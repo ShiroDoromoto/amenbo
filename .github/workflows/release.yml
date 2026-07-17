@@ -165,13 +165,24 @@ jobs:
   windows:
     name: Windows installer (NSIS) + CLI
     runs-on: windows-latest
+    # The store is SQLCipher-encrypted, so rusqlite's bundled-sqlcipher-vendored-openssl
+    # builds OpenSSL from source, and openssl-src configures it by shelling out to perl.
+    # Steps that run under git-bash resolve `perl` to MSYS2's, which lacks
+    # Locale::Maketext::Simple and dies in ./Configure — so name the runner's Strawberry
+    # Perl, which openssl-src reads ahead of PERL and PATH.
+    env:
+      OPENSSL_SRC_PERL: C:/Strawberry/perl/bin/perl.exe
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      # The perl check fails in seconds if the image ever moves Strawberry Perl; without it
+      # a bad path only surfaces once the OpenSSL build gets that far.
       - name: Show toolchain
-        run: rustc --version && cargo --version
+        run: |
+          rustc --version && cargo --version
+          & $env:OPENSSL_SRC_PERL --version
 
       - uses: actions/setup-node@v7
         with:

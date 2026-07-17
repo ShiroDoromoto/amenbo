@@ -275,7 +275,9 @@ jobs:
           set -euo pipefail
           wharfy build
           wharfy sign
-          wharfy release --prerelease 2>&1 | tee release.log
+          # --yes is what makes this an upload: without it wharfy prints the plan and
+          # exits 0, so the job goes green having shipped nothing.
+          wharfy release --yes --prerelease 2>&1 | tee release.log
           if grep -qi 'attest_unavailable' release.log; then
             echo "::error::build provenance was not attached (attest_unavailable): the release job is missing id-token/attestations write permission" >&2
             exit 1

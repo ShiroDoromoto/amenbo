@@ -1,0 +1,79 @@
+[package]
+name = "amenbo-app"
+version = "1.0.0"
+description = "amenbo desktop GUI (Tauri shell, amenbo-core direct)"
+authors = ["ShiroDoromoto"]
+license = "Apache-2.0"
+repository = "https://github.com/ShiroDoromoto/amenbo"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+# Generates the TS types from the Rust DTOs, so the two are not hand-written twice: a camelCase-shaped
+# DTO becomes a TS interface under `app/src/bindings/`. Generation runs under `cargo test`, through the
+# export test the derive writes.
+ts-rs = "12"
+log = "0.4"
+tauri = { version = "2.11.3", features = [] }
+tauri-plugin-log = "2"
+# The folder picker ("open a folder" = the GUI's way to bind an existing store).
+tauri-plugin-dialog = "2"
+# Announces an arrival in the inbox as an OS notification.
+tauri-plugin-notification = "2"
+# Opens an external URL in the default browser (the TopBar's "Amenbo" link to the product page).
+tauri-plugin-opener = "2"
+# Calls core directly, as a Rust library — no FFI.
+amenbo-core = { path = "../../crates/amenbo-core" }
+chrono = { version = "0.4", features = ["clock"] }
+# Always-on perf instrumentation: subscribes to the `target="perf"` spans that core and the command
+# layer emit, holding the EnvFilter (resolved env > config > channel > build) in a reloadable layer and
+# writing to a rolling file. A file is created **only while it is ON** — when OFF the EnvFilter drops
+# every perf event, so the lazy writer never opens one.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
+tracing-appender = "0.2"
+# Wakes the GUI when another process (the CLI, an AI) writes (`commands::watch_store`). The kernel's
+# file watcher does the waking (macOS: FSEvents / Linux: inotify / Windows: ReadDirectoryChangesW), and
+# where that does not work (containers, NFS) the same API falls back to `PollWatcher`. Unrelated to the
+# similarly named `notify-rust` (OS notifications), which is a different crate.
+notify = "8"
+
+# The store-watch tests (`tests/store_watch.rs`) dig real directories on a real filesystem.
+[dev-dependencies]
+tempfile = "3"
+
+# Asks `statfs(2)` whether the store's directory sits on a network filesystem (`store_watch`). On NFS
+# an inotify watch attaches happily and then never reports another host's writes, so the filesystem
+# type is the only thing that can choose polling.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# macOS OS notifications are delivered by hand through UNUserNotificationCenter (the current API). The
+# default tauri-plugin-notification route goes notify-rust -> mac-notification-sys, which uses the
+# deprecated NSUserNotification: on current macOS that shows no permission dialog, never registers in
+# System Settings, and drops delivery silently. Windows and Linux stay on the plugin (WinRT / D-Bus).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-user-notifications = "0.3"
+block2 = "0.6"
+
+# Windows OS notifications are delivered by hand through notify-rust. The default
+# tauri-plugin-notification desktop route fires a toast and forgets it, exposing no click or action
+# callback (its action listener is mobile-only). notify-rust can take WinRT's ToastActivated/Dismissed
+# through `wait_for_response`, so a click on the body can be wired to the inbox — symmetric with the
+# hand-written UNUserNotificationCenter path on macOS. It is the same version the plugin already pulls
+# in transitively (4.18), so it costs no extra build. Linux stays on the plugin (D-Bus).
+[target.'cfg(target_os = "windows")'.dependencies]
+notify-rust = "4"
+# Asks whether the drive is remote (a network drive) (`store_watch`). Same version tauri already pulls in.
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }

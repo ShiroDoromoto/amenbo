@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = ["crates/amenbo-core", "crates/amenbo-cli"]
+# The GUI (Tauri) shell is a standalone crate outside the workspace, excluded so the root
+# `cargo build` stays light. It reaches amenbo-core through a path dependency.
+exclude = ["app/src-tauri"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/ShiroDoromoto/amenbo"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde", "clock"] }
+thiserror = "2"
+directories = "6"
+clap = { version = "4", features = ["derive"] }
+# Always-on, low-overhead perf instrumentation. The facade only — sites emit `target="perf"`
+# spans/events; with no subscriber installed (CLI today) they are cheap no-ops. The GUI installs a
+# reloadable file subscriber (see `app/src-tauri/src/perf.rs`).
+tracing = "0.1"

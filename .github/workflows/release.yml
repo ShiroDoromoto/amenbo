@@ -1,0 +1,268 @@
+name: Release
+
+# Cut a release from PUBLIC CI, not a developer's laptop. A `v*` tag push
+# builds every OS's unified installer + CLI on its native runner, then one aggregate
+# job uploads them to a GitHub *prerelease* and attaches build provenance
+# (attestation) signed with the workflow's keyless OIDC identity. A prerelease is
+# downloadable but NOT latest: users keep the previous version until a human verifies
+# the real bytes and runs the separate promote job. Building is not shipping —
+# nothing here touches what users get.
+#
+# This is the ONLY place a release is built. It must never run on a merge or branch
+# push: only a `v*` tag (the real path) or a manual dispatch (a re-run against a tag).
+# The human/AI gate closes BEFORE the tag is pushed.
+#
+# The native-amd64 Linux GUI bundle and its GUI e2e run in the `linux` job below, so a
+# broken tauri/webview hop is caught exactly when it would otherwise ship.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# A release must finish once started — never cancel an in-progress run. Group per ref
+# so two tags don't serialize against each other.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# Least privilege by default; the aggregate `release` job widens its own.
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS installers (.pkg arm64 + x86_64) + CLI
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # rust-toolchain.toml pins the channel; rustup installs it on first use.
+      # macos-latest is Apple Silicon (arm64) — add the Intel target so the Apple
+      # toolchain cross-builds the x86_64 slice (no zig needed on macOS).
+      - name: Show toolchain
+        run: rustc --version && cargo --version
+      - name: Add the Intel mac target
+        run: rustup target add x86_64-apple-darwin
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # Standalone CLI binaries (wharfy `prebuilt`): the `script` channel's install.sh
+      # and the CLI archives ship these, distinct from the sidecar CLI bundled inside
+      # each installer.
+      - name: Build the mac CLI (arm64 + x86_64)
+        run: |
+          mkdir -p dist
+          cargo build --release -p amenbo-cli --target aarch64-apple-darwin
+          cp target/aarch64-apple-darwin/release/amenbo dist/amenbo-darwin-arm64
+          cargo build --release -p amenbo-cli --target x86_64-apple-darwin
+          cp target/x86_64-apple-darwin/release/amenbo dist/amenbo-darwin-amd64
+
+      - name: Install GUI deps
+        working-directory: app
+        run: npm ci
+
+      # One unified .pkg per arch: GUI in /Applications + the sidecar CLI
+      # symlinked onto PATH. tauri's beforeBuildCommand builds the CLI sidecar for the
+      # target triple; the Intel build cross-compiles from Apple Silicon.
+      - name: Build the mac installers (.pkg, both archs)
+        run: |
+          make dist-gui-mac MAC_GUI_ARCH=arm64
+          make dist-gui-mac MAC_GUI_ARCH=amd64
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-macos
+          path: |
+            dist/amenbo-darwin-arm64
+            dist/amenbo-darwin-amd64
+            dist/amenbo-darwin-arm64.pkg
+            dist/amenbo-darwin-amd64.pkg
+          if-no-files-found: error
+
+  linux:
+    name: Linux bundle (.deb + .rpm) + amd64 CLI + GUI e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Show toolchain
+        run: rustc --version && cargo --version
+
+      # amd64 CLI builds natively (wharfy `prebuilt`); the arm64 CLI is a separate
+      # native job (linux-arm-cli) so nothing here has to cross-compile.
+      - name: Build the Linux amd64 CLI
+        run: |
+          mkdir -p dist
+          cargo build --release -p amenbo-cli
+          cp target/release/amenbo dist/amenbo-linux-amd64
+
+      # The unified Linux GUI bundle (.deb + .rpm, GUI + CLI on /usr/bin) builds in the
+      # shared Docker recipe on this NATIVE amd64 runner, because Apple Silicon can't
+      # build amd64 under qemu (the Tauri CLI SIGABRTs). Docker is preinstalled and
+      # runs natively here.
+      - name: Build the Linux GUI bundle (.deb + .rpm)
+        run: make dist-gui-linux LINUX_GUI_ARCH=amd64
+
+      # Run the real .deb GUI under Xvfb, write to the store from a separate CLI
+      # process, and read the board back off the screen: the new card must appear with
+      # no interaction. Guards the last hop (tauri's emit reaching the WebKitGTK
+      # webview), which only breaks on a tauri/webview upgrade — so gating it at
+      # release time is exactly when a broken hop would otherwise ship.
+      - name: GUI e2e — an external write must repaint the running webview
+        run: make verify-gui-linux
+      - name: Upload the e2e screenshots (evidence, pass or fail)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gui-e2e-linux-amd64
+          path: dist/gui-e2e/*.png
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-linux
+          path: |
+            dist/amenbo-linux-amd64
+            dist/amenbo-app-linux-amd64.deb
+            dist/amenbo-app-linux-x86_64.rpm
+          if-no-files-found: error
+
+  linux-arm-cli:
+    name: Linux arm64 CLI
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Show toolchain
+        run: rustc --version && cargo --version
+
+      # Built natively on an arm64 runner (free for public repos) rather than
+      # cross-compiled — no zig, no emulation. arm64 ships the CLI only (the `script`
+      # channel + CLI archive); there is no arm64 Linux GUI bundle.
+      - name: Build the Linux arm64 CLI
+        run: |
+          mkdir -p dist
+          cargo build --release -p amenbo-cli
+          cp target/release/amenbo dist/amenbo-linux-arm64
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-linux-arm
+          path: dist/amenbo-linux-arm64
+          if-no-files-found: error
+
+  windows:
+    name: Windows installer (NSIS) + CLI
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Show toolchain
+        run: rustc --version && cargo --version
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # Native MSVC build of the standalone CLI (wharfy `prebuilt`).
+      - name: Build the Windows CLI
+        shell: bash
+        run: |
+          mkdir -p dist
+          cargo build --release -p amenbo-cli
+          cp target/release/amenbo.exe dist/amenbo-windows-amd64.exe
+
+      - name: Install GUI deps
+        working-directory: app
+        run: npm ci
+
+      # The unified NSIS installer (GUI + sidecar CLI, which the NSIS hook puts on
+      # PATH) builds natively — Tauri's Windows bundle can't be cross-built (WebView2 /
+      # NSIS / Authenticode all expect Windows). tauri's beforeBuildCommand builds the
+      # CLI sidecar; the installer is unsigned (SmartScreen's first-run warning
+      # is accepted).
+      - name: Build the Windows installer (NSIS)
+        working-directory: app
+        run: npm run tauri build -- --bundles nsis
+
+      # Copy the produced installer to the stable, wharfy-declared asset name.
+      - name: Collect the installer under its release name
+        shell: bash
+        run: cp app/src-tauri/target/release/bundle/nsis/*setup.exe dist/amenbo-app-windows-x64-setup.exe
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-windows
+          path: |
+            dist/amenbo-windows-amd64.exe
+            dist/amenbo-app-windows-x64-setup.exe
+          if-no-files-found: error
+
+  release:
+    name: Prerelease + attest provenance
+    needs: [macos, linux, linux-arm-cli, windows]
+    runs-on: ubuntu-latest
+    # id-token + attestations let wharfy sign build provenance with the workflow's
+    # keyless OIDC identity (no secret to register); contents lets it write the GitHub
+    # release. Stripping these is caught red below, not shipped unattested.
+    permissions:
+      id-token: write
+      attestations: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # wharfy reads the version from the git tag
+
+      # Reassemble every runner's output into dist/ at the paths wharfy.yaml names.
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          pattern: dist-*
+          merge-multiple: true
+
+      - name: Show the assembled dist/
+        run: ls -l dist
+
+      # wharfy ships from its public Homebrew tap; because amenbo feeds BYO inputs
+      # (prebuilt: / bundle:), `wharfy build` never calls goreleaser, so nothing else
+      # needs installing.
+      - name: Install wharfy
+        run: brew install shirodoromoto/wharfy/wharfy
+
+      # build packages the prebuilt CLIs + installers into release assets; sign is a
+      # no-op (nothing here signs for distribution) kept for pipeline shape; release
+      # uploads them as a PRERELEASE and attaches provenance. A prerelease is
+      # downloadable but not latest — users are untouched until the promote job
+      # flips it.
+      #
+      # The permissions above mean provenance IS attached. If someone strips them,
+      # wharfy only WARNS (attest_unavailable) and still uploads — so turn that warning
+      # red here (never ship unattested).
+      - name: Release as a prerelease + attest provenance
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          wharfy build
+          wharfy sign
+          wharfy release --prerelease 2>&1 | tee release.log
+          if grep -qi 'attest_unavailable' release.log; then
+            echo "::error::build provenance was not attached (attest_unavailable): the release job is missing id-token/attestations write permission" >&2
+            exit 1
+          fi

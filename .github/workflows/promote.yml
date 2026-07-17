@@ -1,0 +1,68 @@
+name: Promote
+
+# Flip a verified prerelease to latest and publish it. This is the ONLY
+# trigger that changes what users get, and it is manual on purpose: a human/AI first
+# verifies the CI-built bytes — `gh attestation verify` on the real assets, plus a
+# migration rehearsal of the shipped CLI against a clone of the prod store — and only
+# then dispatches this. Nothing here builds or re-signs: release.yml already built the
+# assets and attached provenance as a PRERELEASE (downloadable but not latest, so
+# releases/latest/download/latest.json still serves the previous version). This job
+# flips that prerelease to latest, pushes it to the owned channels (releases, script),
+# and checks each one from the consumer side. Green = shipped.
+#
+# There is no push/merge trigger: distribution never runs unattended. The only
+# inputs are the tag to promote and a human's click. The whole point is that
+# no "shippable command" lives on a laptop — the promote lever is here, in CI.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to promote (e.g. v1.0.0). Its prerelease must already exist and be verified.'
+        required: true
+        type: string
+
+# A promote must finish once started; group per tag so two never race the same release.
+concurrency:
+  group: promote-${{ inputs.tag }}
+  cancel-in-progress: false
+
+# publish flips the GitHub release to latest and writes the owned channels, both of
+# which live on THIS repo (channels: [releases, script] — no tap/bucket/registry), so
+# the default token's contents:write is enough. No id-token/attestations: promote
+# re-uploads nothing and re-signs nothing — the provenance attached at build time is
+# exactly the bytes users get.
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    name: Promote prerelease → latest, publish, verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0   # wharfy reads the version from the git tag at HEAD
+
+      # wharfy ships from its public Homebrew tap (preinstalled on the ubuntu runner);
+      # amenbo feeds BYO inputs, so nothing else needs installing.
+      - name: Install wharfy
+        run: brew install shirodoromoto/wharfy/wharfy
+
+      # promote flips one flag on the release GitHub already holds — no asset is
+      # re-uploaded, no attestation re-signed — so releases/latest/download/ and
+      # latest.json now serve this version. publish then writes the owned channels; it
+      # takes the asset names + checksums from the release itself, so the bytes users
+      # install are the bytes that were verified, and it refuses an unpromoted version
+      # (hence promote is first). verify reads every channel back from the consumer
+      # side, comparing GitHub's reported digests against the checksums manifest and
+      # checking build provenance — any red means it is NOT shipped.
+      - name: Promote → publish → verify
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          wharfy promote --yes
+          wharfy publish --yes
+          wharfy verify

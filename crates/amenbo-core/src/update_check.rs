@@ -1,0 +1,455 @@
+//! Querying the static `latest.json`.
+//!
+//! amenbo keeps its **functional traffic at zero**: local-first, no central server, no user data
+//! ever leaving the machine. That core is untouched; what this module owns is the one piece of
+//! **infrastructure traffic** — noticing that a newer release exists. It queries the static
+//! `latest.json` hanging off the newest release of the project's own repository: a version plus
+//! minimal metadata, carrying no user data. (It is wharfy's release step that publishes it.)
+//!
+//! The policy: **on by default**, with a config knob to disable it
+//! ([`crate::config::Config::update_check`]); **timed out**; **silent on failure** (a failed update
+//! check must never get in the way of the real work); and **cached**, so we do not talk to the
+//! network on every command. Self-update — downloading and swapping the binary in-app — remains a
+//! non-goal: all this returns is the awareness.
+//!
+//! The module does nothing but query and fetch. Comparing the fetched version against the running
+//! binary to derive `update_available` is the caller's job (it is folded into
+//! [`crate::store::VersionStatus`]).
+
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::time::Duration;
+
+/// The default endpoint: the static manifest hanging off the **newest** release of the project's
+/// own repository. `releases/latest/download/…` is a stable redirect (302 to an object CDN) that
+/// does not hit the GitHub Releases API, so we can fetch it as a plain, cacheable static file. It is
+/// the counterpart of the URL the publisher writes to.
+///
+/// A shipped binary carries this URL baked in, so moving the releases elsewhere strands every
+/// existing install on the old address until it updates once.
+pub const LATEST_JSON_URL: &str =
+    "https://github.com/ShiroDoromoto/amenbo/releases/latest/download/latest.json";
+
+/// Where the "apply the update" affordance falls back to: the download page of the latest release.
+/// We land here whenever the unified-installer URL for the current OS cannot be read out of
+/// `latest.json` — the query failed, the asset is not listed, or the env var disabled the check —
+/// and the user can pick from the list by hand. Since we never self-update, this affordance only
+/// ever *opens* a page.
+pub const LATEST_RELEASE_PAGE: &str = "https://github.com/ShiroDoromoto/amenbo/releases/latest";
+
+/// Timeout on the query. We give up silently on failure, so keep it short enough that it never
+/// needlessly stalls an interactive command.
+const FETCH_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// How long a cached result stays valid, in seconds. Within this window we answer from the cache
+/// without re-querying, keeping the request rate about as modest as Homebrew's.
+const CACHE_TTL_SECS: i64 = 24 * 60 * 60;
+
+/// Schema of `latest.json` (published by wharfy's release step). Everything but `version` is
+/// optional metadata for display and affordances; the query still succeeds without it, because the
+/// fields carry `#[serde(default)]` and unknown fields are ignored — forwards- and
+/// backwards-compatible.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct LatestRelease {
+    /// The newest published version (e.g. `"0.1.5"`). The basis for deciding an update exists.
+    pub version: String,
+    /// URL of the release-notes page (the GitHub Release tag). The fallback for when we cannot work
+    /// out the direct affordance for a given OS.
+    #[serde(default)]
+    pub notes_url: Option<String>,
+    /// `os-arch[-kind]` → distribution asset URL (wharfy's `assets` map). The key vocabulary follows
+    /// wharfy: os is `macos` / `windows` / `linux`, arch is `x64` / `arm64`. A unified installer
+    /// carries a kind suffix (`macos-arm64-pkg`, `windows-x64-exe`, `linux-x64-deb`), while a
+    /// suffix-less key (`macos-arm64`, …) is the CLI archive (tar.gz/zip). The "open the latest
+    /// installer" affordance looks up the installer key for the current OS.
+    #[serde(default)]
+    pub assets: std::collections::BTreeMap<String, String>,
+}
+
+impl LatestRelease {
+    /// Whether this upstream version is **newer** than `current`, the version of the running binary
+    /// (e.g. [`crate::agent::VERSION`]). The comparison shares the logic used for cross-surface
+    /// checks: pre-release and build metadata are ignored, and anything unparseable is `false` on
+    /// the safe side. This is the predicate the CLI and GUI use to surface "there is a newer release
+    /// upstream" — a thin public API that keeps raw version comparison out of the callers.
+    #[must_use]
+    pub fn is_newer_than(&self, current: &str) -> bool {
+        crate::store::version_is_newer(&self.version, current)
+    }
+
+    /// The unified-installer URL for the current OS/arch: the URL listed in `assets` under this
+    /// platform's installer key ([`installer_asset_key`], e.g. `macos-arm64-pkg`), or `None` if
+    /// there is none. `None` is the honest answer where no installer is shipped — macOS x64 and
+    /// Linux arm64 only get the CLI archive.
+    #[must_use]
+    pub fn installer_for_current_platform(&self) -> Option<&str> {
+        self.assets.get(&installer_asset_key()).map(String::as_str)
+    }
+
+    /// The URL the "apply the update" affordance should open: the current OS's unified installer if
+    /// there is one, else the release-notes page (`notes_url`), else the latest-release page
+    /// ([`LATEST_RELEASE_PAGE`]). We do not self-update — that is a non-goal — so the CLI and GUI
+    /// merely **open** this URL in the OS's default browser.
+    #[must_use]
+    pub fn update_url(&self) -> &str {
+        self.installer_for_current_platform()
+            .or(self.notes_url.as_deref())
+            .unwrap_or(LATEST_RELEASE_PAGE)
+    }
+}
+
+/// Map the running binary's OS/arch onto wharfy's `assets` platform key (`os-arch`). We follow
+/// wharfy's vocabulary: the OS matches `std::env::consts::OS` verbatim (macOS → `macos`, plus
+/// `windows` and `linux`), and only the arch is rewritten — `aarch64` → `arm64`, `x86_64` → `x64`.
+/// So macOS/aarch64 → `macos-arm64`, Windows/x86_64 → `windows-x64`, Linux/x86_64 → `linux-x64`.
+/// This is also the key of the CLI archive (the suffix-less one); [`installer_asset_key`] appends
+/// the kind to get the installer key.
+#[must_use]
+pub fn current_platform_key() -> String {
+    let os = std::env::consts::OS;
+    let arch = match std::env::consts::ARCH {
+        "aarch64" => "arm64",
+        "x86_64" => "x64",
+        other => other,
+    };
+    format!("{os}-{arch}")
+}
+
+/// The wharfy `assets` key (`os-arch-kind`) of the **unified installer** for the current OS. The
+/// kind follows from the OS: macOS → `pkg`, Windows → `exe`, Linux → `deb`. This composite key is
+/// what picks the installer rather than the CLI archive (the suffix-less `os-arch` tar.gz/zip); on
+/// mac we ship both arm64 and x64. Where no installer exists for an OS/arch (Linux arm64, say), the
+/// key is simply absent from `assets` and
+/// [`LatestRelease::installer_for_current_platform`] yields `None`, falling back to the
+/// release-notes page.
+fn installer_asset_key() -> String {
+    let kind = match std::env::consts::OS {
+        "macos" => "pkg",
+        "windows" => "exe",
+        _ => "deb", // linux (any other OS tries the deb key too, but an absent key falls back to None).
+    };
+    format!("{}-{kind}", current_platform_key())
+}
+
+/// Resolve the update URL that an explicit user action (`amenbo update`, or the GUI's "open the
+/// installer") should open. We try regardless of the config toggle — the user asked for it, so we go
+/// and fetch — but the env kill switch (`AMENBO_UPDATE_CHECK=0`), and a failed query, both fall back
+/// to the latest-release page ([`LATEST_RELEASE_PAGE`]).
+#[must_use]
+pub fn resolve_update_url() -> String {
+    check(true)
+        .map(|r| r.update_url().to_string())
+        .unwrap_or_else(|| LATEST_RELEASE_PAGE.to_string())
+}
+
+/// The on-disk cache envelope: when we fetched, and what we got. It carries the fetch time so the
+/// TTL can be judged.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct CacheEnvelope {
+    /// UNIX time of the fetch, in seconds.
+    fetched_at: i64,
+    /// The latest release as it was fetched then.
+    release: LatestRelease,
+}
+
+/// Whether the query is **disabled**: either the config is off (`enabled = false`), or the
+/// `AMENBO_UPDATE_CHECK` env var asks for it to be off. The env var wins over the config — it is the
+/// hard kill switch. Kept pure by taking the env value as an argument; [`is_disabled`] above is what
+/// reads the environment.
+fn disabled(enabled: bool, env_off: bool) -> bool {
+    !enabled || env_off
+}
+
+/// Whether the query is disabled, effectively — the config toggle and the env override combined.
+pub fn is_disabled(enabled: bool) -> bool {
+    disabled(enabled, crate::env::update_check_disabled())
+}
+
+/// Whether a cache entry is fresh: it is, while less than [`CACHE_TTL_SECS`] has passed since the
+/// fetch. A fetch time in the future (a clock rolled back, say) counts as stale on the safe side,
+/// prompting a re-fetch.
+fn is_fresh(fetched_at: i64, now: i64) -> bool {
+    let age = now - fetched_at;
+    (0..CACHE_TTL_SECS).contains(&age)
+}
+
+/// The current UNIX time, in seconds.
+fn now_unix() -> i64 {
+    chrono::Utc::now().timestamp()
+}
+
+/// The URL to query: [`LATEST_JSON_URL`] in production, overridable through the
+/// `AMENBO_UPDATE_JSON_URL` env var.
+fn latest_json_url() -> String {
+    crate::env::update_json_url().unwrap_or_else(|| LATEST_JSON_URL.to_string())
+}
+
+/// Path of the cache file, under the app-data cache dir — one per channel, so dev and prod never mix.
+/// In the rare environment where `directories` cannot produce a cache dir, this is `None`: no cache,
+/// so we query every time. We lose the TTL's benefit, but we still work.
+fn cache_path() -> Option<PathBuf> {
+    directories::ProjectDirs::from("work", "amenbo", crate::config::Paths::APP_NAME)
+        .map(|d| d.cache_dir().join("update_check.json"))
+}
+
+/// Read the cache. A corrupt file reads as `None`, which simply means we fetch again.
+fn read_cache(path: &std::path::Path) -> Option<CacheEnvelope> {
+    let bytes = std::fs::read(path).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+/// Write the cache. Failure is silent: the cache is only ever an optimization.
+fn write_cache(path: &std::path::Path, env: &CacheEnvelope) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(bytes) = serde_json::to_vec_pretty(env) {
+        let _ = std::fs::write(path, bytes);
+    }
+}
+
+/// Actually fetch `latest.json`, with a timeout; failure is `None`. This is the only place that
+/// performs network I/O.
+fn fetch(url: &str) -> Option<LatestRelease> {
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(FETCH_TIMEOUT))
+        .build()
+        .into();
+    let body = agent.get(url).call().ok()?.body_mut().read_to_string().ok()?;
+    serde_json::from_str(&body).ok()
+}
+
+/// Return the newest published release. **On by default; honours the config's disable knob; timed
+/// out; silent on failure; caches its result.**
+///
+/// - `enabled` is [`crate::config::Config::update_check`]. Disabled means `None` immediately, with
+///   no traffic.
+/// - A fresh cache entry (within the TTL) is returned as-is, again with no traffic.
+/// - If the entry is stale or absent, we query upstream exactly once, with a timeout, and update the
+///   cache on success.
+/// - If that query fails, a stale cache entry is still returned — offline, we keep the most recent
+///   awareness we had — and `None` only if there is none.
+///
+/// So `None` means disabled, never fetched, or failed. **Callers may only use this as material for
+/// what they display; they must not surface the failure** — an update check does not get in the way
+/// of the real work.
+pub fn check(enabled: bool) -> Option<LatestRelease> {
+    check_inner(enabled, false)
+}
+
+/// [`check`], bypassing the cache: query upstream once **even if** a fresh entry exists. Meant to be
+/// called only on the **first** tick after process start, so that right after a release we do not
+/// sit behind a fresh cache entry for the old version and fail to mention the new one. The contract
+/// (honours the disable knob, times out, silent on failure, falls back to stale) is identical to
+/// [`check`], and **a successful fetch updates the cache too**, so the entry that later ticks read
+/// through [`check`] is swapped for the new version as well. A failed query falls back to the stale
+/// entry, which is what makes it tolerate being offline.
+pub fn check_fresh(enabled: bool) -> Option<LatestRelease> {
+    check_inner(enabled, true)
+}
+
+/// The body behind [`check`] and [`check_fresh`]. When `force_fresh` is set, the early return on a
+/// fresh cache entry is skipped and upstream is always queried — updating the cache on success, and
+/// falling back to the stale entry on failure.
+fn check_inner(enabled: bool, force_fresh: bool) -> Option<LatestRelease> {
+    if is_disabled(enabled) {
+        return None;
+    }
+    let now = now_unix();
+    let path = cache_path();
+    let cached = path.as_deref().and_then(read_cache);
+    if !force_fresh {
+        if let Some(env) = &cached {
+            if is_fresh(env.fetched_at, now) {
+                return Some(env.release.clone());
+            }
+        }
+    }
+    match fetch(&latest_json_url()) {
+        Some(release) => {
+            if let Some(path) = &path {
+                write_cache(path, &CacheEnvelope { fetched_at: now, release: release.clone() });
+            }
+            Some(release)
+        }
+        // The query failed: return the most recent cache entry even if stale — silently, and so that
+        // being offline still tells the user what we last knew.
+        None => cached.map(|c| c.release),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A verbatim copy of the latest.json that wharfy's release step actually publishes (the
+    /// `.wharfy/latest.json`), pinned here to **fix the contract**. Because the query is silent on
+    /// failure by design, a schema change on wharfy's side — the key vocabulary, a field name —
+    /// would break this consumer quietly; this sample is the anchor that makes CI catch it. It pins
+    /// both parsing and the choice of installer for the current OS.
+    const WHARFY_LATEST_JSON: &str = r#"{
+      "version": "0.1.5",
+      "notes_url": "https://github.com/ShiroDoromoto/amenbo-dist/releases/tag/v0.1.5",
+      "assets": {
+        "linux-arm64": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo_0.1.5_linux_arm64.tar.gz",
+        "linux-x64": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo_0.1.5_linux_amd64.tar.gz",
+        "linux-x64-deb": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-app-linux-amd64.deb",
+        "linux-x64-rpm": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-app-linux-x86_64.rpm",
+        "macos-arm64": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo_0.1.5_darwin_arm64.tar.gz",
+        "macos-arm64-pkg": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-darwin-arm64.pkg",
+        "macos-x64": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo_0.1.5_darwin_amd64.tar.gz",
+        "windows-x64": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo_0.1.5_windows_amd64.zip",
+        "windows-x64-exe": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-app-windows-x64-setup.exe"
+      }
+    }"#;
+
+    /// wharfy's real latest.json parses exactly, with the expected key vocabulary and notes_url.
+    #[test]
+    fn parses_wharfy_manifest() {
+        let r: LatestRelease = serde_json::from_str(WHARFY_LATEST_JSON).unwrap();
+        assert_eq!(r.version, "0.1.5");
+        assert_eq!(
+            r.notes_url.as_deref(),
+            Some("https://github.com/ShiroDoromoto/amenbo-dist/releases/tag/v0.1.5")
+        );
+        // Both the unified installers (kind suffix) and the CLI archives (no suffix) are listed.
+        assert_eq!(
+            r.assets.get("macos-arm64-pkg").map(String::as_str),
+            Some("https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-darwin-arm64.pkg")
+        );
+        assert_eq!(
+            r.assets.get("windows-x64-exe").map(String::as_str),
+            Some("https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-app-windows-x64-setup.exe")
+        );
+        assert!(r.assets.contains_key("linux-x64-deb"));
+        assert!(r.assets.contains_key("macos-arm64"), "the CLI archive keys are listed too, with no suffix");
+    }
+
+    /// From wharfy's real sample, the running OS's **unified installer** is what gets picked — not
+    /// the CLI archive.
+    #[test]
+    fn selects_current_os_installer_from_wharfy_manifest() {
+        let r: LatestRelease = serde_json::from_str(WHARFY_LATEST_JSON).unwrap();
+        // The installer asset for the running OS is chosen, and it is not a CLI archive
+        // (.tar.gz/.zip).
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        assert_eq!(r.installer_for_current_platform(), r.assets.get("macos-arm64-pkg").map(String::as_str));
+        #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+        assert_eq!(r.installer_for_current_platform(), r.assets.get("windows-x64-exe").map(String::as_str));
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        assert_eq!(r.installer_for_current_platform(), r.assets.get("linux-x64-deb").map(String::as_str));
+        // Whatever gets picked, it never carries a CLI-archive extension: the contract is to pick an
+        // installer.
+        if let Some(url) = r.installer_for_current_platform() {
+            assert!(!url.ends_with(".tar.gz") && !url.ends_with(".zip"), "an installer is what gets picked: {url}");
+        }
+    }
+
+    /// With every optional field missing, a manifest still parses off `version` alone (forwards- and
+    /// backwards-compatible).
+    #[test]
+    fn parses_minimal_manifest() {
+        let r: LatestRelease = serde_json::from_str(r#"{"version":"9.9.9"}"#).unwrap();
+        assert_eq!(r.version, "9.9.9");
+        assert!(r.assets.is_empty());
+        assert!(r.notes_url.is_none());
+    }
+
+    /// Unknown fields are ignored, so the publisher adding metadata later cannot break us.
+    #[test]
+    fn ignores_unknown_fields() {
+        let r: LatestRelease = serde_json::from_str(r#"{"version":"1.0.0","future":"meta"}"#).unwrap();
+        assert_eq!(r.version, "1.0.0");
+    }
+
+    /// The key for the current platform comes out in wharfy's `os-arch` shape.
+    #[test]
+    fn platform_key_shape() {
+        let key = current_platform_key();
+        let (os, arch) = key.split_once('-').expect("os-arch");
+        assert!(["macos", "windows", "linux"].contains(&os) || !os.is_empty());
+        assert!(["arm64", "x64"].contains(&arch) || !arch.is_empty());
+        // The key matches the running OS/arch (macOS arm64 gives macos-arm64, and so on).
+        #[cfg(target_os = "macos")]
+        assert!(key.starts_with("macos-"));
+        #[cfg(target_arch = "aarch64")]
+        assert!(key.ends_with("-arm64"));
+        #[cfg(target_arch = "x86_64")]
+        assert!(key.ends_with("-x64"));
+    }
+
+    /// `update_url` falls back in order: the current OS's installer, then notes_url, then the
+    /// release page.
+    #[test]
+    fn update_url_prefers_current_installer_then_falls_back() {
+        let installer_key = installer_asset_key();
+        // An installer listed for the current platform is what we return.
+        let mut assets = std::collections::BTreeMap::new();
+        assets.insert(installer_key.clone(), "https://example/installer-for-me".to_string());
+        let r = LatestRelease {
+            version: "1.0.0".into(),
+            notes_url: Some("https://example/releases".into()),
+            assets,
+        };
+        assert_eq!(r.update_url(), "https://example/installer-for-me");
+        assert_eq!(r.installer_for_current_platform(), Some("https://example/installer-for-me"));
+
+        // With no installer for the current platform we go to notes_url — a CLI archive key alone is
+        // never picked.
+        let mut assets = std::collections::BTreeMap::new();
+        assets.insert(current_platform_key(), "https://example/cli-archive.tar.gz".to_string());
+        let r = LatestRelease {
+            version: "1.0.0".into(),
+            notes_url: Some("https://example/releases".into()),
+            assets,
+        };
+        assert_eq!(r.update_url(), "https://example/releases");
+        assert!(r.installer_for_current_platform().is_none(), "a CLI archive is not an installer");
+
+        // With no notes_url either, we go to the latest-release page.
+        let r = LatestRelease {
+            version: "1.0.0".into(),
+            notes_url: None,
+            assets: Default::default(),
+        };
+        assert_eq!(r.update_url(), LATEST_RELEASE_PAGE);
+    }
+
+    #[test]
+    fn disabled_by_config_or_env() {
+        assert!(disabled(false, false), "config off means disabled");
+        assert!(disabled(true, true), "the env override wins over config, so disabled");
+        assert!(disabled(false, true), "both off, disabled");
+        assert!(!disabled(true, false), "config on with no env override means enabled");
+    }
+
+    #[test]
+    fn freshness_boundaries() {
+        let base = 1_000_000;
+        assert!(is_fresh(base, base), "the same instant is fresh");
+        assert!(is_fresh(base, base + CACHE_TTL_SECS - 1), "just short of the TTL is fresh");
+        assert!(!is_fresh(base, base + CACHE_TTL_SECS), "exactly at the TTL is stale");
+        assert!(!is_fresh(base, base + CACHE_TTL_SECS + 100), "past the TTL is stale");
+        assert!(!is_fresh(base, base - 10), "a fetch in the future (clock rolled back) is stale, erring on the safe side");
+    }
+
+    /// The cache round-trips: what we write is what we read back.
+    #[test]
+    fn cache_round_trip() {
+        let dir = std::env::temp_dir().join(format!("amenbo-update-test-{}", std::process::id()));
+        let path = dir.join("update_check.json");
+        let env = CacheEnvelope {
+            fetched_at: 42,
+            release: LatestRelease {
+                version: "1.2.3".into(),
+                notes_url: None,
+                assets: Default::default(),
+            },
+        };
+        write_cache(&path, &env);
+        let back = read_cache(&path).expect("cache reads back");
+        assert_eq!(back.fetched_at, 42);
+        assert_eq!(back.release.version, "1.2.3");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

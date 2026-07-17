@@ -1,0 +1,32 @@
+# What amenbo is allowed to ship, license-wise. Run by the `cargo-license` job in
+# ci.yml on any dependency change, over BOTH lockfiles (the workspace and the out-of-workspace
+# Tauri host crate) with this one config.
+#
+# amenbo is Apache-2.0 and ships binaries that statically link every Rust dependency, so a
+# strong-copyleft crate (GPL/AGPL/LGPL-only) anywhere in the tree would make the binaries
+# undistributable under that license. Nothing here is judged by a human at bump time —
+# Dependabot bumps are auto-merged — so the allow-list below is the only thing that would
+# notice a license changing under us.
+
+[licenses]
+# Permissive, plus weak (file-level) copyleft. MPL-2.0 obliges us to publish changes to the
+# LICENSED FILES themselves, which we do not make: those crates (dirs' option-ext, and the CSS
+# stack under Tauri) are used unmodified, so linking them into an Apache-2.0 binary is fine.
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "Unlicense",
+  "CC0-1.0",
+  "MPL-2.0",
+  # Not code: webpki-roots ships Mozilla's CA root store under a permissive DATA license.
+  "CDLA-Permissive-2.0",
+]
+
+# amenbo's own crates carry no license text of their own to detect.
+private = { ignore = true }

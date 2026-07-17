@@ -1,0 +1,96 @@
+[package]
+name = "amenbo-core"
+description = "The amenbo core library: domain model, persistence, and export"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+# Heavy scale/perf guards, split out by *attribute* so the everyday `cargo test` stays fast.
+# `read_scaling_guard` is gated behind an off-by-default feature so it is invisible to the default
+# build; CI MUST run it (see .github/workflows/ci.yml) or the guard silently rots.
+#
+# Two tiers, split by seed size: the deterministic O(result) ratio guards prove their point
+# at a medium seed in a few seconds, but the wall-clock guards (sublinearity, the board's O(N²) net)
+# need the full 10k to bite. So `scale` (the PR gate) seeds medium and runs only the ratio guards,
+# while `scale-heavy` (nightly / workflow_dispatch — see .github/workflows/scale-heavy.yml) seeds the
+# full 10k and additionally runs the timing guards. `scale-heavy` implies `scale`, so the
+# `read_scaling_guard` test target (required-features = ["scale"]) builds under either.
+scale = []
+scale-heavy = ["scale"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+directories.workspace = true
+tracing.workspace = true
+getrandom = "0.4"
+base64 = "0.22"
+fs2 = "0.4"
+# Content-addressed blob store: BLAKE3 is the attachment content-address — a fast, tree-hashing
+# digest. The bytes never enter the truth source; the hash is the fingerprint of the content that
+# drives dedup and tamper detection.
+blake3 = "1"
+# The SQLite truth source: each field write UPSERTs straight into an indexed read-model table.
+# `bundled-sqlcipher-vendored-openssl` compiles SQLCipher with FTS5 enabled, vendoring OpenSSL so no
+# system crypto lib is required for cross-OS builds. Nothing keys a store — SQLCipher stays linked
+# only so the `at_rest_sqlcipher` / `sqlcipher_is_linked` tests can fabricate a legacy encrypted store
+# and prove the open paths refuse it (see engine.rs).
+#
+# This is the sole DB library: the change feed rides `update_hook`, which is bound to the connection,
+# and reads are issued from inside the write transaction — both are lost the moment a second library
+# opens its own connection. The typed layer amenbo needs is built on top of this one.
+rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl", "hooks"] }
+# Whole-device backup: the `.amenbo-backup` archive is an uncompressed tar bundling the database's
+# `VACUUM INTO` snapshot plus `manifest.json`. tar streams entries file-by-file, so memory stays
+# bounded; no compression — SQLite snapshots compress poorly and streaming stays simpler.
+tar = "0.4"
+# HTTP client for the static latest.json lookup. Synchronous and light, so the CLI carries no async
+# runtime. rustls (the default) bundles TLS certificate verification, so no system crypto lib is
+# required cross-OS. It serves update awareness and nothing else.
+ureq = "3"
+# Markdown, read as a structure rather than as bytes: `refscan` has to tell a ref written as prose from
+# one shown as a code span, a fenced block, or an existing link, and those are distinctions only a parser
+# draws. Body text is Markdown by contract (`agent`'s `conventions.markdown`), and the GUI already renders
+# it through remark — both are CommonMark, so a pull parser is what keeps the two faces answering alike
+# rather than approximately. It is the one text task in core a hand-rolled scanner (the shape `lint` uses)
+# does not fit: `lint` judges a byte pattern with no grammar around it, whereas skipping code spans means
+# implementing backtick runs, fence kinds and link syntax — the edges where a near-miss silently calls a
+# live ref dead. Pure Rust, no build script, and the parser rustdoc itself reads doc comments with.
+pulldown-cmark = { version = "0.13", default-features = false }
+
+[dev-dependencies]
+serde_json.workspace = true
+chrono.workspace = true
+# Property/fuzz testing of the hand-rolled parsers, where the input is whatever a user hands us and
+# the examples a person thinks of are not the ones that break it: today the lint scanner (`src/lint.rs`),
+# which walks bytes and slices text back at the indices it lands on. Stable toolchain (vs
+# cargo-fuzz/nightly), so it runs as a plain test and CI covers it with everything else.
+proptest = "1"
+# The tests that speak to SQLite directly — the engine and projection suites, the change feed, the
+# preservation checks — build `rusqlite` values and read rows themselves, rather than through the store.
+# Match the main dependency's version and features.
+rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }
+# Read-hotpath scaling bench. Stable-toolchain harness; `cargo bench` only, so it never
+# gates `cargo test`. The CI guard (`tests/read_scaling_guard.rs`) is a plain test, no criterion.
+criterion = "0.8"
+
+# Scaling bench for the read hot paths. `harness = false` hands main() to criterion.
+[[bench]]
+name = "read_hotpath"
+harness = false
+
+# The read-hotpath scaling guard is the single heaviest test in the suite (~23s seeding a 10k
+# store). Gate it behind `scale` so it builds/runs only under `cargo test --features scale`.
+[[test]]
+name = "read_scaling_guard"
+required-features = ["scale"]
+
+# The whole-device export scaling guard: proves the streaming export stays O(1) memory (peak
+# materialized rows N-independent). Shares the medium/heavy seed split, so gate it behind `scale`.
+[[test]]
+name = "export_scaling_guard"
+required-features = ["scale"]

@@ -1,0 +1,126 @@
+/* amenbo design tokens */
+:root {
+  /* ----- color: neutral (warm gray) ----- */
+  --c-bg: #f7f6f3;
+  --c-surface: #ffffff;
+  --c-surface-2: #fbfaf8;
+  --c-surface-sunken: #f1efe9;
+  --c-border: #e4e1d9;
+  --c-border-strong: #d2cec3;
+  --c-text: #23211c;
+  --c-text-muted: #6f6a5e;
+  --c-text-faint: #9b958a;
+
+  /* ----- color: accent (teal) ----- */
+  --c-accent: #0e7c7b;
+  --c-accent-weak: #d6ecec;
+  --c-accent-text: #095a59;
+
+  /* ----- semantic ----- */
+  --c-human: #3b6bd6; /* human */
+  --c-ai: #8a4fd0;    /* AI */
+  --c-warn: #c6791f;
+  --c-danger: #c0392b;
+
+  /* status */
+  --c-todo: #9b958a;
+  --c-progress: #0e7c7b;
+  --c-done: #2fae66;
+  --c-blocked: #c6791f;
+
+  /* priority */
+  --c-pri-high: #c0392b;
+  --c-pri-med: #c6791f;
+  --c-pri-low: #9b958a;
+
+  /* due */
+  --c-due-overdue: #c0392b;
+  --c-due-today: #c6791f;
+  --c-due-future: #6f6a5e;
+
+  /* ----- typography ----- */
+  --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+  /* text scale */
+  --fs-2xs: 10px; /* badges / superscript markers */
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-body: 16px; /* detail-pane reading body */
+  --measure-prose: 40rem; /* reading-width cap for detail-pane body text (~40 CJK chars) */
+  --fs-lg: 17px;
+  --fs-xl: 20px;
+  /* display (decorative glyphs / emoji, not body text) */
+  --fs-display-md: 36px;
+  --fs-display-lg: 44px;
+  --fw-normal: 400;
+  --fw-medium: 550;
+  --fw-bold: 680;
+  --lh: 1.5;
+
+  /* ----- spacing ----- */
+  --s-1: 4px;
+  --s-2: 6px;
+  --s-3: 8px;
+  --s-4: 12px;
+  --s-5: 16px;
+  --s-6: 24px;
+  --s-7: 32px;
+
+  /* ----- radius / shadow ----- */
+  --r-sm: 5px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(35, 33, 28, 0.06), 0 1px 1px rgba(35, 33, 28, 0.04);
+  --shadow-md: 0 4px 12px rgba(35, 33, 28, 0.1);
+
+  /* ----- layout ----- */
+  --topbar-h: 48px;
+  --sidebar-w: 232px;
+  --rightpane-w: 480px;
+
+  color-scheme: light;
+}
+
+/* Theme switch (Settings > Appearance). core/theme.ts resolves the preference
+   (os/dark/light) to a concrete theme and keeps it on <html data-theme="dark|light">.
+   Light is the :root default, so only the dark overrides live here (the warm-gray +
+   teal palette mapped onto dark). */
+[data-theme="dark"] {
+  --c-bg: #1b1a17;
+  --c-surface: #242320;
+  --c-surface-2: #2a2925;
+  --c-surface-sunken: #1f1e1b;
+  --c-border: #3a3833;
+  --c-border-strong: #4c4a43;
+  --c-text: #ece9e1;
+  --c-text-muted: #a8a399;
+  --c-text-faint: #7d786e;
+
+  --c-accent: #2ba6a4;
+  --c-accent-weak: #11403f;
+  --c-accent-text: #7fd6d4;
+
+  --c-human: #6f97ec;
+  --c-ai: #b083ea;
+  --c-warn: #e0a04a;
+  --c-danger: #e06155;
+
+  --c-todo: #7d786e;
+  --c-progress: #2ba6a4;
+  --c-done: #46c97e;
+  --c-blocked: #e0a04a;
+
+  --c-pri-high: #e06155;
+  --c-pri-med: #e0a04a;
+  --c-pri-low: #7d786e;
+
+  --c-due-overdue: #e06155;
+  --c-due-today: #e0a04a;
+  --c-due-future: #a8a399;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}

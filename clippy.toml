@@ -1,0 +1,12 @@
+# Facet enforcement, layer D.
+# Reading the process environment raw is banned in every crate; every read funnels through the one
+# audited gateway, `amenbo_core::env`. The point is mechanical: stop the facet's entry point
+# (AMENBO_ACTOR) from creeping back in at a new call site, bypassing decide_facet and silently
+# falling back to human. Only `amenbo_core::env` itself is excepted, with
+# #[allow(clippy::disallowed_methods)].
+# When a new env variable is needed, add a typed getter to `amenbo_core::env` rather than a raw read.
+# The CI gate promotes this to -D clippy::disallowed_methods (.github/workflows/ci.yml).
+disallowed-methods = [
+    { path = "std::env::var", reason = "read process env only via amenbo_core::env (the single audited facet/config gateway). A raw read lets a facet silently fall back to human." },
+    { path = "std::env::var_os", reason = "read process env only via amenbo_core::env (the single audited facet/config gateway). A raw read lets a facet silently fall back to human." },
+]

@@ -1,0 +1,146 @@
+name: Rot gates
+
+# The gates that can go red WITHOUT anyone touching the tree. They live here, in a reusable
+# workflow, because two different events have to run them and there must be exactly one definition
+# of each:
+#
+#   - ci.yml calls this on push:main / pull_request, with the `changes` path filter deciding which
+#     of the three run — a change that touches no dependency shouldn't pay for an audit.
+#   - rot-weekly.yml calls it on a schedule with every input left at its default (true), so all three
+#     run unconditionally. Rot is not a function of the diff: a dependency nobody edited turns red
+#     when a new advisory is published, and the linters
+#     below install the newest release on every run, so the RUNNER moves under a tree that didn't.
+#     Neither is visible to a path filter, and `push` is deliberately not a per-commit event here
+#     (it is reserved for changes only CI can judge), so without the weekly leg these three go
+#     unjudged for as long as main sits unpushed.
+#
+# What is NOT here, on purpose: rust / app-rust / gui-web. Those only break when code changes, and
+# code changes are already judged — by the local gate (`make test`, plus `make lint-linux` for the
+# Linux-only branches) before the merge, and by ci.yml after it. Running them weekly would buy
+# nothing and spend minutes (this repo is private; see the cost note in ci.yml's header).
+#
+# Cost: three Linux jobs (x1), a few minutes each. The weekly leg is on the order of 20 min/month.
+
+on:
+  workflow_call:
+    inputs:
+      shell:
+        description: run the shellcheck + actionlint gate
+        type: boolean
+        default: true
+      cargo_deps:
+        description: run cargo audit
+        type: boolean
+        default: true
+      npm_deps:
+        description: run npm audit
+        type: boolean
+        default: true
+
+jobs:
+  # scripts/ drives the packaging and the on-hardware verification (mac pkg, Linux Docker, the
+  # real-machine e2e), and guards/ + .githooks/ are what stop a bad commit, so an unset variable
+  # or a quoting slip in either would surface on release day.
+  # `-x` makes shellcheck follow the `source=` directives, so a script's shared helpers resolve.
+  # Runs the same `make shell-gate` as the local gate: one definition of what gets checked.
+  #
+  # Same definition is only the same VERDICT if both sides run the same linter. The shellcheck
+  # preinstalled on ubuntu-latest is years behind the one a developer gets from a package manager,
+  # and the two disagree: the trap-invoked `cleanup` in guards/check-doc-refs.sh is SC2329 on a
+  # current shellcheck (already suppressed there) and SC2317 on the runner's — green locally, red in
+  # CI. So install the current stable release instead of using the preinstalled one; the
+  # version floats on both sides, and a new check that fails is visible immediately. This also
+  # settles the embedded half below, since actionlint runs whatever shellcheck is on PATH.
+  #
+  # That other half is the shell EMBEDDED in these workflows' own `run:` blocks — which the
+  # file-based half never saw, even though a step like the store_watch binary extraction in ci.yml is
+  # a real pipeline with real quoting. actionlint hands every `run:` to shellcheck (and validates
+  # the workflow's expressions/job refs on the way), so the same contract now covers both. It is
+  # not preinstalled either; `go install` it (Go ships on the runner). Neither install is pinned —
+  # both float to the newest, so this side is always the stricter one, and the gate itself names the
+  # versions it ran on both sides, which is what makes a split verdict readable. That float
+  # is also why this job belongs in this file: it can go red on a tree nobody touched.
+  shell:
+    name: shellcheck + actionlint (scripts, guards, workflows)
+    runs-on: ubuntu-latest
+    if: ${{ inputs.shell }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install shellcheck
+        run: |
+          curl -fsSL https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz \
+            | tar -xJ -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/shellcheck-stable" >> "$GITHUB_PATH"
+
+      - name: Install actionlint
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Lint every tracked shell script and every embedded workflow step
+        run: make shell-gate
+
+  cargo-audit:
+    name: cargo audit (RustSec)
+    runs-on: ubuntu-latest
+    if: ${{ inputs.cargo_deps }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      # Audits Cargo.lock against the RustSec advisory DB. Non-zero exit ⇒ gate fails.
+      # Unpatchable transitive advisories are ignored (with justification) in
+      # .cargo/audit.toml, which cargo-audit reads from the working dir.
+      - name: Audit the workspace
+        run: cargo audit
+
+      # The Tauri host crate is excluded from the workspace, so the root audit never reaches its
+      # lockfile — and it is where the only advisories the tree currently carries live (see
+      # .cargo/audit.toml). Auditing it here is what lets this be the single audit gate.
+      - name: Audit the Tauri host crate
+        run: cargo audit --file app/src-tauri/Cargo.lock
+
+      # The other half of an ignore: taking it off again. An ignore that no longer matches
+      # anything is green either way, so nothing here would ever notice that upstream unpinned the
+      # crate and the waiver is now suppressing an advisory the tree does not have. This asks the
+      # question the audit does not: does every ignore still fire?
+      - name: Check that every ignored advisory still applies
+        run: guards/check-audit-ignores.sh
+
+  npm-audit:
+    name: npm audit (GUI)
+    runs-on: ubuntu-latest
+    if: ${{ inputs.npm_deps }}
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Track the pinned Node from .nvmrc instead of a hardcoded version
+          # (no more CI/local drift). See the version-pin files at the repo root.
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Blocking gate: only the runtime deps that ship in the Tauri bundle. A
+      # high/critical advisory here fails the build (amenbo owns what it ships).
+      - name: Run npm audit (shipped deps)
+        run: npm audit --omit=dev --audit-level=high
+
+      # Non-blocking: surface advisories in the dev toolchain (vite/esbuild etc.).
+      # These touch the local dev server, not the shipped app, so they are reported
+      # but don't gate — a maintainer follows up via a deliberate dep bump.
+      - name: Audit dev toolchain (informational)
+        continue-on-error: true
+        run: npm audit --audit-level=high

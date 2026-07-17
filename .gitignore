@@ -1,0 +1,37 @@
+/.prompt/
+/docs/
+# What is kept out is what has one developer's own choices burned into it — which agent to run,
+# which editor to use — because those are the clone's to make, not ours to hand down. A helper
+# tool with none of that in it is published instead, however far it sits from the build. So they
+# live here alongside the tree, ignored.
+/.claude/
+/.zed/
+# Whatever is one developer's own — the scripts that drive their own Windows box over ssh, the
+# PowerShell gate whose only subject those are, and `.local/local.mk`, the seam `make` includes
+# when it is present, where a target for any of them belongs. A clone builds, tests and ships
+# amenbo without any of it. It is a directory rather than a list of names so that placing a file
+# decides which side it is on, and nothing rests on remembering a suffix.
+/.local/
+/target/
+# Tauri sidecar staging: `make gui`/`gui-dev` build the CLI and drop it here as
+# `amenbo-<triple>` for bundle.externalBin. Build artifact, not source.
+/app/src-tauri/binaries/
+# wharfy: the distribution state/artifact area (`.wharfy/`) and the prebuilt binaries `make dist`
+# emits (`dist/`). Both are distribution artifacts, not source. The wharfy config `wharfy.yaml` is
+# committed.
+/.wharfy/
+/dist/
+
+# amenbo: the dir→store/project pointer (`.amenbo`). store_id points at machine-specific app-data, so
+# it is not committed (it is invalid on a clone). The store itself and the secrets are not here; they
+# live in app-data. `.amenbo-home/` is an unused legacy pointer dir, kept ignored defensively.
+.amenbo
+.amenbo-home/
+# AGENTS.md / CLAUDE.md are placed by the AI-agent environment of whoever clones this repo (`amenbo
+# init` generates the managed block). Which agent anyone uses is not ours to decide, so it is not
+# committed.
+AGENTS.md
+CLAUDE.md
+# The PII denylist plaintext (real names/emails/accounts) is managed outside the repo. Committing it
+# would burn the very thing it protects into the tree = a self-leak.
+.pii-denylist

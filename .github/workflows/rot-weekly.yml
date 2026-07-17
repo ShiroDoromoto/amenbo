@@ -1,0 +1,74 @@
+name: Rot gates (weekly)
+
+# The time-driven half of the CI net. The three gates in rot-gates.yml break on their own: a new
+# RustSec advisory lands on a dependency nobody edited, or the runner's linter installs a newer
+# version than the tree was written against. Nothing in a diff can predict either, so a diff-driven
+# trigger never fires for them — this leg runs them on a timer instead.
+#
+# It runs every one of the three unconditionally (no path filter: rot is not a function of the diff)
+# and nothing else — see rot-gates.yml for why the build/test jobs are not here.
+#
+# Weekly, not nightly: an advisory only becomes real harm when a binary ships, and a release is
+# judged on its own merits when it is built. What this leg buys is finding out early instead of on
+# release day, and a week is soon enough for that.
+#
+# The same "goes red without anyone touching the tree" argument covers the shipped release, not just
+# the source: a release built and attested by public CI (release.yml) can lose its provenance after
+# the fact — an asset overwritten from a laptop attaches nothing (wharfy only WARNS), so a
+# consumer's `wharfy verify` would fail on bytes that were sound when they shipped. Nothing in a diff
+# predicts that either. So this leg also runs `wharfy verify` against the latest release from the
+# consumer side, so an unattested or tampered release cannot sit unnoticed between ships.
+#
+# It lives in its own workflow rather than ci.yml because its trigger and cadence are wholly separate
+# from ci.yml's push/PR gate — the same reason scale-heavy.yml is split out.
+
+on:
+  schedule:
+    # Mondays at 07:00 UTC. An hour after scale-heavy.yml's nightly so the two don't contend.
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  # No `with:` — every input defaults to true, which is the whole point of this leg.
+  rot-gates:
+    uses: ./.github/workflows/rot-gates.yml
+
+  # Verify the shipped release still installs and still carries its build provenance,
+  # from the consumer side. Not in rot-gates.yml because that reusable workflow
+  # also runs on push/PR, and probing the live release is meaningless against a diff —
+  # this belongs to the timer alone.
+  provenance:
+    name: wharfy verify (shipped release digests + provenance)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # wharfy falls back to the latest git tag if there is no record
+
+      # Same public tap release.yml/promote.yml install from (preinstalled on ubuntu).
+      - name: Install wharfy
+        run: brew install shirodoromoto/wharfy/wharfy
+
+      # verify needs no local state: with no .wharfy/ record it takes the version from
+      # the latest GitHub release (else the latest tag). The default (probe) run
+      # downloads nothing but still compares GitHub's reported asset digests against the
+      # checksums manifest and checks build provenance — a truncated upload, a swapped
+      # asset, or a release that lost its attestation turns this red.
+      - name: Verify the latest release from the consumer side
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Before the first public release there is nothing to verify — don't sit red
+          # on a repo that has never shipped. Once a release exists, verify judges it.
+          if [ -z "$(gh release list --limit 1 2>/dev/null)" ]; then
+            echo "no GitHub release yet — nothing to verify"
+            exit 0
+          fi
+          wharfy verify

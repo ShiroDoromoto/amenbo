@@ -1,0 +1,30 @@
+# cargo-nextest configuration (https://nexte.st/docs/configuration/).
+#
+# nextest runs each test in its own process, in parallel, so it feels faster than the default
+# `cargo test` and it lists how long every test took.
+#
+# Wiring notes:
+# - nextest does **not** run doctests. The gate picks those up separately with `cargo test --doc`.
+# - `--all-features` is not usable: it turns on `sharing`, which breaks cli_e2e's solo-mode
+#   assumption. Heavy suites are listed explicitly as `--features scale,e2e`.
+
+[profile.default]
+# Mark slow tests as SLOW to surface them (never kill them). Under the gate (`--features scale,e2e`)
+# the slowest are export_scaling_guard / read_scaling_guard at ~2s, so the threshold sits an order
+# above that: they never read as SLOW, but a regression does. `scale` seeds medium; the 10k seed and
+# the wall-clock guards live in `scale-heavy` (nightly), so seconds is the right order here.
+slow-timeout = { period = "10s" }
+# List slow-or-worse (slow / fail) tests in the closing summary, so heavy tests are visible at a glance.
+final-status-level = "slow"
+
+[profile.ci]
+# CI: on a failure keep running the rest (take the whole picture), and print failures immediately
+# as well as again at the end.
+fail-fast = false
+failure-output = "immediate-final"
+# This is looser than default not because the runner is slow, but because **the nightly scale-heavy
+# run shares this ci profile** (scale-heavy.yml passes `--profile ci --features scale-heavy`, which
+# runs read_scaling_guard at BIG=10k with the wall-clock guards). Tuned to the PR path's medium seed
+# alone, that nightly run would report SLOW on every test.
+slow-timeout = { period = "60s" }
+final-status-level = "slow"

@@ -1,0 +1,54 @@
+# wharfy distribution config — ship the all-OS unified installer (GUI+CLI bundled) via GitHub Release.
+# project / github / homepage / license are inferred from the git remote and conventions (no need to
+# state them).
+# Artifacts: mac .pkg / Windows NSIS / Linux .deb+.rpm (each installs GUI+CLI together and puts the
+# CLI on PATH).
+
+project: amenbo
+github: ShiroDoromoto/amenbo
+
+# releases = upload every asset (the unified installer, the CLI archive, install.sh) to the GitHub
+# Release.
+# script   = a lightweight curl|sh path that puts the CLI alone on PATH (for people who do not want
+# the GUI; references prebuilt).
+channels: [releases, script]
+
+# Stable distribution signing is retired. `wharfy sign` self-skips when no identity is set, and the
+# mac CLI/GUI ship with the toolchain's ad-hoc self-signature (arm64 execution is satisfied). The
+# Gatekeeper first-run warning stays under self-signing anyway.
+
+# BYO-binary: the CLI-only binary. The `script` channel (install.sh) fetches this per OS and puts it
+# on PATH, and it also goes to releases for people who want the CLI only (the GUI is bundled into the
+# unified installer side).
+# The build runs on public CI (release.yml): each OS's native runner does `cargo build -p amenbo-cli`
+# into dist/, and wharfy does only package→release→publish.
+prebuilt:
+  binaries:
+    - { os: darwin,  arch: arm64, path: dist/amenbo-darwin-arm64 }
+    - { os: darwin,  arch: amd64, path: dist/amenbo-darwin-amd64 }
+    - { os: linux,   arch: amd64, path: dist/amenbo-linux-amd64 }
+    - { os: linux,   arch: arm64, path: dist/amenbo-linux-arm64 }
+    - { os: windows, arch: amd64, path: dist/amenbo-windows-amd64.exe }
+
+# BYO-bundle: the unified installer (GUI + bundled CLI). Built on the amenbo side and brought in;
+# wharfy does not re-sign (relay) and uploads it to the GitHub Release. Stable distribution signing is
+# retired = mac stays ad-hoc self-signed.
+#   mac  .pkg  … `make dist-gui-mac` (GUI to /Applications, CLI to /usr/local/bin; the .app is ad-hoc
+#                self-signed / the .pkg is unsigned)
+#                two builds, arm64 / amd64 (the Intel build is cross-built with `MAC_GUI_ARCH=amd64`).
+#                It is not a single universal build because the asset-key scheme (os-arch) and the
+#                update_check mapping assume a per-arch layout.
+#   linux .deb/.rpm … `make dist-gui-linux` (GUI+CLI to /usr/bin; for amd64 the Tauri CLI dies under
+#                      qemu, so GitHub Actions' native x86_64 runner release.yml is the primary path)
+#   win  NSIS … built natively by public CI (release.yml's windows job runs `tauri build --bundles
+#               nsis`); registers GUI + bundled CLI on PATH; **unsigned** = the SmartScreen first-run
+#               warning is accepted.
+# Note: applying an update has no self-update; it detects latest.json → opens the latest installer URL
+# and re-runs it.
+bundle:
+  bundles:
+    - { os: darwin,  arch: arm64, kind: pkg,  path: dist/amenbo-darwin-arm64.pkg }
+    - { os: darwin,  arch: amd64, kind: pkg,  path: dist/amenbo-darwin-amd64.pkg }
+    - { os: linux,   arch: amd64, kind: deb,  path: dist/amenbo-app-linux-amd64.deb }
+    - { os: linux,   arch: amd64, kind: rpm,  path: dist/amenbo-app-linux-x86_64.rpm }
+    - { os: windows, arch: amd64, kind: nsis, path: dist/amenbo-app-windows-x64-setup.exe }

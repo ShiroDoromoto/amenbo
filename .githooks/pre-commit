@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# pre-commit — scan the staged additions with every tree guard: they must not
+# reference internal working notes, nor write test prose in Japanese. Enabled by
+# `make hooks` (sets core.hooksPath .githooks).
+# Bypassable with `git commit --no-verify`; CI is the backstop (tree-guards).
+#
+# Every guard runs even once one fails, so a commit is told about all of it at
+# once rather than one guard per attempt.
+set -uo pipefail
+root="$(git rev-parse --show-toplevel)"
+rc=0
+for guard in check-doc-refs check-test-prose; do
+  "$root/guards/$guard.sh" --staged || rc=1
+done
+
+# The comment guard (esorp.yaml): where the guards above read staged lines, this
+# one reads the comments themselves — where they sit, what shape they take, and
+# the vocabulary they may not use. Every comment in the tree is judged, not only
+# the changed part: the tree is clean, so there is nothing to excuse, and a
+# violation anywhere is a violation of this commit.
+#
+# esorp is optional: an outside contributor without it commits as before.
+if command -v esorp >/dev/null 2>&1; then
+  (cd "$root" && esorp check) || rc=1
+fi
+
+# The same declaration over the tracked files that carry no code, whose prose and
+# values no other guard reads (a comment scanner cannot see a value).
+"$root/guards/check-prose.sh" || rc=1
+
+exit "$rc"

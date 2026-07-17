@@ -1,0 +1,124 @@
+# Dependency update proposals. Bot proposes -> CI checks the PR -> the PR merges
+# itself if CI is green (.github/workflows/dependabot-automerge.yml). Merging is
+# automatic; SHIPPING is not — releases stay a deliberate human/AI step, so bumps
+# pile up on main until someone cuts one. Runtime versions (Node/Rust) are NOT
+# managed here; they follow the LTS lifecycle by hand (see the version-pin files).
+#
+# This file only proposes *newer* versions. The security half — "the version you
+# already depend on turned out to be vulnerable" — comes from Dependabot security
+# updates, which are a repo setting (vulnerability alerts + automated security
+# fixes, both on), not a line in this file. That is the half that matters when
+# nobody is pushing: an advisory can turn a green lockfile red without a single
+# commit, and it is the only thing CI cannot catch by running on push.
+#
+# Grouping keeps "one PR per axis" instead of a flood: minor/patch are batched,
+# majors are split into individual PRs so each breaking migration is reviewed on
+# its own. Dependabot itself is free on private repos.
+version: 2
+updates:
+  # Rust workspace (root Cargo.toml + crates/*). The Tauri shell crate
+  # (app/src-tauri) is excluded from the workspace but its manifest lives under
+  # the npm app dir; cargo here covers the workspace members.
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - rust
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch
+    # majors fall outside the group => one PR each.
+
+  # The Tauri host crate. It is `exclude`d from the root workspace, so the cargo
+  # entry above does NOT see it — its manifest and lockfile need their own entry
+  # or the app's whole dependency tree (tauri, webkit bindings, notify) goes
+  # unwatched. Same reason the `app-rust` CI job exists.
+  - package-ecosystem: cargo
+    directory: "/app/src-tauri"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - rust
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      app-cargo-minor-patch:
+        update-types:
+          - minor
+          - patch
+    # majors fall outside the group => one PR each.
+
+  # GUI npm project.
+  - package-ecosystem: npm
+    directory: "/app"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - npm
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      tauri:
+        patterns:
+          - "@tauri-apps/*"
+        update-types:
+          - minor
+          - patch
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+        update-types:
+          - minor
+          - patch
+      vite:
+        patterns:
+          - vite
+          - "@vitejs/plugin-react"
+        update-types:
+          - minor
+          - patch
+      npm-other:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "@tauri-apps/*"
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+          - vite
+          - "@vitejs/plugin-react"
+        update-types:
+          - minor
+          - patch
+    # majors fall outside every group => one PR each.
+
+  # GitHub Actions used by the workflows.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions:
+        patterns:
+          - "*"

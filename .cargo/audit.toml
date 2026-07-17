@@ -1,0 +1,26 @@
+# cargo-audit config. cargo-audit loads `.cargo/audit.toml` relative to the
+# working dir, so the `cargo audit` CI gate (run from the repo root) picks this up.
+#
+# Ignored advisories are transitive deps we cannot patch yet, with no reachable
+# attack surface in amenbo. Revisit whenever the upstream chain bumps its pin.
+#
+# The two quick-xml advisories below reach the tree through the Tauri host crate
+# (app/src-tauri), which is excluded from the workspace, so the weekly audit reads
+# its lockfile separately. Both are denial-of-service in quick-xml's XML reader,
+# and both reach us only where Tauri parses files WE ship:
+# plist -> quick-xml (macOS Info.plist / bundle metadata) and tauri's own resource
+# parsing. amenbo has no network input at all and accepts no XML from a user or a
+# peer, so there is no path for an attacker to hand the reader a hostile document.
+#
+# Not fixable here: the fix is quick-xml >=0.41, and both 0.37.x and 0.39.x pins are
+# semver-locked upstream (plist 1.9 wants 0.39, tauri's chain wants 0.37) — cargo
+# update moves nothing, and Dependabot cannot open a PR for a bump that does not
+# exist. Drop these two lines when upstream bumps; you will be told to, rather than
+# having to remember: the weekly rot gate runs guards/check-audit-ignores.sh, which
+# fails as soon as an ignore here stops matching anything in either lockfile.
+
+[advisories]
+ignore = [
+  "RUSTSEC-2026-0194", # quick-xml: quadratic time on duplicate attribute names (DoS)
+  "RUSTSEC-2026-0195", # quick-xml: unbounded namespace-declaration allocation (DoS)
+]

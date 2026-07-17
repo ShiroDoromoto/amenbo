@@ -1,0 +1,604 @@
+/* ---------- atoms ---------- */
+.facet { display: inline-flex; align-items: center; gap: var(--s-1); }
+/* The circular base carries the facet via its ring colour (--c-human / --c-ai, set
+   inline). A registered image or a facet-seeded identicon fills it — no badge overlay. */
+.facet__base {
+  display: inline-flex; width: 18px; height: 18px; flex: none;
+  border: 1.5px solid; border-radius: 50%; background: var(--c-surface); overflow: hidden;
+}
+.facet__base svg { display: block; width: 100%; height: 100%; }
+/* Registered avatar image fills and crops to the circular base (object-fit: cover). */
+.facet__img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.facet__name { font-size: var(--fs-sm); }
+
+.statusbadge { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-xs); color: var(--c-text-muted); flex-shrink: 0; white-space: nowrap; }
+.statusbadge__dot { width: 8px; height: 8px; border-radius: 50%; }
+
+.due--overdue { color: var(--c-due-overdue); }
+.due--today { color: var(--c-due-today); }
+.due--future { color: var(--c-due-future); }
+
+/* ---------- board ---------- */
+.board { display: flex; gap: var(--s-4); padding: var(--s-5); align-items: flex-start; overflow-x: auto; flex: 1; }
+.board__toolbar {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+}
+.board__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-right: var(--s-3); }
+.viewtabs { display: inline-flex; background: var(--c-surface-sunken); border-radius: var(--r-md); padding: 2px; }
+.viewtab { border: none; background: none; padding: var(--s-1) var(--s-3); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
+.viewtab--active { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-medium); box-shadow: var(--shadow-sm); }
+/* A vertical separator plus a standalone button, setting the view switcher apart from
+   decisions (a different kind of entity). */
+.board__sep { align-self: stretch; width: 1px; margin: var(--s-1) 0; background: var(--c-border); }
+.decisionsbtn { border: 1px solid var(--c-border); background: var(--c-surface); padding: var(--s-1) var(--s-3); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
+.decisionsbtn--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
+.filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-5); border-bottom: 1px solid var(--c-border); flex-wrap: wrap; }
+.filterchip { font-size: var(--fs-xs); border: 1px solid var(--c-border); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-3); color: var(--c-text-muted); }
+.filterchip--on { border-color: var(--c-accent); color: var(--c-accent-text); background: var(--c-accent-weak); }
+/* One filter dimension (a label plus its <select>), laid out on a single line. */
+.filtersel { display: inline-flex; align-items: center; gap: var(--s-1); }
+
+.column { width: 280px; flex: none; display: flex; flex-direction: column; gap: var(--s-3); }
+.column__head { display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-1); }
+.column__name { font-weight: var(--fw-bold); font-size: var(--fs-md); }
+.column__count { font-size: var(--fs-xs); color: var(--c-text-faint); }
+/* The add button at the right end of a column header. Pressing it starts a new item in the
+   right pane. */
+.column__addbtn {
+  margin-left: auto; width: 22px; height: 22px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--c-border); border-radius: var(--r-sm);
+  background: var(--c-surface); color: var(--c-text-muted); cursor: pointer; line-height: 1;
+}
+.column__addbtn:hover { color: var(--c-accent); border-color: var(--c-accent); }
+.board__addcol {
+  width: 200px; flex: none;
+  text-align: left; font-size: var(--fs-sm); color: var(--c-text-faint);
+  border: 1px dashed var(--c-border-strong); background: none; border-radius: var(--r-md); padding: var(--s-2) var(--s-3);
+}
+.board__addcol:hover { color: var(--c-accent); border-color: var(--c-accent); }
+.column__addinput { border: 1px solid var(--c-accent); border-radius: var(--r-md); padding: var(--s-2) var(--s-3); font-size: var(--fs-md); outline: none; }
+.board__addcolinput { width: 200px; flex: none; align-self: flex-start; }
+
+/* ---------- drag & drop (moving between the status board's columns) ---------- */
+/* A droppable column keeps a grabbable area even when empty, and highlights its frame with
+   a dashed outline while a drag is in flight. */
+/* The way out of a done column that has hit its cap: see the done items as a list (the
+   done archive). */
+.column__seeall {
+  text-align: center; width: 100%; padding: var(--s-2);
+  font-size: var(--fs-sm); color: var(--c-text-muted);
+  background: none; border: 1px dashed var(--c-border); border-radius: var(--r-md); cursor: pointer;
+}
+.column__seeall:hover { color: var(--c-accent); border-color: var(--c-accent); }
+.column--droppable { min-height: 72px; border-radius: var(--r-md); transition: background 0.1s ease; }
+.column--dragover { background: var(--c-surface-2, rgba(27, 147, 194, 0.08)); outline: 2px dashed var(--c-accent); outline-offset: 4px; }
+.card--draggable { cursor: grab; }
+.card--dragging { opacity: 0.45; cursor: grabbing; }
+
+/* ---------- toast (a transient warning: a failed write and the like) ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 1000;
+  max-width: 80%; padding: var(--s-3) var(--s-4); border-radius: var(--r-md);
+  font-size: var(--fs-sm); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); cursor: pointer;
+}
+.toast--warn { color: #fff; background: var(--c-warn); }
+
+/* ---------- card ---------- */
+.card {
+  text-align: left; width: 100%;
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); padding: var(--s-3); box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column; gap: var(--s-2);
+  /* Render windowing: a card off screen skips layout and paint while keeping its DOM and
+     its drag-and-drop. This holds the rendering cost near constant however long the column
+     grows. contain-intrinsic-size is the assumed height used to estimate scroll extent. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 110px;
+}
+.card:hover { border-color: var(--c-border-strong); }
+.card--selected { border-color: var(--c-accent); box-shadow: 0 0 0 1px var(--c-accent); }
+.card--done .card__title { color: var(--c-text-faint); text-decoration: line-through; }
+.card__title { font-size: var(--fs-md); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
+.card__row { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.card__assign { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.card__footer { display: flex; align-items: center; gap: var(--s-2); color: var(--c-text-faint); font-size: var(--fs-xs); }
+.card__spacer { flex: 1; }
+.card__status {
+  font-size: var(--fs-xs); color: var(--c-text); background: var(--c-surface);
+  border: 1px solid var(--c-border-strong); border-radius: var(--r-sm); padding: 0 2px; cursor: pointer;
+}
+.groupby { display: flex; align-items: center; gap: var(--s-2); }
+
+/* The chip a task's ref is shown in; clicking it copies that same ref. */
+.idchip {
+  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-faint);
+  background: none; border: none; padding: 0 2px; cursor: pointer; white-space: nowrap;
+}
+.idchip:hover { color: var(--c-accent); }
+
+/* ---------- comment compose (multi-line, Markdown, Cmd+Enter or the send button) ------ */
+/* The comment thread; bodies render as Markdown. */
+.comments { margin-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-2); }
+.comment {
+  background: var(--c-surface-sunken); border-radius: var(--r-md);
+  padding: var(--s-2) var(--s-3);
+}
+.comment__meta {
+  display: flex; align-items: center; gap: var(--s-2);
+  font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-1);
+}
+/* Edit and remove. They sit at the end of the line and only darken on hover, staying quiet
+   enough to be hard to hit by accident. */
+.comment__act { margin-left: auto; opacity: 0.35; }
+.comment__rm { opacity: 0.35; }
+.comment:hover .comment__act, .comment:hover .comment__rm { opacity: 1; }
+.comment__body { font-size: var(--fs-body); line-height: 1.7; max-width: var(--measure-prose); }
+/* The elements react-markdown emits. The line height and paragraph spacing keep Japanese
+   text from feeling cramped. */
+.markdown { line-height: 1.7; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown p { margin: var(--s-2) 0; }
+.markdown ul, .markdown ol { margin: var(--s-2) 0; padding-left: 1.25em; }
+.markdown li { margin: 2px 0; }
+.markdown li > p { margin: 0; }
+.markdown h1, .markdown h2, .markdown h3 {
+  font-weight: var(--fw-bold); line-height: 1.4; margin: var(--s-4) 0 var(--s-2);
+}
+.markdown h1 { font-size: var(--fs-xl); }
+.markdown h2 { font-size: var(--fs-lg); }
+.markdown h3 { font-size: var(--fs-md); color: var(--c-text-muted); }
+.markdown code {
+  font-family: var(--font-mono); font-size: 0.92em;
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--r-sm); padding: 0 0.3em;
+}
+.markdown pre {
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); padding: var(--s-2); overflow-x: auto;
+}
+.markdown pre code { background: none; border: none; padding: 0; }
+.markdown a { color: var(--c-accent); }
+/* Mermaid diagrams. Once rendered, the SVG is centred; before rendering, or after it
+   fails, the raw source shows instead. */
+.markdown .mermaid { margin: var(--s-2) 0; }
+.markdown .mermaid--ready { text-align: center; }
+.markdown .mermaid--ready svg { max-width: 100%; height: auto; }
+.markdown .mermaid__source { margin: 0; }
+.markdown .mermaid__note {
+  margin: 0 0 var(--s-1); font-size: var(--fs-xs); color: var(--c-text-muted);
+}
+.markdown .mermaid--failed { border-left: 2px solid var(--c-border-strong); padding-left: var(--s-2); }
+/* A reference link inside a body, jumping to its target on click. */
+.markdown a.reflink {
+  cursor: pointer; color: var(--c-accent-text);
+  background: var(--c-accent-weak); border-radius: var(--r-sm);
+  padding: 0 0.3em; font-variant-numeric: tabular-nums; text-decoration: none;
+}
+.markdown a.reflink:hover { text-decoration: underline; }
+
+.compose { margin-top: var(--s-2); }
+.compose__input {
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px;
+  font-family: inherit; font-size: var(--fs-sm); line-height: 1.5;
+  border: 1px solid var(--c-border-strong); border-radius: var(--r-md);
+  padding: var(--s-2) var(--s-3); background: var(--c-surface); color: var(--c-text); outline: none;
+}
+.compose__input:focus { border-color: var(--c-accent); }
+.compose__actions { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-top: var(--s-2); }
+.btn--primary:disabled { opacity: 0.45; cursor: default; }
+/* A small label chip, as used for a blocker or a reference to a decision. */
+.chip { font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm); background: var(--c-surface-sunken); }
+/* A clickable chip: the link that navigates to a dependency's blocker. It drops the button
+   defaults to keep the chip's look, and turns accent on hover to show it can be pressed. */
+.chip--link { border: 0; cursor: pointer; color: inherit; font-family: inherit; line-height: inherit; }
+.chip--link:hover { background: var(--c-border-strong); color: var(--c-accent); }
+/* The chip for a premise that holds a reserve back (ready===false). It is a different axis
+   from the human-declared status=blocked and its --c-blocked, so it borrows none of that
+   colour and speaks through its glyph and spacing alone — the two must not be confused. */
+.chip--block { white-space: nowrap; cursor: default; }
+/* The glyph-only form of the same block, for dense surfaces (a calendar chip, a timeline's
+   row label). It shares a line with the title, so it drops the chip background and the
+   count and borrows the width of a single character. */
+.chip--blockglyph { flex: none; font-size: var(--fs-2xs); cursor: default; margin-right: 2px; }
+/* ---------- detail pane ---------- */
+.detail { display: flex; flex-direction: column; }
+.detail__tabs { display: flex; gap: var(--s-1); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--c-border); }
+.detail__tab { border: none; background: none; padding: var(--s-1) var(--s-3); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
+.detail__tab--active { background: var(--c-surface-sunken); color: var(--c-text); font-weight: var(--fw-medium); }
+.detail__body { padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-4); }
+.detail__title { font-size: var(--fs-xl); font-weight: var(--fw-bold); }
+.detail__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.detail__field { display: flex; gap: var(--s-3); font-size: var(--fs-md); align-items: baseline; }
+.detail__flabel { width: 64px; flex: none; color: var(--c-text-faint); font-size: var(--fs-sm); }
+.detail__sep { height: 1px; background: var(--c-border); }
+.detail__section-h { font-size: var(--fs-sm); font-weight: var(--fw-bold); color: var(--c-text-muted); }
+
+/* The attachment view: a drag-and-drop target plus a preview chosen by mime type. */
+.attach__drop { margin-top: var(--s-2); border: 1px dashed var(--c-border); border-radius: var(--r-sm); padding: var(--s-2); }
+.attach__drop--active { border-color: var(--c-accent); background: var(--c-accent-weak); }
+/* The space-saving attachment right under a comment. Quieter padding and border than a
+   body attachment, so it reads as nested under the comment it belongs to. */
+.attach__drop--compact { margin-top: var(--s-1); padding: var(--s-1); }
+.attach__drop--compact .attach__list { margin-bottom: var(--s-1); }
+.attach__compactadd { font-size: var(--fs-xs); }
+.attach__drophint { font-size: var(--fs-sm); padding: var(--s-2); text-align: center; }
+.attach__list { display: flex; flex-direction: column; gap: var(--s-3); }
+.attach__item { border: 1px solid var(--c-border); border-radius: var(--r-sm); padding: var(--s-2); }
+.attach__head { display: flex; align-items: center; gap: var(--s-2); }
+.attach__name { font-size: var(--fs-sm); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
+.attach__meta { font-size: var(--fs-2xs); flex: none; }
+.attach__rm { flex: none; }
+.attach__dl { flex: none; }
+.attach__img { display: block; max-width: 100%; max-height: 360px; margin-top: var(--s-2); border-radius: var(--r-sm); object-fit: contain; }
+.attach__audio { display: block; width: 100%; margin-top: var(--s-2); }
+.attach__video { display: block; max-width: 100%; max-height: 360px; margin-top: var(--s-2); border-radius: var(--r-sm); }
+.attach__pdf { display: block; width: 100%; height: 480px; margin-top: var(--s-2); border: none; border-radius: var(--r-sm); }
+.attach__text { max-height: 320px; overflow: auto; margin-top: var(--s-2); font-size: var(--fs-sm); }
+.attach__pre { white-space: pre-wrap; word-break: break-word; background: var(--c-surface-2); padding: var(--s-2); border-radius: var(--r-sm); }
+.attach__csvwrap { max-height: 320px; overflow: auto; margin-top: var(--s-2); }
+.attach__csv { border-collapse: collapse; font-size: var(--fs-2xs); }
+.attach__csv th, .attach__csv td { border: 1px solid var(--c-border); padding: 2px 6px; text-align: left; white-space: nowrap; }
+.attach__csv th { background: var(--c-surface-2); position: sticky; top: 0; }
+.attach__missing, .attach__unsupported, .attach__loading { margin-top: var(--s-2); font-size: var(--fs-sm); }
+.attach__url { margin-top: var(--s-1); font-size: var(--fs-sm); word-break: break-all; }
+.btn {
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  border-radius: var(--r-sm); padding: var(--s-1) var(--s-3); font-size: var(--fs-sm);
+}
+.btn--primary { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
+/* For a button that is a single glyph. line-height: 0 leaves the line box at the parent's
+   strut (the body size) and scales only the glyph, so the button's dimensions do not
+   change. */
+.btn__glyph { font-size: 1.25em; line-height: 0; }
+/* The assignee picker: a small custom dropdown that puts a FacetAvatar on each facet,
+   which a native <select> cannot draw. The trigger keeps the .btn look and fits the
+   avatar, the name and the caret on one line. */
+.apick { position: relative; display: inline-block; }
+.apick__trigger { display: inline-flex; align-items: center; gap: var(--s-2); cursor: pointer; }
+.apick__caret { font-size: var(--fs-xs); color: var(--c-text-muted, #888); }
+.apick__menu {
+  position: absolute; top: calc(100% + 2px); left: 0; z-index: 20; margin: 0; padding: var(--s-1);
+  list-style: none; min-width: 100%; background: var(--c-surface);
+  border: 1px solid var(--c-border-strong); border-radius: var(--r-sm);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+.apick__opt {
+  display: flex; align-items: center; gap: var(--s-2); width: 100%; text-align: left;
+  padding: var(--s-1) var(--s-2); background: transparent; border: 0; border-radius: var(--r-sm);
+  cursor: pointer; white-space: nowrap;
+}
+.apick__opt:hover { background: var(--c-surface-sunken); }
+/* A menu whose candidate list can grow long (the target picker for a decision-to-decision
+   edge). It scrolls inside itself rather than stretching with the count. */
+.apick__menu--scroll { max-height: 240px; overflow-y: auto; }
+/* The button for a destructive operation (delete): a restrained red outline that fills in
+   on hover. */
+.btn--danger { color: var(--c-danger, #c0392b); border-color: var(--c-danger, #c0392b); background: transparent; }
+.btn--danger:hover { background: var(--c-danger, #c0392b); color: #fff; }
+.detail__danger { margin-top: var(--s-3); display: flex; justify-content: flex-end; }
+.notes { background: var(--c-surface-sunken); border-radius: var(--r-md); padding: var(--s-4); font-size: var(--fs-body); line-height: 1.7; white-space: pre-wrap; max-width: var(--measure-prose); }
+/* Notes rendered as Markdown are a run of block elements, so pre-wrap comes back off (this
+   is the react-markdown path). */
+.notes--md { white-space: normal; cursor: text; }
+.meta { font-size: var(--fs-xs); color: var(--c-text-faint); }
+
+/* ---------- activity ---------- */
+.feed { display: flex; flex-direction: column; }
+/* Virtual scrolling for history: it claims the remaining height inside .main and scrolls
+   only within itself, which is what windowing rests on. */
+.feed--virtual { flex: 1; min-height: 0; overflow-y: auto; }
+.feed__daygroup { padding: var(--s-3) var(--s-5) 0; font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-faint); }
+.feed__item { display: flex; gap: var(--s-3); padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); align-items: flex-start; }
+.feed__item:hover { background: var(--c-surface-2); }
+.feed__body { flex: 1; min-width: 0; }
+.feed__line { font-size: var(--fs-md); line-height: 1.6; }
+/* The destination of an entry. Only a row that can be pressed carries the link colour.
+   Trying to mute an unpressable row with `.faint` does not work: between two single
+   classes, load order hands the win to `.feed__target`, which inverts the affordance —
+   the unpressable row looks like a link and the pressable one looks plain. */
+.feed__target { font-size: var(--fs-xs); color: var(--c-accent-text); border: none; background: none; }
+button.feed__target:hover { color: var(--c-accent); }
+.feed__target--gone { color: var(--c-text-faint); }
+.feed__meta { font-size: var(--fs-xs); color: var(--c-text-faint); display: flex; gap: var(--s-3); margin-top: 2px; }
+.feed__action { font-size: var(--fs-xs); color: var(--c-text-faint); border: none; background: none; }
+.feed__action:hover { color: var(--c-accent); }
+
+/* ---------- command catalog ---------- */
+.cmdcat__search { max-width: 280px; margin: 0; }
+.cmdcat__head { display: block; width: 100%; text-align: left; white-space: normal; }
+.cmdcat__detail { margin-top: var(--s-2); padding-left: var(--s-3); display: flex; flex-direction: column; gap: 2px; }
+.cmdcat__opt { font-size: var(--fs-xs); display: flex; gap: var(--s-2); align-items: baseline; flex-wrap: wrap; }
+.cmdcat__opt code { font-family: var(--font-mono); color: var(--c-accent-text); }
+.cmdcat__req { font-size: var(--fs-xs); color: var(--c-danger, #c6791f); }
+.cmdcat__examples { margin-top: var(--s-2); display: flex; flex-direction: column; gap: 2px; }
+.cmdcat__example { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-faint); }
+
+/* ---------- empty / placeholder ---------- */
+.placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-3); color: var(--c-text-faint); }
+.placeholder__big { font-size: var(--fs-display-md); }
+
+/* ---------- list (smart views) ---------- */
+.list { display: flex; flex-direction: column; }
+.row {
+  display: flex; align-items: center; gap: var(--s-3);
+  width: 100%; text-align: left; background: none; border: none;
+  padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border);
+}
+.row:hover { background: var(--c-surface-2); }
+.row--selected { background: var(--c-accent-weak); }
+/* The inbox's unread indicator. It takes a fixed-width slot at the head of the row, so the
+   row does not shift as the dot lights or clears, and only lights while unread. */
+.row__unread { flex: none; width: 8px; display: inline-flex; align-items: center; justify-content: center; }
+.row__unread-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c-accent); }
+.row__check { color: var(--c-text-faint); }
+/* A list row's title truncates to one line. With wrapping (overflow-wrap: anywhere)
+   instead, widening the detail pane narrows the centre list column until the title plus
+   the chips on the right exceed it; the title, at min-width:0, is then crushed to near
+   zero width and breaks one character per line, stretching the row to full height.
+   Truncating keeps the height constant whatever the column width, and overflow:hidden
+   handles the horizontal spill. */
+.row__title { font-size: var(--fs-md); font-weight: var(--fw-medium); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row__title--done { color: var(--c-text-faint); text-decoration: line-through; }
+.row__spacer { flex: 1; }
+/* The inbox row's actions (mark read / archive / restore). They stay visible at all times:
+   showing them only on hover leaves them undiscoverable, and on a selected row, once the
+   pointer leaves, they would vanish entirely. The buttons carry their own surface
+   background and border, so contrast holds whatever the row background is. On hover they
+   split by colour — read takes the accent, archive stays neutral — keeping the two
+   concepts apart. */
+.row__actions { flex: none; display: inline-flex; align-items: center; gap: var(--s-2); }
+.row__action {
+  background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-sm); cursor: pointer;
+  padding: 2px var(--s-2); font-size: var(--fs-sm); line-height: 1.4; white-space: nowrap;
+  color: var(--c-text-muted);
+}
+/* Mark read: leans on the accent — a forward move that clears the mark while the item is
+   still untouched. */
+.row__action--read:hover, .row__action--read:focus-visible { color: var(--c-accent); border-color: var(--c-accent); }
+/* Archive / restore: neutral — tidying that moves an item out of the inbox or brings it
+   back, not a delete. */
+.row__action--dismiss:hover, .row__action--dismiss:focus-visible { color: var(--c-text); border-color: var(--c-text-muted); }
+
+/* ---------- settings ---------- */
+.settings { padding: var(--s-5); max-width: 720px; display: flex; flex-direction: column; gap: var(--s-5); }
+.settings__section { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); padding: var(--s-4); }
+.settings__h { font-weight: var(--fw-bold); margin-bottom: var(--s-3); }
+.settings__body { display: flex; flex-direction: column; gap: var(--s-2); }
+.settings__row { display: flex; gap: var(--s-4); font-size: var(--fs-md); }
+.settings__k { width: 220px; flex: none; color: var(--c-text-muted); }
+/* Profile avatar preview: a 48px circular base (registered image or identicon). */
+.avatar-preview {
+  display: inline-flex; width: 48px; height: 48px; flex: none;
+  border: 2px solid; border-radius: 50%; background: var(--c-surface); overflow: hidden;
+}
+.avatar-preview svg { display: block; width: 100%; height: 100%; }
+.avatar-preview__img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* ---------- new project (creation screen) ---------- */
+.newproj { padding: var(--s-5); max-width: 560px; display: flex; flex-direction: column; gap: var(--s-5); }
+.newproj__field { display: flex; flex-direction: column; gap: var(--s-2); }
+.newproj__label { font-weight: var(--fw-bold); font-size: var(--fs-md); }
+.newproj__hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
+.newproj__input {
+  padding: var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md);
+  font-size: var(--fs-md); background: var(--c-surface); color: var(--c-text); outline: none;
+}
+.newproj__input:focus { border-color: var(--c-accent); }
+.newproj__folder { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.newproj__path {
+  flex: 1; min-width: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
+  background: var(--c-surface-sunken); font-size: var(--fs-sm); overflow-x: auto; white-space: nowrap;
+}
+.newproj__error { color: var(--c-danger, #c0392b); font-size: var(--fs-sm); }
+.newproj__actions { display: flex; gap: var(--s-3); }
+
+/* ---------- new-project completion step ---------- */
+.newproj__capability { display: flex; flex-direction: column; gap: var(--s-2); }
+.newproj__capability p { margin: 0; font-size: var(--fs-md); }
+.newproj__next { display: flex; flex-direction: column; gap: var(--s-2); }
+.newproj__nextrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+
+/* ---------- pager (list/smart-view windowing) ---------- */
+.pager { display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: var(--s-3); }
+.pager__info { font-size: var(--fs-sm); color: var(--c-text-muted); min-width: 12ch; text-align: center; }
+.pager .btn:disabled { opacity: 0.4; cursor: default; }
+
+/* ---------- onboarding ---------- */
+.onboard { padding: var(--s-7); max-width: 640px; margin: 0 auto; }
+.onboard__hero { text-align: center; margin-bottom: var(--s-7); }
+.onboard__hero h2 { margin: var(--s-3) 0 var(--s-2); }
+.onboard__steps { display: flex; flex-direction: column; gap: var(--s-4); }
+.onboard__step { display: flex; gap: var(--s-4); }
+.onboard__num { width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--c-accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: var(--fw-bold); }
+.onboard__steptitle { font-weight: var(--fw-bold); margin-bottom: 2px; }
+.onboard__cmd, .onboard__step code { font-family: var(--font-mono); font-size: var(--fs-sm); background: var(--c-surface-sunken); border-radius: var(--r-sm); padding: 1px var(--s-2); }
+.onboard__cmd { display: inline-block; margin-top: var(--s-2); color: var(--c-accent-text); }
+/* The empty state's primary actions (create / join). Clicking one copies its CLI command. */
+.onboard__actions { display: flex; gap: var(--s-3); justify-content: center; margin-top: var(--s-5); flex-wrap: wrap; }
+.onboard__action {
+  display: flex; align-items: flex-start; gap: var(--s-3); text-align: left;
+  flex: 1 1 240px; max-width: 300px;
+  background: var(--c-surface); border: 1px solid var(--c-border-strong); border-radius: var(--r-md);
+  padding: var(--s-3); cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.onboard__action:hover { border-color: var(--c-accent); background: var(--c-surface-sunken); }
+.onboard__action-icon { font-size: var(--fs-xl); line-height: 1; }
+.onboard__action-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.onboard__action-label { font-weight: var(--fw-bold); display: flex; align-items: center; gap: var(--s-2); }
+.onboard__action-hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* The create card — the primary action, which moves to a screen inside the GUI. The accent
+   lifts it a little above the rest. */
+.onboard__action--primary { border-color: var(--c-accent); }
+.onboard__go { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-accent-text); margin-top: var(--s-2); }
+/* The tag marking a CLI card (open / join) as a terminal operation. */
+.onboard__cli-tag { font-size: var(--fs-2xs, 10px); font-weight: var(--fw-normal); color: var(--c-text-muted); background: var(--c-surface-sunken); border-radius: var(--r-sm); padding: 0 var(--s-2); }
+/* The heading of the reference section. */
+.onboard__stepshead { margin-bottom: var(--s-2); }
+.onboard__stepstitle { margin: 0 0 var(--s-1); }
+
+/* ---------- palette-derived shared bits ---------- */
+/* Shared styles the command catalogue (CommandCatalogScreen) reuses for its search input
+   and its command display. */
+.palette__input { width: 100%; border: none; border-bottom: 1px solid var(--c-border); padding: var(--s-4); font-size: var(--fs-lg); background: none; outline: none; }
+.palette__cmd { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--c-accent-text); }
+
+/* The first-run setup modal (OnboardingSetup: language, then name, then theme). */
+.setup__overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: var(--s-5); }
+.setup__modal { width: min(440px, 100%); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-6); }
+.setup__hero { text-align: center; margin-bottom: var(--s-5); }
+.setup__goose { font-size: var(--fs-display-lg); line-height: 1; }
+.setup__hero h2 { margin: var(--s-3) 0 var(--s-1); }
+.setup__step { min-height: 120px; }
+.setup__q { font-weight: var(--fw-bold); margin-bottom: var(--s-3); }
+.setup__choices { display: flex; gap: var(--s-3); flex-wrap: wrap; }
+.setup__choice { padding: var(--s-3) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); cursor: pointer; }
+.setup__choice--on { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); }
+.setup__nameRow { display: flex; align-items: center; gap: var(--s-3); }
+.setup__identicon { width: 40px; height: 40px; flex: none; border-radius: 50%; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: var(--fw-bold); }
+.setup__input { flex: 1; padding: var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface); }
+.setup__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-2); }
+.setup__dots { display: flex; gap: var(--s-2); justify-content: center; margin: var(--s-5) 0 var(--s-3); }
+.setup__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c-border-strong); }
+.setup__dot--on { background: var(--c-accent); }
+.setup__actions { display: flex; align-items: center; gap: var(--s-3); }
+
+/* ---------- the lint hook consent modal (HookConsentModal) ---------- */
+.hookconsent__overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: var(--s-5); }
+.hookconsent__modal { width: min(520px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-6); }
+.hookconsent__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-3); }
+.hookconsent__why { margin-bottom: var(--s-3); }
+.hookconsent__where { font-size: var(--fs-xs); color: var(--c-text-muted); word-break: break-all; margin-bottom: var(--s-4); }
+.hookconsent__slots { margin-bottom: var(--s-4); }
+.hookconsent__slotsTitle { font-weight: var(--fw-bold); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
+.hookconsent__slots ul { margin: 0; padding-left: var(--s-5); }
+.hookconsent__guidance { margin: var(--s-2) 0 0; padding: var(--s-2); background: var(--c-surface-2); border-radius: var(--r-md); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-all; }
+.hookconsent__error { color: var(--c-danger); font-size: var(--fs-xs); margin-bottom: var(--s-3); }
+.hookconsent__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.hookconsent__action { padding: var(--s-3) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); cursor: pointer; }
+.hookconsent__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
+.hookconsent__action--never { color: var(--c-text-muted); }
+.hookconsent__action:disabled { opacity: 0.5; cursor: default; }
+.hookconsent__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-3); }
+
+/* ---------- the classification management panel (DimensionManager) ---------- */
+.dimmgr { width: min(560px, 100%); max-height: 82vh; display: flex; flex-direction: column; gap: var(--s-4); }
+.dimmgr__head { display: flex; align-items: center; justify-content: space-between; }
+.dimmgr__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); }
+.dimmgr__empty { margin: 0; }
+.dimmgr__list { display: flex; flex-direction: column; gap: var(--s-3); overflow-y: auto; }
+.dimmgr__dim { border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); padding: var(--s-3) var(--s-4); display: flex; flex-direction: column; gap: var(--s-2); }
+.dimmgr__dimhead { display: flex; align-items: center; gap: var(--s-3); }
+.dimmgr__name { flex: 1; font-weight: var(--fw-bold); background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: inherit; }
+.dimmgr__notes { width: 100%; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-size: var(--fs-sm); }
+.dimmgr__name:hover, .dimmgr__notes:hover, .dimmgr__valname:hover { border-color: var(--c-border); }
+.dimmgr__name:focus, .dimmgr__notes:focus, .dimmgr__valname:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
+.dimmgr__values { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-left: var(--s-2); }
+.dimmgr__vlabel { font-size: var(--fs-xs); margin-right: var(--s-1); }
+.dimmgr__val { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--c-border); border-radius: 999px; padding: 1px var(--s-2); background: var(--c-surface); }
+.dimmgr__valname { background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-sm); width: 8ch; }
+/* Only ordered values go into a single vertical column. A cloud of chips wraps in two
+   dimensions, so the up/down controls stop matching what is visually above and below, and
+   the names truncate at 8ch beyond reading. One column shows the ordering as it is and
+   lets the names run to full width. */
+.dimmgr__values--ordered { flex-wrap: nowrap; flex-direction: column; align-items: stretch; }
+.dimmgr__values--ordered > .dimmgr__vlabel, .dimmgr__values--ordered > .dimmgr__addval { align-self: flex-start; }
+.dimmgr__values--ordered > .dimmgr__val { display: flex; gap: var(--s-2); border-radius: var(--r-md); padding: 2px var(--s-2); }
+.dimmgr__values--ordered .dimmgr__valname { flex: 1; width: auto; min-width: 0; }
+/* The period and the "current" mark, carried only by the values of a time_axis dimension.
+   The current era shows as a border plus a pale accent background. */
+.dimmgr__val--current { border-color: var(--c-accent); background: color-mix(in srgb, var(--c-accent) 12%, var(--c-surface)); }
+.dimmgr__period { display: inline-flex; align-items: center; gap: 2px; margin: 0 2px; font-size: var(--fs-xs); }
+.dimmgr__date { background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: var(--c-text-muted); font-size: var(--fs-xs); }
+.dimmgr__date:hover { border-color: var(--c-border); }
+.dimmgr__date:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
+.dimmgr__open { background: transparent; border: 1px dashed var(--c-border); border-radius: var(--r-sm); padding: 0 var(--s-1); color: var(--c-text-muted); font-size: var(--fs-xs); cursor: pointer; }
+.dimmgr__open:hover { border-color: var(--c-accent); color: var(--c-accent); }
+.dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: #fff; font-size: var(--fs-xs); }
+.dimmgr__danger { color: var(--c-danger, #c0392b); }
+.dimmgr__adddim { align-self: flex-start; }
+.dimmgr__ordered { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--c-text-muted); cursor: pointer; white-space: nowrap; }
+.dimmgr__reorder { display: inline-flex; gap: 1px; margin-right: 2px; }
+.dimmgr__movebtn { background: transparent; border: none; color: var(--c-text-muted); cursor: pointer; padding: 0 1px; line-height: 1; font-size: var(--fs-sm); }
+.dimmgr__movebtn:hover:not(:disabled) { color: var(--c-accent); }
+.dimmgr__movebtn:disabled { opacity: 0.3; cursor: default; }
+
+/* ---------- calendar view ---------- */
+.cal { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--s-4) var(--s-5); gap: var(--s-3); overflow-y: auto; }
+.cal__head { display: flex; align-items: center; gap: var(--s-3); }
+.cal__month { font-size: var(--fs-lg); font-weight: var(--fw-bold); min-width: 9ch; }
+.cal__nav {
+  width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--c-border); border-radius: var(--r-sm); background: var(--c-surface);
+  color: var(--c-text-muted); cursor: pointer; line-height: 1;
+}
+.cal__nav:hover { color: var(--c-accent); border-color: var(--c-accent); }
+.cal__todaybtn {
+  margin-left: var(--s-2); font-size: var(--fs-xs); border: 1px solid var(--c-border);
+  background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-3); color: var(--c-text-muted); cursor: pointer;
+}
+.cal__todaybtn:hover { color: var(--c-accent); border-color: var(--c-accent); }
+.cal__weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s-1); }
+.cal__weekday { font-size: var(--fs-xs); color: var(--c-text-faint); text-align: center; padding: var(--s-1) 0; }
+.cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s-1); }
+.cal__cell {
+  min-height: 92px; display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid var(--c-border); border-radius: var(--r-sm); background: var(--c-surface); padding: var(--s-1);
+}
+.cal__cell--out { background: var(--c-surface-sunken); }
+.cal__cell--out .cal__date { color: var(--c-text-faint); }
+.cal__cell--today { border-color: var(--c-accent); box-shadow: 0 0 0 1px var(--c-accent); }
+.cal__date { font-size: var(--fs-xs); color: var(--c-text-muted); text-align: right; padding: 0 2px; }
+.cal__cell--today .cal__date { color: var(--c-accent); font-weight: var(--fw-bold); }
+.cal__chip {
+  display: block; width: 100%; text-align: left; border: none; border-radius: var(--r-sm);
+  padding: 1px var(--s-2); font-size: var(--fs-2xs); line-height: 1.5; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--c-surface-sunken); color: var(--c-text); border-left: 3px solid var(--c-text-faint);
+}
+.cal__chip--overdue { border-left-color: var(--c-due-overdue); }
+.cal__chip--today { border-left-color: var(--c-due-today); }
+.cal__chip--future { border-left-color: var(--c-due-future); }
+.cal__chip--done { color: var(--c-text-faint); text-decoration: line-through; }
+.cal__chip--selected { background: var(--c-accent-weak); box-shadow: inset 0 0 0 1px var(--c-accent); }
+.cal__chip:hover { background: var(--c-surface-2); }
+.cal__more { font-size: var(--fs-2xs); color: var(--c-text-faint); padding: 0 var(--s-2); }
+.cal__nodue { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-top: var(--s-2); border-top: 1px dashed var(--c-border); }
+.cal__nodue-label { font-size: var(--fs-xs); color: var(--c-text-faint); font-weight: var(--fw-medium); }
+.cal__nodue .cal__chip { display: inline-block; width: auto; max-width: 220px; border-left-width: 3px; border-left-color: var(--c-border-strong); }
+
+/* ---------- timeline (gantt) view ---------- */
+.tl { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--s-4) var(--s-5); gap: var(--s-2); overflow-y: auto; }
+.tl__axis, .tl__row { display: grid; grid-template-columns: 200px 1fr 84px; align-items: center; gap: var(--s-3); }
+.tl__axis { padding-bottom: var(--s-2); border-bottom: 1px solid var(--c-border); position: sticky; top: 0; background: var(--c-bg); z-index: 1; }
+.tl__ruler { position: relative; height: 16px; font-size: var(--fs-2xs); color: var(--c-text-faint); }
+.tl__ruler-end { position: absolute; right: 0; top: 0; }
+.tl__ruler-start { right: auto; left: 0; }
+.tl__ruler-today { position: absolute; top: 0; transform: translateX(-50%); color: var(--c-accent); font-weight: var(--fw-medium); white-space: nowrap; }
+.tl__rows { display: flex; flex-direction: column; }
+.tl__row { width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--c-border); padding: var(--s-2) 0; cursor: pointer; }
+.tl__row:hover { background: var(--c-surface-2); }
+.tl__row--selected { background: var(--c-accent-weak); }
+.tl__label { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.tl__title { font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl__track { position: relative; height: 18px; }
+.tl__todayline { position: absolute; top: -2px; bottom: -2px; width: 0; border-left: 1px dashed var(--c-accent); }
+.tl__bar { position: absolute; top: 3px; height: 12px; border-radius: var(--r-sm); min-width: 4px; background: var(--c-due-future); }
+.tl__bar--overdue { background: var(--c-due-overdue); }
+.tl__bar--today { background: var(--c-due-today); }
+.tl__bar--future { background: var(--c-due-future); }
+.tl__bar--done { background: var(--c-done); opacity: 0.7; }
+.tl__rel { font-size: var(--fs-2xs); color: var(--c-text-muted); text-align: right; white-space: nowrap; }
+
+/* The restart gate for a store that has been overtaken (RestartGate). */
+.restart__error { margin-bottom: var(--s-3); padding: var(--s-3); border: 1px solid var(--c-blocked); border-radius: var(--r-md); color: var(--c-blocked); font-size: var(--fs-xs); }
+.restart__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+
+/* The migration screen shown at startup (MigrationScreen). */
+.migrate__body { display: flex; flex-direction: column; gap: var(--s-3); }
+.migrate__path { display: block; margin-top: var(--s-1); font-size: var(--fs-xs); word-break: break-all; }
+.migrate__bar { height: 6px; background: var(--c-border); border-radius: 3px; overflow: hidden; }
+.migrate__bar-fill { height: 100%; background: var(--c-accent); }
+.migrate__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }

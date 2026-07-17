@@ -1,0 +1,2150 @@
+//! Read queries: `task list` (filter/sort), `status`, and project list/detail. Every read is served
+//! by indexed SQL against the read-model (the engine that holds the source of truth).
+
+use chrono::NaiveDate;
+use serde::Serialize;
+
+use crate::error::{Error, Result};
+use crate::model::{ActorKind, DecisionStatus, Priority, TaskStatus};
+use crate::time::{self, Timestamp};
+use crate::view::{DecisionCompact, DecisionRef, Ref, TaskCompact};
+
+// ───────────────────────── filter / sort skeleton (shared) ─────────────────────────
+
+/// Shared parsing skeleton for filter expressions written as space-separated `key:value` tokens.
+/// Each token is split on `:`; anything not in `key:value` form yields the same error. `apply` is
+/// called once per `(key, value)` and folds it into the caller's filter (unknown keys and bad
+/// values are rejected by returning `Err` from `apply`).
+fn parse_filter_tokens(expr: &str, mut apply: impl FnMut(&str, &str) -> Result<()>) -> Result<()> {
+    for token in expr.split_whitespace() {
+        let (key, value) = token.split_once(':').ok_or_else(|| {
+            Error::invalid(
+                format!("filter '{token}' must be in key:value form"),
+                format!("フィルタ '{token}' は key:value 形式で指定してください"),
+            )
+        })?;
+        apply(key, value)?;
+    }
+    Ok(())
+}
+
+/// Shared skeleton for sort strings where a leading `-` means descending. The stripped `key` is
+/// handed to `apply`, which sorts the slice (unknown keys are rejected there with `Err`); if the
+/// spec asked for descending, the slice is reversed afterwards.
+fn sort_by_spec<T>(
+    items: &mut [T],
+    sort: &str,
+    apply: impl FnOnce(&mut [T], &str) -> Result<()>,
+) -> Result<()> {
+    let desc = sort.starts_with('-');
+    let key = sort.trim_start_matches('-');
+    apply(items, key)?;
+    if desc {
+        items.reverse();
+    }
+    Ok(())
+}
+
+// ───────────────────────── filter ─────────────────────────
+
+#[derive(Clone, Debug, Default)]
+pub struct Filter {
+    pub done: Option<bool>,
+    /// Allowed set for `status:` — comma-separated values (`status:todo,in_progress`) match if the
+    /// task has any of them (OR within the key). Never empty: the parser demands at least one value.
+    pub status: Option<Vec<TaskStatus>>,
+    pub due: Option<DueFilter>,
+    pub priority: Option<Option<Priority>>, // Some(None)=none, Some(Some(p))=that priority
+    /// The reference written in `project:` (an id, or an exact name). Parsing only looks at grammar
+    /// (it has no `conn`), so this stays an **unresolved raw string**; the entry point of the read
+    /// turns it into an id via [`Filter::resolve`]. A reference that cannot be resolved is an error,
+    /// not an empty result — silently returning nothing leaves the caller unable to tell "nothing
+    /// matched" from "the name did not resolve".
+    pub(crate) project_ref: Option<String>,
+    /// The resolved project id. This is the only field the filtering looks at ([`Filter::resolve`]
+    /// fills it in).
+    pub project_id: Option<i64>,
+    pub text: Option<String>,
+    /// `number:` / `ref:` — filter by conversational ref (`AMB-T-<n>` / `AMB-D-<n>` / a bare number).
+    pub number: Option<NumberFilter>,
+    pub assignee: Option<AssigneeFilter>,
+    /// `ai:true|false` — the AI-delegation dimension (`assignee_kind=ai`). Independent of the
+    /// assignee dimension: it gathers everything delegated to an AI, whoever's. `me-ai` (my own AI)
+    /// still exists separately on the assignee side.
+    pub ai: Option<bool>,
+    /// Derived: `ready:yes` = actionable, `ready:no` = blocked. `ready:no` catches not only tasks
+    /// with open blockers but also tasks linked to a decision that is not live as a rationale — the
+    /// two reasons [`crate::view::ReserveBlocker`] enumerates, which the reservation guard reads off
+    /// the same derivation.
+    pub ready: Option<bool>,
+    /// Filtering by classification axis (dimension). Folds together `dim:<axis>=<value>` and
+    /// `time_axis:<value>`, the sugar that names only the time axis. The key may appear several
+    /// times (`dim:a=x dim:b=y`) and the elements AND together.
+    pub dimensions: Vec<DimensionFilter>,
+    /// `decision:<AMB-D-n | D-n | n>` — tasks linked to this decision (forward lookup through
+    /// `decision_task_link`). Symmetric with `task:` on the `decision list` side: it makes the
+    /// decision ⇄ task relation **traversable by query**. Compose it with `status:` and friends to
+    /// ask for "the unfinished tasks this decision produced".
+    pub decision: Option<u32>,
+}
+
+/// One `dim:<axis>=<value>` / `time_axis:<value>` token. The time axis is not a first-class
+/// attribute — it is just a dimension carrying `role: time_axis` — so `time_axis:` is only sugar for
+/// "the axis designated for that role" (it does not depend on the axis's name, so it works whatever
+/// the user calls the axis, in any language).
+#[derive(Clone, Debug)]
+pub struct DimensionFilter {
+    /// The axis reference (exact name, case-insensitive, or an exact id). `None` = `time_axis:` =
+    /// whichever axis has role=time_axis. Parsing only looks at grammar (it has no `conn`), so this
+    /// stays an **unresolved raw string** — [`Filter::resolve`] turns it into an id.
+    pub(crate) axis: Option<String>,
+    pub(crate) value: DimensionValueFilter,
+    /// The resolved axis/value ([`Filter::resolve`] fills it in). This is the only field the
+    /// filtering looks at, and an axis or value name that fails to resolve is an error, not an empty
+    /// result (same contract as `project:`).
+    pub(crate) resolved: Option<ResolvedDimension>,
+}
+
+/// The result of resolving a [`DimensionFilter`].
+#[derive(Clone, Debug)]
+pub(crate) struct ResolvedDimension {
+    /// Ids of the axes matching the reference. Axis names are defined **per project**, so a name
+    /// shared by several projects resolves to several ids — a cross-project `task list` ORs over all
+    /// of them. Under `project:` the candidate tasks are already confined to that project, so the
+    /// extra axis ids cannot widen the result.
+    pub(crate) axis_ids: Vec<i64>,
+    /// Ids of the values. `None` = `=none` (no live value of that axis is attached — unclassified).
+    pub(crate) value_ids: Option<Vec<i64>>,
+}
+
+/// The value side of `dim:` / `time_axis:`.
+#[derive(Clone, Debug)]
+pub enum DimensionValueFilter {
+    /// `none` — not a single live value of that axis is attached (unclassified). Same vocabulary as
+    /// `priority:none` and friends.
+    Unassigned,
+    /// A value name (exact, case-insensitive) or an exact value id (resolved either way).
+    Named(String),
+}
+
+impl DimensionValueFilter {
+    /// Reject an empty value. Empty names nothing — neither a name nor an id — so `time_axis:` would
+    /// degenerate into "no value given" and the filter would pass everything through. Catch it at
+    /// the grammar level.
+    fn parse(value: &str, empty: impl Fn() -> Error) -> Result<DimensionValueFilter> {
+        if value.trim().is_empty() {
+            return Err(empty());
+        }
+        Ok(if value == "none" {
+            DimensionValueFilter::Unassigned
+        } else {
+            DimensionValueFilter::Named(value.to_string())
+        })
+    }
+}
+
+impl DimensionFilter {
+    /// Parse the value of `dim:` (`<axis>=<value>`). Split on the first `=`, so the value side may
+    /// itself contain `=`.
+    fn parse_axis_value(spec: &str) -> Result<DimensionFilter> {
+        let invalid = || {
+            Error::invalid(
+                "dim must be <axis>=<value> (e.g. dim:Category=bug, dim:Category=none)",
+                "dim は <軸>=<値> の形式です（例: dim:カテゴリー=バグ・dim:カテゴリー=none）",
+            )
+        };
+        let (axis, value) = spec.split_once('=').ok_or_else(invalid)?;
+        if axis.trim().is_empty() {
+            return Err(invalid());
+        }
+        Ok(DimensionFilter {
+            axis: Some(axis.to_string()),
+            value: DimensionValueFilter::parse(value, invalid)?,
+            resolved: None,
+        })
+    }
+
+    /// Resolve the axis and value references to ids. A mistyped axis or value name is an **error** —
+    /// returning zero rows would leave the caller unable to tell "nothing matched" from "I mistyped
+    /// the name", and on the `=none` (unclassified) side it is worse than zero rows: it turns into
+    /// **every row**, because `NOT EXISTS` against a nonexistent axis is true for everyone.
+    fn resolve(&mut self, conn: &rusqlite::Connection) -> Result<()> {
+        use crate::ops::dimension::{NOUN, VALUE_NOUN};
+        use crate::store_engine::read;
+        let oops = crate::error::engine_on(conn);
+
+        let axis_ids = match &self.axis {
+            Some(reference) => {
+                let hits = read::resolve_dimension_by_ref(conn, reference).map_err(&oops)?;
+                if hits.is_empty() {
+                    return Err(NOUN.not_found(reference));
+                }
+                hits
+            }
+            // `time_axis:` is sugar for **the axis designated by role**, not for an axis name. With
+            // nothing designated, there is nothing to point at.
+            None => {
+                let hits = read::time_axis_dimensions(conn).map_err(&oops)?;
+                if hits.is_empty() {
+                    return Err(Error::not_found(
+                        "no dimension is designated as the time axis",
+                        "時間軸に指名された次元がありません",
+                    ));
+                }
+                hits
+            }
+        };
+
+        let value_ids = match &self.value {
+            DimensionValueFilter::Unassigned => None,
+            DimensionValueFilter::Named(reference) => {
+                let hits =
+                    read::resolve_dimension_value_by_ref(conn, &axis_ids, reference).map_err(&oops)?;
+                if hits.is_empty() {
+                    return Err(VALUE_NOUN.not_found(reference));
+                }
+                Some(hits)
+            }
+        };
+
+        self.resolved = Some(ResolvedDimension { axis_ids, value_ids });
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum DueFilter {
+    Today,
+    Overdue,
+    Week,
+    None,
+    On(NaiveDate),
+}
+
+/// The value of `assignee:`. `me` / `me-ai` resolve through the facet (`assignee_kind` human/ai);
+/// with a single store there is no id to name.
+#[derive(Clone, Debug)]
+pub enum AssigneeFilter {
+    /// Unassigned.
+    None,
+    /// Me (the human facet). `me`.
+    Me,
+    /// My AI. `me-ai`.
+    MeAi,
+}
+
+/// The value of `number:` / `ref:` — filtering by conversational number. Besides plain digits
+/// (`123` / `#123`), it accepts the kind codes: `AMB-T-n` (task) and `AMB-D-n` (decision), the bare
+/// `T-n` / `D-n` included. With a code the filter only matches on that side (`AMB-D-<n>` matches no
+/// task; `AMB-T-<n>` matches no decision). Tasks and decisions live in separate number spaces.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NumberFilter {
+    /// The conversational number.
+    pub number: u32,
+    /// `Some` only when a kind prefix was given (`true` = decisions, `false` = tasks). A bare number
+    /// or a bare `#n` leaves it `None`.
+    pub require_decision: Option<bool>,
+}
+
+impl NumberFilter {
+    /// Parse a filter value (`AMB-T-<n>` / `AMB-D-<n>`, or the bare `123` / `#123` / `T-123` / `D-123`). It
+    /// shares the grammar helpers with
+    /// reference resolution, so "what a number means" cannot drift apart between filtering and
+    /// resolving.
+    fn parse(value: &str) -> Result<NumberFilter> {
+        use crate::ops::task::{parse_number_ref, parse_typed_ref, TypedKind};
+        if let Some((kind, number)) = parse_typed_ref(value) {
+            return Ok(NumberFilter { number, require_decision: Some(kind == TypedKind::Decision) });
+        }
+        if let Some(number) = parse_number_ref(value) {
+            return Ok(NumberFilter { number, require_decision: None });
+        }
+        Err(Error::invalid(
+            "number must be a conversational ref like AMB-T-<n> or AMB-D-<n> (the bare <n> / #<n> / T-<n> are read too)",
+            "number は AMB-T-<n> / AMB-D-<n> のような会話用参照で指定してください（素の <n> / #<n> / T-<n> も読めます）",
+        ))
+    }
+
+    /// Match on the decision side (a `T-` prefix never matches a decision).
+    fn matches_decision(&self, d: &crate::model::Decision) -> bool {
+        if self.require_decision == Some(false) {
+            return false;
+        }
+        d.id == i64::from(self.number)
+    }
+}
+
+/// The filter value of `decision:` / `task:` — the conversational number of the *other* side (a bare
+/// number, `#n`, or a kind-coded form such as `AMB-T-n`). Tasks and decisions have separate number spaces, so **the
+/// opposite prefix is an error rather than an empty result**: a `T-12` handed to `decision:` is a
+/// mix-up by the writer, and quietly returning nothing would read as "there is no such link".
+fn parse_cross_ref(value: &str, want_decision: bool) -> Result<u32> {
+    let nf = NumberFilter::parse(value)?;
+    if nf.require_decision.is_some_and(|is_decision| is_decision != want_decision) {
+        return Err(if want_decision {
+            Error::invalid(
+                "decision must name a decision (AMB-D-<n> / D-<n> / <n>)",
+                "decision は決定を指します（AMB-D-<n> / D-<n> / <n>）",
+            )
+        } else {
+            Error::invalid(
+                "task must name a task (AMB-T-<n> / T-<n> / <n>)",
+                "task はタスクを指します（AMB-T-<n> / T-<n> / <n>）",
+            )
+        });
+    }
+    Ok(nf.number)
+}
+
+impl Filter {
+    /// Resolve the `project:` reference (an id, or an exact name) to a single project id. Parsing
+    /// only looks at grammar (it has no `conn`), so the entry point of the read — which does have a
+    /// `conn` — runs this once, right after parsing. A reference that fails to resolve is an
+    /// **error**: returning zero rows would swallow the typo.
+    pub fn resolve(&mut self, conn: &rusqlite::Connection) -> Result<()> {
+        if let Some(reference) = self.project_ref.take() {
+            self.project_id = Some(resolve_project_ref(conn, &reference)?);
+        }
+        for dimension in &mut self.dimensions {
+            dimension.resolve(conn)?;
+        }
+        Ok(())
+    }
+
+    pub fn parse(expr: &str, today: NaiveDate) -> Result<Filter> {
+        let mut f = Filter::default();
+        parse_filter_tokens(expr, |key, value| {
+            match key {
+                "done" => {
+                    f.done = Some(match value {
+                        "true" => true,
+                        "false" => false,
+                        _ => return Err(Error::invalid("done must be true / false", "done は true / false")),
+                    })
+                }
+                "status" => {
+                    // Several values may be given, comma-separated (`status:todo,in_progress`). A
+                    // single unknown value is an error, and so is an empty element
+                    // (`status:todo,`).
+                    let mut statuses = Vec::new();
+                    for part in value.split(',') {
+                        let parsed = TaskStatus::parse(part).ok_or_else(|| {
+                            Error::invalid("status must be todo / in_progress / done / blocked", "status は todo / in_progress / done / blocked")
+                        })?;
+                        if !statuses.contains(&parsed) {
+                            statuses.push(parsed);
+                        }
+                    }
+                    f.status = Some(statuses)
+                }
+                "due" => {
+                    f.due = Some(match value {
+                        "today" => DueFilter::Today,
+                        "overdue" => DueFilter::Overdue,
+                        "week" => DueFilter::Week,
+                        "none" => DueFilter::None,
+                        other => DueFilter::On(time::parse_date(other, today)?),
+                    })
+                }
+                "priority" => {
+                    f.priority = Some(match value {
+                        "high" => Some(Priority::High),
+                        "medium" => Some(Priority::Medium),
+                        "low" => Some(Priority::Low),
+                        "none" => None,
+                        _ => return Err(Error::invalid("priority must be high / medium / low / none", "priority は high / medium / low / none")),
+                    })
+                }
+                "project" => f.project_ref = Some(value.to_string()),
+                "text" => f.text = Some(value.to_string()),
+                // `number:` and its alias `ref:` (synonyms — filter by conversational number).
+                "number" | "ref" => f.number = Some(NumberFilter::parse(value)?),
+                "assignee" => {
+                    f.assignee = Some(match value {
+                        "none" => AssigneeFilter::None,
+                        "me" | "human" => AssigneeFilter::Me,
+                        "me-ai" | "ai" => AssigneeFilter::MeAi,
+                        _ => {
+                            return Err(Error::invalid(
+                                "assignee must be none / me / me-ai",
+                                "assignee は none / me / me-ai のいずれかです",
+                            ))
+                        }
+                    })
+                }
+                // `ai:true|false` — the AI-delegation dimension (independent of assignee: it selects
+                // what is delegated to an AI, whoever's).
+                "ai" => {
+                    f.ai = Some(match value {
+                        "true" => true,
+                        "false" => false,
+                        _ => return Err(Error::invalid("ai must be true / false", "ai は true / false")),
+                    })
+                }
+                // `ready:yes|no` and its alias `blocked:none|open` (synonyms).
+                "ready" => {
+                    f.ready = Some(match value {
+                        "yes" => true,
+                        "no" => false,
+                        _ => return Err(Error::invalid("ready must be yes / no", "ready は yes / no")),
+                    })
+                }
+                "blocked" => {
+                    f.ready = Some(match value {
+                        "none" => true,
+                        "open" => false,
+                        _ => return Err(Error::invalid("blocked must be none / open", "blocked は none / open")),
+                    })
+                }
+                // Traverse the decision ⇄ task link (symmetric with `task:` on `decision list`).
+                "decision" => f.decision = Some(parse_cross_ref(value, true)?),
+                // Filter across classification axes. `dim:` names any axis; `time_axis:` is sugar for
+                // the axis designated for that role. Repeated tokens AND together (`dim:` is not a
+                // single-value key — it accumulates).
+                "dim" | "dimension" => f.dimensions.push(DimensionFilter::parse_axis_value(value)?),
+                "time_axis" => {
+                    let value = DimensionValueFilter::parse(value, || {
+                        Error::invalid(
+                            "time_axis must name a value of the time axis (e.g. time_axis:ops, time_axis:none)",
+                            "time_axis は時間軸の値を指定します（例: time_axis:ops・time_axis:none）",
+                        )
+                    })?;
+                    f.dimensions.push(DimensionFilter { axis: None, value, resolved: None })
+                }
+                other => {
+                    return Err(Error::invalid(
+                        format!("unknown filter key '{other}' (done/status/due/priority/project/text/number/ref/assignee/ai/ready/decision/dim/time_axis)"),
+                        format!("未知のフィルタキー '{other}'（done/status/due/priority/project/text/number/ref/assignee/ai/ready/decision/dim/time_axis）"),
+                    ))
+                }
+            }
+            Ok(())
+        })?;
+        Ok(f)
+    }
+
+}
+
+// ───────────────────────── task list ─────────────────────────
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ListQueryEcho {
+    pub project: Option<i64>,
+    pub filter: Option<String>,
+    pub sort: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct TaskListResult {
+    pub query: ListQueryEcho,
+    pub count: usize,
+    pub total_matched: usize,
+    pub tasks: Vec<TaskCompact>,
+}
+
+#[derive(Default)]
+pub struct ListParams {
+    pub project_id: Option<i64>,
+    pub filter_expr: Option<String>,
+    pub sort: String,
+    /// Page size (the first `limit` items in sort order). `None` = unlimited.
+    pub limit: Option<usize>,
+    /// How many items to skip from the front (paging further back through history). `None` = 0.
+    pub offset: Option<usize>,
+}
+
+/// Paging of the same shape as activity's (`--limit` / `--offset`). Takes the fully sorted set of
+/// matches `items`, skips `offset` of them and truncates to `limit`. Returns `(total matches before
+/// paging, the page)` — the caller reports the total as `total_matched` and the page length as
+/// `count`. `offset >= len` yields an empty page; `limit = None` means "everything from `offset` on".
+pub(crate) fn paginate<T>(mut items: Vec<T>, offset: Option<usize>, limit: Option<usize>) -> (usize, Vec<T>) {
+    let total = items.len();
+    let off = offset.unwrap_or(0);
+    if off >= items.len() {
+        items.clear();
+    } else if off > 0 {
+        items.drain(0..off);
+    }
+    if let Some(n) = limit {
+        items.truncate(n);
+    }
+    (total, items)
+}
+
+/// The `task list` read. Selection (filter / project / sort / total) is computed by **indexed SQL**
+/// over the engine read-model ([`crate::store_engine::list_task_ids`]): membership, dependency and
+/// sort are all index-served `WHERE` / `ORDER BY` terms. Only the ids that made it onto the page are
+/// hydrated, straight from the SQL read-model
+/// ([`crate::store_engine::hydrate_task_cards`] — O(output), never a full-store walk). `reach` is
+/// **always** taken as an argument: forcing the scope to be declared in the type means a read that
+/// forgets it does not compile, so containment does not rest on the author remembering it.
+pub fn list(
+    conn: &rusqlite::Connection,
+    reach: crate::reach::Reach,
+    params: ListParams,
+) -> Result<TaskListResult> {
+    use crate::store_engine::{self, TaskQuery};
+
+    let today = time::today();
+    let mut filter = match &params.filter_expr {
+        Some(e) => Filter::parse(e, today)?,
+        None => Filter::default(),
+    };
+    // `project:` may be written as a name or an id. This is the entry point of the read — the layer
+    // that holds the `conn` — so resolve it exactly once, before building any SQL. A name that does
+    // not resolve errors here instead of degenerating into an empty result.
+    filter.resolve(conn)?;
+
+    // Folding the reach into the scope happens in the same one place. If the reach is closed over a
+    // single project, an unspecified scope is filled in with the bound project. Naming a project
+    // with `project:` is human vocabulary, and inside a closed reach it is an error — even when it
+    // names the bound project itself. Same discipline as never quietly returning zero rows for what
+    // you cannot see: do not make what you cannot choose look choosable.
+    if filter.project_id.is_some() {
+        reach.refuse_project_choice("the `project:` filter")?;
+    }
+    let project_id = reach.narrow(params.project_id)?;
+    filter.project_id = reach.narrow(filter.project_id)?;
+
+    // Paging is pushed down to SQL `LIMIT`/`OFFSET` to keep the read O(result). `total_matched` (the
+    // number of matches before paging) comes back from `list_task_ids` as a separate COUNT.
+    let page = store_engine::list_task_ids(
+        conn,
+        &TaskQuery {
+            reach,
+            project_id,
+            filter: &filter,
+            sort: &params.sort,
+            today,
+            limit: params.limit,
+            offset: params.offset,
+        },
+    )
+    .map_err(crate::error::engine_on(conn))?;
+
+    // Keeping the order SQL produced, hydrate only the ids on this page, straight from the
+    // read-model. Ids with no live row drop out (an invariant of `hydrate_task_cards`).
+    let tasks = store_engine::hydrate_task_cards(conn, reach, &page.ids)
+        .map_err(crate::error::engine_on(conn))?;
+    let count = tasks.len();
+    Ok(TaskListResult {
+        query: ListQueryEcho {
+            project: params.project_id,
+            filter: params.filter_expr,
+            sort: params.sort,
+        },
+        total_matched: page.total_matched,
+        count,
+        tasks,
+    })
+}
+
+/// Comparison that always sorts `None` last.
+fn cmp_opt<T: Ord>(a: Option<T>, b: Option<T>) -> std::cmp::Ordering {
+    match (a, b) {
+        (Some(x), Some(y)) => x.cmp(&y),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    }
+}
+
+// ───────────────────────── status ─────────────────────────
+
+#[derive(Clone, Debug, Serialize)]
+pub struct OverdueTask {
+    #[serde(flatten)]
+    pub task: TaskCompact,
+    pub days_overdue: i64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct Suggestion {
+    pub id: i64,
+    pub title: String,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct StatusCounts {
+    pub overdue: usize,
+    pub due_today: usize,
+    pub in_progress: usize,
+    pub upcoming_7d: usize,
+    pub no_due: usize,
+    pub completed_today: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct StatusResult {
+    pub scope: String,
+    pub generated_at: Timestamp,
+    pub today_date: NaiveDate,
+    pub counts: StatusCounts,
+    pub overdue: Vec<OverdueTask>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_today: Option<Vec<TaskCompact>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_this_week: Option<Vec<TaskCompact>>,
+    pub in_progress: Vec<TaskCompact>,
+    pub next_suggested: Vec<Suggestion>,
+}
+
+/// Serves the `status` read from the source-of-truth engine with indexed SQL. Bucket selection and
+/// counting are done by [`crate::store_engine::read::status_bucket_ids`] and card hydration by
+/// [`crate::store_engine::hydrate_task_cards`], both O(output) — neither walks the whole store. The
+/// order within each bucket is decided by the read-model's `ORDER BY`.
+pub fn status(conn: &rusqlite::Connection, scope: &str, reach: crate::reach::Reach) -> Result<StatusResult> {
+    let today = time::today();
+    // Buckets and counts alike only see inside the reach (an AI's `status` must not mirror the whole
+    // store back at it).
+    let buckets = crate::store_engine::read::status_bucket_ids(conn, today, reach)
+        .map_err(crate::error::engine_on(conn))?;
+
+    let hydrate = |ids: &[i64]| -> Result<Vec<TaskCompact>> {
+        crate::store_engine::hydrate_task_cards(conn, reach, ids)
+            .map_err(crate::error::engine_on(conn))
+    };
+
+    // The overdue rows and the raw material for `next_suggested` (overdue / due_today) are needed
+    // whatever the scope, so always hydrate them. `due_week` only for the week scope.
+    let overdue_cards = hydrate(&buckets.overdue)?;
+    let due_today_cards = hydrate(&buckets.due_today)?;
+    let in_progress_cards = hydrate(&buckets.in_progress)?;
+    let due_week_cards = if scope == "week" { Some(hydrate(&buckets.due_week)?) } else { None };
+
+    let counts = StatusCounts {
+        overdue: overdue_cards.len(),
+        due_today: due_today_cards.len(),
+        in_progress: in_progress_cards.len(),
+        upcoming_7d: buckets.upcoming_7d,
+        no_due: buckets.no_due,
+        completed_today: buckets.completed_today,
+    };
+
+    // next_suggested: up to 3, taken from overdue first (worst first), then due today (high priority
+    // first).
+    let mut suggestions: Vec<Suggestion> = Vec::new();
+    for t in overdue_cards.iter().take(3) {
+        let days = t.due_on.map(|d| today.signed_duration_since(d).num_days()).unwrap_or(0);
+        let pri = t.priority.map(|p| format!("・優先度 {}", p.as_str())).unwrap_or_default();
+        suggestions.push(Suggestion {
+            id: t.id,
+            title: t.title.clone(),
+            reason: format!("{days}日 期限超過{pri}"),
+        });
+    }
+    for t in due_today_cards.iter() {
+        if suggestions.len() >= 3 {
+            break;
+        }
+        let pri = t.priority.map(|p| format!("・優先度 {}", p.as_str())).unwrap_or_default();
+        suggestions.push(Suggestion {
+            id: t.id,
+            title: t.title.clone(),
+            reason: format!("本日締切{pri}"),
+        });
+    }
+
+    let overdue: Vec<OverdueTask> = overdue_cards
+        .into_iter()
+        .map(|t| {
+            let days_overdue =
+                t.due_on.map(|d| today.signed_duration_since(d).num_days()).unwrap_or(0);
+            OverdueTask { task: t, days_overdue }
+        })
+        .collect();
+
+    let (due_today_out, due_this_week) = match scope {
+        "week" => (None, due_week_cards),
+        "overdue" => (None, None),
+        _ => (Some(due_today_cards), None),
+    };
+
+    Ok(StatusResult {
+        scope: scope.to_string(),
+        generated_at: Timestamp::now(),
+        today_date: today,
+        counts,
+        overdue,
+        due_today: due_today_out,
+        due_this_week,
+        in_progress: in_progress_cards,
+        next_suggested: suggestions,
+    })
+}
+
+// ───────────────────────── project ─────────────────────────
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ProjectListItem {
+    pub id: i64,
+    pub name: String,
+    pub color: Option<String>,
+    pub default_view: crate::model::View,
+    pub archived: bool,
+    pub num_dimensions: usize,
+    pub num_tasks: usize,
+    pub order_key: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ProjectListResult {
+    pub count: usize,
+    pub projects: Vec<ProjectListItem>,
+}
+
+/// The **language-independent default display name** of a facet (human / ai). Core's projection
+/// layers (activity / comment / roster), which have no config, name authors and assignees with this
+/// default label. Callers (CLI/GUI) may override it with `human_name` / `ai_name` from the config.
+pub fn facet_label(kind: Option<ActorKind>) -> String {
+    match kind {
+        Some(ActorKind::Ai) => crate::config::default_ai_name(None),
+        _ => crate::config::default_human_name(None),
+    }
+}
+
+/// The stable token of a facet (for the `id` field of DTOs): `human` / `ai`, or empty when unset.
+pub fn facet_kind_str(kind: Option<ActorKind>) -> String {
+    kind.map(|k| k.as_str().to_string()).unwrap_or_default()
+}
+
+/// The SQL path of `project list`. Indexed SQL over the engine read-model
+/// ([`crate::store_engine::read::project_list`]) pulls the live projects in `order_key` order and
+/// folds `num_dimensions` / `num_tasks` in with correlated subqueries — no re-walking dimensions and
+/// tasks once per project.
+pub fn project_list(
+    conn: &rusqlite::Connection,
+    include_archived: bool,
+) -> Result<ProjectListResult> {
+    let rows = crate::store_engine::read::project_list(conn, include_archived)
+        .map_err(crate::error::engine_on(conn))?;
+    let items: Vec<ProjectListItem> = rows
+        .into_iter()
+        .map(|r| ProjectListItem {
+            id: r.id,
+            name: r.name,
+            color: r.color,
+            default_view: crate::model::View::parse(&r.default_view).unwrap_or_default(),
+            archived: r.archived,
+            num_dimensions: r.num_dimensions,
+            num_tasks: r.num_tasks,
+            order_key: r.order_key,
+        })
+        .collect();
+    Ok(ProjectListResult {
+        count: items.len(),
+        projects: items,
+    })
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ProjectTaskCounts {
+    pub total: usize,
+    pub completed: usize,
+    pub incomplete: usize,
+    pub overdue: usize,
+    pub due_today: usize,
+    pub no_due: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ProjectDetail {
+    pub id: i64,
+    pub resource_type: &'static str,
+    pub name: String,
+    pub notes: String,
+    pub color: Option<String>,
+    pub default_view: crate::model::View,
+    pub archived: bool,
+    pub order_key: String,
+    pub task_counts: ProjectTaskCounts,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// The SQL path of `project show`. The project row comes from [`crate::store_engine::read::project`]
+/// and the count summary from [`crate::store_engine::read::project_task_counts`], which returns it
+/// in a single aggregate. No live row for the project means `not_found`.
+pub fn project_detail(
+    conn: &rusqlite::Connection,
+    project_id: i64,
+) -> Result<ProjectDetail> {
+    let today = time::today();
+    let p = crate::store_engine::read::project(conn, project_id)
+        .map_err(crate::error::engine_on(conn))?
+        
+        .ok_or_else(|| {
+            Error::not_found(
+                format!("project '{project_id}' not found"),
+                format!("プロジェクト '{project_id}' が見つかりません"),
+            )
+        })?;
+
+    let c = crate::store_engine::read::project_task_counts(conn, project_id, today)
+        .map_err(crate::error::engine_on(conn))?;
+    let task_counts = ProjectTaskCounts {
+        total: c.total,
+        completed: c.completed,
+        incomplete: c.total - c.completed,
+        overdue: c.overdue,
+        due_today: c.due_today,
+        no_due: c.no_due,
+    };
+
+    Ok(ProjectDetail {
+        id: p.id,
+        resource_type: "project",
+        name: p.name,
+        notes: p.notes,
+        color: p.color,
+        default_view: p.default_view,
+        archived: p.archived,
+        order_key: p.order_key,
+        task_counts,
+        created_at: p.created_at,
+        updated_at: p.updated_at,
+    })
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct DiscoverResult {
+    pub today_date: NaiveDate,
+    pub summary: StatusCounts,
+    pub today: Vec<TaskCompact>,
+    pub next_suggested: Vec<Suggestion>,
+    pub hints: Vec<String>,
+}
+
+// ───────────────────────── member / comment ─────────────────────────
+
+/// One entry of the member roster. The actor is a facet (human / ai) and `user_id` is the facet
+/// token.
+#[derive(Clone, Debug, Serialize)]
+pub struct MemberItem {
+    pub user_id: String,
+    pub name: String,
+    pub is_self: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct MemberListResult {
+    pub count: usize,
+    pub members: Vec<MemberItem>,
+}
+
+/// The member roster (the GUI's assignee dropdown and the like). It is the two names from the config
+/// (human / ai): `user_id` is the facet token, and `is_self` marks the human facet (this local
+/// actor).
+pub fn members(config: &crate::config::Config) -> MemberListResult {
+    let members: Vec<MemberItem> = config
+        .roster()
+        .into_iter()
+        .map(|(kind, name)| MemberItem {
+            user_id: kind.as_str().to_string(),
+            name,
+            is_self: kind == ActorKind::Human,
+        })
+        .collect();
+    MemberListResult { count: members.len(), members }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct CommentItem {
+    pub id: i64,
+    /// The author, for display (the default label). The real thing is the facet; `author_kind` is
+    /// authoritative.
+    pub author: Ref,
+    /// The author's facet (human / ai). Callers look the display name up from the config.
+    pub author_kind: Option<ActorKind>,
+    pub text: String,
+    pub created_at: Timestamp,
+    /// When the body was later corrected (an in-place edit); `None` if it never was. This is the only
+    /// clue a reader gets that "this is not the text I read a moment ago" — no revision history is
+    /// kept, so the fact of the edit surfaces nowhere else.
+    pub edited_at: Option<Timestamp>,
+}
+
+/// Turns a read-model row ([`crate::store_engine::read::CommentRow`]) into a [`CommentItem`] for
+/// display. Task comments and decision comments arrive as the same row type, so hydration goes
+/// through this one place too.
+fn comment_item(r: crate::store_engine::read::CommentRow) -> CommentItem {
+    let created_at = crate::time::Timestamp::parse_rfc3339(&r.created_at).unwrap_or_default();
+    let edited_at =
+        r.edited_at.as_deref().map(|t| crate::time::Timestamp::parse_rfc3339(t).unwrap_or_default());
+    let author_kind = r.author_kind.as_deref().and_then(ActorKind::parse);
+    CommentItem {
+        author: Ref { id: facet_kind_str(author_kind), name: facet_label(author_kind) },
+        author_kind,
+        id: r.id,
+        text: r.text,
+        created_at,
+        edited_at,
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct CommentListResult {
+    pub task: crate::view::TaskRef,
+    /// Total number of comments before paging (the whole count when `--limit` / `--offset` are in
+    /// play).
+    pub total_matched: usize,
+    pub count: usize,
+    pub comments: Vec<CommentItem>,
+}
+
+/// The SQL path of `comment list`. Live comments come from indexed SQL over the engine read-model
+/// ([`crate::store_engine::read::comment_list`] — the `task_comment` table). If the task is not
+/// live (no live row in the read-model), `not_found`.
+pub fn comment_list(conn: &rusqlite::Connection, task_id: i64, offset: Option<usize>, limit: Option<usize>) -> Result<CommentListResult> {
+    use crate::store_engine::read;
+    let title = read::task_title(conn, task_id)
+        .map_err(crate::error::engine_on(conn))?
+        .ok_or_else(|| Error::not_found(format!("task '{task_id}' not found"), format!("タスク '{task_id}' が見つかりません")))?;
+    // Rows arrive oldest-first (`read::comment_list` = `created_at ASC`). Slice out just the page
+    // with offset/limit — O(result). `total_matched` is the count before paging.
+    let rows = read::comment_list(conn, task_id)
+        .map_err(crate::error::engine_on(conn))?;
+    let (total_matched, rows) = paginate(rows, offset, limit);
+    let comments: Vec<CommentItem> = rows.into_iter().map(comment_item).collect();
+    Ok(CommentListResult {
+        task: crate::view::TaskRef { id: task_id, name: title },
+        total_matched,
+        count: comments.len(),
+        comments,
+    })
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct DecisionCommentListResult {
+    pub decision: DecisionRef,
+    /// Total number of comments before paging (the whole count when `--limit` / `--offset` are in
+    /// play).
+    pub total_matched: usize,
+    pub count: usize,
+    pub comments: Vec<CommentItem>,
+}
+
+/// The SQL path of `comment list` for decision records (O(result)). Live comments come from indexed
+/// SQL over the engine read-model ([`crate::store_engine::read::decision_comment_list`]). If the
+/// decision is not live (no live row in the read-model), `not_found`.
+pub fn decision_comment_list(conn: &rusqlite::Connection, decision_id: i64, offset: Option<usize>, limit: Option<usize>) -> Result<DecisionCommentListResult> {
+    use crate::store_engine::read;
+    let title = read::decision_title(conn, decision_id)
+        .map_err(crate::error::engine_on(conn))?
+        .ok_or_else(|| Error::not_found(format!("decision '{decision_id}' not found"), format!("決定 '{decision_id}' が見つかりません")))?;
+    let rows = read::decision_comment_list(conn, decision_id)
+        .map_err(crate::error::engine_on(conn))?;
+    let (total_matched, rows) = paginate(rows, offset, limit);
+    let comments: Vec<CommentItem> = rows.into_iter().map(comment_item).collect();
+    Ok(DecisionCommentListResult {
+        decision: DecisionRef { id: decision_id, name: Some(title) },
+        total_matched,
+        count: comments.len(),
+        comments,
+    })
+}
+
+/// Resolves a `task` reference (`AMB-T-n`, or the bare `T-n` / `#n` / `n`) to a single live task id. It is an indexed SQL
+/// lookup against the read-model, so a pre-write lookup never drags an O(n) scan in with it. To
+/// avoid defining the grammar twice, the pieces are reused straight from ops: parsing the reference
+/// (`parse_*_ref`), collapsing the hits (`pick_id` over 0 / 1 / many) and the not-found message
+/// (`NOUN`). Numbers are **globally unique on this machine**, so no project context is needed.
+/// Ambiguity yields `AmbiguousId`.
+pub fn resolve_task_ref(conn: &rusqlite::Connection, input: &str) -> Result<i64> {
+    use crate::store_engine::read;
+    use crate::ops::pick_id;
+    use crate::ops::task::{parse_number_ref, parse_typed_ref, TypedKind, NOUN};
+
+    let s = input.trim();
+    let oops = crate::error::engine_on(conn);
+
+    // Resolution by number. Numbers are globally unique, so no project context is needed.
+    let by_number = |number: u32, token: &str| -> Result<i64> {
+        let hits = read::task_ids_by_number(conn, number).map_err(&oops)?;
+        pick_id(hits, token, || NOUN.not_found(token))
+    };
+
+    // 0) Kind prefixes `T-` / `D-`. As a task, `D-n` is simply "not found".
+    if let Some((kind, number)) = parse_typed_ref(s) {
+        return match kind {
+            TypedKind::Task => by_number(number, s),
+            TypedKind::Decision => Err(NOUN.not_found(s)),
+        };
+    }
+    // 1) `#n` / `n` (decimal).
+    if let Some(number) = parse_number_ref(s) {
+        return by_number(number, s);
+    }
+    Err(NOUN.not_found(s))
+}
+
+/// Resolves a `decision` reference (`AMB-D-n`, or the bare `D-n` / `#n` / `n`) to a single live decision id, by indexed SQL
+/// against the read-model. Decisions live in **a number space of their own, separate from tasks**, so
+/// only the `decision` table is consulted and passing `AMB-T-n` yields "decision not found". Parsing
+/// (`parse_*_ref`), collapsing the hits (`pick_id`) and the not-found message (decision's `NOUN`) are
+/// reused from ops.
+pub fn resolve_decision_ref(conn: &rusqlite::Connection, input: &str) -> Result<i64> {
+    use crate::store_engine::read;
+    use crate::ops::decision::NOUN;
+    use crate::ops::pick_id;
+    use crate::ops::task::{parse_number_ref, parse_typed_ref, TypedKind};
+
+    let s = input.trim();
+    let oops = crate::error::engine_on(conn);
+
+    // Resolution by number. Numbers are globally unique, so no project context is needed.
+    let by_number = |number: u32, token: &str| -> Result<i64> {
+        let hits = read::decision_ids_by_number(conn, number).map_err(&oops)?;
+        pick_id(hits, token, || NOUN.not_found(token))
+    };
+
+    // 0) Kind prefixes `T-` / `D-`. As a decision, `T-n` is simply "not found".
+    if let Some((kind, number)) = parse_typed_ref(s) {
+        return match kind {
+            TypedKind::Decision => by_number(number, s),
+            TypedKind::Task => Err(NOUN.not_found(s)),
+        };
+    }
+    // 1) `#n` / `n` (decimal).
+    if let Some(number) = parse_number_ref(s) {
+        return by_number(number, s);
+    }
+    Err(NOUN.not_found(s))
+}
+
+/// Resolves a cross-kind conversational reference (`AMB-T-n` / `AMB-D-n`, or a bare `#n` / `n`) to either a Task or a
+/// Decision, by indexed SQL against the read-model. The kind prefixes `T-` / `D-` are delegated to
+/// the per-kind resolvers; a bare `#n` / `n` (carrying no kind code) is looked up across **both tables** (task and decision),
+/// and if the same number exists on both sides the result is an ambiguity error that asks for a
+/// prefix. Collapsing the hits (0 / 1 / many) reuses `pick` / `pick_anywhere` from ops.
+pub fn resolve_any(conn: &rusqlite::Connection, input: &str) -> Result<crate::ops::Ref> {
+    use crate::store_engine::read;
+    use crate::ops::task::{parse_number_ref, parse_typed_ref, TypedKind};
+    use crate::ops::{pick, pick_anywhere, Ref};
+
+    let s = input.trim();
+    let oops = crate::error::engine_on(conn);
+
+    // Collect the tasks and decisions carrying this number as `Ref`s. Numbers are globally unique, so
+    // no project context is needed — the only ambiguity left across the two tables is the kind
+    // itself, `#n` as a task versus `D-n` as a decision.
+    let by_number = |number: u32| -> Result<Vec<Ref>> {
+        let mut v = Vec::new();
+        for id in read::task_ids_by_number(conn, number).map_err(&oops)? {
+            v.push(Ref::Task(id));
+        }
+        for id in read::decision_ids_by_number(conn, number).map_err(&oops)? {
+            v.push(Ref::Decision(id));
+        }
+        Ok(v)
+    };
+
+    // 0) Kind prefixes `T-` / `D-`. Delegate to the per-kind SQL resolver and wrap the result in a
+    // `Ref`.
+    if let Some((kind, _)) = parse_typed_ref(s) {
+        return match kind {
+            TypedKind::Task => resolve_task_ref(conn, s).map(Ref::Task),
+            TypedKind::Decision => resolve_decision_ref(conn, s).map(Ref::Decision),
+        };
+    }
+    // 1) `#n` / `n` (decimal).
+    if let Some(number) = parse_number_ref(s) {
+        return pick_anywhere(by_number(number)?, number);
+    }
+    pick(Vec::new(), s)
+}
+
+/// Resolves a `project` reference (an id, or an exact name) to a single live project id, by indexed
+/// SQL against the read-model. Collapsing the hits (`pick_id`) and the not-found message (project's
+/// `NOUN`) are reused from ops.
+pub fn resolve_project_ref(conn: &rusqlite::Connection, reference: &str) -> Result<i64> {
+    use crate::ops::pick_id;
+    use crate::ops::project::NOUN;
+    let oops = crate::error::engine_on(conn);
+    let hits = crate::store_engine::read::resolve_project(conn, reference).map_err(&oops)?;
+    pick_id(hits, reference, || NOUN.not_found(reference))
+}
+
+// ───────────────────────── activity (unified timeline) ─────────────────────────
+
+/// Who emitted an activity row (a person, or that person's AI).
+#[derive(Clone, Debug, Serialize)]
+pub struct ActivityAuthor {
+    pub user_id: String,
+    pub name: String,
+    pub kind: Option<ActorKind>,
+}
+
+/// What an activity row is about (a task, a decision, or a project).
+#[derive(Clone, Debug, Serialize)]
+pub struct ActivityTarget {
+    #[serde(rename = "type")]
+    pub target_type: String,
+    pub id: i64,
+    pub title: String,
+    /// Whether the target still exists in the read-model. Rows about a deleted target stay in the
+    /// ledger (that is what a ledger is for), but there is nothing left to open — this lets a reader
+    /// tell apart the rows that have a name but no destination.
+    pub live: bool,
+}
+
+/// The output shape of one activity row (a system event or a comment).
+#[derive(Clone, Debug, Serialize)]
+pub struct ActivityItem {
+    pub id: i64,
+    pub at: Timestamp,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub author: ActivityAuthor,
+    pub target: ActivityTarget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub event: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    /// Comment rows only: when the body was later corrected (an in-place edit). Absent if it never
+    /// was. The timeline (`amenbo activity`) is the main way people read this stream, so it states
+    /// the same fact `comment list` does.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edited_at: Option<Timestamp>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ActivityResult {
+    pub count: usize,
+    /// An opaque cursor: pass it back as `--since <cursor>` to get only what is newer than this
+    /// response, moving forward in time (the equivalent of an AI watching the stream). In incremental
+    /// mode it points at the newest event returned; in history mode it points at the current head of
+    /// the matching stream (the bootstrap point from which to start subscribing incrementally).
+    /// `None` when nothing matched. The token is opaque so that callers cannot come to depend on its
+    /// internal representation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    /// In incremental mode: whether unconsumed events remain beyond the returned window (i.e. whether
+    /// `--limit` cut it short).
+    pub has_more: bool,
+    pub items: Vec<ActivityItem>,
+}
+
+/// Prefix of activity's opaque incremental cursor, which denotes one point in the total order
+/// `(created_at, id)`. The internal representation is hidden: it travels as a base64url string
+/// starting with `cur1_`. The prefix exists so that `--since` can tell a cursor from a date
+/// expression (`today` / `+3d` / `YYYY-MM-DD` never start with `cur1_`). The key can be a total order
+/// only because the timeline's two sources — the file ledger (system events) and `task_comment` —
+/// **share a single id sequence** ([`crate::store_engine::read::next_activity_id`]). Break that and
+/// the same id appears twice within one second, so cutting the stream at a cursor starts dropping or
+/// duplicating rows.
+const ACTIVITY_CURSOR_PREFIX: &str = "cur1_";
+
+/// Activity's ordering key: `(at, id)`, where `id` is the INTEGER primary key.
+pub fn activity_sort_key(at: Timestamp, id: i64) -> (Timestamp, i64) {
+    (at, id)
+}
+
+/// Encodes `(at, id)` into an opaque cursor.
+pub fn encode_activity_cursor(at: &Timestamp, id: i64) -> String {
+    use base64::Engine;
+    let raw = format!("{}\n{}", at.to_rfc3339_z(), id);
+    format!("{ACTIVITY_CURSOR_PREFIX}{}", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw.as_bytes()))
+}
+
+/// Whether a string looks like a cursor (starts with `cur1_`). Used to tell dates from cursors in
+/// `--since`.
+pub fn looks_like_activity_cursor(s: &str) -> bool {
+    s.starts_with(ACTIVITY_CURSOR_PREFIX)
+}
+
+/// Decodes a cursor back into `(at, id)`. Malformed input (missing prefix, broken base64, …) gives
+/// `None`.
+pub fn parse_activity_cursor(s: &str) -> Option<(Timestamp, i64)> {
+    use base64::Engine;
+    let body = s.strip_prefix(ACTIVITY_CURSOR_PREFIX)?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(body).ok()?;
+    let text = String::from_utf8(bytes).ok()?;
+    let (at_s, id) = text.split_once('\n')?;
+    let at = Timestamp::parse_rfc3339(at_s)?;
+    Some((at, id.parse().ok()?))
+}
+
+#[derive(Default)]
+pub struct ActivityParams {
+    /// A resolved task id (only this task's activity).
+    pub task_id: Option<i64>,
+    /// A resolved project id (only the activity of tasks belonging to this project).
+    pub project_id: Option<i64>,
+    /// From this date on (from 00:00 of that day). History mode, newest first. Mutually exclusive
+    /// with `since_cursor`.
+    pub since: Option<NaiveDate>,
+    /// The `(at, id)` origin decoded from an opaque cursor (`--since <cursor>`). When set, the read
+    /// runs in incremental mode: only what is strictly newer than the cursor, oldest-first (moving
+    /// forward in time). Mutually exclusive with `since` (the date).
+    pub since_cursor: Option<(Timestamp, i64)>,
+    /// Narrow to system events or comments.
+    pub kind: Option<crate::activity::Kind>,
+    /// Narrow to the facet that emitted the row.
+    pub actor: Option<ActorKind>,
+    /// Recipient scope (`--for me`): keep only rows whose target task is assigned to this facet. A
+    /// different axis from `actor` (`--by`), which narrows by emitter — this one narrows by
+    /// addressee, and it is how an AI picks out "the part I am supposed to act on".
+    pub for_facet: Option<ActorKind>,
+    /// Maximum number of rows (taken newest first).
+    pub limit: Option<usize>,
+    /// How many rows to skip, newest first (paging further back through history). Defaults to 0.
+    pub offset: Option<usize>,
+}
+
+/// Returns the unified timeline **newest first** (people and AIs read the same stream). The stream is
+/// a merge of two sources ([`crate::activity`]): system events come from the file ledger (outside the
+/// source of truth, bounded), while comments come from the first-class `task_comment` table
+/// (permanent data, never lost). All that is left here is the arithmetic of the window, the cursor
+/// and `has_more`. `has_more` is not a COUNT: we **ask for `limit + 1` rows and see whether they
+/// overflow**, so no extra full aggregate is needed. History mode's bootstrap cursor is the newest
+/// row *before* offset is applied, so it comes from a separate `limit 1` read. `reach` is **always**
+/// taken as an argument: forcing the scope to be declared in the type means a read that forgets it
+/// does not compile.
+pub fn activity(
+    ledger: &std::path::Path,
+    conn: &rusqlite::Connection,
+    reach: crate::reach::Reach,
+    params: ActivityParams,
+) -> Result<ActivityResult> {
+    let incremental = params.since_cursor.is_some();
+    // The timeline is closed over the reach too: no events or comments from tasks outside the bound
+    // scope.
+    let project_id = reach.narrow(params.project_id)?;
+    let filter = crate::activity::Filter {
+        task_id: params.task_id,
+        project_id,
+        since: params.since,
+        after: params.since_cursor,
+        kind: params.kind,
+        author_kind: params.actor,
+        for_facet: params.for_facet,
+        oldest_first: incremental,
+        // Ask for one row more than the window: that alone tells us whether anything follows it,
+        // without counting the whole set.
+        limit: params.limit.map(|n| n + 1),
+        offset: if incremental { 0 } else { params.offset.unwrap_or(0) },
+    };
+
+    // The ledger is read once per request — history mode then pages over it twice, for the window and
+    // for the cursor.
+    let lines = crate::activity::Ledger::open(ledger);
+    let mut rows = crate::activity::page(&lines, conn, &filter)?;
+    let has_more = params.limit.map(|n| rows.len() > n).unwrap_or(false);
+    if let Some(n) = params.limit {
+        rows.truncate(n);
+    }
+    let items: Vec<ActivityItem> = rows.into_iter().map(activity_item).collect();
+
+    if let Some((cur_at, cur_id)) = &params.since_cursor {
+        // Incremental mode: the last row of the returned window (the newest) becomes the next cursor.
+        // If the window is empty, keep the incoming cursor so the reader does not lose its place.
+        let cursor = items
+            .last()
+            .map(|it| encode_activity_cursor(&it.at, it.id))
+            .or_else(|| Some(encode_activity_cursor(cur_at, *cur_id)));
+        return Ok(ActivityResult { count: items.len(), cursor, has_more, items });
+    }
+
+    // History mode: the bootstrap cursor is the current head of the matching stream, taken before
+    // offset/limit trim anything.
+    let newest = crate::activity::page(
+        &lines,
+        conn,
+        &crate::activity::Filter { limit: Some(1), offset: 0, ..filter },
+    )?;
+    let cursor = newest.first().map(|it| encode_activity_cursor(&it.at, it.id));
+    Ok(ActivityResult { count: items.len(), cursor, has_more, items })
+}
+
+/// Turns one merged row into its output shape. Only comment rows carry `text`, only system rows carry
+/// `event`.
+fn activity_item(it: crate::activity::Item) -> ActivityItem {
+    ActivityItem {
+        id: it.id,
+        at: it.at,
+        kind: it.kind.as_str().to_string(),
+        author: ActivityAuthor {
+            user_id: facet_kind_str(it.author_kind),
+            name: facet_label(it.author_kind),
+            kind: it.author_kind,
+        },
+        target: ActivityTarget {
+            target_type: it.target_type.as_str().to_string(),
+            id: it.target_id,
+            title: it.title,
+            live: it.target_live,
+        },
+        event: it.event,
+        text: it.text,
+        edited_at: it.edited_at,
+    }
+}
+
+// ───────────────────────── decision list / search ─────────────────────────
+
+/// Search filter for decision records (`status:` / `current:` / `text:` / `project:`). Decisions have
+/// no mailbox state the way tasks do, so there are few keys: storing them and searching them by
+/// text, status and time is enough.
+#[derive(Clone, Debug, Default)]
+pub struct DecisionFilter {
+    pub status: Option<DecisionStatus>,
+    /// `current:yes|no` — whether the decision has not been superseded. This is not the status but a
+    /// projection derived from the edges (`current:no` means "a superseded decision").
+    pub current: Option<bool>,
+    /// Substring match against title or body (case-insensitive).
+    pub text: Option<String>,
+    /// The reference written in `project:` (same meaning as [`Filter::project_ref`] on the task side —
+    /// an unresolved raw string).
+    pub(crate) project_ref: Option<String>,
+    /// The resolved project id ([`DecisionFilter::resolve`] fills it in).
+    pub project_id: Option<i64>,
+    /// `number:` / `ref:` — filter by conversational number (`D-80` / `#80` / a bare number).
+    pub number: Option<NumberFilter>,
+    /// `task:<AMB-T-n | T-n | n>` — decisions linked to this task (reverse lookup through
+    /// `decision_task_link`). Symmetric with `decision:` on the `task list` side: it makes the
+    /// decision ⇄ task relation **traversable by query**.
+    pub task: Option<u32>,
+    /// `decided_before:<date>` — accepted on or before this day (`decided_at`'s date ≤ date; the day
+    /// itself is **included**). "What had been decided as of some point in time" is not a feature of
+    /// its own: it falls out of composing this ordinary filter key with `current:`. Decisions never
+    /// accepted (proposed / rejected, with no `decided_at`) match neither direction.
+    pub decided_before: Option<NaiveDate>,
+    /// `decided_after:<date>` — accepted on or after this day (`decided_at`'s date ≥ date; the day
+    /// itself is **included**). The counterpart of `decided_before`: give both and you have a span,
+    /// inclusive at each end.
+    pub decided_after: Option<NaiveDate>,
+}
+
+impl DecisionFilter {
+    /// Resolve the `project:` reference (an id or a name) to an id. Same contract as [`Filter::resolve`]
+    /// on the task side: a reference that fails to resolve is an error.
+    pub fn resolve(&mut self, conn: &rusqlite::Connection) -> Result<()> {
+        if let Some(reference) = self.project_ref.take() {
+            self.project_id = Some(resolve_project_ref(conn, &reference)?);
+        }
+        Ok(())
+    }
+
+    /// `today` is the reference day for relative dates (`today`, `-30d`, …). Same entry point as
+    /// [`Filter::parse`] on the task side.
+    pub fn parse(expr: &str, today: NaiveDate) -> Result<DecisionFilter> {
+        let mut f = DecisionFilter::default();
+        parse_filter_tokens(expr, |key, value| {
+            match key {
+                "status" => {
+                    f.status = Some(DecisionStatus::parse(value).ok_or_else(|| {
+                        Error::invalid(
+                            "status must be proposed / accepted / rejected",
+                            "status は proposed / accepted / rejected",
+                        )
+                    })?)
+                }
+                "current" => {
+                    f.current = Some(match value {
+                        "yes" | "true" => true,
+                        "no" | "false" => false,
+                        _ => {
+                            return Err(Error::invalid(
+                                "current must be yes / no",
+                                "current は yes / no",
+                            ))
+                        }
+                    })
+                }
+                "text" => f.text = Some(value.to_string()),
+                "project" => f.project_ref = Some(value.to_string()),
+                // `number:` and its alias `ref:` (synonyms — filter by conversational number).
+                "number" | "ref" => f.number = Some(NumberFilter::parse(value)?),
+                // Traverse the decision ⇄ task link (symmetric with `decision:` on `task list`).
+                "task" => f.task = Some(parse_cross_ref(value, false)?),
+                // Filter by acceptance time. Day granularity, and the named day is included.
+                "decided_before" => f.decided_before = Some(time::parse_date(value, today)?),
+                "decided_after" => f.decided_after = Some(time::parse_date(value, today)?),
+                other => {
+                    return Err(Error::invalid(
+                        format!("unknown filter key '{other}' (status/current/text/project/number/ref/task/decided_before/decided_after)"),
+                        format!("未知のフィルタキー '{other}'（status/current/text/project/number/ref/task/decided_before/decided_after）"),
+                    ))
+                }
+            }
+            Ok(())
+        })?;
+        Ok(f)
+    }
+
+    /// `current` is not a column on the decision (it is derived from the edges), so the caller looks
+    /// it up and passes it in. Likewise the link set behind `task:`: the caller reads it once and
+    /// passes it in (`linked_to_task` = the ids of the live decisions linked to the task named by
+    /// `task:`, or `None` when `task:` was not given). Both arguments exist so that nothing is
+    /// re-queried per decision.
+    fn matches(
+        &self,
+        d: &crate::model::Decision,
+        current: bool,
+        linked_to_task: Option<&[i64]>,
+    ) -> bool {
+        if self.task.is_some() && !linked_to_task.is_some_and(|ids| ids.contains(&d.id)) {
+            return false;
+        }
+        if let Some(status) = self.status {
+            if d.status != status {
+                return false;
+            }
+        }
+        if let Some(want) = self.current {
+            if current != want {
+                return false;
+            }
+        }
+        if let Some(text) = &self.text {
+            let needle = text.to_lowercase();
+            if !d.title.to_lowercase().contains(&needle) && !d.body.to_lowercase().contains(&needle) {
+                return false;
+            }
+        }
+        debug_assert!(self.project_ref.is_none(), "DecisionFilter::resolve was not run");
+        if let Some(project_id) = self.project_id {
+            if project_id != d.project_id {
+                return false;
+            }
+        }
+        if let Some(nf) = &self.number {
+            if !nf.matches_decision(d) {
+                return false;
+            }
+        }
+        // Acceptance time. A decision that was never accepted has no date, so it matches neither
+        // direction.
+        if self.decided_before.is_some() || self.decided_after.is_some() {
+            let Some(decided) = d.decided_at.map(|t| t.0.date_naive()) else {
+                return false;
+            };
+            if self.decided_before.is_some_and(|d0| decided > d0) {
+                return false;
+            }
+            if self.decided_after.is_some_and(|d0| decided < d0) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct DecisionListResult {
+    pub query: ListQueryEcho,
+    /// Total number of matches before paging (the whole count when `--limit` / `--offset` are in
+    /// play).
+    pub total_matched: usize,
+    pub count: usize,
+    pub decisions: Vec<DecisionCompact>,
+}
+
+#[derive(Default)]
+pub struct DecisionListParams {
+    pub project_id: Option<i64>,
+    pub filter_expr: Option<String>,
+    /// `decided` / `created` / `number` / `title` / `status` (leading `-` for descending). Defaults to
+    /// `-created`.
+    pub sort: String,
+    /// Page size (the first `limit` items in sort order). `None` = unlimited.
+    pub limit: Option<usize>,
+    /// How many items to skip from the front. `None` = 0.
+    pub offset: Option<usize>,
+    /// Projection that puts each decision's `body` on its card. Off by default (a light,
+    /// title-only listing). It **composes** with `--filter` / `--limit` / `--offset` — it only adds a
+    /// body column to whatever page the filter and paging already selected, it is not a dump of
+    /// everything. The point is to read the bodies of a page bounded by keyword or axis in one go:
+    /// it removes the N round-trips of calling `decision show` once per decision while keeping the
+    /// amount read bounded.
+    pub with_body: bool,
+}
+
+/// The SQL path of `decision list`. Live decisions come from indexed SQL over the engine read-model
+/// ([`crate::store_engine::read::decision_list`] — a `decision` × `project` LEFT JOIN plus a
+/// correlated subquery over live links and live tasks for `linked_task_count`), which avoids
+/// re-walking projects and tasks once per decision. The filter (status/text/project) and the sort
+/// (decided/created/number/title/status) are applied by [`DecisionFilter::matches`] and
+/// [`sort_decisions`] to a partial `Decision` assembled from each row; the `project` ref and
+/// `linked_task_count` come straight from the row. `reach` is **always** taken as an argument:
+/// forcing the scope to be declared in the type means a read that forgets it does not compile.
+pub fn decision_list(
+    conn: &rusqlite::Connection,
+    reach: crate::reach::Reach,
+    params: DecisionListParams,
+) -> Result<DecisionListResult> {
+    use crate::store_engine::read;
+    let mut filter = match &params.filter_expr {
+        Some(e) => DecisionFilter::parse(e, time::today())?,
+        None => DecisionFilter::default(),
+    };
+    filter.resolve(conn)?; // As on the task side: names are accepted, unresolvable refs are an error.
+
+    // Fold the reach into the scope, and refuse a `project:` by name from inside a closed reach (same
+    // shape as the task side).
+    if filter.project_id.is_some() {
+        reach.refuse_project_choice("the `project:` filter")?;
+    }
+    let project_id = reach.narrow(params.project_id)?;
+    filter.project_id = reach.narrow(filter.project_id)?;
+
+    let rows = read::decision_list(conn, reach, project_id)
+        .map_err(crate::error::engine_on(conn))?;
+
+    // The link set behind `task:` — read once, live links and live decisions only.
+    let linked_to_task = match filter.task {
+        Some(n) => Some(
+            read::decisions_for_task(conn, i64::from(n))
+                .map_err(crate::error::engine_on(conn))?
+                .into_iter()
+                .map(|r| r.id)
+                .collect::<Vec<i64>>(),
+        ),
+        None => None,
+    };
+
+    // Row → a partial `Decision` (only the fields filter/sort need) plus what the card needs on the
+    // side (the project ref and `linked_task_count`).
+    struct Entry {
+        decision: crate::model::Decision,
+        project: Option<crate::view::ProjectRef>,
+        linked_task_count: usize,
+        /// Currency as carried by the row (a projection derived from the edges). Both the filter and
+        /// the card read it.
+        current: bool,
+    }
+    let mut entries: Vec<Entry> = rows
+        .into_iter()
+        .map(|r| {
+            let decision = crate::model::Decision {
+                id: r.id,
+                project_id: r.project_id,
+                title: r.title,
+                body: r.body,
+                status: crate::model::DecisionStatus::parse(&r.status).unwrap_or_default(),
+                decided_at: r.decided_at.as_deref().and_then(crate::time::Timestamp::parse_rfc3339),
+                created_at: crate::time::Timestamp::parse_rfc3339(&r.created_at).unwrap_or_default(),
+                ..Default::default()
+            };
+            let project = r.project_name.map(|name| crate::view::ProjectRef { id: r.project_id, name });
+            Entry { decision, project, linked_task_count: r.linked_task_count, current: r.current }
+        })
+        .filter(|e| filter.matches(&e.decision, e.current, linked_to_task.as_deref()))
+        .collect();
+
+    // `sort_decisions` sorts a `&mut [&Decision]`. To bring `entries` into the same order, sort the
+    // references, then read off each id's rank and sort `entries` by it.
+    let mut refs: Vec<&crate::model::Decision> = entries.iter().map(|e| &e.decision).collect();
+    sort_decisions(&mut refs, &params.sort)?;
+    let order: std::collections::HashMap<i64, usize> =
+        refs.iter().enumerate().map(|(i, d)| (d.id, i)).collect();
+    entries.sort_by_key(|e| order[&e.decision.id]);
+
+    let mut all: Vec<DecisionCompact> = entries
+        .iter()
+        .map(|e| {
+            crate::view::decision_compact_with(
+                &e.decision,
+                e.project.clone(),
+                e.linked_task_count,
+                e.current,
+            )
+        })
+        .collect();
+    // `--with-body`: add the body column to each card (using the row's `body`).
+    if params.with_body {
+        for (card, e) in all.iter_mut().zip(entries.iter()) {
+            card.body = Some(e.decision.body.clone());
+        }
+    }
+    // Paging: slice the full, filtered and sorted match set with offset/limit.
+    let (total_matched, decisions) = paginate(all, params.offset, params.limit);
+    let count = decisions.len();
+    Ok(DecisionListResult {
+        query: ListQueryEcho {
+            project: params.project_id,
+            filter: params.filter_expr,
+            sort: params.sort,
+        },
+        total_matched,
+        count,
+        decisions,
+    })
+}
+
+/// The SQL path of `decision show`. Indexed SQL over the engine read-model
+/// ([`crate::store_engine::read::decision_detail`]) pulls every field of a single decision in one go
+/// — the project name, both directions of supersedes/superseded_by, the `decided_by` name, and
+/// `linked_tasks` (live links × live tasks) — and the row is assembled into a
+/// [`crate::view::DecisionDetail`]. If the resolved id has no row, `not_found`.
+pub fn decision_detail(
+    conn: &rusqlite::Connection,
+    decision_id: i64,
+) -> Result<crate::view::DecisionDetail> {
+    use crate::store_engine::read;
+    use crate::time::Timestamp;
+    let row = read::decision_detail(conn, decision_id)
+        .map_err(crate::error::engine_on(conn))?
+        .ok_or_else(|| {
+            Error::not_found(
+                format!("decision '{decision_id}' not found"),
+                format!("決定 '{decision_id}' が見つかりません"),
+            )
+        })?;
+
+    let project = row.project_name.map(|name| crate::view::ProjectRef { id: row.project_id, name });
+    // Edges between decisions. The forward direction (supersedes / amends) fetches the target's title
+    // whether or not the target is still live, leaving `name` as `None` when it dangles — the face
+    // composes the placeholder. The reverse direction only ever yields live decisions, so a title is
+    // always there (wrapped in `Some`).
+    let forward = |edges: Vec<(i64, Option<String>)>| -> Vec<DecisionRef> {
+        edges.into_iter().map(|(id, title)| DecisionRef { id, name: title }).collect()
+    };
+    let reverse = |edges: Vec<(i64, String)>| -> Vec<DecisionRef> {
+        edges.into_iter().map(|(id, name)| DecisionRef { id, name: Some(name) }).collect()
+    };
+    let supersedes = forward(row.edges.supersedes);
+    let superseded_by = reverse(row.edges.superseded_by);
+    let amends = forward(row.edges.amends);
+    let amended_by = reverse(row.edges.amended_by);
+    // A premise carries its currency along with the reference (the successor is given as a
+    // conversational reference of the form `D-40`).
+    let builds_on = row
+        .edges
+        .builds_on
+        .into_iter()
+        .map(|p| crate::view::PremiseRef {
+            id: p.id,
+            name: p.title,
+            current: p.superseded_by.is_none(),
+            superseded_by: p.superseded_by.map(crate::idref::decision),
+        })
+        .collect();
+    let built_on_by = reverse(row.edges.built_on_by);
+    // `decided_by` is a TEXT token read into both id and name, so whenever the id is present the name is
+    // too — the `unwrap_or_default` never fires. Core keeps no display placeholder here.
+    let decided_by = row.decided_by_id.map(|id| Ref { id, name: row.decided_by_name.unwrap_or_default() });
+    // The tasks a decision produced come out with their status attached, so that "is the work this
+    // decision called for finished?" can be read from the decision's side.
+    let linked_tasks = row
+        .linked_tasks
+        .into_iter()
+        .map(|t| crate::view::LinkedTaskRef {
+            id: t.id,
+            name: t.title,
+            status: crate::model::TaskStatus::parse(&t.status).unwrap_or_default(),
+        })
+        .collect();
+
+    Ok(crate::view::DecisionDetail {
+        r#ref: crate::idref::decision(row.id),
+        id: row.id,
+        resource_type: "decision",
+        project,
+        title: row.title,
+        body: row.body,
+        status: crate::model::DecisionStatus::parse(&row.status).unwrap_or_default(),
+        // Current = no live supersedes edge points at this decision.
+        current: superseded_by.is_empty(),
+        supersedes,
+        superseded_by,
+        amends,
+        amended_by,
+        builds_on,
+        built_on_by,
+        decided_at: row.decided_at.as_deref().and_then(Timestamp::parse_rfc3339),
+        decided_by,
+        linked_tasks,
+        created_at: Timestamp::parse_rfc3339(&row.created_at).unwrap_or_default(),
+        updated_at: Timestamp::parse_rfc3339(&row.updated_at).unwrap_or_default(),
+    })
+}
+
+/// The SQL path of `task show`. Indexed SQL over the engine read-model
+/// ([`crate::store_engine::read::task_detail`]) pulls every field of a single task in one go — its
+/// memberships, the assignee facet, open blockers (with titles) and the comment count — and the row is
+/// assembled into a [`crate::view::TaskDetail`]. If the resolved id has no row, `not_found`.
+pub fn task_detail(
+    conn: &rusqlite::Connection,
+    task_id: i64,
+) -> Result<crate::view::TaskDetail> {
+    use crate::store_engine::read;
+    let row = read::task_detail(conn, task_id)
+        .map_err(crate::error::engine_on(conn))?
+        .ok_or_else(|| {
+            Error::not_found(
+                format!("task '{task_id}' not found"),
+                format!("タスク '{task_id}' が見つかりません"),
+            )
+        })?;
+
+    let parse_date =
+        |s: &Option<String>| s.as_deref().and_then(|v| NaiveDate::parse_from_str(v, "%Y-%m-%d").ok());
+    let parse_kind = |s: &Option<String>| s.as_deref().and_then(ActorKind::parse);
+
+    let memberships: Vec<crate::view::MembershipView> = row
+        .memberships
+        .into_iter()
+        .map(|m| crate::view::MembershipView {
+            project: crate::view::ProjectRef {
+                id: m.project_id,
+                name: m.project_name.unwrap_or_default(),
+            },
+            order_key: m.order_key,
+        })
+        .collect();
+
+    let blocked_by: Vec<crate::view::TaskRef> =
+        row.blocked_by.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
+    let blocked_by_decisions: Vec<DecisionRef> =
+        row.blocked_by_decisions.into_iter().map(|(id, name)| DecisionRef { id, name: Some(name) }).collect();
+    // Ready only when there are neither open blockers nor unsettled rationales (the same predicate the
+    // `ready:` filter uses).
+    let ready = blocked_by.is_empty() && blocked_by_decisions.is_empty();
+    let blocks: Vec<crate::view::TaskRef> =
+        row.blocks.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
+
+    let status = TaskStatus::parse(&row.status).unwrap_or_default();
+
+    Ok(crate::view::TaskDetail {
+        r#ref: crate::idref::task(row.id),
+        id: row.id,
+        resource_type: "task",
+        title: row.title,
+        notes: row.notes,
+        subtype: crate::model::Subtype::parse(&row.subtype).unwrap_or_default(),
+        completed: status == TaskStatus::Done,
+        completed_at: row.completed_at.as_deref().and_then(Timestamp::parse_rfc3339),
+        status,
+        created_by_kind: parse_kind(&row.created_by_kind),
+        assignee_kind: parse_kind(&row.assignee_kind),
+        start_on: parse_date(&row.start_on),
+        due_on: parse_date(&row.due_on),
+        priority: row.priority.as_deref().and_then(Priority::parse),
+        memberships,
+        blocked_by,
+        blocked_by_decisions,
+        ready,
+        blocks,
+        num_comments: row.num_comments,
+        created_at: Timestamp::parse_rfc3339(&row.created_at).unwrap_or_default(),
+        updated_at: Timestamp::parse_rfc3339(&row.updated_at).unwrap_or_default(),
+    })
+}
+
+/// Orders the fetched rows by the sort key (for [`decision_list`]). Decision ordering is deliberately
+/// not pushed down to SQL: the count is bounded per project, so sorting in memory is more direct than
+/// assembling an `ORDER BY`.
+fn sort_decisions(decisions: &mut [&crate::model::Decision], sort: &str) -> Result<()> {
+    sort_by_spec(decisions, sort, |decisions, key| {
+        match key {
+            // Chronological (accepted at / created at). `None` (never accepted) sorts last.
+            "decided" => decisions.sort_by(|a, b| cmp_opt(a.decided_at, b.decided_at)),
+            "created" => decisions.sort_by_key(|d| d.created_at),
+            "number" => decisions.sort_by_key(|d| d.id),
+            "title" => decisions.sort_by(|a, b| a.title.cmp(&b.title)),
+            "status" => decisions.sort_by(|a, b| a.status.as_str().cmp(b.status.as_str())),
+            other => {
+                return Err(Error::invalid(
+                    format!("unknown sort key '{other}' (decided/created/number/title/status; - for descending)"),
+                    format!("未知の sort キー '{other}'（decided/created/number/title/status、-で降順）"),
+                ))
+            }
+        }
+        Ok(())
+    })
+}
+
+/// `discover` (bare `amenbo`, with no arguments): today's tasks plus what to do next. The raw material
+/// is `status`, read from the engine with indexed SQL ([`status`]); [`discover_from`] assembles it.
+pub fn discover(conn: &rusqlite::Connection, reach: crate::reach::Reach) -> Result<DiscoverResult> {
+    Ok(discover_from(status(conn, "today", reach)?))
+}
+
+/// Builds discover out of the `status --today` result. The "today" column is overdue tasks followed by
+/// tasks due today.
+fn discover_from(st: StatusResult) -> DiscoverResult {
+    let mut today = st.overdue.iter().map(|o| o.task.clone()).collect::<Vec<_>>();
+    if let Some(dt) = &st.due_today {
+        today.extend(dt.iter().cloned());
+    }
+    DiscoverResult {
+        today_date: st.today_date,
+        summary: st.counts,
+        today,
+        next_suggested: st.next_suggested,
+        hints: vec![
+            "全コマンド仕様は `amenbo agent --json`".to_string(),
+            "新規タスクは `amenbo task add --title \"...\" --project <id>`".to_string(),
+            "今やることは `amenbo status`".to_string(),
+        ],
+    }
+}
+
+#[cfg(test)]
+mod filter_tests {
+    use super::*;
+    use crate::ops;
+    use crate::ops::test_support::{mk_project, mk_task_in, new_engine};
+    use crate::store_engine::WriteTx;
+
+    fn proj(tx: &WriteTx<'_>, name: &str) -> i64 {
+        mk_project(tx, name)
+    }
+
+    fn task(tx: &WriteTx<'_>, title: &str, project_id: Option<i64>) -> i64 {
+        mk_task_in(tx, title, project_id)
+    }
+
+    /// The ids of the tasks matching a filter expression. The read goes through the same indexed SQL
+    /// as production ([`list`]), which pins the meaning of the grammar against the source of truth.
+    fn ids(tx: &WriteTx<'_>, filter: Option<&str>) -> Vec<i64> {
+        let mut v: Vec<i64> = list(
+            tx.conn(),
+            crate::reach::Reach::All,
+            ListParams {
+                project_id: None,
+                filter_expr: filter.map(|s| s.to_string()),
+                sort: "title".to_string(),
+                limit: None,
+                offset: None,
+            },
+        )
+        .unwrap()
+        .tasks
+        .into_iter()
+        .map(|t| t.id)
+        .collect();
+        v.sort();
+        v
+    }
+
+    /// The message a rejected filter expression produces — the hook for asserting that it errors
+    /// rather than matching nothing.
+    fn err(tx: &WriteTx<'_>, filter: &str) -> String {
+        list(
+            tx.conn(),
+            crate::reach::Reach::All,
+            ListParams {
+                project_id: None,
+                filter_expr: Some(filter.to_string()),
+                sort: "title".to_string(),
+                limit: None,
+                offset: None,
+            },
+        )
+        .expect_err(&format!("`{filter}` does not resolve, so it must error"))
+        .to_string()
+    }
+
+    /// `project:` takes an id or a **name** (the same entry point as `task add --project`). A
+    /// reference that fails to resolve is an error, not an empty result — silently returning nothing
+    /// leaves the caller unable to tell "nothing matched" from "I mistyped the name".
+    #[test]
+    fn project_filter_takes_a_name_or_an_id_and_refuses_an_unknown_one() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let alpha = proj(tx, "アルファ");
+        let beta = proj(tx, "ベータ");
+        let a = task(tx, "a", Some(alpha));
+        task(tx, "b", Some(beta));
+
+        assert_eq!(ids(tx, Some(&format!("project:{alpha}"))), vec![a], "an id resolves");
+        assert_eq!(ids(tx, Some("project:アルファ")), vec![a], "a name finds the same single row");
+
+        let err = list(
+            tx.conn(),
+            crate::reach::Reach::All,
+            ListParams {
+                project_id: None,
+                filter_expr: Some("project:存在しないPJ".to_string()),
+                sort: "title".to_string(),
+                limit: None,
+                offset: None,
+            },
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("存在しないPJ"),
+            "a reference that fails to resolve is an error, not an empty result, and it names the reference as written: {err}"
+        );
+    }
+
+    /// `number:` / `ref:` select tasks by conversational number. A bare number, `#n`, `T-n` and `AMB-T-n` match
+    /// on the number; `D-n` (a decision reference) and a number nobody holds match nothing. `ref:` is
+    /// an alias of `number:`.
+    #[test]
+    fn number_filter_discriminates_tasks() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = proj(tx, "PJ");
+        let t1 = task(tx, "one", Some(p)); // number 1
+        let t2 = task(tx, "two", Some(p)); // number 2
+        let _t3 = task(tx, "three", Some(p)); // number 3
+
+        assert_eq!(ids(tx, Some("number:1")), vec![t1]);
+        assert_eq!(ids(tx, Some("number:#2")), vec![t2]);
+        assert_eq!(ids(tx, Some("ref:2")), vec![t2], "`ref:` is an alias of `number:`");
+        assert_eq!(ids(tx, Some("number:T-1")), vec![t1], "T-n matches on the task side");
+        assert!(ids(tx, Some("number:D-2")).is_empty(), "D-n is a decision reference — no task matches");
+        assert!(ids(tx, Some("number:999")).is_empty(), "a number nobody holds matches nothing");
+    }
+
+    /// `ai:true|false` selects on the AI-delegation dimension (`assignee_kind=ai`). Independent of the
+    /// assignee dimension: `true` gathers everything delegated to an AI, whoever's, while what is not
+    /// delegated (assigned to a human, or unassigned) falls under `false`. A bad value is an error.
+    #[test]
+    fn ai_facet_discriminates_delegation() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = proj(tx, "PJ");
+        let ai = task(tx, "ai", Some(p));
+        let human = task(tx, "human", Some(p));
+        let unassigned = task(tx, "unassigned", Some(p));
+        ops::task::set_assignee(tx, ai, Some(ActorKind::Ai)).unwrap();
+        ops::task::set_assignee(tx, human, Some(ActorKind::Human)).unwrap();
+
+        assert_eq!(ids(tx, Some("ai:true")), vec![ai], "only what is delegated to an AI");
+        let mut not_ai = vec![human, unassigned];
+        not_ai.sort();
+        assert_eq!(ids(tx, Some("ai:false")), not_ai, "assigned to a human, or unassigned, is not delegated");
+        let day = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        assert!(Filter::parse("ai:maybe", day).is_err(), "anything other than true/false is an error");
+    }
+
+    /// `status:` is a comma-separated any-of set. `status:todo,in_progress` picks up both todo and
+    /// in_progress and leaves out done and blocked — the foundation that keeps an AI's mailbox from
+    /// dropping the tasks it has already started.
+    #[test]
+    fn status_filter_accepts_comma_separated_any_of() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = proj(tx, "PJ");
+        let td = task(tx, "todo", Some(p));
+        let ip = task(tx, "in_progress", Some(p));
+        let dn = task(tx, "done", Some(p));
+        let bl = task(tx, "blocked", Some(p));
+        ops::task::set_status(tx, ip, TaskStatus::InProgress).unwrap();
+        ops::task::set_status(tx, dn, TaskStatus::Done).unwrap();
+        ops::task::set_status(tx, bl, TaskStatus::Blocked).unwrap();
+
+        let mut expected = vec![td, ip];
+        expected.sort();
+        assert_eq!(ids(tx, Some("status:todo,in_progress")), expected, "todo and in_progress only");
+        assert_eq!(ids(tx, Some("status:in_progress")), vec![ip], "a single value works as before");
+        assert_eq!(ids(tx, Some("status:blocked")), vec![bl], "blocked is outside the set");
+
+        let day = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        assert!(Filter::parse("status:todo,bogus", day).is_err(), "an unknown value anywhere in the set is an error");
+        assert!(Filter::parse("status:todo,", day).is_err(), "an empty element is an error");
+    }
+
+    /// `dim:<axis>=<value>` selects on any classification axis, and `time_axis:<value>` is sugar for
+    /// **whichever axis is designated role=time_axis** (independent of the axis's name). `=none` means
+    /// tasks with no live value on that axis. Several axis tokens AND together.
+    #[test]
+    fn dimension_and_time_axis_filters_slice_by_axis_value() {
+        use crate::model::{DimensionCardinality, DimensionRole};
+
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = proj(tx, "PJ");
+        let axis = |name: &str, role: DimensionRole| {
+            ops::dimension::add(
+                tx,
+                p,
+                ops::dimension::NewDimension {
+                    name: name.to_string(),
+                    notes: String::new(),
+                    cardinality: DimensionCardinality::Single,
+                    ordered: true,
+                    role,
+                },
+            )
+            .unwrap()
+            .id
+        };
+        // Name the time axis "Era" — to show that `time_axis:` looks it up by role, not by name.
+        let era = axis("Era", DimensionRole::TimeAxis);
+        let category = axis("Category", DimensionRole::None);
+        let dev = ops::dimension::value_add(tx, era, "dev").unwrap().id;
+        let ops_era = ops::dimension::value_add(tx, era, "ops").unwrap().id;
+        let bug = ops::dimension::value_add(tx, category, "bug").unwrap().id;
+
+        let t_dev_bug = task(tx, "dev bug", Some(p));
+        let t_ops = task(tx, "ops", Some(p));
+        let t_bare = task(tx, "bare", Some(p));
+        ops::dimension::set(tx, t_dev_bug, dev).unwrap();
+        ops::dimension::set(tx, t_dev_bug, bug).unwrap();
+        ops::dimension::set(tx, t_ops, ops_era).unwrap();
+
+        assert_eq!(ids(tx, Some("time_axis:dev")), vec![t_dev_bug], "the time axis is looked up by role");
+        assert_eq!(ids(tx, Some("time_axis:DEV")), vec![t_dev_bug], "a value name is case-insensitive");
+        assert_eq!(ids(tx, Some("dim:Era=ops")), vec![t_ops], "the axis name resolves too");
+        assert_eq!(ids(tx, Some("dimension:era=ops")), vec![t_ops], "the alias and the axis name are case-insensitive too");
+        assert_eq!(ids(tx, Some("dim:Category=bug")), vec![t_dev_bug]);
+        assert_eq!(
+            ids(tx, Some("time_axis:dev dim:Category=bug")),
+            vec![t_dev_bug],
+            "axis tokens AND together"
+        );
+        assert!(ids(tx, Some("time_axis:ops dim:Category=bug")).is_empty(), "an AND, so nothing matches");
+        assert_eq!(ids(tx, Some("time_axis:none")), vec![t_bare], "the tasks with no value on the time axis");
+        let mut no_category = vec![t_ops, t_bare];
+        no_category.sort();
+        assert_eq!(ids(tx, Some("dim:Category=none")), no_category);
+        // Both axis and value can be given as ids (they resolve either by name or by id).
+        assert_eq!(
+            ids(tx, Some(&format!("dim:{category}={bug}"))),
+            vec![t_dev_bug],
+            "axis and value both given as ids"
+        );
+
+        // Delete a value and the assignments to it fall back to "unclassified" (an assignment only
+        // counts when both hops, assignment → value, are live). The deleted value's name now points at
+        // nothing, so filtering by it is an error rather than an empty result (see the dedicated test
+        // below).
+        ops::dimension::value_delete(tx, dev).unwrap();
+        let mut time_axis_none = vec![t_dev_bug, t_bare];
+        time_axis_none.sort();
+        assert_eq!(ids(tx, Some("time_axis:none")), time_axis_none, "an assignment to a deleted value counts as unclassified");
+
+        let day = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        assert!(Filter::parse("dim:Category", day).is_err(), "no `=` is an error");
+        assert!(Filter::parse("dim:=bug", day).is_err(), "an empty axis is an error");
+        // An empty value is always rejected: filtering on a value that names nothing turns what was
+        // meant as a filter into an unconditional pass.
+        assert!(Filter::parse("dim:Category=", day).is_err(), "an empty value is an error");
+        assert!(Filter::parse("time_axis:", day).is_err(), "an empty `time_axis` value is an error");
+        // Gatekeeping the vocabulary: `phase` is only a name a user might give an axis, never a key of
+        // the grammar.
+        assert!(Filter::parse("phase:dev", day).is_err(), "`phase:` is an unknown key");
+    }
+
+    /// An axis or value name that fails to resolve is **an error, not an empty result** (the same
+    /// contract as `project:`). A typo that quietly matched nothing would leave the caller unable to
+    /// tell "nothing matched" from "I mistyped the name", and on the `=none` side it is worse still:
+    /// "unclassified with respect to an axis that does not exist" is true of everyone, so the query
+    /// would hand back **every row**.
+    #[test]
+    fn unknown_axis_or_value_is_an_error_not_an_empty_or_a_full_list() {
+        use crate::model::{DimensionCardinality, DimensionRole};
+
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = proj(tx, "PJ");
+        let add_axis = |name: &str, role: DimensionRole| {
+            ops::dimension::add(
+                tx,
+                p,
+                ops::dimension::NewDimension {
+                    name: name.to_string(),
+                    notes: String::new(),
+                    cardinality: DimensionCardinality::Single,
+                    ordered: true,
+                    role,
+                },
+            )
+            .unwrap()
+            .id
+        };
+        let era = add_axis("Era", DimensionRole::TimeAxis);
+        let category = add_axis("Category", DimensionRole::None);
+        ops::dimension::value_add(tx, era, "dev").unwrap();
+        ops::dimension::value_add(tx, category, "bug").unwrap();
+        let t = task(tx, "task", Some(p));
+
+        assert!(err(tx, "dim:Nosuch=bug").contains("Nosuch"), "a nonexistent axis errors, naming it");
+        assert!(err(tx, "dim:Category=nosuch").contains("nosuch"), "a nonexistent value errors, naming it");
+        assert!(err(tx, "time_axis:nosuch").contains("nosuch"), "a nonexistent value on the time axis errors too");
+        // This is the side where an empty result would not be the worst outcome: `=none` on a
+        // nonexistent axis makes `NOT EXISTS` always true, so a filter meant to narrow returns
+        // everything.
+        assert!(!ids(tx, Some("dim:Category=none")).is_empty(), "`=none` on a live axis resolves as before");
+        assert!(err(tx, "dim:Nosuch=none").contains("Nosuch"), "`=none` on a nonexistent axis is an error, not every row");
+        assert_eq!(ids(tx, Some("dim:Category=bug")), Vec::<i64>::new(), "merely matching nothing stays an empty result");
+        assert_eq!(ids(tx, None), vec![t], "the error is confined to a reference that fails to resolve");
+
+        // `time_axis:` names an axis by role. With no axis designated there is nothing to point at,
+        // and that too is an error rather than an empty result.
+        let bare = new_engine();
+        let tx = &bare.write().unwrap();
+        proj(tx, "時間軸の無い PJ");
+        assert!(err(tx, "time_axis:dev").contains("時間軸"), "no axis is designated as the time axis: {}", err(tx, "time_axis:dev"));
+        assert!(err(tx, "time_axis:none").contains("時間軸"), "the same for `=none`");
+    }
+
+    /// The grammar of a filter value (`AMB-T-<n>` / `AMB-D-<n>`, or the bare `123` / `#123` / `T-123` /
+    /// `D-123`, the prefix case-insensitive) and the error on a bad one.
+    #[test]
+    fn number_filter_parse_forms() {
+        assert_eq!(
+            NumberFilter::parse("123").unwrap(),
+            NumberFilter { number: 123, require_decision: None }
+        );
+        assert_eq!(
+            NumberFilter::parse("#123").unwrap(),
+            NumberFilter { number: 123, require_decision: None }
+        );
+        assert_eq!(
+            NumberFilter::parse("T-7").unwrap(),
+            NumberFilter { number: 7, require_decision: Some(false) }
+        );
+        assert_eq!(
+            NumberFilter::parse("d-80").unwrap(),
+            NumberFilter { number: 80, require_decision: Some(true) },
+            "the prefix is case-insensitive"
+        );
+        assert!(NumberFilter::parse("abc").is_err());
+        assert!(NumberFilter::parse("").is_err());
+    }
+
+    /// A cursor is an opaque token hiding `(at, id)`: it round-trips, and it can be told apart from a
+    /// date expression or from garbage.
+    #[test]
+    fn activity_cursor_roundtrips_and_is_distinguishable() {
+        let at = Timestamp::parse_rfc3339("2026-07-05T01:02:03Z").unwrap();
+        let c = encode_activity_cursor(&at, 12);
+        assert!(looks_like_activity_cursor(&c), "it starts with cur1_");
+        assert_eq!(parse_activity_cursor(&c), Some((at, 12)));
+        // Date expressions and garbage are not cursors (so `--since` branches to the date side).
+        assert!(!looks_like_activity_cursor("today"));
+        assert!(!looks_like_activity_cursor("2026-07-05"));
+        assert!(parse_activity_cursor("today").is_none());
+        assert!(parse_activity_cursor("cur1_@@@not-base64@@@").is_none());
+    }
+
+    /// The reach cannot be **left undeclared**: `list` / `activity` / `decision_list` take it as an
+    /// argument and `TaskQuery` takes it as a field, so forgetting it does not compile. Underneath
+    /// that, this pins down that the engine's own listing is closed over the reach as well — reads
+    /// that do not go through `query::list` (the GUI's task page) need that floor.
+    #[test]
+    fn a_closed_reach_narrows_the_engines_own_list_too() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let mine = proj(tx, "bound");
+        let theirs = proj(tx, "other");
+        let a = task(tx, "mine", Some(mine));
+        task(tx, "theirs", Some(theirs));
+
+        let page = crate::store_engine::list_task_ids(
+            tx.conn(),
+            &crate::store_engine::TaskQuery {
+                reach: crate::reach::Reach::Project(mine),
+                // Even with no scope given (i.e. asking for the whole machine), nothing outside the
+                // closed reach comes out.
+                project_id: None,
+                filter: &Filter::default(),
+                sort: "title",
+                today: time::today(),
+                limit: None,
+                offset: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(page.ids, vec![a], "only the bound project's rows");
+        assert_eq!(page.total_matched, 1, "the pre-paging total is counted within the reach too");
+    }
+}

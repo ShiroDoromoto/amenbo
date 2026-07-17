@@ -1,0 +1,41 @@
+[package]
+name = "amenbo-cli"
+description = "The amenbo CLI: the first interface an AI agent reaches for"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "amenbo"
+path = "src/main.rs"
+
+[features]
+default = []
+# `cli_e2e` forks the built `amenbo` binary once per test (30 tests, ~1–2s each) — heavy by
+# *attribute*, not by logic. Gate it behind an off-by-default feature so the everyday `cargo test`
+# stays fast; CI runs it via `--features e2e`. A feature-gated test rots unless CI runs every feature
+# (see .github/workflows/ci.yml).
+e2e = []
+
+[dependencies]
+amenbo-core = { path = "../amenbo-core" }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+clap.workspace = true
+# Hidden password entry for the encrypted recovery kit (`recovery backup`): read the passphrase from
+# the TTY without echoing it. Small, widely-used crate; no-op'd by `--password-stdin` for
+# non-interactive/scripted runs.
+rpassword = "7"
+
+# Restores SIGPIPE to its default at startup (`main`), so a reader that walks away ends this process
+# the way a Unix tool ends: at once, and quietly. Windows has no such signal, so the dependency is
+# scoped to the platforms that do.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# Real-binary end-to-end suite. Gated behind `e2e`; build/run it with `cargo test --features e2e`.
+[[test]]
+name = "cli_e2e"
+required-features = ["e2e"]

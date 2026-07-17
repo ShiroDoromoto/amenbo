@@ -1,0 +1,51 @@
+//! amenbo's core library: the domain model, persistence, operations and export live here, and the CLI,
+//! the GUI and AI agents are thin skins over it. There is no central server — the data is portable and
+//! local-first — and the conceptual model it exposes is one coherent, CLI- and AI-native whole.
+
+// The big `json!` spec in `agent::build` blows past the default macro recursion limit.
+#![recursion_limit = "256"]
+// Docs are built with `--document-private-items`, so linking from a public API to a private helper is
+// correct here — we only want broken links to warn.
+#![allow(rustdoc::private_intra_doc_links)]
+
+pub mod activity;
+pub mod activity_log;
+pub mod agent;
+pub mod agents;
+pub mod archive;
+pub mod binding;
+pub mod blob;
+pub mod config;
+pub mod doctor;
+pub mod env;
+pub mod error;
+pub mod hooks;
+pub mod identity;
+pub mod export;
+pub mod idref;
+pub mod lint;
+pub mod migrate;
+pub mod model;
+pub mod store_engine;
+pub mod ops;
+pub mod order;
+pub mod overview;
+pub mod perf;
+pub mod progress;
+pub mod project_teardown;
+pub mod query;
+pub mod reach;
+pub mod read_receipts;
+pub mod refscan;
+pub mod slug;
+pub mod store;
+pub mod swap_lock;
+pub mod time;
+mod tmpdir;
+pub mod update_check;
+pub mod validate;
+pub mod view;
+pub mod worktree;
+
+pub use error::{Error, ErrorCode, Result};
+pub use store::Store;

@@ -1,0 +1,259 @@
+# esorp.yaml — where comments may live, and what shape they may take.
+# What is written here is all that runs; there are no hidden defaults.
+
+syntax:
+  cstyle-rust:
+    family: cstyle
+    files:
+      - "**/*.rs"
+    mode: structural
+
+    # Every container is enumerated, so a comment is judged by what it says
+    # rather than by where it sits. A body reaches layer 2 (vocabulary) and
+    # layer 3 (meaning) only once layer 1 lets it through, and this tree
+    # explains a step next to the step: in a function body, where the language
+    # offers no doc slot at all. Narrowing the containers here would hide those
+    # bodies from the two layers that read them.
+    allow:
+      - place: header               # top of the file (license and the like)
+
+      - place: doc                  # attached to a declaration
+        # Shape of the container. Form is checked, vocabulary is not.
+        form:
+          headings: deny            # no headings (history is written under headings)
+
+      - place: trailing             # end of line
+      - place: leading              # before the code it explains
+      - place: orphan
+
+  cstyle-ts:
+    family: cstyle
+    files:
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "!**/node_modules/**"
+      - "!**/*.d.ts"
+    mode: structural
+    allow:
+      - place: header
+      - place: doc
+        form:
+          headings: deny
+      - place: trailing
+      - place: leading
+      - place: orphan
+
+  cstyle-js:
+    family: cstyle
+    files:
+      - "**/*.mjs"
+      - "!**/node_modules/**"
+    mode: structural
+    allow:
+      - place: header
+      - place: doc
+        form:
+          headings: deny
+      - place: trailing
+      - place: leading
+      - place: orphan
+
+  cstyle-go:
+    family: cstyle
+    files:
+      - "**/*.go"
+    mode: structural
+    allow:
+      - place: header
+      - place: doc
+        form:
+          subject: required         # first line starts with the declared name (Go doc convention)
+          headings: deny
+      - place: trailing
+      - place: leading
+      - place: orphan
+
+  # Files with no container to speak of: one kind of comment, no doc, no
+  # declaration to attach to. "List the allowed containers and drop the rest"
+  # has nothing to bite on, so layer 1 is skipped and only layer 2 applies.
+  # They are covered because tracker references are not confined to code.
+  #
+  # This reaches the comments of a config file and stops there — what a .yml or a
+  # .toml says in a *value* is not a comment, and no family can see it. Those
+  # files are handed to layer 2 whole by guards/check-prose.sh, which is what
+  # actually holds their values; the listing here is what audits their comments.
+  #
+  # go.mod runs the other way, and is listed nowhere on purpose. Its comments open
+  # with '//', which no family here reads — but check-prose.sh hands the file to
+  # layer 2 whole, so what they say is held under the same rules regardless. A
+  # listing would re-read those lines against those rules and turn up nothing.
+  # Layer 1 has nothing to bite on either: go.mod declares no code, and the
+  # comments it carries in practice are the '// indirect' markers `go` writes.
+  #
+  # Two file types stay out, each swept and kept clean by hand, and the tree
+  # holds one file of each:
+  #
+  #   - .nsh: its comments open with ';', which no family reads — a listing here
+  #     would audit a fragment of each line and read as coverage.
+  #   - .swift: `cstyle` reads its `//` well enough, but esorp carries no scanner
+  #     for the language, so a listing would run nothing at all while reading as
+  #     coverage. Nothing else reaches it either: check-prose.sh holds the files
+  #     that carry no code, and source stays outside it by design. `check` names
+  #     such a file out loud ("not inspected") when one is declared.
+  hash:
+    files:
+      - "**/*.yml"
+      - "**/*.yaml"
+      - "**/*.toml"
+      - "**/*.sh"
+      - "**/*.ps1"
+      - "Makefile"
+      - "**/.gitignore"
+    mode: content-only
+
+  # `.md` is deliberately absent: Markdown says what it says in prose, and a
+  # comment extractor reads only `<!-- -->`, so listing it would audit a fragment
+  # and read as coverage. Its prose is handed to layer 2 whole, file by file, by
+  # guards/check-prose.sh.
+  sgml:
+    files:
+      - "**/*.html"
+      - "**/*.svg"
+    mode: content-only
+
+  cssblock:
+    files:
+      - "**/*.css"
+    mode: content-only
+
+# How a violation is to be settled. Deletion is the default: version control
+# already holds the history, and most offending comments have nowhere to go.
+# Only the ids that can fire are listed: every container is allowed and no
+# label is required, so place-not-allowed and label-required have nothing to
+# bite on.
+disposition:
+  form-subject: |
+    A doc comment explains its declaration. Start with the name of the declaration.
+    If it cannot start with the name, it is not an explanation of the declaration.
+  form-headings: |
+    A doc comment carries no headings.
+
+# What git declares is not our code, esorp does not treat as our code either.
+respect_gitignore: true
+
+# Layer 2 (vocabulary). The tool ships no vocabulary of its own; what is in
+# rules: below is all of it. Measure a candidate against this corpus before
+# adding it (`esorp lexicon --try <re>`) — a guard that cries wolf breeds
+# exceptions, and then it is ignored altogether.
+rules:
+  # The nine English pronouns are where the precision comes from, not a shortcut.
+  # "used to" carries two senses in one surface form: the past habit, which
+  # narrates, and purpose — "is used to sort the column" — which is what the
+  # comments here overwhelmingly write. A pronoun is unambiguously a subject, so
+  # only the narrating sense survives one; the purpose sense always puts a verb or
+  # a sentence start in between, which the adjacency below never matches. Telling
+  # the two apart any other way needs the part of speech, and RE2 has no negative
+  # lookahead to subtract one sense from the other. Widening the subject buys false
+  # positives and nothing else (measured: fifteen hits, none genuine). A noun
+  # subject that narrates is layer 3's to catch — its question does not ask what
+  # shape the subject has.
+  - id: no-history
+    pattern: '(?i)(we|it|this|that|they|these|those|which|there)\s+used\s+to|かつて|従来は|(^|[\s。、（(「『:：・])以前は'
+    message: |
+      This narrates a change. State what the code is now.
+      What it was before is held by version control.
+
+  # A reference to this project's own tracker, which nobody reading the source
+  # can follow. Both faces are watched — a comment, and the body handed to
+  # `check --text` (a commit message), which is where a reference driven out of
+  # a comment goes looking for shelter.
+  #
+  # A code span is the one place the form may appear, because some code's whole
+  # subject IS the form: the parser that reads a reference, and the tests that
+  # pin what it accepts, cannot say what they accept without writing it. Outside
+  # a code span a reference is a pointer, so that is where this bites.
+  - id: internal-ref
+    pattern: '(^|[^-A-Za-z`])(AMB-)?[TD]-\d+([^`]|$)|amenbo-task:'
+    message: |
+      This points at this project's tracker. A reader — a future contributor, an
+      outside reader, the next agent — cannot follow it, so say what the code
+      does instead of where it was decided.
+      If the form itself is the subject, write it as a code span.
+
+  # Link syntax in a comment nothing resolves. rustdoc reads `///` and `//!`, so
+  # a bracketed code span there is a real link, and a target that goes turns the
+  # doc build red. The same characters in a plain `//` are text: no tool reads
+  # them, so the link never works and its rot is never reported.
+  #
+  # There is no third disposition to point an author at. A plain comment sits
+  # where the language offers no doc slot — inside a function body — so it cannot
+  # be promoted into one. The brackets go, and the name stays; the sentence says
+  # the same thing without promising a jump it cannot make.
+  #
+  # Scoped by kind, not by place: `docline` / `docblock` are where the link is
+  # meant to be. That also keeps it off the commit-message face, which narrowing
+  # by kind cannot reach.
+  - id: dead-link
+    pattern: '\[`[^`]+`\]'
+    message: |
+      Nothing resolves link syntax in a plain comment. This promises the reader a
+      jump it cannot make, and says nothing when what it points at goes away.
+      Drop the brackets and keep the name. A link that resolves has to sit on a
+      declaration's doc comment.
+    where:
+      kind: [line, block]
+
+  # The doc kinds the rule above spares, on the TypeScript side, where sparing
+  # them buys nothing. What earns Rust its exemption is rustdoc: it reads `///`
+  # and `//!`, so a bracketed code span there is a link, and its rot turns the
+  # doc build red. No documentation is built from the TypeScript here, so a
+  # `/** */` block is read by people and by nothing else — the brackets promise a
+  # jump no tool makes, and nothing goes red when the target does. `{@link}`
+  # would resolve in an editor, but its rot is reported by nothing either, so the
+  # settlement is the one Rust takes for its plain comments: the brackets go, the
+  # name stays.
+  #
+  # The two rules divide by kind and do not overlap: the plain kinds everywhere
+  # are the rule above, the doc kinds of this one syntax are this one.
+  #
+  # `bindings.ts` is out because ts-rs writes it from the Rust DTOs' `///` — the
+  # bodies are a copy, and the copy is not where they are settled. Editing it is
+  # undone by the next `cargo test`, and dropping the brackets at the source
+  # would kill 22 links that do resolve, along with the rot detection `cargo doc
+  # -D warnings` runs over them. What this rule protects is held there instead.
+  - id: dead-link-ts
+    pattern: '\[`[^`]+`\]'
+    message: |
+      Nothing resolves link syntax here: no documentation is built from the
+      TypeScript in this tree, so this promises the reader a jump it cannot make
+      and says nothing when what it points at goes away.
+      Drop the brackets and keep the name.
+    where:
+      syntax: [cstyle-ts]
+      kind: [docline, docblock]
+      path:
+        - "**"
+        - "!app/src/bindings/bindings.ts"
+
+  # Comments are English, so an outside reader reads the same tree the authors
+  # do. This watches the comment face and the commit message alike.
+  #
+  # It reads letters, not words: any kana or han character is a hit. That is
+  # deliberate — a vocabulary of Japanese phrases would be endless, while the
+  # script itself is exact. Sample data (a task title, a person's name) lives in
+  # string literals, which no layer of this reads.
+  - id: english-only
+    pattern: '[\p{Hiragana}\p{Katakana}\p{Han}]'
+    message: |
+      Comments and commit messages are English here — the source is read by
+      people who do not read Japanese. Write this in English.
+
+# Layer 3 (meaning). esorp judges no meaning and calls no LLM: it hands over the
+# comments that made it through layers 1 and 2, with the question below attached.
+# The one who answers is the agent running esorp. CI stays out of it — the red
+# and green of CI rest on layers 1 and 2 alone.
+review:
+  question: |
+    Does this comment explain the code in front of it, as it stands now?
+    If instead it recounts circumstance, history, a ruling, or a note to self — or if it
+    points at anything a reader who has only this repository cannot reach — delete it.

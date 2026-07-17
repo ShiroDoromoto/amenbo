@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# commit-msg — hold the commit message to the same vocabulary as the comments:
+# no reference to this project's own tracker, and English only. The rules live in
+# esorp.yaml (the `text` face of layer 2), so the message and the source are
+# judged by one declaration rather than two that drift.
+# Enabled by `make hooks`. Bypassable with `git commit --no-verify`; nothing is a
+# backstop here, since a pushed message cannot be rewritten (CI reads the tree,
+# not the history).
+#
+# esorp is optional: an outside contributor without it commits as before.
+set -uo pipefail
+
+command -v esorp >/dev/null 2>&1 || exit 0
+
+# What git will keep, not what is in the file. The hook is handed the raw buffer:
+# the '#' help lines, and — under `git commit -v` — the whole diff below the
+# scissors. Judging that would read the DIFF's own references as the message's.
+# Cut at the scissors, then let git's own cleanup drop the comments.
+msg="$(sed '/^#.* >8 /,$d' "$1" | git stripspace --strip-comments)"
+[ -n "$msg" ] || exit 0
+
+printf '%s\n' "$msg" | esorp check --text -

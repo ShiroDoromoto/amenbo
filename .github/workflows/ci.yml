@@ -1,0 +1,488 @@
+name: CI
+
+# Single gate that guards the merge target. Every job below lives in this one
+# workflow, so one event fires one workflow run (with N jobs) instead of N
+# separate runs. Runner minutes are unchanged — each job still gets its own
+# runner — but the run list, status, and concurrency group are unified.
+#
+# Trigger scope: `push` is restricted to `main` so a feature/Dependabot branch
+# doesn't run the suite twice (once for the push, once for the PR). Pre-merge
+# validation happens via `pull_request`; `push: main` is the post-merge backstop
+# on the merge target itself (and the only gate for branches merged without a
+# PR). `concurrency` cancels an in-progress run when a newer commit (e.g. a
+# Dependabot rebase) supersedes it — but only on PRs, see below.
+#
+# Cost: this repo is private, so Actions runs against a monthly minute quota with
+# per-OS multipliers (Linux x1, Windows x2, macOS x10). Every job runs on Linux
+# to stay within the free tier. The host crate IS clippy+test gated on Linux (the
+# `app-rust` job below), but the native Tauri .app *bundle* (macOS only, x10) is
+# deliberately NOT built here — it is reserved for a tag/dispatch trigger.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Superseding is a PR-only idea here, which is why the group key differs per event.
+#
+# On a PR the path filter below diffs against the merge base, so every run sees the
+# branch's WHOLE diff — a newer run subsumes the one it cancels, and the group is
+# keyed by ref so a rebase/force-push supersedes the run it made obsolete.
+#
+# On `push` the filter sees only THAT push's diff, so a superseded main run takes
+# its changes down with it: push A touches Rust, push B (shell only) supersedes A,
+# B's filter reports rust=false, and A's Rust change is never compiled while main
+# says green. Keying push runs by SHA gives each commit its own group, so no main
+# run is ever cancelled — neither in-progress (cancel-in-progress) nor pending
+# (a group holds one pending run, and a third arrival evicts the one waiting).
+# Main pushes are rare here, so paying for every one of them is cheap next to a
+# green main that was never built.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  # Path gate for the build/test jobs: run each only when a change can affect it.
+  #
+  # `rust` (gates rust ~8min + app-rust) is a positive allowlist of the Rust
+  # build inputs: the workspace crates, the manifests/lockfile, the toolchain +
+  # lint + nextest config, .cargo/, the out-of-workspace Tauri host crate
+  # (app/src-tauri), and this workflow. A change confined to relay/ or docs (or
+  # any non-Rust tree) matches none of these, so the Rust suite is skipped.
+  #
+  # `gui` (gates gui-web) is a positive allowlist of every front-end build input:
+  # the app/ tree (src, package*.json, tsconfig, vite/vitest config, src-tauri
+  # types), plus the root .nvmrc that setup-node reads and the workflow itself.
+  # A Rust-only change touches none of these, so the GUI typecheck+build+vitest is
+  # skipped. app/src-tauri/** is under app/**, so a Tauri command change still
+  # reruns the GUI (its TS bindings may depend on it).
+  #
+  # The audit jobs are path-gated too: cargo-audit on the Cargo manifests/lock (+
+  # its config), npm-audit on the app's package manifests/lock — so a change that
+  # touches no dependency (e.g. a relay-only or docs push) doesn't run them. The
+  # trade-off is that a newly-disclosed advisory on an UNCHANGED dep isn't flagged
+  # until the next dependency change — which is why those two, and the two linter
+  # gates (whose runner-side versions float), are defined in rot-gates.yml and also
+  # run on a timer from rot-weekly.yml, with no path filter at all. Here they
+  # stay gated: a diff that can't have moved them shouldn't pay for them.
+  # tree-guards stays always-on: what it looks for — an internal-note reference,
+  # Japanese test prose — can appear in any file, and the scans are seconds.
+  changes:
+    name: detect changed paths
+    runs-on: ubuntu-latest
+    # On pull_request events dorny/paths-filter lists changed files via the GitHub
+    # API, which needs pull-requests:read. The repo's default token is
+    # contents/metadata/packages:read only, so without this the job fails with
+    # "Resource not accessible by integration" on every PR — which, since the
+    # gated jobs `needs: changes`, would skip ALL build/test on PRs. (push events
+    # diff via git and need no extra scope.)
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      gui: ${{ steps.filter.outputs.gui }}
+      go: ${{ steps.filter.outputs.go }}
+      shell: ${{ steps.filter.outputs.shell }}
+      cargo_deps: ${{ steps.filter.outputs.cargo_deps }}
+      npm_deps: ${{ steps.filter.outputs.npm_deps }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
+              - 'clippy.toml'
+              - '.config/nextest.toml'
+              - '.cargo/**'
+              - 'app/src-tauri/**'
+              - '.github/workflows/ci.yml'
+              # The harness the app-rust job's network-FS step runs (it stands up the real NFS/SMB/9P
+              # mounts): change it and nothing else, and the step that uses it would not re-run.
+              - 'scripts/verify-network-watch.sh'
+            gui:
+              - 'app/**'
+              - '.nvmrc'
+              - '.github/workflows/ci.yml'
+            # devtool is one self-contained Go module with no dependency on the rest of the tree,
+            # so nothing outside it can move its verdict — except the gate itself, which holds the
+            # three checks this job runs.
+            go:
+              - 'devtool/**'
+              - 'scripts/go-gate.sh'
+              - '.github/workflows/ci.yml'
+            shell:
+              - '**/*.sh'
+              - '.githooks/**'
+              - 'Makefile'
+              - '.github/workflows/**'
+            # The two below gate jobs whose steps live in rot-gates.yml, so that file is a build
+            # input for them just as this one is. (`shell` needs no such entry: its
+            # '.github/workflows/**' rule already covers every workflow, rot-gates.yml included.)
+            cargo_deps:
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              # The Tauri host crate is out of the workspace, with a lockfile of its own — and the
+              # audit job reads it too, so a bump there has to open this gate.
+              - 'app/src-tauri/Cargo.toml'
+              - 'app/src-tauri/Cargo.lock'
+              - '.cargo/audit.toml'
+              # The license allow-list the cargo-license job below reads.
+              - 'deny.toml'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/rot-gates.yml'
+            npm_deps:
+              - 'app/package.json'
+              - 'app/package-lock.json'
+              # The license half of this gate: the allow-list it reads (shared with the Rust side),
+              # the gate itself, and the tests that hold its judgment down. All three decide the
+              # verdict — a test edited alone still has to re-open this.
+              - 'deny.toml'
+              - 'guards/*.mjs'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/rot-gates.yml'
+
+  rust:
+    name: cargo clippy + test
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # rust-toolchain.toml pins the channel (1.96.0) and components
+      # (rustfmt/clippy); rustup installs them on the first cargo invocation.
+      - name: Show toolchain
+        run: rustc --version && cargo clippy --version
+
+      # rust-cache over a hand-rolled actions/cache: it caches only reusable
+      # dependency artifacts (not this workspace's own crates, which change every
+      # commit and would bloat the key), auto-evicts stale entries, and keys on the
+      # rustc version + Cargo.lock + enabled features — so a lockfile bump no longer
+      # throws away the whole `target`. Must run after the toolchain exists (Show
+      # toolchain above triggers the rustup install) since it reads the rustc version.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # nextest runs each test in its own process and in parallel — faster than
+      # `cargo test` and it prints per-test timings (slow tests surface in the
+      # final summary; thresholds live in .config/nextest.toml).
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      # -D clippy::disallowed_methods enforces the facet env funnel (clippy.toml):
+      # raw std::env::var/var_os is banned outside amenbo_core::env so a facet can
+      # never silently fall back to human from a new call site. `--all-features`
+      # lints the feature-gated targets too (scale/e2e tests, the gated `sharing`
+      # surface) so they can't rot — required-features targets are invisible to a
+      # plain `--all-targets` build.
+      - name: Clippy (all targets, all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
+
+      # The everyday test run skips the feature-gated heavy suites (read_scaling_guard
+      # behind `scale`, cli_e2e behind `e2e`) so local runs stay sub-second; CI MUST enable
+      # them or those guards silently rot. NOT `--all-features`: that would also turn on
+      # `sharing`, flipping the CLI out of personal mode and breaking cli_e2e's P1 assertions.
+      # Enable scale+e2e only. `scale` (not `scale-heavy`) seeds read_scaling_guard at a *medium*
+      # store and runs only its deterministic O(result) ratio guards — the full 10k seed + the
+      # wall-clock guards run nightly via scale-heavy.yml, off the PR path. The `ci` profile
+      # (.config/nextest.toml) runs every test to completion (no fail-fast) so one failure doesn't
+      # mask the rest.
+      - name: Test (incl. feature-gated scale + e2e suites)
+        run: cargo nextest run --profile ci --features scale,e2e
+
+      # nextest does NOT run doctests; run them separately so a future `/// ```rust`
+      # example can't silently skip CI. Today there are none (only ```text blocks), so
+      # this is a near-instant honesty backstop, not a cost.
+      - name: Doctests
+        run: cargo test --doc --features scale,e2e
+
+      # Whether doc comments point at a symbol that does not exist. An intra-doc link to a removed
+      # function sends the reader to code that is not there, so stop it mechanically rather than by
+      # prose discipline. Links to private items are allowed on the crate side (a doc reader sees
+      # private too) = all that fails here is a broken link.
+      - name: Doc links
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+
+  gui-web:
+    name: GUI typecheck + build
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.gui == 'true' }}
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pinned Node comes from .nvmrc; keeps CI in lockstep with the version-pin
+      # files instead of a hardcoded number.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # The Vitest unit suite (front-end logic: reconcile self-heal, IPC, i18n,
+      # bind-folder). Host-independent — pure Node, so it gates per-PR on Linux
+      # without the macOS bundle. Mirrors the `npm test` leg of the local make-test
+      # gate so the front-end logic can't rot unnoticed.
+      - name: Test
+        run: npm test
+
+  # devtool is not built or shipped by anything else here — it is the optional helper that stamps
+  # out a git worktree per task and measures the agent entry — so no other job compiles it, and
+  # nothing but this one would notice it breaking. Publishing it without this job would be
+  # publishing a tool that rots. It is seconds: one stdlib-only module, no dependencies to
+  # resolve, tests that touch only temp dirs and git.
+  go:
+    name: devtool vet + test
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.go == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # The version pin lives in devtool/go.mod, next to the module, rather than being written
+      # again here. `cache: false` because the module has no dependencies to cache — the cache
+      # keys on a go.sum this module has no reason to have.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: devtool/go.mod
+          cache: false
+
+      # `make go-gate` is the same entry point, minus the skip it does for a clone with no Go —
+      # here Go is installed, so call the script the target calls and let the job fail rather than
+      # report a green skip.
+      - name: Format, vet and test the devtool module
+        run: bash scripts/go-gate.sh
+
+  # The three gates that can also go red on a tree nobody touched (the linter floats its runner-side
+  # version; the audits float the advisory DB). Their definitions live in rot-gates.yml so that this
+  # workflow and the weekly timer (rot-weekly.yml) run the same thing rather than two copies that
+  # drift — see that file for what each one gates and why the build/test jobs are not among them.
+  # Here they keep their path filter; the weekly leg runs them unfiltered.
+  rot-gates:
+    needs: changes
+    uses: ./.github/workflows/rot-gates.yml
+    with:
+      shell: ${{ needs.changes.outputs.shell == 'true' }}
+      cargo_deps: ${{ needs.changes.outputs.cargo_deps == 'true' }}
+      npm_deps: ${{ needs.changes.outputs.npm_deps == 'true' }}
+
+  # amenbo is Apache-2.0 and ships binaries that statically link every Rust dependency, so a
+  # strong-copyleft crate anywhere in the tree would make what we distribute undistributable.
+  # Nobody reads a license at bump time — Dependabot bumps are auto-merged — so the allow-list in
+  # deny.toml is the only thing that would notice one arriving. It stays HERE rather than in
+  # rot-gates.yml: unlike the audits, this verdict is a function of the lockfiles alone, so it
+  # cannot go red on a tree nobody touched, and the weekly leg would only pay for it again.
+  cargo-license:
+    name: cargo deny (licenses)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.cargo_deps == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: Check the workspace's licenses
+        run: cargo deny check licenses
+
+      # Same argument as the audit gate: the Tauri host crate is out of the workspace and carries
+      # its own lockfile (the whole GTK/WebKit stack lives there), so the root check never sees it.
+      # One config governs both trees.
+      - name: Check the Tauri host crate's licenses
+        run: cargo deny --config deny.toml --manifest-path app/src-tauri/Cargo.toml check licenses
+
+  # The same argument, for the other half of what we ship. cargo deny never sees the GUI's npm
+  # dependencies, but they ride into the Tauri bundle exactly as the crates do — and they arrive the
+  # same unwatched way, since Dependabot bumps are auto-merged. The gate reads the allow-list out of
+  # deny.toml rather than keeping a second copy, so "what amenbo may ship" cannot come to mean two
+  # different things. It sits beside cargo-license for the same reason that job is here and not in
+  # rot-gates.yml: the verdict is a function of the lockfile alone.
+  npm-license:
+    name: npm licenses (GUI shipped deps)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.npm_deps == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # A real run only exercises the tree we have, which is green — so it shows the gate can say
+      # yes, and never that it can still say no. These pin the refusals (node's own runner, no
+      # dependency): they run first, because a broken judge passing everything is the failure mode
+      # the check below cannot report on itself.
+      - name: Test the gate's judgment
+        run: node --test "guards/**/*.test.mjs"
+
+      # No `npm ci`: npm records each resolved package's license in the lockfile, so the check reads
+      # a file rather than an install.
+      - name: Check the shipped npm dependencies' licenses
+        run: node guards/check-npm-licenses.mjs
+
+  # The Tauri host crate (app/src-tauri) is `exclude`d from the root workspace, so
+  # the `rust` job above never compiles it — a core refactor can break it on main
+  # unnoticed. This job closes that gap by clippy+test gating the crate. It is NOT
+  # the native .app bundle build (that stays tag/dispatch-only, per the header) —
+  # just `cargo` over the host crate, which needs the Tauri Linux system libs
+  # (webkit/gtk) to link.
+  app-rust:
+    name: app crate clippy + test
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Tauri v2's webkit/gtk system deps — required to compile the `tauri` crate on
+      # Linux (the runner already has build-essential/curl).
+      - name: Install Tauri system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev
+
+      # rust-toolchain.toml (repo root) pins the channel + clippy for this crate too.
+      - name: Show toolchain
+        run: rustc --version && cargo clippy --version
+
+      # Separate cache from the `rust` job: the host crate is out-of-workspace with
+      # its own lock and target dir (app/src-tauri/target). `workspaces` points
+      # rust-cache at that manifest so it keys on the right lockfile and target;
+      # the distinct job id keeps this cache from colliding with the `rust` job's.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      # The host crate's build.rs (tauri_build) validates tauri.conf.json's
+      # externalBin=binaries/amenbo. That sidecar CLI is normally staged by tauri's
+      # beforeBuildCommand, which a plain `cargo clippy/test` never runs, and
+      # binaries/ is gitignored — so on a cache miss (or when tauri.conf.json
+      # changes and build.rs re-runs) this job would fail with `resource path …
+      # doesn't exist`. Stage it up front with the same script the GUI build uses.
+      - name: Stage CLI sidecar (externalBin)
+        run: node app/scripts/prepare-cli-sidecar.mjs
+
+      # Same lint contract as the core/cli `rust` job, including the facet env funnel
+      # (-D clippy::disallowed_methods): the host crate reads AMENBO_* only via
+      # amenbo_core::env, never raw std::env.
+      - name: Clippy (all targets)
+        run: cargo clippy --manifest-path app/src-tauri/Cargo.toml --all-targets -- -D warnings -D clippy::disallowed_methods
+
+      - name: Test
+        run: cargo test --manifest-path app/src-tauri/Cargo.toml
+
+      # store_watch's network-FS test is #[ignore]d until something hands it a real
+      # mount. Stand up NFS + SMB on the runner and give it one: `is_network_dir` reads
+      # the statfs magic to choose polling over a
+      # kernel watch, and when that table is wrong the GUI arms an inotify watch that reports
+      # nothing from the server side — another host's writes are lost, silently and forever.
+      # Cheap enough for every run: no bundle, just the test binary this job builds.
+      #
+      # Built as the normal user on purpose. Only the binary runs under sudo (mount(8) needs
+      # it); a `cargo test` under sudo would leave root-owned artifacts in the cached target.
+      - name: Build the store_watch test binary
+        id: store-watch-bin
+        run: |
+          bin=$(cargo test --manifest-path app/src-tauri/Cargo.toml --test store_watch \
+                  --no-run --message-format=json \
+                | jq -r 'select(.executable != null and .target.name == "store_watch") | .executable' \
+                | tail -1)
+          test -x "$bin" || { echo "no store_watch test binary"; exit 1; }
+          echo "bin=$bin" >> "$GITHUB_OUTPUT"
+
+      - name: store_watch against real NFS + SMB + 9P mounts
+        run: sudo bash scripts/verify-network-watch.sh "${{ steps.store-watch-bin.outputs.bin }}"
+
+      # Same doc-link contract as the `rust` job — this crate is out of the
+      # workspace, so the other job's `--workspace` doc run never sees it.
+      - name: Doc links
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path app/src-tauri/Cargo.toml --no-deps --document-private-items
+
+  # The comment guard. Where tree-guards below reads whole lines, this one reads the comments
+  # themselves: where they sit, what shape they take, and the vocabulary they may not use — a
+  # reference to this project's own tracker, and Japanese. The hook runs the same command, so this
+  # is its backstop (a hook is bypassable, and an outside contributor has no esorp at all).
+  #
+  # Every comment in the tree is judged, and so is the whole of every tracked file that carries no
+  # code in the step after. Both faces stand at zero, so there is nothing to excuse and a violation
+  # anywhere is the change's to answer for, whichever line it sits on. Reading the tree also names
+  # the files a family declares but no scanner can read ("not inspected"), which a scope drawn round
+  # a diff shows only when such a file is touched.
+  #
+  # The version is pinned with its checksum: an unpinned linter floats its own verdict, and a gate
+  # that changes its mind on a tree nobody touched belongs in rot-gates.yml, not here.
+  comment-guard:
+    name: Comment guard (placement, form, vocabulary)
+    runs-on: ubuntu-latest
+    env:
+      ESORP_VERSION: 0.6.0
+      ESORP_SHA256: bd0a8136aa859892e21b51270ba6202e40529e100c0e8aeb5558726822e257c2
+    steps:
+      # The tree as it stands is the whole subject, so the default shallow clone holds everything
+      # this job reads.
+      - uses: actions/checkout@v7
+
+      - name: Install esorp
+        run: |
+          url="https://github.com/ShiroDoromoto/esorp/releases/download/v${ESORP_VERSION}/esorp_${ESORP_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "$url" -o esorp.tar.gz
+          echo "${ESORP_SHA256}  esorp.tar.gz" | sha256sum -c -
+          tar -xzf esorp.tar.gz esorp
+          sudo install -m 0755 esorp /usr/local/bin/esorp
+          rm -f esorp esorp.tar.gz
+
+      - name: Audit every comment in the tree
+        run: esorp check
+
+      - name: Audit the prose and the config values of every tracked file that carries no code
+        run: |
+          chmod +x guards/check-prose.sh
+          guards/check-prose.sh
+
+  tree-guards:
+    name: Tree guards (internal-note refs, test prose)
+    runs-on: ubuntu-latest
+    # Backstop for the local pre-commit hook, which runs the same two scans over
+    # staged additions only. Both have fixed patterns — no secret needed.
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Scan tracked files for internal-note references
+        run: |
+          chmod +x guards/check-doc-refs.sh
+          git ls-files -z | xargs -0 guards/check-doc-refs.sh --
+
+      - name: Scan tracked files for Japanese test prose
+        run: |
+          chmod +x guards/check-test-prose.sh
+          git ls-files -z | xargs -0 guards/check-test-prose.sh --

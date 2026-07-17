@@ -1,0 +1,32 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- For the dev build: the colours of the production icon.svg, inverted, so the two are
+       easy to tell apart. -->
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="#000000"/>
+
+  <!-- The legs, drawn as circuit traces. The upper and lower pairs (fore and hind) run out
+       at 45 degrees. -->
+  <g stroke="#E46C3D" stroke-width="50" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M482,410 L382,410 L172,200"/>
+    <path d="M542,410 L642,410 L852,200"/>
+    <path d="M482,558 L110,558"/>
+    <path d="M542,558 L914,558"/>
+    <path d="M482,706 L382,706 L172,916"/>
+    <path d="M542,706 L642,706 L852,916"/>
+  </g>
+
+  <!-- The nodes at the leg tips. -->
+  <g fill="#E46C3D">
+    <circle cx="172" cy="200" r="24"/>
+    <circle cx="852" cy="200" r="24"/>
+    <circle cx="110" cy="558" r="24"/>
+    <circle cx="914" cy="558" r="24"/>
+    <circle cx="172" cy="916" r="24"/>
+    <circle cx="852" cy="916" r="24"/>
+  </g>
+
+  <!-- The body: a thick vertical line (two thirds of the height), in the inverted blue. -->
+  <line x1="512" y1="383" x2="512" y2="733" stroke="#E46C3D" stroke-width="64" stroke-linecap="round"/>
+
+  <!-- The head, in the inverted coral. -->
+  <circle cx="512" cy="317" r="58" fill="#0081A0"/>
+</svg>

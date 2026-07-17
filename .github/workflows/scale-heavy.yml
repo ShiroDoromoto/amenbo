@@ -1,0 +1,57 @@
+name: Scale (heavy)
+
+# The full 10k-seed read-scaling guard, split out of the per-PR gate.
+#
+# `read_scaling_guard` proves the read hot paths stay O(result) as the store grows. Its deterministic
+# ratio guards prove that at a medium seed in seconds (the `rust` job in ci.yml runs them on every
+# PR via `--features scale`), but its *wall-clock* guards — sublinearity and the board's O(N²) net —
+# only bite at the full 10k seed, where they cost ~23s. Running that on every PR would tax the merge
+# path for a regression class that does not need per-PR latency, so the full 10k runs here instead:
+# nightly (the cadence at which an O(N²)/O(total) regression must be caught) and on demand.
+#
+# This lives in its own workflow rather than ci.yml because its trigger (schedule + dispatch) and
+# cadence are wholly separate from ci.yml's push/PR gate; folding it in would force an event guard on
+# every PR job. See crates/amenbo-core/Cargo.toml for the `scale` / `scale-heavy` feature split.
+#
+# Cost: this repo is private (monthly minute quota); the job runs on Linux (x1) only.
+
+on:
+  schedule:
+    # Nightly at 06:00 UTC. A regression here only has to surface within a day.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  scale-heavy:
+    name: read scaling guard (full 10k)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # rust-toolchain.toml pins the channel/components; rustup installs them on first cargo use.
+      - name: Show toolchain
+        run: rustc --version
+
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      # `scale-heavy` implies `scale`, so this seeds the full 10k store and additionally runs the
+      # timing guards. Scope to the single guard target — the rest of the suite is the PR gate's job.
+      - name: Read scaling guard at full 10k seed
+        run: cargo nextest run --profile ci --features scale-heavy -p amenbo-core --test read_scaling_guard

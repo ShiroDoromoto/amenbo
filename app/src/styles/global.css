@@ -1,0 +1,228 @@
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: var(--font);
+  font-size: var(--fs-md);
+  line-height: var(--lh);
+  color: var(--c-text);
+  background: var(--c-bg);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--c-border-strong); border-radius: 6px; border: 2px solid var(--c-bg); }
+
+/* ---------- app shell grid ---------- */
+/* Rows: topbar / health banner / body. The banner rows are auto, so when HealthBanner
+   renders nothing (return null with no issue) the track collapses to 0. Direct children
+   get an explicit grid-row because otherwise auto-placement would shift the body row and
+   crush it as the child count changes between 2 and 3 with the banner's presence. */
+.shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: var(--topbar-h) auto auto 1fr;
+}
+.shell > .topbar { grid-row: 1; }
+.shell > .healthbanner { grid-row: 2; }
+/* The re-sync affordance for an outdated managed block. It takes a row of its own,
+   independent of the health banner, so either one being null leaves the other in place
+   (each row collapses to auto=0). It inherits `.healthbanner`'s look and overrides only
+   the row to 3 (same specificity, so the later rule wins). */
+.shell > .managedblock-banner { grid-row: 3; }
+.shell > .shell__body { grid-row: 4; }
+/* 2 rows x 3 columns. The header row (the project header) spans the full width of main
+   plus the right pane (col 2-3), and the row below places main and the right pane side by
+   side, so the right pane sits under the project header. The sidebar spans both rows on
+   the left. On a screen with no header the slot is empty and the header row collapses to
+   auto=0. */
+.shell__body {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr var(--rightpane-w);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "sidebar header header"
+    "sidebar main   pane";
+  min-height: 0;
+}
+.shell__body--no-right {
+  grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-areas:
+    "sidebar header"
+    "sidebar main";
+}
+/* The project header (the board's toolbar) is portalled in here; BoardScreen renders it. */
+.shell__header { grid-area: header; min-width: 0; }
+
+/* ---------- startup health banner ---------- */
+/* The read-only warning from the startup integrity check. It never repairs anything, so
+   the only control is the close button. */
+.healthbanner {
+  display: flex; align-items: flex-start; gap: var(--s-3);
+  padding: var(--s-2) var(--s-4);
+  background: var(--c-warn); color: #fff;
+  border-bottom: 1px solid var(--c-border);
+  font-size: var(--fs-sm);
+}
+.healthbanner__icon { font-size: var(--fs-lg); line-height: 1.2; }
+.healthbanner__body { flex: 1; min-width: 0; }
+.healthbanner__title { font-weight: var(--fw-bold); }
+.healthbanner__line { font-size: var(--fs-xs); opacity: 0.95; word-break: break-word; }
+.healthbanner__hint { font-size: var(--fs-xs); opacity: 0.85; margin-top: var(--s-1); }
+.healthbanner__close {
+  flex: none; color: #fff; background: rgba(0, 0, 0, 0.18);
+  border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-2);
+  font-size: var(--fs-xs); cursor: pointer;
+}
+.healthbanner__close:hover { background: rgba(0, 0, 0, 0.3); }
+.healthbanner__close:disabled { opacity: 0.5; cursor: default; }
+/* The button that runs the action (re-sync). It outweighs the close button. */
+.healthbanner__action {
+  flex: none; color: var(--c-accent); background: #fff;
+  border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-3);
+  font-size: var(--fs-xs); font-weight: var(--fw-bold); cursor: pointer;
+}
+.healthbanner__action:hover { background: rgba(255, 255, 255, 0.85); }
+.healthbanner__action:disabled { opacity: 0.6; cursor: default; }
+/* The re-sync affordance for an outdated managed block. It wears the accent colour
+   (guidance plus an action) to stay distinct from the integrity error's warning colour. */
+.managedblock-banner { background: var(--c-accent); }
+
+/* ---------- topbar ---------- */
+.topbar {
+  display: flex; align-items: center; gap: var(--s-4);
+  padding: 0 var(--s-4);
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-border);
+}
+/* The brand mark tightens its gap a little so it reads as a pair with the workspace name. */
+.topbar__brand { display: inline-flex; align-items: center; margin-right: calc(var(--s-2) - var(--s-4)); }
+/* "Amenbo" is a link that opens the product page (https://amenbo.work/) in the default
+   browser. */
+.topbar__ws { font-weight: var(--fw-bold); font-size: var(--fs-lg); cursor: pointer; }
+.topbar__ws:hover { text-decoration: underline; }
+.topbar__ws:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; border-radius: 2px; }
+/* The reflect flourish: the moment an external write (AI/CLI) reaches the GUI, a rainbow
+   sweeps across the "Amenbo" wordmark for an instant. Kept short (700ms, matching
+   REFLECT_FLASH_MS on the JS side) and soft, so the white text stays readable. */
+@keyframes topbar-ws-rainbow {
+  from { background-position: 0% 50%; }
+  to { background-position: 200% 50%; }
+}
+.topbar__ws--reflect {
+  background-image: linear-gradient(
+    90deg, #ff6b6b, #ffd166, #06d6a0, #4cc9f0, #b8a1ff, #ff6b6b
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: topbar-ws-rainbow 700ms ease-in-out;
+}
+/* Honour the reduced-motion preference and drop the animation (the text keeps its normal
+   colour). */
+@media (prefers-reduced-motion: reduce) {
+  .topbar__ws--reflect {
+    animation: none;
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+    color: inherit;
+  }
+}
+.topbar__spacer { flex: 1; }
+.topbar__refresh {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--c-surface-sunken); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1; cursor: pointer;
+}
+.topbar__refresh:hover { color: var(--c-text); }
+/* Back/forward: a pair of icon buttons in the same family as refresh. At either end of the
+   history they fade out and go disabled. */
+.topbar__nav { display: inline-flex; gap: var(--s-1); }
+.topbar__navbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; background: var(--c-surface-sunken); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
+  color: var(--c-text-muted); font-size: var(--fs-lg); line-height: 1; cursor: pointer;
+}
+.topbar__navbtn:hover:not(:disabled) { color: var(--c-text); }
+.topbar__navbtn:disabled { opacity: 0.35; cursor: default; }
+
+
+/* ---------- sidebar ---------- */
+.sidebar {
+  grid-area: sidebar;
+  background: var(--c-surface-2);
+  border-right: 1px solid var(--c-border);
+  overflow-y: auto; padding: var(--s-3) var(--s-2);
+}
+.sidebar__group { margin-bottom: var(--s-5); }
+.sidebar__label {
+  font-size: var(--fs-xs); font-weight: var(--fw-bold);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--c-text-faint); padding: 0 var(--s-3); margin-bottom: var(--s-2);
+}
+.navitem {
+  display: flex; align-items: center; gap: var(--s-3);
+  width: 100%; text-align: left; background: none; border: none;
+  padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
+  color: var(--c-text); font-size: var(--fs-md);
+}
+.navitem:hover { background: var(--c-surface-sunken); }
+.navitem--active { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
+.navitem__dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+/* Drag-and-drop reordering of projects. The row being held fades, and the drop target
+   takes an accent line above or below its midline. */
+.navitem[draggable="true"] { cursor: grab; }
+.navitem--dragging { opacity: 0.4; }
+.navitem--drop-before { box-shadow: inset 0 2px 0 0 var(--c-accent); }
+.navitem--drop-after { box-shadow: inset 0 -2px 0 0 var(--c-accent); }
+.navitem__count {
+  margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-faint);
+  background: var(--c-surface-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
+}
+.navitem--active .navitem__count { background: var(--c-surface); }
+/* The inbox's needs-attention badge: the accent colour carries "unread / needs a look". */
+.navitem__count--alert { background: var(--c-accent); color: var(--c-on-accent, #fff); font-weight: var(--fw-medium); }
+.navitem--active .navitem__count--alert { background: var(--c-accent); color: var(--c-on-accent, #fff); }
+.navitem--muted { color: var(--c-text-faint); font-size: var(--fs-sm); cursor: pointer; }
+
+/* ---------- main ---------- */
+.main { grid-area: main; overflow: auto; min-width: 0; display: flex; flex-direction: column; }
+
+/* ---------- right pane ---------- */
+/* The grid's third column is a wrapper. Its width is --rightpane-w, which AppShell
+   overrides inline as the handle is dragged. The handle on the left edge is positioned
+   absolutely against the wrapper so it does not scroll; only the contents (.rightpane)
+   scroll vertically. */
+.rightpane-wrap { grid-area: pane; position: relative; display: flex; min-height: 0; min-width: 0; }
+.rightpane {
+  flex: 1; min-width: 0;
+  background: var(--c-surface); border-left: 1px solid var(--c-border);
+  overflow-y: auto; display: flex; flex-direction: column;
+}
+/* The resize handle on the left edge: a thin hit area straddling the border, showing its
+   line only on hover or drag. */
+.rightpane__resizer {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 9px; margin-left: -4px;
+  z-index: 5; cursor: col-resize; touch-action: none;
+}
+.rightpane__resizer::after {
+  content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 1px;
+  background: var(--c-accent); opacity: 0; transition: opacity 0.12s;
+}
+.rightpane__resizer:hover::after, .rightpane__resizer:active::after { opacity: 1; }
+.rightpane__empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: var(--c-text-faint); font-size: var(--fs-sm); padding: var(--s-6); text-align: center;
+}
+
+/* ---------- generic ---------- */
+.chip {
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm);
+  background: var(--c-surface-sunken); color: var(--c-text-muted); white-space: nowrap;
+}
+.muted { color: var(--c-text-muted); }
+.faint { color: var(--c-text-faint); }

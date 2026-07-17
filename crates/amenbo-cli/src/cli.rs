@@ -1,0 +1,958 @@
+//! Command definitions, via clap.
+//! The single source of truth for the command spec is `agent.rs` (`amenbo agent --json`); this file is kept in step with it.
+
+use clap::{Parser, Subcommand};
+
+#[derive(Parser, Debug)]
+#[command(
+    name = "amenbo",
+    version,
+    about = "Local-first, server-less task management (CLI-first, AI-agent ready)",
+    disable_help_subcommand = true
+)]
+pub struct Cli {
+    /// machine-readable JSON output (for AI)
+    #[arg(long, global = true)]
+    pub json: bool,
+    /// skip confirmation for destructive operations (non-interactive)
+    #[arg(long, short = 'y', global = true)]
+    pub yes: bool,
+    /// deprecated: accepted but ignored — a store owns a single workspace
+    #[arg(long, global = true, hide = true)]
+    pub workspace: Option<String>,
+    /// suppress the human-facing success message
+    #[arg(long, global = true)]
+    pub quiet: bool,
+    /// disable color
+    #[arg(long, global = true)]
+    pub no_color: bool,
+    /// facet of this operation (human / ai). AI agents pass ai. Defaults to the AMENBO_ACTOR env var, then human
+    #[arg(long, global = true)]
+    pub actor: Option<String>,
+
+    /// operate within a specific project (name or id) — overrides the bound project context used for
+    /// ref resolution and defaults. Place before the subcommand: `amenbo --project <name> decision add …`.
+    /// Explicit override: `--project` > `.amenbo` (CWD) > error, with no silent guessing
+    #[arg(long, value_name = "NAME_OR_ID")]
+    pub project: Option<String>,
+
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Command {
+    /// Present how to work here — the workflow and rules in full, plus an index of the commands (the
+    /// AI's entry point). Pull one command's full spec with `--command <name>`; `--full` prints them
+    /// all.
+    Agent {
+        /// Print one command's full spec (flags, args, examples) instead of the entry point
+        #[arg(long, value_name = "NAME")]
+        command: Option<String>,
+        /// Print every command's full spec inline, instead of an index (scripts / verification)
+        #[arg(long)]
+        full: bool,
+    },
+    /// Version information
+    Version,
+    /// Open the latest amenbo installer for this OS — the update path (amenbo does not self-update).
+    /// Resolves the one-piece installer URL from the published latest.json (falling back to the
+    /// releases page) and opens it in your browser. Pass --print to only print the URL (no browser)
+    Update {
+        /// print the installer URL instead of opening a browser (headless / scripted use)
+        #[arg(long)]
+        print: bool,
+    },
+    /// Show / change configuration
+    Config {
+        #[command(subcommand)]
+        sub: Option<ConfigCmd>,
+    },
+    /// Show this store's identity (display name / hardware-copy check)
+    Whoami,
+    /// Initialize a folder so an AI launched there may operate amenbo (it does not read or write the
+    /// project's contents — source or files). The store itself lives in app-data; only the `.amenbo`
+    /// pointer and AGENTS.md (the AI guide) are placed in the folder
+    Init {
+        #[arg(long)]
+        name: Option<String>,
+        /// user language (e.g. ja / en). Sets it in the global config and embeds it in the AGENTS.md directive
+        #[arg(long)]
+        language: Option<String>,
+        /// create a new store and overwrite even if a `.amenbo` pointer already exists (default rejects
+        /// it = prevents clobbering the production pointer; use `bind` to re-bind to an existing store).
+        /// It does not reach a git worktree cut inside a managed tree: amenbo is refused there, and the
+        /// project this would raise outlives the checkout that asked for it
+        #[arg(long)]
+        force: bool,
+    },
+    /// Allow an AI launched in this folder to operate an existing project/store (it does not touch the
+    /// contents; it just places a `.amenbo` pointer). Shows the current binding when omitted
+    Bind {
+        /// project to bind (name or ID). Shows the current binding when omitted
+        #[arg(long)]
+        project: Option<String>,
+        /// bind another folder instead of the current directory: place the `.amenbo` pointer in that
+        /// directory (which must exist) rather than CWD. Lets you link a folder from outside it (git -C style)
+        #[arg(long)]
+        dir: Option<String>,
+        /// bind even when this folder is already inside an amenbo-managed tree (a parent has a
+        /// `.amenbo`). Off by default so a stray bind in a source subdirectory cannot shadow the
+        /// root pointer (and scatter `.amenbo`/AGENTS.md/CLAUDE.md there). It does not reach a git
+        /// worktree cut inside that tree: amenbo is refused there whatever pointer it holds, so
+        /// binding one could only write a pointer nothing would read
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Remove this folder's `.amenbo` binding (and amenbo's managed blocks in AGENTS.md/CLAUDE.md),
+    /// keeping the store itself. Many-to-one: only this folder's pointer is removed; other folders
+    /// bound to the same store are untouched. Use --dir to unbind another folder
+    Unbind {
+        /// folder to unbind (defaults to the current directory)
+        #[arg(long)]
+        dir: Option<String>,
+    },
+
+    /// Re-sync amenbo's managed guidance block in bound folders to this binary's current version. A folder
+    /// follows on its own the moment you run amenbo in it, so this is for the folders you have not been in
+    /// (and for a block amenbo could not write). Idempotent and low-churn: a folder's CLAUDE.md/AGENTS.md is
+    /// rewritten only when its managed block actually changed, each folder's own language label is preserved,
+    /// and your content outside the markers is untouched. Targets every locally bound folder by
+    /// default; pass --dir to resync just one
+    SyncGuide {
+        /// resync just this folder (defaults to every locally bound folder)
+        #[arg(long)]
+        dir: Option<String>,
+    },
+
+    /// Summary of what to do now (overdue / today / in progress)
+    Status {
+        #[arg(long, default_value = "today")]
+        scope: String,
+    },
+    /// Show activity (system events + comments), newest first (humans and the AI read the same stream)
+    Activity {
+        /// only this task's activity
+        #[arg(long)]
+        task: Option<String>,
+        /// only activity for tasks belonging to this project
+        #[arg(long)]
+        project: Option<String>,
+        /// on or after this date (today / tomorrow / +3d / YYYY-MM-DD), or an opaque cursor from a
+        /// previous response (returns only what is strictly newer, oldest-first — an AI's incremental watch)
+        #[arg(long)]
+        since: Option<String>,
+        /// filter by kind: system / comment
+        #[arg(long)]
+        kind: Option<String>,
+        /// filter by the issuer's facet: human / ai (separate from the global --actor; a read filter)
+        #[arg(long)]
+        by: Option<String>,
+        /// scope to what this facet should act on: me / human / ai (destination axis — a task assigned to
+        /// that facet; separate from --by which filters by the issuer)
+        #[arg(long = "for")]
+        for_scope: Option<String>,
+        /// max count (newest first)
+        #[arg(long)]
+        limit: Option<usize>,
+        /// number of items to skip, newest first (paging / going back through history)
+        #[arg(long)]
+        offset: Option<usize>,
+    },
+    /// Data integrity check (orphan references, broken ordering, key-ledger tampering, etc.)
+    Doctor {
+        /// repair fixable problems (reclaim unreferenced attachment files; forget folder bindings no live project claims) - all non-destructive
+        #[arg(long)]
+        fix: bool,
+    },
+    /// Shape-check the given tasks (all data when omitted)
+    Validate { ids: Vec<String> },
+
+    /// Projects
+    Project {
+        #[command(subcommand)]
+        sub: ProjectCmd,
+    },
+    /// Dimensions (user-defined classification axes: an axis, its values, and task assignments)
+    Dimension {
+        #[command(subcommand)]
+        sub: DimensionCmd,
+    },
+    /// Tasks
+    Task {
+        #[command(subcommand)]
+        sub: TaskCmd,
+    },
+    /// Comments (a task's stories)
+    Comment {
+        #[command(subcommand)]
+        sub: CommentCmd,
+    },
+    /// Decision records (append-only "why we chose X"; a Task sibling, not a task)
+    Decision {
+        #[command(subcommand)]
+        sub: DecisionCmd,
+    },
+    /// Attachments — list/show/open/remove (add via `task attach` / `decision attach`)
+    Attach {
+        #[command(subcommand)]
+        sub: AttachCmd,
+    },
+    /// Export data — everything on this device, as JSON. That is the only shape: export
+    /// exists for migrating into other tools, and neither an excerpt nor a human-readable table serves
+    /// that. Export is **one-way**: the way back into amenbo is a `backup` archive and `restore`,
+    /// not this output.
+    Export {
+        /// The **export directory** to create — `export.json` plus `attachments/` with every
+        /// attachment's bytes. Must not exist yet. With no `--out` the dump streams to stdout (records
+        /// only — no attachments).
+        #[arg(long)]
+        out: Option<String>,
+    },
+    /// Back up this device — its store and its attachment bytes — into a single
+    /// verified `.amenbo-backup` archive at `path`. The store is snapshotted with `VACUUM INTO`
+    /// (checkpointed, no torn DB+WAL) and bounded-verified; a `manifest.json` records its migration
+    /// generation. Secrets (keys/identity) are never included. The destination must not already exist.
+    Backup {
+        /// Destination `.amenbo-backup` archive; must not already exist.
+        path: Option<String>,
+    },
+
+    /// Restore this device from a verified `.amenbo-backup` archive at `path`: a
+    /// destructive replace of this device's store. The snapshot is
+    /// validated and gated on its format generation before anything is swapped in (all-or-nothing);
+    /// the replaced truth source is set aside with a timestamp. An archive newer than this build is
+    /// refused — update first. An archive written before the consolidation (layout v4 or older)
+    /// is refused too: restore it with the build that wrote it. Destructive —
+    /// prompts for confirmation unless `--yes`.
+    Restore {
+        /// `.amenbo-backup` archive to restore from.
+        path: Option<String>,
+    },
+
+    /// Find amenbo refs (`AMB-T-<n>`, `AMB-D-<n>`, …) in text on its way out of this store — a commit
+    /// message, a diff, a file — and exit non-zero if there are any.
+    ///
+    /// An id names something only someone holding this store can look up; anywhere else it is a
+    /// reference into nothing. This reports every one it finds as `path:line` and **changes nothing**:
+    /// removing them is yours to do (there is no `--fix`).
+    ///
+    /// With no arguments it reads the staged diff (`git diff --cached`) and scans what the commit
+    /// **adds**. Pass file paths to lint those instead — the commit message file git hands a `commit-msg`
+    /// hook included — or `--stdin` to lint piped text. A bare `#<n>` is left alone: that is a GitHub
+    /// issue, and a `T-<n>` may be another tracker's.
+    ///
+    /// It opens no store and resolves no id — the `AMB-` prefix is the whole test — so it answers the
+    /// same in a checkout, in CI, and over any text at all, and needs no `.amenbo` to run.
+    Lint {
+        /// files to lint (default: the staged diff)
+        paths: Vec<String>,
+        /// lint the text piped on stdin instead
+        #[arg(long, conflicts_with = "paths")]
+        stdin: bool,
+    },
+
+    /// Manage the git hooks that run `amenbo lint`: `pre-commit` for the staged diff, and `commit-msg`
+    /// for the message, which is the only place git offers it. Installing writes into your git plumbing,
+    /// which amenbo does not do unasked: it asks once per project — for the lint, not per file — and
+    /// remembers the answer, and these are the explicit faces of that, usable any time, whatever was
+    /// answered, and the way back if you said no. amenbo touches only the hooks it wrote, which it marks
+    /// as its own: a hook from husky, lefthook, or your own hand is never overwritten and never removed,
+    /// and install steps around it, wiring the slots it may own and naming the line to add to the rest.
+    Hooks {
+        #[command(subcommand)]
+        sub: HooksCmd,
+    },
+
+    /// Physically erase content from this store's truth source.
+    ///
+    /// An ordinary delete removes the row but leaves its bytes in the file's freed pages, and an accepted
+    /// decision's body is frozen (supersede keeps the old body in the chain), so the everyday commands
+    /// cannot make content leave the file. This is the deliberate, gated exception: it deletes the
+    /// read-model row / overwrites the field in place and VACUUMs so the bytes leave the file,
+    /// unrecoverable.
+    ///
+    /// A destructive maintenance op: it takes a safety backup first (`pre-erase-<stamp>.amenbo-backup`
+    /// next to the store — the archive `amenbo restore` puts the store back from) and prompts unless
+    /// `--yes`. Only the newest one is kept: taking it sweeps the ones earlier erases left, naming what it
+    /// removed. It still contains the erased content — delete it once you have verified the erase.
+    HardErase {
+        #[command(subcommand)]
+        sub: HardEraseCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum HooksCmd {
+    /// Write the lint hooks, and record that this project consented. A slot amenbo did not write is
+    /// stepped around rather than overwritten — the rest are still wired, and the one line to add by
+    /// hand is named; re-running over amenbo's own hooks rewrites them, which is how a newer build's
+    /// hooks land. Only an install with no slot to write at all is refused.
+    Install,
+
+    /// Remove the lint hooks amenbo wrote, and record that this project does not want them. The mirror
+    /// of install, refusal for refusal: a hook amenbo did not write is not amenbo's to delete, and with
+    /// nothing of ours there it records the answer and does nothing else.
+    Uninstall,
+
+    /// Show what is in each hook slot and what this project answered — the two facts, side by side.
+    Status,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum HardEraseCmd {
+    /// Remove a task comment in full — its row, and the freed pages with it. Identify comments by
+    /// id; find them with `comment list <task> --json`.
+    Comment {
+        /// comment ref(s) to erase, AMB-C-n
+        #[arg(required = true)]
+        ids: Vec<String>,
+    },
+    /// Redact an accepted decision's frozen body: overwrite it in place with the given text, so the
+    /// prior body is gone. The decision — its number, links and other fields — stays.
+    Decision {
+        /// decision reference (AMB-D-n)
+        id: String,
+        /// replacement body text (Markdown); omit and pass --body-file, or pipe on stdin
+        #[arg(long)]
+        body: Option<String>,
+        /// read the replacement body from this file instead of --body / stdin
+        #[arg(long, conflicts_with = "body")]
+        body_file: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ConfigCmd {
+    /// Change a configuration value
+    Set { key: String, value: String },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ProjectCmd {
+    Add {
+        #[arg(long)]
+        name: String,
+        #[arg(long, default_value = "board")]
+        view: String,
+        #[arg(long, default_value = "")]
+        notes: String,
+        #[arg(long)]
+        color: Option<String>,
+    },
+    List {
+        #[arg(long)]
+        archived: bool,
+    },
+    Show { id: String },
+    Update {
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        notes: Option<String>,
+        #[arg(long)]
+        view: Option<String>,
+        #[arg(long)]
+        color: Option<String>,
+    },
+    Move {
+        id: String,
+        #[arg(long)]
+        before: Option<String>,
+        #[arg(long)]
+        after: Option<String>,
+        #[arg(long)]
+        top: bool,
+        #[arg(long)]
+        bottom: bool,
+    },
+    Archive { id: String },
+    Unarchive { id: String },
+    Delete { id: String },
+}
+
+/// A dimension is a purely user-defined classification axis. The axis, its values, and task
+/// assignments are handled symmetrically, and the verbs for axis operations line up with the other
+/// resources' (only value operations and assignment are specific to this mechanism).
+#[derive(Subcommand, Debug)]
+pub enum DimensionCmd {
+    /// Add a dimension (classification axis) to a project (appended after existing dimensions)
+    Add {
+        /// project (name or ID; defaults to the bound project)
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        name: String,
+        /// description / notes (Markdown)
+        #[arg(long, default_value = "")]
+        notes: String,
+        /// give the values an explicit order (default: unordered)
+        #[arg(long)]
+        ordered: bool,
+        /// mark this axis as the project's time axis — its values carry periods
+        #[arg(long)]
+        time_axis: bool,
+    },
+    /// List a project's dimensions (display order) with their values
+    List {
+        /// project (name or ID; defaults to the bound project)
+        #[arg(long)]
+        project: Option<String>,
+    },
+    /// Show a dimension (name, notes, cardinality/ordered/role, values)
+    Show {
+        /// dimension ref (AMB-DIM-n) or name
+        id: String,
+    },
+    /// Rename a dimension
+    Rename {
+        /// dimension ref (AMB-DIM-n) or name
+        id: String,
+        #[arg(long)]
+        name: String,
+    },
+    /// Update a dimension's name, notes, value ordering, and/or time-axis role (only the given fields change)
+    Update {
+        /// dimension ref (AMB-DIM-n) or name
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        notes: Option<String>,
+        /// whether the values carry an explicit order (`--ordered true|false`)
+        #[arg(long)]
+        ordered: Option<bool>,
+        /// whether this axis is the project's time axis (`--time-axis true|false`)
+        #[arg(long)]
+        time_axis: Option<bool>,
+    },
+    /// Reorder a dimension within its project
+    Move {
+        /// dimension ref (AMB-DIM-n) or name
+        id: String,
+        #[arg(long)]
+        before: Option<String>,
+        #[arg(long)]
+        after: Option<String>,
+        #[arg(long)]
+        top: bool,
+        #[arg(long)]
+        bottom: bool,
+    },
+    /// Delete a dimension permanently; its values and task assignments go with it (alias: delete)
+    #[command(alias = "delete")]
+    Rm {
+        /// dimension ref (AMB-DIM-n) or name
+        id: String,
+    },
+    /// Add a value to a dimension (appended after existing values)
+    ValueAdd {
+        /// dimension ref (AMB-DIM-n) or name
+        dimension: String,
+        #[arg(long)]
+        name: String,
+        /// first day of the value's period (time-axis dimensions only)
+        #[arg(long)]
+        start: Option<String>,
+        /// last day of the value's period; omit to leave it ongoing (time-axis dimensions only)
+        #[arg(long)]
+        end: Option<String>,
+    },
+    /// Rename a dimension value
+    ValueRename {
+        /// dimension ref (AMB-DIM-n) or name
+        dimension: String,
+        /// value ref (AMB-DIMV-n) or name (within the dimension)
+        value: String,
+        #[arg(long)]
+        name: String,
+    },
+    /// Update a dimension value's name and/or period (only the given fields change)
+    ValueUpdate {
+        /// dimension ref (AMB-DIM-n) or name
+        dimension: String,
+        /// value ref (AMB-DIMV-n) or name (within the dimension)
+        value: String,
+        #[arg(long)]
+        name: Option<String>,
+        /// first day of the value's period (time-axis dimensions only)
+        #[arg(long)]
+        start: Option<String>,
+        /// last day of the value's period (time-axis dimensions only)
+        #[arg(long)]
+        end: Option<String>,
+        /// open the period's start
+        #[arg(long, conflicts_with = "start")]
+        clear_start: bool,
+        /// open the period's end (the value becomes ongoing)
+        #[arg(long, conflicts_with = "end")]
+        clear_end: bool,
+    },
+    /// Reorder a value within its dimension
+    ValueMove {
+        /// dimension ref (AMB-DIM-n) or name
+        dimension: String,
+        /// value ref (AMB-DIMV-n) or name (within the dimension)
+        value: String,
+        #[arg(long)]
+        before: Option<String>,
+        #[arg(long)]
+        after: Option<String>,
+        #[arg(long)]
+        top: bool,
+        #[arg(long)]
+        bottom: bool,
+    },
+    /// Delete a dimension value permanently; its task assignments go with it (alias: value-delete)
+    #[command(alias = "value-delete")]
+    ValueRm {
+        /// dimension ref (AMB-DIM-n) or name
+        dimension: String,
+        /// value ref (AMB-DIMV-n) or name (within the dimension)
+        value: String,
+    },
+    /// Assign a task a value of a dimension (single-select replaces the task's prior value)
+    Set {
+        /// task ref (AMB-T-n)
+        task: String,
+        /// dimension ref (AMB-DIM-n) or name
+        dimension: String,
+        /// value ref (AMB-DIMV-n) or name (within the dimension)
+        value: String,
+    },
+    /// Clear a task's value of a dimension
+    Unset {
+        /// task ref (AMB-T-n)
+        task: String,
+        /// dimension ref (AMB-DIM-n) or name
+        dimension: String,
+        /// value ref (AMB-DIMV-n) or name (within the dimension)
+        value: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum TaskCmd {
+    Add {
+        #[arg(long)]
+        title: String,
+        /// owning project (name or ID). Required — a project-less task is refused;
+        /// omitting it lists existing projects to pick from.
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        due: Option<String>,
+        #[arg(long)]
+        start: Option<String>,
+        #[arg(long)]
+        priority: Option<String>,
+        /// description / notes, as Markdown (GUI renders GFM tables/task lists + ```mermaid; no raw HTML).
+        /// Lead with the conclusion, prefer bullets/tables, one point per line (a single newline is a break).
+        #[arg(long, default_value = "")]
+        notes: String,
+        /// delegate the new task to a facet in one step — `me`/`self`/`human` or the human's name →
+        /// the human; `me-ai`/`ai` → the human's AI. Same as a follow-up `task assign`,
+        /// saving the create+assign round trip when filing AI work.
+        #[arg(long)]
+        to: Option<String>,
+        /// with --to, delegate to "that person's AI" (assignee_kind=ai)
+        #[arg(long)]
+        ai: bool,
+    },
+    List {
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        filter: Option<String>,
+        #[arg(long, default_value = "order")]
+        sort: String,
+        /// max count (in sort order; pairs with --offset for paging)
+        #[arg(long)]
+        limit: Option<usize>,
+        /// number of items to skip in sort order (paging)
+        #[arg(long)]
+        offset: Option<usize>,
+    },
+    Show { id: String },
+    Update {
+        id: String,
+        #[arg(long)]
+        title: Option<String>,
+        /// replacement notes, as Markdown (GUI renders GFM tables/task lists + ```mermaid; no raw HTML).
+        /// Lead with the conclusion, prefer bullets/tables, one point per line (a single newline is a break).
+        #[arg(long)]
+        notes: Option<String>,
+        #[arg(long)]
+        due: Option<String>,
+        #[arg(long)]
+        start: Option<String>,
+        #[arg(long)]
+        priority: Option<String>,
+        #[arg(long)]
+        clear_due: bool,
+        #[arg(long)]
+        clear_start: bool,
+        #[arg(long)]
+        clear_priority: bool,
+    },
+    /// Mark a task done
+    Done { id: String },
+    Reopen { id: String },
+    /// Explicitly change the progress state (todo / in_progress / done / blocked). Setting
+    /// in_progress reserves it — a compare-and-swap that only succeeds from todo, so a second
+    /// session's reserve is rejected with already_reserved (the double-work guard); todo releases it
+    Status {
+        id: String,
+        /// new state: todo / in_progress / done / blocked
+        status: String,
+    },
+    /// Mark blocked (stuck)
+    Block {
+        id: String,
+        /// reason (recorded as a comment)
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    Move {
+        id: String,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        before: Option<String>,
+        #[arg(long)]
+        after: Option<String>,
+        #[arg(long)]
+        top: bool,
+        #[arg(long)]
+        bottom: bool,
+    },
+    /// Make this task depend on another (make --on a blocker that must be done first)
+    Depend {
+        id: String,
+        /// task ID of the blocker that must be done first
+        #[arg(long)]
+        on: String,
+    },
+    /// Remove a dependency
+    Undepend {
+        id: String,
+        /// blocker task ID to remove
+        #[arg(long)]
+        on: String,
+    },
+    /// Attach a file (blob, ingested) or external link (--url) to a task (manage via `attach`)
+    Attach {
+        /// target task ref (AMB-T-n)
+        id: String,
+        /// file path to ingest as a blob, or the external URL with --url
+        source: String,
+        /// treat <source> as an external URL link instead of ingesting a file
+        #[arg(long)]
+        url: bool,
+        /// display label (defaults to the file name / URL)
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// Assign an assignee to a task
+    Assign {
+        id: String,
+        /// assignee facet: `me`/`self`/`human` or the human's display name → the human;
+        /// `me-ai`/`ai` → the human's AI
+        #[arg(long)]
+        to: String,
+        /// delegate to "that person's AI" (assignee_kind=ai)
+        #[arg(long)]
+        ai: bool,
+    },
+    /// Remove a task's assignee
+    Unassign { id: String },
+    Delete { id: String },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CommentCmd {
+    Add {
+        /// target task ID
+        task: String,
+        /// comment body, as Markdown (GUI renders GFM tables/task lists + ```mermaid; no raw HTML).
+        /// Lead with the conclusion, prefer bullets/tables, one point per line (a single newline is a break).
+        #[arg(long)]
+        text: String,
+    },
+    List {
+        /// target task ID
+        task: String,
+        /// max count (oldest first; pairs with --offset for paging)
+        #[arg(long)]
+        limit: Option<usize>,
+        /// number of items to skip, oldest first (paging)
+        #[arg(long)]
+        offset: Option<usize>,
+    },
+    /// Delete a comment posted by mistake — permanently, with its attachments.
+    /// The id comes from `comment list`
+    Rm {
+        /// target comment ref, AMB-C-n (from `comment list`)
+        comment: String,
+    },
+    /// Rewrite a comment's body in place — the id, its place on the timeline, and its
+    /// attachments all stay. The id comes from `comment list`
+    Edit {
+        /// target comment ref, AMB-C-n (from `comment list`)
+        comment: String,
+        /// the new body, as Markdown — it replaces the old one outright
+        #[arg(long)]
+        text: String,
+    },
+    /// Attach a file (blob, ingested) or external link (--url) to a single task comment — kept
+    /// separate from the parent task's own attachments (manage via `attach`)
+    Attach {
+        /// target comment ref, AMB-C-n (from `comment list`)
+        comment: String,
+        /// file path to ingest as a blob, or the external URL with --url
+        source: String,
+        /// treat <source> as an external URL link instead of ingesting a file
+        #[arg(long)]
+        url: bool,
+        /// display label (defaults to the file name / URL)
+        #[arg(long)]
+        name: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DecisionCmd {
+    /// Record a new decision (proposed). The project defaults to the bound project
+    Add {
+        #[arg(long)]
+        title: String,
+        /// the decision body: conclusion + rationale (compress; do not paste raw discussion). Markdown —
+        /// GUI renders GFM tables/task lists + ```mermaid (no raw HTML); a single newline shows as a break.
+        #[arg(long, default_value = "")]
+        body: String,
+        /// project (name or ID; defaults to the bound project)
+        #[arg(long)]
+        project: Option<String>,
+    },
+    /// List decisions (filter by status:/current:/text:/project:/number: (alias ref:, e.g. `D-<n>`/`#<n>`)/task: (the decisions a task rests on, e.g. `task:#<n>`)/decided_before:/decided_after: (the day a decision was accepted, YYYY-MM-DD or today/-30d; both ends inclusive), sort by decided/created/number/title/status)
+    List {
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        filter: Option<String>,
+        #[arg(long, default_value = "-created")]
+        sort: String,
+        /// max count (in sort order; pairs with --offset for paging)
+        #[arg(long)]
+        limit: Option<usize>,
+        /// number of items to skip in sort order (paging)
+        #[arg(long)]
+        offset: Option<usize>,
+        /// include each decision's body in the listing (a projection — composes with
+        /// --filter/--limit/--offset; narrow and page, don't dump the whole corpus)
+        #[arg(long)]
+        with_body: bool,
+    },
+    /// Show a decision (body, status, supersession chain, the premises it builds on — overturned ones flagged —
+    /// the decisions that build on it, and linked tasks)
+    Show {
+        /// decision ref (AMB-D-n)
+        id: String,
+    },
+    /// Edit a proposed decision (frozen once accepted — supersede instead)
+    Edit {
+        id: String,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+    },
+    /// Accept a decision (proposed → accepted)
+    Accept {
+        id: String,
+        /// reason for accepting — recorded as a decision comment, not a dedicated field
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Reject a decision (proposed → rejected)
+    Reject {
+        id: String,
+        /// reason for rejecting — recorded as a decision comment, not a dedicated field
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Reopen an accepted decision for editing (accepted → proposed; then edit and re-accept). Non-destructive and audited
+    Reopen {
+        id: String,
+    },
+    /// Delete (retire) a decision — accepted ones included; the row goes, the bytes stay in the file (confirms unless --yes)
+    Delete {
+        /// decision ref (AMB-D-n)
+        id: String,
+    },
+    /// Record a new decision that replaces an existing one (supersession chain)
+    Supersede {
+        /// the new decision (it replaces the old one)
+        decision: String,
+        /// the decision being replaced
+        #[arg(long)]
+        replaces: String,
+    },
+    /// Record that a decision amends (partially revises) an existing one — the target stays current (not superseded)
+    Amend {
+        /// the new decision (it amends the old one)
+        decision: String,
+        /// the decision being amended (stays current)
+        #[arg(long)]
+        amends: String,
+    },
+    /// Record that a decision builds on (takes as a premise) an existing one — read the premise first, and revisit
+    /// this decision if the premise is ever overturned. The target stays current and is not corrected
+    #[command(name = "builds-on")]
+    BuildsOn {
+        /// the decision that stands on the premise
+        decision: String,
+        /// the premise it stands on (stays current)
+        #[arg(long)]
+        on: String,
+    },
+    /// Remove a decision-to-decision edge drawn by mistake (supersedes / amends / builds_on — the pair names it).
+    /// Superseding again is a new decision; unlinking is for the edge that should never have been drawn
+    Unlink {
+        /// the decision the edge was drawn from (the newer one)
+        decision: String,
+        /// the decision it points at (the older one)
+        #[arg(long)]
+        from: String,
+    },
+    /// Link (or --unlink) a decision and a task (the motivating decision ⇄ its implementation tasks)
+    Link {
+        /// decision ref
+        decision: String,
+        /// task ref
+        task: String,
+        #[arg(long)]
+        unlink: bool,
+    },
+    /// Promote a task comment into a decision (the comment text becomes the body; links to the task)
+    Promote {
+        /// the comment ref to promote, AMB-C-n
+        comment: String,
+        #[arg(long)]
+        title: String,
+        /// project (defaults to the comment's task project)
+        #[arg(long)]
+        project: Option<String>,
+    },
+    /// Discuss on a decision's timeline (append-only comments)
+    Comment {
+        #[command(subcommand)]
+        sub: DecisionCommentCmd,
+    },
+    /// Attach a file (blob, ingested) or external link (--url) to a decision (manage via `attach`)
+    Attach {
+        /// target decision ref (AMB-D-n)
+        id: String,
+        /// file path to ingest as a blob, or the external URL with --url
+        source: String,
+        /// treat <source> as an external URL link instead of ingesting a file
+        #[arg(long)]
+        url: bool,
+        /// display label (defaults to the file name / URL)
+        #[arg(long)]
+        name: Option<String>,
+    },
+}
+
+/// Decision comment operations (`add`/`list`/`rm`/`edit`) — a decision's timeline (a comment
+/// posted by mistake is deleted outright or rewritten in place, not retracted).
+/// Mirrors the task [`CommentCmd`]; `accept`/`reject --reason` are thin sugar over `comment add`.
+#[derive(Subcommand, Debug)]
+pub enum DecisionCommentCmd {
+    /// Add a comment to a decision's timeline
+    Add {
+        /// target decision ref (AMB-D-n)
+        decision: String,
+        /// comment body, as Markdown (GUI renders GFM tables/task lists + ```mermaid; no raw HTML).
+        /// Lead with the conclusion, prefer bullets/tables, one point per line (a single newline is a break).
+        #[arg(long)]
+        text: String,
+    },
+    /// List a decision's comments (oldest first; pairs with --offset for paging)
+    List {
+        /// target decision ref (AMB-D-n)
+        decision: String,
+        /// max count (oldest first; pairs with --offset for paging)
+        #[arg(long)]
+        limit: Option<usize>,
+        /// number of items to skip, oldest first (paging)
+        #[arg(long)]
+        offset: Option<usize>,
+    },
+    /// Delete a comment posted by mistake — permanently, with its attachments.
+    /// The id comes from `decision comment list`
+    Rm {
+        /// target comment ref, AMB-C-n (from `decision comment list`)
+        comment: String,
+    },
+    /// Rewrite a comment's body in place — the id, its place on the timeline, and its
+    /// attachments all stay. The id comes from `decision comment list`
+    Edit {
+        /// target comment ref, AMB-C-n (from `decision comment list`)
+        comment: String,
+        /// the new body, as Markdown — it replaces the old one outright
+        #[arg(long)]
+        text: String,
+    },
+    /// Attach a file (blob, ingested) or external link (--url) to a single decision comment — kept
+    /// separate from the parent decision's own attachments (manage via `attach`)
+    Attach {
+        /// target comment ref, AMB-C-n (from `decision comment list`)
+        comment: String,
+        /// file path to ingest as a blob, or the external URL with --url
+        source: String,
+        /// treat <source> as an external URL link instead of ingesting a file
+        #[arg(long)]
+        url: bool,
+        /// display label (defaults to the file name / URL)
+        #[arg(long)]
+        name: Option<String>,
+    },
+}
+
+/// Attachment management (`ls`/`show`/`open`/`rm`). Add attachments with `task attach` /
+/// `decision attach`.
+#[derive(Subcommand, Debug)]
+pub enum AttachCmd {
+    /// List the attachments on a task, decision, or a single comment
+    Ls {
+        /// target task / decision ref (AMB-T-n / AMB-D-n) — for a comment, pass --task-comment /
+        /// --decision-comment instead (the two comment tables number apart, so a bare id says
+        /// nothing about which one it is)
+        target: Option<String>,
+        /// list the attachments on this task comment (id from `comment list`)
+        #[arg(long, value_name = "ID", conflicts_with_all = ["target", "decision_comment"])]
+        task_comment: Option<String>,
+        /// list the attachments on this decision comment (id from `decision comment list`)
+        #[arg(long, value_name = "ID", conflicts_with_all = ["target", "task_comment"])]
+        decision_comment: Option<String>,
+    },
+    /// Show one attachment's metadata
+    Show {
+        /// attachment ref (AMB-ATT-n)
+        id: String,
+    },
+    /// Open an attachment — a blob via the OS opener, or the external URL
+    Open {
+        /// attachment ref (AMB-ATT-n)
+        id: String,
+    },
+    /// Remove an attachment, permanently — confirms unless -y (the blob bytes are GC'd once
+    /// nothing references them)
+    Rm {
+        /// attachment ref (AMB-ATT-n)
+        id: String,
+    },
+}

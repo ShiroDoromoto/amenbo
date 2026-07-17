@@ -1,0 +1,3 @@
+# Build output: compiled files and executables.
+/target/
+/gen/schemas

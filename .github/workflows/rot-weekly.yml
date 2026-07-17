@@ -51,9 +51,11 @@ jobs:
         with:
           fetch-depth: 0   # wharfy falls back to the latest git tag if there is no record
 
-      # Same public tap release.yml/promote.yml install from (preinstalled on ubuntu).
+      # Same install script release.yml/promote.yml use; the ubuntu runner has no Homebrew.
       - name: Install wharfy
-        run: brew install shirodoromoto/wharfy/wharfy
+        run: |
+          curl -fsSL https://github.com/ShiroDoromoto/wharfy/releases/latest/download/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # verify needs no local state: with no .wharfy/ record it takes the version from
       # the latest GitHub release (else the latest tag). The default (probe) run

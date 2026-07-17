@@ -250,11 +250,14 @@ jobs:
       - name: Show the assembled dist/
         run: ls -l dist
 
-      # wharfy ships from its public Homebrew tap; because amenbo feeds BYO inputs
-      # (prebuilt: / bundle:), `wharfy build` never calls goreleaser, so nothing else
-      # needs installing.
+      # wharfy's own install script; the ubuntu runner carries no Homebrew. It installs
+      # per-user under $HOME/.local, which needs no elevation but is not on PATH yet.
+      # Because amenbo feeds BYO inputs (prebuilt: / bundle:), `wharfy build` never calls
+      # goreleaser, so nothing else needs installing.
       - name: Install wharfy
-        run: brew install shirodoromoto/wharfy/wharfy
+        run: |
+          curl -fsSL https://github.com/ShiroDoromoto/wharfy/releases/latest/download/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # build packages the prebuilt CLIs + installers into release assets; sign is a
       # no-op (nothing here signs for distribution) kept for pipeline shape; release

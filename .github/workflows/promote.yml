@@ -45,10 +45,12 @@ jobs:
           ref: ${{ inputs.tag }}
           fetch-depth: 0   # wharfy reads the version from the git tag at HEAD
 
-      # wharfy ships from its public Homebrew tap (preinstalled on the ubuntu runner);
-      # amenbo feeds BYO inputs, so nothing else needs installing.
+      # wharfy's own install script; the ubuntu runner carries no Homebrew. amenbo feeds
+      # BYO inputs, so nothing else needs installing.
       - name: Install wharfy
-        run: brew install shirodoromoto/wharfy/wharfy
+        run: |
+          curl -fsSL https://github.com/ShiroDoromoto/wharfy/releases/latest/download/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # promote flips one flag on the release GitHub already holds — no asset is
       # re-uploaded, no attestation re-signed — so releases/latest/download/ and

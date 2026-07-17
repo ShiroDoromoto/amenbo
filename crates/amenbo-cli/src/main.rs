@@ -998,6 +998,14 @@ fn lint_hook_setup(store: &mut Store, flags: &Flags) {
     let states = hooks::probe(&cwd);
 
     let answered = offer_lint_hook(store, &cwd, states, consent, opted_out, can_ask);
+    // Heal a block of ours that was left damaged or stale — the corruption reconcile (inside the offer)
+    // steps past, because any marker reads to it as a managed slot. Runs under the answer just given or the
+    // one already on record; it writes only when something is actually broken, so the common case is silent.
+    let restored = hooks::restore_blocks(&cwd, Paths::APP_NAME, answered.or(consent), opted_out);
+    if !restored.is_empty() && !flags.quiet {
+        let names = restored.iter().map(|s| s.name()).collect::<Vec<_>>().join(", ");
+        eprintln!("⚠ amenbo's lint block in {names} had been changed or gone stale — restored it.");
+    }
     report_unfinished_setup(flags, &cwd, answered, states, consent, opted_out);
 }
 
@@ -1081,10 +1089,19 @@ fn offer_lint_hook(
     match hooks::reconcile(&hooks::HookContext { states, consent, opted_out, can_ask }) {
         HookAction::Nothing => None,
         HookAction::Install => {
+            // A slot another tool held, with no block of ours in it, most likely had its hook regenerated —
+            // wiping the block amenbo put there. Re-wiring it is a restoration, so say so rather than report
+            // a plain first-time install.
+            let vanished = states.map(|s| s.slots_in(hooks::HookState::Foreign)).unwrap_or_default();
             match hooks::install(cwd, cmd) {
                 Ok(done) => {
                     let names = done.installed.iter().map(|(slot, _)| slot.name()).collect::<Vec<_>>().join(", ");
-                    eprintln!("✓ {names} hook installed, under the answer you already gave. Not here? `{cmd} hooks uninstall`.");
+                    if vanished.is_empty() {
+                        eprintln!("✓ {names} hook installed, under the answer you already gave. Not here? `{cmd} hooks uninstall`.");
+                    } else {
+                        let gone = vanished.iter().map(|s| s.name()).collect::<Vec<_>>().join(", ");
+                        eprintln!("⚠ amenbo's lint block was gone from {gone} (another tool may have replaced its hook) — restored it under the answer you already gave.");
+                    }
                 }
                 Err(e) => eprintln!("⚠ Could not install the hook: {e}"),
             }

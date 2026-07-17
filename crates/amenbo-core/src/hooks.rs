@@ -28,6 +28,12 @@
 //! [`uninstall`] strips only the block, deleting the file only when nothing but amenbo's block was in it.
 //! There is no slot amenbo refuses over an owner: coexisting is always possible, the one exception being a
 //! hook whose bytes will not read back as text ([`InstallReport::refused`]).
+//!
+//! Because the block lives inside someone else's file, that file can move under it — another tool
+//! regenerating its hook wipes the block wholesale (which reads back as a slot with no block of ours, so
+//! [`reconcile`] re-wires it), or leaves it half-there. [`restore_blocks`] is the startup heal for the
+//! second case: under the same device `yes`, it re-asserts the current block over one of ours that is
+//! damaged or stale — the corruption [`reconcile`] cannot see, because to it any marker is a managed slot.
 
 use std::path::{Path, PathBuf};
 
@@ -575,6 +581,48 @@ pub fn uninstall(dir: &Path) -> Result<Vec<HookSlot>> {
         }
     }
     Ok(removed)
+}
+
+/// Is `slot`'s on-disk block **healthy** — both markers present and at the current version? A begin marker
+/// with no end marker (a block left half-there when something rewrote around it), or a block at an older
+/// version, is not: it is ours, but damaged or stale. Deliberately cmd-agnostic — a block installed by the
+/// prod channel is healthy to the dev channel and vice versa, so the two never fight over which name sits
+/// between the markers, and a repair never ping-pongs.
+fn block_is_healthy(text: &str) -> bool {
+    find_hook_block(text).is_some() && marker_version(text) == Some(HOOK_MARKER_VERSION)
+}
+
+/// **Heal on startup.** Re-assert the current block in any slot of `dir` that holds a block of ours which
+/// is damaged (a half-there block whose end marker was lost) or stale (an older version) — the corruption
+/// [`reconcile`] steps past, because a marker of any shape reads to it as a managed slot with nothing to
+/// do. Returns the slots restored, so the caller can warn that amenbo's block had been changed and is back.
+///
+/// It is bounded exactly as [`reconcile`]'s consented install is: nothing without a device `yes`, nothing
+/// in an opted-out repository, nothing outside a git repository. Healing is only ever putting back the very
+/// block the user already agreed to, so it asks nothing and never touches a slot that is not already ours —
+/// a slot another tool holds, or an empty one, is [`reconcile`]'s to (re)wire, not this function's to repair.
+/// A healthy current block is left untouched, so a mtime never moves for nothing. The common case walks the
+/// two slots, finds both healthy, and writes nothing.
+pub fn restore_blocks(dir: &Path, cmd: &str, consent: Option<HookConsent>, opted_out: bool) -> Vec<HookSlot> {
+    if opted_out || consent != Some(HookConsent::Yes) {
+        return Vec::new();
+    }
+    let Some(hooks) = hooks_dir(dir) else {
+        return Vec::new();
+    };
+    let mut restored = Vec::new();
+    for slot in HOOK_SLOTS {
+        let hook = hooks.join(slot.name());
+        let Ok(text) = std::fs::read_to_string(&hook) else { continue };
+        if marker_version(&text).is_some() && !block_is_healthy(&text) {
+            let healed = upsert_block(Some(&text), slot, cmd);
+            if std::fs::write(&hook, healed).is_ok() {
+                let _ = make_executable(&hook);
+                restored.push(slot);
+            }
+        }
+    }
+    restored
 }
 
 fn io_err_slot(slot: HookSlot, e: std::io::Error) -> Error {
@@ -1237,6 +1285,97 @@ mod tests {
         assert_eq!(probe(&dir), None);
         assert!(install(&dir, "amenbo").is_err());
         assert!(uninstall(&dir).is_err());
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A block is healthy only with both markers and at the current version. Half-there (end marker gone),
+    /// a legacy single-line hook, and a stranger's are all not healthy — the first two are ours to heal, the
+    /// last is not ours at all.
+    #[test]
+    fn block_health_needs_both_markers_at_the_current_version() {
+        assert!(block_is_healthy(&hook_body(HookSlot::PreCommit, "amenbo")), "a freshly written block is healthy");
+        assert!(block_is_healthy(&hook_body(HookSlot::CommitMsg, "amenbo-dev")), "either channel's block is healthy");
+
+        let no_end = hook_body(HookSlot::PreCommit, "amenbo").replace(&format!("\n{HOOK_END_MARKER}"), "");
+        assert!(!block_is_healthy(&no_end), "a begin marker with no end is half-there, not healthy");
+        assert!(!block_is_healthy("#!/bin/sh\n# amenbo:hook (managed v2)\nexec amenbo lint\n"), "a legacy hook is stale");
+        assert!(!block_is_healthy("#!/bin/sh\nnpx husky run\n"), "a stranger's hook is not ours and not healthy");
+    }
+
+    /// The heal itself: a block of ours left half-there (its end marker lost, the way a tool rewriting the
+    /// file around it would) is re-asserted whole under the device's `yes`, and a coexisting body beside it
+    /// is kept. A slot that is already healthy is not rewritten.
+    #[test]
+    fn restore_blocks_heals_a_damaged_block_and_keeps_a_coexisting_body() {
+        let dir = git_repo("heal");
+        // pre-commit: husky + a damaged amenbo block (end marker stripped). commit-msg: a healthy block.
+        let damaged = format!(
+            "#!/bin/sh\n{}\nnpx husky run pre-commit\n",
+            hook_block(HookSlot::PreCommit, "amenbo").replace(&format!("\n{HOOK_END_MARKER}"), "")
+        );
+        std::fs::write(hook_path(&dir, HookSlot::PreCommit), &damaged).unwrap();
+        std::fs::write(hook_path(&dir, HookSlot::CommitMsg), hook_body(HookSlot::CommitMsg, "amenbo")).unwrap();
+        let healthy_before = std::fs::read_to_string(hook_path(&dir, HookSlot::CommitMsg)).unwrap();
+
+        let restored = restore_blocks(&dir, "amenbo", Some(HookConsent::Yes), false);
+        assert_eq!(restored, vec![HookSlot::PreCommit], "only the damaged slot is healed");
+
+        let healed = std::fs::read_to_string(hook_path(&dir, HookSlot::PreCommit)).unwrap();
+        assert!(block_is_healthy(&healed), "the block is whole again");
+        assert!(healed.contains("npx husky run pre-commit"), "husky's body is kept");
+        assert_eq!(
+            std::fs::read_to_string(hook_path(&dir, HookSlot::CommitMsg)).unwrap(),
+            healthy_before,
+            "a healthy slot is left byte-for-byte alone",
+        );
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A legacy standalone hook (the single-line marker, no block) is recognised as ours and healed into the
+    /// current block form — the same upgrade an explicit install does, reached at startup.
+    #[test]
+    fn restore_blocks_upgrades_a_legacy_hook() {
+        let dir = git_repo("heal-legacy");
+        std::fs::write(
+            hook_path(&dir, HookSlot::PreCommit),
+            "#!/bin/sh\n# amenbo:hook (managed v2)\ncommand -v amenbo >/dev/null 2>&1 || exit 0\nexec amenbo lint\n",
+        )
+        .unwrap();
+
+        assert_eq!(restore_blocks(&dir, "amenbo", Some(HookConsent::Yes), false), vec![HookSlot::PreCommit]);
+        assert_eq!(
+            std::fs::read_to_string(hook_path(&dir, HookSlot::PreCommit)).unwrap(),
+            hook_body(HookSlot::PreCommit, "amenbo"),
+            "healed into the current standalone block form",
+        );
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Healing is bounded exactly as the consented install is: no device `yes`, an opt-out, a slot with no
+    /// block of ours (reconcile's to wire), or an empty slot — none is healed, and a damaged block is left
+    /// as it was found.
+    #[test]
+    fn restore_blocks_only_heals_our_block_under_a_consenting_un_opted_out_device() {
+        let dir = git_repo("heal-bounds");
+        let damaged = hook_body(HookSlot::PreCommit, "amenbo").replace(&format!("\n{HOOK_END_MARKER}"), "");
+        std::fs::write(hook_path(&dir, HookSlot::PreCommit), &damaged).unwrap();
+        std::fs::write(hook_path(&dir, HookSlot::CommitMsg), "#!/bin/sh\nnpx husky run\n").unwrap();
+
+        assert!(restore_blocks(&dir, "amenbo", None, false).is_empty(), "no answer on record — nothing healed");
+        assert!(restore_blocks(&dir, "amenbo", Some(HookConsent::No), false).is_empty(), "a no heals nothing");
+        assert!(restore_blocks(&dir, "amenbo", Some(HookConsent::Yes), true).is_empty(), "an opt-out heals nothing");
+        assert_eq!(std::fs::read_to_string(hook_path(&dir, HookSlot::PreCommit)).unwrap(), damaged, "left as found");
+
+        // Under a yes, only the damaged block of ours is touched; the stranger's slot is not.
+        assert_eq!(restore_blocks(&dir, "amenbo", Some(HookConsent::Yes), false), vec![HookSlot::PreCommit]);
+        assert_eq!(
+            std::fs::read_to_string(hook_path(&dir, HookSlot::CommitMsg)).unwrap(),
+            "#!/bin/sh\nnpx husky run\n",
+            "a slot with no block of ours is reconcile's to wire, not restore_blocks' to touch",
+        );
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

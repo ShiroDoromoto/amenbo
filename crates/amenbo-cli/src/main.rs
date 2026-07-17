@@ -858,7 +858,7 @@ fn hooks_cmd(store: &mut Store, flags: &Flags, sub: HooksCmd) -> Result<i32, Cli
             }
         }
         HooksCmd::Uninstall => {
-            let removed = hooks::uninstall(&cwd, cmd).map_err(CliError::from)?;
+            let removed = hooks::uninstall(&cwd).map_err(CliError::from)?;
             record_optout(store, project, true);
             if flags.json {
                 print_json(&json!({
@@ -894,8 +894,9 @@ fn hooks_cmd(store: &mut Store, flags: &Flags, sub: HooksCmd) -> Result<i32, Cli
     Ok(0)
 }
 
-/// What an install did, slot by slot, and what it stepped around — a stranger's slot is not a failure, so
-/// it is reported next to what was written rather than instead of it.
+/// What an install did, slot by slot — a slot another tool holds gets the block alongside its body, so the
+/// only line here that is not a plain "installed" is the rare slot amenbo could not read as text and so
+/// could not join.
 fn render_install(done: &amenbo_core::hooks::InstallReport, cmd: &str) -> String {
     use amenbo_core::hooks::{guidance_line, Installed};
 
@@ -909,7 +910,7 @@ fn render_install(done: &amenbo_core::hooks::InstallReport, cmd: &str) -> String
     }
     for slot in &done.refused {
         lines.push(format!(
-            "hooks: {} is not amenbo's and was left alone. Add this line to it yourself:\n    {}",
+            "hooks: {} will not read back as text, so amenbo could not add its block. Add this line yourself:\n    {}",
             slot.name(),
             guidance_line(*slot, cmd)
         ));
@@ -928,7 +929,7 @@ fn render_hook_status(
     opted_out: bool,
     cmd: &str,
 ) -> String {
-    use amenbo_core::hooks::{guidance_line, HookConsent, HookState};
+    use amenbo_core::hooks::{HookConsent, HookState};
 
     let on_disk = match states {
         None => "  not a git repository — nothing to hook".to_string(),
@@ -938,10 +939,9 @@ fn render_hook_status(
                 let name = slot.name();
                 match state {
                     HookState::Unwired => format!("  {name}: not there (install: `{cmd} hooks install`)"),
-                    HookState::Managed { version } => format!("  {name}: amenbo's (marker v{version})"),
+                    HookState::Managed { version } => format!("  {name}: amenbo's block (marker v{version})"),
                     HookState::Foreign => format!(
-                        "  {name}: not amenbo's — untouched. Add this line to it yourself:\n      {}",
-                        guidance_line(slot, cmd)
+                        "  {name}: another tool's hook, no amenbo block yet (add one alongside: `{cmd} hooks install`)"
                     ),
                 }
             })
@@ -1091,7 +1091,7 @@ fn offer_lint_hook(
             None
         }
         HookAction::Ask => {
-            let yes = ask_yes_no(&offer_prompt(states, cmd))?;
+            let yes = ask_yes_no(&offer_prompt(states))?;
             if yes {
                 match hooks::install(cwd, cmd) {
                     Ok(done) => eprintln!("{}", render_install(&done, cmd)),
@@ -1111,40 +1111,29 @@ fn offer_lint_hook(
     }
 }
 
-/// The one question there is, worded from what the slots actually hold: amenbo offers to write the ones it
-/// may own and points at the line to add for the ones it may not, which is why there is no second action
-/// for a stranger's hook.
+/// The one question there is, worded from what the slots actually hold: amenbo offers to wire the lint into
+/// every slot — an empty one becomes a small standalone hook, a slot another tool holds gains amenbo's
+/// block alongside its body, so there is one action and no hand-off.
 ///
 /// It says the answer is asked once and covers every repository, because that is what answering it does —
 /// a prompt that named only "this repository" would be collecting a wider consent than it admitted to. What
 /// it does *not* do is list those repositories: the answer is about the lint, not about a set of folders,
 /// and a list would hand the reader something to check over a question that has one sensible answer.
-fn offer_prompt(states: Option<amenbo_core::hooks::HookStates>, cmd: &str) -> String {
-    use amenbo_core::hooks::{guidance_block, HookState};
+fn offer_prompt(states: Option<amenbo_core::hooks::HookStates>) -> String {
+    use amenbo_core::hooks::HookState;
 
     let Some(states) = states else { return String::new() };
     let mut prompt = String::from(
         "amenbo can keep amenbo refs (AMB-T-…) out of your commits by linting them on the way out.\n",
     );
-    let writable = states.slots_in(HookState::Unwired);
-    let foreign = states.slots_in(HookState::Foreign);
-    if !writable.is_empty() {
-        let names = writable.iter().map(|s| s.name()).collect::<Vec<_>>().join(" and ");
-        prompt.push_str(&format!("It writes the {names} hook, and nothing else.\n"));
-    }
-    if !foreign.is_empty() {
-        let names = foreign.iter().map(|s| s.name()).collect::<Vec<_>>().join(" and ");
-        prompt.push_str(&format!(
-            "The {names} hook here is not amenbo's and will not be touched — add this line to it yourself:\n{}\n",
-            guidance_block(foreign, cmd, "    ")
-        ));
-    }
-    prompt.push_str("Asked once: your answer covers the repositories amenbo works in, now and later.\n");
-    prompt.push_str(if writable.is_empty() {
-        "Answering settles it either way (amenbo will not ask again). Done?"
+    let has_foreign = !states.slots_in(HookState::Foreign).is_empty();
+    prompt.push_str(if has_foreign {
+        "It adds a small block to your git hooks, keeping any hook already there and running alongside it.\n"
     } else {
-        "Wire it up?"
+        "It writes a small git hook, and touches nothing else.\n"
     });
+    prompt.push_str("Asked once: your answer covers the repositories amenbo works in, now and later.\n");
+    prompt.push_str("Wire it up?");
     prompt
 }
 

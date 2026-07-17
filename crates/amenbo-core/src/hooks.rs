@@ -19,13 +19,15 @@
 //! The answer and the hooks on disk are two independent facts: the answer says what was consented to and
 //! never what `.git/hooks` holds, which is [`probe`]'s answer and is read from the filesystem every time —
 //! reading the answer as a mirror of the disk breaks the moment a hook is deleted or added by hand, so the
-//! two meet in exactly one place, [`reconcile`]. amenbo owns only what carries its marker: a hook it wrote
-//! opens with [`HOOK_MARKER`], the same shape as the managed block in `CLAUDE.md` / `AGENTS.md`
-//! ([`crate::agents`]), while anything else in a slot belongs to someone else — husky, lefthook, a
-//! hand-written script — and is never written to and never removed, which [`install`] and [`uninstall`]
-//! honour slot by slot rather than all-or-nothing: a stranger holding one slot leaves the others writable
-//! and earns a [`guidance_line`], because refusing the lint everywhere over husky's `pre-commit` would fail
-//! the commonest repository there is.
+//! two meet in exactly one place, [`reconcile`]. amenbo owns only **what sits between its markers**: a
+//! managed block ([`HOOK_BEGIN_MARKER`] … [`HOOK_END_MARKER`], the same shape as the block in `CLAUDE.md` /
+//! `AGENTS.md`, [`crate::agents`]). Into an empty slot it writes the block as a standalone hook; into a slot
+//! another tool holds — husky, lefthook, a hand-written script — it slips the block in **right after the
+//! shebang**, so amenbo's lint and the other tool's hook both run, and running first means the lint fires
+//! even if the other hook exits early. Everything outside the markers is left exactly as it was, and
+//! [`uninstall`] strips only the block, deleting the file only when nothing but amenbo's block was in it.
+//! There is no slot amenbo refuses over an owner: coexisting is always possible, the one exception being a
+//! hook whose bytes will not read back as text ([`InstallReport::refused`]).
 
 use std::path::{Path, PathBuf};
 
@@ -50,21 +52,30 @@ pub enum HookConsent {
     No,
 }
 
-/// Format version of the marker on the hook **this binary writes**. Paired with [`HOOK_MARKER`], and the
-/// same device as [`crate::agents::MANAGED_BLOCK_VERSION`]: bump it when the hook's body changes, and a
-/// hook written by an older build is recognised as ours and rewritten rather than mistaken for a
-/// stranger's.
-pub const HOOK_MARKER_VERSION: u32 = 2;
+/// Format version of the managed block **this binary writes**. Paired with [`HOOK_BEGIN_MARKER`], and the
+/// same device as [`crate::agents::MANAGED_BLOCK_VERSION`]: bump it when the block's body changes, and a
+/// block written by an older build is recognised as ours and rewritten rather than mistaken for a
+/// stranger's. v3 is where the standalone hook became a marker-delimited block that can coexist with
+/// another tool's hook in the same slot.
+pub const HOOK_MARKER_VERSION: u32 = 3;
 
-/// Version-independent prefix of the marker. Detection matches on this rather than on [`HOOK_MARKER`]
-/// whole, so a hook written by any version of amenbo is still known to be ours.
-const MARKER_PREFIX: &str = "# amenbo:hook (managed";
-/// Close of the marker. The version token (` vN`) sits between the prefix and this close.
-const MARKER_SUFFIX: &str = ")";
+/// Version-independent prefix of the begin marker. Detection matches on this rather than on
+/// [`HOOK_BEGIN_MARKER`] whole, so a block written by any version of amenbo is still known to be ours.
+const BEGIN_PREFIX: &str = "# amenbo:hook begin (managed";
+/// Close of the begin marker. The version token (` vN`) sits between the prefix and this close.
+const BEGIN_SUFFIX: &str = ")";
 
-/// The marker at the version this binary writes. It is a shell comment, so it lives in the hook itself:
-/// the file *is* the record of who wrote it, and there is no side ledger to fall out of step with it.
-pub const HOOK_MARKER: &str = "# amenbo:hook (managed v2)";
+/// The begin marker at the version this binary writes, and the end marker that closes the block. They are
+/// shell comments, so they live in the hook itself: the file *is* the record of who wrote it, and there is
+/// no side ledger to fall out of step with it.
+pub const HOOK_BEGIN_MARKER: &str = "# amenbo:hook begin (managed v3)";
+pub const HOOK_END_MARKER: &str = "# amenbo:hook end";
+
+/// The single-line marker older builds wrote at the top of a standalone hook (`# amenbo:hook (managed vN)`,
+/// v1/v2). It is still recognised as ours so an upgrade rewrites such a hook into the block form rather
+/// than mistaking it for a stranger's and injecting a second block beside it. Note it is not a prefix of
+/// [`BEGIN_PREFIX`] — the newer marker reads `… begin (managed`, so the two never match each other.
+const LEGACY_PREFIX: &str = "# amenbo:hook (managed";
 
 /// A git hook slot the lint needs. There are two because of git's lifecycle, not because the lint is two
 /// things: `pre-commit` can see the staged diff but runs before a commit message exists, and `commit-msg`
@@ -109,15 +120,31 @@ impl HookSlot {
     }
 }
 
-/// The marker's version in `text`, or `None` when there is no marker — i.e. when the text is not a hook
-/// amenbo wrote. Mirrors [`crate::agents::managed_block_version`]; an unparsable token reads as version 1,
-/// staying conservative (it is still ours).
+/// The block's version in `text`, or `None` when there is no marker of ours — i.e. when the text is not a
+/// hook amenbo wrote. Recognises the current begin marker and, failing that, the legacy single-line marker
+/// an older standalone hook carried. Mirrors [`crate::agents::managed_block_version`]; an unparsable token
+/// reads as version 1, staying conservative (it is still ours).
 fn marker_version(text: &str) -> Option<u32> {
-    let start = text.find(MARKER_PREFIX)?;
-    let after_prefix = start + MARKER_PREFIX.len();
-    let close = after_prefix + text[after_prefix..].find(MARKER_SUFFIX)?;
+    version_after(text, BEGIN_PREFIX).or_else(|| version_after(text, LEGACY_PREFIX))
+}
+
+/// The version token following `prefix` in `text` (the `vN` between `prefix` and [`BEGIN_SUFFIX`]), or
+/// `None` when `prefix` is absent.
+fn version_after(text: &str, prefix: &str) -> Option<u32> {
+    let start = text.find(prefix)?;
+    let after_prefix = start + prefix.len();
+    let close = after_prefix + text[after_prefix..].find(BEGIN_SUFFIX)?;
     let token = text[after_prefix..close].trim();
     Some(token.strip_prefix('v').and_then(|n| n.parse::<u32>().ok()).unwrap_or(1))
+}
+
+/// The byte range of amenbo's managed block in `text` — from the begin marker through the end marker —
+/// or `None` when the current block markers are not both present (a legacy single-line hook has no such
+/// block, and neither does a stranger's). What [`install`] swaps and [`uninstall`] strips.
+fn find_hook_block(text: &str) -> Option<(usize, usize)> {
+    let begin = text.find(BEGIN_PREFIX)?;
+    let end_start = begin + text[begin..].find(HOOK_END_MARKER)?;
+    Some((begin, end_start + HOOK_END_MARKER.len()))
 }
 
 /// What is actually in the hook slot — read from the filesystem, never from the record.
@@ -126,10 +153,12 @@ fn marker_version(text: &str) -> Option<u32> {
 pub enum HookState {
     /// Nothing there. The lint runs on nobody's commit.
     Unwired,
-    /// A hook carrying amenbo's marker, at `version`. Ours to rewrite and ours to remove.
+    /// A hook carrying amenbo's managed block, at `version`. The block is ours to rewrite and ours to
+    /// remove; anything around it in the file is not.
     Managed { version: u32 },
-    /// A hook that is not ours — husky, lefthook, a hand-written script. amenbo never writes it and never
-    /// removes it; the most it does is say [which line to add](guidance_line).
+    /// A hook with no block of ours — husky, lefthook, a hand-written script, and no amenbo markers yet.
+    /// [`install`] adds the block **alongside** the existing body (right after the shebang), leaving that
+    /// body untouched; the one it cannot is a file whose bytes will not read back as text.
     Foreign,
 }
 
@@ -141,31 +170,94 @@ impl HookState {
     }
 }
 
-/// The body of `slot`'s hook, where `cmd` is the launch command (`amenbo` in production, `amenbo-dev` in
-/// development) so the hook calls the channel that installed it. It bails out when `cmd` is not on `PATH`
-/// rather than failing: a hook that blocks every commit because amenbo was uninstalled would be a trap,
-/// and this is a convenience, not a gate the repository depends on.
-pub fn hook_body(slot: HookSlot, cmd: &str) -> String {
+/// amenbo's managed block for `slot`, markers and all — the unit amenbo owns and the only thing it writes,
+/// whether the slot was empty or already held another tool's hook. `cmd` is the launch command (`amenbo`
+/// in production, `amenbo-dev` in development) so the block calls the channel that installed it.
+///
+/// It guards on `cmd` being on `PATH` rather than assuming it: a block that blocked every commit because
+/// amenbo was uninstalled would be a trap, and this is a convenience, not a gate the repository depends on.
+/// When amenbo *is* present, a failing lint stops the commit (`|| exit 1`); when it passes, control falls
+/// through to whatever the rest of the file holds — which is how the block coexists with another tool's
+/// hook. It uses no `exec` for that reason: `exec` would replace the process and the other tool's hook
+/// would never run.
+pub fn hook_block(slot: HookSlot, cmd: &str) -> String {
     let name = slot.name();
     let subject = slot.subject();
     let call = slot.lint_call(cmd);
     format!(
-        "#!/bin/sh\n\
-         {HOOK_MARKER}\n\
-         #\n\
-         # Written by `{cmd} hooks install`. amenbo owns this file only while the marker above is\n\
-         # here: delete the marker, or the file, and amenbo leaves it alone for good.\n\
-         # Remove it with `{cmd} hooks uninstall`.\n\
-         #\n\
-         # Refuses a commit whose {subject} carries an amenbo ref (AMB-T-… / AMB-D-…): an id\n\
-         # resolves only in the store that issued it, so it says nothing to a reader outside.\n\
-         # The {name} slot is where git offers {subject}.\n\
-         # Bypass one commit with `git commit --no-verify`.\n\
-         \n\
-         # No amenbo on PATH (uninstalled?) — this hook is a convenience, not a gate.\n\
-         command -v {cmd} >/dev/null 2>&1 || exit 0\n\
-         exec {call}\n"
+        "{HOOK_BEGIN_MARKER}\n\
+         # Refuses this commit when {subject} carries an amenbo ref (AMB-T-… / AMB-D-…): an id resolves\n\
+         # only in the store that issued it, so it says nothing to a reader outside. The {name} slot is\n\
+         # where git offers {subject}. amenbo owns only the lines between these two markers — the rest of\n\
+         # this file is left as it is, so this sits happily alongside another tool's hook. Remove it with\n\
+         # `{cmd} hooks uninstall`, or delete the markers. Skipped when {cmd} is not on PATH (uninstalled?);\n\
+         # bypass one commit with `git commit --no-verify`.\n\
+         command -v {cmd} >/dev/null 2>&1 && {{ {call} || exit 1; }}\n\
+         {HOOK_END_MARKER}"
     )
+}
+
+/// The whole file for a slot amenbo owns outright — a shebang and its managed block, and nothing else.
+/// What [`install`] writes into an empty slot; a slot another tool holds gets the block slipped into the
+/// existing file instead ([`install`]).
+pub fn hook_body(slot: HookSlot, cmd: &str) -> String {
+    format!("#!/bin/sh\n{}\n", hook_block(slot, cmd))
+}
+
+/// Put amenbo's block into `existing` (the slot's current contents, `None` when the file is not there) and
+/// return the whole new file. The mirror of [`crate::agents::upsert_managed`], slot-flavoured:
+///
+/// - **no file** → the standalone [`hook_body`];
+/// - **our block already present** → swap it in place, everything outside the markers untouched;
+/// - **a legacy standalone hook** (single-line marker, no block) → replaced whole with [`hook_body`], since
+///   the entire file was ours;
+/// - **someone else's hook** → the block slipped in right after the shebang, so it runs before their body
+///   and fires even if their hook exits early, and their body is left exactly as it was.
+fn upsert_block(existing: Option<&str>, slot: HookSlot, cmd: &str) -> String {
+    let block = hook_block(slot, cmd);
+    let Some(text) = existing else {
+        return hook_body(slot, cmd);
+    };
+    if let Some((begin, end)) = find_hook_block(text) {
+        return format!("{}{}{}", &text[..begin], block, &text[end..]);
+    }
+    if text.contains(LEGACY_PREFIX) {
+        return hook_body(slot, cmd);
+    }
+    insert_after_shebang(text, &block)
+}
+
+/// Slip `block` into `text` right after the shebang line, keeping the rest of `text` after it. When `text`
+/// has no shebang the block goes first; a shebang with no trailing newline (a one-line file) gets the block
+/// appended on the next line.
+fn insert_after_shebang(text: &str, block: &str) -> String {
+    let Some(rest) = text.strip_prefix("#!") else {
+        return format!("{block}\n{text}");
+    };
+    match rest.find('\n') {
+        Some(i) => {
+            let past_newline = "#!".len() + i + 1;
+            format!("{}{block}\n{}", &text[..past_newline], &text[past_newline..])
+        }
+        None => format!("{text}\n{block}\n"),
+    }
+}
+
+/// Take amenbo's block back out of a hook's `text`. `None` when there is nothing of ours in it;
+/// `Some(None)` when what is left is only a shebang (the file was ours entirely and should be deleted);
+/// `Some(Some(t))` when another tool's body remains and the file should be rewritten to `t`.
+fn strip_block(text: &str) -> Option<Option<String>> {
+    if let Some((begin, end)) = find_hook_block(text) {
+        let mut out = String::with_capacity(text.len());
+        out.push_str(&text[..begin]);
+        out.push_str(text[end..].trim_start_matches('\n'));
+        // Anything left that is neither blank nor a shebang is another tool's — keep the file for it.
+        let has_foreign_body =
+            out.lines().any(|l| !l.trim().is_empty() && !l.trim_start().starts_with("#!"));
+        return Some(has_foreign_body.then_some(out));
+    }
+    // A legacy standalone hook is ours from top to bottom, so removing our block leaves nothing.
+    text.contains(LEGACY_PREFIX).then_some(None)
 }
 
 /// The one line to add to `slot`'s hook when amenbo must not touch it. What [`install`] hands back instead
@@ -329,24 +421,15 @@ impl HookStates {
         self.iter().filter(|&(_, s)| s == state).map(|(slot, _)| slot).collect()
     }
 
-    /// Does amenbo own every slot? The one shape in which the lint is fully wired.
+    /// Does amenbo own every slot? The one shape in which the lint is fully wired, and the one in which
+    /// [`reconcile`] has nothing left to write.
     pub fn all_managed(self) -> bool {
         self.iter().all(|(_, s)| s.is_managed())
     }
 
-    /// Does amenbo own any slot at all? Its own hook on disk is the disk's way of saying yes.
+    /// Does amenbo own any slot at all? Its own block on disk is the disk's way of saying yes.
     pub fn any_managed(self) -> bool {
         self.iter().any(|(_, s)| s.is_managed())
-    }
-
-    /// Is any slot empty, i.e. is there anything for an install to write?
-    fn any_unwired(self) -> bool {
-        self.iter().any(|(_, s)| s == HookState::Unwired)
-    }
-
-    /// Is any slot a stranger's?
-    fn any_foreign(self) -> bool {
-        self.iter().any(|(_, s)| s == HookState::Foreign)
     }
 }
 
@@ -376,66 +459,75 @@ fn probe_slot(hooks: &Path, slot: HookSlot) -> HookState {
     }
 }
 
-/// What [`install`] did, so the caller can say it.
+/// What [`install`] did to a slot, so the caller can say it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Installed {
-    /// Written into an empty slot.
+    /// The block is now there where it was not: an empty slot, or another tool's hook that gained the block
+    /// alongside its own body.
     Wrote,
-    /// A hook of ours was already there and was replaced (an older marker version, or a hand-edited body).
+    /// A block of ours was already there and was replaced (an older marker version, or a hand-edited body).
     Rewrote,
 }
 
-/// What [`install`] did, slot by slot: what it wrote, and what it left to its owner.
+/// What [`install`] did, slot by slot: what it wrote, and the rare slot it could not.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstallReport {
     /// The slots amenbo wrote, each with what writing it amounted to.
     pub installed: Vec<(HookSlot, Installed)>,
-    /// The slots a stranger holds, left untouched. The caller offers [`guidance_line`] for each.
+    /// The slots amenbo could not add its block to because their contents will not read back as text — a
+    /// binary hook, or one it may not open. It cannot coexist with what it cannot read, so it leaves the
+    /// file alone; the caller offers [`guidance_line`] for each. Empty in every ordinary repository.
     pub refused: Vec<HookSlot>,
 }
 
-/// Write the lint hook into every slot of `dir` amenbo may own, replacing a hook of ours but never a
-/// stranger's. It is deliberately partial: a [`HookState::Foreign`] slot is reported in
-/// [`InstallReport::refused`] rather than failing the install, because the alternative — refusing every
-/// slot because one is husky's — would leave the commonest setup of all unable to wire the lint anywhere.
-/// Only an install that could write nothing at all is an error, which is the one case where a caller has
-/// nothing to show but [`guidance_line`].
+/// Put amenbo's lint block into every slot of `dir`: an empty slot becomes a standalone hook, a slot of
+/// ours is rewritten in place, and a slot another tool holds gains the block **alongside** its body rather
+/// than being refused — coexisting is always possible, so the old all-or-nothing hand-off is gone. The one
+/// slot it cannot write is a hook whose bytes will not read back as text ([`InstallReport::refused`]): there
+/// is no way to slip a block into a file it cannot read. Only an install that could write nothing at all —
+/// every slot refused for that reason — is an error, the one case with nothing to show but [`guidance_line`].
 pub fn install(dir: &Path, cmd: &str) -> Result<InstallReport> {
-    let states = probe(dir).ok_or_else(|| {
+    probe(dir).ok_or_else(|| {
         Error::Invalid(Msg::new(
             "Not a git repository, so there are no hooks to install.",
             "git リポジトリではないため、インストールするフックがありません。",
         ))
     })?;
-    if !states.any_managed() && !states.any_unwired() {
-        return Err(Error::Conflict(Msg::new(
-            format!(
-                "The hooks here were not written by amenbo, and amenbo does not overwrite them. Add these lines yourself:\n{}",
-                guidance_block(states.slots_in(HookState::Foreign), cmd, "    ")
-            ),
-            format!(
-                "ここのフックは amenbo が書いたものではないため、上書きしません。次の行をご自身で足してください:\n{}",
-                guidance_block(states.slots_in(HookState::Foreign), cmd, "    ")
-            ),
-        )));
-    }
     let dir_path = hooks_dir(dir).expect("probe succeeded, so the hooks dir resolves");
     std::fs::create_dir_all(&dir_path).map_err(io_err)?;
     // Asked once for the directory, not once per slot: the answer is a property of where the hooks live.
     let shared = hooks_are_shared(dir, &dir_path);
     let mut report = InstallReport { installed: Vec::new(), refused: Vec::new() };
-    for (slot, state) in states.iter() {
-        if state == HookState::Foreign {
-            report.refused.push(slot);
-            continue;
-        }
+    for slot in HOOK_SLOTS {
         let hook = dir_path.join(slot.name());
-        std::fs::write(&hook, hook_body(slot, cmd)).map_err(|e| io_err_slot(slot, e))?;
+        let existing = match std::fs::read_to_string(&hook) {
+            Ok(text) => Some(text),
+            // A file that is there but will not read as text is one we cannot coexist with — leave it.
+            Err(_) if hook.exists() => {
+                report.refused.push(slot);
+                continue;
+            }
+            Err(_) => None,
+        };
+        let was_ours = existing.as_deref().is_some_and(|t| marker_version(t).is_some());
+        std::fs::write(&hook, upsert_block(existing.as_deref(), slot, cmd)).map_err(|e| io_err_slot(slot, e))?;
         make_executable(&hook)?;
         if shared {
             exclude_locally(dir, &hook);
         }
-        report.installed.push((slot, if state.is_managed() { Installed::Rewrote } else { Installed::Wrote }));
+        report.installed.push((slot, if was_ours { Installed::Rewrote } else { Installed::Wrote }));
+    }
+    if report.installed.is_empty() && !report.refused.is_empty() {
+        return Err(Error::Conflict(Msg::new(
+            format!(
+                "The hooks here will not read back as text, so amenbo cannot add its block. Add these lines yourself:\n{}",
+                guidance_block(report.refused.clone(), cmd, "    ")
+            ),
+            format!(
+                "ここのフックはテキストとして読めないため、amenbo のブロックを足せません。次の行をご自身で足してください:\n{}",
+                guidance_block(report.refused.clone(), cmd, "    ")
+            ),
+        )));
     }
     Ok(report)
 }
@@ -450,34 +542,36 @@ pub fn guidance_block(slots: Vec<HookSlot>, cmd: &str, indent: &str) -> String {
         .join("\n")
 }
 
-/// Remove the lint hook from every slot of `dir` that carries our marker, and return those slots. The
-/// mirror of [`install`], partial for partial and refusal for refusal: a stranger's hook is not ours to
-/// delete, an empty slot is already the asked-for state, and only a call with nothing of ours to remove and
-/// a stranger in the way is an error.
-pub fn uninstall(dir: &Path, cmd: &str) -> Result<Vec<HookSlot>> {
+/// Take amenbo's block back out of every slot of `dir` that carries it, and return those slots. The mirror
+/// of [`install`]: a slot amenbo shares with another tool keeps the other tool's body — only the block
+/// between the markers goes, and the file is deleted only when nothing but amenbo's block was in it. A slot
+/// with nothing of ours is already the asked-for state, so there is nothing to refuse and nothing to error
+/// over; the only failure is not being in a git repository at all.
+pub fn uninstall(dir: &Path) -> Result<Vec<HookSlot>> {
     let states = probe(dir).ok_or_else(|| {
         Error::Invalid(Msg::new(
             "Not a git repository, so there are no hooks to remove.",
             "git リポジトリではないため、削除するフックがありません。",
         ))
     })?;
-    if !states.any_managed() && states.any_foreign() {
-        let lines = guidance_block(states.slots_in(HookState::Foreign), cmd, "    ");
-        return Err(Error::Conflict(Msg::new(
-            format!(
-                "The hooks here were not written by amenbo, so amenbo will not remove them. Remove these lines yourself if you put them there:\n{lines}"
-            ),
-            format!(
-                "ここのフックは amenbo が書いたものではないため、削除しません。ご自身で足した行であれば、ご自身で外してください:\n{lines}"
-            ),
-        )));
-    }
     let dir_path = hooks_dir(dir).expect("probe succeeded, so the hooks dir resolves");
     let mut removed = Vec::new();
-    for (slot, state) in states.iter() {
-        if state.is_managed() {
-            std::fs::remove_file(dir_path.join(slot.name())).map_err(|e| io_err_slot(slot, e))?;
-            removed.push(slot);
+    for (slot, _) in states.iter() {
+        let hook = dir_path.join(slot.name());
+        let Ok(text) = std::fs::read_to_string(&hook) else { continue };
+        match strip_block(&text) {
+            // Ours entirely — the file goes.
+            Some(None) => {
+                std::fs::remove_file(&hook).map_err(|e| io_err_slot(slot, e))?;
+                removed.push(slot);
+            }
+            // Another tool's body remains — keep the file, drop only our block.
+            Some(Some(rest)) => {
+                std::fs::write(&hook, rest).map_err(|e| io_err_slot(slot, e))?;
+                removed.push(slot);
+            }
+            // Nothing of ours in this slot — leave it.
+            None => {}
         }
     }
     Ok(removed)
@@ -540,9 +634,10 @@ pub enum HookAction {
     /// and every repository, because what is being asked is whether the lint may write at all, and where
     /// it writes is amenbo's business rather than anything the user holds an opinion about.
     Ask,
-    /// [`install`] without asking: the device already said yes, and this repository has a slot to write.
-    /// This is how a yes reaches a folder bound long after it was given — and how it reaches the slot an
-    /// upgrade added to a repository wired by an older build. Neither is a new question.
+    /// [`install`] without asking: the device already said yes, and some slot here is not yet ours — empty,
+    /// or holding another tool's hook the block can join. This is how a yes reaches a folder bound long
+    /// after it was given, and the slot an upgrade added to a repository wired by an older build. Neither
+    /// is a new question.
     Install,
 }
 
@@ -556,10 +651,8 @@ pub enum HookAction {
 ///    device answer that was never about this repository in particular. Without this rung a yes on record
 ///    would put back at the next startup exactly what the user just removed, and the escape hatch would
 ///    not be one.
-/// 3. **No slot to write**: a repository whose every slot is a stranger's is neither asked about nor
-///    acted on, because there is no write to permit — asking would put amenbo's problem in front of the
-///    user and hand back a button that cannot fire. The lint still wants wiring there, which is what
-///    [`setup_notice`] says, on a surface where the line to add can actually be pasted.
+/// 3. **Every slot already ours**: nothing to write and so nothing to ask or do. A slot another tool holds
+///    is *not* this rung — the block coexists with it, so it is a slot to write, not one to step around.
 /// 4. **The device's answer**: `no` is silent from there on; `yes` installs, with nothing to ask;
 ///    never-asked is the one question, and only where it can be answered.
 ///
@@ -578,7 +671,7 @@ pub fn reconcile(ctx: &HookContext) -> HookAction {
     let Some(states) = ctx.states else {
         return HookAction::Nothing;
     };
-    if ctx.opted_out || !states.any_unwired() {
+    if ctx.opted_out || states.all_managed() {
         return HookAction::Nothing;
     }
     match ctx.consent {
@@ -759,22 +852,23 @@ mod tests {
         }
     }
 
-    /// A stranger in every slot is not a question and not a job. Both exist to get a write done, and there
-    /// is no write to permit: a yes could touch nothing, so asking would spend the user's attention on
-    /// amenbo's own difficulty and leave them holding a choice that changes nothing. The lint still wants
-    /// wiring, which `setup_notice` says on a surface where the line can be pasted.
+    /// A stranger in every slot is now a job like any other: the block coexists with their hook, so there
+    /// is a write to permit, and the never-asked device is asked, a yes installs. The old "no answer could
+    /// write it, so do not ask" is gone now that coexisting is always possible.
     #[test]
-    fn a_strangers_hook_is_not_asked_about_since_no_answer_could_write_it() {
-        for consent in CONSENTS {
-            let ctx = HookContext { states: states(HookState::Foreign, HookState::Foreign), consent, ..askable() };
-            assert_eq!(reconcile(&ctx), HookAction::Nothing, "every slot is a stranger's (answer: {consent:?})");
-        }
+    fn a_stranger_in_every_slot_is_asked_about_and_wired_because_the_block_coexists() {
+        let disk = states(HookState::Foreign, HookState::Foreign);
+        assert_eq!(reconcile(&HookContext { states: disk, ..askable() }), HookAction::Ask);
+        assert_eq!(
+            reconcile(&HookContext { states: disk, consent: Some(HookConsent::Yes), ..askable() }),
+            HookAction::Install,
+        );
     }
 
-    /// One writable slot is enough, and it is acted on without mentioning the other: the stranger's slot is
-    /// amenbo's problem to route to `setup_notice`, not a fork in the user's road.
+    /// A mix of an empty slot and a stranger's is one job: both get written (the empty one a standalone
+    /// hook, the stranger's a coexisting block), so the device is asked and a yes installs.
     #[test]
-    fn one_writable_slot_beside_a_stranger_is_still_asked_about_and_still_wired() {
+    fn an_empty_slot_beside_a_stranger_is_asked_about_and_wired() {
         let disk = states(HookState::Unwired, HookState::Foreign);
         assert_eq!(reconcile(&HookContext { states: disk, ..askable() }), HookAction::Ask);
         assert_eq!(
@@ -871,20 +965,25 @@ mod tests {
         assert_eq!(serde_json::to_value(HookConsent::No).unwrap(), serde_json::json!("no"));
     }
 
-    /// Catches the [`HOOK_MARKER`] literal and [`HOOK_MARKER_VERSION`] drifting apart — the same guard
-    /// [`crate::agents`] keeps over its own marker.
+    /// Catches the [`HOOK_BEGIN_MARKER`] literal and [`HOOK_MARKER_VERSION`] drifting apart — the same
+    /// guard [`crate::agents`] keeps over its own marker.
     #[test]
     fn the_marker_literal_carries_the_current_version() {
-        assert_eq!(marker_version(HOOK_MARKER), Some(HOOK_MARKER_VERSION));
+        assert_eq!(marker_version(HOOK_BEGIN_MARKER), Some(HOOK_MARKER_VERSION));
     }
 
     /// Each slot calls the lint the way git speaks to it: `commit-msg` is handed the message file's path
     /// and passes it on, `pre-commit` is handed nothing and lints the staged diff. A hook that ignored `$1`
-    /// in the `commit-msg` slot would lint the diff twice and never read a commit message.
+    /// in the `commit-msg` slot would lint the diff twice and never read a commit message. The call is
+    /// guarded on PATH and stops the commit on a failing lint, and uses no `exec` — control has to fall
+    /// through to whatever else the file holds, which is how the block coexists.
     #[test]
     fn each_slot_hands_the_lint_what_git_gives_it() {
-        assert!(hook_body(HookSlot::CommitMsg, "amenbo").contains("exec amenbo lint \"$1\"\n"));
-        assert!(hook_body(HookSlot::PreCommit, "amenbo").contains("exec amenbo lint\n"));
+        assert!(hook_body(HookSlot::CommitMsg, "amenbo")
+            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo lint \"$1\" || exit 1; }\n"));
+        assert!(hook_body(HookSlot::PreCommit, "amenbo")
+            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo lint || exit 1; }\n"));
+        assert!(!hook_body(HookSlot::CommitMsg, "amenbo").contains("exec "), "no exec — the block must fall through");
         assert_eq!(guidance_line(HookSlot::CommitMsg, "amenbo"), "amenbo lint \"$1\" || exit 1");
         assert_eq!(guidance_line(HookSlot::PreCommit, "amenbo"), "amenbo lint || exit 1");
     }
@@ -953,47 +1052,86 @@ mod tests {
             "installing over our own hooks is a rewrite, not a refusal — that is what carries a body change",
         );
 
-        assert_eq!(uninstall(&dir, "amenbo").unwrap(), vec![HookSlot::PreCommit, HookSlot::CommitMsg]);
+        assert_eq!(uninstall(&dir).unwrap(), vec![HookSlot::PreCommit, HookSlot::CommitMsg]);
         assert_eq!(probe(&dir), states(HookState::Unwired, HookState::Unwired));
         assert!(
-            uninstall(&dir, "amenbo").unwrap().is_empty(),
+            uninstall(&dir).unwrap().is_empty(),
             "symmetric to the end: removing what is already gone is the asked-for state, not an error",
         );
 
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// The whole point of the marker: a hook amenbo did not write is never written and never removed. With
-    /// husky in `pre-commit` and nothing in `commit-msg` — the commonest repository there is — the refusal
-    /// is per slot, so the lint still gets wired where amenbo may write.
+    /// Coexistence end to end: a slot husky holds gains amenbo's block **alongside** husky's body, with the
+    /// block right after the shebang so it runs first, and husky's line intact below it. The empty slot
+    /// becomes a standalone hook. Uninstall then strips only amenbo's block from husky's slot — husky is
+    /// left exactly as it was — and deletes the standalone one.
     #[test]
-    fn a_strangers_hook_is_stepped_around_not_written_over() {
-        let dir = git_repo("foreign");
+    fn a_strangers_hook_gains_the_block_alongside_it_and_uninstall_leaves_husky_intact() {
+        let dir = git_repo("coexist");
         let theirs = "#!/bin/sh\nnpx husky run pre-commit\n";
         std::fs::write(hook_path(&dir, HookSlot::PreCommit), theirs).unwrap();
         assert_eq!(probe(&dir), states(HookState::Foreign, HookState::Unwired));
 
         let done = install(&dir, "amenbo").unwrap();
-        assert_eq!(done.refused, vec![HookSlot::PreCommit], "husky's slot is left to husky");
-        assert_eq!(done.installed, vec![(HookSlot::CommitMsg, Installed::Wrote)], "the free slot is still wired");
-        assert_eq!(std::fs::read_to_string(hook_path(&dir, HookSlot::PreCommit)).unwrap(), theirs, "untouched");
+        assert_eq!(done.refused, vec![], "a readable husky hook is joined, not refused");
+        assert_eq!(
+            done.installed,
+            vec![(HookSlot::PreCommit, Installed::Wrote), (HookSlot::CommitMsg, Installed::Wrote)],
+            "husky's slot gains the block, the empty slot becomes a standalone hook",
+        );
+        assert_eq!(probe(&dir), states(OURS, OURS), "both slots now carry our block");
 
-        assert_eq!(uninstall(&dir, "amenbo").unwrap(), vec![HookSlot::CommitMsg], "and only ours comes back out");
-        assert_eq!(std::fs::read_to_string(hook_path(&dir, HookSlot::PreCommit)).unwrap(), theirs, "still untouched");
+        let coexisting = std::fs::read_to_string(hook_path(&dir, HookSlot::PreCommit)).unwrap();
+        assert!(coexisting.starts_with("#!/bin/sh\n"), "husky's shebang stays first");
+        let after_shebang = &coexisting["#!/bin/sh\n".len()..];
+        assert!(after_shebang.starts_with(HOOK_BEGIN_MARKER), "our block runs before husky's body");
+        assert!(coexisting.contains("npx husky run pre-commit"), "husky's line is kept");
+
+        assert_eq!(uninstall(&dir).unwrap(), vec![HookSlot::PreCommit, HookSlot::CommitMsg], "both slots had our block");
+        assert_eq!(
+            std::fs::read_to_string(hook_path(&dir, HookSlot::PreCommit)).unwrap(),
+            theirs,
+            "husky's slot is restored to exactly what it was",
+        );
+        assert!(!hook_path(&dir, HookSlot::CommitMsg).exists(), "the standalone hook is gone");
 
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// Nothing to write and nothing of ours to remove is the one case that fails: a caller has nothing to
-    /// report but the lines to add by hand, and saying "installed" would be a lie.
+    /// An upgrade from a legacy standalone hook (the single-line marker an older build wrote, no block) is
+    /// recognised as ours and rewritten into the block form — a rewrite, not a second block injected beside
+    /// the old one.
     #[test]
-    fn an_install_that_could_write_nothing_is_an_error() {
-        let dir = git_repo("all-foreign");
+    fn a_legacy_standalone_hook_is_upgraded_to_the_block_form() {
+        let dir = git_repo("legacy");
+        let legacy = "#!/bin/sh\n# amenbo:hook (managed v2)\ncommand -v amenbo >/dev/null 2>&1 || exit 0\nexec amenbo lint\n";
+        std::fs::write(hook_path(&dir, HookSlot::PreCommit), legacy).unwrap();
+        assert_eq!(probe(&dir).unwrap().pre_commit, HookState::Managed { version: 2 }, "the legacy marker is still ours");
+
+        assert_eq!(
+            install(&dir, "amenbo").unwrap().installed[0],
+            (HookSlot::PreCommit, Installed::Rewrote),
+            "a legacy hook is rewritten, not joined",
+        );
+        let upgraded = std::fs::read_to_string(hook_path(&dir, HookSlot::PreCommit)).unwrap();
+        assert_eq!(upgraded, hook_body(HookSlot::PreCommit, "amenbo"), "rewritten whole into the current block form");
+        assert!(!upgraded.contains("exec amenbo lint"), "the old exec body is gone");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The one slot install cannot write: a hook whose bytes will not read back as text, which it cannot
+    /// coexist with because it cannot read it. When that is the whole repository, the install has written
+    /// nothing and is an error; uninstall finds nothing of ours and quietly does nothing.
+    #[test]
+    fn a_hook_that_is_not_text_is_refused_and_an_all_binary_install_errors() {
+        let dir = git_repo("binary");
         for slot in HOOK_SLOTS {
-            std::fs::write(hook_path(&dir, slot), "#!/bin/sh\nnpx husky run\n").unwrap();
+            std::fs::write(hook_path(&dir, slot), [0x00u8, 0xff, 0xfe, b'\n']).unwrap();
         }
-        assert!(install(&dir, "amenbo").is_err(), "every slot is a stranger's, so the install wrote nothing");
-        assert!(uninstall(&dir, "amenbo").is_err(), "and there is nothing of ours to take back");
+        assert!(install(&dir, "amenbo").is_err(), "every slot is unreadable, so the install wrote nothing");
+        assert!(uninstall(&dir).unwrap().is_empty(), "nothing of ours to take back, and no error");
 
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -1098,7 +1236,7 @@ mod tests {
 
         assert_eq!(probe(&dir), None);
         assert!(install(&dir, "amenbo").is_err());
-        assert!(uninstall(&dir, "amenbo").is_err());
+        assert!(uninstall(&dir).is_err());
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

@@ -570,19 +570,20 @@ function OrphanBindingBanner() {
 // **It is two banners, not one**, because it has two different things to say and they are not degrees of each
 // other (core keeps the lists apart for this reason):
 //
-//   - unwired — the lint is wired to nothing, so the refs it exists to catch are going out uncaught. Setup is
-//     genuinely unfinished, and `hooks install` is the fix. A warning, and it reads as one.
-//   - foreign — a hook that is not amenbo's holds a slot, so amenbo left it alone. **Nothing is unfinished**:
-//     amenbo did everything it may do, and only the file's owner may add the line. Running this under the
-//     warning's heading is what made "yes" read as a failure the moment it was clicked (#1808) — the user had
-//     just finished the setup, and was told the setup was unfinished.
+//   - unwired — the lint is wired to nothing in these slots, empty or held by another tool alike, so the refs
+//     it exists to catch are going out uncaught. `hooks install` is the fix — it writes a standalone hook, or
+//     slips amenbo's block in beside another tool's. A warning, and it reads as one. (There is no separate
+//     hand-off any more: coexisting is always possible, so a stranger's slot is just a slot to install into.)
+//   - restored — a block of ours was found damaged or stale this session and put back (something had changed
+//     or removed it — a tool regenerating its hook, a hand-edit). Nothing is unfinished and nothing is asked;
+//     it is a heads-up that amenbo repaired itself, so the reader knows the lint had briefly stopped.
 //
 // It renders only once the modal is done asking (`asked`), because asking about the hooks and warning about the
-// hooks in the same breath says one thing twice. That order is what the notice is read after, too: a yes
-// answered just now has already written them, and a notice read before that would name slots that are wired.
-// A recorded "no" and an opted-out repository are both silent here (core decides), so this cannot become noise
-// to tune out. Dismissible with the ✕ for the session. Outside Tauri (in the browser) it is always empty, hence
-// hidden.
+// hooks in the same breath says one thing twice. That order is what the notice is read after, too: `hook_offer`'s
+// sweep has installed a yes's hooks and healed damaged blocks by then, so `unwired` names only what is still
+// missing and `restored` names what the sweep just put back. A recorded "no" and an opted-out repository are
+// both silent here (core decides), so this cannot become noise to tune out. Dismissible with the ✕ for the
+// session. Outside Tauri (in the browser) it is always empty, hence hidden.
 export function HookSetupBanner({ asked }: { asked: boolean }) {
   const [notices, setNotices] = useState<HookNoticeDto[]>([]);
   const [dismissed, setDismissed] = useState(false);
@@ -599,7 +600,7 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
   }, [asked]);
 
   const unwired = notices.filter((n) => n.unwired.length > 0);
-  const foreign = notices.filter((n) => n.foreign.length > 0);
+  const restored = notices.filter((n) => n.restored.length > 0);
   if (dismissed || notices.length === 0) return null;
 
   return (
@@ -619,19 +620,15 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
           <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
         </div>
       )}
-      {/* A hand-off, not an alert: `status` rather than `role="alert"`, and no ⚠ — there is nothing wrong here,
-          only a line that amenbo may not add on someone else's behalf. */}
-      {foreign.length > 0 && (
-        <div className="healthbanner managedblock-banner" role="status">
-          <span className="healthbanner__icon" aria-hidden>ℹ</span>
+      {restored.length > 0 && (
+        <div className="healthbanner managedblock-banner" role="alert">
+          <span className="healthbanner__icon" aria-hidden>⚠</span>
           <div className="healthbanner__body">
-            <div className="healthbanner__title">{t("hookForeign.title")}</div>
-            {foreign.map((n) => (
+            <div className="healthbanner__title">{t("hookRestored.title")}</div>
+            {restored.map((n) => (
               <div key={n.dir} className="healthbanner__line">
                 <div>{tf("hookSetup.where", { project: n.projectName, dir: n.dir })}</div>
-                {n.foreign.map((slot, i) => (
-                  <div key={slot}>{tf("hookForeign.slot", { slot, line: n.guidance[i] })}</div>
-                ))}
+                <div>{tf("hookRestored.slots", { slots: n.restored.join(", ") })}</div>
               </div>
             ))}
           </div>

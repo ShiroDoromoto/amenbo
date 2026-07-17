@@ -40,15 +40,14 @@ import { HookSetupBanner } from "./AppShell";
 let container: HTMLDivElement;
 let root: Root;
 
-// core carries no prose — the slots, the command's own name and the line to add arrive, and the banner words it.
+// core carries no prose — the slots and the command's own name arrive, and the banner words it.
 function notice(over: Partial<HookNoticeDto> = {}): HookNoticeDto {
   return {
     projectName: "案件X",
     dir: "/w/案件X",
     cmd: "amenbo",
     unwired: ["pre-commit"],
-    foreign: [],
-    guidance: [],
+    restored: [],
     ...over,
   };
 }
@@ -119,41 +118,30 @@ describe("lint setup banner", () => {
     expect(lines()[0]).not.toContain("amenbo hooks install");
   });
 
-  // A stranger's slot has no command to run — the only way in is the line, so the line is what the banner shows.
-  // And it is a hand-off, not a warning: #1808 was this case reading as "setup unfinished", which blamed amenbo
-  // for keeping its own policy. It goes in its own banner, under its own heading, with no ⚠ and no "unfinished".
-  it("hands off a stranger's slot as a note, never as an unfinished setup", async () => {
-    hoisted.notices = [notice({
-      unwired: [],
-      foreign: ["pre-commit"],
-      guidance: ["amenbo lint || exit 1"],
-    })];
-    await render(true);
-
-    const banner = container.querySelector<HTMLElement>('.healthbanner[role="status"]');
-    expect(banner, "a stranger's slot is a status, not an alert").not.toBeNull();
-    expect(container.querySelector('.healthbanner[role="alert"]'), "and nothing is unfinished").toBeNull();
-
-    const text = banner!.textContent ?? "";
-    expect(text).toContain("pre-commit");
-    expect(text).toContain("amenbo lint || exit 1");
-    expect(text, "nothing to install, so nothing suggests installing").not.toContain("hooks install");
-    expect(text, "the word that made a finished setup read as a failure").not.toContain("未完了");
-  });
-
-  // Both live at once — husky in one slot, nothing in the other — is two reports, not one. The unfinished slot is a
-  // warning and amenbo's to fix; the stranger's slot is a note only its owner can act on. They must not share a heading.
-  it("splits an unwired slot from a stranger's into two separate banners", async () => {
-    hoisted.notices = [notice({ unwired: ["commit-msg"], foreign: ["pre-commit"], guidance: ["amenbo lint || exit 1"] })];
+  // A block found damaged or stale this session and put back is a warning of its own — the lint had briefly
+  // stopped and amenbo repaired itself. It names the slots restored, and does not read as "still unwired".
+  it("warns when a block was restored, naming the slots", async () => {
+    hoisted.notices = [notice({ unwired: [], restored: ["pre-commit"] })];
     await render(true);
 
     const alert = container.querySelector<HTMLElement>('.healthbanner[role="alert"]');
-    const status = container.querySelector<HTMLElement>('.healthbanner[role="status"]');
-    expect(alert, "the empty slot is the warning").not.toBeNull();
-    expect(status, "the stranger's slot is the note").not.toBeNull();
-    expect(alert!.textContent).toContain("commit-msg");
-    expect(alert!.textContent).not.toContain("pre-commit");
-    expect(status!.textContent).toContain("pre-commit");
+    expect(alert, "a restoration is a warning").not.toBeNull();
+    const text = alert!.textContent ?? "";
+    expect(text).toContain("pre-commit");
+    expect(text, "nothing is unwired, so it does not tell them to install").not.toContain("hooks install");
+  });
+
+  // Both live at once — one slot still unwired, another whose block was just restored — is two reports, not one.
+  it("splits an unwired slot from a restored one into two separate banners", async () => {
+    hoisted.notices = [notice({ unwired: ["commit-msg"], restored: ["pre-commit"] })];
+    await render(true);
+
+    const banners = [...container.querySelectorAll<HTMLElement>(".healthbanner")];
+    expect(banners, "two things to say, two banners").toHaveLength(2);
+    const unwired = banners.find((b) => b.textContent?.includes("hooks install"));
+    const restored = banners.find((b) => !b.textContent?.includes("hooks install"));
+    expect(unwired!.textContent).toContain("commit-msg");
+    expect(restored!.textContent).toContain("pre-commit");
   });
 
   it("lists every unfinished repository, and ✕ dismisses the banner for the session", async () => {

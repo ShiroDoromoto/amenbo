@@ -3721,8 +3721,58 @@ fn sweep_bound_repos(store: &Store, consent: Option<amenbo_core::hooks::HookCons
             }
             HookAction::Ask => question_is_live = true,
         }
+        // Heal a block of ours left damaged or stale — the corruption reconcile steps past, since any
+        // marker reads to it as a managed slot. It writes only when something is broken, and records what it
+        // restored (in session_hook_repairs) so the banner can warn the block had been changed and is back.
+        record_hook_repairs(&dir, &hooks::restore_blocks(path, cmd, consent, opted_out));
     }
     question_is_live
+}
+
+/// Per bound folder, the names of the slots restored there this session: `(dir, slot names)`.
+type HookRepairLog = Vec<(String, Vec<String>)>;
+
+/// What [`restore_blocks`](amenbo_core::hooks::restore_blocks) put back this session, per bound folder — a
+/// transient the standing report ([`hook_notices`]) reads to warn about, since a healed block leaves no
+/// damage on disk to detect after the fact. Accumulated (a second sweep that heals nothing does not erase
+/// the first), and deduped, so [`hook_offer`]'s startup sweep firing twice under StrictMode still reports
+/// each repair once.
+fn session_hook_repairs() -> &'static std::sync::Mutex<HookRepairLog> {
+    static REPAIRS: std::sync::OnceLock<std::sync::Mutex<HookRepairLog>> = std::sync::OnceLock::new();
+    REPAIRS.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+/// Record the slots [`restore_blocks`](amenbo_core::hooks::restore_blocks) healed in `dir`, merged into any
+/// already recorded for it. A no-op when nothing was restored.
+fn record_hook_repairs(dir: &str, restored: &[amenbo_core::hooks::HookSlot]) {
+    if restored.is_empty() {
+        return;
+    }
+    let mut all = session_hook_repairs().lock().unwrap_or_else(|e| e.into_inner());
+    let entry = match all.iter_mut().find(|(d, _)| d == dir) {
+        Some(entry) => &mut entry.1,
+        None => {
+            all.push((dir.to_string(), Vec::new()));
+            &mut all.last_mut().expect("just pushed").1
+        }
+    };
+    for slot in restored {
+        let name = slot.name().to_string();
+        if !entry.contains(&name) {
+            entry.push(name);
+        }
+    }
+}
+
+/// The slots restored in `dir` so far this session (empty when none).
+fn hook_repairs_for(dir: &str) -> Vec<String> {
+    session_hook_repairs()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .find(|(d, _)| d == dir)
+        .map(|(_, slots)| slots.clone())
+        .unwrap_or_default()
 }
 
 /// The one question the GUI should ask about the lint hooks, or `None` when there is nothing to ask —
@@ -3738,30 +3788,30 @@ pub fn hook_offer() -> Result<Option<HookOfferDto>, CmdError> {
     Ok(live.then(|| HookOfferDto { cmd: amenbo_core::config::Paths::APP_NAME.to_string() }))
 }
 
-/// One bound repository where the lint is not actually running — the raw material for the banner's
-/// wording, never the sentence, as with [`HookOfferDto`].
+/// One bound repository the banner has something to say about — the raw material for its wording, never
+/// the sentence, as with [`HookOfferDto`].
 ///
-/// Its two lists are two different reports, not one in two halves, and the banner words them apart:
-/// [`HookNoticeDto::unwired`] is setup left undone, while [`HookNoticeDto::foreign`] is amenbo having
-/// finished and stopped at a file that is not its own. Calling the second one unfinished is what made a
-/// successful install read as a failure.
+/// Its two lists are two different things: [`HookNoticeDto::unwired`] is a standing state (the lint is not
+/// running in these slots, and `hooks install` wires them — coexisting with another tool's hook where one
+/// is there), while [`HookNoticeDto::restored`] is a transient event (a block of ours was found damaged or
+/// stale this session and put back). A repository appears when either list is non-empty.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct HookNoticeDto {
     /// The project's name, so the banner can say which one it is about.
     project_name: String,
-    /// The git repository whose setup is unfinished, which is also what identifies this notice.
+    /// The git repository this notice is about, which is also what identifies it.
     dir: String,
     /// What this build is called on the command line, for the same reason [`HookOfferDto::cmd`]
     /// carries it: the dev channel answers `amenbo-dev` and the wording must not spell either in.
     cmd: String,
-    /// Slots with no hook at all, which `hooks install` writes.
+    /// Slots with no block of ours (empty, or another tool's hook without amenbo's block), which
+    /// `hooks install` wires.
     unwired: Vec<String>,
-    /// Slots a stranger holds, which amenbo will not write.
-    foreign: Vec<String>,
-    /// The line to add by hand, one per [`HookNoticeDto::foreign`] slot and in the same order.
-    guidance: Vec<String>,
+    /// Slots whose block of ours was found damaged or stale this session and restored — something had
+    /// changed or removed it (a tool regenerating its hook, a hand-edit). Empty in the ordinary case.
+    restored: Vec<String>,
 }
 
 /// Where the lint is not running — the GUI's third channel for it, alongside the CLI's `--json` field and
@@ -3770,10 +3820,11 @@ pub struct HookNoticeDto {
 /// already declined.
 ///
 /// The GUI calls it **once, after [`hook_offer`] has had its turn**, and that order is the point rather
-/// than a detail of scheduling. Both probe, so this pays a second `git` spawn per folder — and what it buys
-/// is a probe of the disk the first one *changed*: an answered yes has installed hooks by then, and a
-/// notice computed from the earlier probe would report slots that are now wired. The double cost is the
-/// price of the report being true, which for a report is the whole of its value.
+/// than a detail of scheduling. `hook_offer`'s sweep both installs the hooks a yes wired and heals the
+/// damaged blocks it found (recording them in [`session_hook_repairs`]); this then probes the disk that
+/// sweep *changed*, so `unwired` names only slots still without a block, and `restored` names what the
+/// sweep just put back. A notice computed before the sweep would report slots that are now wired, and would
+/// miss the repairs entirely.
 #[tauri::command]
 pub fn hook_notices() -> Result<Vec<HookNoticeDto>, CmdError> {
     use amenbo_core::hooks;
@@ -3788,16 +3839,15 @@ pub fn hook_notices() -> Result<Vec<HookNoticeDto>, CmdError> {
             continue;
         };
         let opted_out = store.hook_opted_out(project_id).unwrap_or(false);
-        let Some(notice) = hooks::setup_notice(hooks::probe(path), consent, opted_out) else { continue };
+        let unwired: Vec<String> = hooks::setup_notice(hooks::probe(path), consent, opted_out)
+            .map(|n| n.unwired.iter().map(|s| s.name().to_string()).collect())
+            .unwrap_or_default();
+        let restored = hook_repairs_for(&dir);
+        if unwired.is_empty() && restored.is_empty() {
+            continue;
+        }
         let Ok(Some(project)) = store.project(project_id) else { continue };
-        notices.push(HookNoticeDto {
-            project_name: project.name,
-            dir: dir.clone(),
-            cmd: cmd.to_string(),
-            unwired: notice.unwired.iter().map(|s| s.name().to_string()).collect(),
-            guidance: notice.foreign.iter().map(|s| hooks::guidance_line(*s, cmd)).collect(),
-            foreign: notice.foreign.iter().map(|s| s.name().to_string()).collect(),
-        });
+        notices.push(HookNoticeDto { project_name: project.name, dir: dir.clone(), cmd: cmd.to_string(), unwired, restored });
     }
     Ok(notices)
 }

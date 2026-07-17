@@ -256,13 +256,13 @@ attachments: number,
 missing: number, };
 
 /**
- * One bound repository where the lint is not actually running — the raw material for the banner's
- * wording, never the sentence, as with [`HookOfferDto`].
+ * One bound repository the banner has something to say about — the raw material for its wording, never
+ * the sentence, as with [`HookOfferDto`].
  *
- * Its two lists are two different reports, not one in two halves, and the banner words them apart:
- * [`HookNoticeDto::unwired`] is setup left undone, while [`HookNoticeDto::foreign`] is amenbo having
- * finished and stopped at a file that is not its own. Calling the second one unfinished is what made a
- * successful install read as a failure.
+ * Its two lists are two different things: [`HookNoticeDto::unwired`] is a standing state (the lint is not
+ * running in these slots, and `hooks install` wires them — coexisting with another tool's hook where one
+ * is there), while [`HookNoticeDto::restored`] is a transient event (a block of ours was found damaged or
+ * stale this session and put back). A repository appears when either list is non-empty.
  */
 export type HookNoticeDto = { 
 /**
@@ -270,7 +270,7 @@ export type HookNoticeDto = {
  */
 projectName: string, 
 /**
- * The git repository whose setup is unfinished, which is also what identifies this notice.
+ * The git repository this notice is about, which is also what identifies it.
  */
 dir: string, 
 /**
@@ -279,17 +279,15 @@ dir: string,
  */
 cmd: string, 
 /**
- * Slots with no hook at all, which `hooks install` writes.
+ * Slots with no block of ours (empty, or another tool's hook without amenbo's block), which
+ * `hooks install` wires.
  */
 unwired: Array<string>, 
 /**
- * Slots a stranger holds, which amenbo will not write.
+ * Slots whose block of ours was found damaged or stale this session and restored — something had
+ * changed or removed it (a tool regenerating its hook, a hand-edit). Empty in the ordinary case.
  */
-foreign: Array<string>, 
-/**
- * The line to add by hand, one per [`HookNoticeDto::foreign`] slot and in the same order.
- */
-guidance: Array<string>, };
+restored: Array<string>, };
 
 /**
  * The question waiting to be put to the user: may amenbo wire its lint into your git hooks?

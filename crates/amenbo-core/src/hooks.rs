@@ -730,66 +730,32 @@ pub fn reconcile(ctx: &HookContext) -> HookAction {
     }
 }
 
-/// Why the lint is not running on every commit here. **Two different sentences, not two degrees of one**,
-/// which is the whole reason they are separate: they differ in whose fault it is, in what fixes it, and in
-/// whether the reader has anything to feel bad about. Both can be live at once — husky holding
-/// `pre-commit` while nothing holds `commit-msg` needs a line added by hand *and* a command run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NoticeReason {
-    /// Slots with no hook at all. Setup is genuinely unfinished: amenbo has not been let in yet, or its
-    /// hook was removed. `hooks install` is the whole fix.
-    LintHookUnwired,
-    /// Slots a stranger holds — husky, lefthook, a hand-written script. **Nothing is unfinished here**:
-    /// amenbo did everything it may do and stopped where the file stopped being its own, which is the
-    /// policy working rather than failing. Only the file's owner can let the lint in, so the report is a
-    /// hand-off, not a warning: [`guidance_line`] is the line for them to paste.
-    LintHookForeignSlot,
-}
-
-/// Where the lint is not running, and why — the standing report, as opposed to [`reconcile`]'s one-time
-/// question. It carries [`NoticeReason`] per list rather than one code for the whole notice, because a
-/// notice naming only a stranger's slot under a reason that says "unwired" is a report that does not
-/// match what it found.
+/// Where the lint is not running — the standing report, as opposed to [`reconcile`]'s one-time question.
+/// One list, because there is now one thing to say: every slot with no block of ours, whether empty or held
+/// by another tool, is fixed the same way — `hooks install`, which writes a standalone hook into an empty
+/// slot and slips the block in alongside another tool's. There is no separate hand-off to report: coexisting
+/// is always possible, so a stranger's slot is not a line for the user to add by hand, it is a slot install
+/// wires like any other.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetupNotice {
-    /// Slots with no hook at all ([`NoticeReason::LintHookUnwired`]), which `hooks install` writes.
+    /// Slots with no block of ours (empty, or another tool's hook without amenbo's block), which
+    /// `hooks install` wires — writing a standalone hook, or adding the block beside an existing one.
     pub unwired: Vec<HookSlot>,
-    /// Slots a stranger holds ([`NoticeReason::LintHookForeignSlot`]), which amenbo will not write —
-    /// [`guidance_line`] is the way in, by hand.
-    pub foreign: Vec<HookSlot>,
 }
 
-impl SetupNotice {
-    /// The reasons this notice actually carries, in the order a reader meets them. Never empty (a notice
-    /// with nothing in either list is not constructed), and exactly one entry in the common case — which
-    /// is what a surface names its report with, instead of a fixed code that guesses.
-    pub fn reasons(&self) -> Vec<NoticeReason> {
-        let mut reasons = Vec::new();
-        if !self.unwired.is_empty() {
-            reasons.push(NoticeReason::LintHookUnwired);
-        }
-        if !self.foreign.is_empty() {
-            reasons.push(NoticeReason::LintHookForeignSlot);
-        }
-        reasons
-    }
-}
-
-/// Is the lint actually running, and if not, where it is not — the slots of a git repository that are not
-/// ours, or `None` when there is nothing to say. It is deliberately quieter than that sounds: hooks of ours
-/// in every slot, a device that said no, and a repository that opted out are all silent, so it speaks only
-/// while something is genuinely unsaid and cannot become noise to tune out. A `yes` on record does **not**
-/// silence it, because the answer is not a mirror of the disk: consent with no hook there is exactly the
-/// state worth reporting.
+/// Is the lint actually running, and if not, where it is not — the slots of a git repository that carry no
+/// block of ours, or `None` when there is nothing to say. It is deliberately quieter than that sounds: our
+/// block in every slot, a device that said no, and a repository that opted out are all silent, so it speaks
+/// only while something is genuinely unsaid and cannot become noise to tune out. A `yes` on record does
+/// **not** silence it, because the answer is not a mirror of the disk: consent with no block there is
+/// exactly the state worth reporting.
 pub fn setup_notice(states: Option<HookStates>, consent: Option<HookConsent>, opted_out: bool) -> Option<SetupNotice> {
     if opted_out || consent == Some(HookConsent::No) {
         return None;
     }
     let states = states?;
-    let notice =
-        SetupNotice { unwired: states.slots_in(HookState::Unwired), foreign: states.slots_in(HookState::Foreign) };
-    (!notice.unwired.is_empty() || !notice.foreign.is_empty()).then_some(notice)
+    let unwired: Vec<HookSlot> = states.iter().filter(|(_, s)| !s.is_managed()).map(|(slot, _)| slot).collect();
+    (!unwired.is_empty()).then_some(SetupNotice { unwired })
 }
 
 #[cfg(test)]
@@ -925,47 +891,38 @@ mod tests {
         );
     }
 
-    /// The report speaks exactly while the lint is not running and has not been refused, naming each slot
-    /// under its own reason — the two lists are live at once when husky holds one slot and nothing holds
-    /// the other, because the fixes differ.
+    /// The report speaks exactly while the lint is not running: every slot with no block of ours, whether
+    /// empty or held by another tool, in one list — they are fixed the same way now (`hooks install`
+    /// coexists), so there is no second category to keep apart.
     #[test]
     fn an_unwired_repository_is_reported_as_unfinished() {
         for consent in [None, Some(HookConsent::Yes)] {
             assert_eq!(
                 setup_notice(states(HookState::Unwired, HookState::Unwired), consent, false),
-                Some(SetupNotice { unwired: vec![HookSlot::PreCommit, HookSlot::CommitMsg], foreign: vec![] }),
+                Some(SetupNotice { unwired: vec![HookSlot::PreCommit, HookSlot::CommitMsg] }),
             );
             assert_eq!(
                 setup_notice(states(HookState::Foreign, HookState::Unwired), consent, false),
-                Some(SetupNotice { unwired: vec![HookSlot::CommitMsg], foreign: vec![HookSlot::PreCommit] }),
-                "a stranger in one slot and an empty other is two different fixes at once",
+                Some(SetupNotice { unwired: vec![HookSlot::PreCommit, HookSlot::CommitMsg] }),
+                "a stranger's slot and an empty one are both just 'no block here — install wires it'",
             );
             assert_eq!(
                 setup_notice(states(OURS, HookState::Unwired), consent, false),
-                Some(SetupNotice { unwired: vec![HookSlot::CommitMsg], foreign: vec![] }),
+                Some(SetupNotice { unwired: vec![HookSlot::CommitMsg] }),
                 "one slot wired is not the lint running",
             );
         }
     }
 
-    /// The report names what it actually found. A stranger's slot beside no empty one is **not** an
-    /// unwired hook — amenbo did all it may do — and a report that called it one would be describing a
-    /// state that is not there. This is the mismatch #1808 caught: `unwired: []` under a reason that said
-    /// `lint_hook_unwired`.
+    /// A stranger's slot is now reported as unwired, not as a hand-off: install coexists with it, so it is
+    /// a slot to wire like any other, and the only thing worth saying is that the lint is not running there
+    /// yet.
     #[test]
-    fn each_reason_names_the_list_it_came_from() {
-        let foreign_only = setup_notice(states(OURS, HookState::Foreign), None, false).unwrap();
-        assert_eq!(foreign_only.unwired, vec![], "nothing is missing — a stranger simply holds a slot");
-        assert_eq!(foreign_only.reasons(), vec![NoticeReason::LintHookForeignSlot]);
-
-        let unwired_only = setup_notice(states(OURS, HookState::Unwired), None, false).unwrap();
-        assert_eq!(unwired_only.reasons(), vec![NoticeReason::LintHookUnwired]);
-
-        let both = setup_notice(states(HookState::Foreign, HookState::Unwired), None, false).unwrap();
+    fn a_strangers_slot_is_reported_as_unwired_not_handed_off() {
         assert_eq!(
-            both.reasons(),
-            vec![NoticeReason::LintHookUnwired, NoticeReason::LintHookForeignSlot],
-            "two live reasons are two reasons, not the first one",
+            setup_notice(states(OURS, HookState::Foreign), None, false),
+            Some(SetupNotice { unwired: vec![HookSlot::CommitMsg] }),
+            "the stranger's slot is where the lint is not running, and install is the fix",
         );
     }
 
@@ -993,7 +950,7 @@ mod tests {
     fn consent_alone_does_not_silence_the_report() {
         assert_eq!(
             setup_notice(states(HookState::Unwired, HookState::Unwired), Some(HookConsent::Yes), false),
-            Some(SetupNotice { unwired: vec![HookSlot::PreCommit, HookSlot::CommitMsg], foreign: vec![] }),
+            Some(SetupNotice { unwired: vec![HookSlot::PreCommit, HookSlot::CommitMsg] }),
         );
     }
 

@@ -1033,37 +1033,18 @@ fn report_unfinished_setup(
     let Some(notice) = hooks::setup_notice(states, consent, opted_out) else { return };
     let cmd = Paths::APP_NAME;
     if flags.json {
-        // `reasons`, plural and derived, rather than one code chosen up front: a notice holding only a
-        // stranger's slot used to go out under `lint_hook_unwired` beside an empty `unwired` list, which
-        // said the opposite of what it carried.
+        // One list: every slot with no block of ours, fixed the same way. A stranger's slot is no longer a
+        // separate hand-off — install coexists with it — so it is reported here like any other unwired slot.
         set_setup_report(json!({
-            "reasons": notice.reasons(),
             "unwired": notice.unwired.iter().map(|slot| json!({
                 "hook": slot.name(),
                 "fix": format!("{cmd} hooks install"),
             })).collect::<Vec<_>>(),
-            "foreign": notice.foreign.iter().map(|slot| json!({
-                "hook": slot.name(),
-                "fix": hooks::guidance_line(*slot, cmd),
-            })).collect::<Vec<_>>(),
         }));
     } else if !flags.quiet {
-        // Two reports, because they are two different things to say, and running them together under one
-        // heading is what made a finished install read as a failure. An empty slot is setup left undone and
-        // amenbo's to finish; a stranger's slot is amenbo having finished — it wrote what it may write and
-        // stopped at a file that is not its own — and the only thing left is a line nobody but the file's
-        // owner may add. Saying "unfinished" over the second blames amenbo for keeping its own policy.
-        if !notice.unwired.is_empty() {
-            let slots = notice.unwired.iter().map(|slot| slot.name()).collect::<Vec<_>>().join(", ");
-            eprintln!("⚠ `{cmd} lint` is not running on your commits ({slots}).");
-            eprintln!("  Wire it up: {cmd} hooks install");
-        }
-        if !notice.foreign.is_empty() {
-            let slots = notice.foreign.iter().map(|slot| slot.name()).collect::<Vec<_>>().join(", ");
-            eprintln!("Note: {slots} belongs to another tool, so amenbo left it alone.");
-            eprintln!("  To lint there too, add this line yourself:");
-            eprintln!("{}", hooks::guidance_block(notice.foreign, cmd, "    "));
-        }
+        let slots = notice.unwired.iter().map(|slot| slot.name()).collect::<Vec<_>>().join(", ");
+        eprintln!("⚠ `{cmd} lint` is not running on your commits ({slots}).");
+        eprintln!("  Wire it up: {cmd} hooks install");
     }
 }
 

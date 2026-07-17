@@ -1,5 +1,7 @@
 # amenbo
 
+**[amenbo.work](https://amenbo.work/)** — downloads, and what this is for.
+
 A **local, single-store** task & project manager where an AI and a human
 collaborate on one machine. It is **CLI-first and AI-agent-friendly**: a Rust core
 library does the domain work and the CLI is a thin shell on top of it. Your data

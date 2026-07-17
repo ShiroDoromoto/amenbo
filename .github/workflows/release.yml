@@ -47,7 +47,7 @@ jobs:
       - name: Add the Intel mac target
         run: rustup target add x86_64-apple-darwin
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -173,7 +173,7 @@ jobs:
       - name: Show toolchain
         run: rustc --version && cargo --version
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -230,7 +230,7 @@ jobs:
           fetch-depth: 0   # wharfy reads the version from the git tag
 
       # Reassemble every runner's output into dist/ at the paths wharfy.yaml names.
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           pattern: dist-*

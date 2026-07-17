@@ -3669,10 +3669,14 @@ pub fn pointer_issues() -> Result<Vec<DoctorIssueDto>, CmdError> {
         .collect())
 }
 
-/// A question waiting to be put to the user: may amenbo write the lint hooks into this repository
-/// Only the raw material travels, never the sentence — which slots amenbo would write, which
-/// a stranger holds, and the line to add by hand for those — and i18n composes the wording, as with
-/// [`SlugMismatchDto`].
+/// A question waiting to be put to the user: may amenbo write the lint hooks into this repository?
+///
+/// It carries what the question is *about* and nothing about how it would be answered. Which slots are
+/// empty, which a stranger holds, whether the hooks directory is one the whole team shares — all of that is
+/// `amenbo_core::hooks::install`'s to act on, and none of it is a fork in the user's road: nobody wants an
+/// AMB-T-… in their commits, so a screen that laid the machinery out would be asking them to solve amenbo's
+/// problem. What is still unwired afterwards is the setup banner's to report ([`HookNoticeDto`]), where it
+/// is a statement rather than a question.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3690,12 +3694,6 @@ pub struct HookOfferDto {
     /// run and what its guidance tells the user to type. The dev channel answers `amenbo-dev`, so the
     /// name travels rather than being spelled into the wording.
     cmd: String,
-    /// The slots amenbo would write on a yes.
-    unwired: Vec<String>,
-    /// The slots a stranger holds. amenbo will not write them, so a yes does not cover them.
-    foreign: Vec<String>,
-    /// The line to add by hand, one per [`HookOfferDto::foreign`] slot and in the same order.
-    guidance: Vec<String>,
 }
 
 /// The questions the GUI should ask about the lint hooks, and the acts that need no asking — the
@@ -3716,7 +3714,7 @@ pub struct HookOfferDto {
 /// acts are best-effort: a hook is a convenience, and failing the startup over one would help no one.
 #[tauri::command]
 pub fn hook_offers() -> Result<Vec<HookOfferDto>, CmdError> {
-    use amenbo_core::hooks::{self, HookAction, HookConsent, HookState};
+    use amenbo_core::hooks::{self, HookAction, HookConsent};
 
     let store = open_store()?;
     let cmd = amenbo_core::config::Paths::APP_NAME;
@@ -3738,15 +3736,11 @@ pub fn hook_offers() -> Result<Vec<HookOfferDto>, CmdError> {
             }
             HookAction::Ask => {
                 let Ok(Some(project)) = store.project(project_id) else { continue };
-                let foreign = states.slots_in(HookState::Foreign);
                 offers.push(HookOfferDto {
                     project_id,
                     project_name: project.name,
                     dir: dir.clone(),
                     cmd: cmd.to_string(),
-                    unwired: states.slots_in(HookState::Unwired).iter().map(|s| s.name().to_string()).collect(),
-                    guidance: foreign.iter().map(|s| hooks::guidance_line(*s, cmd)).collect(),
-                    foreign: foreign.iter().map(|s| s.name().to_string()).collect(),
                 });
             }
         }
@@ -3821,8 +3815,9 @@ pub fn hook_notices() -> Result<Vec<HookNoticeDto>, CmdError> {
 ///
 /// A failed install records nothing: consent is the note that the hooks are where the user asked for
 /// them, and keeping it after failing to put them there would make the record a lie and silence the
-/// question that should be asked again. A stranger's slot is not a failure — the install steps around
-/// it, having offered [`HookOfferDto::guidance`] for it in the same breath as the question.
+/// question that should be asked again. A stranger's slot is not a failure — the install steps around it,
+/// and the setup banner is where that gets said ([`HookNoticeDto`]), after the fact and out of the way of
+/// an answer that was never about it.
 #[tauri::command]
 pub fn hook_answer(project_id: i64, dir: String, yes: bool) -> Result<(), CmdError> {
     use amenbo_core::hooks::{self, HookConsent};
@@ -5664,8 +5659,8 @@ mod tests {
         assert_eq!(offers[0].project_id, asked, "the offer names the project its pointer resolves to");
         assert_eq!(offers[0].project_name, "問われるPJ", "the modal is told what it is asking about");
         assert_eq!(offers[0].dir, asked_dir.to_string_lossy(), "the offer identifies the repository");
-        assert_eq!(offers[0].unwired, vec!["pre-commit", "commit-msg"], "both empty slots are on the table");
-        assert!(offers[0].foreign.is_empty() && offers[0].guidance.is_empty(), "no stranger holds a slot");
+        // The offer carries the question and its subject, and nothing of the plumbing behind it: which slots
+        // are empty is what a yes acts on, not what it is asked about.
         assert!(
             !offers.iter().any(|o| o.dir == plain_dir.to_string_lossy() || o.dir == lost_dir.to_string_lossy()),
             "a non-git folder and a folder with no pointer raise no question: {:?}",

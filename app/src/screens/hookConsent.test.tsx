@@ -52,9 +52,6 @@ function offer(over: Partial<HookOfferDto> = {}): HookOfferDto {
     projectName: "amenbo",
     dir: "/w/amenbo",
     cmd: "amenbo",
-    unwired: ["pre-commit", "commit-msg"],
-    foreign: [],
-    guidance: [],
     ...over,
   };
 }
@@ -75,6 +72,13 @@ function button(label: string): HTMLButtonElement {
 async function click(label: string) {
   await act(async () => {
     button(label).click();
+  });
+}
+
+/** Esc, which is "not now" — the third answer, and the only way left to reach it once the button went. */
+async function escape() {
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
   });
 }
 
@@ -106,22 +110,22 @@ describe("the lint hook consent modal", () => {
   it("records a yes and moves on", async () => {
     hoisted.offers = [offer()];
     await render();
-    await click("設置する");
+    await click("はい");
     expect(hoisted.answers).toEqual([{ projectId: 3, dir: "/w/amenbo", yes: true }]);
     expect(container.textContent).toBe("");
   });
 
-  it("records a no when the user says never ask again", async () => {
+  it("records a no", async () => {
     hoisted.offers = [offer()];
     await render();
-    await click("二度と聞かない");
+    await click("いいえ");
     expect(hoisted.answers).toEqual([{ projectId: 3, dir: "/w/amenbo", yes: false }]);
   });
 
-  it("records nothing when dismissed: not now is not a no", async () => {
+  it("records nothing when dismissed with Esc: putting it off is not a no", async () => {
     hoisted.offers = [offer()];
     await render();
-    await click("今はしない");
+    await escape();
     expect(hoisted.answers).toEqual([]); // Unanswered, so the next startup asks again.
     expect(container.textContent).toBe(""); // …and it is gone for this run.
   });
@@ -131,36 +135,35 @@ describe("the lint hook consent modal", () => {
     await render();
     expect(container.textContent).toContain("/w/amenbo");
     expect(container.textContent).not.toContain("/w/other");
-    await click("今はしない");
+    await escape();
     expect(container.textContent).toContain("/w/other"); // The second question waits its turn.
   });
 
   it("words itself with the command name this build answers to, never a spelled-in one", async () => {
     hoisted.offers = [offer({ cmd: "amenbo-dev" })];
     await render();
-    expect(container.textContent).toContain("amenbo-dev lint");
     expect(container.textContent).toContain("amenbo-dev hooks install");
   });
 
-  it("shows the line to add by hand for a slot amenbo will not write", async () => {
-    hoisted.offers = [offer({ unwired: ["commit-msg"], foreign: ["pre-commit"], guidance: ["amenbo lint || exit 1"] })];
+  // The point of the whole screen: it asks for permission and nothing else. Slots, strangers, shared hooks
+  // directories and the lines to paste are core's business — putting any of them here would hand the user
+  // amenbo's problem, which is how this modal grew a button that could not be pressed.
+  it("puts no plumbing in front of the user — only what is being asked, and about which repository", async () => {
+    hoisted.offers = [offer()];
     await render();
-    expect(container.textContent).toContain("amenbo lint || exit 1");
-  });
-
-  it("offers nothing to install when every slot is a stranger's, and still takes an answer", async () => {
-    hoisted.offers = [offer({ unwired: [], foreign: ["pre-commit"], guidance: ["amenbo lint || exit 1"] })];
-    await render();
-    expect(button("設置する").disabled).toBe(true); // There is nothing amenbo may write.
-    await click("二度と聞かない"); // Answering still settles it — that is why it is asked at all.
-    expect(hoisted.answers).toEqual([{ projectId: 3, dir: "/w/amenbo", yes: false }]);
+    const text = container.textContent ?? "";
+    expect(text).toContain("/w/amenbo"); // Which repository is being asked about: identity, not plumbing.
+    for (const leak of ["pre-commit", "commit-msg", "|| exit 1", ".githooks", "core.hooksPath"]) {
+      expect(text).not.toContain(leak);
+    }
+    expect([...container.querySelectorAll("button")].every((b) => !b.disabled)).toBe(true);
   });
 
   it("keeps the question up when the install failed, so the failure is never recorded as consent", async () => {
     hoisted.offers = [offer()];
     hoisted.failWith = "permission denied";
     await render();
-    await click("設置する");
+    await click("はい");
     expect(hoisted.answers).toEqual([]);
     expect(container.textContent).toContain("/w/amenbo"); // Still asking.
   });
@@ -173,10 +176,10 @@ describe("the lint hook consent modal", () => {
       await render();
       expect(hoisted.done).toBe(0);
 
-      await click("今はしない"); // One left, so still asking.
+      await escape(); // One left, so still asking.
       expect(hoisted.done).toBe(0);
 
-      await click("今はしない");
+      await escape();
       expect(hoisted.done).toBeGreaterThan(0);
     });
 
@@ -195,7 +198,7 @@ describe("the lint hook consent modal", () => {
     it("says so once the last question is answered", async () => {
       hoisted.offers = [offer()];
       await render();
-      await click("設置する");
+      await click("はい");
       expect(hoisted.done).toBeGreaterThan(0);
     });
 
@@ -204,7 +207,7 @@ describe("the lint hook consent modal", () => {
       hoisted.offers = [offer()];
       hoisted.failWith = "permission denied";
       await render();
-      await click("設置する");
+      await click("はい");
       expect(hoisted.done).toBe(0);
     });
   });

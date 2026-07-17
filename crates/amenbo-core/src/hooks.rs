@@ -199,6 +199,112 @@ pub fn hooks_dir(dir: &Path) -> Option<PathBuf> {
     Some(dir.join(path))
 }
 
+/// Would git show a hook written here? That is the whole of the difference between a hook that stays on
+/// this machine and one that lands in everybody's checkout. `.git/hooks` is outside the working tree, so
+/// nothing there is ever git's to show; a `core.hooksPath` aimed into the tree (`.githooks`, `.husky`) is
+/// the repository's own versioned decision, and a file amenbo drops in it surfaces in `git status` and
+/// rides out on the next `git add -A`. Which is why [`install`] pairs a shared write with
+/// [`exclude_locally`] rather than refusing it: the lint is not optional, so the write happens either way
+/// and it is amenbo's job — not the user's — to keep it off everybody else's machine.
+fn hooks_are_shared(dir: &Path, hooks: &Path) -> bool {
+    let Some(root) = worktree_root(dir) else {
+        return false;
+    };
+    let Ok(hooks) = std::fs::canonicalize(hooks) else {
+        return false;
+    };
+    // Inside the git directory first, and by path rather than by reasoning: `.git` sits *within* the
+    // working tree, so the ordinary `.git/hooks` passes a prefix test against the root and would be called
+    // shared. Git shows nothing in there whatever the prefix says. `--git-common-dir` rather than
+    // `--git-dir` because a linked worktree keeps its hooks in the main repository's.
+    if let Some(gitdir) = common_git_dir(dir) {
+        if hooks.starts_with(gitdir) {
+            return false;
+        }
+    }
+    // What is left is in the tree proper. A hook git already ignores is as local as one it cannot see.
+    hooks.starts_with(root) && !is_ignored(dir, &hooks)
+}
+
+/// The git directory shared by every worktree of this repository, resolved through any symlink. This is
+/// where hooks live unless `core.hooksPath` says otherwise, and nothing under it is ever git's to show.
+fn common_git_dir(dir: &Path) -> Option<PathBuf> {
+    let path = git_line(dir, &["rev-parse", "--git-common-dir"])?;
+    std::fs::canonicalize(dir.join(path)).ok()
+}
+
+/// The working tree's root, resolved through any symlink on the way. Both halves must be canonical or the
+/// comparison silently lies: git answers with the real path (on macOS a temp dir under `/var` comes back
+/// under `/private/var`), while the caller's `dir` is whatever it was handed. A prefix test between the two
+/// spellings says "outside the tree" for a path plainly inside it — and this guard failing open is a hook
+/// committed to everybody's checkout, with nothing on screen to say so.
+fn worktree_root(dir: &Path) -> Option<PathBuf> {
+    let root = git_line(dir, &["rev-parse", "--show-toplevel"])?;
+    std::fs::canonicalize(root).ok()
+}
+
+/// The first line of a git command's output, or `None` when git has nothing to say (not a repository, or
+/// the call failed). Trimmed, because git terminates its answers with a newline.
+fn git_line(dir: &Path, args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new("git").current_dir(dir).args(args).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let line = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if line.is_empty() { None } else { Some(line) }
+}
+
+/// Whether git already ignores `path`. `check-ignore` answers by exit code: 0 is ignored, 1 is not, and
+/// anything else is an error we read as "not ignored" — guessing "ignored" there would hide a shared write.
+fn is_ignored(dir: &Path, path: &Path) -> bool {
+    std::process::Command::new("git")
+        .current_dir(dir)
+        .args(["check-ignore", "-q"])
+        .arg(path)
+        .status()
+        .map(|s| s.code() == Some(0))
+        .unwrap_or(false)
+}
+
+/// Keep a hook written into a shared directory out of everybody else's checkout, by naming it in
+/// `.git/info/exclude` — git's per-clone ignore file, which is inside `.git` and so is never committed and
+/// never travels. The hook then runs for the person who said yes and shows up for nobody: not in
+/// `git status`, not in `git add -A`.
+///
+/// It is deliberately additive and idempotent: the file is the user's to keep other lines in, so this
+/// appends one and only when it is not already there. A failure to write is *not* an error — the hook is
+/// already on disk and working, and the alternative (unwinding a successful install because a comfort
+/// measure failed) would trade a working lint for a tidy tree.
+fn exclude_locally(dir: &Path, hook: &Path) {
+    // Canonical on both sides, for the reason `worktree_root` gives: a prefix test between two spellings of
+    // the same directory strips nothing, and the line that reaches the file would be an absolute path git
+    // reads as a pattern that matches nothing.
+    let Some(root) = worktree_root(dir) else {
+        return;
+    };
+    let Ok(hook) = std::fs::canonicalize(hook) else {
+        return;
+    };
+    let Ok(rel) = hook.strip_prefix(root) else {
+        return;
+    };
+    // Always forward slashes: this file is read by git, not by the platform.
+    let line = rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
+    let Some(exclude) = git_line(dir, &["rev-parse", "--git-path", "info/exclude"]) else {
+        return;
+    };
+    let exclude = dir.join(exclude);
+    let current = std::fs::read_to_string(&exclude).unwrap_or_default();
+    if current.lines().any(|l| l.trim() == line) {
+        return;
+    }
+    if let Some(parent) = exclude.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let sep = if current.is_empty() || current.ends_with('\n') { "" } else { "\n" };
+    let _ = std::fs::write(&exclude, format!("{current}{sep}{line}\n"));
+}
+
 /// What every slot holds right now, read from the filesystem and never from the record.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -328,6 +434,8 @@ pub fn install(dir: &Path, cmd: &str) -> Result<InstallReport> {
     }
     let dir_path = hooks_dir(dir).expect("probe succeeded, so the hooks dir resolves");
     std::fs::create_dir_all(&dir_path).map_err(io_err)?;
+    // Asked once for the directory, not once per slot: the answer is a property of where the hooks live.
+    let shared = hooks_are_shared(dir, &dir_path);
     let mut report = InstallReport { installed: Vec::new(), refused: Vec::new() };
     for (slot, state) in states.iter() {
         if state == HookState::Foreign {
@@ -337,6 +445,9 @@ pub fn install(dir: &Path, cmd: &str) -> Result<InstallReport> {
         let hook = dir_path.join(slot.name());
         std::fs::write(&hook, hook_body(slot, cmd)).map_err(|e| io_err_slot(slot, e))?;
         make_executable(&hook)?;
+        if shared {
+            exclude_locally(dir, &hook);
+        }
         report.installed.push((slot, if state.is_managed() { Installed::Rewrote } else { Installed::Wrote }));
     }
     Ok(report)
@@ -457,7 +568,9 @@ pub enum HookAction {
 /// keeps a slot added by an upgrade from re-asking every project that already said yes. What is left is a
 /// question: never having answered, or having said yes with nothing of ours on disk — the latter because a
 /// hook deleted by hand may well have been deleted on purpose, and consent was consent to an install, not
-/// a promise to keep the file alive, so it is never silently restored. A machine caller is never asked,
+/// a promise to keep the file alive, so it is never silently restored. Either way there must be a slot a
+/// yes would write: a repository whose every slot is a stranger's is not asked about, because the question
+/// exists to get permission for a write and there is no write to permit. A machine caller is never asked,
 /// whatever the disk holds: `--json`, an AI harness and a script cannot answer, and a prompt there hangs a
 /// caller on a terminal nobody is watching, so `can_ask` is false, the question does not happen, and
 /// nothing is recorded — the unanswered state carries intact to the next surface that can ask, and what a
@@ -475,9 +588,12 @@ pub fn reconcile(ctx: &HookContext) -> HookAction {
     if ctx.consent == Some(HookConsent::Yes) && states.any_unwired() && states.predates_this_build() {
         return HookAction::Install;
     }
+    // A question amenbo cannot act on is not a question. Where every slot is a stranger's there is nothing
+    // a yes would write, so asking would put amenbo's problem in front of the user and hand them back a
+    // button that cannot fire — the lint still wants wiring there, which is what `setup_notice` is for, on
+    // a surface where the line to add can actually be pasted.
     let question_is_live = match ctx.consent {
-        None => states.any_unwired() || states.any_foreign(),
-        Some(HookConsent::Yes) => states.any_unwired(),
+        None | Some(HookConsent::Yes) => states.any_unwired(),
         Some(HookConsent::No) => false,
     };
     if question_is_live && ctx.can_ask {
@@ -637,12 +753,21 @@ mod tests {
         }
     }
 
-    /// A stranger's hook is a question, not a target: never having answered, amenbo asks once even when
-    /// every slot is taken, because the answer settles the question either way. What is offered is the
-    /// caller's to word from the states — there is no separate action for it.
+    /// A stranger in every slot is not a question. The question exists to get permission for a write, and
+    /// there is no write to permit: a yes could touch nothing, so asking would spend the user's attention
+    /// on amenbo's own difficulty and leave them holding a choice that changes nothing. The lint still
+    /// wants wiring, which `setup_notice` says on a surface where the line can be pasted.
     #[test]
-    fn a_strangers_hook_is_asked_about_but_never_written() {
+    fn a_strangers_hook_is_not_asked_about_since_no_answer_could_write_it() {
         let ctx = HookContext { states: states(HookState::Foreign, HookState::Foreign), ..askable() };
+        assert_eq!(reconcile(&ctx), HookAction::Nothing);
+    }
+
+    /// One writable slot is enough to make the question live, and it is asked without mentioning the other:
+    /// the stranger's slot is amenbo's problem to route to `setup_notice`, not a fork in the user's road.
+    #[test]
+    fn one_writable_slot_beside_a_stranger_is_still_asked_about() {
+        let ctx = HookContext { states: states(HookState::Unwired, HookState::Foreign), ..askable() };
         assert_eq!(reconcile(&ctx), HookAction::Ask);
     }
 
@@ -868,6 +993,60 @@ mod tests {
             assert!(!dir.join(".git/hooks").join(slot.name()).exists(), "and not in the guessed directory");
         }
         assert_eq!(probe(&dir), states(OURS, OURS));
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The whole of the shared-directory guard, stated the way it is felt: after an install, `git status` is
+    /// as empty as it was before. A `core.hooksPath` aimed into the tree is the repository's own versioned
+    /// choice — everybody's `.githooks`, not this machine's — so a hook dropped there would ride out on the
+    /// next `git add -A` and land amenbo's lint on people who never installed amenbo. Writing it and naming
+    /// it in `.git/info/exclude` keeps both halves: the lint runs for whoever said yes, and git never sees
+    /// it. Nothing is asked and nothing is reported, because neither is the user's problem.
+    #[test]
+    fn a_hook_written_into_a_shared_directory_stays_off_everybody_elses_machine() {
+        let dir = git_repo("shared-hooks");
+        std::process::Command::new("git")
+            .current_dir(&dir)
+            .args(["config", "core.hooksPath", ".githooks"])
+            .output()
+            .unwrap();
+
+        install(&dir, "amenbo").unwrap();
+
+        let status = std::process::Command::new("git")
+            .current_dir(&dir)
+            .args(["status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&status.stdout).trim(),
+            "",
+            "the install must leave the tree exactly as it found it"
+        );
+        for slot in HOOK_SLOTS {
+            assert!(is_ignored(&dir, &dir.join(".githooks").join(slot.name())), "{slot:?} must be excluded");
+        }
+        // The hook is still there and still ours — excluded, not skipped.
+        assert_eq!(probe(&dir), states(OURS, OURS));
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The mirror: `.git/hooks` is inside the git directory, so git was never going to show the hook and
+    /// there is nothing to exclude. Writing to `info/exclude` anyway would put a line in the user's file for
+    /// no reason — the guard is for shared directories, and this is not one. Worth its own test because
+    /// `.git` sits *within* the working tree: the ordinary case passes a naive prefix test against the root
+    /// and reaches this code looking exactly like a shared one.
+    #[test]
+    fn an_ordinary_repository_gets_no_exclude_line() {
+        let dir = git_repo("plain-hooks");
+
+        install(&dir, "amenbo").unwrap();
+
+        let exclude = dir.join(".git/info/exclude");
+        let text = std::fs::read_to_string(&exclude).unwrap_or_default();
+        assert!(!text.contains("hooks"), "nothing was hidden, because nothing was ever visible: {text:?}");
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

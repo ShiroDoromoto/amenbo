@@ -2,10 +2,16 @@
 // modal. It asks per repository, one at a time, and only ever about repositories core said to ask about
 // (`hooks::reconcile`, via `fetchHookOffers`) — nothing here decides whether a question is due.
 //
-// It is built in-app rather than on the native confirm because the answer has three values and a native
-// dialog carries two. "Not now" is not a no: a no is recorded and never asked again, while dismissing
-// leaves the project unanswered, which is a state amenbo keeps deliberately (a surface that could not get
-// an answer must not invent one). Collapsing the two would turn pressing Esc into "never ask me again".
+// It is a consent gate, not a consultation. Nobody wants an AMB-T-… in their commits, so there is no
+// judgement to delegate: the question is whether amenbo may write, and the answers are yes and no. What it
+// takes to honour a yes — an empty slot, a hooks directory the whole team shares, a stranger already in the
+// other slot — is core's to work out (`hooks::install`), and none of it is put on screen. Core only ever
+// asks when a yes could write something, so the yes button is never dead.
+//
+// The answer still has three values against the modal's two buttons. "Not now" is not a no: a no is
+// recorded and never asked again, while dismissing leaves the project unanswered, which is a state amenbo
+// keeps deliberately (a surface that could not get an answer must not invent one). Esc is that third value,
+// which is why it must not be wired to `answer(false)` — pressing it would then mean "never ask me again".
 import { useEffect, useState } from "react";
 import { answerHookOffer, fetchHookOffers } from "../core/mutations";
 import { errText, t, tf } from "../core/i18n";
@@ -41,15 +47,29 @@ export function HookConsentModal({ onDone }: { onDone?: () => void }) {
     if (asked && offers.length === 0) onDone?.();
   }, [asked, offers.length, onDone]);
 
-  const offer = offers[0];
-  if (!offer) return null;
-
   // Dropping the head is the whole of "not now": nothing is called, so nothing is recorded, and the next
   // startup finds the same offer waiting.
   const next = () => {
     setError(null);
     setOffers((rest) => rest.slice(1));
   };
+
+  // Esc is "not now", and it is the only way to reach that answer now the button for it is gone. It stays
+  // deliberately unbound to no: dismissing a dialog is how people put a question off, and recording that as
+  // a refusal would answer on their behalf — the one thing this surface must not do.
+  //
+  // Above the early return because a hook cannot be reached conditionally; the listener is harmless with no
+  // question up, since dropping the head of an empty list is a no-op.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) next();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  const offer = offers[0];
+  if (!offer) return null;
 
   const answer = async (yes: boolean) => {
     setBusy(true);
@@ -67,40 +87,20 @@ export function HookConsentModal({ onDone }: { onDone?: () => void }) {
     <div className="hookconsent__overlay">
       <div className="hookconsent__modal" role="dialog" aria-modal="true" aria-labelledby="hookconsent-title">
         <div className="hookconsent__title" id="hookconsent-title">{t("hooks.title")}</div>
-        <div className="hookconsent__why">{tf("hooks.why", { cmd: `${offer.cmd} lint` })}</div>
+        <div className="hookconsent__why">{t("hooks.why")}</div>
+        {/* Which repository, because the offers come one per project and answering four in a row is
+            otherwise four identical questions. This is the only fact from the probe that reaches the
+            user, and it is identity, not plumbing. */}
         <div className="hookconsent__where">{tf("hooks.where", { project: offer.projectName, dir: offer.dir })}</div>
-
-        {offer.unwired.length > 0 && (
-          <div className="hookconsent__slots">
-            <div className="hookconsent__slotsTitle">{t("hooks.willWrite")}</div>
-            <ul>{offer.unwired.map((slot) => <li key={slot}><code>{slot}</code></li>)}</ul>
-          </div>
-        )}
-
-        {/* A stranger's hook is never written, so a yes does not cover it — say so next to the line that does. */}
-        {offer.foreign.length > 0 && (
-          <div className="hookconsent__slots">
-            <div className="hookconsent__slotsTitle">{t("hooks.foreign")}</div>
-            <ul>
-              {offer.foreign.map((slot, i) => (
-                <li key={slot}>
-                  <code>{slot}</code>
-                  <pre className="hookconsent__guidance">{offer.guidance[i]}</pre>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         {error && <div className="hookconsent__error">{error}</div>}
 
         <div className="hookconsent__actions">
-          <button className="hookconsent__action hookconsent__action--yes" disabled={busy || offer.unwired.length === 0} onClick={() => void answer(true)}>
-            {t("hooks.install")}
+          <button className="hookconsent__action hookconsent__action--yes" disabled={busy} onClick={() => void answer(true)}>
+            {t("hooks.yes")}
           </button>
-          <button className="hookconsent__action" disabled={busy} onClick={next}>{t("hooks.notNow")}</button>
           <button className="hookconsent__action hookconsent__action--never" disabled={busy} onClick={() => void answer(false)}>
-            {t("hooks.never")}
+            {t("hooks.no")}
           </button>
         </div>
         <div className="hookconsent__hint">{tf("hooks.hint", { cmd: offer.cmd })}</div>

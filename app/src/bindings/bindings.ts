@@ -287,10 +287,14 @@ foreign: Array<string>,
 guidance: Array<string>, };
 
 /**
- * A question waiting to be put to the user: may amenbo write the lint hooks into this repository
- * Only the raw material travels, never the sentence — which slots amenbo would write, which
- * a stranger holds, and the line to add by hand for those — and i18n composes the wording, as with
- * [`SlugMismatchDto`].
+ * A question waiting to be put to the user: may amenbo write the lint hooks into this repository?
+ *
+ * It carries what the question is *about* and nothing about how it would be answered. Which slots are
+ * empty, which a stranger holds, whether the hooks directory is one the whole team shares — all of that is
+ * `amenbo_core::hooks::install`'s to act on, and none of it is a fork in the user's road: nobody wants an
+ * AMB-T-… in their commits, so a screen that laid the machinery out would be asking them to solve amenbo's
+ * problem. What is still unwired afterwards is the setup banner's to report ([`HookNoticeDto`]), where it
+ * is a statement rather than a question.
  */
 export type HookOfferDto = { 
 /**
@@ -312,19 +316,7 @@ dir: string,
  * run and what its guidance tells the user to type. The dev channel answers `amenbo-dev`, so the
  * name travels rather than being spelled into the wording.
  */
-cmd: string, 
-/**
- * The slots amenbo would write on a yes.
- */
-unwired: Array<string>, 
-/**
- * The slots a stranger holds. amenbo will not write them, so a yes does not cover them.
- */
-foreign: Array<string>, 
-/**
- * The line to add by hand, one per [`HookOfferDto::foreign`] slot and in the same order.
- */
-guidance: Array<string>, };
+cmd: string, };
 
 /**
  * A reference to a task a decision spawned. A [`DecisionRefDto`] plus **status**, so the screen can

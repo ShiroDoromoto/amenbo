@@ -186,7 +186,7 @@ pub fn run() {
       commands::forget_orphan_bindings,
       commands::pointer_issues,
       commands::repair_pointers,
-      commands::hook_offers,
+      commands::hook_offer,
       commands::hook_notices,
       commands::hook_answer,
       commands::doctor_report,

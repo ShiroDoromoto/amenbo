@@ -258,10 +258,15 @@ missing: number, };
 /**
  * One bound repository where the lint is not actually running — the raw material for the banner's
  * wording, never the sentence, as with [`HookOfferDto`].
+ *
+ * Its two lists are two different reports, not one in two halves, and the banner words them apart:
+ * [`HookNoticeDto::unwired`] is setup left undone, while [`HookNoticeDto::foreign`] is amenbo having
+ * finished and stopped at a file that is not its own. Calling the second one unfinished is what made a
+ * successful install read as a failure.
  */
 export type HookNoticeDto = { 
 /**
- * The project's name, so the banner can say which one is unfinished.
+ * The project's name, so the banner can say which one it is about.
  */
 projectName: string, 
 /**
@@ -287,30 +292,18 @@ foreign: Array<string>,
 guidance: Array<string>, };
 
 /**
- * A question waiting to be put to the user: may amenbo write the lint hooks into this repository?
+ * The question waiting to be put to the user: may amenbo wire its lint into your git hooks?
  *
- * It carries what the question is *about* and nothing about how it would be answered. Which slots are
- * empty, which a stranger holds, whether the hooks directory is one the whole team shares — all of that is
- * `amenbo_core::hooks::install`'s to act on, and none of it is a fork in the user's road: nobody wants an
- * AMB-T-… in their commits, so a screen that laid the machinery out would be asking them to solve amenbo's
- * problem. What is still unwired afterwards is the setup banner's to report ([`HookNoticeDto`]), where it
- * is a statement rather than a question.
+ * **There is one of it, ever** — not one per repository. It carries only what the wording needs, which is
+ * the name of this build, and nothing about where an answer would land. Which repositories are bound,
+ * which slots are empty, which a stranger holds, whether the hooks directory is one the whole team shares
+ * — all of that is `amenbo_core::hooks::install`'s to act on, and none of it is a fork in the user's
+ * road: nobody wants an AMB-T-… in their commits *here* but not *there*, so a screen that laid the
+ * machinery out — or listed the folders — would be asking them to solve amenbo's problem. What is still
+ * unwired afterwards is the setup banner's to report ([`HookNoticeDto`]), where it is a statement rather
+ * than a question.
  */
 export type HookOfferDto = { 
-/**
- * The project the answer is recorded on: consent is one per project, for the lint as a feature
- * rather than per file.
- * `number` on the TS side (the default `bigint` cannot be passed back through `hook_answer`).
- */
-projectId: number, 
-/**
- * The project's name, so the modal can say what it is asking about.
- */
-projectName: string, 
-/**
- * The git repository the hooks would be written into, which is also what identifies this offer.
- */
-dir: string, 
 /**
  * What this build of amenbo is called on the command line, which is what its hooks will actually
  * run and what its guidance tells the user to type. The dev channel answers `amenbo-dev`, so the

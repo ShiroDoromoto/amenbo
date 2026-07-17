@@ -272,12 +272,13 @@ amenbo lint --stdin < message.txt           # ...or piped text. Needs no store, 
 
 # Run that lint on every commit: `pre-commit` reads the staged diff, `commit-msg` reads
 # the message (git offers it nowhere else). Installing writes into your git plumbing, so
-# amenbo asks once per project — for the lint, not per file — rather than doing it unasked.
-# It touches only the hooks it wrote: a hook from husky, lefthook or your own hand is never
-# overwritten and never removed (install wires the rest and names the line to add instead).
-amenbo hooks install                        # write the lint hooks (`git commit --no-verify` bypasses them)
-amenbo hooks status                         # what is in each hook slot, and what this project answered
-amenbo hooks uninstall                      # remove amenbo's own hooks — and stop being asked
+# amenbo asks once — for the lint as a feature — and that one answer covers every repository
+# it works in, the ones you bind later included. It touches only the hooks it wrote: a hook
+# from husky, lefthook or your own hand is never overwritten and never removed (install wires
+# the rest and names the line to add instead).
+amenbo hooks install                        # wire the lint hooks here (`git commit --no-verify` bypasses them)
+amenbo hooks status                         # what is in each hook slot, and what this device answered
+amenbo hooks uninstall                      # remove amenbo's hooks here, and opt this repository out
 
 # Identity
 amenbo whoami                               # this store's identity

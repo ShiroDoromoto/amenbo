@@ -493,23 +493,24 @@ export async function fetchPointerIssues(): Promise<DoctorIssueDto[]> {
 }
 
 /**
- * The lint-hook questions waiting for the user, one per bound git repository amenbo has not been
- * answered about. Called **exactly once, at startup**, for the reason `fetchPointerIssues` is:
- * it probes the filesystem once per bound folder, which has no business on the store-changed tick.
+ * The lint-hook question waiting for the user, or null when there is none — **there is one of it on this
+ * device, ever**, not one per bound repository. Called **exactly once, at startup**, for the reason
+ * `fetchPointerIssues` is: it probes the filesystem once per bound folder, which has no business on the
+ * store-changed tick.
  *
  * The judgment of what to ask is core's (`hooks::reconcile`) — the same one the CLI puts its terminal
- * prompt behind. What comes back is only the material to word the question from; what is not a question
- * (a hook of ours found under a record that does not say yes, or a slot this build added under consent
- * already given) is settled by core-side without ever reaching here. Outside Tauri this is an empty array.
+ * prompt behind. What comes back is only the material to word the question from. The same call carries an
+ * answer already given out to the folders bound since it, which is why it is a command and not a read.
+ * Outside Tauri there is never a question.
  */
-export async function fetchHookOffers(): Promise<HookOfferDto[]> {
-  if (!inTauri()) return [];
-  return await invoke<HookOfferDto[]>("hook_offers");
+export async function fetchHookOffer(): Promise<HookOfferDto | null> {
+  if (!inTauri()) return null;
+  return await invoke<HookOfferDto | null>("hook_offer");
 }
 
 /**
  * The bound repositories where the lint is not actually running (core's `hooks::setup_notice`) — the
- * standing report behind the banner, as opposed to `fetchHookOffers`'s one-time question.
+ * standing report behind the banner, as opposed to `fetchHookOffer`'s one-time question.
  *
  * Called **once, after the modal has had its turn**, which is an ordering rather than a convenience:
  * this probes the disk that answering the question just changed, and a notice read any earlier would
@@ -521,16 +522,18 @@ export async function fetchHookNotices(): Promise<HookNoticeDto[]> {
 }
 
 /**
- * Record what the user answered about one repository's lint hooks, installing them on a yes.
+ * Record the device's answer about the lint hooks, and wire every bound repository on a yes. One answer,
+ * once — it takes no repository, because it is not about one.
  *
  * **Call it only when there is an answer.** The record decides whether the question is ever asked
- * again, so a dismissed modal must call nothing at all and leave the project unanswered for the next
- * startup — which is why there is no third value to pass here. Throws if the install failed,
- * having recorded nothing.
+ * again, so a dismissed modal must call nothing at all and leave the device unanswered for the next
+ * startup — which is why there is no third value to pass here. Throws only if the answer itself could not
+ * be recorded; a repository that could not be wired does not cost the answer, since it was about all of
+ * them.
  */
-export async function answerHookOffer(projectId: number, dir: string, yes: boolean): Promise<void> {
+export async function answerHookOffer(yes: boolean): Promise<void> {
   if (!inTauri()) return;
-  await invoke("hook_answer", { projectId, dir, yes });
+  await invoke("hook_answer", { yes });
 }
 
 /**

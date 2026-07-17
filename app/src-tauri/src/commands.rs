@@ -3669,92 +3669,87 @@ pub fn pointer_issues() -> Result<Vec<DoctorIssueDto>, CmdError> {
         .collect())
 }
 
-/// A question waiting to be put to the user: may amenbo write the lint hooks into this repository?
+/// The question waiting to be put to the user: may amenbo wire its lint into your git hooks?
 ///
-/// It carries what the question is *about* and nothing about how it would be answered. Which slots are
-/// empty, which a stranger holds, whether the hooks directory is one the whole team shares — all of that is
-/// `amenbo_core::hooks::install`'s to act on, and none of it is a fork in the user's road: nobody wants an
-/// AMB-T-… in their commits, so a screen that laid the machinery out would be asking them to solve amenbo's
-/// problem. What is still unwired afterwards is the setup banner's to report ([`HookNoticeDto`]), where it
-/// is a statement rather than a question.
+/// **There is one of it, ever** — not one per repository. It carries only what the wording needs, which is
+/// the name of this build, and nothing about where an answer would land. Which repositories are bound,
+/// which slots are empty, which a stranger holds, whether the hooks directory is one the whole team shares
+/// — all of that is `amenbo_core::hooks::install`'s to act on, and none of it is a fork in the user's
+/// road: nobody wants an AMB-T-… in their commits *here* but not *there*, so a screen that laid the
+/// machinery out — or listed the folders — would be asking them to solve amenbo's problem. What is still
+/// unwired afterwards is the setup banner's to report ([`HookNoticeDto`]), where it is a statement rather
+/// than a question.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct HookOfferDto {
-    /// The project the answer is recorded on: consent is one per project, for the lint as a feature
-    /// rather than per file.
-    /// `number` on the TS side (the default `bigint` cannot be passed back through `hook_answer`).
-    #[ts(type = "number")]
-    project_id: i64,
-    /// The project's name, so the modal can say what it is asking about.
-    project_name: String,
-    /// The git repository the hooks would be written into, which is also what identifies this offer.
-    dir: String,
     /// What this build of amenbo is called on the command line, which is what its hooks will actually
     /// run and what its guidance tells the user to type. The dev channel answers `amenbo-dev`, so the
     /// name travels rather than being spelled into the wording.
     cmd: String,
 }
 
-/// The questions the GUI should ask about the lint hooks, and the acts that need no asking — the
-/// GUI's half of [`amenbo_core::hooks::reconcile`], where the CLI's is `lint_hook_setup`. The GUI
-/// calls it **once, at app startup**, for the reason [`pointer_issues`] is called there and not on
-/// the snapshot path: probing costs a `git` spawn per folder, and the environment does not change on
-/// a store tick.
+/// Walk the bound git repositories and do what [`amenbo_core::hooks::reconcile`] says about each — the
+/// GUI's half of it, where the CLI's is `lint_hook_setup`. Returns whether any of them left the one
+/// question live.
 ///
-/// The CLI asks about the repository it was run in. The GUI has no cwd, so it asks about every bound
-/// folder, taking each folder's own `.amenbo` as the answer to which project it belongs to — the same
-/// question an AI started in that folder would resolve. A folder that is not a git repository has no
-/// hooks to have and no question to ask.
+/// The CLI acts on the repository it was run in. The GUI has no cwd, so it walks every bound folder,
+/// taking each folder's own `.amenbo` as the answer to which project it belongs to — the same question an
+/// AI started in that folder would resolve. A folder that is not a git repository has no hooks to have and
+/// nothing to do.
 ///
-/// Judgment stays in core: this only carries out what `reconcile` returns. Two of its answers are not
-/// questions and are settled here — a hook of ours found under a record that does not say yes moves
-/// the record (the disk wins), and a slot this build added is completed under the consent already
-/// given — while `Ask` is the only one that needs a user, and so the only one that comes back. Both
-/// acts are best-effort: a hook is a convenience, and failing the startup over one would help no one.
-#[tauri::command]
-pub fn hook_offers() -> Result<Vec<HookOfferDto>, CmdError> {
-    use amenbo_core::hooks::{self, HookAction, HookConsent};
+/// This walk is what makes a `yes` device-wide: it reaches the folders bound long after the answer was
+/// given, at the next startup, asking nothing. Judgment stays in core — this only carries
+/// out what `reconcile` returns, and `Ask` is the only answer that needs a user. Installing is best-effort:
+/// a hook is a convenience, and failing the startup over one would help no one.
+fn sweep_bound_repos(store: &Store, consent: Option<amenbo_core::hooks::HookConsent>, can_ask: bool) -> bool {
+    use amenbo_core::hooks::{self, HookAction};
 
-    let store = open_store()?;
     let cmd = amenbo_core::config::Paths::APP_NAME;
-    let mut offers = Vec::new();
+    let mut question_is_live = false;
     for dir in store.bindings().all_dirs() {
         let path = std::path::Path::new(&dir);
         let Some(project_id) = amenbo_core::binding::read_pointer(path).and_then(|b| b.project_id) else {
             continue;
         };
         let Some(states) = hooks::probe(path) else { continue };
-        let consent = store.hook_consent(project_id).ok().flatten();
-        match hooks::reconcile(&hooks::HookContext { states: Some(states), consent, can_ask: true }) {
+        let opted_out = store.hook_opted_out(project_id).unwrap_or(false);
+        match hooks::reconcile(&hooks::HookContext { states: Some(states), consent, opted_out, can_ask }) {
             HookAction::Nothing => {}
-            HookAction::SyncConsentToYes => {
-                let _ = store.set_hook_consent(project_id, HookConsent::Yes);
-            }
             HookAction::Install => {
                 let _ = hooks::install(path, cmd);
             }
-            HookAction::Ask => {
-                let Ok(Some(project)) = store.project(project_id) else { continue };
-                offers.push(HookOfferDto {
-                    project_id,
-                    project_name: project.name,
-                    dir: dir.clone(),
-                    cmd: cmd.to_string(),
-                });
-            }
+            HookAction::Ask => question_is_live = true,
         }
     }
-    Ok(offers)
+    question_is_live
+}
+
+/// The one question the GUI should ask about the lint hooks, or `None` when there is nothing to ask —
+/// which is the overwhelmingly common case, since it can only ever be asked once on this device.
+///
+/// The GUI calls it **once, at app startup**, for the reason [`pointer_issues`] is called there and not on
+/// the snapshot path: probing costs a `git` spawn per folder, and the environment does not change on a
+/// store tick. The same call is what carries an answer already given out to the folders bound since.
+#[tauri::command]
+pub fn hook_offer() -> Result<Option<HookOfferDto>, CmdError> {
+    let store = open_store()?;
+    let live = sweep_bound_repos(&store, store.config.hook_consent, true);
+    Ok(live.then(|| HookOfferDto { cmd: amenbo_core::config::Paths::APP_NAME.to_string() }))
 }
 
 /// One bound repository where the lint is not actually running — the raw material for the banner's
 /// wording, never the sentence, as with [`HookOfferDto`].
+///
+/// Its two lists are two different reports, not one in two halves, and the banner words them apart:
+/// [`HookNoticeDto::unwired`] is setup left undone, while [`HookNoticeDto::foreign`] is amenbo having
+/// finished and stopped at a file that is not its own. Calling the second one unfinished is what made a
+/// successful install read as a failure.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct HookNoticeDto {
-    /// The project's name, so the banner can say which one is unfinished.
+    /// The project's name, so the banner can say which one it is about.
     project_name: String,
     /// The git repository whose setup is unfinished, which is also what identifies this notice.
     dir: String,
@@ -3769,30 +3764,31 @@ pub struct HookNoticeDto {
     guidance: Vec<String>,
 }
 
-/// Where setup is still unfinished — the GUI's third channel for it, alongside the CLI's `--json`
-/// field and stderr line. This is the standing report ([`amenbo_core::hooks::setup_notice`]), not
-/// [`hook_offers`]'s one-time question: it warns and offers no button, because the answer to it was
-/// either already given or already declined.
+/// Where the lint is not running — the GUI's third channel for it, alongside the CLI's `--json` field and
+/// stderr line. This is the standing report ([`amenbo_core::hooks::setup_notice`]), not [`hook_offer`]'s
+/// one-time question: it tells and offers no button, because the answer to it was either already given or
+/// already declined.
 ///
-/// The GUI calls it **once, after [`hook_offers`] has had its turn**, and that order is the point
-/// rather than a detail of scheduling. Both probe, so this pays a second `git` spawn per folder — and
-/// what it buys is a probe of the disk the first one *changed*: an answered yes has installed hooks by
-/// then, and a notice computed from the earlier probe would report slots that are now wired. The
-/// double cost is the price of the report being true, which for a report is the whole of its value.
+/// The GUI calls it **once, after [`hook_offer`] has had its turn**, and that order is the point rather
+/// than a detail of scheduling. Both probe, so this pays a second `git` spawn per folder — and what it buys
+/// is a probe of the disk the first one *changed*: an answered yes has installed hooks by then, and a
+/// notice computed from the earlier probe would report slots that are now wired. The double cost is the
+/// price of the report being true, which for a report is the whole of its value.
 #[tauri::command]
 pub fn hook_notices() -> Result<Vec<HookNoticeDto>, CmdError> {
     use amenbo_core::hooks;
 
     let store = open_store_read()?;
     let cmd = amenbo_core::config::Paths::APP_NAME;
+    let consent = store.config.hook_consent;
     let mut notices = Vec::new();
     for dir in store.bindings().all_dirs() {
         let path = std::path::Path::new(&dir);
         let Some(project_id) = amenbo_core::binding::read_pointer(path).and_then(|b| b.project_id) else {
             continue;
         };
-        let consent = store.hook_consent(project_id).ok().flatten();
-        let Some(notice) = hooks::setup_notice(hooks::probe(path), consent) else { continue };
+        let opted_out = store.hook_opted_out(project_id).unwrap_or(false);
+        let Some(notice) = hooks::setup_notice(hooks::probe(path), consent, opted_out) else { continue };
         let Ok(Some(project)) = store.project(project_id) else { continue };
         notices.push(HookNoticeDto {
             project_name: project.name,
@@ -3806,27 +3802,29 @@ pub fn hook_notices() -> Result<Vec<HookNoticeDto>, CmdError> {
     Ok(notices)
 }
 
-/// Write down what the user answered to a [`HookOfferDto`], and install on a yes. The record is what
-/// decides whether the question is ever asked again, so it is written **only when an answer was
-/// actually given**: a modal the user dismissed calls nothing at all, and the project stays
-/// unanswered for the next startup to ask again. That is why this takes a `yes` rather than
-/// an "outcome" — there is no third value to pass, because the third outcome is this command not
-/// running.
+/// Write down what the user answered to the [`HookOfferDto`], and carry it out. The answer is the
+/// **device's** — one click, once, covering every repository amenbo works in and the ones bound after —
+/// so it lands in `config.hook_consent` and not against whichever project happened to be on screen.
 ///
-/// A failed install records nothing: consent is the note that the hooks are where the user asked for
-/// them, and keeping it after failing to put them there would make the record a lie and silence the
-/// question that should be asked again. A stranger's slot is not a failure — the install steps around it,
-/// and the setup banner is where that gets said ([`HookNoticeDto`]), after the fact and out of the way of
-/// an answer that was never about it.
+/// The record is what decides whether the question is ever asked again, so it is written **only when an
+/// answer was actually given**: a modal the user dismissed calls nothing at all, and the device stays
+/// unanswered for the next startup to ask again. That is why this takes a `yes` rather than an "outcome" —
+/// there is no third value to pass, because the third outcome is this command not running.
+///
+/// A yes is carried out by the same sweep the startup runs, rather than by a second install path here:
+/// the answer's whole meaning is "whatever `reconcile` says, everywhere", and writing that out twice is
+/// how the two would come to disagree. Recording comes first so the sweep reads the answer just given.
+/// Installing is best-effort per repository — a stranger's slot is not a failure (the install steps around
+/// it, and the setup banner says so afterwards), and one unwritable repository must not lose an answer that
+/// was about all of them.
 #[tauri::command]
-pub fn hook_answer(project_id: i64, dir: String, yes: bool) -> Result<(), CmdError> {
-    use amenbo_core::hooks::{self, HookConsent};
+pub fn hook_answer(yes: bool) -> Result<(), CmdError> {
+    use amenbo_core::hooks::HookConsent;
 
-    let store = open_store()?;
-    if yes {
-        hooks::install(std::path::Path::new(&dir), amenbo_core::config::Paths::APP_NAME)?;
-    }
-    let _ = store.set_hook_consent(project_id, if yes { HookConsent::Yes } else { HookConsent::No });
+    let mut store = open_store()?;
+    store.config.hook_consent = Some(if yes { HookConsent::Yes } else { HookConsent::No });
+    store.save_config()?;
+    sweep_bound_repos(&store, store.config.hook_consent, false);
     Ok(())
 }
 
@@ -5598,14 +5596,12 @@ mod tests {
         assert!(out.status.success(), "git init failed: {}", String::from_utf8_lossy(&out.stderr));
     }
 
-    /// Which folders `hook_offers` even asks about, and which project each question lands on. The
-    /// walk is the GUI's own: core decides the answer per folder, but the GUI has no cwd, so it is
-    /// here that a folder gets skipped or gets attributed — and attributing it wrong writes the
-    /// answer onto another project's record. A folder that is not a git repository has no hooks and
-    /// so no question, one whose `.amenbo` is gone names no project to ask about, and where the
-    /// registry and the pointer disagree the **pointer** is the answer.
+    /// Which folders the walk even looks at. Core decides what to do per folder, but the GUI has no cwd,
+    /// so it is here that a folder gets skipped: one that is not a git repository has no hooks to have,
+    /// and one whose `.amenbo` is gone names no project whose opt-out could be read. Neither raises the
+    /// question, and the folder that does raises it **once for the device**, not once for itself.
     #[test]
-    fn hook_offers_asks_only_git_folders_and_attributes_them_by_their_pointer() {
+    fn hook_offer_is_raised_only_by_a_bound_git_folder_and_only_once() {
         let _env = env_guard();
         let tmp = std::env::temp_dir().join(format!("amenbo-app-hookoffers-home-{}", std::process::id()));
         let base = std::env::temp_dir().join(format!("amenbo-app-hookoffers-dirs-{}", std::process::id()));
@@ -5625,7 +5621,7 @@ mod tests {
                 .unwrap()
                 .id
         };
-        // Canonicalized, because binding records the folder that way and the offers are compared to it.
+        // Canonicalized, because binding records the folder that way and the walk reads it back.
         let dir_of = |leaf: &str| -> std::path::PathBuf {
             let d = base.join(leaf);
             std::fs::create_dir_all(&d).unwrap();
@@ -5633,18 +5629,11 @@ mod tests {
         };
 
         let plain = new_project("素のPJ");
-        let asked = new_project("問われるPJ");
         let lost = new_project("ポインタを失うPJ");
-        let repointed = new_project("指し直されたPJ");
 
         // Not a git repository: bound and pointing at a project, but there are no hooks to have.
         let plain_dir = dir_of("plain");
         project_bind_folder(plain, plain_dir.to_string_lossy().to_string()).unwrap();
-
-        // A git repository with no hooks and no answer on record: the one live question.
-        let asked_dir = dir_of("asked");
-        git_init(&asked_dir);
-        project_bind_folder(asked, asked_dir.to_string_lossy().to_string()).unwrap();
 
         // A git repository the registry still names, whose pointer has been removed by hand.
         let lost_dir = dir_of("lost");
@@ -5652,43 +5641,45 @@ mod tests {
         project_bind_folder(lost, lost_dir.to_string_lossy().to_string()).unwrap();
         std::fs::remove_file(lost_dir.join(".amenbo")).unwrap();
 
-        let asked_dirs = |offers: &[HookOfferDto]| -> Vec<String> { offers.iter().map(|o| o.dir.clone()).collect() };
+        assert!(hook_offer().unwrap().is_none(), "a non-git folder and a folder with no pointer raise no question");
 
-        let offers = hook_offers().unwrap();
-        assert_eq!(offers.len(), 1, "only the git folder with a pointer is asked about: {:?}", asked_dirs(&offers));
-        assert_eq!(offers[0].project_id, asked, "the offer names the project its pointer resolves to");
-        assert_eq!(offers[0].project_name, "問われるPJ", "the modal is told what it is asking about");
-        assert_eq!(offers[0].dir, asked_dir.to_string_lossy(), "the offer identifies the repository");
-        // The offer carries the question and its subject, and nothing of the plumbing behind it: which slots
-        // are empty is what a yes acts on, not what it is asked about.
-        assert!(
-            !offers.iter().any(|o| o.dir == plain_dir.to_string_lossy() || o.dir == lost_dir.to_string_lossy()),
-            "a non-git folder and a folder with no pointer raise no question: {:?}",
-            asked_dirs(&offers)
-        );
+        // A git repository with no hooks and nothing answered: the one live question.
+        let asked = new_project("問われるPJ");
+        let asked_dir = dir_of("asked");
+        git_init(&asked_dir);
+        project_bind_folder(asked, asked_dir.to_string_lossy().to_string()).unwrap();
 
-        // Rebind the same folder at another project: the registry now records it under both, but the
-        // pointer says `repointed`, and that is the record the answer would be written on.
-        project_bind_folder(repointed, asked_dir.to_string_lossy().to_string()).unwrap();
-        let after = hook_offers().unwrap();
-        assert_eq!(
-            after.len(),
-            1,
-            "the folder is asked about once, not once per project naming it: {:?}",
-            asked_dirs(&after)
-        );
-        assert_eq!(after[0].project_id, repointed, "the folder's own .amenbo decides whose question it is");
+        let offer = hook_offer().unwrap().expect("an unwired git repository raises the question");
+        assert_eq!(offer.cmd, amenbo_core::config::Paths::APP_NAME, "the wording gets this build's name to use");
+
+        // A second unwired repository does not make a second question: the answer is the device's, so the
+        // number of folders is not the number of clicks. That is the whole of the one-question design.
+        let second = new_project("2つめのPJ");
+        let second_dir = dir_of("second");
+        git_init(&second_dir);
+        project_bind_folder(second, second_dir.to_string_lossy().to_string()).unwrap();
+        assert!(hook_offer().unwrap().is_some(), "still exactly one question, whatever the folder count");
+
+        // Answering it once settles it for both, and wires both without a second question.
+        hook_answer(true).unwrap();
+        assert!(hook_offer().unwrap().is_none(), "answered once, never asked again");
+        for dir in [&asked_dir, &second_dir] {
+            assert!(
+                amenbo_core::hooks::probe(dir).unwrap().all_managed(),
+                "one yes reached {dir:?}, which was never asked about on its own",
+            );
+        }
 
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&base);
     }
 
-    /// The two answers that are not questions are carried out here and come back as no offer:
-    /// `SyncConsentToYes` when a hook of ours is on disk under a record that does not say yes, and
-    /// `Install` when a slot this build added is missing from an install written by an older one.
-    /// Both are best-effort — a failure must not cost the startup its other offers.
+    /// What the walk carries out without asking, once the device has answered: a folder bound **after**
+    /// the answer is wired at the next startup, and one that was opted out is left exactly as its
+    /// `hooks uninstall` left it. The second is what makes the escape hatch an escape hatch — without it a
+    /// yes on record would undo the uninstall on the next launch.
     #[test]
-    fn hook_offers_settles_the_answers_that_need_no_asking() {
+    fn a_yes_reaches_folders_bound_later_but_never_an_opted_out_one() {
         let _env = env_guard();
         let tmp = std::env::temp_dir().join(format!("amenbo-app-hooksettle-home-{}", std::process::id()));
         let base = std::env::temp_dir().join(format!("amenbo-app-hooksettle-dirs-{}", std::process::id()));
@@ -5697,11 +5688,11 @@ mod tests {
         std::env::set_var("AMENBO_HOME", &tmp);
         std::fs::create_dir_all(&base).unwrap();
 
-        let project = {
+        let new_project = |name: &str| -> i64 {
             let mut store = Store::open().unwrap();
             store
                 .project_add(amenbo_core::ops::project::NewProject {
-                    name: "同意済みPJ".into(),
+                    name: name.into(),
                     view: View::Board,
                     notes: String::new(),
                     color: None,
@@ -5709,27 +5700,47 @@ mod tests {
                 .unwrap()
                 .id
         };
-        let dir = base.join("repo");
-        std::fs::create_dir_all(&dir).unwrap();
-        git_init(&dir);
-        project_bind_folder(project, dir.to_string_lossy().to_string()).unwrap();
+        let git_dir = |leaf: &str| -> std::path::PathBuf {
+            let d = base.join(leaf);
+            std::fs::create_dir_all(&d).unwrap();
+            let d = std::fs::canonicalize(&d).unwrap();
+            git_init(&d);
+            d
+        };
 
-        // Our hooks installed by hand, with nothing on record: the disk wins.
-        amenbo_core::hooks::install(&dir, amenbo_core::config::Paths::APP_NAME).unwrap();
-        assert!(hook_offers().unwrap().is_empty(), "a settled answer raises no question");
-        assert_eq!(
-            Store::open().unwrap().hook_consent(project).unwrap(),
-            Some(amenbo_core::hooks::HookConsent::Yes),
-            "the record follows the disk (SyncConsentToYes), silently"
+        // The device says yes, with nothing bound yet: an answer given before the folders exist.
+        {
+            let mut store = Store::open().unwrap();
+            store.config.hook_consent = Some(amenbo_core::hooks::HookConsent::Yes);
+            store.save_config().unwrap();
+        }
+
+        let later = new_project("あとで bind する PJ");
+        let later_dir = git_dir("later");
+        project_bind_folder(later, later_dir.to_string_lossy().to_string()).unwrap();
+
+        let refused = new_project("ここだけ要らない PJ");
+        let refused_dir = git_dir("refused");
+        project_bind_folder(refused, refused_dir.to_string_lossy().to_string()).unwrap();
+        Store::open().unwrap().set_hook_optout(refused, true).unwrap();
+
+        assert!(hook_offer().unwrap().is_none(), "the device has answered, so there is nothing to ask");
+        assert!(
+            amenbo_core::hooks::probe(&later_dir).unwrap().all_managed(),
+            "a folder bound after the yes is wired by it, with no second question",
+        );
+        assert!(
+            !amenbo_core::hooks::probe(&refused_dir).unwrap().any_managed(),
+            "`hooks uninstall` said not this one, and a device-wide yes does not overrule it",
         );
 
-        // An install from a build that did not know the commit-msg slot: consent already covers it.
-        let hooks = amenbo_core::hooks::hooks_dir(&dir).unwrap();
+        // The slot an upgrade added, in a repository an older build wired: filled under the same answer.
+        let hooks = amenbo_core::hooks::hooks_dir(&later_dir).unwrap();
         std::fs::remove_file(hooks.join("commit-msg")).unwrap();
         std::fs::write(hooks.join("pre-commit"), "#!/bin/sh\n# amenbo:hook (managed v1)\nexit 0\n").unwrap();
-        assert!(hook_offers().unwrap().is_empty(), "completing a consented install is not a question");
-        let states = amenbo_core::hooks::probe(&dir).unwrap();
-        assert!(states.all_managed(), "the missing slot was installed under the consent already given: {states:?}");
+        assert!(hook_offer().unwrap().is_none(), "completing a consented install is not a question");
+        let states = amenbo_core::hooks::probe(&later_dir).unwrap();
+        assert!(states.all_managed(), "the missing slot was wired under the answer already given: {states:?}");
 
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&base);

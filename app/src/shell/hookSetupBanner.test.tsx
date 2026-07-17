@@ -120,7 +120,9 @@ describe("lint setup banner", () => {
   });
 
   // A stranger's slot has no command to run — the only way in is the line, so the line is what the banner shows.
-  it("shows the line to add by hand for a slot a stranger holds", async () => {
+  // And it is a hand-off, not a warning: #1808 was this case reading as "setup unfinished", which blamed amenbo
+  // for keeping its own policy. It goes in its own banner, under its own heading, with no ⚠ and no "unfinished".
+  it("hands off a stranger's slot as a note, never as an unfinished setup", async () => {
     hoisted.notices = [notice({
       unwired: [],
       foreign: ["pre-commit"],
@@ -128,10 +130,30 @@ describe("lint setup banner", () => {
     })];
     await render(true);
 
-    const line = lines()[0]!;
-    expect(line).toContain("pre-commit");
-    expect(line).toContain("amenbo lint || exit 1");
-    expect(line, "nothing to install, so nothing suggests installing").not.toContain("hooks install");
+    const banner = container.querySelector<HTMLElement>('.healthbanner[role="status"]');
+    expect(banner, "a stranger's slot is a status, not an alert").not.toBeNull();
+    expect(container.querySelector('.healthbanner[role="alert"]'), "and nothing is unfinished").toBeNull();
+
+    const text = banner!.textContent ?? "";
+    expect(text).toContain("pre-commit");
+    expect(text).toContain("amenbo lint || exit 1");
+    expect(text, "nothing to install, so nothing suggests installing").not.toContain("hooks install");
+    expect(text, "the word that made a finished setup read as a failure").not.toContain("未完了");
+  });
+
+  // Both live at once — husky in one slot, nothing in the other — is two reports, not one. The unfinished slot is a
+  // warning and amenbo's to fix; the stranger's slot is a note only its owner can act on. They must not share a heading.
+  it("splits an unwired slot from a stranger's into two separate banners", async () => {
+    hoisted.notices = [notice({ unwired: ["commit-msg"], foreign: ["pre-commit"], guidance: ["amenbo lint || exit 1"] })];
+    await render(true);
+
+    const alert = container.querySelector<HTMLElement>('.healthbanner[role="alert"]');
+    const status = container.querySelector<HTMLElement>('.healthbanner[role="status"]');
+    expect(alert, "the empty slot is the warning").not.toBeNull();
+    expect(status, "the stranger's slot is the note").not.toBeNull();
+    expect(alert!.textContent).toContain("commit-msg");
+    expect(alert!.textContent).not.toContain("pre-commit");
+    expect(status!.textContent).toContain("pre-commit");
   });
 
   it("lists every unfinished repository, and ✕ dismisses the banner for the session", async () => {

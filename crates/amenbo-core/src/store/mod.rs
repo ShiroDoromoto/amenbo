@@ -223,21 +223,18 @@ impl Store {
         crate::overview::retain_live_inbox_archive(&self.engine, keep)
     }
 
-    /// What a project answered when asked whether amenbo may install the lint hook, or `None` if it
-    /// has never been asked ([`crate::hooks`]). It says what was answered, never what `.git/hooks`
-    /// currently holds.
-    pub fn hook_consent(&self, project_id: i64) -> Result<Option<crate::hooks::HookConsent>> {
-        crate::overview::hook_consent(&self.engine, project_id)
+    /// Has this project been opted out of the lint hooks — did `hooks uninstall` run in it
+    /// ([`crate::hooks`])? It says what was explicitly asked for here, never what `.git/hooks` currently
+    /// holds. The *answer* to the hook question is not per project and does not live here: it is
+    /// [`crate::config::Config::hook_consent`].
+    pub fn hook_opted_out(&self, project_id: i64) -> Result<bool> {
+        crate::overview::hook_opted_out(&self.engine, project_id)
     }
 
-    /// Record a project's answer about the lint hook. Written only when an answer was actually given —
-    /// a surface that cannot ask leaves the project unanswered rather than assuming one.
-    pub fn set_hook_consent(
-        &self,
-        project_id: i64,
-        answer: crate::hooks::HookConsent,
-    ) -> Result<()> {
-        crate::overview::set_hook_consent(&self.engine, project_id, answer)
+    /// Opt a project out of the lint hooks, or take that back — what `hooks uninstall` and `hooks
+    /// install` record about the repository they ran in.
+    pub fn set_hook_optout(&self, project_id: i64, opted_out: bool) -> Result<()> {
+        crate::overview::set_hook_optout(&self.engine, project_id, opted_out)
     }
 }
 

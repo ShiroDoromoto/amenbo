@@ -561,18 +561,28 @@ function OrphanBindingBanner() {
   );
 }
 
-// The GUI's channel for "setup is not finished" (core `hooks::setup_notice`, the same report the CLI puts in its
-// `--json` field and on stderr): the lint is wired to nothing in these repositories, so the refs it exists to catch
-// are going out uncaught. It warns and stops nothing — and it takes no answer either, which is what keeps it apart
+// The GUI's channel for what core's `hooks::setup_notice` found — the same report the CLI puts in its `--json`
+// field and on stderr. It tells and stops nothing, and it takes no answer either, which is what keeps it apart
 // from the modal that does (`HookConsentModal`). That is also why it carries no install button: consent has one
 // surface, and a banner that installed on a click would be writing into the user's git plumbing from a line they
 // never answered.
 //
-// It renders only once the modal is done asking (`asked`), because asking about a repository and warning about the
-// same repository in the same breath says one thing twice. That order is what the notice is read after, too: a yes
-// answered just now has already written the hooks, and a notice read before that would name slots that are wired.
-// A recorded "never" is silent here (core decides), so this cannot become noise to tune out. Dismissible with the ✕
-// for the session. Outside Tauri (in the browser) it is always empty, hence hidden.
+// **It is two banners, not one**, because it has two different things to say and they are not degrees of each
+// other (core keeps the lists apart for this reason):
+//
+//   - unwired — the lint is wired to nothing, so the refs it exists to catch are going out uncaught. Setup is
+//     genuinely unfinished, and `hooks install` is the fix. A warning, and it reads as one.
+//   - foreign — a hook that is not amenbo's holds a slot, so amenbo left it alone. **Nothing is unfinished**:
+//     amenbo did everything it may do, and only the file's owner may add the line. Running this under the
+//     warning's heading is what made "yes" read as a failure the moment it was clicked (#1808) — the user had
+//     just finished the setup, and was told the setup was unfinished.
+//
+// It renders only once the modal is done asking (`asked`), because asking about the hooks and warning about the
+// hooks in the same breath says one thing twice. That order is what the notice is read after, too: a yes
+// answered just now has already written them, and a notice read before that would name slots that are wired.
+// A recorded "no" and an opted-out repository are both silent here (core decides), so this cannot become noise
+// to tune out. Dismissible with the ✕ for the session. Outside Tauri (in the browser) it is always empty, hence
+// hidden.
 export function HookSetupBanner({ asked }: { asked: boolean }) {
   const [notices, setNotices] = useState<HookNoticeDto[]>([]);
   const [dismissed, setDismissed] = useState(false);
@@ -588,28 +598,47 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
     };
   }, [asked]);
 
+  const unwired = notices.filter((n) => n.unwired.length > 0);
+  const foreign = notices.filter((n) => n.foreign.length > 0);
   if (dismissed || notices.length === 0) return null;
 
   return (
-    <div className="healthbanner managedblock-banner" role="alert">
-      <span className="healthbanner__icon" aria-hidden>⚠</span>
-      <div className="healthbanner__body">
-        <div className="healthbanner__title">{t("hookSetup.title")}</div>
-        {notices.map((n) => (
-          <div key={n.dir} className="healthbanner__line">
-            <div>{tf("hookSetup.where", { project: n.projectName, dir: n.dir })}</div>
-            {n.unwired.length > 0 && (
-              <div>{tf("hookSetup.unwired", { slots: n.unwired.join(", "), cmd: `${n.cmd} hooks install` })}</div>
-            )}
-            {/* A stranger's hook is never written, so there is nothing to run — only the line to add by hand. */}
-            {n.foreign.map((slot, i) => (
-              <div key={slot}>{tf("hookSetup.foreign", { slot, line: n.guidance[i] })}</div>
+    <>
+      {unwired.length > 0 && (
+        <div className="healthbanner managedblock-banner" role="alert">
+          <span className="healthbanner__icon" aria-hidden>⚠</span>
+          <div className="healthbanner__body">
+            <div className="healthbanner__title">{t("hookSetup.title")}</div>
+            {unwired.map((n) => (
+              <div key={n.dir} className="healthbanner__line">
+                <div>{tf("hookSetup.where", { project: n.projectName, dir: n.dir })}</div>
+                <div>{tf("hookSetup.unwired", { slots: n.unwired.join(", "), cmd: `${n.cmd} hooks install` })}</div>
+              </div>
             ))}
           </div>
-        ))}
-      </div>
-      <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
-    </div>
+          <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
+        </div>
+      )}
+      {/* A hand-off, not an alert: `status` rather than `role="alert"`, and no ⚠ — there is nothing wrong here,
+          only a line that amenbo may not add on someone else's behalf. */}
+      {foreign.length > 0 && (
+        <div className="healthbanner managedblock-banner" role="status">
+          <span className="healthbanner__icon" aria-hidden>ℹ</span>
+          <div className="healthbanner__body">
+            <div className="healthbanner__title">{t("hookForeign.title")}</div>
+            {foreign.map((n) => (
+              <div key={n.dir} className="healthbanner__line">
+                <div>{tf("hookSetup.where", { project: n.projectName, dir: n.dir })}</div>
+                {n.foreign.map((slot, i) => (
+                  <div key={slot}>{tf("hookForeign.slot", { slot, line: n.guidance[i] })}</div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
+        </div>
+      )}
+    </>
   );
 }
 

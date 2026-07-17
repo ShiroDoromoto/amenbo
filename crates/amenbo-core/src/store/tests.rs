@@ -471,55 +471,56 @@ fn project(name: &str) -> crate::ops::project::NewProject {
     }
 }
 
-/// The lint-hook consent is per project and outlives the process that recorded it — a project answers
-/// once and is never asked again, on this clone or the next.
+/// The lint-hook opt-out is per project and outlives the process that recorded it — `hooks uninstall`
+/// says "not this one", and it keeps saying it on this clone and the next. The *answer* is not here at
+/// all: it is one per device, in `config.hook_consent`.
 #[test]
-fn hook_consent_is_recorded_per_project_and_survives_a_reopen() {
-    use crate::hooks::HookConsent;
-    let (mut s, dir) = fresh_store("hook-consent");
+fn a_hook_optout_is_recorded_per_project_and_survives_a_reopen() {
+    let (mut s, dir) = fresh_store("hook-optout");
     let a = s.project_add(project("PJ A")).unwrap();
     let b = s.project_add(project("PJ B")).unwrap();
 
-    // Never asked: no row, which is what makes the next interactive run ask.
-    assert_eq!(s.hook_consent(a.id).unwrap(), None);
+    // Never opted out: no row, which is what lets the device's answer reach a repository.
+    assert!(!s.hook_opted_out(a.id).unwrap());
 
-    // Each project answers for itself; a refusal is recorded as firmly as a consent.
-    s.set_hook_consent(a.id, HookConsent::Yes).unwrap();
-    s.set_hook_consent(b.id, HookConsent::No).unwrap();
-    assert_eq!(s.hook_consent(a.id).unwrap(), Some(HookConsent::Yes));
-    assert_eq!(s.hook_consent(b.id).unwrap(), Some(HookConsent::No));
+    // Each project stands for itself, and setting it twice is setting it once.
+    s.set_hook_optout(a.id, true).unwrap();
+    s.set_hook_optout(a.id, true).unwrap();
+    assert!(s.hook_opted_out(a.id).unwrap());
+    assert!(!s.hook_opted_out(b.id).unwrap(), "and only that project's");
 
-    // Asked again after a state change, a project answers again and the latest answer wins.
-    s.set_hook_consent(b.id, HookConsent::Yes).unwrap();
-    assert_eq!(s.hook_consent(b.id).unwrap(), Some(HookConsent::Yes));
+    // `hooks install` takes it back, which is what makes the pair symmetric.
+    s.set_hook_optout(a.id, false).unwrap();
+    assert!(!s.hook_opted_out(a.id).unwrap());
+    s.set_hook_optout(a.id, true).unwrap();
 
     drop(s);
     let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
-    assert_eq!(s.hook_consent(a.id).unwrap(), Some(HookConsent::Yes), "the answer outlives the process that gave it");
+    assert!(s.hook_opted_out(a.id).unwrap(), "the opt-out outlives the process that recorded it");
 
-    // The answer is about the project, so it goes when the project does.
+    // The veto is about the project, so it goes when the project does.
+    s.set_hook_optout(b.id, true).unwrap();
     s.project_delete(b.id, crate::model::ActorKind::Human).unwrap();
-    assert_eq!(s.hook_consent(b.id).unwrap(), None);
-    assert_eq!(s.hook_consent(a.id).unwrap(), Some(HookConsent::Yes), "and only that project's");
+    assert!(!s.hook_opted_out(b.id).unwrap());
+    assert!(s.hook_opted_out(a.id).unwrap(), "and only that project's");
     fs::remove_dir_all(&dir).ok();
 }
 
-/// A store written before `hook_consent` was declared has no such table, and opening it is what gives
+/// A store written before `hook_optout` was declared has no such table, and opening it is what gives
 /// it one — the declaration is `CREATE TABLE IF NOT EXISTS`, run on every open, so a new plain table
 /// reaches an old store without a migration step. Standing in for that older store: drop the table
 /// from a store this build made, and reopen.
 #[test]
-fn an_old_store_gains_the_consent_table_on_open() {
-    use crate::hooks::HookConsent;
-    let (mut s, dir) = fresh_store("hook-consent-old-store");
+fn an_old_store_gains_the_optout_table_on_open() {
+    let (mut s, dir) = fresh_store("hook-optout-old-store");
     let p = s.project_add(project("PJ")).unwrap();
-    s.engine.conn().execute_batch("DROP TABLE hook_consent;").unwrap();
+    s.engine.conn().execute_batch("DROP TABLE hook_optout;").unwrap();
     drop(s);
 
     let s = Store::open_at(Paths::at(dir.clone())).unwrap();
-    assert_eq!(s.hook_consent(p.id).unwrap(), None, "an old store has answered nothing, and reads that way");
-    s.set_hook_consent(p.id, HookConsent::Yes).unwrap();
-    assert_eq!(s.hook_consent(p.id).unwrap(), Some(HookConsent::Yes));
+    assert!(!s.hook_opted_out(p.id).unwrap(), "an old store has vetoed nothing, and reads that way");
+    s.set_hook_optout(p.id, true).unwrap();
+    assert!(s.hook_opted_out(p.id).unwrap());
     fs::remove_dir_all(&dir).ok();
 }
 

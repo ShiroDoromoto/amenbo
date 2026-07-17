@@ -1,24 +1,26 @@
 // @vitest-environment jsdom
-// The modal that asks whether amenbo may write the lint hooks. Only the boundary is stubbed (core's
-// `hook_offers` / `hook_answer`); the modal's own branching runs for real.
+// The modal that asks whether amenbo may wire the lint hooks. Only the boundary is stubbed (core's
+// `hook_offer` / `hook_answer`); the modal's own branching runs for real.
 //
 // What these guard is the three-valued answer, which is why this modal exists at all rather than a native
-// confirm: "not now" must record nothing (the project stays unanswered and is asked again), while "never"
+// confirm: "not now" must record nothing (the device stays unanswered and is asked again), while "never"
 // must record a no. A native dialog cannot tell those apart, so a regression toward one would silently turn
-// dismissing the modal into "never ask me again".
+// dismissing the modal into "never ask me again". And they guard the one-question shape: there is a
+// single question for the device, not one per repository, and answering it once is the whole of it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HookOfferDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
-  /** What core says is worth asking about (`hooks::reconcile` already judged this). */
-  offers: [] as HookOfferDto[],
-  /** Every answer that reached the store — the point being that a dismissal leaves this empty. */
-  answers: [] as { projectId: number; dir: string; yes: boolean }[],
-  /** How many times the offers were fetched: the environment is probed once, at startup. */
+  /** The one question core says is due (`hooks::reconcile` already judged it), or null for none. */
+  offer: null as HookOfferDto | null,
+  /** Every answer that reached the store — the point being that a dismissal leaves this empty. There is
+   *  never a repository in it: the answer is the device's. */
+  answers: [] as { yes: boolean }[],
+  /** How many times the offer was fetched: the environment is probed once, at startup. */
   fetches: 0,
-  /** When set, the install fails and the answer never lands. */
+  /** When set, the answer fails and nothing lands. */
   failWith: null as string | null,
   /** When set, the fetch itself fails — a surface that could not ask anything. */
   fetchFails: false,
@@ -27,14 +29,14 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock("../core/mutations", () => ({
-  fetchHookOffers: () => {
+  fetchHookOffer: () => {
     hoisted.fetches += 1;
     if (hoisted.fetchFails) return Promise.reject(new Error("cannot probe"));
-    return Promise.resolve(hoisted.offers);
+    return Promise.resolve(hoisted.offer);
   },
-  answerHookOffer: (projectId: number, dir: string, yes: boolean) => {
+  answerHookOffer: (yes: boolean) => {
     if (hoisted.failWith) return Promise.reject(new Error(hoisted.failWith));
-    hoisted.answers.push({ projectId, dir, yes });
+    hoisted.answers.push({ yes });
     return Promise.resolve();
   },
 }));
@@ -47,13 +49,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 function offer(over: Partial<HookOfferDto> = {}): HookOfferDto {
-  return {
-    projectId: 3,
-    projectName: "amenbo",
-    dir: "/w/amenbo",
-    cmd: "amenbo",
-    ...over,
-  };
+  return { cmd: "amenbo", ...over };
 }
 
 async function render() {
@@ -83,7 +79,7 @@ async function escape() {
 }
 
 beforeEach(() => {
-  hoisted.offers = [];
+  hoisted.offer = null;
   hoisted.answers = [];
   hoisted.fetches = 0;
   hoisted.failWith = null;
@@ -107,76 +103,71 @@ describe("the lint hook consent modal", () => {
     expect(hoisted.fetches).toBe(1);
   });
 
-  it("records a yes and moves on", async () => {
-    hoisted.offers = [offer()];
+  it("records a yes and closes — one answer, no repository", async () => {
+    hoisted.offer = offer();
     await render();
     await click("はい");
-    expect(hoisted.answers).toEqual([{ projectId: 3, dir: "/w/amenbo", yes: true }]);
+    expect(hoisted.answers).toEqual([{ yes: true }]);
     expect(container.textContent).toBe("");
   });
 
   it("records a no", async () => {
-    hoisted.offers = [offer()];
+    hoisted.offer = offer();
     await render();
     await click("いいえ");
-    expect(hoisted.answers).toEqual([{ projectId: 3, dir: "/w/amenbo", yes: false }]);
+    expect(hoisted.answers).toEqual([{ yes: false }]);
   });
 
   it("records nothing when dismissed with Esc: putting it off is not a no", async () => {
-    hoisted.offers = [offer()];
+    hoisted.offer = offer();
     await render();
     await escape();
     expect(hoisted.answers).toEqual([]); // Unanswered, so the next startup asks again.
     expect(container.textContent).toBe(""); // …and it is gone for this run.
   });
 
-  it("asks one repository at a time", async () => {
-    hoisted.offers = [offer(), offer({ projectId: 4, projectName: "別PJ", dir: "/w/other" })];
+  it("says the answer is asked once and covers every repository", async () => {
+    hoisted.offer = offer();
     await render();
-    expect(container.textContent).toContain("/w/amenbo");
-    expect(container.textContent).not.toContain("/w/other");
-    await escape();
-    expect(container.textContent).toContain("/w/other"); // The second question waits its turn.
+    // The scope line is the promise the click makes good on, so it must be on screen before the click.
+    expect(container.textContent).toContain("1回");
   });
 
-  it("words itself with the command name this build answers to, never a spelled-in one", async () => {
-    hoisted.offers = [offer({ cmd: "amenbo-dev" })];
+  it("words its hint with the command name this build answers to, never a spelled-in one", async () => {
+    hoisted.offer = offer({ cmd: "amenbo-dev" });
     await render();
     expect(container.textContent).toContain("amenbo-dev hooks install");
   });
 
   // The point of the whole screen: it asks for permission and nothing else. Slots, strangers, shared hooks
-  // directories and the lines to paste are core's business — putting any of them here would hand the user
-  // amenbo's problem, which is how this modal grew a button that could not be pressed.
-  it("puts no plumbing in front of the user — only what is being asked, and about which repository", async () => {
-    hoisted.offers = [offer()];
+  // directories, the lines to paste — and the list of repositories the answer covers — are core's business.
+  // Putting any of them here would hand the user amenbo's problem, which is how this modal grew a button that
+  // could not be pressed.
+  it("puts no plumbing in front of the user — only the question", async () => {
+    hoisted.offer = offer();
     await render();
     const text = container.textContent ?? "";
-    expect(text).toContain("/w/amenbo"); // Which repository is being asked about: identity, not plumbing.
-    for (const leak of ["pre-commit", "commit-msg", "|| exit 1", ".githooks", "core.hooksPath"]) {
+    for (const leak of ["pre-commit", "commit-msg", "|| exit 1", ".githooks", "core.hooksPath", "/w/"]) {
       expect(text).not.toContain(leak);
     }
     expect([...container.querySelectorAll("button")].every((b) => !b.disabled)).toBe(true);
   });
 
-  it("keeps the question up when the install failed, so the failure is never recorded as consent", async () => {
-    hoisted.offers = [offer()];
+  it("keeps the question up when the answer failed, so the failure is never recorded as consent", async () => {
+    hoisted.offer = offer();
     hoisted.failWith = "permission denied";
     await render();
     await click("はい");
     expect(hoisted.answers).toEqual([]);
-    expect(container.textContent).toContain("/w/amenbo"); // Still asking.
+    expect(container.querySelector(".hookconsent__modal")).not.toBeNull(); // Still asking.
   });
 
-  // Handing over to the setup banner, which reports what is still unwired. It must not speak while a question about
-  // the same repository is on screen, and it must read the disk only after an answer has had its chance to change it.
+  // Handing over to the setup banner, which reports what is still unwired. It must not speak while the question is
+  // on screen, and it must read the disk only after an answer has had its chance to change it.
   describe("saying it is done asking", () => {
-    it("does not say so while a question is still up", async () => {
-      hoisted.offers = [offer(), offer({ dir: "/w/案件Y" })];
+    it("does not say so while the question is still up", async () => {
+      hoisted.offer = offer();
       await render();
-      expect(hoisted.done).toBe(0);
-
-      await escape(); // One left, so still asking.
       expect(hoisted.done).toBe(0);
 
       await escape();
@@ -195,16 +186,16 @@ describe("the lint hook consent modal", () => {
       expect(hoisted.done).toBeGreaterThan(0);
     });
 
-    it("says so once the last question is answered", async () => {
-      hoisted.offers = [offer()];
+    it("says so once the question is answered", async () => {
+      hoisted.offer = offer();
       await render();
       await click("はい");
       expect(hoisted.done).toBeGreaterThan(0);
     });
 
-    // The failed install left the question up, so the banner must keep waiting rather than warn behind the modal.
+    // The failed answer left the question up, so the banner must keep waiting rather than warn behind the modal.
     it("does not say so when an answer failed and the question is still up", async () => {
-      hoisted.offers = [offer()];
+      hoisted.offer = offer();
       hoisted.failWith = "permission denied";
       await render();
       await click("はい");

@@ -75,13 +75,88 @@ pub struct Ctx<'a> {
 
 /// The chain. A change that moves a store appends a step here — and that alone bumps
 /// [`LATEST_VERSION`], and with it [`crate::model::FORMAT_VERSION`].
-pub const STEPS: &[Step] = &[Step {
-    to: 3,
-    name: "drop the orphaned owner_account meta row",
-    // `owner_account` is a store-wide scalar the retired account dimension left behind: stores born
-    // before it was dropped still carry the row, and nothing names it.
-    apply: Apply::Sql("DELETE FROM store_meta WHERE key = 'owner_account';"),
-}];
+pub const STEPS: &[Step] = &[
+    Step {
+        to: 3,
+        name: "drop the orphaned owner_account meta row",
+        // `owner_account` is a store-wide scalar the retired account dimension left behind: stores born
+        // before it was dropped still carry the row, and nothing names it.
+        apply: Apply::Sql("DELETE FROM store_meta WHERE key = 'owner_account';"),
+    },
+    Step {
+        to: 4,
+        name: "fold the per-project hook consent into one device answer, keeping each refusal as an opt-out",
+        apply: Apply::Custom(fold_hook_consent_to_device),
+    },
+];
+
+/// v4: the lint-hook question stopped being one per project and became one for the device
+/// (`crate::hooks`), so the `hook_consent` table has no one left to answer for. Dropping it would throw
+/// away an answer the user already gave; this carries it across, and it is a `Custom` step because the
+/// answer's new home is `config.json` beside the store rather than a column in it.
+///
+/// **The fold: any `yes` wins.** The rows are the same person answering the same question in several
+/// places, and consent is to the lint as a feature — so one `yes` is that person having said yes to it.
+/// Rows that are all `no` fold to `no`; no rows at all is the unanswered state and stays unanswered,
+/// which is what keeps a store that was never asked from being treated as having refused.
+///
+/// **Each `no` also survives as an opt-out.** A device-wide `yes` would otherwise install into the very
+/// repositories that refused, at the first startup after the upgrade — the fold must not turn a refusal
+/// into its opposite, so every `no` row becomes a `hook_optout` row and the repository stays as the user
+/// left it. Under a folded `no` the rows are redundant but harmless, and writing them unconditionally
+/// keeps this step one statement rather than a branch.
+///
+/// Everything here names its columns and its config key in frozen text, per this module's contract: the
+/// step must keep meaning what it meant, whatever the typed layer is called tomorrow. A config that
+/// cannot be read is left to its defaults rather than failing the migration — an unreadable config is
+/// one the user's own next write repairs, and refusing to migrate the store over it would be the worse
+/// of the two outcomes.
+fn fold_hook_consent_to_device(ctx: &Ctx<'_>) -> Result<()> {
+    // A store that predates the table has nothing to fold. `IF NOT EXISTS` rather than a probe: the two
+    // shapes then take the same path out.
+    ctx.tx.execute_batch(
+        "CREATE TABLE IF NOT EXISTS hook_consent (project_id INTEGER PRIMARY KEY, answer TEXT);
+         CREATE TABLE IF NOT EXISTS hook_optout (project_id INTEGER PRIMARY KEY);
+         INSERT OR IGNORE INTO hook_optout (project_id)
+             SELECT project_id FROM hook_consent WHERE answer = 'no';",
+    )?;
+    let answers: Vec<String> = {
+        let mut stmt = ctx.tx.prepare("SELECT answer FROM hook_consent")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+    if let Some(folded) = fold_answers(&answers) {
+        write_config_hook_consent(ctx.base_dir, folded);
+    }
+    ctx.tx.execute_batch("DROP TABLE hook_consent;")?;
+    Ok(())
+}
+
+/// The fold itself, apart from the store so it can be tested as the rule it is: any `yes` is a yes, any
+/// answer at all with no `yes` is a no, and nothing answered is `None` (leave the device unasked). An
+/// answer the old `CHECK` should have refused is not an answer and takes no part.
+fn fold_answers(answers: &[String]) -> Option<&'static str> {
+    if answers.iter().any(|a| a == "yes") {
+        return Some("yes");
+    }
+    answers.iter().any(|a| a == "no").then_some("no")
+}
+
+/// Put the folded answer in `config.json` under `hook_consent`, leaving every other key exactly as it
+/// was. Read-modify-write on the JSON rather than through `crate::config::Config`, for the reason the
+/// module doc gives: a step is frozen, and a struct is not.
+fn write_config_hook_consent(base_dir: &Path, answer: &str) {
+    let path = base_dir.join("config.json");
+    let mut doc: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    let Some(obj) = doc.as_object_mut() else { return };
+    obj.insert("hook_consent".to_string(), serde_json::Value::String(answer.to_string()));
+    if let Ok(text) = serde_json::to_string_pretty(&doc) {
+        let _ = crate::store::write_atomic(&path, text.as_bytes());
+    }
+}
 
 /// The version a store ends at once the chain has run — the last step's, or the baseline if there is
 /// no step. **The chain defines the format version**, so a step cannot be added without the version
@@ -189,6 +264,7 @@ fn stamp(tx: &Transaction<'_>, version: i64) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::OptionalExtension;
 
     fn scratch(tag: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("amenbo-migrate-{tag}-{}", crate::tmpdir::suffix()));
@@ -265,6 +341,88 @@ mod tests {
         assert!(run.migrated());
         assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
         assert_eq!(engine.get_meta("owner_account").unwrap(), None, "the orphan row is gone");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The fold rule on its own: any `yes` wins, an all-`no` set folds to `no`, and an empty set stays
+    /// unanswered (`None`), so a store never asked is not treated as having refused. A stray value the old
+    /// `CHECK` should have refused takes no part.
+    #[test]
+    fn the_hook_consent_fold_takes_any_yes_and_leaves_an_empty_set_unanswered() {
+        let s = |v: &[&str]| fold_answers(&v.iter().map(|x| x.to_string()).collect::<Vec<_>>());
+        assert_eq!(s(&[]), None, "never asked stays unanswered");
+        assert_eq!(s(&["no", "no"]), Some("no"), "all refusals fold to a refusal");
+        assert_eq!(s(&["no", "yes", "no"]), Some("yes"), "one yes is a yes");
+        assert_eq!(s(&["maybe"]), None, "a value the CHECK should have refused is not an answer");
+    }
+
+    /// v4 in full, on the store shape v3 left behind: a `hook_consent` table with a row per project. The
+    /// answer must survive into `config.json`, every `no` must survive as a `hook_optout` row so a
+    /// device-wide `yes` cannot reinstall where the user removed the hook, and the old table must be gone.
+    #[test]
+    fn the_hook_consent_fold_carries_the_answer_to_the_config_and_keeps_each_refusal() {
+        let dir = scratch("hookfold");
+        // A store that answered the hook question was onboarded, so a config.json is already there. Seed a
+        // default one and give it a non-default field, to prove the fold adds its key without disturbing
+        // the rest.
+        {
+            let cfg = crate::config::Config { language: Some("ja".to_string()), ..Default::default() };
+            cfg.save(&dir.join("config.json")).unwrap();
+        }
+        let engine = store_at(&dir, 3);
+        engine
+            .conn()
+            .execute_batch(
+                // Real projects, because the old `hook_consent` (and the new `hook_optout`) reference
+                // `project(id)` — the fold moves rows between two FK-guarded tables, so its inputs must
+                // point at live projects, exactly as production data does.
+                "INSERT INTO project (id, name) VALUES (1, 'A'), (2, 'B'), (3, 'C');
+                 CREATE TABLE hook_consent (project_id INTEGER PRIMARY KEY, answer TEXT);
+                 INSERT INTO hook_consent (project_id, answer) VALUES (1, 'yes'), (2, 'no'), (3, 'no');",
+            )
+            .unwrap();
+
+        let run = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        assert!(run.applied.iter().any(|s| s.contains("hook consent")), "v4 ran: {:?}", run.applied);
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+
+        // The device answer landed in the config beside the store, leaving the rest of it intact.
+        let cfg = crate::config::Config::load(&dir.join("config.json"));
+        assert_eq!(cfg.hook_consent, Some(crate::hooks::HookConsent::Yes), "one yes among the rows is a device yes");
+        assert_eq!(cfg.language.as_deref(), Some("ja"), "the fold adds its key and disturbs nothing else");
+
+        // Each refusal became an opt-out, so the two `no` projects stay as the user left them.
+        let opted: Vec<i64> = {
+            let conn = engine.conn();
+            let mut stmt = conn.prepare("SELECT project_id FROM hook_optout ORDER BY project_id").unwrap();
+            let rows = stmt.query_map([], |r| r.get::<_, i64>(0)).unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        assert_eq!(opted, vec![2, 3], "every no is kept as an opt-out; the yes is not");
+
+        // The old table is gone — the answer has one home now.
+        let has_old: Option<String> = engine
+            .conn()
+            .query_row("SELECT name FROM sqlite_master WHERE type='table' AND name='hook_consent'", [], |r| r.get(0))
+            .optional()
+            .unwrap();
+        assert_eq!(has_old, None, "the per-project table is retired");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A store that predates the `hook_consent` table (nobody ever answered) migrates cleanly and leaves
+    /// the device unanswered — the fold invents no answer where there was none to carry.
+    #[test]
+    fn the_hook_consent_fold_leaves_an_unasked_store_unasked() {
+        let dir = scratch("hookfold-empty");
+        let engine = store_at(&dir, 3);
+        // No hook_consent table at all — the shape of a store born before the feature.
+        engine.conn().execute_batch("DROP TABLE IF EXISTS hook_consent;").unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(crate::config::Config::load(&dir.join("config.json")).hook_consent, None, "nothing to carry");
         std::fs::remove_dir_all(&dir).ok();
     }
 

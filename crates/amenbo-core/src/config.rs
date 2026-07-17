@@ -263,6 +263,18 @@ pub struct Config {
     /// Optional avatar image for the AI facet. Same contract as [`Config::human_avatar`].
     #[serde(default)]
     pub ai_avatar: Option<String>,
+    /// **May amenbo wire its lint into your git hooks?** — asked once, for the lint as a feature, and
+    /// never again ([`crate::hooks`]). `None` is the unanswered state, which is what makes "asked and
+    /// refused" different from "never asked". It lives here rather than against a project because the
+    /// answer is not about a project: the same person answers the same way in every repository they have,
+    /// so asking per repository would be repeating a question, not asking a new one. **A user-level
+    /// setting; never synced.**
+    ///
+    /// There is no `config set` key for it. The faces that move it are the ones that state an intent —
+    /// the first-run question, and `hooks install` / `hooks uninstall`, which act on one repository and
+    /// leave this alone.
+    #[serde(default)]
+    pub hook_consent: Option<crate::hooks::HookConsent>,
 }
 
 /// Cap on the size of an avatar data URL, in bytes. A loose limit to stop breakage and runaways —
@@ -320,6 +332,7 @@ impl Default for Config {
             ai_name: None,
             human_avatar: None,
             ai_avatar: None,
+            hook_consent: None,
         }
     }
 }

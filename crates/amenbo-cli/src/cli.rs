@@ -255,11 +255,13 @@ pub enum Command {
 
     /// Manage the git hooks that run `amenbo lint`: `pre-commit` for the staged diff, and `commit-msg`
     /// for the message, which is the only place git offers it. Installing writes into your git plumbing,
-    /// which amenbo does not do unasked: it asks once per project — for the lint, not per file — and
-    /// remembers the answer, and these are the explicit faces of that, usable any time, whatever was
-    /// answered, and the way back if you said no. amenbo touches only the hooks it wrote, which it marks
-    /// as its own: a hook from husky, lefthook, or your own hand is never overwritten and never removed,
-    /// and install steps around it, wiring the slots it may own and naming the line to add to the rest.
+    /// which amenbo does not do unasked: it asks once — for the lint as a feature, on this device — and
+    /// that one answer covers the repositories it works in, the ones bound later included. These are the
+    /// explicit faces of that: `install` wires this repository (and takes back an earlier `uninstall`
+    /// here), `uninstall` opts this one out so a device-wide yes does not re-wire it, and both are usable
+    /// any time, whatever was answered. amenbo touches only the hooks it wrote, which it marks as its own:
+    /// a hook from husky, lefthook, or your own hand is never overwritten and never removed, and install
+    /// steps around it, wiring the slots it may own and naming the line to add to the rest.
     Hooks {
         #[command(subcommand)]
         sub: HooksCmd,

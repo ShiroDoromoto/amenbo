@@ -16,7 +16,6 @@ use rusqlite::{Connection, OptionalExtension, Transaction};
 
 use crate::binding::Registry;
 use crate::error::Result;
-use crate::hooks::HookConsent;
 use crate::read_receipts::ReadReceipts;
 use crate::store_engine::schema::col;
 use crate::store_engine::sql::{Col, Delete, Insert, Int, Pred, Select, Sort, Sql, Table};
@@ -28,7 +27,7 @@ const BP: col::binding_path::Cols = col::binding_path::ALL;
 const BPD: col::binding_project_dir::Cols = col::binding_project_dir::ALL;
 const RR: col::read_receipt::Cols = col::read_receipt::ALL;
 const IA: col::inbox_archive::Cols = col::inbox_archive::ALL;
-const HC: col::hook_consent::Cols = col::hook_consent::ALL;
+const HO: col::hook_optout::Cols = col::hook_optout::ALL;
 
 /// `store_meta` key for the mailbox's single last-seen instant. A scalar, so it lives in the KV
 /// singleton table rather than the per-task `read_receipt` table.
@@ -188,38 +187,44 @@ pub fn retain_live_inbox_archive(engine: &StoreEngine, keep: impl Fn(i64) -> boo
     retain_live(engine, IA.table, IA.task_id, keep)
 }
 
-// ───────────────────────── lint-hook consent ─────────────────────────
+// ───────────────────────── lint-hook opt-out ─────────────────────────
 
-/// What a project answered when asked whether amenbo may install the lint hook ([`HookConsent`]), or
-/// `None` if it has never been asked — the absence of a row *is* the unanswered state, so a project
-/// that refused reads back differently from one that was never asked.
-///
-/// A row the `CHECK` should have refused reads back as `None` too: an unreadable answer is one nobody
-/// gave, and asking again is the safe way to be wrong.
-pub fn hook_consent(engine: &StoreEngine, project_id: i64) -> Result<Option<HookConsent>> {
+/// Has this project been opted out of the lint hooks — did `hooks uninstall` run in it? Presence of the
+/// row is the whole answer, so this is a plain existence check ([`crate::hooks`]).
+pub fn hook_opted_out(engine: &StoreEngine, project_id: i64) -> Result<bool> {
     let mut sel = Select::new();
-    let answer = sel.col(HC.answer);
-    let mut sql = Sql::from(&sel, HC.table);
-    sql.push_where(Some(&Pred::eq(HC.project_id, project_id)));
-    let stored: Option<String> = engine
+    let pid = sel.col(HO.project_id);
+    let mut sql = Sql::from(&sel, HO.table);
+    sql.push_where(Some(&Pred::eq(HO.project_id, project_id)));
+    let found: Option<i64> = engine
         .conn()
-        .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| answer.get(r))
+        .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| pid.get(r))
         .optional()
         .map_err(StoreEngineError::from)?;
-    Ok(stored.as_deref().and_then(HookConsent::parse))
+    Ok(found.is_some())
 }
 
-/// Record a project's answer: UPSERT one row. The latest answer simply wins — asked again after a
-/// state change (a hook deleted by hand), a project answers again, and the new answer is the one that
-/// counts.
-pub fn set_hook_consent(engine: &StoreEngine, project_id: i64, answer: HookConsent) -> Result<()> {
-    Insert::into(HC.table)
-        .set(HC.project_id, project_id)
-        .set(HC.answer, answer.as_str())
-        .on_conflict_update(HC.project_id)
-        .sql()
-        .execute(engine.conn())
-        .map_err(StoreEngineError::from)?;
+/// Opt this project out, or take the opt-out back. `hooks uninstall` sets it and `hooks install` clears
+/// it: both are explicit acts on one repository, and each undoes what the other said. Setting it twice is
+/// setting it once (the UPSERT is a no-op), and clearing one that was never there is the asked-for state
+/// rather than an error.
+pub fn set_hook_optout(engine: &StoreEngine, project_id: i64, opted_out: bool) -> Result<()> {
+    if opted_out {
+        // The row is its own whole content — presence is the veto — so a repeat is a no-op, not an upsert
+        // onto other columns (there are none). This mirrors `inbox_archive`, the other set-shaped table.
+        Insert::into(HO.table)
+            .set(HO.project_id, project_id)
+            .on_conflict_do_nothing(HO.project_id)
+            .sql()
+            .execute(engine.conn())
+            .map_err(StoreEngineError::from)?;
+    } else {
+        Delete::from(HO.table)
+            .filter(Pred::eq(HO.project_id, project_id))
+            .sql()
+            .execute(engine.conn())
+            .map_err(StoreEngineError::from)?;
+    }
     Ok(())
 }
 

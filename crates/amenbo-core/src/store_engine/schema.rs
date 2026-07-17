@@ -716,18 +716,19 @@ plain_tables! {
         task_id: integer("PRIMARY KEY"),
     }
 
-    /// The **lint-hook consent** — one project's answer to "may amenbo write the lint hook into your
-    /// `.git/hooks`?". A row exists once the question has been answered, so absence *is* the
-    /// unanswered state and the table is the whole record of what was asked. It answers one question
-    /// only — whether to ask again — and is never read as a mirror of what the hook directory actually
-    /// holds ([`crate::hooks`]).
+    /// The **lint-hook opt-out** — the projects amenbo must not wire the lint into on its own. A row is
+    /// written by `hooks uninstall`: an explicit act on one repository, which the device-wide answer
+    /// (`config.hook_consent`) would otherwise undo at the next startup by installing again.
+    ///
+    /// It is a set, not an answer: presence is the whole content, and there is no column for a `yes`
+    /// because a `yes` is the absence of a veto plus the device's own answer ([`crate::hooks`]). It is
+    /// never read as a mirror of what the hook directory actually holds.
     ///
     /// Keyed by the project's `INTEGER` id, and unlike `binding_path` it declares the reference: the
-    /// answer is *about* the project, so it has nothing left to say once the project is gone, and the
+    /// veto is *about* the project, so it has nothing left to say once the project is gone, and the
     /// cascade retires the row without a GC pass.
-    hook_consent {
+    hook_optout {
         project_id: integer("PRIMARY KEY REFERENCES project(id) ON DELETE CASCADE"),
-        answer: text("CHECK (answer IN ('yes', 'no'))"),
     }
 }
 

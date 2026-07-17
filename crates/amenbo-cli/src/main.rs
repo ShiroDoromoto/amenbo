@@ -573,7 +573,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     }
 
     if !matches!(cli.command, Some(Command::Hooks { .. })) {
-        lint_hook_setup(&store, flags);
+        lint_hook_setup(&mut store, flags);
     }
 
     let Some(command) = cli.command else {
@@ -804,16 +804,26 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::Backup { path } => return run_backup(&store, flags, path),
         Command::HardErase { sub } => return hard_erase(&mut store, flags, sub),
         Command::Restore { path } => return run_restore(&store, flags, path),
-        Command::Hooks { sub } => return hooks_cmd(&store, flags, sub),
+        Command::Hooks { sub } => return hooks_cmd(&mut store, flags, sub),
     }
     Ok(0)
 }
 
-/// `amenbo hooks …`: the explicit faces of the lint hook, usable whatever this project answered — a `no`
-/// closes the question, not the door. install and uninstall each do the two things together, moving the
-/// hook and recording the answer that moving it states, which is what keeps [`offer_lint_hook`] quiet
-/// afterwards: an explicit install is consent as surely as a `y` is.
-fn hooks_cmd(store: &Store, flags: &Flags, sub: HooksCmd) -> Result<i32, CliError> {
+/// `amenbo hooks …`: the explicit faces of the lint hook, usable whatever the device answered — a `no`
+/// closes the question, not the door.
+///
+/// **They speak for the repository they are run in, and for nothing else.** Each does the two things
+/// together, but they are not mirror images, because the feature and a repository are not the same scale:
+///
+/// - `install` is an explicit yes to the lint — as much a yes as clicking it in the modal — so it records
+///   the **device** answer ([`amenbo_core::config::Config::hook_consent`]) as `Yes` and clears any opt-out
+///   here. Wanting the lint in this repository but not another is the very thing the one-question design
+///   says nobody wants, so a yes given anywhere is a yes to the feature, and the other bound repositories
+///   are wired at their next startup. One that genuinely wants out says so with `uninstall`.
+/// - `uninstall` is **not** a device-wide no — that would stop the feature everywhere over one repository.
+///   It removes the hook here and opts *this* repository out, so a device-wide yes does not put it back at
+///   the next startup, and it leaves the device answer alone.
+fn hooks_cmd(store: &mut Store, flags: &Flags, sub: HooksCmd) -> Result<i32, CliError> {
     use amenbo_core::hooks::{self, HookConsent};
 
     let cwd = std::env::current_dir().map_err(|e| CliError {
@@ -828,7 +838,9 @@ fn hooks_cmd(store: &Store, flags: &Flags, sub: HooksCmd) -> Result<i32, CliErro
     match sub {
         HooksCmd::Install => {
             let done = hooks::install(&cwd, cmd).map_err(CliError::from)?;
-            record_consent(store, project, HookConsent::Yes);
+            record_optout(store, project, false);
+            store.config.hook_consent = Some(HookConsent::Yes);
+            let _ = store.save_config();
             if flags.json {
                 print_json(&json!({
                     "ok": true,
@@ -847,7 +859,7 @@ fn hooks_cmd(store: &Store, flags: &Flags, sub: HooksCmd) -> Result<i32, CliErro
         }
         HooksCmd::Uninstall => {
             let removed = hooks::uninstall(&cwd, cmd).map_err(CliError::from)?;
-            record_consent(store, project, HookConsent::No);
+            record_optout(store, project, true);
             if flags.json {
                 print_json(&json!({
                     "ok": true,
@@ -862,7 +874,8 @@ fn hooks_cmd(store: &Store, flags: &Flags, sub: HooksCmd) -> Result<i32, CliErro
         }
         HooksCmd::Status => {
             let states = hooks::probe(&cwd);
-            let consent = project.and_then(|p| store.hook_consent(p).ok().flatten());
+            let consent = store.config.hook_consent;
+            let opted_out = project.is_some_and(|p| store.hook_opted_out(p).unwrap_or(false));
             if flags.json {
                 print_json(&json!({
                     "in_git_repo": states.is_some(),
@@ -871,9 +884,10 @@ fn hooks_cmd(store: &Store, flags: &Flags, sub: HooksCmd) -> Result<i32, CliErro
                         "state": state,
                     })).collect::<Vec<_>>()),
                     "consent": consent,
+                    "opted_out": opted_out,
                 }));
             } else {
-                human(flags, render_hook_status(states, consent, cmd));
+                human(flags, render_hook_status(states, consent, opted_out, cmd));
             }
         }
     }
@@ -904,11 +918,14 @@ fn render_install(done: &amenbo_core::hooks::InstallReport, cmd: &str) -> String
     lines.join("\n")
 }
 
-/// The two facts, the disk's a line per slot and the record's its own — which is the whole point: the
-/// record is not a mirror of the disk, so a reader has to be able to see them disagree.
+/// The facts, the disk's a line per slot and the answer's its own — which is the whole point: the answer
+/// is not a mirror of the disk, so a reader has to be able to see them disagree. The answer's line says
+/// *this device* because that is its scale, and the opt-out gets a line of its own only when there is one:
+/// it is the rarer fact, and a line saying a repository is not opted out would be noise on every other run.
 fn render_hook_status(
     states: Option<amenbo_core::hooks::HookStates>,
     consent: Option<amenbo_core::hooks::HookConsent>,
+    opted_out: bool,
     cmd: &str,
 ) -> String {
     use amenbo_core::hooks::{guidance_line, HookConsent, HookState};
@@ -933,18 +950,24 @@ fn render_hook_status(
     };
     let answered = match consent {
         None => "not asked yet",
-        Some(HookConsent::Yes) => "yes",
-        Some(HookConsent::No) => "no (not asked again; `hooks install` still works)",
+        Some(HookConsent::Yes) => "yes — every repository, including ones bound later",
+        Some(HookConsent::No) => "no (not asked again; `hooks install` still works, here)",
     };
-    format!("hooks on disk:\n{on_disk}\nthis project: {answered}")
+    let mut out = format!("hooks on disk:\n{on_disk}\nthis device: {answered}");
+    if opted_out {
+        out.push_str(&format!(
+            "\nthis repository: opted out by `{cmd} hooks uninstall` — amenbo will not wire it here on its own"
+        ));
+    }
+    out
 }
 
-/// Write the answer down, and let a failure to do so pass: the record is a convenience that decides
-/// whether to ask again, the hook itself is already where the user asked for it, and failing the command
+/// Write the veto down, and let a failure to do so pass: the row is a convenience that decides whether
+/// amenbo acts here again, the hook itself is already where the user asked for it, and failing the command
 /// over the note about it would undo nothing and help no one.
-fn record_consent(store: &Store, project: Option<i64>, answer: amenbo_core::hooks::HookConsent) {
+fn record_optout(store: &Store, project: Option<i64>, opted_out: bool) {
     if let Some(pid) = project {
-        let _ = store.set_hook_consent(pid, answer);
+        let _ = store.set_hook_optout(pid, opted_out);
     }
 }
 
@@ -953,21 +976,29 @@ fn record_consent(store: &Store, project: Option<i64>, answer: amenbo_core::hook
 /// command. `hooks` is not routed here at all: its argv already answered the question, its own faces say
 /// what this would say, and skipping it keeps `hooks status` to the one [`amenbo_core::hooks::probe`] it
 /// came for and read-only as its spec promises — this can record consent, and a read command must not.
-/// The question is asked once per project, on a surface where an answer can be had, and never when the two
-/// facts leave nothing to ask: [`amenbo_core::hooks::reconcile`] holds that judgment and this is only its
-/// hands. Everything here is best-effort — a hook is a convenience, so nothing it does can fail the command
-/// the user actually ran.
-fn lint_hook_setup(store: &Store, flags: &Flags) {
+/// The question is asked **once for this device**, on a surface where an answer can be had, and never when
+/// the facts leave nothing to ask: [`amenbo_core::hooks::reconcile`] holds that judgment and this is only
+/// its hands. Everything here is best-effort — a hook is a convenience, so nothing it does can fail the
+/// command the user actually ran.
+///
+/// It acts on the repository it is standing in, and does not sweep the other bound folders a `yes` also
+/// covers. That is not the answer being narrower than it says: those folders are wired the first time
+/// amenbo runs in them — this same path, asking nothing, because by then the device has answered — and the
+/// GUI sweeps them all at its next startup. Sweeping from here would mean a `git` spawn per bound folder on
+/// the way to every `amenbo task list`, which is a cost the CLI pays on every command to finish sooner
+/// something that finishes anyway.
+fn lint_hook_setup(store: &mut Store, flags: &Flags) {
     use amenbo_core::hooks;
 
     let Some(project) = binding_project(store) else { return };
     let Ok(cwd) = std::env::current_dir() else { return };
-    let consent = store.hook_consent(project).ok().flatten();
+    let consent = store.config.hook_consent;
+    let opted_out = store.hook_opted_out(project).unwrap_or(false);
     let can_ask = !flags.json && flags.actor != ActorKind::Ai && std::io::stdin().is_terminal();
     let states = hooks::probe(&cwd);
 
-    let answered = offer_lint_hook(store, project, &cwd, states, consent, can_ask);
-    report_unfinished_setup(flags, &cwd, answered, states, consent);
+    let answered = offer_lint_hook(store, &cwd, states, consent, opted_out, can_ask);
+    report_unfinished_setup(flags, &cwd, answered, states, consent, opted_out);
 }
 
 /// Report that the lint is not actually running, on every response until it is — a standing signal, where
@@ -983,6 +1014,7 @@ fn report_unfinished_setup(
     answered: Option<amenbo_core::hooks::HookConsent>,
     states: Option<amenbo_core::hooks::HookStates>,
     consent: Option<amenbo_core::hooks::HookConsent>,
+    opted_out: bool,
 ) {
     use amenbo_core::hooks;
 
@@ -990,11 +1022,14 @@ fn report_unfinished_setup(
         Some(fresh) => (hooks::probe(cwd), Some(fresh)),
         None => (states, consent),
     };
-    let Some(notice) = hooks::setup_notice(states, consent) else { return };
+    let Some(notice) = hooks::setup_notice(states, consent, opted_out) else { return };
     let cmd = Paths::APP_NAME;
     if flags.json {
+        // `reasons`, plural and derived, rather than one code chosen up front: a notice holding only a
+        // stranger's slot used to go out under `lint_hook_unwired` beside an empty `unwired` list, which
+        // said the opposite of what it carried.
         set_setup_report(json!({
-            "reason": "lint_hook_unwired",
+            "reasons": notice.reasons(),
             "unwired": notice.unwired.iter().map(|slot| json!({
                 "hook": slot.name(),
                 "fix": format!("{cmd} hooks install"),
@@ -1005,46 +1040,51 @@ fn report_unfinished_setup(
             })).collect::<Vec<_>>(),
         }));
     } else if !flags.quiet {
-        let slots = notice
-            .unwired
-            .iter()
-            .chain(notice.foreign.iter())
-            .map(|slot| slot.name())
-            .collect::<Vec<_>>()
-            .join(", ");
-        eprintln!("⚠ Setup unfinished: `{cmd} lint` is not running on your commits ({slots}).");
+        // Two reports, because they are two different things to say, and running them together under one
+        // heading is what made a finished install read as a failure. An empty slot is setup left undone and
+        // amenbo's to finish; a stranger's slot is amenbo having finished — it wrote what it may write and
+        // stopped at a file that is not its own — and the only thing left is a line nobody but the file's
+        // owner may add. Saying "unfinished" over the second blames amenbo for keeping its own policy.
         if !notice.unwired.is_empty() {
-            eprintln!("  Install the hooks: {cmd} hooks install");
+            let slots = notice.unwired.iter().map(|slot| slot.name()).collect::<Vec<_>>().join(", ");
+            eprintln!("⚠ `{cmd} lint` is not running on your commits ({slots}).");
+            eprintln!("  Wire it up: {cmd} hooks install");
         }
         if !notice.foreign.is_empty() {
-            eprintln!("  These hooks are not amenbo's — add the line yourself:");
+            let slots = notice.foreign.iter().map(|slot| slot.name()).collect::<Vec<_>>().join(", ");
+            eprintln!("Note: {slots} belongs to another tool, so amenbo left it alone.");
+            eprintln!("  To lint there too, add this line yourself:");
             eprintln!("{}", hooks::guidance_block(notice.foreign, cmd, "    "));
         }
     }
 }
 
+/// Carry out what [`amenbo_core::hooks::reconcile`] says about the repository we are standing in, and
+/// return the answer if one was just given — the caller re-reads the disk under it, so an install accepted
+/// a moment ago is not reported as missing in the same breath.
+///
+/// The answer to a `HookAction::Ask` is the **device's**, and is written to the config as such: this is the
+/// one place the question is put, so it is the one place that records it. Failing to persist it is let
+/// pass, like every other note here — the hooks are already where the user asked for them, and the cost of
+/// a lost note is being asked once more.
 fn offer_lint_hook(
-    store: &Store,
-    project: i64,
+    store: &mut Store,
     cwd: &std::path::Path,
     states: Option<amenbo_core::hooks::HookStates>,
     consent: Option<amenbo_core::hooks::HookConsent>,
+    opted_out: bool,
     can_ask: bool,
 ) -> Option<amenbo_core::hooks::HookConsent> {
     use amenbo_core::hooks::{self, HookAction, HookConsent};
 
     let cmd = Paths::APP_NAME;
-    match hooks::reconcile(&hooks::HookContext { states, consent, can_ask }) {
+    match hooks::reconcile(&hooks::HookContext { states, consent, opted_out, can_ask }) {
         HookAction::Nothing => None,
-        HookAction::SyncConsentToYes => {
-            record_consent(store, Some(project), HookConsent::Yes);
-            Some(HookConsent::Yes)
-        }
         HookAction::Install => {
             match hooks::install(cwd, cmd) {
                 Ok(done) => {
                     let names = done.installed.iter().map(|(slot, _)| slot.name()).collect::<Vec<_>>().join(", ");
-                    eprintln!("✓ {names} hook installed, under the answer this project already gave. Remove it with `{cmd} hooks uninstall`.");
+                    eprintln!("✓ {names} hook installed, under the answer you already gave. Not here? `{cmd} hooks uninstall`.");
                 }
                 Err(e) => eprintln!("⚠ Could not install the hook: {e}"),
             }
@@ -1064,16 +1104,21 @@ fn offer_lint_hook(
                 eprintln!("Not installed. amenbo will not ask again — `{cmd} hooks install` when you want it.");
             }
             let answer = if yes { HookConsent::Yes } else { HookConsent::No };
-            record_consent(store, Some(project), answer);
+            store.config.hook_consent = Some(answer);
+            let _ = store.save_config();
             Some(answer)
         }
     }
 }
 
-/// One question for the lint as a whole, worded from what the slots actually hold: amenbo offers to write
-/// the ones it may own and points at the line to add for the ones it may not, which is why there is no
-/// second action for a stranger's hook. Answering settles it either way, and that is the point of asking
-/// even when there is nothing amenbo could write.
+/// The one question there is, worded from what the slots actually hold: amenbo offers to write the ones it
+/// may own and points at the line to add for the ones it may not, which is why there is no second action
+/// for a stranger's hook.
+///
+/// It says the answer is asked once and covers every repository, because that is what answering it does —
+/// a prompt that named only "this repository" would be collecting a wider consent than it admitted to. What
+/// it does *not* do is list those repositories: the answer is about the lint, not about a set of folders,
+/// and a list would hand the reader something to check over a question that has one sensible answer.
 fn offer_prompt(states: Option<amenbo_core::hooks::HookStates>, cmd: &str) -> String {
     use amenbo_core::hooks::{guidance_block, HookState};
 
@@ -1085,7 +1130,7 @@ fn offer_prompt(states: Option<amenbo_core::hooks::HookStates>, cmd: &str) -> St
     let foreign = states.slots_in(HookState::Foreign);
     if !writable.is_empty() {
         let names = writable.iter().map(|s| s.name()).collect::<Vec<_>>().join(" and ");
-        prompt.push_str(&format!("It writes the {names} hook into this repository, and nothing else.\n"));
+        prompt.push_str(&format!("It writes the {names} hook, and nothing else.\n"));
     }
     if !foreign.is_empty() {
         let names = foreign.iter().map(|s| s.name()).collect::<Vec<_>>().join(" and ");
@@ -1094,10 +1139,11 @@ fn offer_prompt(states: Option<amenbo_core::hooks::HookStates>, cmd: &str) -> St
             guidance_block(foreign, cmd, "    ")
         ));
     }
+    prompt.push_str("Asked once: your answer covers the repositories amenbo works in, now and later.\n");
     prompt.push_str(if writable.is_empty() {
         "Answering settles it either way (amenbo will not ask again). Done?"
     } else {
-        "Install?"
+        "Wire it up?"
     });
     prompt
 }

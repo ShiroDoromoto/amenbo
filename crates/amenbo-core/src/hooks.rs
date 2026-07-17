@@ -1,20 +1,31 @@
-//! The lint hooks: whether amenbo may write them into a project's `.git/hooks`, and what is in those slots
-//! right now. Installing means writing into the user's git plumbing, which amenbo does not do unasked, so
-//! it asks once per project and remembers the answer in the store's `hook_consent` table (read and written
-//! through [`crate::store::Store`], implemented in [`crate::overview`]). What is consented to is the lint
-//! as a *feature*, not a file: one answer covers every [`HookSlot`], because the slots are a consequence of
-//! git's lifecycle — `pre-commit` cannot see a commit message that does not exist yet, and `commit-msg` is
-//! the only slot git hands it to — and nobody has an opinion about which of git's doors one lint is let in
-//! through. Consent and the hooks on disk are two independent facts: the record ([`HookConsent`]) says what
-//! was answered and never what `.git/hooks` holds, which is [`probe`]'s answer and is read from the
-//! filesystem every time — reading the record as a mirror of the disk breaks the moment a hook is deleted
-//! or added by hand, so the two meet in exactly one place, [`reconcile`]. amenbo owns only what carries its
-//! marker: a hook it wrote opens with [`HOOK_MARKER`], the same shape as the managed block in `CLAUDE.md` /
-//! `AGENTS.md` ([`crate::agents`]), while anything else in a slot belongs to someone else — husky,
-//! lefthook, a hand-written script — and is never written to and never removed, which [`install`] and
-//! [`uninstall`] honour slot by slot rather than all-or-nothing: a stranger holding one slot leaves the
-//! others writable and earns a [`guidance_line`], because refusing the lint everywhere over husky's
-//! `pre-commit` would fail the commonest repository there is.
+//! The lint hooks: whether amenbo may write them into a repository's `.git/hooks`, and what is in those
+//! slots right now. Installing means writing into the user's git plumbing, which amenbo does not do unasked,
+//! so it asks — **once for the lint as a feature, and never again**. The answer is one bit for the whole
+//! device ([`HookConsent`], kept in [`crate::config::Config::hook_consent`]), not one per repository: the
+//! same reasoning that stops it being asked once per [`HookSlot`] stops it being asked once per repository.
+//! The slots are a consequence of git's lifecycle — `pre-commit` cannot see a commit message that does not
+//! exist yet, and `commit-msg` is the only slot git hands it to — and the repositories are a consequence of
+//! how much work the user keeps here. Neither is something anyone holds an opinion about: nobody wants an
+//! `AMB-T-…` in their commits *here* but not *there*, so asking per place is asking a question whose answer
+//! is already known. A yes therefore reaches the repositories bound after it was given, without a second
+//! question.
+//!
+//! The one thing that *is* per repository is an **opt-out**: `uninstall` records that amenbo must not wire
+//! this one on its own again (`hook_optout`, read and written through [`crate::store::Store`] and
+//! implemented in [`crate::overview`]). It is not consent — the user is never asked about a repository —
+//! it is the memory of an explicit act, and without it a yes on record would put back at the next startup
+//! what `uninstall` just took out.
+//!
+//! The answer and the hooks on disk are two independent facts: the answer says what was consented to and
+//! never what `.git/hooks` holds, which is [`probe`]'s answer and is read from the filesystem every time —
+//! reading the answer as a mirror of the disk breaks the moment a hook is deleted or added by hand, so the
+//! two meet in exactly one place, [`reconcile`]. amenbo owns only what carries its marker: a hook it wrote
+//! opens with [`HOOK_MARKER`], the same shape as the managed block in `CLAUDE.md` / `AGENTS.md`
+//! ([`crate::agents`]), while anything else in a slot belongs to someone else — husky, lefthook, a
+//! hand-written script — and is never written to and never removed, which [`install`] and [`uninstall`]
+//! honour slot by slot rather than all-or-nothing: a stranger holding one slot leaves the others writable
+//! and earns a [`guidance_line`], because refusing the lint everywhere over husky's `pre-commit` would fail
+//! the commonest repository there is.
 
 use std::path::{Path, PathBuf};
 
@@ -22,37 +33,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Msg, Result};
 
-/// The answer on record. There is no `Unanswered` variant: never having answered is the *absence* of a
-/// record (`Option::None`), which is what makes "asked and refused" different from "never asked" —
-/// the first must never be asked again, the second must.
+/// The answer on record — **one for the device, given once and never asked for again**. There is no
+/// `Unanswered` variant: never having answered is the *absence* of an answer (`Option::None`), which is
+/// what makes "asked and refused" different from "never asked" — the first must never be asked again, the
+/// second must.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum HookConsent {
-    /// Install it. Consent is given to the *project*, so a later clone of it on this device is covered
-    /// too and is not asked again (`.git/hooks` is per-clone; the answer is not).
+    /// Wire the lint. It covers every repository amenbo works in, including the ones bound after the
+    /// answer was given: consent is to the feature, and binding a folder is the user's own act of putting
+    /// that folder's work in amenbo's hands. A repository that says otherwise says it with `uninstall`
+    /// (see the module docs' opt-out), not by being asked again.
     Yes,
-    /// Don't install it, and don't ask again. It answers the question for good, but it forbids
-    /// nothing: an explicit install asked for later is still honoured.
+    /// Don't wire it anywhere, and don't ask again. It answers the question for good, but it forbids
+    /// nothing: an explicit `install` asked for later is still honoured, in the repository it is run in.
     No,
-}
-
-impl HookConsent {
-    /// The stored spelling (the `answer` column's `CHECK`ed values).
-    pub fn as_str(self) -> &'static str {
-        match self {
-            HookConsent::Yes => "yes",
-            HookConsent::No => "no",
-        }
-    }
-
-    /// Read the stored spelling back. `None` for anything else — a row the `CHECK` should have refused.
-    pub fn parse(s: &str) -> Option<HookConsent> {
-        match s {
-            "yes" => Some(HookConsent::Yes),
-            "no" => Some(HookConsent::No),
-            _ => None,
-        }
-    }
 }
 
 /// Format version of the marker on the hook **this binary writes**. Paired with [`HOOK_MARKER`], and the
@@ -353,14 +348,6 @@ impl HookStates {
     fn any_foreign(self) -> bool {
         self.iter().any(|(_, s)| s == HookState::Foreign)
     }
-
-    /// Does a hook here predate this build's set of slots? A marker older than [`HOOK_MARKER_VERSION`] was
-    /// written before this build knew the slot it is missing, which is what tells an install that is merely
-    /// out of date from a hook the user removed on purpose: the first is this build's to complete under the
-    /// consent already on record, the second is never restored behind their back.
-    fn predates_this_build(self) -> bool {
-        self.iter().any(|(_, s)| matches!(s, HookState::Managed { version } if version < HOOK_MARKER_VERSION))
-    }
 }
 
 /// What each of `dir`'s hook slots holds right now, or `None` when `dir` is not a git repository — there
@@ -524,105 +511,138 @@ fn make_executable(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// What a caller knows when it comes to the question: the two independent facts, and the surface it came
-/// in through.
+/// What a caller knows when it comes to one repository: the device's answer, this repository's two
+/// independent facts, and the surface the caller came in through.
 pub struct HookContext {
     /// What is in each hook slot ([`probe`]), or `None` when the folder is not a git repository — one
     /// probe answers every slot, so they are not carried apart.
     pub states: Option<HookStates>,
-    /// The answer on record, or `None` if this project has never been asked.
+    /// The device's answer, or `None` if it has never been asked. **Not this repository's** — there is no
+    /// such thing (see the module docs).
     pub consent: Option<HookConsent>,
+    /// Has this repository been opted out — did `uninstall` run here? It is the only per-repository fact
+    /// in the question, and it is a veto rather than an answer: it stops amenbo acting here on its own,
+    /// and says nothing about the device's answer or about any other repository.
+    pub opted_out: bool,
     /// Can this surface actually get an answer? An interactive terminal and the GUI's dialog can; a
     /// machine caller cannot (see [`reconcile`]).
     pub can_ask: bool,
 }
 
-/// What the two facts, taken together, call for: the drift table as a value.
+/// What the facts, taken together, call for: the drift table as a value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HookAction {
     /// Leave it be. The overwhelmingly common answer.
     Nothing,
-    /// Ask whether to install, and [`install`] on a yes. Record whichever answer comes back. One question
-    /// covers every slot, because what is being asked is whether the lint may place its files here, and
-    /// the slots are amenbo's business rather than anything the user holds an opinion about. The caller
-    /// says what will happen to which slot, reading it off the states it already has: there is no separate
-    /// action for a stranger's slot, since an install can write one slot while pointing at
-    /// [`guidance_line`] for another.
+    /// Ask whether to wire the lint, and [`install`] on a yes. **This is the only question there is**, so
+    /// a caller that asks it must record the answer on the device ([`crate::config::Config::hook_consent`])
+    /// rather than against the repository it happened to be standing in. One question covers every slot
+    /// and every repository, because what is being asked is whether the lint may write at all, and where
+    /// it writes is amenbo's business rather than anything the user holds an opinion about.
     Ask,
-    /// [`install`] without asking: consent is already on record, and a slot this build added is missing
-    /// from an install written before it existed. Completing what was consented to is not the same as
-    /// restoring a hook the user removed, which is why the two are told apart by
-    /// [`HookStates::predates_this_build`] rather than lumped together.
+    /// [`install`] without asking: the device already said yes, and this repository has a slot to write.
+    /// This is how a yes reaches a folder bound long after it was given — and how it reaches the slot an
+    /// upgrade added to a repository wired by an older build. Neither is a new question.
     Install,
-    /// Our hook is on disk although the record does not say yes: someone installed it by hand, so the
-    /// filesystem wins and the record moves to [`HookConsent::Yes`], silently and with nothing to ask.
-    SyncConsentToYes,
 }
 
-/// Read the record and the disk against each other and say what to do — the drift table, which the tests
-/// below walk row by row. Consent is asked once for the lint as a feature rather than once per file, so
-/// the slots are folded into one answer here in a fixed order of precedence. A hook of ours on disk under
-/// a record that does not say `yes` was installed by hand, so the record follows the disk with nothing to
-/// ask, and that outranks everything. A recorded `no` is silent from there on. An install written before
-/// this build knew a slot is completed under the consent already given, without a question, which is what
-/// keeps a slot added by an upgrade from re-asking every project that already said yes. What is left is a
-/// question: never having answered, or having said yes with nothing of ours on disk — the latter because a
-/// hook deleted by hand may well have been deleted on purpose, and consent was consent to an install, not
-/// a promise to keep the file alive, so it is never silently restored. Either way there must be a slot a
-/// yes would write: a repository whose every slot is a stranger's is not asked about, because the question
-/// exists to get permission for a write and there is no write to permit. A machine caller is never asked,
-/// whatever the disk holds: `--json`, an AI harness and a script cannot answer, and a prompt there hangs a
-/// caller on a terminal nobody is watching, so `can_ask` is false, the question does not happen, and
-/// nothing is recorded — the unanswered state carries intact to the next surface that can ask, and what a
-/// machine gets instead is the unwired hook in its output.
+/// Read the answer and the disk against each other and say what to do — the drift table, which the tests
+/// below walk row by row.
+///
+/// The order of precedence, and why each rung is where it is:
+///
+/// 1. **Not a git repository**: there are no hooks to have and nothing to ask.
+/// 2. **Opted out**: `uninstall` ran here, which is an explicit act on this repository and outranks a
+///    device answer that was never about this repository in particular. Without this rung a yes on record
+///    would put back at the next startup exactly what the user just removed, and the escape hatch would
+///    not be one.
+/// 3. **No slot to write**: a repository whose every slot is a stranger's is neither asked about nor
+///    acted on, because there is no write to permit — asking would put amenbo's problem in front of the
+///    user and hand back a button that cannot fire. The lint still wants wiring there, which is what
+///    [`setup_notice`] says, on a surface where the line to add can actually be pasted.
+/// 4. **The device's answer**: `no` is silent from there on; `yes` installs, with nothing to ask;
+///    never-asked is the one question, and only where it can be answered.
+///
+/// A machine caller is never asked, whatever the disk holds: `--json`, an AI harness and a script cannot
+/// answer, and a prompt there hangs a caller on a terminal nobody is watching, so `can_ask` is false, the
+/// question does not happen, and nothing is recorded — the unanswered state carries intact to the next
+/// surface that can ask, and what a machine gets instead is the unwired hook in its output. A `yes` is
+/// carried out for a machine caller all the same: there is nothing to ask, only work to do.
+///
+/// A hook deleted by hand under a `yes` is written again, and that is deliberate. The old per-repository
+/// record could read it as "removed on purpose" and ask about that repository; a device answer cannot —
+/// a repository with nothing of ours on disk is the fresh clone and the emptied one alike, and re-asking
+/// is the one thing this question no longer does. The supported way to say "not here" is `uninstall`,
+/// which rung 2 makes stick.
 pub fn reconcile(ctx: &HookContext) -> HookAction {
     let Some(states) = ctx.states else {
         return HookAction::Nothing;
     };
-    if states.any_managed() && ctx.consent != Some(HookConsent::Yes) {
-        return HookAction::SyncConsentToYes;
-    }
-    if ctx.consent == Some(HookConsent::No) {
+    if ctx.opted_out || !states.any_unwired() {
         return HookAction::Nothing;
     }
-    if ctx.consent == Some(HookConsent::Yes) && states.any_unwired() && states.predates_this_build() {
-        return HookAction::Install;
-    }
-    // A question amenbo cannot act on is not a question. Where every slot is a stranger's there is nothing
-    // a yes would write, so asking would put amenbo's problem in front of the user and hand them back a
-    // button that cannot fire — the lint still wants wiring there, which is what `setup_notice` is for, on
-    // a surface where the line to add can actually be pasted.
-    let question_is_live = match ctx.consent {
-        None | Some(HookConsent::Yes) => states.any_unwired(),
-        Some(HookConsent::No) => false,
-    };
-    if question_is_live && ctx.can_ask {
-        HookAction::Ask
-    } else {
-        HookAction::Nothing
+    match ctx.consent {
+        Some(HookConsent::No) => HookAction::Nothing,
+        Some(HookConsent::Yes) => HookAction::Install,
+        None if ctx.can_ask => HookAction::Ask,
+        None => HookAction::Nothing,
     }
 }
 
-/// What setup is still missing — the standing report that the lint is not actually running, as opposed to
-/// [`reconcile`]'s one-time question. The two lists are separate because the fix differs and both can be
-/// live at once: a repository where husky holds `pre-commit` and nothing holds `commit-msg` needs a line
-/// added by hand *and* a command run.
+/// Why the lint is not running on every commit here. **Two different sentences, not two degrees of one**,
+/// which is the whole reason they are separate: they differ in whose fault it is, in what fixes it, and in
+/// whether the reader has anything to feel bad about. Both can be live at once — husky holding
+/// `pre-commit` while nothing holds `commit-msg` needs a line added by hand *and* a command run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NoticeReason {
+    /// Slots with no hook at all. Setup is genuinely unfinished: amenbo has not been let in yet, or its
+    /// hook was removed. `hooks install` is the whole fix.
+    LintHookUnwired,
+    /// Slots a stranger holds — husky, lefthook, a hand-written script. **Nothing is unfinished here**:
+    /// amenbo did everything it may do and stopped where the file stopped being its own, which is the
+    /// policy working rather than failing. Only the file's owner can let the lint in, so the report is a
+    /// hand-off, not a warning: [`guidance_line`] is the line for them to paste.
+    LintHookForeignSlot,
+}
+
+/// Where the lint is not running, and why — the standing report, as opposed to [`reconcile`]'s one-time
+/// question. It carries [`NoticeReason`] per list rather than one code for the whole notice, because a
+/// notice naming only a stranger's slot under a reason that says "unwired" is a report that does not
+/// match what it found.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetupNotice {
-    /// Slots with no hook at all: the lint is wired to nothing there, and `hooks install` writes them.
+    /// Slots with no hook at all ([`NoticeReason::LintHookUnwired`]), which `hooks install` writes.
     pub unwired: Vec<HookSlot>,
-    /// Slots a stranger holds, which amenbo will not write — [`guidance_line`] is the way in, by hand.
+    /// Slots a stranger holds ([`NoticeReason::LintHookForeignSlot`]), which amenbo will not write —
+    /// [`guidance_line`] is the way in, by hand.
     pub foreign: Vec<HookSlot>,
 }
 
+impl SetupNotice {
+    /// The reasons this notice actually carries, in the order a reader meets them. Never empty (a notice
+    /// with nothing in either list is not constructed), and exactly one entry in the common case — which
+    /// is what a surface names its report with, instead of a fixed code that guesses.
+    pub fn reasons(&self) -> Vec<NoticeReason> {
+        let mut reasons = Vec::new();
+        if !self.unwired.is_empty() {
+            reasons.push(NoticeReason::LintHookUnwired);
+        }
+        if !self.foreign.is_empty() {
+            reasons.push(NoticeReason::LintHookForeignSlot);
+        }
+        reasons
+    }
+}
+
 /// Is the lint actually running, and if not, where it is not — the slots of a git repository that are not
-/// ours, under a record that is not `no`, or `None` when there is nothing to say. It is deliberately
-/// quieter than that sounds: hooks of ours in every slot and a recorded refusal are both silent, so it
-/// speaks only while setup is genuinely unfinished and cannot become noise to tune out. A recorded `yes`
-/// does **not** silence it, because the record is not a mirror of the disk: consent with no hook there is
-/// exactly the state worth reporting.
-pub fn setup_notice(states: Option<HookStates>, consent: Option<HookConsent>) -> Option<SetupNotice> {
-    if consent == Some(HookConsent::No) {
+/// ours, or `None` when there is nothing to say. It is deliberately quieter than that sounds: hooks of ours
+/// in every slot, a device that said no, and a repository that opted out are all silent, so it speaks only
+/// while something is genuinely unsaid and cannot become noise to tune out. A `yes` on record does **not**
+/// silence it, because the answer is not a mirror of the disk: consent with no hook there is exactly the
+/// state worth reporting.
+pub fn setup_notice(states: Option<HookStates>, consent: Option<HookConsent>, opted_out: bool) -> Option<SetupNotice> {
+    if opted_out || consent == Some(HookConsent::No) {
         return None;
     }
     let states = states?;
@@ -657,14 +677,19 @@ mod tests {
         all
     }
 
-    /// The context in which the question is live: a git repo, nothing wired, never answered, on a
-    /// surface that can ask. Each test below negates exactly one of those.
+    /// The context in which the question is live: a git repo, nothing wired, the device never asked, no
+    /// opt-out, on a surface that can ask. Each test below negates exactly one of those.
     fn askable() -> HookContext {
-        HookContext { states: states(HookState::Unwired, HookState::Unwired), consent: None, can_ask: true }
+        HookContext {
+            states: states(HookState::Unwired, HookState::Unwired),
+            consent: None,
+            opted_out: false,
+            can_ask: true,
+        }
     }
 
     #[test]
-    fn unanswered_git_repo_without_the_hooks_is_asked() {
+    fn an_unasked_device_in_a_git_repo_without_the_hooks_is_asked() {
         assert_eq!(reconcile(&askable()), HookAction::Ask);
     }
 
@@ -677,20 +702,20 @@ mod tests {
     }
 
     #[test]
-    fn an_answered_project_with_its_hooks_in_place_is_not_asked_again() {
-        let ctx = HookContext { states: states(OURS, OURS), consent: Some(HookConsent::Yes), ..askable() };
-        assert_eq!(reconcile(&ctx), HookAction::Nothing);
+    fn a_repository_with_its_hooks_in_place_needs_nothing() {
+        for consent in CONSENTS {
+            let ctx = HookContext { states: states(OURS, OURS), consent, ..askable() };
+            assert_eq!(reconcile(&ctx), HookAction::Nothing, "nothing to write (answer: {consent:?})");
+        }
     }
 
-    /// A recorded `no` settles every row where amenbo has nothing of its own on disk — which is what
-    /// recording a refusal buys — whatever the slots hold.
+    /// A recorded `no` settles every row — which is what recording a refusal buys — whatever the slots
+    /// hold, and wherever the caller is standing.
     #[test]
-    fn a_refusal_is_never_asked_again() {
-        for pre in [HookState::Unwired, HookState::Foreign] {
-            for msg in [HookState::Unwired, HookState::Foreign] {
-                let ctx = HookContext { states: states(pre, msg), consent: Some(HookConsent::No), ..askable() };
-                assert_eq!(reconcile(&ctx), HookAction::Nothing, "{pre:?} / {msg:?} was refused");
-            }
+    fn a_refusal_is_never_asked_again_and_never_acted_on() {
+        for disk in every_disk() {
+            let ctx = HookContext { states: disk, consent: Some(HookConsent::No), ..askable() };
+            assert_eq!(reconcile(&ctx), HookAction::Nothing, "refused, so {disk:?} is left alone");
         }
     }
 
@@ -700,87 +725,62 @@ mod tests {
         assert_eq!(reconcile(&ctx), HookAction::Nothing);
     }
 
-    /// The first refusal: consent was consent to an install, not a promise to keep the files alive. Hooks
-    /// deleted by hand may well have been deleted on purpose, so they are not restored behind the user's
-    /// back — nothing of ours is left on disk, so the state changed and the question is live again.
+    /// The device-wide answer at work: a repository bound long after the yes was given is wired without a
+    /// second question — including for a machine caller, which has nothing to ask and only work to do.
     #[test]
-    fn hand_deleted_hooks_are_asked_about_again_not_silently_restored() {
-        let ctx = HookContext {
-            states: states(HookState::Unwired, HookState::Unwired),
-            consent: Some(HookConsent::Yes),
-            ..askable()
-        };
-        assert_eq!(reconcile(&ctx), HookAction::Ask);
-    }
-
-    /// The same refusal at slot granularity: our hook is in one slot at the version this build writes, so
-    /// this install already knew the empty slot and the user emptied it. Not ours to put back.
-    #[test]
-    fn a_slot_emptied_under_a_current_install_is_asked_about_not_refilled() {
-        let ctx = HookContext { states: states(OURS, HookState::Unwired), consent: Some(HookConsent::Yes), ..askable() };
-        assert_eq!(reconcile(&ctx), HookAction::Ask);
-    }
-
-    /// The row this build adds: an install written before `commit-msg` existed as a slot. The consent on
-    /// record covers the lint as a feature, and the empty slot is one the user never saw, let alone
-    /// removed — so it is filled without asking a project that already said yes.
-    #[test]
-    fn a_slot_this_build_added_is_installed_under_the_consent_already_given() {
-        let ctx = HookContext { states: states(OLD, HookState::Unwired), consent: Some(HookConsent::Yes), ..askable() };
+    fn a_yes_reaches_a_repository_it_was_never_asked_about() {
+        let ctx = HookContext { consent: Some(HookConsent::Yes), ..askable() };
         assert_eq!(reconcile(&ctx), HookAction::Install);
         assert_eq!(
             reconcile(&HookContext { can_ask: false, ..ctx }),
             HookAction::Install,
-            "it asks no one, so a machine caller completes the wiring too",
+            "it asks no one, so a machine caller wires it too",
         );
     }
 
-    /// The mirror row: our hook is on disk though the record does not say yes, so someone installed it by
-    /// hand. The filesystem wins and the record follows it — no question, because the answer is on disk.
-    /// It holds for a bare `no` and for never having been asked alike, and one slot of ours is enough.
+    /// The slot an upgrade added, in a repository an older build wired: one empty slot under a `yes` is
+    /// filled, with nothing asked. It needs no rule of its own — a slot to write under a yes is a slot to
+    /// write, whatever the marker version beside it says.
     #[test]
-    fn a_hand_installed_hook_pulls_the_record_to_yes() {
-        for consent in [Some(HookConsent::No), None] {
-            for disk in [states(OURS, OURS), states(OURS, HookState::Unwired), states(HookState::Foreign, OURS)] {
-                let ctx = HookContext { states: disk, consent, ..askable() };
-                assert_eq!(reconcile(&ctx), HookAction::SyncConsentToYes, "record: {consent:?}, disk: {disk:?}");
-                assert_eq!(
-                    reconcile(&HookContext { can_ask: false, ..ctx }),
-                    HookAction::SyncConsentToYes,
-                    "it asks no one, so it holds on a machine caller too",
-                );
-            }
+    fn a_slot_this_build_added_is_wired_under_the_answer_already_given() {
+        let ctx = HookContext { states: states(OLD, HookState::Unwired), consent: Some(HookConsent::Yes), ..askable() };
+        assert_eq!(reconcile(&ctx), HookAction::Install);
+    }
+
+    /// The opt-out is the escape hatch, and this is what makes it one: `uninstall` ran here, so a yes on
+    /// record does not put the hooks back at the next startup. It vetoes every answer, including the
+    /// unanswered one — a repository the user has already spoken about is not a place to ask the device's
+    /// question.
+    #[test]
+    fn an_opted_out_repository_is_neither_wired_nor_asked_about() {
+        for consent in CONSENTS {
+            let ctx = HookContext { opted_out: true, consent, ..askable() };
+            assert_eq!(reconcile(&ctx), HookAction::Nothing, "uninstall ran here (answer: {consent:?})");
         }
     }
 
-    /// A stranger in every slot is not a question. The question exists to get permission for a write, and
-    /// there is no write to permit: a yes could touch nothing, so asking would spend the user's attention
-    /// on amenbo's own difficulty and leave them holding a choice that changes nothing. The lint still
-    /// wants wiring, which `setup_notice` says on a surface where the line can be pasted.
+    /// A stranger in every slot is not a question and not a job. Both exist to get a write done, and there
+    /// is no write to permit: a yes could touch nothing, so asking would spend the user's attention on
+    /// amenbo's own difficulty and leave them holding a choice that changes nothing. The lint still wants
+    /// wiring, which `setup_notice` says on a surface where the line can be pasted.
     #[test]
     fn a_strangers_hook_is_not_asked_about_since_no_answer_could_write_it() {
-        let ctx = HookContext { states: states(HookState::Foreign, HookState::Foreign), ..askable() };
-        assert_eq!(reconcile(&ctx), HookAction::Nothing);
+        for consent in CONSENTS {
+            let ctx = HookContext { states: states(HookState::Foreign, HookState::Foreign), consent, ..askable() };
+            assert_eq!(reconcile(&ctx), HookAction::Nothing, "every slot is a stranger's (answer: {consent:?})");
+        }
     }
 
-    /// One writable slot is enough to make the question live, and it is asked without mentioning the other:
-    /// the stranger's slot is amenbo's problem to route to `setup_notice`, not a fork in the user's road.
+    /// One writable slot is enough, and it is acted on without mentioning the other: the stranger's slot is
+    /// amenbo's problem to route to `setup_notice`, not a fork in the user's road.
     #[test]
-    fn one_writable_slot_beside_a_stranger_is_still_asked_about() {
-        let ctx = HookContext { states: states(HookState::Unwired, HookState::Foreign), ..askable() };
-        assert_eq!(reconcile(&ctx), HookAction::Ask);
-    }
-
-    /// Having said yes with a stranger in every slot leaves nothing to do: the guidance was given when the
-    /// question was answered, and there is no slot amenbo may write.
-    #[test]
-    fn consent_with_every_slot_taken_asks_nothing_further() {
-        let ctx = HookContext {
-            states: states(HookState::Foreign, HookState::Foreign),
-            consent: Some(HookConsent::Yes),
-            ..askable()
-        };
-        assert_eq!(reconcile(&ctx), HookAction::Nothing);
+    fn one_writable_slot_beside_a_stranger_is_still_asked_about_and_still_wired() {
+        let disk = states(HookState::Unwired, HookState::Foreign);
+        assert_eq!(reconcile(&HookContext { states: disk, ..askable() }), HookAction::Ask);
+        assert_eq!(
+            reconcile(&HookContext { states: disk, consent: Some(HookConsent::Yes), ..askable() }),
+            HookAction::Install,
+        );
     }
 
     /// The report speaks exactly while the lint is not running and has not been refused, naming each slot
@@ -790,45 +790,67 @@ mod tests {
     fn an_unwired_repository_is_reported_as_unfinished() {
         for consent in [None, Some(HookConsent::Yes)] {
             assert_eq!(
-                setup_notice(states(HookState::Unwired, HookState::Unwired), consent),
+                setup_notice(states(HookState::Unwired, HookState::Unwired), consent, false),
                 Some(SetupNotice { unwired: vec![HookSlot::PreCommit, HookSlot::CommitMsg], foreign: vec![] }),
             );
             assert_eq!(
-                setup_notice(states(HookState::Foreign, HookState::Unwired), consent),
+                setup_notice(states(HookState::Foreign, HookState::Unwired), consent, false),
                 Some(SetupNotice { unwired: vec![HookSlot::CommitMsg], foreign: vec![HookSlot::PreCommit] }),
                 "a stranger in one slot and an empty other is two different fixes at once",
             );
             assert_eq!(
-                setup_notice(states(OURS, HookState::Unwired), consent),
+                setup_notice(states(OURS, HookState::Unwired), consent, false),
                 Some(SetupNotice { unwired: vec![HookSlot::CommitMsg], foreign: vec![] }),
                 "one slot wired is not the lint running",
             );
         }
     }
 
-    /// The two silences that keep it from becoming noise: our hooks are in every slot (nothing is
-    /// missing), or the project said no (it was asked and answered, and a refusal is not an unfinished
-    /// setup).
+    /// The report names what it actually found. A stranger's slot beside no empty one is **not** an
+    /// unwired hook — amenbo did all it may do — and a report that called it one would be describing a
+    /// state that is not there. This is the mismatch #1808 caught: `unwired: []` under a reason that said
+    /// `lint_hook_unwired`.
     #[test]
-    fn wired_hooks_or_a_refusal_say_nothing() {
+    fn each_reason_names_the_list_it_came_from() {
+        let foreign_only = setup_notice(states(OURS, HookState::Foreign), None, false).unwrap();
+        assert_eq!(foreign_only.unwired, vec![], "nothing is missing — a stranger simply holds a slot");
+        assert_eq!(foreign_only.reasons(), vec![NoticeReason::LintHookForeignSlot]);
+
+        let unwired_only = setup_notice(states(OURS, HookState::Unwired), None, false).unwrap();
+        assert_eq!(unwired_only.reasons(), vec![NoticeReason::LintHookUnwired]);
+
+        let both = setup_notice(states(HookState::Foreign, HookState::Unwired), None, false).unwrap();
+        assert_eq!(
+            both.reasons(),
+            vec![NoticeReason::LintHookUnwired, NoticeReason::LintHookForeignSlot],
+            "two live reasons are two reasons, not the first one",
+        );
+    }
+
+    /// The three silences that keep it from becoming noise: our hooks are in every slot (nothing is
+    /// missing), the device said no (it was asked and answered, and a refusal is not an unfinished setup),
+    /// or `uninstall` ran here (the user already said "not this one").
+    #[test]
+    fn wired_hooks_a_refusal_or_an_opt_out_say_nothing() {
         for consent in CONSENTS {
             assert_eq!(
-                setup_notice(states(OURS, OURS), consent),
+                setup_notice(states(OURS, OURS), consent, false),
                 None,
-                "the hooks are ours and on disk, so nothing is missing (record: {consent:?})",
+                "the hooks are ours and on disk, so nothing is missing (answer: {consent:?})",
             );
         }
         for disk in every_disk() {
-            assert_eq!(setup_notice(disk, Some(HookConsent::No)), None, "refused, so {disk:?} is silent");
+            assert_eq!(setup_notice(disk, Some(HookConsent::No), false), None, "refused, so {disk:?} is silent");
+            assert_eq!(setup_notice(disk, None, true), None, "opted out, so {disk:?} is silent");
         }
     }
 
-    /// A recorded `yes` does not silence it: the record is not a mirror of the disk, and consent with the
+    /// A recorded `yes` does not silence it: the answer is not a mirror of the disk, and consent with the
     /// hooks gone is precisely the state worth reporting.
     #[test]
     fn consent_alone_does_not_silence_the_report() {
         assert_eq!(
-            setup_notice(states(HookState::Unwired, HookState::Unwired), Some(HookConsent::Yes)),
+            setup_notice(states(HookState::Unwired, HookState::Unwired), Some(HookConsent::Yes), false),
             Some(SetupNotice { unwired: vec![HookSlot::PreCommit, HookSlot::CommitMsg], foreign: vec![] }),
         );
     }
@@ -836,16 +858,17 @@ mod tests {
     #[test]
     fn outside_a_git_repository_there_is_no_setup_to_finish() {
         for consent in CONSENTS {
-            assert_eq!(setup_notice(None, consent), None);
+            assert_eq!(setup_notice(None, consent, false), None);
         }
     }
 
+    /// The spelling the answer is stored under in `config.json`, which the v4 migration step writes by
+    /// hand — it names these two words in frozen text, so a rename here without one there would land an
+    /// answer the config cannot read back.
     #[test]
     fn consent_round_trips_through_its_stored_spelling() {
-        for answer in [HookConsent::Yes, HookConsent::No] {
-            assert_eq!(HookConsent::parse(answer.as_str()), Some(answer));
-        }
-        assert_eq!(HookConsent::parse("maybe"), None);
+        assert_eq!(serde_json::to_value(HookConsent::Yes).unwrap(), serde_json::json!("yes"));
+        assert_eq!(serde_json::to_value(HookConsent::No).unwrap(), serde_json::json!("no"));
     }
 
     /// Catches the [`HOOK_MARKER`] literal and [`HOOK_MARKER_VERSION`] drifting apart — the same guard

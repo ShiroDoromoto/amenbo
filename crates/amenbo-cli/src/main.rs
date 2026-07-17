@@ -910,7 +910,7 @@ fn render_install(done: &amenbo_core::hooks::InstallReport, cmd: &str) -> String
     }
     for slot in &done.refused {
         lines.push(format!(
-            "hooks: {} will not read back as text, so amenbo could not add its block. Add this line yourself:\n    {}",
+            "hooks: {} is not amenbo's to change (git tracks it, or it will not read back as text), so amenbo left it alone. Add this line yourself:\n    {}",
             slot.name(),
             guidance_line(*slot, cmd)
         ));

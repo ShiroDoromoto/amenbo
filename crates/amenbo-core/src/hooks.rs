@@ -26,8 +26,11 @@
 //! shebang**, so amenbo's lint and the other tool's hook both run, and running first means the lint fires
 //! even if the other hook exits early. Everything outside the markers is left exactly as it was, and
 //! [`uninstall`] strips only the block, deleting the file only when nothing but amenbo's block was in it.
-//! There is no slot amenbo refuses over an owner: coexisting is always possible, the one exception being a
-//! hook whose bytes will not read back as text ([`InstallReport::refused`]).
+//! Coexisting is the rule, refused only where amenbo cannot add its block without touching a file it does
+//! not own ([`InstallReport::refused`]): a hook whose bytes will not read back as text, or one git
+//! **tracks** — a committed hook in a `core.hooksPath` dir, where a change would surface in `git status`
+//! and could be committed into the user's repo (`.git/info/exclude` silences only untracked files). Both
+//! are rare; the common `.git/hooks` and the untracked shared hook are always coexisted with.
 //!
 //! Because the block lives inside someone else's file, that file can move under it — another tool
 //! regenerating its hook wipes the block wholesale (which reads back as a slot with no block of ours, so
@@ -359,6 +362,26 @@ fn is_ignored(dir: &Path, path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Does git **track** `path` — is it in the index or a committed file? `ls-files --error-unmatch` exits 0
+/// only for a tracked path. Unlike an untracked file, a tracked one cannot be hidden by
+/// `.git/info/exclude`, so a modification to it shows in `git status` and can be committed. That is why
+/// amenbo must not slip its block into a foreign hook git tracks: it cannot own it and cannot hide the
+/// change, so it would be leaving amenbo's lines in the user's versioned tree to be committed by mistake.
+/// A hook under `.git/hooks` is never tracked (it is inside the git dir, outside the working tree), so this
+/// only ever fires for a hook a `core.hooksPath` puts in the tree — `.githooks`, `.husky` — that the
+/// repository has committed.
+fn is_tracked(dir: &Path, path: &Path) -> bool {
+    std::process::Command::new("git")
+        .current_dir(dir)
+        .args(["ls-files", "--error-unmatch"])
+        .arg(path)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 /// Keep a hook written into a shared directory out of everybody else's checkout, by naming it in
 /// `.git/info/exclude` — git's per-clone ignore file, which is inside `.git` and so is never committed and
 /// never travels. The hook then runs for the person who said yes and shows up for nobody: not in
@@ -480,9 +503,11 @@ pub enum Installed {
 pub struct InstallReport {
     /// The slots amenbo wrote, each with what writing it amounted to.
     pub installed: Vec<(HookSlot, Installed)>,
-    /// The slots amenbo could not add its block to because their contents will not read back as text — a
-    /// binary hook, or one it may not open. It cannot coexist with what it cannot read, so it leaves the
-    /// file alone; the caller offers [`guidance_line`] for each. Empty in every ordinary repository.
+    /// The slots amenbo could not add its block to, and left to their owner. Two reasons, both rare: the
+    /// hook's contents will not read back as text (a binary, or one it may not open), or git **tracks** it
+    /// — a committed hook in a `core.hooksPath` dir — so a modification would show in `git status` and could
+    /// be committed into the user's repo, which amenbo will not risk. The caller offers [`guidance_line`]
+    /// for each. Empty in every ordinary repository.
     pub refused: Vec<HookSlot>,
 }
 
@@ -516,6 +541,14 @@ pub fn install(dir: &Path, cmd: &str) -> Result<InstallReport> {
             Err(_) => None,
         };
         let was_ours = existing.as_deref().is_some_and(|t| marker_version(t).is_some());
+        // A foreign hook that git tracks is one amenbo cannot slip its block into: the change would show in
+        // `git status` and could be committed into the user's repo, and `.git/info/exclude` cannot hide a
+        // tracked file. Coexisting is only ever silent for a hook under `.git/hooks` or an untracked one in
+        // a `core.hooksPath` dir — so leave a tracked stranger's hook to its owner (hand-off), not touched.
+        if !was_ours && existing.is_some() && is_tracked(dir, &hook) {
+            report.refused.push(slot);
+            continue;
+        }
         std::fs::write(&hook, upsert_block(existing.as_deref(), slot, cmd)).map_err(|e| io_err_slot(slot, e))?;
         make_executable(&hook)?;
         if shared {
@@ -526,11 +559,11 @@ pub fn install(dir: &Path, cmd: &str) -> Result<InstallReport> {
     if report.installed.is_empty() && !report.refused.is_empty() {
         return Err(Error::Conflict(Msg::new(
             format!(
-                "The hooks here will not read back as text, so amenbo cannot add its block. Add these lines yourself:\n{}",
+                "amenbo cannot add its block to the hooks here without changing a file it does not own. Add these lines yourself:\n{}",
                 guidance_block(report.refused.clone(), cmd, "    ")
             ),
             format!(
-                "ここのフックはテキストとして読めないため、amenbo のブロックを足せません。次の行をご自身で足してください:\n{}",
+                "ここのフックは、amenbo が所有していないファイルを変えずにはブロックを足せません。次の行をご自身で足してください:\n{}",
                 guidance_block(report.refused.clone(), cmd, "    ")
             ),
         )));
@@ -1159,6 +1192,74 @@ mod tests {
             assert!(!dir.join(".git/hooks").join(slot.name()).exists(), "and not in the guessed directory");
         }
         assert_eq!(probe(&dir), states(OURS, OURS));
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A hook git **tracks** in a `core.hooksPath` dir is one amenbo will not touch: a change to it would
+    /// show in `git status` and could be committed into the user's repo, and `.git/info/exclude` cannot hide
+    /// a tracked file. So amenbo hands that slot off (refused) and leaves the file byte-for-byte, while still
+    /// wiring the empty slot beside it. This is the leak an earlier build caused — it coexist-injected into a
+    /// versioned `.githooks` hook and left the block staged in the user's tree.
+    #[test]
+    fn a_tracked_foreign_hook_in_a_shared_dir_is_refused_not_modified() {
+        let dir = git_repo("tracked-shared");
+        std::process::Command::new("git")
+            .current_dir(&dir)
+            .args(["config", "core.hooksPath", ".githooks"])
+            .output()
+            .unwrap();
+        let hooks = dir.join(".githooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let theirs = "#!/bin/sh\n# their committed commit-msg guard\ntheir-linter \"$1\"\n";
+        std::fs::write(hooks.join("commit-msg"), theirs).unwrap();
+        // Staging is enough for `ls-files --error-unmatch` — no commit, so no git identity is needed.
+        let out =
+            std::process::Command::new("git").current_dir(&dir).args(["add", ".githooks/commit-msg"]).output().unwrap();
+        assert!(out.status.success(), "git add failed: {}", String::from_utf8_lossy(&out.stderr));
+        assert_eq!(probe(&dir), states(HookState::Unwired, HookState::Foreign));
+
+        let done = install(&dir, "amenbo").unwrap();
+        assert_eq!(done.refused, vec![HookSlot::CommitMsg], "the tracked stranger's hook is handed off, not touched");
+        assert_eq!(done.installed, vec![(HookSlot::PreCommit, Installed::Wrote)], "the empty slot is still wired");
+        assert_eq!(
+            std::fs::read_to_string(hooks.join("commit-msg")).unwrap(),
+            theirs,
+            "the tracked hook is left byte-for-byte — no block to be committed",
+        );
+        let status = std::process::Command::new("git").current_dir(&dir).args(["status", "--porcelain"]).output().unwrap();
+        assert!(
+            !String::from_utf8_lossy(&status.stdout).contains(" M .githooks/commit-msg"),
+            "the tracked commit-msg must not show as modified",
+        );
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// An **untracked** stranger's hook in the same shared dir *is* coexisted with — amenbo hides its own
+    /// write with `.git/info/exclude`, so there is nothing to leak. Being tracked is the whole of the
+    /// difference, not the shared dir.
+    #[test]
+    fn an_untracked_foreign_hook_in_a_shared_dir_is_coexisted_with() {
+        let dir = git_repo("untracked-shared");
+        std::process::Command::new("git")
+            .current_dir(&dir)
+            .args(["config", "core.hooksPath", ".githooks"])
+            .output()
+            .unwrap();
+        let hooks = dir.join(".githooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        // Present but NOT git-added — an untracked stranger's hook.
+        std::fs::write(hooks.join("pre-commit"), "#!/bin/sh\nnpx husky run\n").unwrap();
+        assert_eq!(probe(&dir), states(HookState::Foreign, HookState::Unwired));
+
+        let done = install(&dir, "amenbo").unwrap();
+        assert_eq!(done.refused, vec![], "an untracked stranger's hook is coexisted with, not refused");
+        let coexisting = std::fs::read_to_string(hooks.join("pre-commit")).unwrap();
+        assert!(
+            coexisting.contains(HOOK_BEGIN_MARKER) && coexisting.contains("npx husky run"),
+            "the block is added alongside the untracked stranger's body",
+        );
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

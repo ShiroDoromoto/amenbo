@@ -21,7 +21,8 @@ pub mod write;
 
 pub use engine::{
     at_rest_status, AtRestStatus,
-    probe_format_stamp, probe_format_version, probe_is_database, probe_is_populated, probe_live_projects,
+    probe_format_stamp, probe_format_version, probe_is_database, probe_is_legacy_keyed,
+    probe_is_populated, probe_live_projects,
     read_format_stamp, read_format_version, read_meta, FormatStamp,
     Result, RowChange,
     StoreEngine, StoreEngineError, CHANGE_FEED_RETAIN,

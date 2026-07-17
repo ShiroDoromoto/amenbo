@@ -139,10 +139,17 @@ pub(crate) fn ensure_format_supported(stamp: &crate::store_engine::FormatStamp) 
 /// engine's `CREATE TABLE IF NOT EXISTS` will put integer-keyed tables next to ULID-keyed ones,
 /// leaving a store that is neither.
 pub(crate) fn ensure_integer_keyed(engine: &StoreEngine) -> Result<()> {
-    if !engine.is_legacy_keyed()? {
-        return Ok(());
+    if engine.is_legacy_keyed()? {
+        return Err(legacy_keyed_refusal());
     }
-    Err(Error::invalid(
+    Ok(())
+}
+
+/// The bilingual refusal both key-space gates raise ([`ensure_integer_keyed`] over an open engine,
+/// [`ensure_integer_keyed_at`] over a bare probe). One text, one recovery path — install the last build
+/// that consolidates, migrate there, then update again.
+fn legacy_keyed_refusal() -> Error {
+    Error::invalid(
         "this store predates the consolidation — its rows are still ULID-keyed, and this build reads the \
          integer-keyed shape and can no longer re-key one. install amenbo 0.1.9 (the last build that \
          migrates it), run `amenbo migrate` there, then update again (nothing is lost: that migration \
@@ -150,26 +157,23 @@ pub(crate) fn ensure_integer_keyed(engine: &StoreEngine) -> Result<()> {
         "このストアは統合前の世代です（行がまだ ULID キー）。このビルドは INTEGER キーの形を読み、再キーはもう \
          できません。amenbo 0.1.9（移行を行う最後の版）を入れて `amenbo migrate` を実行してから、改めて更新して \
          ください（失われるものはありません: その移行は動かす前にストアをバックアップします）",
-    ))
+    )
 }
 
-/// The key-space gate for the writing open: peek at the live file over a `query_only` connection
-/// **before** opening the engine.
+/// The key-space gate for the writing open: read the live file's catalogue over a **bare, DDL-free**
+/// connection ([`crate::store_engine::probe_is_legacy_keyed`]) **before** opening the engine.
 ///
-/// The only thing it has to tell apart is genesis: a file with no tables at all (missing, or just
-/// created by `Connection::open`) has nothing to lose, and the engine's `CREATE TABLE` is the right
-/// answer for it. If the file cannot be read (corrupt, or a never-migrated at-rest-encrypted store),
-/// pass silently — with nothing to go on, inventing an error here is less accurate than letting the
-/// `StoreEngine::open` that follows return the real one.
+/// It must not open the engine to decide, and this is the whole reason: [`StoreEngine::open`] applies the
+/// registry DDL (`CREATE UNIQUE INDEX … ON project(slug)` among it) on the way to a connection, and that
+/// DDL errors on a ULID-keyed store whose `project` table predates the column — so opening the engine to
+/// ask "is this legacy?" would crash on the exact store this gate exists to refuse by name. The probe
+/// answers from `sqlite_master` instead, and reads genesis (a file with none of the record tables) and an
+/// unreadable file alike as **not legacy** — the permissive answer that lets the real open decide.
 fn ensure_integer_keyed_at(db_path: &std::path::Path) -> Result<()> {
-    if !db_path.is_file() {
-        return Ok(()); // genesis
+    if crate::store_engine::probe_is_legacy_keyed(db_path) {
+        return Err(legacy_keyed_refusal());
     }
-    let Ok(engine) = StoreEngine::open_read(db_path) else { return Ok(()) };
-    if !engine.has_any_table().unwrap_or(false) {
-        return Ok(()); // An empty file is genesis.
-    }
-    ensure_integer_keyed(&engine)
+    Ok(())
 }
 
 impl Store {
@@ -556,6 +560,43 @@ mod tests {
 
         let engine = StoreEngine::open_read(&db).unwrap();
         let err = ensure_integer_keyed(&engine).expect_err("a pre-consolidation store must not open");
+        assert!(
+            err.message_en().contains("0.1.9"),
+            "names the last build that can migrate it: {}",
+            err.message_en()
+        );
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// The regression that named this fix: a pre-consolidation `project` table that **already exists
+    /// without the `slug` column** must be refused by the bare-probe gate — not opened. The earlier gate
+    /// reached the answer through `StoreEngine::open_read`, whose `init` DDL includes
+    /// `CREATE UNIQUE INDEX … ON project(slug)`; on an existing slug-less `project` that `IF NOT EXISTS`
+    /// does not save it (the index is absent, so SQLite tries to build it and finds no column), so the
+    /// open blew up with a raw `no such column: slug` — and, worse, that `Err` was swallowed into a silent
+    /// `Ok(())` that let the store through to the writing `StoreEngine::open`, which then crashed. The
+    /// distinction from [`a_ulid_keyed_store_is_refused_with_the_build_that_can_migrate_it`] is exactly
+    /// that this store's `project` predates `slug`; there the table is created fresh (with `slug`) by the
+    /// probe's own DDL, which is why that shape never exercised the crash.
+    #[test]
+    fn a_legacy_project_without_slug_is_refused_not_crashed() {
+        let base = scratch("legacy-no-slug");
+        let db = base.join(crate::config::STORE_FILE_NAME);
+        {
+            let conn = rusqlite::Connection::open(&db).unwrap();
+            // The pre-consolidation shape: ULID-keyed record tables, and a `project` that predates the
+            // `slug` column the current schema indexes.
+            conn.execute_batch(
+                "CREATE TABLE project (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL DEFAULT '');
+                 CREATE TABLE task (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL DEFAULT '');",
+            )
+            .unwrap();
+        }
+
+        // The bare probe sees the legacy key space without opening the engine (no DDL, no crash).
+        assert!(crate::store_engine::probe_is_legacy_keyed(&db), "a slug-less ULID project is legacy");
+
+        let err = ensure_integer_keyed_at(&db).expect_err("a pre-consolidation store must be refused, not opened");
         assert!(
             err.message_en().contains("0.1.9"),
             "names the last build that can migrate it: {}",

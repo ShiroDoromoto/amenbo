@@ -56,7 +56,7 @@ use crate::config::Paths;
 use crate::error::{Error, Result};
 use crate::progress::Progress;
 use crate::store_engine::migrate::{self as chain, Run, Step, STEPS};
-use crate::store_engine::{probe_format_version, StoreEngine};
+use crate::store_engine::{probe_format_version, probe_is_legacy_keyed, StoreEngine};
 
 /// Filename prefix of the automatic pre-migration archive (`pre-migrate-<stamp>.amenbo-backup`), mirroring
 /// the `store.pre-restore-<stamp>` aside a restore leaves behind: the same "we moved your data, here is the
@@ -318,8 +318,12 @@ pub fn migrate_store(
 /// and the store may be gone or unreadable. It is the same honest, cheap look the run itself starts with,
 /// and the run re-checks under the lock.
 pub fn is_pending() -> bool {
-    archive::enumerate_store()
-        .is_some_and(|source| !chain::pending(probe_format_version(&source.db_path), STEPS).is_empty())
+    archive::enumerate_store().is_some_and(|source| {
+        // A pre-consolidation (ULID-keyed) store is not this chain's to carry forward (see
+        // `at_startup`); it has no *pending* migration, only an open-time refusal ahead of it.
+        !probe_is_legacy_keyed(&source.db_path)
+            && !chain::pending(probe_format_version(&source.db_path), STEPS).is_empty()
+    })
 }
 
 /// **The execution site**: migrate this device's store if it is behind, with the other surface
@@ -339,6 +343,14 @@ pub fn at_startup(
     let Some(source) = archive::enumerate_store() else {
         return Ok(None);
     };
+    // A pre-consolidation (ULID-keyed) store predates the chain's baseline: this build cannot re-key it,
+    // and opening the engine to migrate would fail on the registry DDL (`CREATE UNIQUE INDEX … ON
+    // project(slug)`, which the old `project` table has no column for) before any gate spoke. Leave it
+    // untouched — the open path refuses it by name (`store::open::ensure_integer_keyed`), which is where
+    // the recovery (migrate under 0.1.9, then update) is spelled out.
+    if probe_is_legacy_keyed(&source.db_path) {
+        return Ok(None);
+    }
     if chain::pending(probe_format_version(&source.db_path), STEPS).is_empty() {
         return Ok(None);
     }

@@ -603,6 +603,20 @@ pub fn probe_is_populated(path: &Path) -> bool {
     probe(path, |conn| meta_exists(conn, super::META_SCHEMA_VERSION)).unwrap_or(false)
 }
 
+/// Whether a store still carries the **ULID `TEXT`** key space of a pre-consolidation store, **without
+/// running a line of DDL** — the probe twin of [`StoreEngine::is_legacy_keyed`] ([`schema::is_legacy_keyed`],
+/// same `sqlite_master`/`pragma_table_info` catalogue read). The open-time key-space gate
+/// (`store::open::ensure_integer_keyed`) takes this *before* it opens the engine, for the same reason the
+/// version gate reads through [`probe_format_version`]: [`StoreEngine::open`] applies the registry DDL in
+/// [`StoreEngine::init`] on the way to a connection, and that DDL — `CREATE UNIQUE INDEX … ON project(slug)`
+/// among it — errors on a store whose `project` table predates the column, so the store would blow up on a
+/// raw SQLite error before the gate that means to refuse it by name ever ran. Unreadable (absent / not a
+/// database / a legacy encrypted store) reads as **not legacy**, the permissive answer: the real open that
+/// follows surfaces whatever is actually wrong, with its own error.
+pub fn probe_is_legacy_keyed(path: &Path) -> bool {
+    probe(path, schema::is_legacy_keyed).unwrap_or(false)
+}
+
 /// The live (non-archived) projects of the single store, **without running a line of DDL** — the probe
 /// twin of a `project_list` for callers that must name the store's projects *before* deciding to open it.
 /// The CLI's pointer guard (`no_pointer`) is the one such caller: it offers `bind --project <id>`
@@ -652,6 +666,33 @@ mod tests {
             e.conn().query_row("SELECT COUNT(*) FROM task", [], |r| r.get::<_, i64>(0)).unwrap(),
             0
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The bare legacy-key probe reads the catalogue without opening the engine, so it survives a
+    /// pre-consolidation `project` that predates the `slug` column — the store whose registry DDL
+    /// (`CREATE UNIQUE INDEX … ON project(slug)`) [`StoreEngine::open`] would crash on. A store this build
+    /// wrote is integer-keyed and reads as `false`; a missing file reads as `false` (genesis).
+    #[test]
+    fn probe_is_legacy_keyed_reads_a_slugless_ulid_store_without_ddl() {
+        let dir = std::env::temp_dir().join(format!("amenbo-probe-legacy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let legacy = dir.join("legacy.sqlite");
+        {
+            let conn = Connection::open(&legacy).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE project (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL DEFAULT '');
+                 CREATE TABLE task (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL DEFAULT '');",
+            )
+            .unwrap();
+        }
+        assert!(probe_is_legacy_keyed(&legacy), "a slug-less ULID project is legacy — and no DDL ran to learn it");
+
+        let fresh = dir.join("fresh.sqlite");
+        StoreEngine::open(&fresh).unwrap();
+        assert!(!probe_is_legacy_keyed(&fresh), "a store this build wrote is integer-keyed");
+        assert!(!probe_is_legacy_keyed(&dir.join("absent.sqlite")), "a missing store is genesis, not legacy");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

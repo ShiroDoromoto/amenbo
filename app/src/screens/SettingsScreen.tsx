@@ -12,7 +12,7 @@ import type { DoctorReportDto, StoreLocationsDto, DataProgressDto } from "../bin
 import { perfMode } from "../core/ipc";
 import { Identicon } from "../components/identicon";
 import { DataProgressModal } from "../components/DataProgressModal";
-import { facetColor, FacetAvatar } from "../components/atoms";
+import { facetColor, FacetAvatar, identiconSeed } from "../components/atoms";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { isEnterSubmit } from "../core/keys";
 
@@ -198,7 +198,7 @@ function AvatarSlot({ kind }: { kind: "human" | "ai" }) {
       <span className="avatar-preview" style={{ borderColor: facetColor(kind) }} title={actor?.name ?? ""}>
         {actor?.avatar
           ? <img className="avatar-preview__img" src={actor.avatar} alt="" />
-          : <Identicon seed={kind} size={48} />}
+          : <Identicon seed={actor ? identiconSeed(actor) : kind} size={48} />}
       </span>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <span style={{ fontSize: "var(--fs-xs)" }}>

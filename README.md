@@ -220,6 +220,7 @@ amenbo decision comment attach 7 ./note.png     # attach to one decision comment
 amenbo attach ls AMB-T-<n>                       # list a task's or decision's attachments (the kind code names the space)
 amenbo attach ls --task-comment 42              # a comment is named by a flag: the two comment tables number apart
 amenbo attach open 3                            # open a blob (OS opener) or the URL (id from `attach ls`)
+amenbo attach save 3 --out ./spec.pdf           # write a blob's bytes to a file (or a dir → its own filename); --force to overwrite
 amenbo attach rm 3 --yes                        # remove (confirms without --yes; the file's bytes go with it once nothing else references them)
 
 # Re-home a task to another project (a task belongs to exactly one project)

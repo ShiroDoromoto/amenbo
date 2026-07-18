@@ -1000,6 +1000,21 @@ pub enum AttachCmd {
         /// attachment ref (AMB-ATT-n)
         id: String,
     },
+    /// Save a blob attachment's bytes to a file (the CLI counterpart of the GUI's download —
+    /// `open` only spills to a temp file). URL attachments have nothing to save; open the link
+    /// with `attach open`.
+    Save {
+        /// attachment ref (AMB-ATT-n)
+        id: String,
+        /// where to write it — a file path, or a directory to save under the attachment's own
+        /// filename. Omitted, it lands in the current directory under that filename.
+        #[arg(long, value_name = "PATH")]
+        out: Option<String>,
+        /// overwrite the destination if it already exists (the default refuses, to not clobber
+        /// unasked)
+        #[arg(long)]
+        force: bool,
+    },
     /// Remove an attachment, permanently — confirms unless -y (the blob bytes are GC'd once
     /// nothing references them)
     Rm {

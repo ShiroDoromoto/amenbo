@@ -288,18 +288,19 @@ mod tests {
     /// would break this consumer quietly; this sample is the anchor that makes CI catch it. It pins
     /// both parsing and the choice of installer for the current OS.
     const WHARFY_LATEST_JSON: &str = r#"{
-      "version": "0.1.5",
-      "notes_url": "https://github.com/ShiroDoromoto/amenbo-dist/releases/tag/v0.1.5",
+      "version": "1.0.3",
+      "notes_url": "https://github.com/ShiroDoromoto/amenbo/releases/tag/v1.0.3",
       "assets": {
-        "linux-arm64": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo_0.1.5_linux_arm64.tar.gz",
-        "linux-x64": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo_0.1.5_linux_amd64.tar.gz",
-        "linux-x64-deb": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-app-linux-amd64.deb",
-        "linux-x64-rpm": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-app-linux-x86_64.rpm",
-        "macos-arm64": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo_0.1.5_darwin_arm64.tar.gz",
-        "macos-arm64-pkg": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-darwin-arm64.pkg",
-        "macos-x64": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo_0.1.5_darwin_amd64.tar.gz",
-        "windows-x64": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo_0.1.5_windows_amd64.zip",
-        "windows-x64-exe": "https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-app-windows-x64-setup.exe"
+        "linux-arm64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo_1.0.3_linux_arm64.tar.gz",
+        "linux-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo_1.0.3_linux_amd64.tar.gz",
+        "linux-x64-deb": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-app-linux-amd64.deb",
+        "linux-x64-rpm": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-app-linux-x86_64.rpm",
+        "macos-arm64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo_1.0.3_darwin_arm64.tar.gz",
+        "macos-arm64-pkg": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-darwin-arm64.pkg",
+        "macos-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo_1.0.3_darwin_amd64.tar.gz",
+        "macos-x64-pkg": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-darwin-amd64.pkg",
+        "windows-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo_1.0.3_windows_amd64.zip",
+        "windows-x64-exe": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-app-windows-x64-setup.exe"
       }
     }"#;
 
@@ -307,19 +308,19 @@ mod tests {
     #[test]
     fn parses_wharfy_manifest() {
         let r: LatestRelease = serde_json::from_str(WHARFY_LATEST_JSON).unwrap();
-        assert_eq!(r.version, "0.1.5");
+        assert_eq!(r.version, "1.0.3");
         assert_eq!(
             r.notes_url.as_deref(),
-            Some("https://github.com/ShiroDoromoto/amenbo-dist/releases/tag/v0.1.5")
+            Some("https://github.com/ShiroDoromoto/amenbo/releases/tag/v1.0.3")
         );
         // Both the unified installers (kind suffix) and the CLI archives (no suffix) are listed.
         assert_eq!(
             r.assets.get("macos-arm64-pkg").map(String::as_str),
-            Some("https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-darwin-arm64.pkg")
+            Some("https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-darwin-arm64.pkg")
         );
         assert_eq!(
             r.assets.get("windows-x64-exe").map(String::as_str),
-            Some("https://github.com/ShiroDoromoto/amenbo-dist/releases/download/v0.1.5/amenbo-app-windows-x64-setup.exe")
+            Some("https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-app-windows-x64-setup.exe")
         );
         assert!(r.assets.contains_key("linux-x64-deb"));
         assert!(r.assets.contains_key("macos-arm64"), "the CLI archive keys are listed too, with no suffix");

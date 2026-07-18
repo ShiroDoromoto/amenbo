@@ -21,6 +21,7 @@ import { dataAdapter } from "../mock/adapter";
 import { getSnapshot, inTauri, subscribe } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
+import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sidebarWidth";
 import { RefNavProvider } from "../core/refNav";
 import { currentLang, doctorText, t, tf } from "../core/i18n";
 import { fetchStaleManagedBlocks, resyncManagedBlocks, fetchOrphanBindings, forgetOrphanBindings, fetchPointerIssues, repairPointers, fetchHookNotices, openLatestInstaller } from "../core/mutations";
@@ -81,6 +82,27 @@ export function AppShell() {
   // of main plus the right pane; BoardScreen portals its toolbar in here and the right pane sits below it.
   // A callback ref keeps the DOM node in state so the re-render after it settles can hand the portal target to the child.
   const [headerSlot, setHeaderSlot] = useState<HTMLDivElement | null>(null);
+
+  // The left sidebar's width (a device-local, persisted UI setting). Dragging the right-edge handle widens it, up to
+  // ~40% of the window; core/sidebarWidth owns the default and the bounds.
+  const [sidebarWidth, setSidebarWidthState] = useState(() => getSidebarWidth());
+  // pointerdown on the right-edge handle starts the drag: while moving we update state for immediate feedback, and
+  // persist on pointerup. Width = the pointer's distance from the left edge of the viewport (sidebarWidth clamps it).
+  const startSidebarResize = useCallback((e: ReactPointerEvent) => {
+    e.preventDefault();
+    const onMove = (ev: PointerEvent) => setSidebarWidthState(clampSidebarWidth(ev.clientX));
+    const onUp = (ev: PointerEvent) => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setSidebarWidthState(setSidebarWidth(ev.clientX));
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+  }, []);
 
   const rightpaneRef = useRef<HTMLDivElement>(null);
   // The right pane's width (a device-local, persisted UI setting). Dragging the left-edge handle widens it, up to
@@ -167,9 +189,13 @@ export function AppShell() {
     closeRight();
   };
 
-  // Re-clamp the current width on every resize, so shrinking the window cannot leave the pane over the cap (~50% of the window).
+  // Re-clamp the current widths on every resize, so shrinking the window cannot leave a pane over its cap (the right
+  // pane at ~50%, the sidebar at ~40% of the window).
   useEffect(() => {
-    const onResize = () => setRightWidth((w) => clampRightpaneWidth(w));
+    const onResize = () => {
+      setRightWidth((w) => clampRightpaneWidth(w));
+      setSidebarWidthState((w) => clampSidebarWidth(w));
+    };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -224,9 +250,18 @@ export function AppShell() {
       <HookSetupBanner asked={hooksAsked} />
       <div
         className={`shell__body ${showRight ? "" : "shell__body--no-right"}`}
-        style={{ "--rightpane-w": `${rightWidth}px` } as CSSProperties}
+        style={{ "--rightpane-w": `${rightWidth}px`, "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}
       >
-        <Sidebar nav={nav} onNav={navTo} />
+        <div className="sidebar-wrap">
+          <Sidebar nav={nav} onNav={navTo} />
+          <div
+            className="sidebar__resizer"
+            role="separator"
+            aria-orientation="vertical"
+            title={t("sidebar.resize")}
+            onPointerDown={startSidebarResize}
+          />
+        </div>
 
         {/* The full-width slot for the project header (the board toolbar is portalled in here). */}
         <div className="shell__header" ref={setHeaderSlot} />

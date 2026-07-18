@@ -646,8 +646,14 @@ fn block_is_healthy(text: &str) -> bool {
 
 /// **Heal on startup.** Re-assert the current block in any slot of `dir` that holds a block of ours which
 /// is damaged (a half-there block whose end marker was lost) or stale (an older version) — the corruption
-/// [`reconcile`] steps past, because a marker of any shape reads to it as a managed slot with nothing to
-/// do. Returns the slots restored, so the caller can warn that amenbo's block had been changed and is back.
+/// [`reconcile`] steps past, because a marker of any shape reads to it as a managed slot with nothing to do.
+///
+/// Both cases are written back, but only *damage* is returned, so the caller reports only what is worth a
+/// word. A **stale** block — an intact block at an older version, or a legacy single-line marker — is a
+/// routine upgrade: nobody touched it, this build did, so it is healed silently. Telling every user their
+/// block "was changed" on the launch after a version bump would be both untrue and noise on every repo.
+/// **Damage** — a begin marker with no coherent block below it, the shape left when something rewrites or
+/// half-removes the block — is the only case the user is told about, because there something did change it.
 ///
 /// It is bounded exactly as [`reconcile`]'s consented install is: nothing without a device `yes`, nothing
 /// in an opted-out repository, nothing outside a git repository. Healing is only ever putting back the very
@@ -667,10 +673,16 @@ pub fn restore_blocks(dir: &Path, cmd: &str, consent: Option<HookConsent>, opted
         let hook = hooks.join(slot.name());
         let Ok(text) = std::fs::read_to_string(&hook) else { continue };
         if marker_version(&text).is_some() && !block_is_healthy(&text) {
+            // A current begin marker with no coherent block below it is damage — something changed or
+            // half-removed the block. An intact-but-older block, or a legacy single-line marker, is just a
+            // routine upgrade: heal it, but do not report it.
+            let damaged = text.contains(BEGIN_PREFIX) && find_hook_block(&text).is_none();
             let healed = upsert_block(Some(&text), slot, cmd);
             if std::fs::write(&hook, healed).is_ok() {
                 let _ = make_executable(&hook);
-                restored.push(slot);
+                if damaged {
+                    restored.push(slot);
+                }
             }
         }
     }
@@ -1468,9 +1480,10 @@ mod tests {
     }
 
     /// A legacy standalone hook (the single-line marker, no block) is recognised as ours and healed into the
-    /// current block form — the same upgrade an explicit install does, reached at startup.
+    /// current block form — the same upgrade an explicit install does, reached at startup. It is a routine
+    /// upgrade, not damage, so it heals *silently*: the file is rewritten, but nothing is returned to report.
     #[test]
-    fn restore_blocks_upgrades_a_legacy_hook() {
+    fn restore_blocks_upgrades_a_legacy_hook_silently() {
         let dir = git_repo("heal-legacy");
         std::fs::write(
             hook_path(&dir, HookSlot::PreCommit),
@@ -1478,11 +1491,41 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(restore_blocks(&dir, "amenbo", Some(HookConsent::Yes), false), vec![HookSlot::PreCommit]);
+        assert!(
+            restore_blocks(&dir, "amenbo", Some(HookConsent::Yes), false).is_empty(),
+            "a legacy upgrade is routine — healed, but not reported",
+        );
         assert_eq!(
             std::fs::read_to_string(hook_path(&dir, HookSlot::PreCommit)).unwrap(),
             hook_body(HookSlot::PreCommit, "amenbo"),
             "healed into the current standalone block form",
+        );
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The common upgrade path: an intact block at an older marker version. A marker bump makes it "not
+    /// current", so it is rewritten to the new content — but nobody changed it, this build did, so it heals
+    /// *silently*. Nothing is returned, so the launch after a version bump raises no "your block changed"
+    /// banner on every repo.
+    #[test]
+    fn restore_blocks_upgrades_a_stale_version_block_silently() {
+        let dir = git_repo("heal-stale");
+        // A well-formed current block, aged back one marker version.
+        let older = HOOK_MARKER_VERSION - 1;
+        let stale = hook_body(HookSlot::PreCommit, "amenbo")
+            .replace(&format!("(managed v{HOOK_MARKER_VERSION})"), &format!("(managed v{older})"));
+        assert!(!block_is_healthy(&stale), "the aged block reads as stale");
+        std::fs::write(hook_path(&dir, HookSlot::PreCommit), &stale).unwrap();
+
+        assert!(
+            restore_blocks(&dir, "amenbo", Some(HookConsent::Yes), false).is_empty(),
+            "a version upgrade is routine — healed, but not reported",
+        );
+        assert_eq!(
+            std::fs::read_to_string(hook_path(&dir, HookSlot::PreCommit)).unwrap(),
+            hook_body(HookSlot::PreCommit, "amenbo"),
+            "rewritten to the current block",
         );
 
         std::fs::remove_dir_all(&dir).unwrap();

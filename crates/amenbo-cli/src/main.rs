@@ -1014,11 +1014,12 @@ fn lint_hook_setup(store: &mut Store, flags: &Flags) {
     let answered = offer_lint_hook(store, &cwd, states, consent, opted_out, can_ask);
     // Heal a block of ours that was left damaged or stale — the corruption reconcile (inside the offer)
     // steps past, because any marker reads to it as a managed slot. Runs under the answer just given or the
-    // one already on record; it writes only when something is actually broken, so the common case is silent.
+    // one already on record. A stale block (an older version) is upgraded silently; only genuine damage —
+    // something changed or half-removed the block — is returned, and so is the only thing said out loud.
     let restored = hooks::restore_blocks(&cwd, Paths::APP_NAME, answered.or(consent), opted_out);
     if !restored.is_empty() && !flags.quiet {
         let names = restored.iter().map(|s| s.name()).collect::<Vec<_>>().join(", ");
-        eprintln!("⚠ amenbo's lint block in {names} had been changed or gone stale — restored it.");
+        eprintln!("⚠ amenbo's lint block in {names} had been changed or removed — restored it.");
     }
     report_unfinished_setup(flags, &cwd, answered, states, consent, opted_out);
 }

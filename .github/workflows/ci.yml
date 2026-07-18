@@ -12,11 +12,12 @@ name: CI
 # PR). `concurrency` cancels an in-progress run when a newer commit (e.g. a
 # Dependabot rebase) supersedes it — but only on PRs, see below.
 #
-# Cost: this repo is private, so Actions runs against a monthly minute quota with
-# per-OS multipliers (Linux x1, Windows x2, macOS x10). Every job runs on Linux
-# to stay within the free tier. The host crate IS clippy+test gated on Linux (the
-# `app-rust` job below), but the native Tauri .app *bundle* (macOS only, x10) is
-# deliberately NOT built here — it is reserved for a tag/dispatch trigger.
+# Cost: this repo is public, so Actions minutes are free — the net is no longer drawn
+# to save minutes but by what a change can affect: the `changes` path gate below runs
+# each build/test job only when a change could have moved it. Jobs run on Linux. The
+# host crate IS clippy+test gated (the `app-rust` job below), but the native Tauri
+# .app *bundle* (macOS only) is deliberately NOT built here — it is a distribution
+# artifact reserved for a tag/dispatch trigger, not a test gate.
 
 on:
   push:
@@ -35,8 +36,8 @@ on:
 # says green. Keying push runs by SHA gives each commit its own group, so no main
 # run is ever cancelled — neither in-progress (cancel-in-progress) nor pending
 # (a group holds one pending run, and a third arrival evicts the one waiting).
-# Main pushes are rare here, so paying for every one of them is cheap next to a
-# green main that was never built.
+# Main is pushed on every merge now, and that is fine: an extra run costs nothing
+# next to a green main that was never built.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
@@ -64,7 +65,8 @@ jobs:
   # until the next dependency change — which is why those two, and the two linter
   # gates (whose runner-side versions float), are defined in rot-gates.yml and also
   # run on a timer from rot-weekly.yml, with no path filter at all. Here they
-  # stay gated: a diff that can't have moved them shouldn't pay for them.
+  # stay gated: a job a diff can't have moved has nothing new to report, so skipping it
+# keeps the run list to what actually changed.
   # tree-guards stays always-on: what it looks for — an internal-note reference,
   # Japanese test prose — can appear in any file, and the scans are seconds.
   changes:

@@ -273,7 +273,7 @@ export async function createProject(name: string, dir: string | null): Promise<n
     ...s,
     projects: [
       ...s.projects,
-      { id, name, color: "#6b7280", view: "board", openCount: 0, dimensions: [] },
+      { id, name, color: "#6b7280", view: "board", openCount: 0, proposedDecisionCount: 0, dimensions: [] },
     ],
   }));
   return id;

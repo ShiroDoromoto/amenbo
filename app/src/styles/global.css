@@ -151,12 +151,27 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 
 /* ---------- sidebar ---------- */
+/* The sidebar sits in a non-scrolling wrapper (grid-area: sidebar) so the resize handle on the
+   right edge can be positioned against it without scrolling; only the contents (.sidebar) scroll.
+   Its width is --sidebar-w, which AppShell overrides inline as the handle is dragged. */
+.sidebar-wrap { grid-area: sidebar; position: relative; display: flex; min-height: 0; min-width: 0; }
 .sidebar {
-  grid-area: sidebar;
+  flex: 1; min-width: 0;
   background: var(--c-surface-2);
   border-right: 1px solid var(--c-border);
   overflow-y: auto; padding: var(--s-3) var(--s-2);
 }
+/* The resize handle on the right edge: a thin hit area straddling the border, showing its line
+   only on hover or drag. Mirrors .rightpane__resizer on the opposite edge. */
+.sidebar__resizer {
+  position: absolute; right: 0; top: 0; bottom: 0; width: 9px; margin-right: -4px;
+  z-index: 5; cursor: col-resize; touch-action: none;
+}
+.sidebar__resizer::after {
+  content: ""; position: absolute; right: 4px; top: 0; bottom: 0; width: 1px;
+  background: var(--c-accent); opacity: 0; transition: opacity 0.12s;
+}
+.sidebar__resizer:hover::after, .sidebar__resizer:active::after { opacity: 1; }
 .sidebar__group { margin-bottom: var(--s-5); }
 .sidebar__label {
   font-size: var(--fs-xs); font-weight: var(--fw-bold);

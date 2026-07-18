@@ -3327,19 +3327,19 @@ fn os_open(target: &str) -> Result<(), CliError> {
     let mkerr = |e: std::io::Error| CliError { code: "io_error", message: format!("could not open '{target}': {e}"), hint: None, exit: 1 };
     #[cfg(target_os = "macos")]
     let mut cmd = {
-        let mut c = std::process::Command::new("open");
+        let mut c = amenbo_core::sys::command("open");
         c.arg(target);
         c
     };
     #[cfg(target_os = "windows")]
     let mut cmd = {
-        let mut c = std::process::Command::new("cmd");
+        let mut c = amenbo_core::sys::command("cmd");
         c.args(["/C", "start", "", target]);
         c
     };
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     let mut cmd = {
-        let mut c = std::process::Command::new("xdg-open");
+        let mut c = amenbo_core::sys::command("xdg-open");
         c.arg(target);
         c
     };

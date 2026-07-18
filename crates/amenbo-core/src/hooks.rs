@@ -299,7 +299,7 @@ pub fn guidance_line(slot: HookSlot, cmd: &str) -> String {
 /// matter: `core.hooksPath` moves the directory wholesale, and in a linked worktree `.git` is a file.
 /// `--git-path hooks` honours both and answers relative to `dir`.
 pub fn hooks_dir(dir: &Path) -> Option<PathBuf> {
-    let out = std::process::Command::new("git")
+    let out = crate::sys::command("git")
         .current_dir(dir)
         .args(["rev-parse", "--git-path", "hooks"])
         .output()
@@ -361,7 +361,7 @@ fn worktree_root(dir: &Path) -> Option<PathBuf> {
 /// The first line of a git command's output, or `None` when git has nothing to say (not a repository, or
 /// the call failed). Trimmed, because git terminates its answers with a newline.
 fn git_line(dir: &Path, args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new("git").current_dir(dir).args(args).output().ok()?;
+    let out = crate::sys::command("git").current_dir(dir).args(args).output().ok()?;
     if !out.status.success() {
         return None;
     }
@@ -372,7 +372,7 @@ fn git_line(dir: &Path, args: &[&str]) -> Option<String> {
 /// Whether git already ignores `path`. `check-ignore` answers by exit code: 0 is ignored, 1 is not, and
 /// anything else is an error we read as "not ignored" — guessing "ignored" there would hide a shared write.
 fn is_ignored(dir: &Path, path: &Path) -> bool {
-    std::process::Command::new("git")
+    crate::sys::command("git")
         .current_dir(dir)
         .args(["check-ignore", "-q"])
         .arg(path)
@@ -390,7 +390,7 @@ fn is_ignored(dir: &Path, path: &Path) -> bool {
 /// only ever fires for a hook a `core.hooksPath` puts in the tree — `.githooks`, `.husky` — that the
 /// repository has committed.
 fn is_tracked(dir: &Path, path: &Path) -> bool {
-    std::process::Command::new("git")
+    crate::sys::command("git")
         .current_dir(dir)
         .args(["ls-files", "--error-unmatch"])
         .arg(path)

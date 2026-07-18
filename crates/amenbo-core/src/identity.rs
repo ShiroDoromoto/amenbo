@@ -79,7 +79,7 @@ pub fn live_hw() -> String {
 #[cfg(target_os = "macos")]
 fn platform_hw() -> Option<String> {
     // IOKit's IOPlatformUUID: from the hardware, not from a file.
-    let out = std::process::Command::new("ioreg")
+    let out = crate::sys::command("ioreg")
         .args(["-rd1", "-c", "IOPlatformExpertDevice"])
         .output()
         .ok()?;
@@ -103,7 +103,7 @@ fn platform_hw() -> Option<String> {
 fn platform_hw() -> Option<String> {
     // The SMBIOS product UUID: it comes from the firmware — burnt into the hardware, not held in a file.
     // `wmic` is gone from recent Windows, so this goes through PowerShell's CIM.
-    let out = std::process::Command::new("powershell")
+    let out = crate::sys::command("powershell")
         .args([
             "-NoProfile",
             "-NonInteractive",

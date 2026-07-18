@@ -2117,19 +2117,19 @@ fn blob_bytes(hash: &str) -> Result<Vec<u8>, CmdError> {
 fn os_open(target: &str) -> std::io::Result<()> {
     #[cfg(target_os = "macos")]
     let mut cmd = {
-        let mut c = std::process::Command::new("open");
+        let mut c = amenbo_core::sys::command("open");
         c.arg(target);
         c
     };
     #[cfg(target_os = "windows")]
     let mut cmd = {
-        let mut c = std::process::Command::new("cmd");
+        let mut c = amenbo_core::sys::command("cmd");
         c.args(["/C", "start", "", target]);
         c
     };
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     let mut cmd = {
-        let mut c = std::process::Command::new("xdg-open");
+        let mut c = amenbo_core::sys::command("xdg-open");
         c.arg(target);
         c
     };
@@ -2159,19 +2159,19 @@ pub fn open_terminal(path: String) -> Result<(), CmdError> {
     }
     #[cfg(target_os = "macos")]
     let mut cmd = {
-        let mut c = std::process::Command::new("open");
+        let mut c = amenbo_core::sys::command("open");
         c.args(["-a", "Terminal", &path]);
         c
     };
     #[cfg(target_os = "windows")]
     let mut cmd = {
-        let mut c = std::process::Command::new("cmd");
+        let mut c = amenbo_core::sys::command("cmd");
         c.args(["/C", "start", "", "cmd", "/K", "cd", "/d", &path]);
         c
     };
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     let mut cmd = {
-        let mut c = std::process::Command::new("x-terminal-emulator");
+        let mut c = amenbo_core::sys::command("x-terminal-emulator");
         c.current_dir(&path);
         c
     };

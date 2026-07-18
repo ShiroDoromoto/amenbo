@@ -236,7 +236,7 @@ pub fn staged_diff(dir: &Path) -> Result<String> {
             "git リポジトリではないため、lint する staged diff がありません。ファイルか --stdin でテキストを渡してください。",
         )));
     }
-    let out = std::process::Command::new("git")
+    let out = crate::sys::command("git")
         .current_dir(dir)
         .args([
             // Leave a non-ASCII path as its bytes rather than as `\346\227\245` escapes, so a hit in one
@@ -272,7 +272,7 @@ pub fn staged_diff(dir: &Path) -> Result<String> {
 /// Is `dir` inside a git working tree? Asked of git itself rather than by looking for a `.git`, which is a
 /// directory in one checkout, a `gitdir:` file in a worktree, and above you in a subdirectory of either.
 fn is_git_repo(dir: &Path) -> bool {
-    std::process::Command::new("git")
+    crate::sys::command("git")
         .current_dir(dir)
         .args(["rev-parse", "--is-inside-work-tree"])
         .output()

@@ -27,6 +27,7 @@ pub mod lint;
 pub mod migrate;
 pub mod model;
 pub mod store_engine;
+pub mod sys;
 pub mod ops;
 pub mod order;
 pub mod overview;

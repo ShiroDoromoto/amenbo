@@ -148,6 +148,8 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         | Command::HardErase { .. } // physically erases append-only content; maintenance op, records no facet or activity
         | Command::Export { .. }
         | Command::Lint { .. } // reads the text it is handed; no store, so nothing to stamp a facet onto
+        | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
+        | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
         | Command::Hooks { .. }
         | Command::Config { .. } // settings live in the user layer and leave no activity behind
         | Command::Bind { .. } => false, // only writes the `.amenbo` pointer (no facet recorded)
@@ -229,7 +231,12 @@ fn requires_pointer(cmd: &Option<Command>) -> bool {
 /// that cleans the binding up rather than driving the backlog with it.
 fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
     match cmd {
-        Some(Command::Version) | Some(Command::Update { .. }) | Some(Command::Lint { .. }) | Some(Command::Unbind { .. }) => None,
+        Some(Command::Version)
+        | Some(Command::Update { .. })
+        | Some(Command::Lint { .. })
+        | Some(Command::GithookPreCommit)
+        | Some(Command::GithookCommitMsg { .. })
+        | Some(Command::Unbind { .. }) => None,
         Some(Command::Bind { dir: Some(d), .. }) => {
             let p = std::path::PathBuf::from(d);
             p.is_dir().then(|| std::fs::canonicalize(&p).unwrap_or(p))
@@ -444,6 +451,10 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // nothing to guard. That is not a concession: CI is exactly where this must run, and there is no
         // `.amenbo` there to find.
         Some(Command::Lint { paths, stdin }) => return lint_cmd(flags, paths.clone(), *stdin),
+        // The hook's own entry points, same store-free footing as `lint`: `pre-commit` lints the staged
+        // diff (no paths), `commit-msg` lints the message file git hands over.
+        Some(Command::GithookPreCommit) => return lint_cmd(flags, Vec::new(), false),
+        Some(Command::GithookCommitMsg { path }) => return lint_cmd(flags, vec![path.clone()], false),
         Some(Command::Version) if !store_reachable() => return version_unbound(flags),
         Some(Command::Update { print }) if !store_reachable() => return update_cmd(flags, None, *print),
         _ => {}
@@ -671,6 +682,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             unreachable!("handled before open")
         }
         Command::Lint { .. } => {
+            unreachable!("handled before open")
+        }
+        Command::GithookPreCommit | Command::GithookCommitMsg { .. } => {
             unreachable!("handled before open")
         }
         Command::Config { sub } => return config(&mut store, flags, sub),
@@ -4138,11 +4152,14 @@ mod tests {
         assert!(lines.contains(&"  [1/2] attachments".to_string()), "{lines:?}");
     }
 
-    /// Collect every leaf sub-command clap knows ("project add" and the like), skipping help.
+    /// Collect every leaf sub-command clap knows ("project add" and the like), skipping help and hidden
+    /// commands. A hidden command (`githook-pre-commit`, the hook's own entry point) is not part of the
+    /// surface an AI drives — it stands in for a hook line, and the AI-facing face is `lint` — so it is not
+    /// expected in `agent --json`, the same as `help`.
     fn collect_leaves(cmd: &clap::Command, path: &str, out: &mut Vec<String>) {
         let subs: Vec<&clap::Command> = cmd
             .get_subcommands()
-            .filter(|s| s.get_name() != "help")
+            .filter(|s| s.get_name() != "help" && !s.is_hide_set())
             .collect();
         if subs.is_empty() {
             out.push(path.to_string());
@@ -4160,7 +4177,7 @@ mod tests {
     fn every_clap_leaf_is_in_agent() {
         let root = Cli::command();
         let mut leaves = Vec::new();
-        for s in root.get_subcommands().filter(|s| s.get_name() != "help") {
+        for s in root.get_subcommands().filter(|s| s.get_name() != "help" && !s.is_hide_set()) {
             collect_leaves(s, s.get_name(), &mut leaves);
         }
         let agent: HashSet<String> = agent::command_names().into_iter().collect();

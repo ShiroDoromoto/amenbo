@@ -67,7 +67,7 @@ pub enum HookConsent {
 /// stranger's. v3 is where the standalone hook became a marker-delimited block that can coexist with
 /// another tool's hook in the same slot; v4 makes a standalone block exit cleanly when amenbo is not on
 /// PATH (an uninstalled amenbo must not turn a leftover hook into a commit-blocking trap).
-pub const HOOK_MARKER_VERSION: u32 = 4;
+pub const HOOK_MARKER_VERSION: u32 = 5;
 
 /// Version-independent prefix of the begin marker. Detection matches on this rather than on
 /// [`HOOK_BEGIN_MARKER`] whole, so a block written by any version of amenbo is still known to be ours.
@@ -78,7 +78,7 @@ const BEGIN_SUFFIX: &str = ")";
 /// The begin marker at the version this binary writes, and the end marker that closes the block. They are
 /// shell comments, so they live in the hook itself: the file *is* the record of who wrote it, and there is
 /// no side ledger to fall out of step with it.
-pub const HOOK_BEGIN_MARKER: &str = "# amenbo:hook begin (managed v4)";
+pub const HOOK_BEGIN_MARKER: &str = "# amenbo:hook begin (managed v5)";
 pub const HOOK_END_MARKER: &str = "# amenbo:hook end";
 
 /// The single-line marker older builds wrote at the top of a standalone hook (`# amenbo:hook (managed vN)`,
@@ -111,13 +111,25 @@ impl HookSlot {
         }
     }
 
-    /// How this slot calls the lint. `commit-msg` gets the message file's path from git as `$1` and hands
-    /// it straight over; `pre-commit` is given nothing and lints the staged diff, which is the bare
+    /// How this slot calls the lint by hand — the line the guidance offers a user to add to a hook amenbo
+    /// will not touch (a tracked one). It names the plain public command, `commit-msg` handing over the
+    /// message file git gives it as `$1` and `pre-commit` linting the staged diff, which is the bare
     /// command's default.
     fn lint_call(self, cmd: &str) -> String {
         match self {
             HookSlot::PreCommit => format!("{cmd} lint"),
             HookSlot::CommitMsg => format!("{cmd} lint \"$1\""),
+        }
+    }
+
+    /// What amenbo's own managed block runs. It calls a slot-named entry point (`githook-pre-commit` /
+    /// `githook-commit-msg`) rather than `lint` directly, so the line written into the hook stays fixed
+    /// while what the slot does can grow: the shim is thin and delegates, and a later version can change
+    /// the behaviour without rewriting every installed hook. `commit-msg` still hands over git's `$1`.
+    fn hook_call(self, cmd: &str) -> String {
+        match self {
+            HookSlot::PreCommit => format!("{cmd} githook-pre-commit"),
+            HookSlot::CommitMsg => format!("{cmd} githook-commit-msg \"$1\""),
         }
     }
 
@@ -199,7 +211,7 @@ impl HookState {
 pub fn hook_block(slot: HookSlot, cmd: &str) -> String {
     let name = slot.name();
     let subject = slot.subject();
-    let call = slot.lint_call(cmd);
+    let call = slot.hook_call(cmd);
     format!(
         "{HOOK_BEGIN_MARKER}\n\
          # Refuses this commit when {subject} carries an amenbo ref (AMB-T-… / AMB-D-…): an id resolves\n\
@@ -1022,17 +1034,18 @@ mod tests {
         assert_eq!(marker_version(HOOK_BEGIN_MARKER), Some(HOOK_MARKER_VERSION));
     }
 
-    /// Each slot calls the lint the way git speaks to it: `commit-msg` is handed the message file's path
-    /// and passes it on, `pre-commit` is handed nothing and lints the staged diff. A hook that ignored `$1`
-    /// in the `commit-msg` slot would lint the diff twice and never read a commit message. The call is
-    /// guarded on PATH and stops the commit on a failing lint, and uses no `exec` — control has to fall
-    /// through to whatever else the file holds, which is how the block coexists.
+    /// The managed block calls a slot-named entry point, not `lint` directly, so the line in the hook stays
+    /// fixed while the slot's behaviour can grow: `commit-msg` is handed the message file's path as `$1` and
+    /// passes it on, `pre-commit` is handed nothing and lints the staged diff. The call is guarded on PATH and
+    /// stops the commit on a failing lint, and uses no `exec` — control has to fall through to whatever else
+    /// the file holds, which is how the block coexists. The guidance line a user adds by hand, in contrast,
+    /// names the plain public `lint` command.
     #[test]
     fn each_slot_hands_the_lint_what_git_gives_it() {
         assert!(hook_body(HookSlot::CommitMsg, "amenbo")
-            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo lint \"$1\" || exit 1; } || true\n"));
+            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo githook-commit-msg \"$1\" || exit 1; } || true\n"));
         assert!(hook_body(HookSlot::PreCommit, "amenbo")
-            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo lint || exit 1; } || true\n"));
+            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo githook-pre-commit || exit 1; } || true\n"));
         assert!(!hook_body(HookSlot::CommitMsg, "amenbo").contains("exec "), "no exec — the block must fall through");
         assert_eq!(guidance_line(HookSlot::CommitMsg, "amenbo"), "amenbo lint \"$1\" || exit 1");
         assert_eq!(guidance_line(HookSlot::PreCommit, "amenbo"), "amenbo lint || exit 1");
@@ -1073,8 +1086,9 @@ mod tests {
         // amenbo gone: a standalone hook must exit 0, not trap the commit.
         assert_eq!(run_hook(&dir, &solo, "/nonexistent"), 0, "an uninstalled amenbo must not block a commit");
 
-        // amenbo present, lint fails: the block still stops the commit.
-        fake_amenbo("#!/bin/sh\ncase \"$1\" in lint) exit 1 ;; esac\nexit 0\n");
+        // amenbo present, the hook's lint fails: the block still stops the commit. The block calls the
+        // slot's entry point (`githook-pre-commit`), so that is the argument the shim sees.
+        fake_amenbo("#!/bin/sh\ncase \"$1\" in githook-*) exit 1 ;; esac\nexit 0\n");
         assert_eq!(run_hook(&dir, &solo, bin.to_str().unwrap()), 1, "a failing lint still stops the commit");
 
         // amenbo present, lint passes: through.

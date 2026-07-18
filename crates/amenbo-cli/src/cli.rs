@@ -253,6 +253,21 @@ pub enum Command {
         stdin: bool,
     },
 
+    /// The entry point amenbo's own `pre-commit` hook calls — it lints the staged diff, the same as a bare
+    /// `lint`. Hidden because it exists for the hook, not the hand: the managed block names this fixed line so
+    /// the hook's behaviour can grow in later versions without every installed hook being rewritten.
+    #[command(hide = true)]
+    GithookPreCommit,
+
+    /// The entry point amenbo's own `commit-msg` hook calls — it lints the message file git hands the hook.
+    /// Hidden for the same reason as `githook-pre-commit`: it is the hook's fixed line, not a command for the
+    /// hand (`lint <file>` is that).
+    #[command(hide = true)]
+    GithookCommitMsg {
+        /// the commit message file git passes the hook
+        path: String,
+    },
+
     /// Manage the git hooks that run `amenbo lint`: `pre-commit` for the staged diff, and `commit-msg`
     /// for the message, which is the only place git offers it. Installing writes into your git plumbing,
     /// which amenbo does not do unasked: it asks once — for the lint as a feature, on this device — and

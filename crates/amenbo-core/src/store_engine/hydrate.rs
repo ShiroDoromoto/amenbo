@@ -31,7 +31,7 @@ use crate::model::{
     Decision, DecisionComment, DecisionEdge, DecisionEdgeKind, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionCardinality,
     DimensionRole, DimensionValue, Priority, Project,
-    Subtype, Task, TaskComment, TaskDependency,
+    Subtype, Task, TaskComment, TaskCommit, TaskDependency,
     TaskDimensionValue, TaskStatus, View,
 };
 use crate::time::Timestamp;
@@ -167,6 +167,19 @@ pub(super) fn task_dependency_row(r: &Row) -> rusqlite::Result<TaskDependency> {
         id: get(r, C.id)?,
         task_id: get(r, C.task_id)?,
         blocked_by_id: get(r, C.blocked_by_id)?,
+        created_by_kind: enum_opt(r, C.created_by_kind, ActorKind::parse)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn task_commit_row(r: &Row) -> rusqlite::Result<TaskCommit> {
+    const C: col::task_commit::Cols = col::task_commit::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(TaskCommit {
+        id: get(r, C.id)?,
+        task_id: get(r, C.task_id)?,
+        sha: get(r, C.sha)?,
         created_by_kind: enum_opt(r, C.created_by_kind, ActorKind::parse)?,
         created_at,
         updated_at,
@@ -346,6 +359,7 @@ pub fn hydrate_database(conn: &Connection) -> Result<Database> {
     let projects = rows(conn, "project", project_row)?;
     let tasks = rows(conn, "task", task_row)?;
     let task_dependencies = rows(conn, "task_dependency", task_dependency_row)?;
+    let task_commits = rows(conn, "task_commit", task_commit_row)?;
     let decisions = rows(conn, "decision", decision_row)?;
     let decision_edges = rows(conn, "decision_edge", decision_edge_row)?;
     let decision_task_links = rows(conn, "decision_task_link", decision_task_link_row)?;
@@ -365,6 +379,7 @@ pub fn hydrate_database(conn: &Connection) -> Result<Database> {
         projects,
         tasks,
         task_dependencies,
+        task_commits,
         decisions,
         decision_edges,
         decision_task_links,
@@ -434,6 +449,14 @@ mod tests {
                 id: 1,
                 task_id: 42,
                 blocked_by_id: 42,
+                created_by_kind: Some(ActorKind::Ai),
+                created_at: now,
+                updated_at: now,
+            }],
+            task_commits: vec![TaskCommit {
+                id: 1,
+                task_id: 42,
+                sha: "0123456789abcdef0123456789abcdef01234567".to_string(),
                 created_by_kind: Some(ActorKind::Ai),
                 created_at: now,
                 updated_at: now,
@@ -540,6 +563,7 @@ mod tests {
             !db.projects.is_empty()
                 && !db.tasks.is_empty()
                 && !db.task_dependencies.is_empty()
+                && !db.task_commits.is_empty()
                 && !db.decisions.is_empty()
                 && !db.decision_edges.is_empty()
                 && !db.decision_task_links.is_empty()
@@ -587,6 +611,7 @@ mod tests {
             ("dimension_value", json(&db.dimension_values[0]), json(&read::dimension_value(conn, 1).unwrap().unwrap())),
             ("task_dimension_value", json(&db.task_dimension_values[0]), json(&read::task_dimension_value(conn, 1).unwrap().unwrap())),
             ("task_dependency", json(&db.task_dependencies[0]), json(&read::task_dependency(conn, 1).unwrap().unwrap())),
+            ("task_commit", json(&db.task_commits[0]), json(&read::task_commit(conn, 1).unwrap().unwrap())),
             ("decision_edge", json(&db.decision_edges[0]), json(&read::decision_edge(conn, 1).unwrap().unwrap())),
             ("decision_task_link", json(&db.decision_task_links[0]), json(&read::decision_task_link(conn, 1).unwrap().unwrap())),
             ("task_comment", json(&db.task_comments[0]), json(&read::task_comment(conn, 1).unwrap().unwrap())),

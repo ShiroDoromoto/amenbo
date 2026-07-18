@@ -16,6 +16,7 @@
 //! check **inside that transaction**, through [`crate::store_engine::read`].
 
 pub mod attachment;
+pub mod commit;
 pub mod decision;
 pub mod dependency;
 pub mod dimension;

@@ -192,6 +192,23 @@ impl Store {
         )
     }
 
+    /// Record a commit SHA on a task (one operation = one transaction). The SHA is validated and
+    /// normalised at the ops door; idempotent — a SHA already on the task yields `created=false`.
+    pub fn add_task_commit(
+        &mut self,
+        id: i64,
+        sha: &str,
+        created_by_kind: Option<crate::model::ActorKind>,
+    ) -> Result<(crate::model::TaskCommit, bool)> {
+        self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::commit::add(tx, id, sha, created_by_kind))
+    }
+
+    /// Forget a commit SHA on a task (one operation = one transaction). If it is not recorded, it is a
+    /// no-op and returns `false`.
+    pub fn remove_task_commit(&mut self, id: i64, sha: &str) -> Result<bool> {
+        self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::commit::remove(tx, id, sha))
+    }
+
     /// Create a project (one operation = one transaction). The ordering sibling's `order_key` is read
     /// inside this transaction.
     pub fn project_add(

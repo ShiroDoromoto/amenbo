@@ -3200,6 +3200,37 @@ pub fn task_dependency(
     super::hydrate::row_by_id(conn, "task_dependency", id, super::hydrate::task_dependency_row)
 }
 
+/// The live `task_commit` row for `(task_id, sha)`, or `None` — what makes `ops::commit::add`
+/// idempotent and `remove` a lookup. The `sha` is expected already normalised (lower-case, full
+/// length); the UNIQUE index `task_commit_task_sha` guarantees at most one row.
+pub fn task_commit_id(conn: &Connection, task_id: i64, sha: &str) -> Result<Option<i64>> {
+    const C: col::task_commit::Cols = col::task_commit::ALL;
+    first_id(conn, C.id, &Pred::eq(C.task_id, task_id).and(Pred::eq(C.sha, sha)))
+}
+
+/// The `task_commit` with this id.
+pub fn task_commit(conn: &Connection, id: i64) -> Result<Option<crate::model::TaskCommit>> {
+    super::hydrate::row_by_id(conn, "task_commit", id, super::hydrate::task_commit_row)
+}
+
+/// The commit SHAs recorded on one task, **oldest first** (`created_at ASC, id ASC` — ids are handed
+/// out in creation order, so the id tiebreak agrees with `created_at`). Seeks the task's own rows via
+/// the `task_commit_by_task` index. Whole records, so the mapping is `hydrate::task_commit_row` (one
+/// row→model definition shared with the by-id load and the reverse projection) over a `SELECT *` — the
+/// same raw shape [`super::hydrate::rows`] uses for the same reason: the mapping reads each column by
+/// name, so the column list is not enumerated here.
+pub fn task_commits(conn: &Connection, task_id: i64) -> Result<Vec<crate::model::TaskCommit>> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM task_commit WHERE task_id = ?1 ORDER BY created_at, id")
+        .map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map([task_id], super::hydrate::task_commit_row)
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
 /// Both directions of one decision's edges, as the read surfaces render them. Forward (`supersedes` /
 /// `amends` / `builds_on`) is what this decision drew, and the target is resolved for **any** liveness —
 /// a title of `None` means the edge dangles, which the caller renders as the unknown-name placeholder.

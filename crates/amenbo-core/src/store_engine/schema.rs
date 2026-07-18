@@ -585,6 +585,16 @@ datasets! {
         created_by_kind: actor_kind,
     }
 
+    // A git commit SHA a task carries (1 task : many commits). amenbo stores the SHA as an opaque
+    // string and never reads git — the anchor from history back to a task. `sha` is the full-length
+    // lower-case hex the ops layer normalises to and admits at the door (40 = SHA-1, 64 = SHA-256);
+    // short forms, refs and revisions are refused before they can land.
+    task_commit => task_commit {
+        task_id: fk("task", "CASCADE"),
+        sha: col(REQ),
+        created_by_kind: actor_kind,
+    }
+
     // The unified dimension model: three datasets that put every classification axis on one mechanism.
     // Every axis is a plain user-editable one — there are no built-in fixed axes (no `kind`), no locked
     // values, no stable keys (no `builtin_key`). There are no tags either (multi-select, unordered): a
@@ -766,6 +776,14 @@ CREATE INDEX IF NOT EXISTS decision_edge_by_target ON decision_edge(target_decis
 -- task_membership_by_task etc.). No read path consumes it yet; it is here so that moving the axes onto
 -- the link table cannot reintroduce the O(N²) scan the other FK indexes exist to prevent.
 CREATE INDEX IF NOT EXISTS task_dimension_value_by_task ON task_dimension_value(task_id);
+-- A task's commit SHAs. The pair is UNIQUE so the same commit cannot be recorded twice on one task
+-- (the ops layer reads this to stay idempotent, and the door normalises case so two spellings of one
+-- SHA cannot slip past it). The `by_sha` index is the reverse chain (SHA → tasks) the later filter
+-- seeks by; without it that lookup scans every row. `by_task` is the FK index every child table keeps,
+-- so a task's own commits (and the ready/detail subqueries) seek instead of scanning the whole table.
+CREATE UNIQUE INDEX IF NOT EXISTS task_commit_task_sha ON task_commit(task_id, sha);
+CREATE INDEX IF NOT EXISTS task_commit_by_sha  ON task_commit(sha);
+CREATE INDEX IF NOT EXISTS task_commit_by_task ON task_commit(task_id);
 "#;
 
 /// Read-model secondary indexes that reference **migrated columns**. Kept separate from

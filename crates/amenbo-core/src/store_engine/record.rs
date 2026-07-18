@@ -22,7 +22,8 @@ use rusqlite::types::Value;
 
 use crate::model::{
     ActorKind, Attachment, Database, Decision, DecisionComment, DecisionEdge, DecisionTaskLink,
-    Dimension, DimensionValue, Project, Task, TaskComment, TaskDependency, TaskDimensionValue,
+    Dimension, DimensionValue, Project, Task, TaskComment, TaskCommit, TaskDependency,
+    TaskDimensionValue,
 };
 use crate::time::Timestamp;
 
@@ -163,6 +164,22 @@ pub fn dependency(d: &TaskDependency) -> Record {
             ],
             &d.created_at,
             &d.updated_at,
+        ),
+    )
+}
+
+pub fn task_commit(c: &TaskCommit) -> Record {
+    Record::new(
+        "task_commit",
+        c.id,
+        with_audit(
+            vec![
+                ("task_id", kv(c.task_id)),
+                ("sha", tv(&c.sha)),
+                ("created_by_kind", kov(&c.created_by_kind)),
+            ],
+            &c.created_at,
+            &c.updated_at,
         ),
     )
 }
@@ -346,6 +363,9 @@ pub fn put_database(tx: &super::WriteTx<'_>, db: &Database) -> super::Result<()>
     }
     for x in &db.task_dependencies {
         put(tx, dependency(x))?;
+    }
+    for x in &db.task_commits {
+        put(tx, task_commit(x))?;
     }
     for x in &db.decisions {
         put(tx, decision(x))?;

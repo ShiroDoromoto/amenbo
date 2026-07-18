@@ -284,6 +284,25 @@ pub struct TaskDependency {
     pub updated_at: Timestamp,
 }
 
+/// A git commit SHA recorded against a task — one row, one commit (a task carries many). amenbo keeps the
+/// SHA as an opaque string: it never reads git, verifies the commit exists, or knows which forge it lives
+/// on. It is the anchor from history back to a task: a public commit carries no store-local reference, so
+/// the chain can only be drawn on the task side. `sha` is the full-length lower-case hex the ops layer
+/// admits at the door (40 hex = SHA-1, 64 = SHA-256); short forms and refs are refused before they land.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TaskCommit {
+    pub id: i64,
+    /// The task this commit belongs to.
+    pub task_id: i64,
+    /// The full commit SHA, lower-case hex.
+    pub sha: String,
+    /// The creator's facet. `None` reads as human (older data).
+    #[serde(default)]
+    pub created_by_kind: Option<ActorKind>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 /// A decision record — a decision, and *why* we made it — as a first-class entity that sits beside Task,
 /// under Project. **Append-only**: you do not edit a decision, you write a new one that `supersedes` it.
 /// Decisions have no status workflow and take no part in the mailbox, so they never clutter a task list.
@@ -684,6 +703,10 @@ pub struct Database {
     pub tasks: Vec<Task>,
     #[serde(default)]
     pub task_dependencies: Vec<TaskDependency>,
+    /// A task's recorded commit SHAs. Hydration tolerates their absence — a store predating the table
+    /// yields an empty vec.
+    #[serde(default)]
+    pub task_commits: Vec<TaskCommit>,
     #[serde(default)]
     pub decisions: Vec<Decision>,
     /// Edges between decisions. Hydration tolerates their absence — a store without them yields an empty
@@ -735,6 +758,7 @@ impl Default for Database {
             projects: Vec::new(),
             tasks: Vec::new(),
             task_dependencies: Vec::new(),
+            task_commits: Vec::new(),
             decisions: Vec::new(),
             decision_edges: Vec::new(),
             decision_task_links: Vec::new(),

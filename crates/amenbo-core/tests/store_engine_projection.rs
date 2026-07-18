@@ -74,6 +74,11 @@ fn build_backlog(paths: &Paths) -> (String, i64) {
         // A comment so the comment dataset is exercised.
         store.add_task_comment(t1, ActorKind::Human, "looks good").unwrap();
 
+        // A commit SHA so the task_commit dataset is exercised (non-empty parity, not vacuous).
+        store
+            .add_task_commit(t1, "0123456789abcdef0123456789abcdef01234567", Some(ActorKind::Ai))
+            .unwrap();
+
         // Placement is task-held: a task has exactly one home, so there is no multi-membership
         // scenario to seed here. Delete t4 to exercise a deleted task in the projection.
         store.delete_task(t4, amenbo_core::model::ActorKind::Human).unwrap();
@@ -101,6 +106,7 @@ fn count_parity(db: &Database, e: &StoreEngine) -> Vec<(&'static str, usize, usi
         ("project", db.projects.len()),
         ("task", db.tasks.len()),
         ("dependency", db.task_dependencies.len()),
+        ("task_commit", db.task_commits.len()),
         ("decision", db.decisions.len()),
         ("decision_edge", db.decision_edges.len()),
         ("decision_task_link", db.decision_task_links.len()),
@@ -154,6 +160,11 @@ fn every_record_lands_in_its_dataset() {
     // so the parity above is asserting over a non-empty dataset, not a vacuous one.
     let (_, comments, _) = counts.iter().find(|(d, ..)| *d == "task_comment").unwrap();
     assert!(*comments >= 1, "task_comment projected");
+
+    // A commit SHA was recorded → the task_commit dataset carried it, so its parity is over a
+    // non-empty dataset too.
+    let (_, commits, _) = counts.iter().find(|(d, ..)| *d == "task_commit").unwrap();
+    assert!(*commits >= 1, "task_commit projected");
 }
 
 /// The friendly number *is* the key, so "does the number survive the projection" is the same question

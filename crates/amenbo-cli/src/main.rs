@@ -2901,25 +2901,37 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
         DecisionCmd::Accept { id, reason } => {
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
             let by = flags.actor.as_str().to_string();
-            let d = store.accept_decision(did, Some(by)).map_err(CliError::from)?;
-            // `--reason` is thin sugar for adding one comment with the reason (the same shape as
-            // `task block --reason`). It gets no field of its own.
-            add_reason_comment(store, flags, did, reason)?;
+            let (d, changed) = store.accept_decision(did, Some(by)).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
-            write_envelope(flags, "decision.accept", "decision", serde_json::to_value(&detail).unwrap(), Some(vec!["status".to_string()]), false, format!("✓ Accepted decision: {}", decision_label(d.id)));
+            if changed {
+                // `--reason` is thin sugar for adding one comment with the reason (the same shape as
+                // `task block --reason`). It gets no field of its own. Only on a real acceptance —
+                // re-accepting an already-settled decision changes nothing, so a reason must not pile up.
+                add_reason_comment(store, flags, did, reason)?;
+                write_envelope(flags, "decision.accept", "decision", serde_json::to_value(&detail).unwrap(), Some(vec!["status".to_string()]), false, format!("✓ Accepted decision: {}", decision_label(d.id)));
+            } else {
+                // Already accepted: say so plainly instead of a bare "✓" that reads as "just now settled".
+                // The facet that accepted it is frozen; `reopen` is the sanctioned route to change it.
+                write_envelope(flags, "decision.accept", "decision", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("• Decision {} is already accepted{} — no change. To change who accepted it, `reopen` then `accept` again.", decision_label(d.id), accepted_by_suffix(&d)));
+            }
         }
         DecisionCmd::Reject { id, reason } => {
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
             // Read the blast radius (one hop) before rejecting. A reject leaves the edges in place, but
             // keeping the order the same gives all three verbs the same shape.
             let standing = standing_on(store, did);
-            let d = store.reject_decision(did).map_err(CliError::from)?;
-            add_reason_comment(store, flags, did, reason)?;
+            let (d, changed) = store.reject_decision(did).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             let mut resource = serde_json::to_value(&detail).unwrap();
             attach_revisit(&mut resource, &standing);
-            write_envelope(flags, "decision.reject", "decision", resource, Some(vec!["status".to_string()]), false, format!("✓ Rejected decision: {}", decision_label(d.id)));
-            note_revisit(flags, did, &standing);
+            if changed {
+                // Only attach the reason on a real rejection; a re-reject changes nothing.
+                add_reason_comment(store, flags, did, reason)?;
+                write_envelope(flags, "decision.reject", "decision", resource, Some(vec!["status".to_string()]), false, format!("✓ Rejected decision: {}", decision_label(d.id)));
+                note_revisit(flags, did, &standing);
+            } else {
+                write_envelope(flags, "decision.reject", "decision", resource, Some(vec![]), true, format!("• Decision {} is already rejected — no change.", decision_label(d.id)));
+            }
         }
         DecisionCmd::Reopen { id } => {
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
@@ -2949,12 +2961,17 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             // drawn (new_id itself) turns up among the decisions said to want revisiting.
             let standing = standing_on(store, old_id);
             let by = flags.actor.as_str().to_string();
-            let d = store.supersede_decision(new_id, old_id, Some(by)).map_err(CliError::from)?;
+            let (d, changed) = store.supersede_decision(new_id, old_id, Some(by)).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             let mut resource = serde_json::to_value(&detail).unwrap();
             attach_revisit(&mut resource, &standing);
-            write_envelope(flags, "decision.supersede", "decision", resource, Some(vec!["status".to_string(), "supersedes".to_string()]), false, format!("✓ {} supersedes {}", decision_label(new_id), decision_label(old_id)));
-            note_revisit(flags, old_id, &standing);
+            if changed {
+                write_envelope(flags, "decision.supersede", "decision", resource, Some(vec!["status".to_string(), "supersedes".to_string()]), false, format!("✓ {} supersedes {}", decision_label(new_id), decision_label(old_id)));
+                note_revisit(flags, old_id, &standing);
+            } else {
+                // The edge was already there and the new side already settled: nothing to draw.
+                write_envelope(flags, "decision.supersede", "decision", resource, Some(vec![]), true, format!("• {} already supersedes {} — no change.", decision_label(new_id), decision_label(old_id)));
+            }
         }
         DecisionCmd::Amend { decision: new_ref, amends } => {
             let new_id = resolve_decision(store, &new_ref).map_err(CliError::from)?;
@@ -3020,6 +3037,17 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
 
 /// Record the reason a decision was accepted or rejected as a comment (the same shape as
 /// `task block --reason`). An empty or whitespace-only reason is ignored.
+/// A `" (by <facet>, <utc>)"` suffix naming who settled an already-accepted decision, empty when the
+/// stamps are missing. Shown on the idempotent re-accept so `reopen` is an informed choice, not a guess.
+fn accepted_by_suffix(d: &amenbo_core::model::Decision) -> String {
+    match (&d.decided_by, &d.decided_at) {
+        (Some(who), Some(at)) => format!(" (by {who}, {})", at.to_rfc3339_z()),
+        (Some(who), None) => format!(" (by {who})"),
+        (None, Some(at)) => format!(" (at {})", at.to_rfc3339_z()),
+        (None, None) => String::new(),
+    }
+}
+
 fn add_reason_comment(store: &mut Store, flags: &Flags, decision_id: i64, reason: Option<String>) -> Result<(), CliError> {
     if let Some(r) = reason.as_deref().map(str::trim).filter(|r| !r.is_empty()) {
         // The author is our own facet; the author argument is the trace string for the audit log.

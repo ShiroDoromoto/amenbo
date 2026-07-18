@@ -176,6 +176,9 @@ pub struct ProjectDto {
     /// Open task count (todo/in_progress/blocked — anything but done, live only). The sidebar's
     /// count badge.
     open_count: usize,
+    /// Proposed (under-discussion) decision count — decisions still awaiting a ruling. Feeds the
+    /// sidebar row and the header decision button's under-discussion badge.
+    proposed_decision_count: usize,
     /// Unified dimensions (classification axes). Empty means none are in use. Task classification
     /// happens on these axes and nowhere else.
     dimensions: Vec<DimensionDto>,
@@ -922,6 +925,7 @@ fn collect_store(store: &Store, acc: &mut Acc, lang: &str) -> Result<(), CmdErro
             color: p.color.clone().unwrap_or_else(|| "#9aa7b2".to_string()),
             view: p.default_view.clone(),
             open_count: p.open_count,
+            proposed_decision_count: p.proposed_decision_count,
             dimensions,
         });
     }

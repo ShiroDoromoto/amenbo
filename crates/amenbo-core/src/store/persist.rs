@@ -481,17 +481,20 @@ impl Store {
         self.write_one(&[WriteTarget::Decision(id)], |tx| crate::ops::decision::update(tx, id, patch))
     }
 
-    /// Accept a decision (one operation = one transaction).
+    /// Accept a decision (one operation = one transaction). Returns `(decision, changed)`; `changed`
+    /// is `false` on the idempotent noop (already accepted), so the caller does not report a fresh
+    /// acceptance that never happened.
     pub fn accept_decision(
         &mut self,
         id: i64,
         decided_by: Option<String>,
-    ) -> Result<crate::model::Decision> {
+    ) -> Result<(crate::model::Decision, bool)> {
         self.write_one(&[WriteTarget::Decision(id)], |tx| crate::ops::decision::accept(tx, id, decided_by))
     }
 
-    /// Reject a decision (one operation = one transaction).
-    pub fn reject_decision(&mut self, id: i64) -> Result<crate::model::Decision> {
+    /// Reject a decision (one operation = one transaction). Returns `(decision, changed)`; `changed`
+    /// is `false` on the idempotent noop (already rejected).
+    pub fn reject_decision(&mut self, id: i64) -> Result<(crate::model::Decision, bool)> {
         self.write_one(&[WriteTarget::Decision(id)], |tx| crate::ops::decision::reject(tx, id))
     }
 
@@ -508,7 +511,7 @@ impl Store {
         new_id: i64,
         old_id: i64,
         decided_by: Option<String>,
-    ) -> Result<crate::model::Decision> {
+    ) -> Result<(crate::model::Decision, bool)> {
         self.write_one(
             &[WriteTarget::Decision(new_id), WriteTarget::Decision(old_id)],
             |tx| crate::ops::decision::supersede(tx, new_id, old_id, decided_by),

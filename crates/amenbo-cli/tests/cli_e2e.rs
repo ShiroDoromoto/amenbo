@@ -2075,6 +2075,58 @@ fn decision_comment_add_list_and_accept_reject_reason() {
     assert_eq!(cli.json(&["decision", "comment", "list", &did3, "--json"])["count"], 0);
 }
 
+/// Re-accepting an already-accepted decision is an idempotent noop that **says so** instead of a bare
+/// "✓" that reads as a fresh acceptance: `noop` is true, `changed` is empty, the facet that first
+/// settled it is never silently overwritten (that is `reopen`'s job), and a `--reason` on the noop
+/// does not pile a comment. `reject` / `supersede` are the same shape.
+#[test]
+fn re_settling_a_decision_is_a_reported_noop_and_does_not_overwrite_or_pile_a_reason() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    // First accept settles it; the facet is recorded.
+    let d = cli.json(&["decision", "add", "--project", &pid, "--title", "採択の名義", "--json"]);
+    let did = id_str(&d["decision"]["id"]);
+    let first = cli.json(&["decision", "accept", &did, "--json"]);
+    assert_eq!(first["noop"], false);
+    assert_eq!(first["decision"]["decided_by"]["name"], "human");
+
+    // Re-accepting reports a noop with nothing changed, keeps the recorded facet (re-stamping is
+    // `reopen`'s route), and the `--reason` does not become a comment.
+    let again = cli.json(&["decision", "accept", &did, "--reason", "名義を直したい", "--json"]);
+    assert_eq!(again["noop"], true, "re-accepting is a reported noop");
+    assert_eq!(again["changed"].as_array().unwrap().len(), 0, "nothing changed");
+    assert_eq!(again["decision"]["decided_by"]["name"], "human", "the recorded facet is untouched");
+    assert_eq!(
+        cli.json(&["decision", "comment", "list", &did, "--json"])["count"], 0,
+        "a reason on a noop re-accept must not pile a comment"
+    );
+
+    // reject: re-rejecting an already-rejected decision is a reported noop too.
+    let dr = cli.json(&["decision", "add", "--project", &pid, "--title", "却下の冪等", "--json"]);
+    let didr = id_str(&dr["decision"]["id"]);
+    assert_eq!(cli.json(&["decision", "reject", &didr, "--json"])["noop"], false);
+    let rej_again = cli.json(&["decision", "reject", &didr, "--reason", "二度目", "--json"]);
+    assert_eq!(rej_again["noop"], true);
+    assert_eq!(
+        cli.json(&["decision", "comment", "list", &didr, "--json"])["count"], 0,
+        "a reason on a noop re-reject must not pile a comment"
+    );
+
+    // supersede: re-superseding an already-superseded pair is a reported noop.
+    let old = cli.json(&["decision", "add", "--project", &pid, "--title", "旧", "--json"]);
+    let oldid = id_str(&old["decision"]["id"]);
+    cli.json(&["decision", "accept", &oldid, "--json"]);
+    let new = cli.json(&["decision", "add", "--project", &pid, "--title", "新", "--json"]);
+    let newid = id_str(&new["decision"]["id"]);
+    assert_eq!(cli.json(&["decision", "supersede", &newid, "--replaces", &oldid, "--json"])["noop"], false);
+    assert_eq!(
+        cli.json(&["decision", "supersede", &newid, "--replaces", &oldid, "--json"])["noop"], true,
+        "re-superseding an already-superseded pair is a noop"
+    );
+}
+
 /// `task show` surfaces dependents (`blocks`) — the reverse of `blocked_by` — so an agent
 /// can see what finishing this task would unblock. The category is always signposted: the human output
 /// prints `blocks: (none)` when empty (never silently omitted, so the agent cannot mistake "no

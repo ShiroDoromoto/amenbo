@@ -156,12 +156,17 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: DecisionPatch) -> Result<Decisio
 
 /// Accept a decision (`Proposed` → `Accepted`), stamping `decided_at`/`decided_by`. Idempotent when
 /// it is already `Accepted` (re-accepting is a noop). Accepting a `Rejected` decision is an error.
-pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<Decision> {
+///
+/// Returns `(decision, changed)`. `changed` is `false` on the idempotent noop (already `Accepted`) so
+/// the caller can tell "settled it" from "nothing happened" and not report a fresh acceptance that
+/// never occurred — the freeze on `decided_by`/`decided_at` still holds, and re-stamping a different
+/// facet is [`reopen`]'s business, not a silent overwrite here.
+pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<(Decision, bool)> {
     let now = Timestamp::now();
     let decided_by = decided_by.map(|t| t.trim().to_string());
     let before = live_before(tx, id)?;
     match before.status {
-        DecisionStatus::Accepted => return Ok(before), // idempotent
+        DecisionStatus::Accepted => return Ok((before, false)), // idempotent: already settled, nothing changed
         DecisionStatus::Proposed => {}
         other => {
             return Err(Error::invalid(
@@ -178,15 +183,18 @@ pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<D
         ..before.clone()
     };
     emit_update(tx, record::decision(&before), record::decision(&after))?;
-    Ok(after)
+    Ok((after, true))
 }
 
 /// Reject a decision (`Proposed` → `Rejected`). Idempotent when it is already `Rejected`.
 /// Rejecting an `Accepted` decision is an error — a settled decision is replaced by superseding it.
-pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<Decision> {
+///
+/// Returns `(decision, changed)`. `changed` is `false` on the idempotent noop (already `Rejected`), so
+/// the caller does not report a fresh rejection that never happened.
+pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
     let before = live_before(tx, id)?;
     match before.status {
-        DecisionStatus::Rejected => return Ok(before), // idempotent
+        DecisionStatus::Rejected => return Ok((before, false)), // idempotent: already rejected, nothing changed
         DecisionStatus::Proposed => {}
         other => {
             return Err(Error::invalid(
@@ -201,7 +209,7 @@ pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<Decision> {
         ..before.clone()
     };
     emit_update(tx, record::decision(&before), record::decision(&after))?;
-    Ok(after)
+    Ok((after, true))
 }
 
 /// Return an accepted decision to discussion (`Accepted` → `Proposed`). The freeze on accept (which
@@ -244,12 +252,16 @@ pub fn reopen(tx: &WriteTx<'_>, id: i64) -> Result<Decision> {
 /// ought to be settled, so if it is still `Proposed` it is promoted to `Accepted` in the same
 /// breath. Edges are rows, so **one decision can supersede several old ones** (a DAG).
 /// Self-reference is rejected.
+///
+/// Returns `(new_decision, changed)`. `changed` is `false` only when the supersedes edge was already
+/// there and the new side was already `Accepted` — i.e. re-running it did nothing — so the caller
+/// does not announce a fresh supersession that never happened.
 pub fn supersede(
     tx: &WriteTx<'_>,
     new_id: i64,
     old_id: i64,
     decided_by: Option<String>,
-) -> Result<Decision> {
+) -> Result<(Decision, bool)> {
     if new_id == old_id {
         return Err(Error::invalid(
             "a decision cannot supersede itself",
@@ -262,9 +274,10 @@ pub fn supersede(
     let now = Timestamp::now();
     let decided_by = decided_by.map(|t| t.trim().to_string());
 
-    put_edge(tx, new_id, old_id, DecisionEdgeKind::Supersedes)?;
+    let edge_changed = put_edge(tx, new_id, old_id, DecisionEdgeKind::Supersedes)?;
 
     // New side: promote Proposed to Accepted (the edge itself is put_edge's business).
+    let mut promoted = false;
     if new_before.status == DecisionStatus::Proposed {
         let new_after = Decision {
             status: DecisionStatus::Accepted,
@@ -274,8 +287,9 @@ pub fn supersede(
             ..new_before.clone()
         };
         emit_update(tx, record::decision(&new_before), record::decision(&new_after))?;
+        promoted = true;
     }
-    live_before(tx, new_id)
+    Ok((live_before(tx, new_id)?, edge_changed || promoted))
 }
 
 /// Amend part of decision `old_id` with decision `new_id` (an `amends` edge). It draws the
@@ -354,12 +368,15 @@ pub fn unlink_edge(tx: &WriteTx<'_>, decision_id: i64, target_decision_id: i64) 
 /// (a noop). Rewriting builds_on into supersedes/amends is a **promotion** — a weak implication
 /// gives way to a strong behavior — and goes straight through. Guarding against the reverse, a
 /// demotion, is [`builds_on`]'s job: it does nothing when the edge already implies it.
+///
+/// Returns `changed`: `false` when the same-kind edge was already there (the idempotent noop), so a
+/// caller like [`supersede`] can tell whether it actually drew anything.
 fn put_edge(
     tx: &WriteTx<'_>,
     decision_id: i64,
     target_decision_id: i64,
     kind: DecisionEdgeKind,
-) -> Result<()> {
+) -> Result<bool> {
     // Every decision-to-decision edge funnels through here (supersede / amend / builds_on), so the
     // invariant is enforced at the confluence — put it at each call site instead and the next edge
     // kind someone adds will slip past.
@@ -374,10 +391,11 @@ fn put_edge(
         let before = read::decision_edge(tx.conn(), id)?
             .expect("the edge id was just read from the same transaction");
         if before.kind == kind {
-            return Ok(()); // idempotent
+            return Ok(false); // idempotent: same-kind edge already present
         }
         let after = DecisionEdge { kind, updated_at: now, ..before.clone() };
-        return emit_update(tx, record::decision_edge(&before), record::decision_edge(&after));
+        emit_update(tx, record::decision_edge(&before), record::decision_edge(&after))?;
+        return Ok(true);
     }
     let edge = DecisionEdge {
         id: read::next_id(tx.conn(), "decision_edge")?,
@@ -387,7 +405,8 @@ fn put_edge(
         created_at: now,
         updated_at: now,
     };
-    emit_create(tx, record::decision_edge(&edge))
+    emit_create(tx, record::decision_edge(&edge))?;
+    Ok(true)
 }
 
 /// Hard-delete a decision, `Accepted` ones included: deleting is retiring a record, not rewriting
@@ -980,12 +999,14 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let d = new_decision(tx, pid, "決定");
-        let a = accept(tx, d.id, Some("user-1".to_string())).unwrap();
+        let (a, changed) = accept(tx, d.id, Some("user-1".to_string())).unwrap();
+        assert!(changed, "a fresh acceptance reports changed");
         assert_eq!(a.status, DecisionStatus::Accepted);
         assert!(a.decided_at.is_some());
         assert_eq!(a.decided_by.as_deref(), Some("user-1"));
-        // Idempotent: re-accepting is a noop and does not overwrite decided_by.
-        let a2 = accept(tx, d.id, Some("user-2".to_string())).unwrap();
+        // Idempotent: re-accepting is a noop, reports unchanged, and does not overwrite decided_by.
+        let (a2, changed2) = accept(tx, d.id, Some("user-2".to_string())).unwrap();
+        assert!(!changed2, "re-accepting an already-accepted decision reports unchanged");
         assert_eq!(a2.decided_by.as_deref(), Some("user-1"));
     }
 
@@ -995,10 +1016,13 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let d = new_decision(tx, pid, "却下する案");
-        let r = reject(tx, d.id).unwrap();
+        let (r, changed) = reject(tx, d.id).unwrap();
+        assert!(changed, "a fresh rejection reports changed");
         assert_eq!(r.status, DecisionStatus::Rejected);
-        // Idempotent.
-        assert_eq!(reject(tx, d.id).unwrap().status, DecisionStatus::Rejected);
+        // Idempotent: re-rejecting reports unchanged.
+        let (r2, changed2) = reject(tx, d.id).unwrap();
+        assert!(!changed2, "re-rejecting an already-rejected decision reports unchanged");
+        assert_eq!(r2.status, DecisionStatus::Rejected);
         // An accepted decision cannot be rejected.
         let d2 = new_decision(tx, pid, "採択済み");
         accept(tx, d2.id, None).unwrap();
@@ -1022,7 +1046,8 @@ mod tests {
         // From here it is editable again through edit-while-proposed, and re-accepting settles it.
         let edited = update(tx, d.id, DecisionPatch { body: Some("誤字を直した本文".to_string()), ..Default::default() }).unwrap();
         assert_eq!(edited.body, "誤字を直した本文");
-        let reaccepted = accept(tx, d.id, Some("user-1".to_string())).unwrap();
+        let (reaccepted, changed) = accept(tx, d.id, Some("user-1".to_string())).unwrap();
+        assert!(changed, "accepting again after a reopen is a real transition");
         assert_eq!(reaccepted.status, DecisionStatus::Accepted);
         assert!(reaccepted.decided_at.is_some());
     }
@@ -1056,10 +1081,14 @@ mod tests {
         accept(tx, old.id, None).unwrap();
         let new = new_decision(tx, pid, "v2: RDB を真実源");
         // new (Proposed) supersedes old, and is promoted to Accepted on the way.
-        let res = supersede(tx, new.id, old.id, Some("user-1".to_string())).unwrap();
+        let (res, changed) = supersede(tx, new.id, old.id, Some("user-1".to_string())).unwrap();
+        assert!(changed, "drawing the edge and promoting the new side is a real change");
         assert_eq!(res.status, DecisionStatus::Accepted);
         assert_eq!(targets(tx, new.id, DecisionEdgeKind::Supersedes), vec![old.id]);
         assert!(res.decided_at.is_some());
+        // Re-running it changes nothing: the edge is already there and the new side already settled.
+        let (_, changed2) = supersede(tx, new.id, old.id, Some("user-2".to_string())).unwrap();
+        assert!(!changed2, "re-superseding an already-superseded pair reports unchanged");
         // The old row is untouched: its status stays accepted, and being superseded shows up in the
         // derived currency instead.
         assert_eq!(read::decision(tx.conn(), old.id).unwrap().unwrap().status, DecisionStatus::Accepted, "the old side's status is unchanged");
@@ -1388,7 +1417,7 @@ mod tests {
         assert!(res.decided_by.is_none(), "decided_by is not set");
         assert_eq!(targets(tx, amending.id, DecisionEdgeKind::Amends), vec![target.id]);
         // accept still works as a separate operation, and leaves the edge as it is.
-        let accepted = accept(tx, amending.id, None).unwrap();
+        let (accepted, _) = accept(tx, amending.id, None).unwrap();
         assert_eq!(accepted.status, DecisionStatus::Accepted);
         assert_eq!(targets(tx, amending.id, DecisionEdgeKind::Amends), vec![target.id]);
     }

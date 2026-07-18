@@ -6,7 +6,7 @@ import { useStore } from "../store/store";
 import { dataAdapter } from "../mock/adapter";
 import { getSnapshot, inTauri } from "../core/snapshot";
 import { useTask } from "../core/reads";
-import { editComment as mutEditComment, fetchTaskDimensions } from "../core/mutations";
+import { editComment as mutEditComment, removeComment as mutRemoveComment, fetchTaskDimensions } from "../core/mutations";
 import { loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
 import {
@@ -154,6 +154,13 @@ export function TaskDetailPane({
   const submitComment = () => { if (comment.trim()) { store.addComment(taskId, comment.trim()); setComment(""); } };
   const editComment = async (commentId: number, text: string) => {
     await mutEditComment(commentId, taskId, text);
+    if (inTauri()) setTaskActivity(await loadTaskActivity(taskId));
+  };
+  // Mirror editComment: await the write (so a refusal reaches CommentRow's error surface instead of a swallowed
+  // toast) and reload the local activity the same way. Not routed through `store.removeComment`, which drops the
+  // promise on the floor.
+  const removeComment = async (commentId: number) => {
+    await mutRemoveComment(commentId, taskId);
     if (inTauri()) setTaskActivity(await loadTaskActivity(taskId));
   };
   const removeTask = async () => {
@@ -384,8 +391,8 @@ export function TaskDetailPane({
                     editedAgo={c.editedAgo}
                     text={c.text ?? ""}
                     target="task_comment"
-                    onEdit={(text) => void editComment(c.id, text)}
-                    onRemove={() => store.removeComment(c.id, taskId)}
+                    onEdit={(text) => editComment(c.id, text)}
+                    onRemove={() => removeComment(c.id)}
                     startEditAt={editCommentAt?.commentId === c.id ? editCommentAt.nonce : undefined}
                   />
                 ))}

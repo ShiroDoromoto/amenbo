@@ -33,6 +33,7 @@ export type Membership = MembershipDto;
 export type TaskCard = TaskCardDto & {
   triggeredAt?: string | null;
   unread?: boolean;            // Inbox: whether an unread comment addressed to you remains (drives the unread dot only)
+  unseen?: boolean;            // Inbox source C: this device entered it after last viewing it (or never) — notification only, no dot
 };
 
 export type Project = ProjectDto;

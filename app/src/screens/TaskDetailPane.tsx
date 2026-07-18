@@ -6,13 +6,13 @@ import { useStore } from "../store/store";
 import { dataAdapter } from "../mock/adapter";
 import { getSnapshot, inTauri } from "../core/snapshot";
 import { useTask } from "../core/reads";
-import { editComment as mutEditComment, removeComment as mutRemoveComment, fetchTaskDimensions } from "../core/mutations";
+import { addComment as mutAddComment, editComment as mutEditComment, removeComment as mutRemoveComment, fetchTaskDimensions } from "../core/mutations";
 import { loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
 import {
   DueChip, FacetAvatar, PriorityDot, TaskIdChip,
 } from "../components/atoms";
-import { priorityLabel, statusLabel, t, tf } from "../core/i18n";
+import { errText, priorityLabel, statusLabel, t, tf } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
 import { useRefNav } from "../core/refNav";
 import type { Actor, ActivityItem, Facet, Membership, Priority, Status, TaskCard } from "../mock/types";
@@ -60,6 +60,7 @@ export function TaskDetailPane({
   const refNav = useRefNav();
   const [tab, setTab] = useState<TabKey>("detail");
   const [comment, setComment] = useState("");
+  const [commentError, setCommentError] = useState<string | null>(null);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
@@ -151,7 +152,19 @@ export function TaskDetailPane({
   const olderCount = Math.max(0, allComments.length - limit);
   const comments = allComments.slice(olderCount);
 
-  const submitComment = () => { if (comment.trim()) { store.addComment(taskId, comment.trim()); setComment(""); } };
+  // Await the post and only clear the box once it lands: a refused comment used to blank the input, losing the
+  // body the user just wrote. On failure the text stays put and the error is shown, so retrying costs nothing.
+  const submitComment = async () => {
+    const body = comment.trim();
+    if (!body) return;
+    setCommentError(null);
+    try {
+      await mutAddComment(taskId, body);
+      setComment("");
+    } catch (e) {
+      setCommentError(errText(e));
+    }
+  };
   const editComment = async (commentId: number, text: string) => {
     await mutEditComment(commentId, taskId, text);
     if (inTauri()) setTaskActivity(await loadTaskActivity(taskId));
@@ -407,12 +420,13 @@ export function TaskDetailPane({
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 onKeyDown={(e) => {
-                  if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitComment(); }
+                  if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submitComment(); }
                 }}
               />
+              {commentError && <div className="newproj__error" role="alert">⚠ {commentError}</div>}
               <div className="compose__actions">
                 <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
-                <button className="btn btn--primary" disabled={!comment.trim()} onClick={submitComment}>{t("detail.send")}</button>
+                <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
               </div>
             </div>
           </div>

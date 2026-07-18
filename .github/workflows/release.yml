@@ -282,3 +282,53 @@ jobs:
             echo "::error::build provenance was not attached (attest_unavailable): the release job is missing id-token/attestations write permission" >&2
             exit 1
           fi
+
+      # A green release job is not proof of a release. If wharfy ever prints its plan
+      # and exits 0 without uploading (a real near-miss once left 5 jobs green and 0
+      # releases), nothing above catches it — attest_unavailable stays silent when
+      # there is no upload at all. So measure the actual result off the GitHub API: the
+      # prerelease must exist, be live (not draft) and flagged prerelease (not latest),
+      # and carry every installer wharfy.yaml declares plus latest.json. Any gap is red.
+      - name: Verify the prerelease actually shipped (exists, complete, prerelease)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="$(git describe --tags --abbrev=0 --match 'v*')"
+          fi
+          echo "Verifying the release for tag: $TAG"
+
+          # gh api 404s (non-zero) when no release exists for the tag — that alone
+          # catches "green but shipped nothing".
+          rel="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}")"
+
+          if [ "$(jq -r '.draft' <<<"$rel")" != "false" ]; then
+            echo "::error::release ${TAG} is a draft — it is not downloadable" >&2
+            exit 1
+          fi
+          if [ "$(jq -r '.prerelease' <<<"$rel")" != "true" ]; then
+            echo "::error::release ${TAG} is not a prerelease — it would be served as latest to every user before verification" >&2
+            exit 1
+          fi
+
+          # Expected installers = the bundles wharfy.yaml declares (its block is the
+          # file's last top-level key, so it runs to EOF), by basename, plus wharfy's
+          # latest.json update manifest. Derived here so the two stay one source of truth.
+          mapfile -t expected < <(awk '/^bundle:/{f=1} f' wharfy.yaml \
+            | grep -oE 'path: dist/[^ }]+' | sed 's|.*/||')
+          expected+=("latest.json")
+
+          assets="$(jq -r '.assets[].name' <<<"$rel")"
+          echo "Release assets:"; echo "$assets"
+
+          missing=0
+          for name in "${expected[@]}"; do
+            if ! grep -qxF "$name" <<<"$assets"; then
+              echo "::error::release ${TAG} is missing the expected asset: ${name}" >&2
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ]

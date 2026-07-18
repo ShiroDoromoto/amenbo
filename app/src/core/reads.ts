@@ -318,8 +318,8 @@ async function fetchInboxArchivedTasks(): Promise<TaskCard[]> {
 }
 
 /**
- * The inbox is "what I have to look at or act on". It is the union of a state-based set C (assigned to me on my
- * human facet, newly assigned by someone else, not yet started by me) and a comment-based set D (tasks carrying
+ * The inbox is "what I have to look at or act on". It is the union of a state-based set C (assigned to my human
+ * facet, created by an AI, not yet started — the AI→human hand-off) and a comment-based set D (tasks carrying
  * a comment addressed to me). Membership does not depend on having read anything — clicking an item does not
  * evict it; archiving is the only way out. Read state feeds each item's `unread` display flag and nothing else.
  */
@@ -337,7 +337,8 @@ async function fetchInboxTasks(me: string): Promise<TaskCard[]> {
   const cTasks = cand.filter((t) => {
     const mineHuman = t.assignee?.userId === me && t.assignee?.kind === "human";
     if (!mineHuman) return false;
-    return t.status === "todo" && !!t.createdBy && t.createdBy.userId !== me;
+    // An AI facet created it and handed it to me — judge by kind, not user_id (which the projection pins to human).
+    return t.status === "todo" && t.createdBy?.kind === "ai";
   });
   // The archive set evicts unconditionally — the one and only exit, shared by C and D.
   const inbox = dedupById([...dTasks, ...cTasks]).filter((t) => !archived.has(t.id));

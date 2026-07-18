@@ -586,7 +586,10 @@ function OrphanBindingBanner() {
 // session. Outside Tauri (in the browser) it is always empty, hence hidden.
 export function HookSetupBanner({ asked }: { asked: boolean }) {
   const [notices, setNotices] = useState<HookNoticeDto[]>([]);
-  const [dismissed, setDismissed] = useState(false);
+  // One dismiss per banner: the two say different things, so closing the "restored" heads-up must not also
+  // hide the "not wired" warning (and vice versa).
+  const [unwiredDismissed, setUnwiredDismissed] = useState(false);
+  const [restoredDismissed, setRestoredDismissed] = useState(false);
 
   useEffect(() => {
     if (!inTauri() || !asked) return;
@@ -601,11 +604,13 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
 
   const unwired = notices.filter((n) => n.unwired.length > 0);
   const restored = notices.filter((n) => n.restored.length > 0);
-  if (dismissed || notices.length === 0) return null;
+  const showUnwired = unwired.length > 0 && !unwiredDismissed;
+  const showRestored = restored.length > 0 && !restoredDismissed;
+  if (!showUnwired && !showRestored) return null;
 
   return (
     <>
-      {unwired.length > 0 && (
+      {showUnwired && (
         <div className="healthbanner managedblock-banner" role="alert">
           <span className="healthbanner__icon" aria-hidden>⚠</span>
           <div className="healthbanner__body">
@@ -617,10 +622,10 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
               </div>
             ))}
           </div>
-          <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
+          <button className="healthbanner__close" onClick={() => setUnwiredDismissed(true)}>✕ {t("health.dismiss")}</button>
         </div>
       )}
-      {restored.length > 0 && (
+      {showRestored && (
         <div className="healthbanner managedblock-banner" role="alert">
           <span className="healthbanner__icon" aria-hidden>⚠</span>
           <div className="healthbanner__body">
@@ -632,7 +637,7 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
               </div>
             ))}
           </div>
-          <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
+          <button className="healthbanner__close" onClick={() => setRestoredDismissed(true)}>✕ {t("health.dismiss")}</button>
         </div>
       )}
     </>

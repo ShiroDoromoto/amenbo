@@ -763,31 +763,32 @@ pub fn reconcile(ctx: &HookContext) -> HookAction {
     }
 }
 
-/// Where the lint is not running — the standing report, as opposed to [`reconcile`]'s one-time question.
-/// One list, because there is now one thing to say: every slot with no block of ours, whether empty or held
-/// by another tool, is fixed the same way — `hooks install`, which writes a standalone hook into an empty
-/// slot and slips the block in alongside another tool's. There is no separate hand-off to report: coexisting
-/// is always possible, so a stranger's slot is not a line for the user to add by hand, it is a slot install
-/// wires like any other.
+/// Where the lint is not running and `hooks install` will fix it — the standing report, as opposed to
+/// [`reconcile`]'s one-time question. It names only **empty** slots, the ones install can always wire (it
+/// writes a standalone hook). It deliberately does **not** name a slot another tool holds: an untracked one
+/// install coexists with (and under a `yes` already has, so it is our block by the time this runs), while a
+/// **tracked** one install refuses to touch ([`install`]) — telling the user to "run install" for a slot
+/// install will not wire is a promise it cannot keep. What install cannot do, the report does not offer.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetupNotice {
-    /// Slots with no block of ours (empty, or another tool's hook without amenbo's block), which
-    /// `hooks install` wires — writing a standalone hook, or adding the block beside an existing one.
+    /// Empty slots — no hook there at all — which `hooks install` writes a standalone hook into.
     pub unwired: Vec<HookSlot>,
 }
 
-/// Is the lint actually running, and if not, where it is not — the slots of a git repository that carry no
-/// block of ours, or `None` when there is nothing to say. It is deliberately quieter than that sounds: our
-/// block in every slot, a device that said no, and a repository that opted out are all silent, so it speaks
-/// only while something is genuinely unsaid and cannot become noise to tune out. A `yes` on record does
-/// **not** silence it, because the answer is not a mirror of the disk: consent with no block there is
-/// exactly the state worth reporting.
+/// Is the lint actually running, and if not, where an empty slot is waiting for `hooks install`, or `None`
+/// when there is nothing install can finish. It is deliberately quiet: our block in every slot, a device
+/// that said no, a repository that opted out, and a slot another tool holds are all silent here — the first
+/// three because there is nothing to do, the last because install either already coexisted with it (under a
+/// `yes`) or will not touch it (a tracked hook), and reporting a slot install cannot wire would be noise, or
+/// worse, a false promise. A `yes` on record does not silence an *empty* slot, because the answer is not a
+/// mirror of the disk: consent with no hook there is exactly the state worth reporting.
 pub fn setup_notice(states: Option<HookStates>, consent: Option<HookConsent>, opted_out: bool) -> Option<SetupNotice> {
     if opted_out || consent == Some(HookConsent::No) {
         return None;
     }
     let states = states?;
-    let unwired: Vec<HookSlot> = states.iter().filter(|(_, s)| !s.is_managed()).map(|(slot, _)| slot).collect();
+    let unwired: Vec<HookSlot> =
+        states.iter().filter(|(_, s)| *s == HookState::Unwired).map(|(slot, _)| slot).collect();
     (!unwired.is_empty()).then_some(SetupNotice { unwired })
 }
 
@@ -924,11 +925,11 @@ mod tests {
         );
     }
 
-    /// The report speaks exactly while the lint is not running: every slot with no block of ours, whether
-    /// empty or held by another tool, in one list — they are fixed the same way now (`hooks install`
-    /// coexists), so there is no second category to keep apart.
+    /// The report names only **empty** slots — the ones `hooks install` can always wire. A stranger's slot is
+    /// not named: install either already coexisted with it (under a yes) or will not touch it (tracked), so
+    /// offering "run install" there would be a promise install cannot keep.
     #[test]
-    fn an_unwired_repository_is_reported_as_unfinished() {
+    fn only_empty_slots_are_reported() {
         for consent in [None, Some(HookConsent::Yes)] {
             assert_eq!(
                 setup_notice(states(HookState::Unwired, HookState::Unwired), consent, false),
@@ -936,8 +937,8 @@ mod tests {
             );
             assert_eq!(
                 setup_notice(states(HookState::Foreign, HookState::Unwired), consent, false),
-                Some(SetupNotice { unwired: vec![HookSlot::PreCommit, HookSlot::CommitMsg] }),
-                "a stranger's slot and an empty one are both just 'no block here — install wires it'",
+                Some(SetupNotice { unwired: vec![HookSlot::CommitMsg] }),
+                "the stranger's slot is not named — only the empty one install is sure to wire",
             );
             assert_eq!(
                 setup_notice(states(OURS, HookState::Unwired), consent, false),
@@ -947,15 +948,19 @@ mod tests {
         }
     }
 
-    /// A stranger's slot is now reported as unwired, not as a hand-off: install coexists with it, so it is
-    /// a slot to wire like any other, and the only thing worth saying is that the lint is not running there
-    /// yet.
+    /// A stranger's slot alone is **not** reported: install may not be able to wire it (a tracked hook it
+    /// refuses), so there is nothing to promise. Silence here beats a "run install" that would not work.
     #[test]
-    fn a_strangers_slot_is_reported_as_unwired_not_handed_off() {
+    fn a_lone_strangers_slot_is_not_reported() {
         assert_eq!(
             setup_notice(states(OURS, HookState::Foreign), None, false),
-            Some(SetupNotice { unwired: vec![HookSlot::CommitMsg] }),
-            "the stranger's slot is where the lint is not running, and install is the fix",
+            None,
+            "our block in one slot, a stranger in the other — nothing empty for install to finish",
+        );
+        assert_eq!(
+            setup_notice(states(HookState::Foreign, HookState::Foreign), None, false),
+            None,
+            "both slots a stranger's — install may refuse a tracked one, so the report stays silent",
         );
     }
 

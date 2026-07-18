@@ -144,6 +144,27 @@ describe("lint setup banner", () => {
     expect(restored!.textContent).toContain("pre-commit");
   });
 
+  // Two banners, two dismisses: closing one must leave the other. They were sharing one dismiss flag, so a
+  // single ✕ hid both — the bug this pins.
+  it("dismisses each banner on its own — closing one leaves the other", async () => {
+    hoisted.notices = [notice({ unwired: ["commit-msg"], restored: ["pre-commit"] })];
+    await render(true);
+    expect(container.querySelectorAll(".healthbanner")).toHaveLength(2);
+
+    // Close the unwired banner (the one that mentions `hooks install`).
+    const unwired = [...container.querySelectorAll<HTMLElement>(".healthbanner")].find((b) =>
+      b.textContent?.includes("hooks install"),
+    )!;
+    await act(async () => {
+      unwired.querySelector<HTMLButtonElement>(".healthbanner__close")!.click();
+    });
+
+    const left = [...container.querySelectorAll<HTMLElement>(".healthbanner")];
+    expect(left, "the other banner survives").toHaveLength(1);
+    expect(left[0].textContent, "the survivor is the restored one").not.toContain("hooks install");
+    expect(left[0].textContent).toContain("pre-commit");
+  });
+
   it("lists every unfinished repository, and ✕ dismisses the banner for the session", async () => {
     hoisted.notices = [notice(), notice({ projectName: "案件Y", dir: "/w/案件Y" })];
     await render(true);

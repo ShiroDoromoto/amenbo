@@ -1033,8 +1033,9 @@ fn report_unfinished_setup(
     let Some(notice) = hooks::setup_notice(states, consent, opted_out) else { return };
     let cmd = Paths::APP_NAME;
     if flags.json {
-        // One list: every slot with no block of ours, fixed the same way. A stranger's slot is no longer a
-        // separate hand-off — install coexists with it — so it is reported here like any other unwired slot.
+        // Empty slots only — the ones install is sure to wire. A stranger's slot is not reported: install
+        // either already coexisted with it (under a yes) or refuses it (a tracked hook), so "run install"
+        // there would be a promise it cannot keep.
         set_setup_report(json!({
             "unwired": notice.unwired.iter().map(|slot| json!({
                 "hook": slot.name(),

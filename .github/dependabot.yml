@@ -75,15 +75,14 @@ updates:
         update-types:
           - minor
           - patch
+      # No update-types filter: react and react-dom share a peer contract and must
+      # move together, majors included, or a split leaves each half unresolvable.
       react:
         patterns:
           - react
           - react-dom
           - "@types/react"
           - "@types/react-dom"
-        update-types:
-          - minor
-          - patch
       vite:
         patterns:
           - vite
@@ -105,7 +104,8 @@ updates:
         update-types:
           - minor
           - patch
-    # majors fall outside every group => one PR each.
+    # majors fall outside every group => one PR each, except the react group,
+    # which has no update-types filter and so carries its majors together.
 
   # GitHub Actions used by the workflows.
   - package-ecosystem: github-actions

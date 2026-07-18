@@ -100,7 +100,10 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
             >
               <span className="navitem__dot" style={{ background: p.color }} />
               {p.name}
-              {p.openCount ? <span className="navitem__count">{p.openCount}</span> : null}
+              {(() => {
+                const count = p.openCount + p.proposedDecisionCount;
+                return count ? <span className="navitem__count">{count}</span> : null;
+              })()}
             </button>
           );
         })}

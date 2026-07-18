@@ -65,8 +65,9 @@ pub enum HookConsent {
 /// same device as [`crate::agents::MANAGED_BLOCK_VERSION`]: bump it when the block's body changes, and a
 /// block written by an older build is recognised as ours and rewritten rather than mistaken for a
 /// stranger's. v3 is where the standalone hook became a marker-delimited block that can coexist with
-/// another tool's hook in the same slot.
-pub const HOOK_MARKER_VERSION: u32 = 3;
+/// another tool's hook in the same slot; v4 makes a standalone block exit cleanly when amenbo is not on
+/// PATH (an uninstalled amenbo must not turn a leftover hook into a commit-blocking trap).
+pub const HOOK_MARKER_VERSION: u32 = 4;
 
 /// Version-independent prefix of the begin marker. Detection matches on this rather than on
 /// [`HOOK_BEGIN_MARKER`] whole, so a block written by any version of amenbo is still known to be ours.
@@ -77,7 +78,7 @@ const BEGIN_SUFFIX: &str = ")";
 /// The begin marker at the version this binary writes, and the end marker that closes the block. They are
 /// shell comments, so they live in the hook itself: the file *is* the record of who wrote it, and there is
 /// no side ledger to fall out of step with it.
-pub const HOOK_BEGIN_MARKER: &str = "# amenbo:hook begin (managed v3)";
+pub const HOOK_BEGIN_MARKER: &str = "# amenbo:hook begin (managed v4)";
 pub const HOOK_END_MARKER: &str = "# amenbo:hook end";
 
 /// The single-line marker older builds wrote at the top of a standalone hook (`# amenbo:hook (managed vN)`,
@@ -189,6 +190,12 @@ impl HookState {
 /// through to whatever the rest of the file holds — which is how the block coexists with another tool's
 /// hook. It uses no `exec` for that reason: `exec` would replace the process and the other tool's hook
 /// would never run.
+///
+/// The trailing `|| true` is what keeps the uninstall promise. In a *standalone* hook the block is the last
+/// thing in the file, so its exit status becomes the hook's — and `command -v` failing (amenbo gone) leaves
+/// a non-zero status that would abort every commit. `|| true` turns that into a clean exit, without touching
+/// the two paths that must keep working: a failing lint still `exit 1`s (a hard exit reached before `|| true`
+/// is), and a coexisting hook still falls through to the tool's own body below.
 pub fn hook_block(slot: HookSlot, cmd: &str) -> String {
     let name = slot.name();
     let subject = slot.subject();
@@ -201,7 +208,7 @@ pub fn hook_block(slot: HookSlot, cmd: &str) -> String {
          # this file is left as it is, so this sits happily alongside another tool's hook. Remove it with\n\
          # `{cmd} hooks uninstall`, or delete the markers. Skipped when {cmd} is not on PATH (uninstalled?);\n\
          # bypass one commit with `git commit --no-verify`.\n\
-         command -v {cmd} >/dev/null 2>&1 && {{ {call} || exit 1; }}\n\
+         command -v {cmd} >/dev/null 2>&1 && {{ {call} || exit 1; }} || true\n\
          {HOOK_END_MARKER}"
     )
 }
@@ -1023,12 +1030,62 @@ mod tests {
     #[test]
     fn each_slot_hands_the_lint_what_git_gives_it() {
         assert!(hook_body(HookSlot::CommitMsg, "amenbo")
-            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo lint \"$1\" || exit 1; }\n"));
+            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo lint \"$1\" || exit 1; } || true\n"));
         assert!(hook_body(HookSlot::PreCommit, "amenbo")
-            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo lint || exit 1; }\n"));
+            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo lint || exit 1; } || true\n"));
         assert!(!hook_body(HookSlot::CommitMsg, "amenbo").contains("exec "), "no exec — the block must fall through");
         assert_eq!(guidance_line(HookSlot::CommitMsg, "amenbo"), "amenbo lint \"$1\" || exit 1");
         assert_eq!(guidance_line(HookSlot::PreCommit, "amenbo"), "amenbo lint || exit 1");
+    }
+
+    /// Run `script` as a hook with `PATH` set to `path`, and return its exit code. The file is run directly,
+    /// so its `#!/bin/sh` finds the shell whatever `PATH` is; `$1` is a throwaway (pre-commit ignores it,
+    /// commit-msg reads a message path). This exercises the *generated shell*, which the logic tests above do
+    /// not — the uninstall trap lived there, not in the install/strip code.
+    #[cfg(unix)]
+    fn run_hook(dir: &Path, script: &str, path: &str) -> i32 {
+        use std::os::unix::fs::PermissionsExt;
+        let file = dir.join("hook");
+        std::fs::write(&file, script).unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::process::Command::new(&file).env("PATH", path).arg("/dev/null").status().unwrap().code().unwrap()
+    }
+
+    /// The uninstall promise, at the shell: an amenbo that is gone from `PATH` must let a commit through, not
+    /// abort it. A standalone block is the last thing in its file, so before the `|| true` its `command -v`
+    /// failure was the hook's exit — a trap on every commit. The two paths that must keep working are pinned
+    /// too: a failing lint still stops the commit, and a block with another tool's body below falls through
+    /// to it.
+    #[cfg(unix)]
+    #[test]
+    fn an_uninstalled_amenbo_never_blocks_a_commit() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("amenbo-hook-run-{}", crate::tmpdir::suffix()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let bin = dir.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let fake_amenbo = |body: &str| {
+            std::fs::write(bin.join("amenbo"), body).unwrap();
+            std::fs::set_permissions(bin.join("amenbo"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        let solo = hook_body(HookSlot::PreCommit, "amenbo");
+
+        // amenbo gone: a standalone hook must exit 0, not trap the commit.
+        assert_eq!(run_hook(&dir, &solo, "/nonexistent"), 0, "an uninstalled amenbo must not block a commit");
+
+        // amenbo present, lint fails: the block still stops the commit.
+        fake_amenbo("#!/bin/sh\ncase \"$1\" in lint) exit 1 ;; esac\nexit 0\n");
+        assert_eq!(run_hook(&dir, &solo, bin.to_str().unwrap()), 1, "a failing lint still stops the commit");
+
+        // amenbo present, lint passes: through.
+        fake_amenbo("#!/bin/sh\nexit 0\n");
+        assert_eq!(run_hook(&dir, &solo, bin.to_str().unwrap()), 0, "a passing lint lets the commit through");
+
+        // Coexisting, amenbo gone: the other tool's body below runs and decides — here it fails.
+        let coexist = format!("{solo}echo other-tool\nexit 3\n");
+        assert_eq!(run_hook(&dir, &coexist, "/nonexistent"), 3, "amenbo gone, the other tool's hook still runs");
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// The point of the marker: what amenbo wrote is recognised as amenbo's, and nothing else is — a

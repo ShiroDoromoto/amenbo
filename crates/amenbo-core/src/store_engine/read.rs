@@ -424,6 +424,20 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
                 .pred(),
         );
     }
+    if let Some(sha) = &f.commit {
+        // `commit:` — tasks recording this SHA (the reverse chain git → task), as an EXISTS so it seeks
+        // the `task_commit_by_sha` index instead of scanning a task's commits per row (O(result)). The
+        // SHA arrives already normalised (the filter parser folds case through the door's `normalize`),
+        // so it matches by the bytes it was stored as.
+        const TC: col::task_commit::Cols = col::task_commit::of("tc");
+
+        preds.push(
+            Exists::over(TC.table)
+                .filter(same(TC.task_id, T.id))
+                .filter(Pred::eq(TC.sha, sha.as_str()))
+                .pred(),
+        );
+    }
     preds.extend(f.dimensions.iter().map(dimension_pred));
     preds
 }

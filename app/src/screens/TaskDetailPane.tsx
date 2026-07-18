@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
+import { Commits } from "../components/Commits";
 import { CommentRow } from "../components/CommentRow";
 import { useStore } from "../store/store";
 import { dataAdapter } from "../mock/adapter";
@@ -381,6 +382,10 @@ export function TaskDetailPane({
           <div className="detail__sep" />
 
           {inTauri() && <Attachments target="task" targetId={taskId} />}
+
+          <div className="detail__sep" />
+
+          {inTauri() && <Commits taskId={taskId} />}
 
           <div className="detail__sep" />
 

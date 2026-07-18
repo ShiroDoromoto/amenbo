@@ -2636,6 +2636,56 @@ fn a_decision_says_which_of_the_tasks_it_created_are_still_standing() {
     assert!(!untouched.contains('('), "a default todo does not name its status: {untouched}");
 }
 
+/// `task list --filter commit:<sha>` walks the reverse chain **git → task**: a public commit carries no
+/// store-local ref, so the only face back is the SHA recorded on the task. The
+/// SHA folds to the bytes the door stored, the same commit on two tasks finds both, and a SHA nobody
+/// recorded — a short one included, since the door admits full hex only — is an empty result, not an
+/// error (a SHA is a free value, not a name the store knows); only an empty value is refused.
+#[test]
+fn commit_filter_walks_git_back_to_the_task() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.a_project();
+
+    let a_task = |title: &str| -> String {
+        id_str(&cli.json(&["task", "add", "--project", &pid, "--title", title, "--json"])["task"]["id"])
+    };
+    let t1 = a_task("one");
+    let t2 = a_task("two");
+    let _t3 = a_task("three");
+
+    let sha_a = "a".repeat(40); // SHA-1 form
+    let sha_b = "b".repeat(64); // SHA-256 form
+    cli.json(&["task", "commit", "add", &t1, &sha_a, "--json"]);
+    cli.json(&["task", "commit", "add", &t2, &sha_a, "--json"]); // the same commit on two tasks
+    cli.json(&["task", "commit", "add", &t2, &sha_b, "--json"]);
+
+    // Sorted task ids a `commit:` filter returns.
+    let ids_for = |sha: &str| -> Vec<String> {
+        let mut ids: Vec<String> = cli.json(&["task", "list", "--project", &pid, "--filter", &format!("commit:{sha}"), "--json"])
+            ["tasks"]
+            .as_array()
+            .expect("tasks is an array")
+            .iter()
+            .map(|t| id_str(&t["id"]))
+            .collect();
+        ids.sort();
+        ids
+    };
+
+    let mut both = vec![t1.clone(), t2.clone()];
+    both.sort();
+    assert_eq!(ids_for(&sha_a), both, "both tasks that recorded the commit come back");
+    assert_eq!(ids_for(&sha_b), vec![t2.clone()], "the SHA-256 form finds its one task");
+    assert_eq!(ids_for(&sha_a.to_uppercase()), both, "an upper-case SHA folds to the stored lower-case bytes");
+    assert!(ids_for(&"c".repeat(40)).is_empty(), "a full SHA nobody recorded is an empty result, not an error");
+    assert!(ids_for("abc1234").is_empty(), "a short SHA is never stored, so it simply matches nothing (not rejected)");
+
+    // Only an empty value is no SHA at all — refused (a non-zero exit), unlike an unknown SHA.
+    let (_out, code) = cli.run(&["task", "list", "--project", &pid, "--filter", "commit:", "--json"]);
+    assert_ne!(code, 0, "an empty commit value is refused, not treated as match-nothing");
+}
+
 /// `builds_on` hands a machine two things: read the premise first, and revisit when the premise is
 /// overturned. Three surfaces carry it — the premise list of `decision show`, the note on an overturned
 /// premise, and the blast radius named when one is superseded, rejected or deleted. It names (one hop, not transitive); it never blocks.

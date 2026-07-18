@@ -22,8 +22,10 @@ use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
 /// Normalise a SHA for storage and lookup: trim surrounding whitespace and lower-case it. Case is
-/// folded so two spellings of one commit cannot both land (the UNIQUE index sees bytes only).
-fn normalize(sha: &str) -> String {
+/// folded so two spellings of one commit cannot both land (the UNIQUE index sees bytes only). The
+/// `commit:` filter ([`crate::query`]) normalises through this same function, so a SHA is looked up by
+/// the very bytes the door stored it as.
+pub(crate) fn normalize(sha: &str) -> String {
     sha.trim().to_ascii_lowercase()
 }
 

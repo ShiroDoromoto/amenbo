@@ -86,6 +86,14 @@ pub struct Filter {
     /// decision ⇄ task relation **traversable by query**. Compose it with `status:` and friends to
     /// ask for "the unfinished tasks this decision produced".
     pub decision: Option<u32>,
+    /// `commit:<sha>` — tasks recording this commit SHA, the **reverse chain git → task**. A public
+    /// commit carries no store-local ref, so the chain lives only on the task side; this key
+    /// is the one face that walks it back. The value is normalised through the same
+    /// `ops::commit::normalize` the door stores through, so a SHA looks up by the bytes it was stored as.
+    /// Unlike `dim:` / `project:`, a SHA is a **free value, not a name the store knows**, so one that
+    /// matches nothing is an empty result, not an error — and a short/non-full SHA (never stored, since
+    /// the door admits full hex only) simply matches nothing rather than being rejected here.
+    pub commit: Option<String>,
 }
 
 /// One `dim:<axis>=<value>` / `time_axis:<value>` token. The time axis is not a first-class
@@ -398,6 +406,20 @@ impl Filter {
                 }
                 // Traverse the decision ⇄ task link (symmetric with `task:` on `decision list`).
                 "decision" => f.decision = Some(parse_cross_ref(value, true)?),
+                // Reverse chain git → task: tasks recording this commit SHA. Normalise through the same
+                // `normalize` the door stores through, so lookup sees the stored bytes; no shape check —
+                // a SHA is a free value, so a non-match (short/unknown SHA included) is an empty result,
+                // not an error. Only an empty value is refused, being no SHA at all.
+                "commit" => {
+                    let sha = crate::ops::commit::normalize(value);
+                    if sha.is_empty() {
+                        return Err(Error::invalid(
+                            "commit needs a sha (e.g. commit:<full 40/64-hex sha>)",
+                            "commit には SHA が必要です（例: commit:<完全形 40/64 桁 hex SHA>）",
+                        ));
+                    }
+                    f.commit = Some(sha);
+                }
                 // Filter across classification axes. `dim:` names any axis; `time_axis:` is sugar for
                 // the axis designated for that role. Repeated tokens AND together (`dim:` is not a
                 // single-value key — it accumulates).
@@ -413,8 +435,8 @@ impl Filter {
                 }
                 other => {
                     return Err(Error::invalid(
-                        format!("unknown filter key '{other}' (done/status/due/priority/project/text/number/ref/assignee/ai/ready/decision/dim/time_axis)"),
-                        format!("未知のフィルタキー '{other}'（done/status/due/priority/project/text/number/ref/assignee/ai/ready/decision/dim/time_axis）"),
+                        format!("unknown filter key '{other}' (done/status/due/priority/project/text/number/ref/assignee/ai/ready/decision/commit/dim/time_axis)"),
+                        format!("未知のフィルタキー '{other}'（done/status/due/priority/project/text/number/ref/assignee/ai/ready/decision/commit/dim/time_axis）"),
                     ))
                 }
             }
@@ -1884,6 +1906,52 @@ mod filter_tests {
         assert_eq!(ids(tx, Some("number:T-1")), vec![t1], "T-n matches on the task side");
         assert!(ids(tx, Some("number:D-2")).is_empty(), "D-n is a decision reference — no task matches");
         assert!(ids(tx, Some("number:999")).is_empty(), "a number nobody holds matches nothing");
+    }
+
+    /// `commit:<sha>` walks the reverse chain **git → task**: the tasks that recorded a commit. A public
+    /// commit carries no store-local ref, so this is the only face back to a task. The SHA is
+    /// case-folded to the bytes the door stored; the same commit on two tasks finds both; a SHA nobody
+    /// recorded — a short SHA included, since the door stores full hex only — is an empty result, not an
+    /// error (a SHA is a free value, not a name the store knows); an empty value is refused.
+    #[test]
+    fn commit_filter_walks_the_reverse_chain() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = proj(tx, "PJ");
+        let t1 = task(tx, "one", Some(p));
+        let t2 = task(tx, "two", Some(p));
+        let _t3 = task(tx, "three", Some(p));
+        let sha_a = "a".repeat(40); // SHA-1 form
+        let sha_b = "b".repeat(64); // SHA-256 form
+        ops::commit::add(tx, t1, &sha_a, Some(ActorKind::Ai)).unwrap();
+        ops::commit::add(tx, t2, &sha_a, Some(ActorKind::Ai)).unwrap(); // same commit on two tasks
+        ops::commit::add(tx, t2, &sha_b, Some(ActorKind::Ai)).unwrap();
+
+        let mut both = vec![t1, t2];
+        both.sort();
+        assert_eq!(ids(tx, Some(&format!("commit:{sha_a}"))), both, "both tasks that recorded the commit");
+        assert_eq!(ids(tx, Some(&format!("commit:{sha_b}"))), vec![t2], "the SHA-256 form finds its one task");
+        assert_eq!(
+            ids(tx, Some(&format!("commit:{}", sha_a.to_uppercase()))),
+            both,
+            "an upper-case SHA folds to the stored lower-case bytes",
+        );
+        assert!(
+            ids(tx, Some(&format!("commit:{}", "c".repeat(40)))).is_empty(),
+            "a full SHA nobody recorded is an empty result, not an error",
+        );
+        assert!(
+            ids(tx, Some("commit:abc1234")).is_empty(),
+            "a short SHA is never stored, so it simply matches nothing (not rejected)",
+        );
+
+        let day = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        assert_eq!(
+            Filter::parse("commit:ABCdef", day).unwrap().commit,
+            Some("abcdef".to_string()),
+            "the value is normalised to lower-case at parse time",
+        );
+        assert!(Filter::parse("commit:", day).is_err(), "an empty value is no SHA at all — refused");
     }
 
     /// `ai:true|false` selects on the AI-delegation dimension (`assignee_kind=ai`). Independent of the

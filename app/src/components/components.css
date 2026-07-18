@@ -247,6 +247,13 @@
 .attach__csv th { background: var(--c-surface-2); position: sticky; top: 0; }
 .attach__missing, .attach__unsupported, .attach__loading { margin-top: var(--s-2); font-size: var(--fs-sm); }
 .attach__url { margin-top: var(--s-1); font-size: var(--fs-sm); word-break: break-all; }
+.commits { display: flex; flex-direction: column; gap: var(--s-2); }
+.commits__item { display: flex; align-items: center; gap: var(--s-2); }
+.commits__sha {
+  flex: 1 1 auto; min-width: 0; font-family: var(--font-mono, monospace); font-size: var(--fs-xs);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: var(--c-surface-2); padding: 2px var(--s-2); border-radius: var(--r-sm);
+}
 .btn {
   border: 1px solid var(--c-border-strong); background: var(--c-surface);
   border-radius: var(--r-sm); padding: var(--s-1) var(--s-3); font-size: var(--fs-sm);

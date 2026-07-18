@@ -290,6 +290,10 @@ release:
 ## in release.yml).
 test:
 	@command -v cargo-nextest >/dev/null 2>&1 || { echo "cargo-nextest is required: cargo install cargo-nextest (or https://get.nexte.st)"; exit 1; }
+	## The GUI gate below runs from app/node_modules (tsc, vite). A fresh clone has none — gitignored —
+	## so without this the run walks minutes of Rust and dies at `tsc: command not found`. Fail here
+	## with the one command that fixes it, the same way the toolchain checks above do.
+	@[ -d app/node_modules ] || { echo "app/node_modules is missing: cd app && npm ci"; exit 1; }
 	## Look at shell and comments first (a few seconds). No reason to wait 8 minutes of Rust for a
 	## broken script, or for a comment CI is going to refuse.
 	$(MAKE) --no-print-directory shell-gate

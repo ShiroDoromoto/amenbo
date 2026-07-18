@@ -38,7 +38,7 @@ afterEach(() => {
   container.remove();
 });
 
-const AUTHOR = { kind: "human", name: "Alice" };
+const AUTHOR = { userId: "human", kind: "human", name: "Alice" } as const;
 
 function render(props: Partial<Parameters<typeof CommentRow>[0]>) {
   act(() => {

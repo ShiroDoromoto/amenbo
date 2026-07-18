@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import type { Actor } from "../mock/types";
 import { Markdown } from "./Markdown";
+import { FacetAvatar } from "./atoms";
 import { Attachments } from "./Attachments";
 import { inTauri } from "../core/snapshot";
 import { isEnterSubmit } from "../core/keys";
@@ -19,7 +21,7 @@ import { t, errText } from "../core/i18n";
  */
 export function CommentRow({ id, author, ago, editedAgo, text, target, onEdit, onRemove, startEditAt }: {
   id: number;
-  author: { kind: string; name: string };
+  author: Actor;
   ago: string;
   editedAgo?: string;
   text: string;
@@ -71,7 +73,7 @@ export function CommentRow({ id, author, ago, editedAgo, text, target, onEdit, o
     <div className="comment">
       <div className="comment__meta">
         <span>
-          {author.kind === "ai" ? "🤖" : "👤"} {author.name} · {ago}
+          <FacetAvatar actor={author} /> {author.name} · {ago}
           {editedAgo && <span className="faint"> · {t("comment.edited")} {editedAgo}</span>}
         </span>
         {inTauri() && !editing && (

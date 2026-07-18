@@ -12,7 +12,7 @@ import type { DoctorReportDto, StoreLocationsDto, DataProgressDto } from "../bin
 import { perfMode } from "../core/ipc";
 import { Identicon } from "../components/identicon";
 import { DataProgressModal } from "../components/DataProgressModal";
-import { facetColor } from "../components/atoms";
+import { facetColor, FacetAvatar } from "../components/atoms";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { isEnterSubmit } from "../core/keys";
 
@@ -202,7 +202,7 @@ function AvatarSlot({ kind }: { kind: "human" | "ai" }) {
       </span>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <span style={{ fontSize: "var(--fs-xs)" }}>
-          {kind === "human" ? "👤" : "🤖"} {actor?.name ?? ""}
+          {actor && <FacetAvatar actor={actor} />} {actor?.name ?? ""}
         </span>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>

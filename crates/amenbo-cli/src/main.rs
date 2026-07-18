@@ -158,7 +158,12 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         // Anything that is not a read (list/show) counts as a write.
         Command::Project { sub } => !matches!(sub, ProjectCmd::List { .. } | ProjectCmd::Show { .. }),
         Command::Dimension { sub } => !matches!(sub, DimensionCmd::List { .. } | DimensionCmd::Show { .. }),
-        Command::Task { sub } => !matches!(sub, TaskCmd::List { .. } | TaskCmd::Show { .. }),
+        Command::Task { sub } => match sub {
+            TaskCmd::List { .. } | TaskCmd::Show { .. } => false,
+            // The commit group nests: `task commit list` is a read, add/rm stamp a facet.
+            TaskCmd::Commit { sub } => !matches!(sub, TaskCommitCmd::List { .. }),
+            _ => true,
+        },
         Command::Comment { sub } => !matches!(sub, CommentCmd::List { .. }),
         Command::Decision { sub } => !matches!(
             sub,
@@ -2589,6 +2594,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let tid = resolve_task(store, &id).map_err(CliError::from)?;
             return attach_add(store, flags, AttachmentTarget::Task, tid, &source, url, name);
         }
+        TaskCmd::Commit { sub } => return task_commit(store, flags, sub),
         TaskCmd::Assign { id, to, ai } => {
             let tid = resolve_task(store, &id).map_err(CliError::from)?;
             // The assignee is a facet and nothing else: `--ai` means the AI facet, otherwise the token is
@@ -2628,6 +2634,45 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let label = task_label(tid);
             store.delete_task(tid, flags.actor).map_err(CliError::from)?;
             write_envelope(flags, "task.delete", "task", json!({ "id": tid, "deleted": true }), None, false, format!("✓ Deleted task: {label}"));
+        }
+    }
+    Ok(0)
+}
+
+// ───────────────────────── task commit ─────────────────────────
+
+/// A task's git commit SHAs: record / list / forget. amenbo stores each SHA opaquely — the ops door
+/// admits only full-length lower-case hex and folds case, and the `(task_id, sha)` index makes a
+/// re-record idempotent. The chain runs history to task, since a public commit carries no store-local
+/// reference.
+fn task_commit(store: &mut Store, flags: &Flags, sub: TaskCommitCmd) -> Result<i32, CliError> {
+    match sub {
+        TaskCommitCmd::Add { task, sha } => {
+            let tid = resolve_task(store, &task).map_err(CliError::from)?;
+            let (row, created) = store.add_task_commit(tid, &sha, Some(flags.actor)).map_err(CliError::from)?;
+            let msg = format!("✓ Recorded commit {} on {}", row.sha, task_label(tid));
+            write_envelope(flags, "task.commit.add", "task_commit", serde_json::to_value(&row).unwrap(), None, !created, msg);
+        }
+        TaskCommitCmd::List { task } => {
+            let tid = resolve_task(store, &task).map_err(CliError::from)?;
+            let commits = store.task_commits(tid).map_err(CliError::from)?;
+            if flags.json {
+                print_json(&json!({ "task": tid, "count": commits.len(), "commits": commits }));
+            } else {
+                human(flags, format!("{} commit(s) — {}", commits.len(), task_label(tid)));
+                for c in &commits {
+                    human(flags, format!("  {}  [{}]", c.sha, c.created_at.to_rfc3339_z()));
+                }
+            }
+        }
+        TaskCommitCmd::Rm { task, sha } => {
+            let tid = resolve_task(store, &task).map_err(CliError::from)?;
+            if !confirm(flags, "forget commit")? {
+                return Ok(0);
+            }
+            let changed = store.remove_task_commit(tid, &sha).map_err(CliError::from)?;
+            let data = json!({ "task": tid, "sha": sha, "deleted": changed });
+            write_envelope(flags, "task.commit.rm", "task_commit", data, None, !changed, format!("✓ Forgot commit on {}", task_label(tid)));
         }
     }
     Ok(0)

@@ -672,6 +672,12 @@ pub enum TaskCmd {
         #[arg(long)]
         name: Option<String>,
     },
+    /// Record / list / forget the git commit SHAs that implemented a task — the anchor from
+    /// history back to a task (amenbo stores each SHA opaquely and never reads git)
+    Commit {
+        #[command(subcommand)]
+        sub: TaskCommitCmd,
+    },
     /// Assign an assignee to a task
     Assign {
         id: String,
@@ -686,6 +692,34 @@ pub enum TaskCmd {
     /// Remove a task's assignee
     Unassign { id: String },
     Delete { id: String },
+}
+
+/// A task's git commit SHAs (`add`/`list`/`rm`) — the anchor from history back to a task, since a
+/// public commit carries no store-local reference. amenbo stores each SHA as an opaque full-length
+/// hex string: it never reads git, verifies the commit, or knows which forge it lives on.
+#[derive(Subcommand, Debug)]
+pub enum TaskCommitCmd {
+    /// Record a commit SHA on a task (idempotent; full-length lower-case hex only)
+    Add {
+        /// target task ref (AMB-T-n)
+        task: String,
+        /// the full commit SHA — 40 hex for SHA-1, 64 for SHA-256 (short forms, branches, tags and
+        /// revisions are refused)
+        sha: String,
+    },
+    /// List a task's recorded commit SHAs, oldest first
+    List {
+        /// target task ref (AMB-T-n)
+        task: String,
+    },
+    /// Forget a commit SHA on a task — permanently (alias: remove)
+    #[command(alias = "remove")]
+    Rm {
+        /// target task ref (AMB-T-n)
+        task: String,
+        /// the commit SHA to forget (any case — normalised the way it was stored)
+        sha: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]

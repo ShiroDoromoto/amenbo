@@ -263,6 +263,12 @@ impl Store {
         Ok(crate::store_engine::read::project(self.engine.conn(), id)?)
     }
 
+    /// A task's recorded commit SHAs, oldest first (created_at, id). The list read behind
+    /// `task commit list`; the caller resolves the task ref first, so reach is already settled.
+    pub fn task_commits(&self, task_id: i64) -> Result<Vec<crate::model::TaskCommit>> {
+        Ok(crate::store_engine::read::task_commits(self.engine.conn(), task_id)?)
+    }
+
     /// A single task comment; `None` if there is none (a row exists ⇒ it is live). The id is a comment id, which
     /// is not a conversational ref, so this is itself a reach entry point — it is the path
     /// `decision promote <comment id>` takes to read the body.

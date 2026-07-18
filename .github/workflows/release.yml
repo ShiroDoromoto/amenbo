@@ -68,10 +68,25 @@ jobs:
         working-directory: app
         run: npm ci
 
+      # Load the stable, self-signed release code-signing identity into a throwaway
+      # keychain so the build can sign each .app with a leaf that is fixed across
+      # versions — which is what lets the end user's notification authorization
+      # survive an update. Apple-independent (self-signed codeSigning cert). No-op if
+      # the secret is absent, so a fork without the secret still builds (ad-hoc).
+      - name: Import the mac release signing identity
+        env:
+          MAC_SIGN_P12_BASE64: ${{ secrets.MAC_SIGN_P12_BASE64 }}
+          MAC_SIGN_P12_PASSWORD: ${{ secrets.MAC_SIGN_P12_PASSWORD }}
+        run: scripts/import-signing-cert-mac.sh
+
       # One unified .pkg per arch: GUI in /Applications + the sidecar CLI
       # symlinked onto PATH. tauri's beforeBuildCommand builds the CLI sidecar for the
       # target triple; the Intel build cross-compiles from Apple Silicon.
+      # MAC_SIGN_IDENTITY makes dist-gui-mac re-sign each .app with the imported
+      # identity before packaging (unset → tauri's ad-hoc signature is kept).
       - name: Build the mac installers (.pkg, both archs)
+        env:
+          MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
         run: |
           make dist-gui-mac MAC_GUI_ARCH=arm64
           make dist-gui-mac MAC_GUI_ARCH=amd64

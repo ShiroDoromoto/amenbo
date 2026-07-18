@@ -13,7 +13,7 @@
 // store, and stops every write from refetching every view.
 import { getSnapshot, inTauri, type Decision } from "./snapshot";
 import { useQuery } from "./query";
-import { loadCommentTasks, loadTriggeredAt } from "./readReceipts";
+import { loadCommentTasks, loadTriggeredAt, loadReadReceipts } from "./readReceipts";
 import { loadInboxArchived } from "./inboxArchive";
 import { invoke } from "./ipc";
 import { parseRef } from "./idref";
@@ -341,30 +341,47 @@ async function fetchInboxTasks(me: string): Promise<TaskCard[]> {
     return t.status === "todo" && t.createdBy?.kind === "ai";
   });
   // The archive set evicts unconditionally — the one and only exit, shared by C and D.
+  const dIds = new Set(dTasks.map((t) => t.id));
   const inbox = dedupById([...dTasks, ...cTasks]).filter((t) => !archived.has(t.id));
   // Ask core when each item last became inbox-worthy (its C/D trigger) and carry it on the item, for display and sorting.
   const triggers = await loadTriggeredAt(inbox.map((t) => t.id));
-  const withTrigger = inbox.map((t) => ({ ...t, triggeredAt: triggers[t.id] ?? null, unread: unreadById.get(t.id) ?? false }));
+  // Source C carries no unread flag (unread is D's, comment-derived), so its notification eligibility is "unseen":
+  // it entered the inbox (triggeredAt) after this device last viewed the task, or was never viewed. Load last-seen
+  // state only when a C-only item exists to judge — D items are gated by `unread` and need none.
+  const cOnly = inbox.some((t) => !dIds.has(t.id));
+  const seenByTask = cOnly ? (await loadReadReceipts()).tasks : {};
+  const withTrigger = inbox.map((t) => {
+    const triggeredAt = triggers[t.id] ?? null;
+    const lastSeen = seenByTask[String(t.id)];
+    // Only source C is judged by unseen; D stays on `unread`. Unseen = never viewed, or entered after last view.
+    const unseen = !dIds.has(t.id) && (!lastSeen || (triggeredAt !== null && lastSeen < triggeredAt));
+    return { ...t, triggeredAt, unread: unreadById.get(t.id) ?? false, unseen };
+  });
   // Newest first (triggeredAt descending); unknown (null) sinks to the bottom. RFC3339 UTC, so a string compare is a time compare.
   return withTrigger.sort((a, b) => (b.triggeredAt ?? "").localeCompare(a.triggeredAt ?? ""));
 }
 
-/** One inbox item, reduced to what arrival detection needs: its id and whether it is unread. */
+/**
+ * One inbox item, reduced to what arrival detection needs: its id, whether it is unread (source D's comment-derived
+ * flag), and whether it is unseen (source C's device-local "entered after last viewed, or never viewed"). A source
+ * announces on its own gate — D on `unread`, C on `unseen` — so the two never overlap on one item.
+ */
 export interface InboxItemBrief {
   id: number;
   unread: boolean;
+  unseen: boolean;
 }
 
 /**
- * The current inbox (C ∪ D) as `{ id, unread }`, in the view's own order. Exported so the nav badge count and
- * arrival detection (`mailbox.ts`) can consult it without the view being open: the badge counts the whole set,
- * while the notification fires only for the unread ones (`unread` is the per-item flag `fetchInboxTasks` already
- * computes). Empty until `me` is known (i.e. before the snapshot loads).
+ * The current inbox (C ∪ D) as `{ id, unread, unseen }`, in the view's own order. Exported so the nav badge count
+ * and arrival detection (`mailbox.ts`) can consult it without the view being open: the badge counts the whole set,
+ * while the notification fires for the ones eligible on their source's gate — D's `unread` or C's `unseen`, both
+ * computed by `fetchInboxTasks`. Empty until `me` is known (i.e. before the snapshot loads).
  */
 export async function loadInboxItems(): Promise<InboxItemBrief[]> {
   const me = getSnapshot().meUserId;
   if (!me) return [];
-  return (await fetchInboxTasks(me)).map((t) => ({ id: t.id, unread: t.unread ?? false }));
+  return (await fetchInboxTasks(me)).map((t) => ({ id: t.id, unread: t.unread ?? false, unseen: t.unseen ?? false }));
 }
 
 function dedupById(tasks: TaskCard[]): TaskCard[] {

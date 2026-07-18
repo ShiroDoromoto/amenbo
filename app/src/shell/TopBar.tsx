@@ -15,11 +15,15 @@ export function TopBar({
   onForward,
   canBack,
   canForward,
+  sidebarCollapsed,
+  onToggleSidebar,
 }: {
   onBack: () => void;
   onForward: () => void;
   canBack: boolean;
   canForward: boolean;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
 }) {
   const [reflecting, setReflecting] = useState(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -40,6 +44,15 @@ export function TopBar({
   }, []);
   return (
     <div className="topbar">
+      <button
+        className={`topbar__navbtn topbar__sidebartoggle${sidebarCollapsed ? " topbar__sidebartoggle--collapsed" : ""}`}
+        title={sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")}
+        aria-label={sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")}
+        aria-pressed={sidebarCollapsed}
+        onClick={onToggleSidebar}
+      >
+        ☰
+      </button>
       <span className="topbar__nav">
         <button
           className="topbar__navbtn"

@@ -22,6 +22,7 @@ import { getSnapshot, inTauri, subscribe } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
 import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sidebarWidth";
+import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollapsed";
 import { RefNavProvider } from "../core/refNav";
 import { currentLang, doctorText, t, tf } from "../core/i18n";
 import { fetchStaleManagedBlocks, resyncManagedBlocks, fetchOrphanBindings, forgetOrphanBindings, fetchPointerIssues, repairPointers, fetchHookNotices, openLatestInstaller } from "../core/mutations";
@@ -102,6 +103,13 @@ export function AppShell() {
     document.body.style.userSelect = "none";
     document.addEventListener("pointermove", onMove);
     document.addEventListener("pointerup", onUp);
+  }, []);
+
+  // Whether the sidebar is collapsed (hidden) — a device-local, persisted UI setting. Toggled from the TopBar so the
+  // control stays reachable even when the sidebar itself is hidden; core/sidebarCollapsed owns persistence.
+  const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => getSidebarCollapsed());
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsedState((c) => setSidebarCollapsed(!c));
   }, []);
 
   const rightpaneRef = useRef<HTMLDivElement>(null);
@@ -242,6 +250,8 @@ export function AppShell() {
         onForward={goForward}
         canBack={canBack}
         canForward={canForward}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
       />
       <UpdateBanner />
       <HealthBanner />
@@ -249,7 +259,7 @@ export function AppShell() {
       <OrphanBindingBanner />
       <HookSetupBanner asked={hooksAsked} />
       <div
-        className={`shell__body ${showRight ? "" : "shell__body--no-right"}`}
+        className={`shell__body ${showRight ? "" : "shell__body--no-right"}${sidebarCollapsed ? " shell__body--sidebar-collapsed" : ""}`}
         style={{ "--rightpane-w": `${rightWidth}px`, "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}
       >
         <div className="sidebar-wrap">

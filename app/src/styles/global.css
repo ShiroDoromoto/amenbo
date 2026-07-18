@@ -50,6 +50,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
     "sidebar header"
     "sidebar main";
 }
+/* Collapsed sidebar: the column drops to 0 and the sidebar (with its resize handle) is hidden entirely.
+   Re-expand from the TopBar toggle, which stays reachable while the sidebar is gone. */
+.shell__body--sidebar-collapsed { grid-template-columns: 0 1fr var(--rightpane-w); }
+.shell__body--sidebar-collapsed.shell__body--no-right { grid-template-columns: 0 1fr; }
+.shell__body--sidebar-collapsed .sidebar-wrap { display: none; }
 /* The project header (the board's toolbar) is portalled in here; BoardScreen renders it. */
 .shell__header { grid-area: header; min-width: 0; }
 

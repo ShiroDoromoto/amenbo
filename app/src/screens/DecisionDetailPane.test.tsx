@@ -323,3 +323,74 @@ describe("a refused accept/reject is shown, not swallowed", () => {
     expect(button(t("dec.cancel"))).toBeUndefined();
   });
 });
+
+// The same swallow lived on the rest of the pane's writes: a comment post that blanked the box on failure, a
+// reopen/unlink/edge-wire that dropped the promise. Each must now await and report a refusal instead.
+describe("the remaining pane writes report a refusal, not swallow it", () => {
+  it("keeps the comment text and shows the error when the post is refused", async () => {
+    hoisted.failing.add("addDecisionComment");
+    hoisted.decisions.set(1, decision(1));
+    render(1);
+
+    type(container.querySelector("textarea")!, "本文");
+    click(button(t("detail.send")));
+    await settle();
+
+    expect(hoisted.calls).toEqual([["addDecisionComment", 1, "本文"]]);
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("addDecisionComment refused");
+    expect(container.querySelector("textarea")?.value).toBe("本文"); // the body survives for a retry
+  });
+
+  it("clears the comment box once the post lands", async () => {
+    hoisted.decisions.set(1, decision(1));
+    render(1);
+
+    type(container.querySelector("textarea")!, "本文");
+    click(button(t("detail.send")));
+    await settle();
+
+    expect(hoisted.calls).toEqual([["addDecisionComment", 1, "本文"]]);
+    expect(container.querySelector("textarea")?.value).toBe("");
+  });
+
+  it("surfaces a refused reopen", async () => {
+    hoisted.failing.add("reopenDecision");
+    hoisted.decisions.set(1, decision(1, { status: "accepted" }));
+    render(1);
+
+    click(button(t("dec.reopen")));
+    await settle();
+
+    expect(hoisted.calls).toEqual([["reopenDecision", 1]]);
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("reopenDecision refused");
+  });
+
+  it("surfaces a refused edge unlink", async () => {
+    hoisted.failing.add("unlinkDecisionEdge");
+    hoisted.decisions.set(1, decision(1, { buildsOn: [{ ...ref(2) }] }));
+    render(1);
+
+    click(buttons().filter((b) => b.textContent === t("dec.edge.unlink"))[0]);
+    await settle();
+
+    expect(hoisted.calls).toEqual([["unlinkDecisionEdge", 1, 2]]);
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("unlinkDecisionEdge refused");
+  });
+
+  it("keeps the edge picker open and shows the error when wiring is refused", async () => {
+    hoisted.failing.add("amendDecision");
+    hoisted.decisions.set(1, decision(1));
+    hoisted.page.push(decision(2));
+    render(1);
+
+    click(button(t("dec.edge.add")));
+    const select = container.querySelector("select")!;
+    act(() => { select.value = "amends"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    click(buttons().find((b) => b.textContent?.startsWith("D-2")));
+    await settle();
+
+    expect(hoisted.calls).toEqual([["amendDecision", 1, 2]]);
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("amendDecision refused");
+    expect(container.querySelector("select")).not.toBeNull(); // still open, so a retry costs nothing
+  });
+});

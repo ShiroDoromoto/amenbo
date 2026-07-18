@@ -45,11 +45,32 @@ export function DecisionDetailPane({ decisionId, onOpenTask, onOpenDecision }: {
   const [confirming, setConfirming] = useState<null | "accept" | "reject">(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const [reopenError, setReopenError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (!d) return <div className="rightpane__empty">{t("dec.notFound")}</div>;
 
-  const submitComment = () => {
-    if (comment.trim()) { void addDecisionComment(d.id, comment.trim()); setComment(""); }
+  // Await the post and only clear the box once it lands: a refused comment used to blank the input, losing the
+  // body the user just wrote. On failure the text stays put and the error is shown, so retrying costs nothing.
+  const submitComment = async () => {
+    const body = comment.trim();
+    if (!body) return;
+    setCommentError(null);
+    try {
+      await addDecisionComment(d.id, body);
+      setComment("");
+    } catch (e) {
+      setCommentError(errText(e));
+    }
+  };
+  // Reopening (accepted → proposed) is a write like any other — surface a refusal instead of dropping it.
+  const runReopen = async () => {
+    setReopenError(null);
+    try {
+      await reopenDecision(d.id);
+    } catch (e) {
+      setReopenError(errText(e));
+    }
   };
   // Await the write and only then close the panel: a failed accept/reject must not read as a success.
   // On failure the reason the user typed stays put, so retrying costs nothing.
@@ -160,8 +181,11 @@ export function DecisionDetailPane({ decisionId, onOpenTask, onOpenDecision }: {
       )}
 
       {d.status === "accepted" && (
-        <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-          <button className="feed__action" onClick={() => void reopenDecision(d.id)}>{t("dec.reopen")}</button>
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="feed__action" onClick={() => void runReopen()}>{t("dec.reopen")}</button>
+          </div>
+          {reopenError && <div className="newproj__error" role="alert">⚠ {reopenError}</div>}
         </div>
       )}
 
@@ -201,12 +225,13 @@ export function DecisionDetailPane({ decisionId, onOpenTask, onOpenDecision }: {
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 onKeyDown={(e) => {
-                  if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitComment(); }
+                  if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submitComment(); }
                 }}
               />
+              {commentError && <div className="newproj__error" role="alert">⚠ {commentError}</div>}
               <div className="compose__actions">
                 <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
-                <button className="btn btn--primary" disabled={!comment.trim()} onClick={submitComment}>{t("detail.send")}</button>
+                <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
               </div>
             </div>
           </div>
@@ -224,10 +249,16 @@ function DecisionEdges({ d, onOpenDecision }: {
   onOpenDecision?: (id: number) => void;
 }) {
   const rows = edgeRows(d);
+  const [error, setError] = useState<string | null>(null);
   const unlink = async (r: EdgeRow) => {
     const target = r.target.ref ?? decisionRef(r.target.id);
     if (await confirmDialog(tf("dec.edge.unlinkConfirm", { target }))) {
-      void unlinkDecisionEdge(r.from, r.to);
+      setError(null);
+      try {
+        await unlinkDecisionEdge(r.from, r.to);
+      } catch (e) {
+        setError(errText(e));
+      }
     }
   };
   return (
@@ -261,6 +292,7 @@ function DecisionEdges({ d, onOpenDecision }: {
           )}
         </div>
       ))}
+      {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
       {inTauri() && d.project && <DecisionEdgeCompose d={d} projectId={Number(d.project.id)} />}
     </div>
   );
@@ -280,6 +312,7 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<EdgeKind>("buildsOn");
   const [query, setQuery] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const all = useDecisionPage(projectId);
   const link = async (target: Decision) => {
     const label = target.ref ?? decisionRef(target.id);
@@ -291,11 +324,18 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
       const list = standing.map((s) => `${s.ref ?? decisionRef(s.id)} ${s.name ?? t("dec.unknownName")}`).join("\n");
       if (!(await confirmDialog(tf("dec.edge.supersedeRevisitConfirm", { target: label, list })))) return;
     }
-    if (kind === "supersedes") void supersedeDecision(d.id, target.id);
-    else if (kind === "amends") void amendDecision(d.id, target.id);
-    else void buildsOnDecision(d.id, target.id);
-    setOpen(false);
-    setQuery("");
+    // Await the wiring: a refused edge must not close the picker as though it landed. On failure the picker
+    // stays open with the error, so the user can retry or pick a different target.
+    setError(null);
+    try {
+      if (kind === "supersedes") await supersedeDecision(d.id, target.id);
+      else if (kind === "amends") await amendDecision(d.id, target.id);
+      else await buildsOnDecision(d.id, target.id);
+      setOpen(false);
+      setQuery("");
+    } catch (e) {
+      setError(errText(e));
+    }
   };
   if (!open) {
     return (
@@ -327,6 +367,7 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
       {promotesToAccepted(d, kind) && (
         <div style={{ fontSize: "var(--fs-sm)", color: "#c0504d" }}>⚠ {t("dec.edge.supersedeAccepts")}</div>
       )}
+      {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
       {candidates.length === 0 ? (
         <div className="faint" style={{ fontSize: "var(--fs-sm)" }}>{t("dec.edge.noCandidates")}</div>
       ) : (

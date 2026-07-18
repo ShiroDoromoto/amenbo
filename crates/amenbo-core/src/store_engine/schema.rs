@@ -904,6 +904,36 @@ pub fn is_legacy_keyed(conn: &rusqlite::Connection) -> rusqlite::Result<bool> {
     )
 }
 
+/// Does this store hold **no record in any table** — the emptiness proof the writing open takes before
+/// it may clear a pre-consolidation store to genesis (`store::open::reconcile_legacy_key_space`).
+/// Every table SQLite carries is asked, **bar** its own `sqlite_%` bookkeeping and this
+/// build's `store_meta` (store-level scalars — the schema/format stamps, never records); one row
+/// anywhere else makes the store non-empty. The tables are enumerated from `sqlite_master`, not the
+/// registry, on purpose: a pre-consolidation store carries tables the registry no longer declares
+/// (`story`, `oplog`), and a row in one of those must count too — clearing a store that still holds one
+/// would destroy it. Raw by necessity for the same reason [`is_legacy_keyed`] is: the question is asked
+/// of a file this build has not migrated, so it is asked through SQLite's own catalogue.
+pub fn table_content_is_empty(conn: &rusqlite::Connection) -> rusqlite::Result<bool> {
+    let mut stmt = conn.prepare(
+        "SELECT name FROM sqlite_master \
+           WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'store_meta'",
+    )?;
+    let tables = stmt.query_map([], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    for table in tables {
+        // `table` is an identifier read back from `sqlite_master`, not caller input; quote it as an
+        // identifier (doubling any embedded quote) since it cannot be bound as a parameter.
+        let has_row: bool = conn.query_row(
+            &format!("SELECT EXISTS(SELECT 1 FROM \"{}\")", table.replace('"', "\"\"")),
+            [],
+            |r| r.get(0),
+        )?;
+        if has_row {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// Secondary indexes over registry task columns, applied **after** column migration so they never
 /// reference a column an older store has yet to be backfilled with.
 pub fn read_index_sql() -> &'static str {

@@ -146,8 +146,9 @@ pub(crate) fn ensure_integer_keyed(engine: &StoreEngine) -> Result<()> {
 }
 
 /// The bilingual refusal both key-space gates raise ([`ensure_integer_keyed`] over an open engine,
-/// [`ensure_integer_keyed_at`] over a bare probe). One text, one recovery path — install the last build
-/// that consolidates, migrate there, then update again.
+/// [`reconcile_legacy_key_space`] over a bare probe). It is raised only for a legacy store that still
+/// holds content — a provably empty one is cleared to genesis instead. One text, one recovery
+/// path — install the last build that consolidates, migrate there, then update again.
 fn legacy_keyed_refusal() -> Error {
     Error::invalid(
         "this store predates the consolidation — its rows are still ULID-keyed, and this build reads the \
@@ -161,7 +162,8 @@ fn legacy_keyed_refusal() -> Error {
 }
 
 /// The key-space gate for the writing open: read the live file's catalogue over a **bare, DDL-free**
-/// connection ([`crate::store_engine::probe_is_legacy_keyed`]) **before** opening the engine.
+/// connection ([`crate::store_engine::probe_is_legacy_keyed`]) **before** opening the engine, and either
+/// refuse it by name or — when it is provably empty — clear it so the open that follows lands genesis.
 ///
 /// It must not open the engine to decide, and this is the whole reason: [`StoreEngine::open`] applies the
 /// registry DDL (`CREATE UNIQUE INDEX … ON project(slug)` among it) on the way to a connection, and that
@@ -169,9 +171,70 @@ fn legacy_keyed_refusal() -> Error {
 /// ask "is this legacy?" would crash on the exact store this gate exists to refuse by name. The probe
 /// answers from `sqlite_master` instead, and reads genesis (a file with none of the record tables) and an
 /// unreadable file alike as **not legacy** — the permissive answer that lets the real open decide.
-fn ensure_integer_keyed_at(db_path: &std::path::Path) -> Result<()> {
-    if crate::store_engine::probe_is_legacy_keyed(db_path) {
-        return Err(legacy_keyed_refusal());
+///
+/// A legacy store that is **provably empty** (no record in any table, no blob on disk) has nothing to
+/// migrate, so requiring the 0.1.9 → `amenbo migrate` → update detour for it is pure friction: this gate
+/// clears the file instead and lets the open behind it create genesis in its place. Clearing
+/// **destroys**, so it happens only on proof — [`crate::store_engine::probe_is_empty`] reads an
+/// unreadable or ambiguous store as *not* empty, and a single row anywhere refuses rather than clears.
+/// The empty check is over the same bare connection, for the same crash-avoidance reason as the key-space
+/// probe. The backup-and-consent gate that guards a *destructive migration of data* has no bearing here:
+/// there is no data, so its purpose — protecting content — has nothing to protect.
+fn reconcile_legacy_key_space(db_path: &std::path::Path, base_dir: &std::path::Path) -> Result<()> {
+    if !crate::store_engine::probe_is_legacy_keyed(db_path) {
+        return Ok(());
+    }
+    if crate::store_engine::probe_is_empty(db_path) && blobs_empty(base_dir) {
+        return clear_store_file(db_path);
+    }
+    Err(legacy_keyed_refusal())
+}
+
+/// Whether this store's content-addressed blobs (`base_dir/blobs`) hold **no file** — the disk half of
+/// the emptiness proof [`reconcile_legacy_key_space`] takes before it may clear a store to genesis (the
+/// DB half is [`crate::store_engine::probe_is_empty`]). An attachment is a file the record tables point
+/// at but do not contain, so a store empty of rows can still hold blobs; clearing then would orphan them.
+/// Any regular file anywhere under the tree (the flat `blobs/<hash>` and the legacy `blobs/pinned/`
+/// nesting alike) counts, so the walk recurses. Absent reads as empty (no blobs), and any error reading
+/// the tree reads as **not empty** — the conservative answer, matching the DB probe: an ambiguous store
+/// is refused, never cleared.
+fn blobs_empty(base_dir: &std::path::Path) -> bool {
+    fn any_file(dir: &std::path::Path) -> std::io::Result<bool> {
+        for entry in fs::read_dir(dir)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                if any_file(&path)? {
+                    return Ok(true);
+                }
+            } else {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    let blobs = base_dir.join(crate::blob::BLOBS_SUBDIR);
+    if !blobs.exists() {
+        return true;
+    }
+    // An unreadable tree is treated as non-empty (do not clear a store we cannot prove empty).
+    !any_file(&blobs).unwrap_or(true)
+}
+
+/// Remove a store file proved empty by [`reconcile_legacy_key_space`], with its SQLite sidecars, so the
+/// open behind the gate finds no truth source and creates genesis. Idempotent on absence: a sidecar the
+/// store never had is not an error.
+fn clear_store_file(db_path: &std::path::Path) -> Result<()> {
+    for path in [
+        db_path.to_path_buf(),
+        db_path.with_extension("sqlite-wal"),
+        db_path.with_extension("sqlite-shm"),
+        db_path.with_extension("sqlite-journal"),
+    ] {
+        match fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
     }
     Ok(())
 }
@@ -251,8 +314,9 @@ impl Store {
         // the old binary had already written to the new store before the gate fired.
         ensure_format_supported(&crate::store_engine::probe_format_stamp(&db_path))?;
         // Refuse a store in the pre-consolidation key space (ULID keys) before the engine can create
-        // integer-keyed tables alongside it.
-        ensure_integer_keyed_at(&db_path)?;
+        // integer-keyed tables alongside it — unless it is provably empty, which is cleared here so the
+        // open below lands genesis in its place.
+        reconcile_legacy_key_space(&db_path, &paths.base_dir)?;
         let engine = StoreEngine::open(&db_path)?;
         let engine_populated = engine.is_populated()?;
 
@@ -358,7 +422,13 @@ impl Store {
             Ok(e) if matches!(e.is_populated(), Ok(true)) => e,
             _ => return Store::open_at(paths),
         };
-        // A store in the pre-consolidation key space (ULID keys) is refused by name on this path too.
+        // A store in the pre-consolidation key space (ULID keys) is refused by name on this path too —
+        // unless it is provably empty, which the writing open clears to genesis. This read
+        // open writes nothing to disk, so it cannot clear; it defers to `open_at`, which does. Anything
+        // it does not defer falls to `ensure_integer_keyed`, which refuses a non-empty legacy store.
+        if engine.is_legacy_keyed()? && engine.is_empty()? && blobs_empty(&paths.base_dir) {
+            return Store::open_at(paths);
+        }
         ensure_integer_keyed(&engine)?;
         // The startup integrity check (doctor) folds over everything — even against the read model it
         // is a full-table aggregate, O(total) — so the read open does not compute it: paying that on
@@ -585,10 +655,12 @@ mod tests {
         {
             let conn = rusqlite::Connection::open(&db).unwrap();
             // The pre-consolidation shape: ULID-keyed record tables, and a `project` that predates the
-            // `slug` column the current schema indexes.
+            // `slug` column the current schema indexes. A row makes it content-bearing, so the gate must
+            // refuse it — not clear it.
             conn.execute_batch(
                 "CREATE TABLE project (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL DEFAULT '');
-                 CREATE TABLE task (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL DEFAULT '');",
+                 CREATE TABLE task (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL DEFAULT '');
+                 INSERT INTO task (id, title) VALUES ('01ABC', 'a real task');",
             )
             .unwrap();
         }
@@ -596,12 +668,88 @@ mod tests {
         // The bare probe sees the legacy key space without opening the engine (no DDL, no crash).
         assert!(crate::store_engine::probe_is_legacy_keyed(&db), "a slug-less ULID project is legacy");
 
-        let err = ensure_integer_keyed_at(&db).expect_err("a pre-consolidation store must be refused, not opened");
+        let err =
+            reconcile_legacy_key_space(&db, &base).expect_err("a content-bearing pre-consolidation store must be refused, not opened");
         assert!(
             err.message_en().contains("0.1.9"),
             "names the last build that can migrate it: {}",
             err.message_en()
         );
+        assert!(db.exists(), "a refused store is left untouched, never cleared");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A legacy (ULID) store with **no record in any table and no blob** has nothing to migrate, so the
+    /// gate clears it rather than refuse — the open behind it then lands genesis. The clear takes the
+    /// SQLite sidecars with the file.
+    #[test]
+    fn an_empty_legacy_store_is_cleared_to_genesis() {
+        let base = scratch("empty-legacy");
+        let db = base.join(crate::config::STORE_FILE_NAME);
+        {
+            let conn = rusqlite::Connection::open(&db).unwrap();
+            // A pre-consolidation shape carrying no rows — including a leftover `story` table the
+            // registry no longer declares, still empty, which the emptiness proof must count.
+            conn.execute_batch(
+                "CREATE TABLE project (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL DEFAULT '');
+                 CREATE TABLE task (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL DEFAULT '');
+                 CREATE TABLE story (id TEXT PRIMARY KEY NOT NULL, body TEXT NOT NULL DEFAULT '');",
+            )
+            .unwrap();
+        }
+        // A stray sidecar must be swept too.
+        std::fs::write(db.with_extension("sqlite-wal"), b"").unwrap();
+
+        assert!(crate::store_engine::probe_is_legacy_keyed(&db), "a slug-less ULID project is legacy");
+        reconcile_legacy_key_space(&db, &base).expect("an empty legacy store is cleared, not refused");
+        assert!(!db.exists(), "the empty store is cleared so the open behind the gate creates genesis");
+        assert!(!db.with_extension("sqlite-wal").exists(), "and its sidecars go with it");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A row anywhere — even in a table the registry no longer declares — makes a legacy store
+    /// content-bearing, so it is refused, never cleared. The emptiness proof reads `sqlite_master`, not
+    /// the registry, precisely to catch this.
+    #[test]
+    fn a_legacy_store_with_a_row_in_a_dropped_table_is_refused() {
+        let base = scratch("legacy-story-row");
+        let db = base.join(crate::config::STORE_FILE_NAME);
+        {
+            let conn = rusqlite::Connection::open(&db).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE task (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL DEFAULT '');
+                 CREATE TABLE story (id TEXT PRIMARY KEY NOT NULL, body TEXT NOT NULL DEFAULT '');
+                 INSERT INTO story (id, body) VALUES ('01XYZ', 'an activity row');",
+            )
+            .unwrap();
+        }
+        reconcile_legacy_key_space(&db, &base).expect_err("a row in a dropped table still bars clearing");
+        assert!(db.exists(), "the store is left untouched");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// A legacy store empty of rows but still holding an attachment blob is refused, never cleared —
+    /// clearing would orphan the blob. The blob is a file the record tables point at but do not contain,
+    /// so the row-count proof alone would miss it; the disk half of the proof catches it.
+    #[test]
+    fn an_empty_legacy_store_with_a_blob_is_refused_not_cleared() {
+        let base = scratch("legacy-with-blob");
+        let db = base.join(crate::config::STORE_FILE_NAME);
+        {
+            let conn = rusqlite::Connection::open(&db).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE task (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL DEFAULT '');",
+            )
+            .unwrap();
+        }
+        // An attachment sitting in the flat blobs root — the store is row-empty but not content-empty.
+        let blobs = base.join(crate::blob::BLOBS_SUBDIR);
+        std::fs::create_dir_all(&blobs).unwrap();
+        std::fs::write(blobs.join("deadbeef"), b"attachment bytes").unwrap();
+
+        assert!(!blobs_empty(&base), "a blob on disk means the store is not empty");
+        reconcile_legacy_key_space(&db, &base).expect_err("a store holding a blob must not be cleared");
+        assert!(db.exists(), "the store is left untouched");
         std::fs::remove_dir_all(&base).ok();
     }
 

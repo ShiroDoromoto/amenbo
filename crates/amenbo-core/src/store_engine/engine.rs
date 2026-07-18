@@ -301,6 +301,15 @@ impl StoreEngine {
         Ok(schema::is_legacy_keyed(&self.conn)?)
     }
 
+    /// Whether this store holds **no record in any table** ([`schema::table_content_is_empty`]) — the
+    /// engine twin of [`probe_is_empty`], for the read open, which already has the engine (opened by
+    /// `open_read`, DDL-free) and must not spin up a second connection. It decides, on a legacy store the
+    /// read path cannot itself reset, whether to defer to the writing open (empty → genesis) or refuse by
+    /// name (non-empty).
+    pub fn is_empty(&self) -> Result<bool> {
+        Ok(schema::table_content_is_empty(&self.conn)?)
+    }
+
     /// Upsert a store-level singleton scalar (`schema_version` / the format version) into the
     /// `store_meta` KV table. These have no per-record dataset, so they live in their own table. A `None`
     /// value clears the key (an unset scalar round-trips as absent).
@@ -617,6 +626,18 @@ pub fn probe_is_legacy_keyed(path: &Path) -> bool {
     probe(path, schema::is_legacy_keyed).unwrap_or(false)
 }
 
+/// Whether a store holds **no record in any table**, **without running a line of DDL** — the probe twin
+/// of [`StoreEngine::is_empty`] ([`schema::table_content_is_empty`]). The writing open's key-space gate
+/// (`store::open::reconcile_legacy_key_space`) takes this to decide whether a pre-consolidation store may
+/// be cleared to genesis (nothing to lose) rather than refused by name; it must not open the
+/// engine to ask, for the same reason [`probe_is_legacy_keyed`] must not — [`StoreEngine::open`]'s DDL
+/// crashes on the very schema this gate exists to refuse. The polarity is deliberately strict: clearing
+/// **destroys**, so an unreadable file, a legacy encrypted store, or any table that still holds a row all
+/// read as **not empty** (`false`), and the store is refused rather than cleared.
+pub fn probe_is_empty(path: &Path) -> bool {
+    probe(path, schema::table_content_is_empty).unwrap_or(false)
+}
+
 /// The live (non-archived) projects of the single store, **without running a line of DDL** — the probe
 /// twin of a `project_list` for callers that must name the store's projects *before* deciding to open it.
 /// The CLI's pointer guard (`no_pointer`) is the one such caller: it offers `bind --project <id>`
@@ -693,6 +714,45 @@ mod tests {
         StoreEngine::open(&fresh).unwrap();
         assert!(!probe_is_legacy_keyed(&fresh), "a store this build wrote is integer-keyed");
         assert!(!probe_is_legacy_keyed(&dir.join("absent.sqlite")), "a missing store is genesis, not legacy");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The bare emptiness probe: a store with no row anywhere reads as empty; one row
+    /// makes it non-empty; `store_meta` scalars do not count (they are stamps, not records); and an
+    /// absent file reads as **not empty** — the strict polarity, since a caller uses it to decide
+    /// whether to clear a store, and clearing what it cannot read must never happen.
+    #[test]
+    fn probe_is_empty_is_strict() {
+        let dir = std::env::temp_dir().join(format!("amenbo-probe-empty-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let empty = dir.join("empty.sqlite");
+        {
+            let conn = Connection::open(&empty).unwrap();
+            // Record tables with no rows, plus a `store_meta` stamp that must be exempt.
+            conn.execute_batch(
+                "CREATE TABLE task (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL DEFAULT '');
+                 CREATE TABLE story (id TEXT PRIMARY KEY NOT NULL, body TEXT NOT NULL DEFAULT '');
+                 CREATE TABLE store_meta (key TEXT PRIMARY KEY NOT NULL, value TEXT);
+                 INSERT INTO store_meta (key, value) VALUES ('format_version', '1');",
+            )
+            .unwrap();
+        }
+        assert!(probe_is_empty(&empty), "no record row anywhere — the store_meta stamp does not count");
+
+        let with_row = dir.join("with-row.sqlite");
+        {
+            let conn = Connection::open(&with_row).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE task (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL DEFAULT '');
+                 INSERT INTO task (id, title) VALUES ('01ABC', 't');",
+            )
+            .unwrap();
+        }
+        assert!(!probe_is_empty(&with_row), "a single record row makes it non-empty");
+
+        assert!(!probe_is_empty(&dir.join("absent.sqlite")), "an unreadable/absent file reads as not empty");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

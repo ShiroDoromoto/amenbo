@@ -66,8 +66,10 @@ pub enum HookConsent {
 /// block written by an older build is recognised as ours and rewritten rather than mistaken for a
 /// stranger's. v3 is where the standalone hook became a marker-delimited block that can coexist with
 /// another tool's hook in the same slot; v4 makes a standalone block exit cleanly when amenbo is not on
-/// PATH (an uninstalled amenbo must not turn a leftover hook into a commit-blocking trap).
-pub const HOOK_MARKER_VERSION: u32 = 5;
+/// PATH (an uninstalled amenbo must not turn a leftover hook into a commit-blocking trap); v6 makes that
+/// same clean exit say so on stderr, so a leftover hook that is silently doing nothing is distinguishable
+/// from one that ran and passed.
+pub const HOOK_MARKER_VERSION: u32 = 6;
 
 /// Version-independent prefix of the begin marker. Detection matches on this rather than on
 /// [`HOOK_BEGIN_MARKER`] whole, so a block written by any version of amenbo is still known to be ours.
@@ -78,7 +80,7 @@ const BEGIN_SUFFIX: &str = ")";
 /// The begin marker at the version this binary writes, and the end marker that closes the block. They are
 /// shell comments, so they live in the hook itself: the file *is* the record of who wrote it, and there is
 /// no side ledger to fall out of step with it.
-pub const HOOK_BEGIN_MARKER: &str = "# amenbo:hook begin (managed v5)";
+pub const HOOK_BEGIN_MARKER: &str = "# amenbo:hook begin (managed v6)";
 pub const HOOK_END_MARKER: &str = "# amenbo:hook end";
 
 /// The single-line marker older builds wrote at the top of a standalone hook (`# amenbo:hook (managed vN)`,
@@ -203,11 +205,14 @@ impl HookState {
 /// hook. It uses no `exec` for that reason: `exec` would replace the process and the other tool's hook
 /// would never run.
 ///
-/// The trailing `|| true` is what keeps the uninstall promise. In a *standalone* hook the block is the last
-/// thing in the file, so its exit status becomes the hook's — and `command -v` failing (amenbo gone) leaves
-/// a non-zero status that would abort every commit. `|| true` turns that into a clean exit, without touching
-/// the two paths that must keep working: a failing lint still `exit 1`s (a hard exit reached before `|| true`
-/// is), and a coexisting hook still falls through to the tool's own body below.
+/// The trailing `|| { … ; true; }` is what keeps the uninstall promise while breaking the silence. In a
+/// *standalone* hook the block is the last thing in the file, so its exit status becomes the hook's — and
+/// `command -v` failing (amenbo gone) leaves a non-zero status that would abort every commit. The group
+/// warns on stderr and then `true`s, turning that into a clean exit that says why it did nothing, without
+/// touching the two paths that must keep working: a failing lint still `exit 1`s (a hard exit reached before
+/// the `||`), and a coexisting hook still falls through to the tool's own body below (the group ends in
+/// `true`, so control continues). The warning fires only when amenbo is off PATH — for an installed user it
+/// never prints, so it is loud exactly when the hook would otherwise be silently doing nothing.
 pub fn hook_block(slot: HookSlot, cmd: &str) -> String {
     let name = slot.name();
     let subject = slot.subject();
@@ -218,9 +223,9 @@ pub fn hook_block(slot: HookSlot, cmd: &str) -> String {
          # only in the store that issued it, so it says nothing to a reader outside. The {name} slot is\n\
          # where git offers {subject}. amenbo owns only the lines between these two markers — the rest of\n\
          # this file is left as it is, so this sits happily alongside another tool's hook. Remove it with\n\
-         # `{cmd} hooks uninstall`, or delete the markers. Skipped when {cmd} is not on PATH (uninstalled?);\n\
-         # bypass one commit with `git commit --no-verify`.\n\
-         command -v {cmd} >/dev/null 2>&1 && {{ {call} || exit 1; }} || true\n\
+         # `{cmd} hooks uninstall`, or delete the markers. When {cmd} is not on PATH the commit is allowed\n\
+         # but a warning says the lint was skipped; bypass one commit with `git commit --no-verify`.\n\
+         command -v {cmd} >/dev/null 2>&1 && {{ {call} || exit 1; }} || {{ echo \"{cmd}: not on PATH, {name} ref-lint skipped (commit allowed) — reinstall {cmd}, or remove this hook with '{cmd} hooks uninstall'\" >&2; true; }}\n\
          {HOOK_END_MARKER}"
     )
 }
@@ -1055,9 +1060,9 @@ mod tests {
     #[test]
     fn each_slot_hands_the_lint_what_git_gives_it() {
         assert!(hook_body(HookSlot::CommitMsg, "amenbo")
-            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo githook-commit-msg \"$1\" || exit 1; } || true\n"));
+            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo githook-commit-msg \"$1\" || exit 1; } || { echo \"amenbo: not on PATH, commit-msg ref-lint skipped (commit allowed) — reinstall amenbo, or remove this hook with 'amenbo hooks uninstall'\" >&2; true; }\n"));
         assert!(hook_body(HookSlot::PreCommit, "amenbo")
-            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo githook-pre-commit || exit 1; } || true\n"));
+            .contains("command -v amenbo >/dev/null 2>&1 && { amenbo githook-pre-commit || exit 1; } || { echo \"amenbo: not on PATH, pre-commit ref-lint skipped (commit allowed) — reinstall amenbo, or remove this hook with 'amenbo hooks uninstall'\" >&2; true; }\n"));
         assert!(!hook_body(HookSlot::CommitMsg, "amenbo").contains("exec "), "no exec — the block must fall through");
         assert_eq!(guidance_line(HookSlot::CommitMsg, "amenbo"), "amenbo lint \"$1\" || exit 1");
         assert_eq!(guidance_line(HookSlot::PreCommit, "amenbo"), "amenbo lint || exit 1");
@@ -1077,10 +1082,10 @@ mod tests {
     }
 
     /// The uninstall promise, at the shell: an amenbo that is gone from `PATH` must let a commit through, not
-    /// abort it. A standalone block is the last thing in its file, so before the `|| true` its `command -v`
-    /// failure was the hook's exit — a trap on every commit. The two paths that must keep working are pinned
-    /// too: a failing lint still stops the commit, and a block with another tool's body below falls through
-    /// to it.
+    /// abort it. A standalone block is the last thing in its file, so before the `|| { …; true; }` its
+    /// `command -v` failure was the hook's exit — a trap on every commit. The two paths that must keep working
+    /// are pinned too: a failing lint still stops the commit, and a block with another tool's body below falls
+    /// through to it. Breaking the silence must not break any of that, so the exits are re-checked here.
     #[cfg(unix)]
     #[test]
     fn an_uninstalled_amenbo_never_blocks_a_commit() {
@@ -1110,6 +1115,20 @@ mod tests {
         // Coexisting, amenbo gone: the other tool's body below runs and decides — here it fails.
         let coexist = format!("{solo}echo other-tool\nexit 3\n");
         assert_eq!(run_hook(&dir, &coexist, "/nonexistent"), 3, "amenbo gone, the other tool's hook still runs");
+
+        // ...and the skip is no longer silent: amenbo gone, the hook says so on stderr so a leftover hook
+        // doing nothing is distinguishable from one that ran and passed.
+        let file = dir.join("hook");
+        std::fs::write(&file, &solo).unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let out = std::process::Command::new(&file)
+            .env("PATH", "/nonexistent")
+            .arg("/dev/null")
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(0), "the warning path still exits clean");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains("not on PATH"), "the skip warns on stderr, got: {stderr:?}");
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

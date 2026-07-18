@@ -20,6 +20,7 @@ export const projects: Project[] = [
     color: "#0e7c7b",
     view: "board",
     openCount: 5,
+    proposedDecisionCount: 0,
     dimensions: [],
   },
   {
@@ -28,6 +29,7 @@ export const projects: Project[] = [
     color: "#8a4fd0",
     view: "board",
     openCount: 2,
+    proposedDecisionCount: 0,
     dimensions: [],
   },
 ];

@@ -2156,6 +2156,10 @@ pub struct ProjectRow {
     pub default_view: String,
     /// not-yet-done task count (todo/in_progress/blocked) — the sidebar's per-project badge.
     pub open_count: usize,
+    /// proposed (under-discussion) decision count — a `proposed`, still-current decision; a superseded
+    /// proposal is no longer under discussion, and accepted/rejected are settled. Feeds the sidebar/header
+    /// under-discussion badge.
+    pub proposed_decision_count: usize,
     pub dimensions: Vec<DimensionRow>,
 }
 
@@ -2194,6 +2198,7 @@ pub fn project_overview(conn: &Connection, reach: crate::reach::Reach) -> Result
                     color: color.get(r)?,
                     default_view: default_view.get(r)?,
                     open_count: 0,
+                    proposed_decision_count: 0,
                     dimensions: Vec::new(),
                 })
             })
@@ -2294,6 +2299,34 @@ pub fn project_overview(conn: &Connection, reach: crate::reach::Reach) -> Result
         }
     }
 
+    // Proposed (under-discussion) decision count per project, in one grouped pass. "Proposed" is the
+    // stored status; a superseded proposal is excluded because currency is derived from the edges, not the
+    // status — accepted/rejected fall out by the status filter alone.
+    let mut proposed_count_by_project: HashMap<i64, usize> = HashMap::new();
+    {
+        const DC: col::decision::Cols = col::decision::ALL;
+        let mut sel = Select::new();
+        let project_id = sel.col(DC.project_id);
+        let count = sel.count_all();
+        let pred = Pred::all(
+            [Pred::eq(DC.status, crate::model::DecisionStatus::Proposed.as_str()), !superseded(DC)]
+                .into_iter()
+                .chain(scoped(reach, DC.project_id)),
+        );
+        let mut sql = Sql::from(&sel, DC.table);
+        sql.push_where(pred.as_ref()).group_by([DC.project_id.to_sql()]);
+        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+                Ok((project_id.get(r)?, count.get(r)? as usize))
+            })
+            .map_err(StoreEngineError::from)?;
+        for row in rows {
+            let (pid, count) = row.map_err(StoreEngineError::from)?;
+            proposed_count_by_project.insert(pid, count);
+        }
+    }
+
     for proj in &mut projects {
         let mut dimensions = dimensions_by_project.remove(&proj.id).unwrap_or_default();
         for dim in &mut dimensions {
@@ -2301,6 +2334,7 @@ pub fn project_overview(conn: &Connection, reach: crate::reach::Reach) -> Result
         }
         proj.dimensions = dimensions;
         proj.open_count = open_count_by_project.remove(&proj.id).unwrap_or(0);
+        proj.proposed_decision_count = proposed_count_by_project.remove(&proj.id).unwrap_or(0);
     }
 
     Ok(projects)
@@ -3737,6 +3771,53 @@ mod tests {
         assert_eq!(by.get(&1).copied(), Some(2), "todo+in_progress open; done excluded");
         assert_eq!(by.get(&2).copied(), Some(1), "blocked counts as open");
         assert_eq!(by.get(&3).copied(), Some(0), "only a done task => 0");
+    }
+
+    /// `project_overview` carries per-project proposed (under-discussion) decision counts: `proposed`
+    /// decisions grouped by their `project_id`. accepted/rejected are excluded by status, and a proposed
+    /// decision that a `supersedes` edge points at is excluded as no longer current. A project with none
+    /// reports 0.
+    #[test]
+    fn project_overview_proposed_decision_counts() {
+        let e = StoreEngine::open_in_memory_unchecked().unwrap();
+        e.put_record("project", 1, &[("name", text("Alpha")), ("order_key", text("a"))]).unwrap();
+        e.put_record("project", 2, &[("name", text("Beta")), ("order_key", text("b"))]).unwrap();
+        e.put_record("project", 3, &[("name", text("Gamma")), ("order_key", text("c"))]).unwrap();
+        let decision = |id: i64, project_id: &str, status: &str| {
+            let cols = vec![
+                ("project_id", text(project_id)),
+                ("title", text(&id.to_string())),
+                ("body", text("b")),
+                ("status", text(status)),
+            ];
+            e.put_record("decision", id, &cols).unwrap();
+        };
+        // project 1: two proposed, plus an accepted and a rejected that must not count => 2.
+        decision(1, "1", "proposed");
+        decision(2, "1", "proposed");
+        decision(3, "1", "accepted");
+        decision(4, "1", "rejected");
+        // project 2: one proposed, but it is superseded by decision 6 => 0 (no longer under discussion).
+        decision(5, "2", "proposed");
+        decision(6, "2", "accepted");
+        e.put_record(
+            "decision_edge",
+            1,
+            &[("decision_id", text("6")), ("target_decision_id", text("5")), ("kind", text("supersedes"))],
+        )
+        .unwrap();
+        // project 3: only an accepted decision => 0.
+        decision(7, "3", "accepted");
+
+        let conn = e.conn();
+        let by: HashMap<i64, usize> = project_overview(conn, crate::reach::Reach::All)
+            .unwrap()
+            .into_iter()
+            .map(|r| (r.id, r.proposed_decision_count))
+            .collect();
+        assert_eq!(by.get(&1).copied(), Some(2), "two proposed; accepted/rejected excluded");
+        assert_eq!(by.get(&2).copied(), Some(0), "the one proposal is superseded => not current");
+        assert_eq!(by.get(&3).copied(), Some(0), "no proposed decision => 0");
     }
 
     /// The dimension ref resolvers answer from the truth source — key or exact name, optionally scoped

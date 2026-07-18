@@ -4246,7 +4246,7 @@ mod tests {
         assert_eq!(t.status, "todo");
         assert_eq!(t.created_by.as_ref().map(|a| a.kind), Some("human"));
         assert_eq!(t.id, 1, "the id is the conversational number");
-        assert_eq!(t.r#ref, "AMB-T-1", "ref is the namespaced form (D-272)");
+        assert_eq!(t.r#ref, "AMB-T-1", "ref is the namespaced form");
 
         let ack = task_status(id, "in_progress".into()).unwrap();
         assert_eq!(ack.tasks, vec![id], "status acks the task");

@@ -19,7 +19,7 @@ import { invoke } from "./ipc";
 import { parseRef } from "./idref";
 import { currentLang, type Lang } from "./i18n";
 import type { TaskCard } from "../mock/types";
-import type { ArchivedProjectDto, AttachmentDto, DecisionCommentDto, TaskPageDto, DecisionPageDto, RefTargetDto } from "../bindings/bindings";
+import type { ArchivedProjectDto, AttachmentDto, DecisionCommentDto, TaskCommitDto, TaskPageDto, DecisionPageDto, RefTargetDto } from "../bindings/bindings";
 
 // "Today" for the browser mock only. On the Tauri path core's today() resolves due:today, so this is unused.
 const TODAY = "2026-06-21";
@@ -268,6 +268,24 @@ export function useAttachments(targetType: AttachTargetType, targetId: number | 
   const { data } = useQuery<Attachment[]>(
     ["attachments", targetType, targetId],
     () => (targetId !== null ? fetchAttachments(targetType, targetId) : Promise.resolve([])),
+  );
+  return data ?? [];
+}
+
+/** One git commit SHA recorded on a task (generated DTO). amenbo stores it opaque — the AI reads git. */
+export type TaskCommit = TaskCommitDto;
+
+/** Fetch a task's recorded commit SHAs, oldest first (Tauri: `task_commits`; browser: empty). */
+export async function fetchTaskCommits(taskId: number): Promise<TaskCommit[]> {
+  if (inTauri()) return invoke<TaskCommitDto[]>("task_commits", { taskId });
+  return [];
+}
+
+/** Subscribing read of a task's commit SHAs (add/remove return a WriteAck that invalidates the task id — applyAck). */
+export function useTaskCommits(taskId: number | null): TaskCommit[] {
+  const { data } = useQuery<TaskCommit[]>(
+    ["commits", taskId],
+    () => (taskId !== null ? fetchTaskCommits(taskId) : Promise.resolve([])),
   );
   return data ?? [];
 }

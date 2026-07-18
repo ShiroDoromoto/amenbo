@@ -678,6 +678,17 @@ linkedDecisions: Array<DecisionRefDto>,
 blockedByDecisions: Array<DecisionRefDto>, };
 
 /**
+ * One git commit SHA recorded on a task. amenbo keeps the SHA as an opaque string — it
+ * never reads git, verifies the commit, or knows which forge it lives on; the AI does that with
+ * `git show <sha>`. `createdByKind` is who recorded it (the GUI's actor is always human).
+ */
+export type TaskCommitDto = { id: number, 
+/**
+ * The full commit SHA, lower-case hex (40 for SHA-1, 64 for SHA-256).
+ */
+sha: string, createdByKind: "human" | "ai" | null, };
+
+/**
  * One task × dimension assignment (`valueId` is set on the `dimensionId` axis). The detail pane's
  * assignment selects use it to reflect the current value.
  */

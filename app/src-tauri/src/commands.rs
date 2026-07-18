@@ -2234,6 +2234,66 @@ pub fn attachment_remove(
     })
 }
 
+/// One git commit SHA recorded on a task. amenbo keeps the SHA as an opaque string — it
+/// never reads git, verifies the commit, or knows which forge it lives on; the AI does that with
+/// `git show <sha>`. `createdByKind` is who recorded it (the GUI's actor is always human).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct TaskCommitDto {
+    #[ts(type = "number")]
+    id: i64,
+    /// The full commit SHA, lower-case hex (40 for SHA-1, 64 for SHA-256).
+    sha: String,
+    #[ts(type = "\"human\" | \"ai\" | null")]
+    created_by_kind: Option<String>,
+}
+
+/// A task's recorded commit SHAs, oldest first. A direct read-model query; empty if the task has none.
+#[tauri::command]
+pub fn task_commits(task_id: i64) -> Result<Vec<TaskCommitDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("task_commits");
+    let found = find_in_store(|store| {
+        let rows = store.task_commits(task_id)?;
+        if rows.is_empty() {
+            return Ok(None);
+        }
+        let dtos = rows
+            .into_iter()
+            .map(|r| TaskCommitDto {
+                id: r.id,
+                sha: r.sha,
+                created_by_kind: r.created_by_kind.map(|k| k.as_str().to_string()),
+            })
+            .collect::<Vec<_>>();
+        Ok(Some(dtos))
+    })?;
+    Ok(found.unwrap_or_default())
+}
+
+/// Record a commit SHA on a task. Same shape as the CLI's `task commit add`: the SHA is validated
+/// and normalised at the ops door (full-length lower-case hex only; case folded), and a SHA already
+/// on the task is a no-op. Invalidates the task so any open detail view refetches.
+#[tauri::command]
+pub fn task_commit_add(task_id: i64, sha: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.add_task_commit(task_id, &sha, Some(ActorKind::Human))?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]).task(task_id))
+}
+
+/// Forget a commit SHA on a task (a hard delete; idempotent — a SHA not recorded is a no-op). The
+/// commit itself and the task are untouched.
+#[tauri::command]
+pub fn task_commit_remove(task_id: i64, sha: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.remove_task_commit(task_id, &sha)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]).task(task_id))
+}
+
 /// Record a decision (Proposed), created under `project_id`. The GUI's actor is always human.
 #[tauri::command]
 pub fn decision_add(project_id: i64, title: String, body: Option<String>) -> Result<WriteAck, CmdError> {

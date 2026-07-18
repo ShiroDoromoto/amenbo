@@ -74,6 +74,7 @@ function applyAck(ack: WriteAck): Promise<void> {
       case "decisions": return scopes.has("decisions");
       case "decisionComments": return decisions.has(key[1] as number);
       case "attachments": return tasks.has(Number(key[2])) || decisions.has(Number(key[2]));
+      case "commits": return tasks.has(key[1] as number);
       default: return false;
     }
   });
@@ -986,6 +987,23 @@ export async function saveAttachment(blobHash: string, filename: string | null):
   const dest = await save({ defaultPath: filename ?? undefined });
   if (!dest) return;
   await invoke<void>("attachment_save", { blobHash, dest });
+}
+
+/**
+ * Record a git commit SHA on a task. The SHA is validated at the ops door — full-length
+ * lower-case hex only — so a bad value rejects with a structured error the caller surfaces. Recording
+ * a SHA already on the task is a no-op. Commit SHAs exist only inside Tauri, so this is a no-op in
+ * browser iteration.
+ */
+export async function addTaskCommit(taskId: number, sha: string): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("task_commit_add", { taskId, sha });
+}
+
+/** Forget a commit SHA on a task (a hard delete; a SHA not recorded is a no-op). */
+export async function removeTaskCommit(taskId: number, sha: string): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("task_commit_remove", { taskId, sha });
 }
 
 /**

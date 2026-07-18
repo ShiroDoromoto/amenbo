@@ -4,7 +4,7 @@ import { Attachments } from "./Attachments";
 import { inTauri } from "../core/snapshot";
 import { isEnterSubmit } from "../core/keys";
 import { confirmDialog } from "../core/dialog";
-import { t } from "../core/i18n";
+import { t, errText } from "../core/i18n";
 
 /**
  * One comment row in a timeline. Tasks and decision records draw the body from different places (activity vs.
@@ -24,27 +24,47 @@ export function CommentRow({ id, author, ago, editedAgo, text, target, onEdit, o
   editedAgo?: string;
   text: string;
   target: "task_comment" | "decision_comment";
-  onEdit: (text: string) => void;
-  onRemove: () => void;
+  // A failing write must not read as a success. Both may reject, so they may return a promise to await; a
+  // synchronous `() => void` still satisfies the type (its result awaits to `undefined`).
+  onEdit: (text: string) => void | Promise<void>;
+  onRemove: () => void | Promise<void>;
   startEditAt?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const startEdit = () => { setDraft(text); setEditing(true); };
+  const startEdit = () => { setError(null); setDraft(text); setEditing(true); };
+  const cancelEdit = () => { setError(null); setEditing(false); };
   useEffect(() => {
     if (startEditAt === undefined) return;
+    setError(null);
     setDraft(text);
     setEditing(true);
     // The draft copies the body as it stood when editing opened; making `text` a dependency would let an outside change overwrite it mid-edit.
   }, [startEditAt]);
-  const save = () => {
-    if (!draft.trim()) return; // core rejects an empty body; here the button is simply unpressable.
-    onEdit(draft.trim());
-    setEditing(false);
+  // Await the edit before closing the box: on success it closes; on a refusal it stays open with the text intact
+  // and the error shown, so the draft is never lost and retrying costs nothing.
+  const save = async () => {
+    const body = draft.trim();
+    if (!body) return; // core rejects an empty body; here the button is simply unpressable.
+    setError(null);
+    try {
+      await onEdit(body);
+      setEditing(false);
+    } catch (e) {
+      setError(errText(e));
+    }
   };
+  // Deletion is physical; a refusal must be surfaced, not swallowed as though the row were gone.
   const remove = async () => {
-    if (await confirmDialog(t("comment.removeConfirm"))) onRemove();
+    if (!(await confirmDialog(t("comment.removeConfirm")))) return;
+    setError(null);
+    try {
+      await onRemove();
+    } catch (e) {
+      setError(errText(e));
+    }
   };
 
   return (
@@ -70,15 +90,15 @@ export function CommentRow({ id, author, ago, editedAgo, text, target, onEdit, o
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
-              if (e.key === "Escape") setEditing(false);
+              if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void save(); }
+              if (e.key === "Escape") cancelEdit();
             }}
           />
           <div className="compose__actions">
             <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.notesHint")}</span>
             <span>
-              <button className="btn" onClick={() => setEditing(false)}>{t("detail.cancel")}</button>
-              <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={!draft.trim()} onClick={save}>
+              <button className="btn" onClick={cancelEdit}>{t("detail.cancel")}</button>
+              <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={!draft.trim()} onClick={() => void save()}>
                 {t("detail.save")}
               </button>
             </span>
@@ -89,6 +109,7 @@ export function CommentRow({ id, author, ago, editedAgo, text, target, onEdit, o
           <Markdown>{text}</Markdown>
         </div>
       )}
+      {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
       {inTauri() && <Attachments target={target} targetId={id} compact />}
     </div>
   );

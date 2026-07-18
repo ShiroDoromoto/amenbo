@@ -211,8 +211,8 @@ export function DecisionDetailPane({ decisionId, onOpenTask, onOpenDecision }: {
                     editedAgo={c.editedAgo}
                     text={c.text}
                     target="decision_comment"
-                    onEdit={(text) => void editDecisionComment(c.id, d.id, text)}
-                    onRemove={() => void removeDecisionComment(c.id, d.id)}
+                    onEdit={(text) => editDecisionComment(c.id, d.id, text)}
+                    onRemove={() => removeDecisionComment(c.id, d.id)}
                   />
                 ))}
               </div>

@@ -1,23 +1,42 @@
 // The inbox's notification affordance. It does two things:
-//  1. Supplies the nav's unread badge count reactively from the inbox set (`reads.loadInboxTaskIds`).
-//  2. Recomputes the inbox set on every snapshot notification (a write command returning, a `store-changed`
-//     event, a read-state change) and, when an id appears that was not there last time, raises an OS
-//     notification (the `notify_os` command).
+//  1. Supplies the nav's unread badge count reactively from the inbox set (`reads.loadInboxItems`).
+//  2. Recomputes the inbox on every snapshot notification (a write command returning, a `store-changed`
+//     event, a read-state change) and raises one aggregated OS notification (the `notify_os` command) for
+//     the items that are **unread and not yet notified** — recording them so they never fire again.
+//
+// What "not yet notified" rests on: a device-local persisted set (`mailboxNotified.ts` → the store's
+// `mailbox_notified` table), loaded once at startup as the baseline. It is the persistent form of what used
+// to be an in-memory "seen this run" set: because it survives restarts, the same judgment — unread ∧
+// un-notified — serves both the live path and the startup catch-up. So an item that arrived while the app was
+// closed is announced once on the next launch and never again. There is no first-load special case: a fresh
+// store's notified set is empty, so the first launch simply announces what is unread and records it; a
+// subsequent launch with nothing new stays silent because everything unread is already recorded.
 //
 // Properties to preserve:
-//  - Fetching the set is async, so `running`/`queued` serialise it and fold repeated triggers into one.
-//  - The first load (`known === null`) stays silent — nothing pent up at startup fires a notification.
-//  - A set that merely shrinks (marked read, or done) contains no new id, so nothing is raised.
+//  - Fetching the inbox is async, so `running`/`queued` serialise it and fold repeated triggers into one.
+//  - Read items never notify (only `unread` ones do), and an item already in the notified set never re-fires.
+//  - The badge counts the whole inbox (C ∪ D), independent of read state; only the notification is unread-gated.
 //  - The arrival sound belongs to the OS notification; the app has no beep of its own.
 import { useSyncExternalStore } from "react";
 import { getInboxDataGeneration, inTauri, subscribe } from "./snapshot";
-import { loadInboxTaskIds } from "./reads";
+import { loadInboxItems, type InboxItemBrief } from "./reads";
+import { loadNotified, addNotified } from "./mailboxNotified";
 import { invoke } from "./ipc";
 import { tf, t } from "./i18n";
 import { pushNotice } from "./notice";
 
+/**
+ * The arrival rule, isolated so it can be reasoned about on its own: of the inbox items, the ids that should be
+ * announced now are the ones that are **unread** and **not already in the notified set**. A read item is never
+ * announced; an item already announced (this run or a previous launch, since the set is persisted) never fires
+ * again. The caller announces the returned ids once, aggregated, and adds them to the set.
+ */
+export function arrivalsToAnnounce(items: InboxItemBrief[], notified: Set<number>): number[] {
+  return items.filter((it) => it.unread && !notified.has(it.id)).map((it) => it.id);
+}
+
 let count = 0;
-let known: Set<number> | null = null; // null = before the first load (which never notifies)
+let notified: Set<number> | null = null; // the persisted "already announced" set; null = not loaded yet
 let started = false;
 let running = false;
 let queued = false;
@@ -36,15 +55,19 @@ async function recompute(): Promise<void> {
   }
   running = true;
   try {
-    const ids = await loadInboxTaskIds();
-    const next = new Set(ids);
-    if (known) {
-      const fresh = ids.filter((id) => !known!.has(id));
-      if (fresh.length > 0) void notifyArrival(fresh.length);
+    const items = await loadInboxItems();
+    if (notified === null) notified = new Set(await loadNotified());
+    // Announce the unread items we have not announced before, aggregated into one toast, and record them so
+    // the next recompute (this run or a later launch) does not announce them again. The in-memory set is
+    // updated before the async persist, so a rapid re-trigger cannot double-announce the same id.
+    const fresh = arrivalsToAnnounce(items, notified);
+    if (fresh.length > 0) {
+      for (const id of fresh) notified.add(id);
+      void notifyArrival(fresh.length);
+      void addNotified(fresh);
     }
-    known = next;
-    if (count !== next.size) {
-      count = next.size;
+    if (count !== items.length) {
+      count = items.length;
       emit();
     }
   } finally {

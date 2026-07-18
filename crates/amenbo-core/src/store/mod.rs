@@ -223,6 +223,21 @@ impl Store {
         crate::overview::retain_live_inbox_archive(&self.engine, keep)
     }
 
+    /// The inbox items this device has already raised an OS notification for, as task_ids.
+    pub fn mailbox_notified_ids(&self) -> Result<Vec<i64>> {
+        crate::overview::mailbox_notified_ids(&self.engine)
+    }
+
+    /// Record that these inbox items have now been notified (idempotent, batched).
+    pub fn mailbox_notified_add(&self, task_ids: &[i64]) -> Result<()> {
+        crate::overview::mailbox_notified_add(&self.engine, task_ids)
+    }
+
+    /// GC the mailbox notified set (the counterpart of [`Store::retain_live_inbox_archive`]).
+    pub fn retain_live_mailbox_notified(&self, keep: impl Fn(i64) -> bool) -> Result<bool> {
+        crate::overview::retain_live_mailbox_notified(&self.engine, keep)
+    }
+
     /// Has this project been opted out of the lint hooks — did `hooks uninstall` run in it
     /// ([`crate::hooks`])? It says what was explicitly asked for here, never what `.git/hooks` currently
     /// holds. The *answer* to the hook question is not per project and does not live here: it is

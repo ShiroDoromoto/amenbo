@@ -1584,9 +1584,28 @@ pub fn inbox_unarchive(task_id: i64) -> Result<Vec<i64>, CmdError> {
     Ok(store.inbox_archive_ids()?)
 }
 
-/// GC for device state (read receipts and archive). Both accumulate a task id on every view and
-/// every dismissal, including ids of tasks that have since been deleted. So we build **the complete
-/// set of live task ids** and DELETE any row in either whose id is not in it. Writes only when
+/// Return the inbox items this machine has already raised an OS notification for (task_ids). The
+/// mailbox loads it once at startup as its "already announced" baseline, so an arrival notifies
+/// exactly once even across restarts.
+#[tauri::command]
+pub fn mailbox_notified_ids() -> Result<Vec<i64>, CmdError> {
+    Ok(open_store()?.mailbox_notified_ids()?)
+}
+
+/// Record that these inbox items have now been notified. Idempotent and batched — the mailbox adds
+/// the ids it just announced (one startup catch-up, or a live arrival) so they are never announced
+/// again. Returns the full id list afterwards.
+#[tauri::command]
+pub fn mailbox_notified_add(task_ids: Vec<i64>) -> Result<Vec<i64>, CmdError> {
+    let store = open_store()?;
+    store.mailbox_notified_add(&task_ids)?;
+    Ok(store.mailbox_notified_ids()?)
+}
+
+/// GC for device state (read receipts, the inbox archive and the mailbox notified set). Each
+/// accumulates a task id on every view, dismissal or notification, including ids of tasks that have
+/// since been deleted. So we build **the complete set of live task ids** and DELETE any row whose id
+/// is not in it. Writes only when
 /// something actually changed. Does nothing if the store could not be opened — otherwise an empty
 /// set would wipe everything. Meant to be called once, at startup. Failure is not fatal (the caller
 /// only logs it).
@@ -1615,6 +1634,9 @@ pub fn gc_device_state() -> Result<(), CmdError> {
     }
     if store.retain_live_inbox_archive(|id| live.contains(&id))? {
         log::info!("gc_device_state: pruned stale inbox_archive entries");
+    }
+    if store.retain_live_mailbox_notified(|id| live.contains(&id))? {
+        log::info!("gc_device_state: pruned stale mailbox_notified entries");
     }
     Ok(())
 }

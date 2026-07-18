@@ -726,6 +726,16 @@ plain_tables! {
         task_id: integer("PRIMARY KEY"),
     }
 
+    /// The device-local **mailbox notified set** — the inbox items this device has already raised an OS
+    /// notification for. Per-device, never-synced: the same item may notify once on each device. It
+    /// generalises the mailbox's old in-memory "seen this run" baseline into persistent state, so an
+    /// arrival is announced exactly once even across restarts — a startup catch-up announces what landed
+    /// while the app was closed, and never re-announces it on the next launch. Presence is the whole
+    /// content (a set, like `inbox_archive`); the row is keyed by the task's `INTEGER` id.
+    mailbox_notified {
+        task_id: integer("PRIMARY KEY"),
+    }
+
     /// The **lint-hook opt-out** — the projects amenbo must not wire the lint into on its own. A row is
     /// written by `hooks uninstall`: an explicit act on one repository, which the device-wide answer
     /// (`config.hook_consent`) would otherwise undo at the next startup by installing again.
@@ -910,7 +920,7 @@ mod tests {
     fn the_device_local_sets_carry_the_tasks_integer_key() {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         conn.execute_batch(&schema_sql()).unwrap();
-        for table in ["read_receipt", "inbox_archive"] {
+        for table in ["read_receipt", "inbox_archive", "mailbox_notified"] {
             let ty: String = conn
                 .query_row(
                     "SELECT type FROM pragma_table_info(?1) WHERE name = 'task_id'",

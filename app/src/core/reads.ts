@@ -348,14 +348,22 @@ async function fetchInboxTasks(me: string): Promise<TaskCard[]> {
   return withTrigger.sort((a, b) => (b.triggeredAt ?? "").localeCompare(a.triggeredAt ?? ""));
 }
 
+/** One inbox item, reduced to what arrival detection needs: its id and whether it is unread. */
+export interface InboxItemBrief {
+  id: number;
+  unread: boolean;
+}
+
 /**
- * The current id set of the inbox (C ∪ D). Exported so the nav badge count and arrival detection (`mailbox.ts`)
- * can consult it without the view being open. Empty until `me` is known (i.e. before the snapshot loads).
+ * The current inbox (C ∪ D) as `{ id, unread }`, in the view's own order. Exported so the nav badge count and
+ * arrival detection (`mailbox.ts`) can consult it without the view being open: the badge counts the whole set,
+ * while the notification fires only for the unread ones (`unread` is the per-item flag `fetchInboxTasks` already
+ * computes). Empty until `me` is known (i.e. before the snapshot loads).
  */
-export async function loadInboxTaskIds(): Promise<number[]> {
+export async function loadInboxItems(): Promise<InboxItemBrief[]> {
   const me = getSnapshot().meUserId;
   if (!me) return [];
-  return (await fetchInboxTasks(me)).map((t) => t.id);
+  return (await fetchInboxTasks(me)).map((t) => ({ id: t.id, unread: t.unread ?? false }));
 }
 
 function dedupById(tasks: TaskCard[]): TaskCard[] {

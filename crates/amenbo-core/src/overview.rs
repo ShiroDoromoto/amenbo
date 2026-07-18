@@ -27,6 +27,7 @@ const BP: col::binding_path::Cols = col::binding_path::ALL;
 const BPD: col::binding_project_dir::Cols = col::binding_project_dir::ALL;
 const RR: col::read_receipt::Cols = col::read_receipt::ALL;
 const IA: col::inbox_archive::Cols = col::inbox_archive::ALL;
+const MN: col::mailbox_notified::Cols = col::mailbox_notified::ALL;
 const HO: col::hook_optout::Cols = col::hook_optout::ALL;
 
 /// `store_meta` key for the mailbox's single last-seen instant. A scalar, so it lives in the KV
@@ -187,6 +188,51 @@ pub fn retain_live_inbox_archive(engine: &StoreEngine, keep: impl Fn(i64) -> boo
     retain_live(engine, IA.table, IA.task_id, keep)
 }
 
+// ───────────────────────── mailbox notified set ─────────────────────────
+
+/// The task ids this device has already raised an OS notification for, ascending (the table's PK
+/// order). The empty default means nothing has been announced yet — the state a fresh store is in.
+pub fn mailbox_notified_ids(engine: &StoreEngine) -> Result<Vec<i64>> {
+    let conn = engine.conn();
+    let mut sel = Select::new();
+    let task_id = sel.col(MN.task_id);
+    let mut sql = Sql::from(&sel, MN.table);
+    sql.order_by([Sort::by(MN.task_id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt.query_map([], |r| task_id.get(r)).map_err(StoreEngineError::from)?;
+    let mut ids = Vec::new();
+    for row in rows {
+        ids.push(row.map_err(StoreEngineError::from)?);
+    }
+    Ok(ids)
+}
+
+/// Record that these tasks have now been notified: INSERT one row each, in one transaction.
+/// Idempotent — a task already in the set conflicts on its key and is left as it was, so a re-announce
+/// is a no-op rather than an error.
+pub fn mailbox_notified_add(engine: &StoreEngine, task_ids: &[i64]) -> Result<()> {
+    if task_ids.is_empty() {
+        return Ok(());
+    }
+    let tx = engine.transaction()?;
+    for &task_id in task_ids {
+        Insert::into(MN.table)
+            .set(MN.task_id, task_id)
+            .on_conflict_do_nothing(MN.task_id)
+            .sql()
+            .execute(&tx)
+            .map_err(StoreEngineError::from)?;
+    }
+    tx.commit().map_err(StoreEngineError::from)?;
+    Ok(())
+}
+
+/// GC: drop notified rows whose `task_id` is not `keep` (deleted/absent tasks), returning whether
+/// anything was pruned. Without it the set would keep the ids of tasks long gone.
+pub fn retain_live_mailbox_notified(engine: &StoreEngine, keep: impl Fn(i64) -> bool) -> Result<bool> {
+    retain_live(engine, MN.table, MN.task_id, keep)
+}
+
 // ───────────────────────── lint-hook opt-out ─────────────────────────
 
 /// Has this project been opted out of the lint hooks — did `hooks uninstall` run in it? Presence of the
@@ -322,5 +368,16 @@ mod tests {
         assert_eq!(inbox_archive_ids(&engine).unwrap(), [12]);
         assert!(retain_live_inbox_archive(&engine, |_| false).unwrap());
         assert!(inbox_archive_ids(&engine).unwrap().is_empty());
+
+        // Mailbox notified set: a batched, idempotent set of announced tasks, prunable the same way.
+        assert!(mailbox_notified_ids(&engine).unwrap().is_empty(), "fresh store has announced nothing");
+        mailbox_notified_add(&engine, &[]).unwrap(); // an empty batch is a no-op, not an error
+        assert!(mailbox_notified_ids(&engine).unwrap().is_empty());
+        mailbox_notified_add(&engine, &[12, 11]).unwrap();
+        mailbox_notified_add(&engine, &[11]).unwrap(); // re-announcing an id already in the set is a no-op
+        assert_eq!(mailbox_notified_ids(&engine).unwrap(), [11, 12]);
+        assert!(retain_live_mailbox_notified(&engine, |id| id == 11).unwrap());
+        assert_eq!(mailbox_notified_ids(&engine).unwrap(), [11]);
+        assert!(!retain_live_mailbox_notified(&engine, |id| id == 11).unwrap(), "nothing left to prune");
     }
 }

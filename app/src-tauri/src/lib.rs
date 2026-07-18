@@ -160,6 +160,8 @@ pub fn run() {
       commands::inbox_archived,
       commands::inbox_archive,
       commands::inbox_unarchive,
+      commands::mailbox_notified_ids,
+      commands::mailbox_notified_add,
       commands::notify_os,
       commands::run_backup,
       commands::run_restore,

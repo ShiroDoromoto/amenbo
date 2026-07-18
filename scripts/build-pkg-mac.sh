@@ -9,13 +9,14 @@
 # /usr/local/bin/amenbo → the sidecar inside the installed .app. A symlink (not a
 # copy) keeps the CLI and GUI atomically in sync across updates.
 #
-# Signing model (mirrors the dmg): the .pkg is an unsigned *container*; the .app
-# and its nested binaries inside are signed during the tauri build (the release
-# identity is a codeSigning cert, which `productsign` cannot use for installer
-# signing). Self-signed, not notarized — Gatekeeper warns on first open
-# (right-click → Open), the accepted stance. The end user's keychain
-# "Always Allow" ACL keys on the .app/CLI cert leaf, which the tauri build set —
-# not on the installer package signature.
+# Signing model: the .pkg is an unsigned *container*; the .app and its nested
+# binaries inside carry the signature codesign-release-mac.sh applied just before
+# this step — the stable self-signed release identity in CI, or tauri's build-time
+# ad-hoc signature for a local build. The release identity is a codeSigning cert,
+# which `productsign` cannot use to sign an installer anyway. Self-signed, not
+# notarized — Gatekeeper warns on first open (right-click → Open), the accepted
+# stance. What matters for updates keys on the .app/CLI cert leaf (macOS binds the
+# notification authorization to it), not on the installer package signature.
 #
 # Usage: build-pkg-mac.sh <app-path> <out-pkg> <version> [arch]
 #

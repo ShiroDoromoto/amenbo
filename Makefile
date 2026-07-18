@@ -151,9 +151,12 @@ dist-gui:
 
 ## Build the mac unified .pkg installer into dist/. The GUI .app goes to /Applications, and the
 ## bundled CLI (sidecar) is symlinked to /usr/local/bin/amenbo in postinstall = GUI+CLI from one
-## installer. The .app stays tauri's build-time ad-hoc self-signature (distribution signing is
-## retired), and the .pkg itself is an unsigned container (self-signed/un-notarized is accepted; the
-## Gatekeeper first-run warning stays regardless of the signature).
+## installer. After the tauri build, codesign-release-mac.sh re-signs the .app with the stable
+## self-signed release identity when MAC_SIGN_IDENTITY is set (the release CI, after
+## import-signing-cert-mac.sh); with it unset (a local build) the .app keeps tauri's ad-hoc
+## signature. A fixed leaf across versions is what lets the end user's notification authorization
+## survive updates. The .pkg itself stays an unsigned container (a codeSigning cert cannot sign an
+## installer; the Gatekeeper first-run warning stays under self-signing regardless).
 ## wharfy.yaml declares this .pkg as the mac BYO-bundle. The build runs on public CI (release.yml)
 ## on each OS's native runner.
 ## arch is MAC_GUI_ARCH (arm64 default / amd64 for the Intel build). The Intel build is a
@@ -162,6 +165,7 @@ dist-gui:
 dist-gui-mac:
 	@mkdir -p $(DIST_DIR)
 	cd app && npm run tauri build -- --target $(MAC_GUI_TRIPLE)
+	scripts/codesign-release-mac.sh "$(MAC_GUI_APP)"
 	scripts/build-pkg-mac.sh "$(MAC_GUI_APP)" "$(GUI_PKG_DIST)" "$(VERSION)" "$(MAC_GUI_ARCH)"
 	@ls -1 "$(GUI_PKG_DIST)"
 

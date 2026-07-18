@@ -1,12 +1,10 @@
 // Fixture: a believable sample workspace so the mock looks real.
-// Sample team: A (human) + A's AI, B (human) + B's AI.
+// A single local store has exactly two facets — my own human and my own AI — so the whole cast is A_H / A_AI.
 import type { Project, TaskCard, ActivityItem, Actor } from "./types";
 import { taskRef } from "../core/idref";
 
 const A_H: Actor = { name: "あなた", kind: "human" };
 const A_AI: Actor = { name: "あなたの AI", kind: "ai" };
-const B_H: Actor = { name: "佐藤", kind: "human" };
-const B_AI: Actor = { name: "佐藤の AI", kind: "ai" };
 
 // The roster of a single local store: my own two facets, human and ai. This is what feeds the assignee picker (unassigned / human name / AI name).
 export const roster: Actor[] = [A_H, A_AI];
@@ -61,7 +59,7 @@ export const tasks: TaskCard[] = [
     title: "配色パターン決め",
     projectId: 1,
     status: "todo",
-    assignee: { name: "あなたの AI", kind: "ai" },
+    assignee: A_AI,
     priority: "medium",
     due: null,
     dueLabel: null,
@@ -85,36 +83,36 @@ export const tasks: TaskCard[] = [
     title: "認証フロー実装",
     projectId: 1,
     status: "blocked",
-    assignee: B_H,
+    assignee: A_H,
     priority: "high",
     due: "2026-06-20",
     dueLabel: "昨日",
     comments: 5,
-    createdBy: B_H,
+    createdBy: A_H,
   }),
   mt({
     id: 5,
     title: "実装方針メモ",
     projectId: 1,
     status: "in_progress",
-    assignee: B_AI,
+    assignee: A_AI,
     priority: "low",
     due: null,
     dueLabel: null,
     comments: 2,
-    createdBy: B_AI,
+    createdBy: A_AI,
   }),
   mt({
     id: 6,
     title: "配色チェック",
     projectId: 1,
     status: "done",
-    assignee: B_H,
+    assignee: A_H,
     priority: null,
     due: null,
     dueLabel: null,
     comments: 0,
-    createdBy: B_H,
+    createdBy: A_H,
   }),
 ];
 
@@ -136,12 +134,12 @@ export const activity: ActivityItem[] = [
     burstCount: 3,
   },
   {
-    id: 4, at: "2026-06-21T09:48:00Z", ago: "12分前", kind: "system", author: B_H,
+    id: 4, at: "2026-06-21T09:48:00Z", ago: "12分前", kind: "system", author: A_H,
     target: { type: "project", id: 9, title: "旧サイト（統合前）", live: false },
     event: { kind: "project.deleted", text: "「旧サイト（統合前）」を削除（タスク4件・決定1件）" },
   },
   {
-    id: 5, at: "2026-06-21T09:42:00Z", ago: "18分前", kind: "system", author: B_H,
+    id: 5, at: "2026-06-21T09:42:00Z", ago: "18分前", kind: "system", author: A_H,
     target: { type: "task", id: 6, title: "配色チェック", live: true },
     event: { kind: "task.status_changed", text: "「配色チェック」を完了" },
   },
@@ -151,7 +149,7 @@ export const activity: ActivityItem[] = [
     event: { kind: "task.deleted", text: "「重複していた下書き」を削除" },
   },
   {
-    id: 6, at: "2026-06-21T09:30:00Z", ago: "30分前", kind: "system", author: B_H,
+    id: 6, at: "2026-06-21T09:30:00Z", ago: "30分前", kind: "system", author: A_H,
     target: { type: "decision", id: 2, title: "旧方針の決定", live: false },
     event: { kind: "decision.deleted", text: "「旧方針の決定」を削除" },
   },

@@ -91,9 +91,9 @@ pub mod event {
         json!({ "kind": "task.status_changed", "field": "status", "old": old, "new": new })
     }
 
-    /// A task was assigned to a facet (or unassigned — both `None`).
-    pub fn task_assigned(to_user: Option<&str>, to_kind: Option<&str>) -> Value {
-        json!({ "kind": "task.assigned", "to_user": to_user, "to_kind": to_kind })
+    /// A task was assigned to a facet (`Some`), or unassigned (`None`).
+    pub fn task_assigned(to_kind: Option<&str>) -> Value {
+        json!({ "kind": "task.assigned", "to_kind": to_kind })
     }
 
     /// A task was re-homed to another project (`None` = out of every project).

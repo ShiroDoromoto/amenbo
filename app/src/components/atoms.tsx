@@ -47,10 +47,10 @@ export function facetGlyph(kind: "human" | "ai") {
   return kind === "ai" ? "🤖" : "👤";
 }
 
-/** A distinct identicon seed per facet. In a single store `userId` is always the person token ("human"), so we mix in
- * kind to force human and AI to render differently: they stay tellable apart with no badge, even with no AI icon set. */
+/** A distinct identicon seed per facet. The two facets (human / ai) seed off their kind, so they render as different
+ * glyphs — tellable apart with no badge, even with no AI icon set. */
 export function identiconSeed(actor: Actor) {
-  return `${actor.userId}:${actor.kind}`;
+  return actor.kind;
 }
 
 // The avatar is the facet's registered image (config human_avatar / ai_avatar) when set,

@@ -22,7 +22,7 @@ interface Store {
   toggleDone(id: number): void;
   setStatus(id: number, status: Status): void;
   setPriority(id: number, priority: Priority | null): void;
-  setAssignee(id: number, userId: string | null, kind: Facet): void;
+  setAssignee(id: number, kind: Facet | null): void;
   addComment(taskId: number, text: string): void;
   /** Take back a comment posted by mistake (it is deleted outright). */
   removeComment(commentId: number, taskId: number): void;
@@ -110,7 +110,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     toggleDone(id) { run(mut.toggleDone(id)); },
     setStatus(id, status) { run(mut.setStatus(id, status)); },
     setPriority(id, priority) { run(mut.setPriority(id, priority)); },
-    setAssignee(id, userId, kind) { run(mut.setAssignee(id, userId, kind)); },
+    setAssignee(id, kind) { run(mut.setAssignee(id, kind)); },
     addComment(taskId, text) { run(mut.addComment(taskId, text)); },
     removeComment(commentId, taskId) { run(mut.removeComment(commentId, taskId)); },
     setNotes(id, notes) { run(mut.setNotes(id, notes)); },

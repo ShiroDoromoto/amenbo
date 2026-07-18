@@ -250,8 +250,8 @@ export function TaskDetailPane({
                 current={task.assignee ?? null}
                 roster={roster}
                 onPick={(kind) => {
-                  if (kind === "") store.setAssignee(taskId, null, "human");
-                  else store.setAssignee(taskId, kind, kind);
+                  if (kind === "") store.setAssignee(taskId, null);
+                  else store.setAssignee(taskId, kind);
                 }}
               />
             </span>

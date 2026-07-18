@@ -22,7 +22,7 @@ type: "task" | "project" | "decision", id: number, title: string,
  */
 live: boolean, };
 
-export type ActorDto = { userId: string, name: string, kind: "human" | "ai", 
+export type ActorDto = { name: string, kind: "human" | "ai", 
 /**
  * Optional avatar image for the facet (data URL). The roster loads it from config; other
  * ActorDto uses (assignee, author) leave it unset. Omitted when unset, and the front end draws
@@ -566,7 +566,7 @@ recorded: string,
  */
 actual: string | null, };
 
-export type Snapshot = { meUserId: string, 
+export type Snapshot = { 
 /**
  * The user's language (config.json, global). Decides how the GUI localizes its UI labels. Null
  * when unset.
@@ -579,8 +579,8 @@ onboarded: boolean,
 /**
  * This person's roster — the two facets that come from config (human / ai). It is the one
  * supply line for every roster in the GUI: the assignee picker (unassigned / human name / AI
- * name), the display name and avatar in settings, and display-name resolution. `user_id` is the
- * facet token (`human`/`ai`); `name` is the effective display name from `config.human_name` /
+ * name), the display name and avatar in settings, and display-name resolution. `kind` is the
+ * facet (`human`/`ai`); `name` is the effective display name from `config.human_name` /
  * `ai_name`.
  */
 roster: Array<ActorDto>, projects: Array<ProjectDto>, activity: Array<ActivityItemDto>, 

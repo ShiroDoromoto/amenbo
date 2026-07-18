@@ -30,7 +30,7 @@ export interface WriteAck {
 function me() {
   const s = getSnapshot();
   const name = s.roster.find((a) => a.kind === "human")?.name ?? tf("common.you");
-  return { userId: s.meUserId, name, kind: "human" as const };
+  return { name, kind: "human" as const };
 }
 
 /**
@@ -592,25 +592,25 @@ export async function openLatestInstaller(): Promise<string | null> {
 }
 
 /**
- * The general assignment call. The person (userId) and the facet (kind = the human, or that person's
- * AI) are given independently; userId=null unassigns. Corresponds to the CLI's task assign.
+ * The general assignment call. The facet (kind = the human, or that person's AI) is what a task is
+ * assigned to; kind=null unassigns. Corresponds to the CLI's task assign.
  */
-export async function setAssignee(id: number, userId: string | null, kind: Facet): Promise<void> {
-  if (inTauri()) return invokeAck("task_assign", { id, userId, kind });
+export async function setAssignee(id: number, kind: Facet | null): Promise<void> {
+  if (inTauri()) return invokeAck("task_assign", { id, kind });
   const snap = getSnapshot();
   const t = snap.tasks.find((x) => x.id === id);
   if (!t) return;
-  if (userId === null) {
+  if (kind === null) {
     return mockMutate((s) => ({
       ...s,
       tasks: s.tasks.map((x) => (x.id === id ? { ...x, assignee: null } : x)),
       activity: [sysItem(id, t.title, "task.assigned", tf("act.unassigned", { title: t.title })), ...s.activity],
     }));
   }
-  const name = snap.roster.find((a) => a.kind === kind)?.name ?? userId;
+  const name = snap.roster.find((a) => a.kind === kind)?.name ?? kind;
   return mockMutate((s) => ({
     ...s,
-    tasks: s.tasks.map((x) => (x.id === id ? { ...x, assignee: { userId, name, kind } } : x)),
+    tasks: s.tasks.map((x) => (x.id === id ? { ...x, assignee: { name, kind } } : x)),
     activity: [
       sysItem(id, t.title, "task.assigned",
         kind === "ai" ? tf("act.assignedAi", { title: t.title }) : tf("act.assignedTo", { title: t.title, name })),

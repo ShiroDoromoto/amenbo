@@ -285,18 +285,17 @@ async function fetchSuperset(query: { filter: string; sort: string }): Promise<T
  * and only then cut into a `page` window — no full copy of the store ever lands in JS.
  */
 export function useSmartView(viewId: string, page: number, pageSize: number): { tasks: TaskCard[]; total: number } {
-  const me = getSnapshot().meUserId;
   const { data } = useQuery<{ tasks: TaskCard[]; total: number }>(
-    ["smartView", viewId, page, pageSize, me],
-    () => fetchSmartView(viewId, page, pageSize, me),
+    ["smartView", viewId, page, pageSize],
+    () => fetchSmartView(viewId, page, pageSize),
   );
   return data ?? { tasks: [], total: 0 };
 }
 
 /** Fetch one page of a smart view (the plain async that useQuery calls behind the hook). */
-async function fetchSmartView(viewId: string, page: number, pageSize: number, me: string): Promise<{ tasks: TaskCard[]; total: number }> {
+async function fetchSmartView(viewId: string, page: number, pageSize: number): Promise<{ tasks: TaskCard[]; total: number }> {
   if (viewId === "inbox") {
-    const full = await fetchInboxTasks(me);
+    const full = await fetchInboxTasks();
     return { tasks: full.slice(page * pageSize, (page + 1) * pageSize), total: full.length };
   }
   if (viewId === "inbox-archived") {
@@ -323,7 +322,7 @@ async function fetchInboxArchivedTasks(): Promise<TaskCard[]> {
  * a comment addressed to me). Membership does not depend on having read anything — clicking an item does not
  * evict it; archiving is the only way out. Read state feeds each item's `unread` display flag and nothing else.
  */
-async function fetchInboxTasks(me: string): Promise<TaskCard[]> {
+async function fetchInboxTasks(): Promise<TaskCard[]> {
   const [cand, commentTasks, archivedIds] = await Promise.all([
     // C candidates: assigned to me (assignee:me = the human facet) and not done.
     fetchSuperset({ filter: "assignee:me done:false", sort: "order" }),
@@ -335,9 +334,8 @@ async function fetchInboxTasks(me: string): Promise<TaskCard[]> {
   // D: tasks with a comment addressed to me (they stay once read, and leave when done).
   const dTasks = (await fetchTasksByIds(commentTasks.map((c) => c.id))).filter((t) => t.status !== "done");
   const cTasks = cand.filter((t) => {
-    const mineHuman = t.assignee?.userId === me && t.assignee?.kind === "human";
-    if (!mineHuman) return false;
-    // An AI facet created it and handed it to me — judge by kind, not user_id (which the projection pins to human).
+    // Mine = assigned to my human facet, handed over by an AI facet that created it (the AI→human hand-off).
+    if (t.assignee?.kind !== "human") return false;
     return t.status === "todo" && t.createdBy?.kind === "ai";
   });
   // The archive set evicts unconditionally — the one and only exit, shared by C and D.
@@ -376,12 +374,11 @@ export interface InboxItemBrief {
  * The current inbox (C ∪ D) as `{ id, unread, unseen }`, in the view's own order. Exported so the nav badge count
  * and arrival detection (`mailbox.ts`) can consult it without the view being open: the badge counts the whole set,
  * while the notification fires for the ones eligible on their source's gate — D's `unread` or C's `unseen`, both
- * computed by `fetchInboxTasks`. Empty until `me` is known (i.e. before the snapshot loads).
+ * computed by `fetchInboxTasks`. Empty before the snapshot loads (the roster is the tell — it is filled only then).
  */
 export async function loadInboxItems(): Promise<InboxItemBrief[]> {
-  const me = getSnapshot().meUserId;
-  if (!me) return [];
-  return (await fetchInboxTasks(me)).map((t) => ({ id: t.id, unread: t.unread ?? false, unseen: t.unseen ?? false }));
+  if (getSnapshot().roster.length === 0) return [];
+  return (await fetchInboxTasks()).map((t) => ({ id: t.id, unread: t.unread ?? false, unseen: t.unseen ?? false }));
 }
 
 function dedupById(tasks: TaskCard[]): TaskCard[] {
@@ -399,10 +396,10 @@ function dedupById(tasks: TaskCard[]): TaskCard[] {
  * The browser-mock fallback (outside Tauri, i.e. iterating on the frontend alone). Filters the fixtures with a
  * subset of `task_page`'s grammar, evaluating only the tokens the views actually emit (status/done/assignee/due).
  * In the read-model, `text:` searches title + notes + comment bodies (query.rs); the mock has no comment bodies,
- * so it settles for title + notes. An assignee User token matches an exact id (case-insensitively) or a name — never
- * an id prefix, because ids *are* the conversational numbers and `12` would otherwise swallow `120`.
+ * so it settles for title + notes. An assignee token resolves to a facet: `me`/`me-ai` by kind, a bare `human`/`ai`
+ * by kind too, and anything else against the display name.
  */
-function mockMatches(t: TaskCard, q: TaskPageQuery, me: string): boolean {
+function mockMatches(t: TaskCard, q: TaskPageQuery): boolean {
   if (q.projectId && t.projectId !== q.projectId) return false;
   for (const token of (q.filter ?? "").split(/\s+/).filter(Boolean)) {
     const [key, value] = token.split(":");
@@ -417,13 +414,13 @@ function mockMatches(t: TaskCard, q: TaskPageQuery, me: string): boolean {
       }
       case "assignee":
         if (value === "none" && t.assignee) return false;
-        else if (value === "me" && !(t.assignee?.userId === me && t.assignee?.kind !== "ai")) return false;
-        else if (value === "me-ai" && !(t.assignee?.userId === me && t.assignee?.kind === "ai")) return false;
+        else if (value === "me" && t.assignee?.kind !== "human") return false;
+        else if (value === "me-ai" && t.assignee?.kind !== "ai") return false;
         else if (value && !["none", "me", "me-ai"].includes(value)) {
-          const v = value.toUpperCase();
-          const byId = t.assignee?.userId?.toUpperCase() === v;
+          // A bare facet token (human/ai) matches by kind; anything else is matched against the display name.
+          const byKind = t.assignee?.kind === value.toLowerCase();
           const byName = t.assignee?.name?.toLowerCase() === value.toLowerCase();
-          if (!byId && !byName) return false;
+          if (!byKind && !byName) return false;
         }
         break;
       default: break; // Unsupported tokens are ignored — the mock is an approximation for iterating.
@@ -453,8 +450,7 @@ function mockSort(tasks: TaskCard[], sort: string): TaskCard[] {
 }
 
 function mockTaskPage(q: TaskPageQuery): TaskPage {
-  const me = getSnapshot().meUserId;
-  const matched = mockSort(getSnapshot().tasks.filter((t) => mockMatches(t, q, me)), q.sort ?? "order");
+  const matched = mockSort(getSnapshot().tasks.filter((t) => mockMatches(t, q)), q.sort ?? "order");
   const offset = q.offset ?? 0;
   const limit = q.limit ?? matched.length;
   return { tasks: matched.slice(offset, offset + limit), totalMatched: matched.length };

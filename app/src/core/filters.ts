@@ -40,16 +40,15 @@ const PRIORITIES: Priority[] = ["high", "medium", "low"];
 export type DimAssignments = Record<string, Record<number, number>>;
 
 /**
- * Build the list of filter dimensions. The assignee options me / me-ai are decided against this
- * machine's own user_id, so the dimensions are built from meUserId. Pass userDims/dimAssign and the
- * project's user-defined dimensions join the filters too: the value set is each dimension's values,
- * and the predicate is "is this task assigned this value on this dimension", read from the
+ * Build the list of filter dimensions. The assignee options me / me-ai are decided by facet kind
+ * (in a single local world the human facet is me, the ai facet is my AI). Pass userDims/dimAssign
+ * and the project's user-defined dimensions join the filters too: the value set is each dimension's
+ * values, and the predicate is "is this task assigned this value on this dimension", read from the
  * assignment map (supplied in bulk from the read-model, by BoardScreen). A dimension with no values
  * filters nothing, so it is left out. The CLI has the same dimension filter (`dim:axis=value` in
  * query.rs), which is what cliKey lines up with.
  */
 export function filterDimensions(
-  meUserId: string,
   userDims: DimensionDto[] = [],
   dimAssign: DimAssignments = {},
 ): FilterDimension[] {
@@ -73,12 +72,12 @@ export function filterDimensions(
         {
           value: "me",
           label: () => t("filter.opt.assignee.me"),
-          test: (task) => task.assignee?.userId === meUserId && task.assignee?.kind === "human",
+          test: (task) => task.assignee?.kind === "human",
         },
         {
           value: "me-ai",
           label: () => t("filter.opt.assignee.meAi"),
-          test: (task) => task.assignee?.userId === meUserId && task.assignee?.kind === "ai",
+          test: (task) => task.assignee?.kind === "ai",
         },
       ],
     },

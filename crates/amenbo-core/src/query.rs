@@ -818,11 +818,9 @@ pub struct DiscoverResult {
 
 // ───────────────────────── member / comment ─────────────────────────
 
-/// One entry of the member roster. The actor is a facet (human / ai) and `user_id` is the facet
-/// token.
+/// One entry of the member roster. The actor is a facet (human / ai); `is_self` marks the human one.
 #[derive(Clone, Debug, Serialize)]
 pub struct MemberItem {
-    pub user_id: String,
     pub name: String,
     pub is_self: bool,
 }
@@ -834,14 +832,12 @@ pub struct MemberListResult {
 }
 
 /// The member roster (the GUI's assignee dropdown and the like). It is the two names from the config
-/// (human / ai): `user_id` is the facet token, and `is_self` marks the human facet (this local
-/// actor).
+/// (human / ai): `is_self` marks the human facet (this local actor).
 pub fn members(config: &crate::config::Config) -> MemberListResult {
     let members: Vec<MemberItem> = config
         .roster()
         .into_iter()
         .map(|(kind, name)| MemberItem {
-            user_id: kind.as_str().to_string(),
             name,
             is_self: kind == ActorKind::Human,
         })
@@ -1071,7 +1067,6 @@ pub fn resolve_project_ref(conn: &rusqlite::Connection, reference: &str) -> Resu
 /// Who emitted an activity row (a person, or that person's AI).
 #[derive(Clone, Debug, Serialize)]
 pub struct ActivityAuthor {
-    pub user_id: String,
     pub name: String,
     pub kind: Option<ActorKind>,
 }
@@ -1266,7 +1261,6 @@ fn activity_item(it: crate::activity::Item) -> ActivityItem {
         at: it.at,
         kind: it.kind.as_str().to_string(),
         author: ActivityAuthor {
-            user_id: facet_kind_str(it.author_kind),
             name: facet_label(it.author_kind),
             kind: it.author_kind,
         },

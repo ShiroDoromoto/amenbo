@@ -2408,7 +2408,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             // logical operations and therefore two transactions, so the add survives a failing assign.
             if let Some(kind) = assignee_kind {
                 store.set_task_assignee(t.id, Some(kind)).map_err(CliError::from)?;
-                emit_event(store, flags, t.id, activity_log::event::task_assigned(None, Some(kind.as_str())));
+                emit_event(store, flags, t.id, activity_log::event::task_assigned(Some(kind.as_str())));
             }
             let detail = store.task_detail(t.id).map_err(CliError::from)?;
             warn_body(&detail.notes); // non-blocking readability hint on write (stderr)
@@ -2607,7 +2607,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                 .is_some_and(|t| t.assignee_kind == Some(kind));
             if !noop {
                 store.set_task_assignee(tid, Some(kind)).map_err(CliError::from)?;
-                emit_event(store, flags, tid, activity_log::event::task_assigned(None, Some(kind.as_str())));
+                emit_event(store, flags, tid, activity_log::event::task_assigned(Some(kind.as_str())));
             }
             let detail = store.task_detail(tid).map_err(CliError::from)?;
             let to_label = if ai { " (to that person's AI)" } else { "" };
@@ -2619,7 +2619,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let noop = store.task(tid).map_err(CliError::from)?.is_some_and(|t| t.assignee_kind.is_none());
             if !noop {
                 store.set_task_assignee(tid, None).map_err(CliError::from)?;
-                emit_event(store, flags, tid, activity_log::event::task_assigned(None, None));
+                emit_event(store, flags, tid, activity_log::event::task_assigned(None));
             }
             let detail = store.task_detail(tid).map_err(CliError::from)?;
             write_envelope(flags, "task.unassign", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["assignee".to_string()]), noop, format!("✓ Unassigned: {}", task_label(tid)));

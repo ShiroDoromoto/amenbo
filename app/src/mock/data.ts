@@ -3,12 +3,10 @@
 import type { Project, TaskCard, ActivityItem, Actor } from "./types";
 import { taskRef } from "../core/idref";
 
-export const ME_USER_ID = "u-a";
-
-const A_H: Actor = { userId: "u-a", name: "あなた", kind: "human" };
-const A_AI: Actor = { userId: "u-a", name: "あなたの AI", kind: "ai" };
-const B_H: Actor = { userId: "u-b", name: "佐藤", kind: "human" };
-const B_AI: Actor = { userId: "u-b", name: "佐藤の AI", kind: "ai" };
+const A_H: Actor = { name: "あなた", kind: "human" };
+const A_AI: Actor = { name: "あなたの AI", kind: "ai" };
+const B_H: Actor = { name: "佐藤", kind: "human" };
+const B_AI: Actor = { name: "佐藤の AI", kind: "ai" };
 
 // The roster of a single local store: my own two facets, human and ai. This is what feeds the assignee picker (unassigned / human name / AI name).
 export const roster: Actor[] = [A_H, A_AI];
@@ -63,7 +61,7 @@ export const tasks: TaskCard[] = [
     title: "配色パターン決め",
     projectId: 1,
     status: "todo",
-    assignee: { userId: "u-a", name: "あなたの AI", kind: "ai" },
+    assignee: { name: "あなたの AI", kind: "ai" },
     priority: "medium",
     due: null,
     dueLabel: null,

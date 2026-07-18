@@ -62,7 +62,7 @@ describe("getInboxDataGeneration — suppressing redundant mailbox recomputation
 
   it("swapping in real data (applySnapshot) advances the generation", () => {
     const before = getInboxDataGeneration();
-    applySnapshot({ ...restore, meUserId: "someone-else" });
+    applySnapshot({ ...restore });
     expect(getInboxDataGeneration()).toBe(before + 1);
   });
 

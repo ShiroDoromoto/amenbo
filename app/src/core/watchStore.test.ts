@@ -44,7 +44,6 @@ import {
 (globalThis as unknown as { window: unknown }).window = { __TAURI_INTERNALS__: {} };
 
 const SNAPSHOT = {
-  meUserId: "u1",
   language: "ja",
   onboarded: true,
   roster: [],

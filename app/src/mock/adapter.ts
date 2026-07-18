@@ -10,10 +10,6 @@ import type {
 } from "./types";
 
 export const dataAdapter = {
-  meUserId(): string {
-    return getSnapshot().meUserId;
-  },
-
   listRoster(): Actor[] {
     return getSnapshot().roster;
   },

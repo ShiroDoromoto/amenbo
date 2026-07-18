@@ -145,7 +145,7 @@ export function BoardScreen({
   // The dimension whose values split the columns (when group names one). Null for "status" or a deleted id.
   const groupingDim = groupingDimId ? projectDims.find((d) => d.id === groupingDimId) ?? null : null;
 
-  const dims = filterDimensions(dataAdapter.meUserId(), projectDims, filterDimAssign);
+  const dims = filterDimensions(projectDims, filterDimAssign);
   const tasks = all
     .filter((t) => passesFilters(t, dims, sel))
     .filter((t) => {

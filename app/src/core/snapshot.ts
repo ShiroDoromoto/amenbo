@@ -50,7 +50,6 @@ export type Snapshot = SnapshotDto & {
 };
 
 const EMPTY: Snapshot = {
-  meUserId: "",
   language: null,
   onboarded: true, // before load, and in the browser, no first-run flow (the Tauri snapshot overwrites this)
   roster: [],
@@ -356,7 +355,6 @@ export async function loadSnapshot(opts: LoadOptions = {}): Promise<void> {
     // Browser fallback: build a snapshot of the same shape out of the mock fixtures.
     const fix = await import("../mock/data");
     cache = {
-      meUserId: fix.ME_USER_ID,
       language: "ja", // the browser fallback runs a Japanese UI (frontend-only iteration)
       onboarded: true, // no first-run flow when iterating in the browser
       roster: fix.roster,

@@ -90,7 +90,6 @@ fn emit(store: &mut Store, target_id: i64, event: serde_json::Value) {
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct ActorDto {
-    user_id: String,
     name: String,
     #[ts(type = "\"human\" | \"ai\"")]
     kind: &'static str,
@@ -496,7 +495,6 @@ pub struct ActivityItemDto {
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
-    me_user_id: String,
     /// The user's language (config.json, global). Decides how the GUI localizes its UI labels. Null
     /// when unset.
     language: Option<String>,
@@ -504,8 +502,8 @@ pub struct Snapshot {
     onboarded: bool,
     /// This person's roster — the two facets that come from config (human / ai). It is the one
     /// supply line for every roster in the GUI: the assignee picker (unassigned / human name / AI
-    /// name), the display name and avatar in settings, and display-name resolution. `user_id` is the
-    /// facet token (`human`/`ai`); `name` is the effective display name from `config.human_name` /
+    /// name), the display name and avatar in settings, and display-name resolution. `kind` is the
+    /// facet (`human`/`ai`); `name` is the effective display name from `config.human_name` /
     /// `ai_name`.
     roster: Vec<ActorDto>,
     projects: Vec<ProjectDto>,
@@ -617,18 +615,17 @@ pub struct TaskPageDto {
 }
 
 /// Shape a facet (human / ai) into the GUI's [`ActorDto`]. A single local store has two facets —
-/// "me (the human)" and "my AI" — and both belong to the same one person: me. `user_id` is the
-/// person token (the human facet's `"human"`, which in a single store is always me), `kind`
-/// separates human from ai, and the display name is looked up in config (`human_name`/`ai_name`) —
-/// the read-model carries no names. An [`ActorDto`] used as a label (assignee, author) gets no face:
-/// the roster is the only thing that supplies avatars from config.
+/// "me (the human)" and "my AI" — and both belong to the same one person: me. `kind` separates human
+/// from ai, and the display name is looked up in config (`human_name`/`ai_name`) — the read-model
+/// carries no names. An [`ActorDto`] used as a label (assignee, author) gets no face: the roster is
+/// the only thing that supplies avatars from config.
 fn facet_actor(config: &amenbo_core::config::Config, kind: Option<ActorKind>) -> ActorDto {
     let kind = kind.unwrap_or(ActorKind::Human);
     let name = match kind {
         ActorKind::Ai => config.ai_display_name(),
         ActorKind::Human => config.human_display_name(),
     };
-    ActorDto { user_id: ActorKind::Human.as_str().to_string(), name, kind: kind.as_str(), avatar: None }
+    ActorDto { name, kind: kind.as_str(), avatar: None }
 }
 
 fn date_iso(d: NaiveDate) -> String {
@@ -715,9 +712,9 @@ fn render_event(ev: &serde_json::Value, title: &str, lang: &str) -> EventDto {
             }
         }
         "task.assigned" => {
-            let to_user_null = ev.get("to_user").map(|v| v.is_null()).unwrap_or(true);
-            let ai = ev.get("to_kind").and_then(|x| x.as_str()) == Some("ai");
-            if to_user_null {
+            let to_kind = ev.get("to_kind").and_then(|x| x.as_str());
+            let ai = to_kind == Some("ai");
+            if to_kind.is_none() {
                 if en { format!("Unassigned “{title}”") } else { format!("「{title}」の担当を外す") }
             } else if ai {
                 if en { format!("Delegated “{title}” to AI") } else { format!("「{title}」を AI に委任") }
@@ -823,7 +820,6 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
 /// Scratch accumulator for building the snapshot projection.
 #[derive(Default)]
 struct Acc {
-    me_user_id: String,
     projects: Vec<ProjectDto>,
     activity: Vec<ActivityItemDto>,
 }
@@ -891,10 +887,6 @@ fn collect_store(store: &Store, acc: &mut Acc, lang: &str) -> Result<(), CmdErro
 
     let read_model = store.read_model();
     let conn = read_model.conn();
-
-    if acc.me_user_id.is_empty() {
-        acc.me_user_id = ActorKind::Human.as_str().to_string();
-    }
 
     let project_rows = store_engine::read::project_overview(conn, store.reach())?;
     for p in &project_rows {
@@ -992,14 +984,12 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
     })?;
 
     Ok(Snapshot {
-        me_user_id: acc.me_user_id,
         language,
         onboarded,
         roster: config
             .roster()
             .into_iter()
             .map(|(kind, name)| ActorDto {
-                user_id: kind.as_str().to_string(),
                 name,
                 kind: kind.as_str(),
                 avatar: config.avatar_for(kind),
@@ -1019,8 +1009,7 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
 pub fn snapshot() -> Result<Snapshot, CmdError> {
     let snap = build_snapshot()?;
     log::info!(
-        "snapshot: me={} projects={} activity={}",
-        snap.me_user_id,
+        "snapshot: projects={} activity={}",
         snap.projects.len(),
         snap.activity.len(),
     );
@@ -3038,25 +3027,24 @@ pub fn project_dimension_assignments(project_id: i64, dimension_id: i64) -> Resu
         .collect())
 }
 
-/// Assign the task to someone (`kind="ai"` means the person's AI — it lands in the mailbox).
-/// Assignment is on the facet alone: `user_id=Some(_)` is the signal that there is an assignee (the
-/// facet is `kind`), and `None` clears it. Idempotent — same assignee and facet is a no-op — because
-/// `set_task_assignee` commits in a transaction of its own, so calling it with an unchanged value
-/// would still move `updated_at`. From the GUI, the path that actually gets used is "hand it to my
-/// AI".
+/// Assign the task to a facet (`kind=Some("ai")` means the person's AI — it lands in the mailbox),
+/// or clear it (`kind=None`). Assignment is on the facet alone. Idempotent — same facet is a no-op —
+/// because `set_task_assignee` commits in a transaction of its own, so calling it with an unchanged
+/// value would still move `updated_at`. From the GUI, the path that actually gets used is "hand it
+/// to my AI".
 #[tauri::command]
-pub fn task_assign(id: i64, user_id: Option<String>, kind: String) -> Result<WriteAck, CmdError> {
+pub fn task_assign(id: i64, kind: Option<String>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        let actor_kind = match kind.as_str() {
-            "ai" => ActorKind::Ai,
-            "human" => ActorKind::Human,
-            other => return Err(format!("facet '{other}' は不正です（human / ai）").into()),
+        let kind_arg = match kind.as_deref() {
+            Some("ai") => Some(ActorKind::Ai),
+            Some("human") => Some(ActorKind::Human),
+            Some(other) => return Err(format!("facet '{other}' は不正です（human / ai）").into()),
+            None => None,
         };
-        let kind_arg = user_id.as_ref().map(|_| actor_kind);
         let noop = store.task(id)?.is_some_and(|t| t.assignee_kind == kind_arg);
         if !noop {
             store.set_task_assignee(id, kind_arg)?;
-            let ev = amenbo_core::activity_log::event::task_assigned(user_id.as_deref(), kind_arg.map(|k| k.as_str()));
+            let ev = amenbo_core::activity_log::event::task_assigned(kind_arg.map(|k| k.as_str()));
             emit(store, id, ev);
         }
         Ok(())
@@ -4221,9 +4209,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::env::set_var("AMENBO_HOME", &tmp);
 
-        let (project_id, me_user) = {
+        let project_id = {
             let mut store = Store::open().unwrap();
-            let me = ActorKind::Human.as_str().to_string();
             let p = store.project_add(
                 amenbo_core::ops::project::NewProject {
                     name: "テストPJ".into(),
@@ -4233,7 +4220,7 @@ mod tests {
                 },
             )
             .unwrap();
-            (p.id, me)
+            p.id
         };
 
         let ack = task_add(Some(project_id), "結線テスト".into(), None).unwrap();
@@ -4307,11 +4294,11 @@ mod tests {
             "a deleted row's name lives only in the ledger payload (the DB cannot join to it)"
         );
 
-        let ack = task_assign(id, Some(me_user.clone()), "ai".into()).unwrap();
+        let ack = task_assign(id, Some("ai".into())).unwrap();
         assert!(ack.scopes.contains(&"tasks"), "assign invalidates the assignee-filtered lists");
         let t = card(id).unwrap();
         assert_eq!(t.assignee.as_ref().map(|a| a.kind), Some("ai"), "delegated to my AI");
-        let _ = task_assign(id, None, "human".into()).unwrap();
+        let _ = task_assign(id, None).unwrap();
         assert!(card(id).unwrap().assignee.is_none(), "unassigned");
         let snap = snapshot().unwrap();
         assert!(snap.activity.iter().any(|a| a.kind == "system" && a.event.as_ref().map(|e| e.kind == "task.assigned").unwrap_or(false)), "assigned event emitted");
@@ -5448,8 +5435,7 @@ mod tests {
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let id = task_add(None, "受信箱D".into(), None).unwrap().tasks[0];
-        let me = snapshot().unwrap().me_user_id.clone();
-        task_assign(id, Some(me.clone()), "human".into()).unwrap();
+        task_assign(id, Some("human".into())).unwrap();
         assert!(mailbox_comment_tasks().unwrap().is_empty(), "no comments = no membership");
 
         {
@@ -5493,7 +5479,6 @@ mod tests {
         assert!(mailbox_triggered_at(vec![]).unwrap().is_empty(), "empty input is empty");
 
         let id = task_add(None, "triggeredAt".into(), None).unwrap().tasks[0];
-        let me = snapshot().unwrap().me_user_id.clone();
 
         let get = |ids: Vec<i64>| -> Option<String> {
             mailbox_triggered_at(ids).unwrap().into_iter().find(|(i, _)| *i == id).map(|(_, at)| at)
@@ -5502,7 +5487,7 @@ mod tests {
         assert!(get(vec![id]).is_none(), "a task with no inbox trigger is omitted");
         assert!(mailbox_triggered_at(vec![999_999]).unwrap().is_empty(), "an unknown id is omitted");
 
-        task_assign(id, Some(me.clone()), "human".into()).unwrap();
+        task_assign(id, Some("human".into())).unwrap();
         let after_assign = get(vec![id]).expect("an assignment yields a triggeredAt");
 
         {

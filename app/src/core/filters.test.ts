@@ -8,7 +8,7 @@ describe("filters: user-defined classifications (unified dimension)", () => {
     values: [{ id: 11, name: "バグ" }, { id: 12, name: "機能" }],
   };
   const assign = { t1: { 1: 11 }, t2: { 1: 12 } };
-  const dims = filterDimensions("me", [dim], assign);
+  const dims = filterDimensions([dim], assign);
   const custom = dims.find((d) => d.id === "dim:1")!;
 
   it("appends a user-defined classification that has values as a trailing filter dimension", () => {
@@ -30,7 +30,7 @@ describe("filters: user-defined classifications (unified dimension)", () => {
 
   it("does not surface a classification axis with no values as a filter dimension (nothing to narrow)", () => {
     const empty = { ...dim, id: 2, values: [] };
-    const only = filterDimensions("me", [empty], {});
+    const only = filterDimensions([empty], {});
     expect(only.find((d) => d.id === "dim:2")).toBeUndefined();
   });
 });

@@ -1,7 +1,7 @@
 // The modal that gets first-run setup (language, then names, then theme) done in one flow. It is
 // triggered by config.onboarded===false, regardless of whether there is any data, which also catches
 // an existing user who never went through setup. The icon is only an identicon preview seeded from
-// user_id. The theme applies immediately (theme.ts). On completion saveOnboarding raises onboarded.
+// the human display name. The theme applies immediately (theme.ts). On completion saveOnboarding raises onboarded.
 import { useState } from "react";
 import { getSnapshot } from "../core/snapshot";
 import { saveOnboarding } from "../core/mutations";
@@ -50,7 +50,7 @@ export function OnboardingSetup() {
     }
   };
 
-  const seed = snap.meUserId || humanName || "amenbo";
+  const seed = humanName || "amenbo";
   const initial = (humanName.trim()[0] ?? "🙂").toUpperCase();
 
   const steps = [

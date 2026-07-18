@@ -70,6 +70,27 @@ cp -R "$APP" "$STAGE/"
 # running GUI below. Channel-agnostic: "amenbo" for prod, "amenbo (dev)" for dev.
 APP_LAUNCH_NAME="${APP_NAME%.app}"
 
+# preinstall: refuse a per-user install (`installer -target CurrentUserHomeDirectory`)
+# up front, before any payload is laid down. This installer is system-wide only:
+# --install-location /Applications, the CLI symlink lands in root-owned /usr/local/bin,
+# and postinstall relaunches /Applications by absolute path — none of which a home-dir
+# install can satisfy. Left unchecked, a per-user install exits 0 while splitting the
+# world (old /Applications build + orphaned ~/Applications copy, `amenbo --version`
+# reporting the stale one). Better to fail loudly than to break quietly.
+# $3 is the destination volume/mountpoint: `/` for a system install, the user's home
+# for a home-directory target. Guarding here (preinstall, not postinstall) means the
+# abort happens before the payload is written, so no orphan .app is left behind.
+cat > "$SCRIPTS/preinstall" <<'PREINSTALL'
+#!/bin/bash
+if [ "$3" != "/" ]; then
+  echo "✗ amenbo installs system-wide only; a per-user install is not supported." >&2
+  echo "  Re-run for all users, e.g.  sudo installer -pkg <this>.pkg -target /" >&2
+  exit 1
+fi
+exit 0
+PREINSTALL
+chmod +x "$SCRIPTS/preinstall"
+
 # postinstall: (1) expose the bundled CLI on PATH via a symlink into the installed
 # app, then (2) quit the old GUI and relaunch the freshly installed one.
 # Without (2), a GUI running during the update keeps showing the "update available"

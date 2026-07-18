@@ -2245,6 +2245,53 @@ fn attach_blob_and_url_lifecycle() {
     assert_ne!(code, 0);
 }
 
+/// `attach save` writes a blob's bytes back out to a file — the CLI counterpart of the GUI download.
+/// A file path is written verbatim; a directory saves under the attachment's own filename. It refuses
+/// to clobber an existing destination without `--force`, and refuses a URL attachment (no bytes to save).
+#[test]
+fn attach_save_writes_a_blob_to_a_file() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "保存PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    let t = cli.json(&["task", "add", "--title", "保存タスク", "--project", &pid, "--json"]);
+    let tid = id_str(&t["task"]["id"]);
+    let d = cli.json(&["decision", "add", "--project", &pid, "--title", "理由", "--json"]);
+    let did = id_str(&d["decision"]["id"]);
+
+    let body = "# title\nbody\n";
+    let src = cli.home.join("report.md");
+    std::fs::write(&src, body).unwrap();
+    let blob_id = id_str(&cli.json(&["task", "attach", &tid, src.to_str().unwrap(), "--json"])["attachment"]["id"]);
+
+    // Save to an explicit file path — the bytes round-trip exactly.
+    let dst = cli.home.join("out").join("copy.md");
+    std::fs::create_dir_all(dst.parent().unwrap()).unwrap();
+    let saved = cli.json(&["attach", "save", &blob_id, "--out", dst.to_str().unwrap(), "--json"]);
+    assert_eq!(saved["action"], "attach.save");
+    assert_eq!(std::fs::read_to_string(&dst).unwrap(), body);
+
+    // Save into a directory — the file lands under the attachment's own filename.
+    let dir = cli.home.join("into");
+    std::fs::create_dir_all(&dir).unwrap();
+    cli.json(&["attach", "save", &blob_id, "--out", dir.to_str().unwrap(), "--json"]);
+    assert_eq!(std::fs::read_to_string(dir.join("report.md")).unwrap(), body);
+
+    // An existing destination is not clobbered without --force; --force overwrites it.
+    let (_, refused) = cli.run(&["attach", "save", &blob_id, "--out", dst.to_str().unwrap(), "--json"]);
+    assert_ne!(refused, 0, "saving over an existing file without --force is refused");
+    let forced = cli.json(&["attach", "save", &blob_id, "--out", dst.to_str().unwrap(), "--force", "--json"]);
+    assert_eq!(forced["action"], "attach.save");
+
+    // A URL attachment has no bytes to save.
+    let url_id = id_str(&cli.json(&["decision", "attach", &did, "https://example.com/spec", "--url", "--json"])["attachment"]["id"]);
+    let (_, code) = cli.run(&["attach", "save", &url_id, "--out", cli.home.join("nope").to_str().unwrap(), "--json"]);
+    assert_ne!(code, 0, "a url attachment cannot be saved");
+
+    // A missing id is not_found.
+    let (_, code) = cli.run(&["attach", "save", "01NOPENOPENOPENOPENOPENOPE", "--json"]);
+    assert_ne!(code, 0);
+}
+
 /// How many blob files actually sit in a `blobs/` directory under `<home>`.
 fn blob_count(home: &std::path::Path) -> usize {
     fn walk(dir: &std::path::Path, inside_blobs: bool, n: &mut usize) {

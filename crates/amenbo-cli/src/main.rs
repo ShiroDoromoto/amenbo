@@ -3239,6 +3239,54 @@ fn attach(store: &mut Store, flags: &Flags, sub: AttachCmd) -> Result<i32, CliEr
             os_open(&target)?;
             write_envelope(flags, "attach.open", "attachment", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Opened {}", attach_label(&a)));
         }
+        AttachCmd::Save { id, out, force } => {
+            use amenbo_core::model::AttachmentKind;
+            let a = resolve_attachment(store, &id)?;
+            // Only a blob has bytes to save. A URL attachment records a link, not a file — open it.
+            let hash = match (a.kind, a.blob_hash.as_deref()) {
+                (AttachmentKind::Blob, Some(h)) => h,
+                (AttachmentKind::Url, _) => {
+                    return Err(CliError {
+                        code: "invalid_value",
+                        message: "this attachment is an external link, not a stored file — open it with `attach open`".to_string(),
+                        hint: None,
+                        exit: 2,
+                    })
+                }
+                _ => {
+                    return Err(CliError { code: "invalid_value", message: "attachment has no local blob to save".to_string(), hint: None, exit: 2 })
+                }
+            };
+            if !store.blobs().has(hash) {
+                return Err(CliError { code: "not_found", message: format!("blob {hash} is not stored locally"), hint: None, exit: 1 });
+            }
+            let filename = a.filename.clone().unwrap_or_else(|| "attachment".to_string());
+            // `--out` is a file path, unless it names an existing directory — then save under the
+            // attachment's own filename inside it. With no `--out`, that filename in the CWD.
+            let dest = match out.as_deref() {
+                None => std::path::PathBuf::from(&filename),
+                Some(p) => {
+                    let p = std::path::Path::new(p);
+                    if p.is_dir() { p.join(&filename) } else { p.to_path_buf() }
+                }
+            };
+            if dest.exists() && !force {
+                return Err(CliError {
+                    code: "file_exists",
+                    message: format!("{} already exists", dest.display()),
+                    hint: Some("pass --force to overwrite".to_string()),
+                    exit: 1,
+                });
+            }
+            let bytes = store.blobs().read(hash).map_err(CliError::from)?;
+            std::fs::write(&dest, &bytes).map_err(|e: std::io::Error| CliError {
+                code: "io_error",
+                message: format!("cannot write {}: {e}", dest.display()),
+                hint: None,
+                exit: 1,
+            })?;
+            write_envelope(flags, "attach.save", "attachment", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Saved {} → {}", attach_label(&a), dest.display()));
+        }
         AttachCmd::Rm { id } => {
             let a = resolve_attachment(store, &id)?;
             if !confirm(flags, "remove attachment")? {

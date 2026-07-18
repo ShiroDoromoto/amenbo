@@ -510,6 +510,7 @@ fn cycles() -> Value {
             "when": "You are about to commit, or to send text out of this store some other way (a PR body, an issue, a message).",
             "backbone": [
                 backbone_step("Lint what is leaving, before it leaves: the staged diff, and the commit message. It reports and never edits, so a ref it names is yours to rewrite out of the text.", &["lint"]),
+                backbone_step("Once the commit lands, record its SHA on the task — a task takes many, and a SHA already there is a no-op, so anchor every commit you merge.", &["task commit add"]),
             ],
             "optional": [
                 optional_step("the human wants every commit linted without anyone having to remember", "Offer the lint hooks (opt-in, asked once for the device).", &["hooks install", "hooks status"]),

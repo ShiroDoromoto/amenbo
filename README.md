@@ -232,6 +232,7 @@ amenbo task move 12 --project "Backlog"
 amenbo task commit add 12 0123456789abcdef0123456789abcdef01234567   # full-length hex only
 amenbo task commit list 12                   # oldest first (git show <sha> goes the other way)
 amenbo task commit rm 12 <sha> --yes         # forget one (permanent)
+amenbo task list --filter "commit:<full-sha>" --json # walk history -> task inside amenbo: which task(s) recorded this commit (an unknown SHA is empty, not an error)
 
 # Dependencies: this task must wait for a blocker to be done first
 amenbo task depend 13 --on 12                # 13 is blocked until 12 is done

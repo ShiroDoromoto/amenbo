@@ -293,7 +293,7 @@ jobs:
   # Nobody reads a license at bump time — Dependabot bumps are auto-merged — so the allow-list in
   # deny.toml is the only thing that would notice one arriving. It stays HERE rather than in
   # rot-gates.yml: unlike the audits, this verdict is a function of the lockfiles alone, so it
-  # cannot go red on a tree nobody touched, and the weekly leg would only pay for it again.
+  # cannot go red on a tree nobody touched, and the weekly leg would only re-run it for nothing.
   cargo-license:
     name: cargo deny (licenses)
     runs-on: ubuntu-latest
@@ -408,7 +408,7 @@ jobs:
       # the statfs magic to choose polling over a
       # kernel watch, and when that table is wrong the GUI arms an inotify watch that reports
       # nothing from the server side — another host's writes are lost, silently and forever.
-      # Cheap enough for every run: no bundle, just the test binary this job builds.
+      # Light enough for every run: no bundle, just the test binary this job builds.
       #
       # Built as the normal user on purpose. Only the binary runs under sudo (mount(8) needs
       # it); a `cargo test` under sudo would leave root-owned artifacts in the cached target.

@@ -184,6 +184,7 @@ export function BoardScreen({
         onClick={() => setTab("decisions")}
       >
         ⚖ {t("nav.decisions")}
+        {project.proposedDecisionCount ? <span className="decisionsbtn__count">{project.proposedDecisionCount}</span> : null}
       </button>
       <div className="topbar__spacer" />
       <button className="btn" title={t("projset.title")} aria-label={t("projset.title")} onClick={onOpenSettings}>

@@ -3100,6 +3100,148 @@ fn the_hook_probe_spawns_git_once_per_command_and_never_for_hooks_itself() {
     assert_eq!(consent_before, serde_json::json!("yes"), "the explicit install recorded the answer");
 }
 
+/// Resolve the real `git` on this machine, the way the probe test does.
+#[cfg(unix)]
+fn real_git_path() -> String {
+    String::from_utf8(Command::new("/usr/bin/env").args(["which", "git"]).output().unwrap().stdout)
+        .unwrap()
+        .trim()
+        .to_string()
+}
+
+/// Build a `bin` dir holding a `git` symlink — so a fully-controlled `PATH` can still run git — and, when
+/// `with_amenbo`, an `amenbo` symlink to this build. The hook's `command -v amenbo` has to resolve to the
+/// binary under test, not whatever is installed on the machine running the suite; and "uninstalled" has to
+/// mean a `PATH` that holds no amenbo at all, which the machine's own `PATH` cannot promise. Returns the dir
+/// as the whole `PATH` value.
+#[cfg(unix)]
+fn hook_path(bin: &std::path::Path, with_amenbo: bool) -> String {
+    std::fs::create_dir_all(bin).unwrap();
+    let git = bin.join("git");
+    let _ = std::fs::remove_file(&git);
+    std::os::unix::fs::symlink(real_git_path(), &git).unwrap();
+    if with_amenbo {
+        let link = bin.join("amenbo");
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_amenbo"), &link).unwrap();
+    }
+    bin.display().to_string()
+}
+
+/// The whole life of an installed hook, driven through real `git commit`: a ref in the staged diff is
+/// refused, a ref in the message is refused, a clean commit goes through, an amenbo gone from `PATH` never
+/// traps a commit, and `uninstall` stops the gate-keeping. The unit tests see the install/strip logic and
+/// the generated shell each in isolation; only this runs git the way a user does — and both shipped bugs (a
+/// ref slipping through, an uninstalled amenbo trapping every commit) lived past where those tests looked.
+#[cfg(unix)]
+#[test]
+fn the_installed_hook_lives_its_whole_life_under_real_git() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+    let repo = a_repo();
+
+    let with_amenbo = hook_path(&cli.home.join("bin"), true);
+    let no_amenbo = hook_path(&cli.home.join("gitonly"), false);
+
+    let installed = cli.json_from(&repo, &["hooks", "install", "--json"]);
+    assert_eq!(installed["ok"], serde_json::json!(true), "install: {installed}");
+
+    // Write `content` to `file`, stage everything, and attempt a commit with `message` on `path`.
+    let commit = |file: &str, content: &str, message: &str, path: &str| -> std::process::Output {
+        std::fs::write(repo.join(file), content).unwrap();
+        git(&repo, &["add", "-A"]);
+        Command::new("git")
+            .current_dir(&repo)
+            .env("PATH", path)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .args(["commit", "-m", message])
+            .output()
+            .unwrap()
+    };
+
+    // A ref in the staged diff is refused — the pre-commit slot lints what the commit adds.
+    let diff = commit("leak.txt", "adds AMB-T-1656 here\n", "chore: a clean message", &with_amenbo);
+    assert!(!diff.status.success(), "a ref in the staged diff must be refused: {}", String::from_utf8_lossy(&diff.stderr));
+    std::fs::remove_file(repo.join("leak.txt")).unwrap(); // so the next `add -A` stages it away
+
+    // A ref in the message is refused — the commit-msg slot lints the message file git hands it.
+    let msg = commit("one.txt", "one\n", "chore: closes AMB-T-1655", &with_amenbo);
+    assert!(!msg.status.success(), "a ref in the message must be refused: {}", String::from_utf8_lossy(&msg.stderr));
+
+    // The same change with a clean message goes through.
+    let clean = commit("one.txt", "one\n", "chore: tidy up", &with_amenbo);
+    assert!(clean.status.success(), "a clean commit must go through: {}", String::from_utf8_lossy(&clean.stderr));
+
+    // amenbo gone from PATH: even a ref in the message must not trap the commit — `command -v` fails, the
+    // block's `|| true` clears it, and a standalone hook lets the commit through.
+    let gone = commit("two.txt", "two\n", "chore: closes AMB-T-1655, amenbo gone", &no_amenbo);
+    assert!(gone.status.success(), "an uninstalled amenbo must not trap a commit: {}", String::from_utf8_lossy(&gone.stderr));
+
+    // uninstall stops the gate-keeping: a ref in the message now goes through.
+    let removed = cli.json_from(&repo, &["hooks", "uninstall", "--json"]);
+    assert_eq!(removed["ok"], serde_json::json!(true), "uninstall: {removed}");
+    let after = commit("three.txt", "three\n", "chore: closes AMB-T-1655 after uninstall", &with_amenbo);
+    assert!(after.status.success(), "uninstall must remove the gate: {}", String::from_utf8_lossy(&after.stderr));
+}
+
+/// Installed beside another tool's hook, amenbo guards without disturbing it, and `uninstall` takes only
+/// amenbo's block — the other tool's hook keeps running. amenbo's block sits after the shebang and runs
+/// first, and when it passes, control falls through to the foreign body.
+#[cfg(unix)]
+#[test]
+fn the_hook_coexists_with_a_foreign_hook_and_leaves_it_on_uninstall() {
+    use std::os::unix::fs::PermissionsExt;
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+    let repo = a_repo();
+    let with_amenbo = hook_path(&cli.home.join("bin"), true);
+
+    // A foreign commit-msg hook that leaves a mark when it runs, so we can see it still fires.
+    let hooks_dir = repo.join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks_dir).unwrap();
+    // The body marks a file with only shell built-ins (`: > file`), so it needs nothing on the tightly
+    // controlled PATH these commits run under — the mark appearing is proof the foreign body actually ran.
+    let mark = repo.join("foreign-ran");
+    std::fs::write(hooks_dir.join("commit-msg"), format!("#!/bin/sh\n: > {}\nexit 0\n", mark.display())).unwrap();
+    std::fs::set_permissions(hooks_dir.join("commit-msg"), std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let installed = cli.json_from(&repo, &["hooks", "install", "--json"]);
+    assert_eq!(installed["ok"], serde_json::json!(true), "install: {installed}");
+
+    let commit = |file: &str, message: &str| -> std::process::Output {
+        std::fs::write(repo.join(file), format!("{file}\n")).unwrap();
+        git(&repo, &["add", "-A"]);
+        Command::new("git")
+            .current_dir(&repo)
+            .env("PATH", &with_amenbo)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .args(["commit", "-m", message])
+            .output()
+            .unwrap()
+    };
+
+    // A ref in the message is still refused — amenbo's block runs before the foreign body ever gets control.
+    let blocked = commit("a.txt", "chore: closes AMB-T-1655");
+    assert!(!blocked.status.success(), "the coexisting block must still refuse a ref");
+    assert!(!mark.exists(), "a refused commit must not have reached the foreign body");
+
+    // A clean commit passes and the foreign hook runs (control fell through to it).
+    let _ = std::fs::remove_file(&mark);
+    let clean = commit("a.txt", "chore: tidy up");
+    assert!(clean.status.success(), "a clean commit must pass: {}", String::from_utf8_lossy(&clean.stderr));
+    assert!(mark.exists(), "the foreign hook must still run when amenbo's block falls through");
+
+    // uninstall takes only amenbo's block; the foreign body stays and keeps running.
+    let removed = cli.json_from(&repo, &["hooks", "uninstall", "--json"]);
+    assert_eq!(removed["ok"], serde_json::json!(true), "uninstall: {removed}");
+    let body = std::fs::read_to_string(hooks_dir.join("commit-msg")).unwrap();
+    assert!(!body.contains("amenbo:hook"), "uninstall left amenbo's managed block behind: {body}");
+    assert!(body.contains(": >"), "uninstall must leave the foreign hook intact: {body}");
+    let _ = std::fs::remove_file(&mark);
+    let still = commit("b.txt", "chore: still here");
+    assert!(still.status.success() && mark.exists(), "the foreign hook must survive uninstall");
+}
+
 /// A reader that walks away ends the run quietly, rather than crashing it.
 ///
 /// The Rust runtime ignores SIGPIPE on startup, and with it ignored every printing macro panics on a

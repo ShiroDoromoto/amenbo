@@ -230,6 +230,17 @@ fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
                     ja.push(format!("根拠 {label} が未確定です。裁定を待つか link を外してください"));
                 }
             },
+            // There is no force. Starting early means the declared day is wrong, so the way through is
+            // to correct the declaration — which is what the advice names, rather than a flag that would
+            // let the declaration rot into decoration.
+            ReserveBlocker::NotStartedYet { start_on } => {
+                en.push(format!(
+                    "it is not due to start until {start_on} — run `task update {subject} --start today` if that is wrong"
+                ));
+                ja.push(format!(
+                    "着手日 {start_on} がまだ来ていません（宣言が誤っているなら `task update {subject} --start today`）"
+                ));
+            }
         }
     }
     Error::not_ready(
@@ -270,7 +281,7 @@ pub fn set_status(tx: &WriteTx<'_>, id: i64, status: TaskStatus) -> Result<Task>
     // A reservation only goes through once the declared premises hold: no open blocker, and every decision
     // linked as a premise settled.
     if status == TaskStatus::InProgress {
-        let blockers = read::reserve_blockers(tx.conn(), id)?;
+        let blockers = read::reserve_blockers(tx.conn(), id, crate::time::today())?;
         if !blockers.is_empty() {
             return Err(not_ready(&subject(tx, id), &blockers));
         }
@@ -572,7 +583,7 @@ mod tests {
             };
             let check = |tx: &WriteTx<'_>| {
                 assert_eq!(
-                    read::reserve_blockers(tx.conn(), tid).unwrap().is_empty(),
+                    read::reserve_blockers(tx.conn(), tid, crate::time::today()).unwrap().is_empty(),
                     ready_in_mailbox(tx),
                     "reserve_blockers が空 ⇔ mailbox の ready:yes に出る"
                 );
@@ -586,7 +597,56 @@ mod tests {
             check(tx);
             crate::ops::decision::accept(tx, premise, None).unwrap();
             check(tx);
-            assert!(read::reserve_blockers(tx.conn(), tid).unwrap().is_empty());
+            // The third premise rides the same symmetry: a start day still ahead has to hide the task
+            // from the mailbox and refuse the reserve, or the two would disagree about one task.
+            let tomorrow = crate::time::today() + chrono::Duration::days(1);
+            update(tx, tid, TaskPatch { start_on: Some(tomorrow), ..TaskPatch::default() }).unwrap();
+            check(tx);
+            update(tx, tid, TaskPatch { clear_start: true, ..TaskPatch::default() }).unwrap();
+            check(tx);
+            assert!(read::reserve_blockers(tx.conn(), tid, crate::time::today()).unwrap().is_empty());
+        });
+    }
+
+    #[test]
+    fn reserving_a_task_whose_start_day_has_not_come_is_rejected_as_not_ready() {
+        // Naming the number directly must not get past what the mailbox hides — the asymmetry between
+        // what is visible and what is writable is the whole thing this guard is here to keep closed.
+        // There is no force: the way through is to correct the declaration, which is what the message says.
+        with_numbered_task(|tx, _pid, tid| {
+            let tomorrow = crate::time::today() + chrono::Duration::days(1);
+            update(tx, tid, TaskPatch { start_on: Some(tomorrow), ..TaskPatch::default() }).unwrap();
+
+            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            assert_eq!(err.code(), "not_ready");
+            assert!(err.message_en().contains("not due to start until"), "{}", err.message_en());
+            assert!(err.message_en().contains("--start today"), "the way through is named: {}", err.message_en());
+            assert!(err.to_string().contains("着手日"), "{err}");
+            assert_eq!(status_of(tx, tid), TaskStatus::Todo, "rejected, and the status has not moved");
+
+            // Correcting the declaration is the way through — the same move the message names.
+            update(tx, tid, TaskPatch { start_on: Some(crate::time::today()), ..TaskPatch::default() })
+                .unwrap();
+            assert_eq!(
+                set_status(tx, tid, TaskStatus::InProgress).unwrap().status,
+                TaskStatus::InProgress
+            );
+        });
+    }
+
+    #[test]
+    fn the_start_day_guard_only_fires_on_the_reserve_transition() {
+        // Same rule as the other two premises: a start day pushed into the future does not strip a
+        // reservation already held, and the other transitions stay unconditional.
+        with_numbered_task(|tx, _pid, tid| {
+            set_status(tx, tid, TaskStatus::InProgress).unwrap();
+            let tomorrow = crate::time::today() + chrono::Duration::days(1);
+            update(tx, tid, TaskPatch { start_on: Some(tomorrow), ..TaskPatch::default() }).unwrap();
+
+            assert_eq!(status_of(tx, tid), TaskStatus::InProgress, "a start day set after the fact does not strip the reservation");
+            assert_eq!(set_status(tx, tid, TaskStatus::Todo).unwrap().status, TaskStatus::Todo);
+            assert_eq!(set_status(tx, tid, TaskStatus::Blocked).unwrap().status, TaskStatus::Blocked);
+            assert_eq!(set_status(tx, tid, TaskStatus::Done).unwrap().status, TaskStatus::Done);
         });
     }
 

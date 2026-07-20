@@ -994,9 +994,15 @@ pub fn task_project_id(conn: &Connection, id: i64) -> Result<Option<i64>> {
 /// What holds `ready` down for this task ([`crate::view::ReserveBlocker`]), read inside the reserving
 /// transaction so the guard sees the truth source rather than the caller's snapshot (the same reason the
 /// CAS reads [`task_status`] here). Open blockers first, then unsettled premises, each in edge-`id`
-/// order; the premise query resolves the superseding decision in the same pass, so the error can name the
-/// relink target.
-pub fn reserve_blockers(conn: &Connection, task_id: i64) -> Result<Vec<crate::view::ReserveBlocker>> {
+/// order, then a start day that has not arrived; the premise query resolves the superseding decision in
+/// the same pass, so the error can name the relink target. The three arms are the three premises of
+/// [`crate::view::is_ready`], so the guard refuses exactly what the reads call not ready — `today` is the
+/// caller's reference day, for the same reason the reads take one.
+pub fn reserve_blockers(
+    conn: &Connection,
+    task_id: i64,
+    today: NaiveDate,
+) -> Result<Vec<crate::view::ReserveBlocker>> {
     use crate::view::ReserveBlocker;
 
     let mut out = Vec::new();
@@ -1064,6 +1070,19 @@ pub fn reserve_blockers(conn: &Connection, task_id: i64) -> Result<Vec<crate::vi
                 status,
                 superseded_by: successor_number.map(crate::idref::decision),
             });
+        }
+    }
+    {
+        // The third premise. Read from the same transaction as the other two, off the row this guard is
+        // about — a `start_on` the caller edited a moment ago is already in view.
+        const TA: col::task::Cols = col::task::ALL;
+        let stored = scalar_by_id(conn, TA.id, TA.start_on, task_id)?.flatten();
+        // A date that will not parse is raised, not shrugged off: letting a reservation through on an
+        // unreadable declaration is the one answer that cannot be right.
+        if let Some(start_on) = parse_card_date(stored).map_err(StoreEngineError::from)? {
+            if start_on > today {
+                out.push(ReserveBlocker::NotStartedYet { start_on });
+            }
         }
     }
     Ok(out)
@@ -3194,8 +3213,11 @@ pub fn newly_ready_by(conn: &Connection, blocker_id: i64) -> Result<Vec<i64>> {
         .collect::<rusqlite::Result<Vec<i64>>>()
         .map_err(StoreEngineError::from)?;
     let mut ready = Vec::new();
+    // The reference day the guard would judge against, taken once for the whole sweep so every dependent
+    // is measured against the same "today".
+    let today = crate::time::today();
     for task_id in dependents {
-        if reserve_blockers(conn, task_id)?.is_empty() {
+        if reserve_blockers(conn, task_id, today)?.is_empty() {
             ready.push(task_id);
         }
     }

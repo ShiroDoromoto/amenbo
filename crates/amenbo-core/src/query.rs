@@ -1713,13 +1713,12 @@ pub fn task_detail(
     let blocked_by_decisions: Vec<DecisionRef> =
         row.blocked_by_decisions.into_iter().map(|(id, name)| DecisionRef { id, name: Some(name) }).collect();
     let start_on = parse_date(&row.start_on);
-    // The one ready predicate, shared with the task card and the `ready:` filter.
-    let ready = crate::view::is_ready(
-        !blocked_by.is_empty(),
-        !blocked_by_decisions.is_empty(),
-        start_on,
-        time::today(),
-    );
+    let today = time::today();
+    // The one ready predicate, shared with the task card and the `ready:` filter, and beside it the
+    // third reason it can return false.
+    let ready =
+        crate::view::is_ready(!blocked_by.is_empty(), !blocked_by_decisions.is_empty(), start_on, today);
+    let not_started_until = crate::view::not_started_until(start_on, today);
     let blocks: Vec<crate::view::TaskRef> =
         row.blocks.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
 
@@ -1743,6 +1742,7 @@ pub fn task_detail(
         placement,
         blocked_by,
         blocked_by_decisions,
+        not_started_until,
         ready,
         blocks,
         num_comments: row.num_comments,

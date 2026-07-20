@@ -31,7 +31,20 @@ pub fn is_ready(
     start_on: Option<NaiveDate>,
     today: NaiveDate,
 ) -> bool {
-    !has_open_blocker && !has_unsettled_premise && start_on.is_none_or(|start| start <= today)
+    !has_open_blocker && !has_unsettled_premise && not_started_until(start_on, today).is_none()
+}
+
+/// The third premise as a *reason* rather than a boolean: the declared start day, when it is still ahead
+/// of `today` — i.e. the date this task is waiting for. `None` means the start day is no reason to hold
+/// the task back, either because none was declared or because it has arrived.
+///
+/// A read projects this beside `blocked_by_open` / `blocked_by_decisions` so that every `ready: false` on
+/// a face carries the reason for it: a task in a listing is never left saying "not ready" with nothing to
+/// point at. [`is_ready`] derives its third premise from here, so the reason and the verdict are one
+/// thing.
+#[must_use]
+pub fn not_started_until(start_on: Option<NaiveDate>, today: NaiveDate) -> Option<NaiveDate> {
+    start_on.filter(|start| *start > today)
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -115,6 +128,10 @@ pub struct TaskCompact {
     /// Derived from premises: the decision_ids of linked decisions that are not live grounds. Empty means
     /// the premises hold.
     pub blocked_by_decisions: Vec<i64>,
+    /// Derived from the declared start day: the date this task is waiting for, when that day is still
+    /// ahead ([`not_started_until`]). The third reason a task is not ready, beside the two above — always
+    /// serialized, `null` when the start day is no reason.
+    pub not_started_until: Option<NaiveDate>,
     /// Derived: no open blockers, no unsettled grounds, and the declared start day arrived — i.e. this
     /// can be started ([`is_ready`]).
     pub ready: bool,
@@ -153,6 +170,9 @@ pub struct TaskDetail {
     pub blocked_by: Vec<TaskRef>,
     /// Premises: linked decisions that are not live grounds (id + title). Empty means the premises hold.
     pub blocked_by_decisions: Vec<DecisionRef>,
+    /// The declared start day, when it is still ahead ([`not_started_until`]) — the third reason this task
+    /// is not ready, beside the two above. Always serialized, `null` when the start day is no reason.
+    pub not_started_until: Option<NaiveDate>,
     /// Derived: no open blockers, no unsettled grounds, and the declared start day arrived — i.e. this
     /// can be started ([`is_ready`]).
     pub ready: bool,

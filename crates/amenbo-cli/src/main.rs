@@ -2432,7 +2432,16 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                     let check = if t.completed { "x" } else { " " };
                     let due = t.due_on.map(|d| format!(" due:{}", time::date_to_string(d))).unwrap_or_default();
                     let pri = t.priority.map(|p| format!(" [{}]", p.as_str())).unwrap_or_default();
-                    human(flags, format!("  [{check}] {}  {}{}{}", task_label(t.id), t.title, due, pri));
+                    // Why this row is not in the mailbox, said on the row itself. A plain `task list` shows
+                    // everything, so a task held back by a start day still ahead has to carry its reason
+                    // here or it reads as ordinary work that the mailbox inexplicably skips. Written only
+                    // when it is a reason — like `due:`, and unlike the marked-when-empty lines of `task
+                    // show`, a listing row states what is so, and a date column of `-` on every other row
+                    // buys nothing.
+                    let waiting = t.not_started_until
+                        .map(|d| format!(" waiting-until:{}", time::date_to_string(d)))
+                        .unwrap_or_default();
+                    human(flags, format!("  [{check}] {}  {}{}{}{}", task_label(t.id), t.title, due, waiting, pri));
                 }
             }
         }
@@ -2491,6 +2500,16 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                         .map(|d| format!("{} {}", decision_label(d.id), decision_ref_name(&d.name)))
                         .collect::<Vec<_>>().join(", ");
                     human(flags, format!("blocked by decisions: {premises} (not settled — cannot start)"));
+                }
+                // The third reason a task is not ready: a start day that has not arrived. Marked even when
+                // empty, like the two above — a reader who cannot tell "startable today" from "the start day
+                // was never looked at" is back to guessing why the task is not in the mailbox.
+                match detail.not_started_until {
+                    None => human(flags, "not started until: (none)"),
+                    Some(d) => human(
+                        flags,
+                        format!("not started until: {} (cannot start yet)", time::date_to_string(d)),
+                    ),
                 }
                 // The dependents — what becomes startable once this task is done. Always mark it, printing
                 // `blocks: (none)` when empty; leaving the line out reads to an AI as "nothing follows".

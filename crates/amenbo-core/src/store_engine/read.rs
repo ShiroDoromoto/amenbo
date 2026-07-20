@@ -2730,6 +2730,7 @@ pub fn hydrate_task_cards(
             b.start_on,
             today,
         );
+        let not_started_until = crate::view::not_started_until(b.start_on, today);
         out.push(TaskCompact {
             id: b.id,
             title: b.title.clone(),
@@ -2743,6 +2744,7 @@ pub fn hydrate_task_cards(
             assignee_kind: b.assignee_kind,
             blocked_by_open,
             blocked_by_decisions,
+            not_started_until,
             ready,
         });
     }

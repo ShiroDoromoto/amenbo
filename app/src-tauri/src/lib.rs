@@ -87,6 +87,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       commands::snapshot,
       commands::store_signature,
+      commands::version_status,
       commands::store_locations,
       commands::activity_page,
       commands::changes_since,

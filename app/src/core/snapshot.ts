@@ -19,6 +19,7 @@ import type {
   DecisionDto,
   DoctorIssueDto,
   StartupHealthDto,
+  VersionStatusDto,
   Snapshot as SnapshotDto,
 } from "../bindings/bindings";
 import { invalidateAllQueries, invalidateScopes } from "./query";
@@ -266,7 +267,8 @@ export async function reconcile(reason: ReconcileReason): Promise<void> {
 
 /**
  * One pass of the focus path. Re-reads the store signature and compares it with the last load:
- *   - unchanged → do nothing (no loadSnapshot, no invalidation, so nothing wakes the mailbox either).
+ *   - unchanged → read nothing back (no loadSnapshot, no invalidation, so nothing wakes the mailbox either). The one
+ *     thing still asked is the update state, which does not live in the store and so has no signature to move.
  *   - changed, or no signature at all → re-read the snapshot region and every live query. There is
  *     one store, so there is no "where" to narrow by: the signature says only whether it moved.
  * Outside Tauri there is no signature, so this always re-reads everything.
@@ -280,9 +282,35 @@ async function focusCatchUp(): Promise<void> {
       cur = null; // no signature: fall to the safe side and re-read everything.
     }
   }
-  if (cur !== null && lastSignature !== null && cur === lastSignature) return; // nothing moved on disk.
+  if (cur !== null && lastSignature !== null && cur === lastSignature) {
+    // Nothing moved on disk, so there is no snapshot to re-read — but "is there a newer release" does not live in
+    // the store, and this is the one moment we get to ask it: the user just came back to the app. Someone who only
+    // reads never moves the signature, and would otherwise never be told about an update again after launch.
+    await refreshVersionStatus();
+    return;
+  }
   await loadSnapshot(); // this also moves lastSignature to the current value.
   invalidateAllQueries();
+}
+
+/**
+ * Re-asks core for the update-available state alone and patches it into the snapshot cache. The TTL lives in core
+ * (24h), so within the window this answers from its cache without traffic — which is why it is safe to call on every
+ * focus return. Failure is silent, the same as everywhere else the update check is surfaced: not being able to say
+ * whether an update exists must never get in the way. Outside Tauri there is nothing to ask.
+ */
+async function refreshVersionStatus(): Promise<void> {
+  if (!inTauri()) return;
+  let next: VersionStatusDto;
+  try {
+    next = await invoke<VersionStatusDto>("version_status");
+  } catch {
+    return; // silent: an update check does not get in the way of the real work.
+  }
+  const cur = cache.versionStatus;
+  if (cur.updateAvailable === next.updateAvailable && cur.newerVersion === next.newerVersion) return; // nothing to redraw.
+  cache = { ...cache, versionStatus: next };
+  notifyDataChanged(); // the banner is the only reader; inbox membership is untouched.
 }
 
 // Throttle window for a burst of focus returns, matched to the watcher's 1.5s wake interval. manual and gap are never throttled.

@@ -1123,6 +1123,27 @@ pub fn store_signature() -> String {
     store_signature_string()
 }
 
+/// Just the update-available state, without assembling a whole snapshot. The GUI asks this on every
+/// focus return, which is the moment the user starts using the app again; the snapshot cannot serve
+/// that, since it is only rebuilt when the store itself has moved, and someone who only reads never
+/// moves it. Cheap by construction: the cache TTL lives in `update_check::check`, so a call inside
+/// the window answers from the cache with no traffic at all, and only a stale one queries upstream
+/// (timed out, silent on failure). Never `check_fresh` — bypassing the cache belongs to the first
+/// snapshot after process start, not to a trigger the user can fire by alt-tabbing.
+#[tauri::command]
+pub fn version_status() -> Result<VersionStatusDto, CmdError> {
+    let config = amenbo_core::config::Paths::resolve()
+        .map(|p| amenbo_core::config::Config::load(&p.config_file))
+        .unwrap_or_default();
+    let upstream = amenbo_core::update_check::check(config.update_check);
+    let mut dto = VersionStatusDto::default();
+    with_store_read(|store| {
+        dto.absorb(store, upstream.as_ref());
+        Ok(())
+    })?;
+    Ok(dto)
+}
+
 /// For the "location" line under Settings > Data. Returns the real, OS-independent path (the
 /// app-data root).
 #[derive(Serialize, TS)]

@@ -19,7 +19,6 @@ interface Store {
   listActivity(): ActivityItem[];
   // Returns the id of the task created, so the caller can open its detail right away. null on failure (a toast says so).
   addTask(projectId: number | null, title: string, notes?: string): Promise<number | null>;
-  toggleDone(id: number): void;
   setStatus(id: number, status: Status): void;
   setPriority(id: number, priority: Priority | null): void;
   setAssignee(id: number, kind: Facet | null): void;
@@ -107,7 +106,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     listActivity() { return activity; },
 
     addTask(projectId, title, notes) { return runResult(mut.addTask(projectId, title, notes)); },
-    toggleDone(id) { run(mut.toggleDone(id)); },
     setStatus(id, status) { run(mut.setStatus(id, status)); },
     setPriority(id, priority) { run(mut.setPriority(id, priority)); },
     setAssignee(id, kind) { run(mut.setAssignee(id, kind)); },

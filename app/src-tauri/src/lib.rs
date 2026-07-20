@@ -98,7 +98,6 @@ pub fn run() {
       commands::decisions_by_ids,
       commands::resolve_ref,
       commands::task_add,
-      commands::task_done,
       commands::task_status,
       commands::task_delete,
       commands::comment_add,

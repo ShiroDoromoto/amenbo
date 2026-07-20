@@ -1744,22 +1744,6 @@ pub fn task_add(
     Ok(WriteAck::new(&["tasks"]).task(id))
 }
 
-/// Complete or reopen a task (done ⟺ completed). Idempotent — already in that state means no-op.
-#[tauri::command]
-pub fn task_done(id: i64, done: bool) -> Result<WriteAck, CmdError> {
-    with_store_mut(|store| {
-        let cur = store.task(id)?;
-        let already = cur.as_ref().is_some_and(|t| t.completed());
-        let old = cur.map(|t| t.status).unwrap_or_default();
-        if already != done {
-            let t = store.set_task_completed(id, done)?;
-            emit(store, id, amenbo_core::activity_log::event::task_status_changed(old.as_str(), t.status.as_str()));
-        }
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["tasks"]).task(id))
-}
-
 /// Set the status explicitly (done keeps completed in step). Setting the same status again is a
 /// no-op, with one exception: `in_progress → in_progress` is never waved through. It goes down to
 /// `set_status` so the reservation CAS is not defused, and a second session trying to start the same
@@ -4198,7 +4182,7 @@ mod tests {
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
         assert_eq!(card(dependent).status, "todo", "a rejected reservation does not move the column (no rollback needed)");
 
-        task_done(blocker, true).unwrap();
+        task_status(blocker, "done".into()).unwrap();
         task_status(dependent, "in_progress".into()).expect("reservation succeeds once the premise clears");
         assert_eq!(card(dependent).status, "in_progress");
 
@@ -4319,7 +4303,7 @@ mod tests {
         assert_eq!(promoted.body, "コメント", "promoted decision body is the task_comment text");
         assert!(promoted.linked_tasks.iter().any(|l| l.id == id), "promoted decision links its task");
 
-        let _ = task_done(id, true).unwrap();
+        task_status(id, "done".into()).unwrap();
         assert_eq!(card(id).unwrap().status, "done");
 
         let snap = snapshot().unwrap();
@@ -4461,7 +4445,7 @@ mod tests {
         let pending = task_add(Some(project_id), "GUI を追従させる".into(), None).unwrap().tasks[0];
         decision_set_link(head, shipped, true).unwrap();
         decision_set_link(head, pending, true).unwrap();
-        task_done(shipped, true).unwrap();
+        task_status(shipped, "done".into()).unwrap();
 
         let c = card(head);
         assert_eq!(c.r#ref, amenbo_core::idref::decision(head), "the conversational ref is the display form of the id");

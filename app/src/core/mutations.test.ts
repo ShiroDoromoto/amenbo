@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addComment, deleteProject, deleteTask, setStatus, toggleDone } from "./mutations";
+import { addComment, deleteProject, deleteTask, setStatus } from "./mutations";
 import { tf } from "./i18n";
 import { applySnapshot, getSnapshot, type Snapshot } from "./snapshot";
 import type { TaskCard } from "../mock/types";
@@ -69,13 +69,13 @@ function seedTasks(tasks: TaskCard[]): void {
   applySnapshot({ ...getSnapshot(), tasks, activity: [] });
 }
 
-describe("setStatus / toggleDone (browser-loop mock)", () => {
+describe("setStatus (browser-loop mock)", () => {
   it("done carries a completion time and loses it when reverted (status is the source of truth for done; completedAt is subordinate)", async () => {
     seedTasks([full(10)]);
     await setStatus(10, "done");
     expect(getSnapshot().tasks[0].completedAt).not.toBeNull();
 
-    await toggleDone(10); // done → todo
+    await setStatus(10, "todo");
     const t = getSnapshot().tasks[0];
     expect(t.status).toBe("todo");
     expect(t.completedAt).toBeNull();

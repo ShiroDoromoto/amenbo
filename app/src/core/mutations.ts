@@ -1,6 +1,6 @@
 // THE WIRING SEAM (write side).
 //
-// Writes: inside Tauri we invoke core's per-action commands (task_add/done/status/comment_add) and
+// Writes: inside Tauri we invoke core's per-action commands (task_add/status/comment_add) and
 // use the returned **WriteAck (affected ids + invalidation scopes)** to invalidate only the query
 // keys it names — no wholesale snapshot swap, no refetch storm across every view, no optimistic
 // updates. Reads that still hang off the snapshot cache (projects/roster/activity/config) are
@@ -11,7 +11,7 @@
 import { applySnapshot, getSnapshot, inTauri, loadSnapshot, type Snapshot } from "./snapshot";
 import { applyPerfConfig, invoke } from "./ipc";
 import { invalidateAllQueries, invalidateQueries, type QueryKey } from "./query";
-import { fetchTasksByIds, type AttachTargetType } from "./reads";
+import { type AttachTargetType } from "./reads";
 import { t, tf, type CmdError } from "./i18n";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
 import type { ActivityTargetDto, BoundFolderDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
@@ -163,18 +163,6 @@ export async function addTask(projectId: number | null, title: string, notes?: s
     return { ...s, tasks: [...s.tasks, task], activity: [sysItem(id, title, "task.created", tf("act.created", { title })), ...s.activity] };
   });
   return id;
-}
-
-/** Toggle completion. The current status is hydrated for that one task from core, rather than read out of the whole snapshot. */
-export async function toggleDone(id: number): Promise<void> {
-  if (inTauri()) {
-    const t = (await fetchTasksByIds([id]))[0];
-    if (!t) return;
-    return invokeAck("task_done", { id, done: t.status !== "done" });
-  }
-  const t = getSnapshot().tasks.find((x) => x.id === id);
-  if (!t) return;
-  return setStatus(id, t.status !== "done" ? "done" : "todo");
 }
 
 /**

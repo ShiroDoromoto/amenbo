@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState, type DragEvent } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { createPortal } from "react-dom";
 import { dataAdapter } from "../mock/adapter";
 import { useStore } from "../store/store";
@@ -17,6 +17,7 @@ import type { ComposeTarget } from "../shell/AppShell";
 import { filterDimensions, parseRefQuery, passesFilters, selectionKey, type FilterSelection } from "../core/filters";
 import { fetchProjectDimensionAssignments } from "../core/mutations";
 import { DimensionManager } from "./DimensionManager";
+import { BOARD_FLIP, useBoardFlip } from "./boardFlip";
 
 type View = "list" | "board" | "calendar" | "timeline";
 const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
@@ -87,6 +88,10 @@ export function BoardScreen({
   // Id of the card currently being dragged (drives the column highlight and dims the card that was grabbed).
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const clearDragging = useCallback(() => setDraggingId(null), []);
+  // The board surface, for the move flourish. Only one `.board` mounts at a time, so both grouping
+  // layouts share this ref. useBoardFlip is inert outside Tauri and when its flag is off.
+  const boardRef = useRef<HTMLDivElement>(null);
+  useBoardFlip(boardRef, draggingId);
   const project = dataAdapter.getProject(projectId);
   const rawQ = search.trim();
   const q = rawQ.toLowerCase();
@@ -257,7 +262,7 @@ export function BoardScreen({
       </div>
 
       {view === "board" && !groupingDim && (
-        <div className="board">
+        <div className="board" ref={boardRef}>
           {STATUS_ORDER.map((st) => {
             const colTasks = tasks.filter((t) => t.status === st);
             const isDone = st === "done";
@@ -296,7 +301,7 @@ export function BoardScreen({
       )}
 
       {view === "board" && groupingDim && (
-        <div className="board">
+        <div className="board" ref={boardRef}>
           {groupingDim.values.map((v) => (
             <Column
               key={v.id}
@@ -527,6 +532,8 @@ const TaskCardView = memo(function TaskCardView({
         draggable ? "card--draggable" : "",
         dragging ? "card--dragging" : "",
       ].join(" ")}
+      // The move flourish keys on this to track a card across columns; the flag omits it when off.
+      data-flip-id={BOARD_FLIP ? task.id : undefined}
       draggable={draggable}
       onDragStart={draggable ? (e: DragEvent) => {
         e.dataTransfer.setData("text/plain", String(task.id));

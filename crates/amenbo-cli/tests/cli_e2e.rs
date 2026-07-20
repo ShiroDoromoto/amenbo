@@ -3118,14 +3118,33 @@ fn lint(cwd: &std::path::Path, home: &std::path::Path, args: &[&str], stdin: Opt
     )
 }
 
+/// Run git, and on failure say what git actually objected to — the exit code and **both** streams.
+///
+/// stderr alone is not enough, and that is not a hypothetical: `git commit -q` writes "nothing to commit"
+/// to stdout, so a commit that fails that way reports an empty message and a bare non-zero code, which is
+/// exactly how the flake this helper now describes managed to stay unreadable.
 fn git(dir: &std::path::Path, args: &[&str]) {
     let out = Command::new("git").current_dir(dir).args(args).output().expect("failed to run git");
-    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "git {args:?} exited {code}\nstdout: {stdout}\nstderr: {stderr}",
+        code = out.status.code().map_or_else(|| "by signal".to_string(), |c| c.to_string()),
+        stdout = String::from_utf8_lossy(&out.stdout),
+        stderr = String::from_utf8_lossy(&out.stderr),
+    );
 }
 
 /// A repository with one commit behind it, at a fresh path.
+///
+/// "Fresh" has to be made true here, not merely derived: [`temp_home`] wipes the path it hands back, and
+/// this is a *sibling* of that path, which nothing was wiping. Test processes leave their scratch dirs
+/// behind, and a temp name is only as unique as the pid in it — so a recycled pid handed this function a
+/// repository that already existed, already had `a.rs` at exactly this content, and already had the `base`
+/// commit. `git add -A` then staged nothing and `git commit -qm base` exited non-zero saying "nothing to
+/// commit" on stdout, which `-q` swallowed: a rare, silent, empty-stderr failure of an unrelated test.
 fn a_repo() -> std::path::PathBuf {
     let dir = temp_home().with_extension("repo");
+    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     git(&dir, &["init", "-q", "."]);
     // A commit needs an identity, and the machine's own must not decide a test's outcome.
@@ -3197,6 +3216,10 @@ fn lint_reads_stdin_and_leaves_foreign_refs_alone() {
 #[test]
 fn lint_outside_a_repository_says_so_plainly() {
     let dir = temp_home().with_extension("plain");
+    // A sibling of the wiped path, so it is wiped here too — see `a_repo`. Inheriting a leftover is
+    // harmless for this test (it only needs a directory that is not a repository), but the name is unique
+    // only as far as a pid is, and that is not far enough to leave to chance twice.
+    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let home = temp_home();
 

@@ -391,7 +391,7 @@ export async function loadSnapshot(opts: LoadOptions = {}): Promise<void> {
       decisions: [], // the mock fixtures carry no decisions
       activity: fix.activity,
       startupHealth: { issues: [] }, // no warnings when iterating in the browser
-      versionStatus: { appVersion: "", updateAvailable: false, newerVersion: null }, // no version skew either
+      versionStatus: { appVersion: "", updateAvailable: false, newerVersion: null }, // and no update check either (the browser fallback asks nothing upstream)
       perfLog: null, // in the browser this is on by default in dev (ipc decides via import.meta.env.DEV)
       updateCheck: true,
     };

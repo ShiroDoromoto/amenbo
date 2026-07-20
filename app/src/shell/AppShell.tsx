@@ -366,11 +366,12 @@ export function AppShell() {
   );
 }
 
-// Version skew across surfaces, with no network involved: if another surface (CLI or GUI) has touched this store
-// with a version newer than ours, we show "an update is available" right under the TopBar. The "open the installer"
-// button only opens the current OS's all-in-one installer (GUI + CLI bundled) in the default browser — it never
-// self-updates. The ✕ dismisses it per version (core/updateDismissed): the version dismissed stays quiet across
-// launches, and the banner returns on its own once a newer one is offered.
+// A newer release exists upstream: when the published `latest.json` names a version newer than the one running, we
+// show "an update is available" right under the TopBar. That is the only thing that raises the flag — the local
+// version state on its own never does. The "open the installer" button only opens the current OS's all-in-one
+// installer (GUI + CLI bundled) in the default browser — it never self-updates. The ✕ dismisses it per version
+// (core/updateDismissed): the version dismissed stays quiet across launches, and the banner returns on its own once
+// a newer one is offered.
 function UpdateBanner() {
   const vs = useSyncExternalStore(subscribe, () => getSnapshot().versionStatus);
   // Session-only fallback, for the offer that carries no version to remember (and where localStorage is unavailable).

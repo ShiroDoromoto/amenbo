@@ -139,7 +139,7 @@ function sysItem(taskId: number, title: string, kind: string, text: string): Act
 /** Returns the id of the task just created, so the caller can open its detail pane. Null if it cannot be resolved. */
 export async function addTask(projectId: number | null, title: string, notes?: string): Promise<number | null> {
   if (inTauri()) {
-    // Pass a project and core wires up the membership so the task lands on that board; its
+    // Pass a project and core places the task there so it lands on that board; its
     // classification (dimension values) is assigned afterwards. With no project it is an inbox
     // (unfiled) task. task_add's WriteAck carries the new task among its affected ids (commands.rs),
     // so we apply the ack and lift the id out of it.
@@ -150,15 +150,15 @@ export async function addTask(projectId: number | null, title: string, notes?: s
   const id = Date.now();
   mockMutate((s) => {
     // Every field of the wire TaskCardDto is required (core always sends them all), so the mock fills
-    // in defaults. Membership is expressed with `projectId` alone and `memberships` is left empty —
-    // the mock has no project names to build one from, and the detail pane falls back to `projectId`
-    // (see `membershipsOf`).
+    // in defaults. Placement is expressed with `projectId` alone and `placement` is left null — the
+    // mock has no project names to build one from, and the detail pane falls back to `projectId`
+    // (see `placementOf`).
 
     const task: TaskCard = {
       id, title, notes: notes ?? "", status: "todo", assignee: null, priority: null,
       due: null, dueLabel: null, comments: 0, createdBy: me(),
       ref: taskRef(id), projectId, completedAt: null,
-      ready: true, blockedBy: [], memberships: [], linkedDecisions: [], blockedByDecisions: [],
+      ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [],
     };
     return { ...s, tasks: [...s.tasks, task], activity: [sysItem(id, title, "task.created", tf("act.created", { title })), ...s.activity] };
   });

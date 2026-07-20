@@ -2464,15 +2464,11 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                     None => "-".to_string(),
                 };
                 human(flags, format!("assignee: {} / comments: {}", assignee, detail.num_comments));
-                // Always mark whether memberships exist; never omit the line when empty. No membership is a
-                // meaningful state — an unfiled task belonging to no project — so say `(none)` out loud.
-                if detail.memberships.is_empty() {
-                    human(flags, "memberships: (none)");
-                } else {
-                    let homes = detail.memberships.iter()
-                        .map(|m| m.project.name.clone())
-                        .collect::<Vec<_>>().join(", ");
-                    human(flags, format!("memberships: {homes}"));
+                // Always mark whether the task is placed; never omit the line when empty. Being unplaced
+                // is a meaningful state — a task belonging to no project — so say `(none)` out loud.
+                match &detail.placement {
+                    None => human(flags, "project: (none)"),
+                    Some(p) => human(flags, format!("project: {}", p.project.name)),
                 }
                 // Empty means nothing blocks this task and it can be started; say `(none)`. Omitting the line
                 // would leave the reader unable to tell "no dependencies" from "dependencies not checked".
@@ -2570,7 +2566,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let t = store.move_task(tid, project_id, pos).map_err(CliError::from)?;
             emit_event(store, flags, tid, activity_log::event::task_moved(project_for_event.as_deref()));
             let detail = store.task_detail(t.id).map_err(CliError::from)?;
-            write_envelope(flags, "task.move", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["membership".to_string()]), false, format!("✓ Moved task: {}", task_label(t.id)));
+            write_envelope(flags, "task.move", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["placement".to_string()]), false, format!("✓ Moved task: {}", task_label(t.id)));
         }
         TaskCmd::Depend { id, on } => {
             let tid = resolve_task(store, &id).map_err(CliError::from)?;

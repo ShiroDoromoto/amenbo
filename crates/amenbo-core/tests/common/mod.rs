@@ -218,7 +218,7 @@ pub fn run_mailbox_list(s: &Seeded) -> (usize, usize) {
 /// Run the **unfiltered, project-scoped board** `list_task_ids` read once (sort=`order`, the GUI's
 /// default board page), returning its (scanned=total_matched, returned=page) pair. Unlike the
 /// selective mailbox read this matches *every* task in the project, so it grows with N — its job in
-/// the guard is to exercise the `order`-sort's per-row membership subquery and the membership
+/// the guard is to exercise the `order`-sort's per-row placement subquery and the placement
 /// EXISTS over the whole set. Without the child-table FK indexes those subqueries table-scan per
 /// task → O(N²) (a 10k board took ~13s); with them it is O(N log N) (~16ms). The guard bounds it
 /// with an absolute budget (an O(N²) regression cannot be told from O(N log N) by a scanned/returned

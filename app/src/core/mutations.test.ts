@@ -61,7 +61,7 @@ const full = (id: number, over: Partial<TaskCard> = {}) =>
   ({
     id, ref: `#${id}`, title: `t${id}`, notes: "", projectId: 1, status: "todo", assignee: null,
     priority: null, due: null, dueLabel: null, completedAt: null, comments: 0, createdBy: null,
-    ready: true, blockedBy: [], memberships: [], linkedDecisions: [], blockedByDecisions: [],
+    ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [],
     ...over,
   }) as unknown as TaskCard;
 

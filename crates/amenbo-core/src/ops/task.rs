@@ -95,7 +95,7 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
     // does not count as its own sibling).
     let (project_id, order_key) = match input.project_id {
         Some(proj) => {
-            let sibs = read::membership_siblings(tx.conn(), proj, None)?;
+            let sibs = read::placement_siblings(tx.conn(), proj, None)?;
             let key = place(&sibs, &Position::Bottom)?;
             (Some(proj), Some(key))
         }
@@ -339,7 +339,7 @@ pub fn move_to(
         ));
     }
 
-    let sibs = read::membership_siblings(tx.conn(), proj, Some(id))?;
+    let sibs = read::placement_siblings(tx.conn(), proj, Some(id))?;
     let key = place(&sibs, &pos)?;
 
     let after = Task {

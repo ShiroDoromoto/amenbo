@@ -494,7 +494,7 @@ pub(crate) fn paginate<T>(mut items: Vec<T>, offset: Option<usize>, limit: Optio
 }
 
 /// The `task list` read. Selection (filter / project / sort / total) is computed by **indexed SQL**
-/// over the engine read-model ([`crate::store_engine::list_task_ids`]): membership, dependency and
+/// over the engine read-model ([`crate::store_engine::list_task_ids`]): placement, dependency and
 /// sort are all index-served `WHERE` / `ORDER BY` terms. Only the ids that made it onto the page are
 /// hydrated, straight from the SQL read-model
 /// ([`crate::store_engine::hydrate_task_cards`] — O(output), never a full-store walk). `reach` is
@@ -1680,7 +1680,7 @@ pub fn decision_detail(
 
 /// The SQL path of `task show`. Indexed SQL over the engine read-model
 /// ([`crate::store_engine::read::task_detail`]) pulls every field of a single task in one go — its
-/// memberships, the assignee facet, open blockers (with titles) and the comment count — and the row is
+/// placement, the assignee facet, open blockers (with titles) and the comment count — and the row is
 /// assembled into a [`crate::view::TaskDetail`]. If the resolved id has no row, `not_found`.
 pub fn task_detail(
     conn: &rusqlite::Connection,
@@ -1700,17 +1700,13 @@ pub fn task_detail(
         |s: &Option<String>| s.as_deref().and_then(|v| NaiveDate::parse_from_str(v, "%Y-%m-%d").ok());
     let parse_kind = |s: &Option<String>| s.as_deref().and_then(ActorKind::parse);
 
-    let memberships: Vec<crate::view::MembershipView> = row
-        .memberships
-        .into_iter()
-        .map(|m| crate::view::MembershipView {
-            project: crate::view::ProjectRef {
-                id: m.project_id,
-                name: m.project_name.unwrap_or_default(),
-            },
-            order_key: m.order_key,
-        })
-        .collect();
+    let placement = row.placement.map(|m| crate::view::PlacementView {
+        project: crate::view::ProjectRef {
+            id: m.project_id,
+            name: m.project_name.unwrap_or_default(),
+        },
+        order_key: m.order_key,
+    });
 
     let blocked_by: Vec<crate::view::TaskRef> =
         row.blocked_by.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
@@ -1739,7 +1735,7 @@ pub fn task_detail(
         start_on: parse_date(&row.start_on),
         due_on: parse_date(&row.due_on),
         priority: row.priority.as_deref().and_then(Priority::parse),
-        memberships,
+        placement,
         blocked_by,
         blocked_by_decisions,
         ready,

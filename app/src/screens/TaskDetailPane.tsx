@@ -16,16 +16,16 @@ import {
 import { errText, priorityLabel, t, tf } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
 import { useRefNav } from "../core/refNav";
-import type { Actor, ActivityItem, Facet, Membership, Priority, TaskCard } from "../mock/types";
+import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
 
-// The memberships to display. The Tauri DTO already carries task.memberships (names included); the mock
-// fallback builds a single entry by resolving the primary membership (projectId) against snapshot.projects.
-function membershipsOf(task: TaskCard): Membership[] {
-  if (task.memberships.length) return task.memberships;
-  if (!task.projectId) return [];
+// The placement to display. The Tauri DTO already carries task.placement (name included); the mock
+// fallback builds one by resolving projectId against snapshot.projects.
+function placementOf(task: TaskCard): Placement | null {
+  if (task.placement) return task.placement;
+  if (!task.projectId) return null;
   const p = getSnapshot().projects.find((pp) => pp.id === task.projectId);
-  if (!p) return [];
-  return [{ project: { id: p.id, name: p.name } }];
+  if (!p) return null;
+  return { project: { id: p.id, name: p.name } };
 }
 
 const TAB_KEYS = ["detail", "activity"] as const;
@@ -125,7 +125,7 @@ export function TaskDetailPane({
   const roster = dataAdapter.listRoster();
   if (!task) return <div className="rightpane__empty">{t("detail.notFound")}</div>;
 
-  const notesProjectId = membershipsOf(task)[0]?.project.id ?? task.projectId ?? null;
+  const notesProjectId = placementOf(task)?.project.id ?? task.projectId ?? null;
   const axisProject = notesProjectId ? getSnapshot().projects.find((p) => p.id === notesProjectId) : undefined;
 
   const startEditNotes = () => { setNotesDraft(task.notes ?? ""); setEditingNotes(true); };
@@ -251,13 +251,13 @@ export function TaskDetailPane({
             </span>
           </div>
           <div className="detail__field">
-            <span className="detail__flabel">{t("detail.membership")}</span>
+            <span className="detail__flabel">{t("detail.project")}</span>
             <span>
               {(() => {
-                const memberships = membershipsOf(task);
-                if (memberships.length === 0) return <span className="faint">{t("detail.none")}</span>;
+                const placement = placementOf(task);
+                if (!placement) return <span className="faint">{t("detail.none")}</span>;
                 // Classification is attached and detached in the dimension selects below, so this row shows only the project name.
-                return memberships[0].project.name;
+                return placement.project.name;
               })()}
             </span>
           </div>

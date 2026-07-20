@@ -97,7 +97,7 @@ fn assert_count_only_read_not_flagged(big: &Seeded) {
 /// Guard 3 — the **unfiltered board page**. It legitimately matches every task in the project, so
 /// neither the complexity-ratio guard (scanned ≈ N by design) nor the sublinearity guard (it is
 /// genuinely O(N log N), not O(result)) applies. The failure mode it must catch is a *dropped
-/// child-table index* turning each `order`-sort / membership-EXISTS subquery into a per-task table
+/// child-table index* turning each `order`-sort / placement-EXISTS subquery into a per-task table
 /// scan — O(N²): a 10k-task board read jumps from tens of ms to ~13s. An O(N²) regression cannot be
 /// distinguished from O(N log N) by any machine-independent ratio (both scan ~N rows), so the only
 /// net is wall-clock with generous headroom: the indexed read is sub-100ms even in a debug test, so
@@ -120,7 +120,7 @@ fn assert_board_read_within_budget(big: &Seeded) {
     assert!(
         t.as_millis() < BUDGET_MS,
         "unfiltered board page took {t:?} at N={BIG} (budget {BUDGET_MS}ms) — a child-table index was \
-         likely dropped, turning the order-sort/membership subqueries into per-task table scans (O(N²))"
+         likely dropped, turning the order-sort/placement subqueries into per-task table scans (O(N²))"
     );
 }
 

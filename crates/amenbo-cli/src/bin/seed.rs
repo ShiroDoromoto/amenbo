@@ -202,14 +202,9 @@ fn main() {
 mod tests {
     use super::*;
     use amenbo_core::config::Paths;
-    use std::sync::atomic::{AtomicU32, Ordering};
-
-    static COUNTER: AtomicU32 = AtomicU32::new(0);
-
-    fn temp_base(tag: &str) -> std::path::PathBuf {
-        let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let p = std::env::temp_dir().join(format!("amenbo-seed-{}-{}-{}", std::process::id(), tag, n));
-        let _ = std::fs::remove_dir_all(&p);
+    
+        fn temp_base(tag: &str) -> std::path::PathBuf {
+        let p = amenbo_scratch::scratch(&format!("seed-{tag}"));
         p
     }
 

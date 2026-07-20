@@ -15,18 +15,13 @@
 //!   genesis, not corruption. That is the boundary of what open can detect.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use amenbo_core::config::Paths;
 use amenbo_core::store_engine::{hydrate_database, read_format_version, StoreEngine};
 use amenbo_core::{archive, ops, Store};
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
 fn temp_base(tag: &str) -> PathBuf {
-    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let p = std::env::temp_dir().join(format!("amenbo-preserve-{}-{}-{}", std::process::id(), tag, n));
-    let _ = std::fs::remove_dir_all(&p);
+    let p = amenbo_scratch::scratch(&format!("preserve-{tag}"));
     p
 }
 

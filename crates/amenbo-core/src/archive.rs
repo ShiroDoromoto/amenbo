@@ -1151,9 +1151,7 @@ mod tests {
     use crate::config::Paths;
 
     fn scratch(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("amenbo-backup-{tag}-{}", crate::tmpdir::suffix()));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+        amenbo_scratch::scratch(&format!("backup-{tag}"))
     }
 
     /// Open a real store in `dir` and seed it with `names` tasks — exercises the live engine the way a

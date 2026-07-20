@@ -3,8 +3,6 @@
 //! redacted while the decision itself survives. In both cases the old content must vanish from the
 //! read model (not merely be tombstoned) and stay gone across a reopen.
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use amenbo_core::config::Paths;
 use amenbo_core::model::{ActorKind, AttachmentTarget, View};
@@ -12,17 +10,11 @@ use amenbo_core::ops;
 use amenbo_core::store::{HardEraseReport, HardEraseTarget};
 use amenbo_core::Store;
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
 const SECRET_COMMENT: &str = "OUT_OF_DESIGN_COMMENT_MARKER";
 const SECRET_SECTION: &str = "OUT_OF_DESIGN_SECTION_MARKER";
 
 fn temp_paths() -> Paths {
-    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let base: PathBuf =
-        std::env::temp_dir().join(format!("amenbo-harderase-{}-{}", std::process::id(), n));
-    let _ = std::fs::remove_dir_all(&base);
-    std::fs::create_dir_all(&base).unwrap();
+    let base = amenbo_scratch::scratch("harderase");
     Paths::at(base)
 }
 

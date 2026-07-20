@@ -3,22 +3,14 @@
 //! content) as empty, and refuse the moment any
 //! project/task exists (guardrail — never delete real data).
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use amenbo_core::config::Paths;
 use amenbo_core::model::Priority;
 use amenbo_core::ops::task::NewTask;
 use amenbo_core::Store;
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
 fn temp_paths() -> Paths {
-    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let base: PathBuf =
-        std::env::temp_dir().join(format!("amenbo-phantom-{}-{}", std::process::id(), n));
-    let _ = std::fs::remove_dir_all(&base);
-    std::fs::create_dir_all(&base).unwrap();
+    let base = amenbo_scratch::scratch("phantom");
     Paths::at(base)
 }
 

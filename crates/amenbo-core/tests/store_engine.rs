@@ -1,19 +1,12 @@
 //! The engine engine over a single local store: field writes UPSERT straight into the read-model,
 //! deletes take the row out, and startup migrates an older store's columns to the registry.
 
-use std::sync::atomic::{AtomicU32, Ordering};
-
 use amenbo_core::store_engine::{StoreEngine, StoreEngineError};
 use rusqlite::types::Value;
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
 /// A fresh temp file path for a path-backed engine (so we can reopen the same DB file).
 fn temp_db_path() -> std::path::PathBuf {
-    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let p = std::env::temp_dir().join(format!("amenbo-engine-engine-{}-{}.db", std::process::id(), n));
-    let _ = std::fs::remove_file(&p);
-    p
+    amenbo_scratch::scratch("engine").join("store.db")
 }
 
 fn txt(s: &str) -> Value {

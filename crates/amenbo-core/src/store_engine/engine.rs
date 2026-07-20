@@ -672,9 +672,7 @@ mod tests {
     /// invariant, not a comment: a DDL statement bounces off the connection.
     #[test]
     fn open_read_cannot_write() {
-        let dir = std::env::temp_dir().join(format!("amenbo-open-read-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("open-read");
         let path = dir.join("store.sqlite");
         StoreEngine::open(&path).unwrap(); // create the schema through the write-path open.
 
@@ -696,9 +694,7 @@ mod tests {
     /// wrote is integer-keyed and reads as `false`; a missing file reads as `false` (genesis).
     #[test]
     fn probe_is_legacy_keyed_reads_a_slugless_ulid_store_without_ddl() {
-        let dir = std::env::temp_dir().join(format!("amenbo-probe-legacy-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("probe-legacy");
         let legacy = dir.join("legacy.sqlite");
         {
             let conn = Connection::open(&legacy).unwrap();
@@ -723,9 +719,7 @@ mod tests {
     /// whether to clear a store, and clearing what it cannot read must never happen.
     #[test]
     fn probe_is_empty_is_strict() {
-        let dir = std::env::temp_dir().join(format!("amenbo-probe-empty-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("probe-empty");
 
         let empty = dir.join("empty.sqlite");
         {
@@ -885,8 +879,7 @@ mod tests {
     /// connections to one file are the in-process stand-in for the CLI + GUI pair.
     #[test]
     fn a_contended_transaction_waits_out_busy_timeout() {
-        let dir = std::env::temp_dir().join(format!("amenbo-tx-immediate-{}", crate::tmpdir::suffix()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("tx-immediate");
         let path = dir.join("store.sqlite");
 
         // Open both before either holds the lock: opening runs migrations, which would themselves wait.

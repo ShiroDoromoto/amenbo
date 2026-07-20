@@ -475,9 +475,7 @@ mod tests {
     use super::*;
 
     fn tmp(tag: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("amenbo-bind-{}-{}", std::process::id(), tag));
-        let _ = std::fs::remove_dir_all(&p);
-        std::fs::create_dir_all(&p).unwrap();
+        let p = amenbo_scratch::scratch(&format!("bind-{tag}"));
         p
     }
 

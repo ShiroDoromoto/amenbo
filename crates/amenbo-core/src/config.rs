@@ -717,8 +717,7 @@ mod tests {
     /// recovers the same values.
     #[test]
     fn save_is_atomic_round_trips_and_leaves_no_tmp() {
-        let dir = std::env::temp_dir().join(format!("amenbo-cfg-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = amenbo_scratch::scratch("cfg");
         let path = dir.join("config.json");
 
         let mut c = Config::default();

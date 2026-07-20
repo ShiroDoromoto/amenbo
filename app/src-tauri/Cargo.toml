@@ -49,6 +49,7 @@ notify = "8"
 
 # The store-watch tests (`tests/store_watch.rs`) dig real directories on a real filesystem.
 [dev-dependencies]
+amenbo-scratch = { path = "../../crates/amenbo-scratch" }
 tempfile = "3"
 
 # Asks `statfs(2)` whether the store's directory sits on a network filesystem (`store_watch`). On NFS

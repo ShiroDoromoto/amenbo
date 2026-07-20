@@ -18,8 +18,7 @@ fn hydrated(s: &Store) -> Database {
     /// shuts anyone else out.
     #[test]
     fn a_resident_store_does_not_shut_out_another_writer() {
-        let dir = std::env::temp_dir().join(format!("amenbo-no-flock-{}", crate::tmpdir::suffix()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("no-flock");
         // Create the store first — as it would exist before the GUI opens it.
         drop(Store::open_at(Paths::at(dir.clone())).unwrap());
 
@@ -51,8 +50,7 @@ fn hydrated(s: &Store) -> Database {
     /// comes back out of it.
     #[test]
     fn reopen_serves_database_from_the_engine() {
-        let dir = std::env::temp_dir().join(format!("amenbo-engine-truth-{}", crate::tmpdir::suffix()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("engine-truth");
 
         let tid = {
             let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
@@ -88,8 +86,7 @@ fn hydrated(s: &Store) -> Database {
     /// check); it owns no repair.
     #[test]
     fn open_leaves_the_files_beside_the_store_alone() {
-        let dir = std::env::temp_dir().join(format!("amenbo-open-untouched-{}", crate::tmpdir::suffix()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("open-untouched");
 
         // Create a live store.
         let tid = {
@@ -124,8 +121,7 @@ fn hydrated(s: &Store) -> Database {
     #[test]
     fn list_tasks_selects_and_orders_through_the_engine() {
         use crate::ops::task::NewTask;
-        let dir = std::env::temp_dir().join(format!("amenbo-list-route-{}", crate::tmpdir::suffix()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("list-route");
 
         let (a, b, c) = {
             let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
@@ -176,8 +172,7 @@ fn hydrated(s: &Store) -> Database {
     #[test]
     fn reopen_does_not_regrow_the_engine() {
         use crate::model::Priority;
-        let dir = std::env::temp_dir().join(format!("amenbo-p2-idem-{}", crate::tmpdir::suffix()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("p2-idem");
         let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
         let count = |s: &Store| -> (i64, usize) {
             let comments =
@@ -231,8 +226,7 @@ fn hydrated(s: &Store) -> Database {
     fn read_model_borrows_persistent_engine_without_reprojection() {
         use crate::model::ActorKind;
 
-        let dir = std::env::temp_dir().join(format!("amenbo-readmodel-{}", crate::tmpdir::suffix()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("readmodel");
 
         // Feed the engine through real ops; each write wrapper commits its own operation.
         {
@@ -293,8 +287,7 @@ fn version_is_newer_compares_numerically_and_ignores_metadata() {
 /// folding in the upstream release can.
 #[test]
 fn version_status_alone_never_flags_an_update() {
-    let dir = std::env::temp_dir().join(format!("amenbo-updavail-{}", crate::tmpdir::suffix()));
-    fs::create_dir_all(&dir).unwrap();
+    let dir = amenbo_scratch::scratch("updavail");
     let s = Store::open_at(Paths::at(dir.clone())).unwrap();
     let vs = s.version_status();
     assert!(!vs.update_available, "the zero-network standalone check does not flag an update");
@@ -352,8 +345,7 @@ fn with_upstream_folds_in_upstream_release() {
 
 /// Open a store in a fresh temp dir and hand back `(store, dir)`.
 fn fresh_store(tag: &str) -> (Store, std::path::PathBuf) {
-    let dir = std::env::temp_dir().join(format!("amenbo-{tag}-{}", crate::tmpdir::suffix()));
-    fs::create_dir_all(&dir).unwrap();
+    let dir = amenbo_scratch::scratch(tag);
     let s = Store::open_at(Paths::at(dir.clone())).unwrap();
     (s, dir)
 }

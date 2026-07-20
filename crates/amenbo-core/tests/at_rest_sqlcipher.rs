@@ -18,9 +18,7 @@ fn no_progress(_: &amenbo_core::progress::Progress) -> std::ops::ControlFlow<()>
 
 /// A scratch directory for one test, wiped clean before use.
 fn scratch(tag: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("amenbo-atrest-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = amenbo_scratch::scratch(&format!("atrest-{tag}"));
     dir
 }
 

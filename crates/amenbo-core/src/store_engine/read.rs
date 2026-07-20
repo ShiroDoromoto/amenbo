@@ -3733,8 +3733,7 @@ mod tests {
     /// the connection's own writes, which is what lets the GUI tell an external write apart from its own.
     #[test]
     fn data_version_moves_for_another_connections_commit_and_not_for_ones_own() {
-        let dir = std::env::temp_dir().join(format!("amenbo-dataversion-{}", crate::tmpdir::suffix()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("dataversion");
         let path = dir.join("store.sqlite");
 
         let watcher = StoreEngine::open(&path).unwrap();

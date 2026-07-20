@@ -1,54 +1,12 @@
 //! End-to-end integration tests for the CLI: the built binary is run against a throwaway AMENBO_HOME.
 
 use std::process::Command;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Once;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
-/// The one parent every throwaway directory in this file sits under, so the sweep below can only ever
-/// reach leftovers of these tests — never a neighbour's files under `temp_dir()`.
-fn scratch_root() -> std::path::PathBuf {
-    std::env::temp_dir().join("amenbo-test")
-}
-
-/// A throwaway directory nobody else holds, named `<tag>-<pid>-<nanos>-<n>`.
-///
-/// Uniqueness must not rest on the pid alone: the OS recycles ids, so two runs were handed the same path
-/// and one could open the other's leftovers — or wipe a live run's working directory on its way in. The
-/// wall clock separates runs, the counter separates calls within a run, and the pid separates two runs
-/// that start in the same nanosecond. The path returned is new, so there is nothing to wipe first.
-fn scratch(tag: &str) -> std::path::PathBuf {
-    sweep_old_scratch();
-    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    scratch_root().join(format!("{tag}-{:x}-{nanos:x}-{n:x}", std::process::id()))
-}
-
-/// Sweep on the way in, not on the way out. A `Drop` guard never runs when nextest kills a hung test (nor
-/// under Ctrl-C or `process::exit`), and it would take the wreckage of a failure with it — which is the
-/// thing one wants to read afterwards. Leaving the job to whoever runs next survives both, and caps what
-/// accumulates at a day's worth. Only entries older than that go, so a parallel run is never touched.
-fn sweep_old_scratch() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| {
-        let cutoff = SystemTime::now() - Duration::from_secs(24 * 60 * 60);
-        let Ok(entries) = std::fs::read_dir(scratch_root()) else { return };
-        for entry in entries.flatten() {
-            let stale = entry.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < cutoff);
-            if stale {
-                let _ = std::fs::remove_dir_all(entry.path());
-            }
-        }
-    });
-}
-
 /// A fresh, isolated AMENBO_HOME for each test.
 fn temp_home() -> std::path::PathBuf {
-    scratch("home")
+    amenbo_scratch::scratch("home")
 }
 
 struct Cli {
@@ -1257,8 +1215,7 @@ fn bind_dir_places_pointer_in_external_folder() {
     let pid = id_str(&cli.json(&["project", "add", "--name", "外部PJ", "--json"])["project"]["id"]);
 
     // Make an empty folder outside home and bind it from a different CWD.
-    let ext = scratch("ext");
-    std::fs::create_dir_all(&ext).unwrap();
+    let ext = amenbo_scratch::scratch("ext");
     let ext_str = ext.to_string_lossy().to_string();
 
     let bound = cli.json(&["bind", "--project", &pid, "--dir", &ext_str, "--json"]);
@@ -1283,8 +1240,7 @@ fn project_show_lists_bound_folders_with_existence() {
 
     // Bind the CWD (home) as the main folder, plus an external folder via `--dir` (many-to-one).
     cli.run(&["bind", "--project", &pid]);
-    let ext = scratch("bf");
-    std::fs::create_dir_all(&ext).unwrap();
+    let ext = amenbo_scratch::scratch("bf");
     let ext_str = ext.to_string_lossy().to_string();
     cli.run(&["bind", "--project", &pid, "--dir", &ext_str]);
     // `--dir` is canonicalized (symlinks resolved) before it is recorded; match on that path later.
@@ -1314,8 +1270,7 @@ fn doctor_and_project_show_flag_a_bound_folder_whose_pointer_vanished() {
     cli.run(&["init", "--name", "tester"]);
     let pid = id_str(&cli.json(&["project", "add", "--name", "ポインタ消失PJ", "--json"])["project"]["id"]);
 
-    let ext = scratch("mp");
-    std::fs::create_dir_all(&ext).unwrap();
+    let ext = amenbo_scratch::scratch("mp");
     let ext_str = ext.to_string_lossy().to_string();
     cli.run(&["bind", "--project", &pid, "--dir", &ext_str]);
     let ext_canon = std::fs::canonicalize(&ext).unwrap().to_string_lossy().to_string();
@@ -2878,8 +2833,7 @@ fn an_ais_diagnostics_and_export_stay_inside_the_project_it_is_bound_to() {
     // doctor: no other project's folder path, and no project id, reaches the AI's surface. Register a folder
     // outside the binding and remove its pointer, so doctor lists it as a bound folder whose `.amenbo` vanished.
     // It must sit outside this CWD — no `.amenbo` may stand above a bound folder (bind's ancestor guard).
-    let stray = scratch("stray");
-    std::fs::create_dir_all(&stray).unwrap();
+    let stray = amenbo_scratch::scratch("stray");
     let stray_path = stray.display().to_string();
     cli.json(&["bind", "--project", &other, "--dir", &stray_path, "--json"]);
     std::fs::remove_file(stray.join(".amenbo")).unwrap();
@@ -3123,6 +3077,12 @@ fn an_ai_cannot_read_an_out_of_reach_entity_by_its_raw_id() {
 /// points at a directory that does not exist and each test asserts it still does not afterwards — which
 /// keeps the run hermetic (a regression that opened a store would create it there, never in the real
 /// app-data tree) *and* is itself the evidence that no store was opened.
+/// An `AMENBO_HOME` that does not exist — a name inside a scratch directory, one level down, which
+/// nothing creates. [`lint`] asserts it is still missing afterwards, so it has to start out missing.
+fn unopened_home() -> std::path::PathBuf {
+    amenbo_scratch::scratch("lint-home").join("home")
+}
+
 fn lint(cwd: &std::path::Path, home: &std::path::Path, args: &[&str], stdin: Option<&str>) -> (String, String, i32) {
     use std::io::Write;
     let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
@@ -3168,14 +3128,13 @@ fn git(dir: &std::path::Path, args: &[&str]) {
 
 /// A repository with one commit behind it, at a fresh path.
 ///
-/// Fresh is what [`scratch`] hands back, and this function needs it to be: when a recycled pid once named
+/// Fresh is what [`amenbo_scratch::scratch`] hands back, and this function needs it to be: when a recycled pid once named
 /// this repository, it already existed, already had `a.rs` at exactly this content, and already had the
 /// `base` commit. `git add -A` then staged nothing and `git commit -qm base` exited non-zero saying
 /// "nothing to commit" on stdout, which `-q` swallowed — a rare, silent, empty-stderr failure of an
 /// unrelated test.
 fn a_repo() -> std::path::PathBuf {
-    let dir = scratch("repo");
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = amenbo_scratch::scratch("repo");
     git(&dir, &["init", "-q", "."]);
     // A commit needs an identity, and the machine's own must not decide a test's outcome.
     git(&dir, &["config", "user.email", "alice@example.com"]);
@@ -3191,7 +3150,7 @@ fn a_repo() -> std::path::PathBuf {
 #[test]
 fn lint_reads_the_staged_diff_by_default() {
     let repo = a_repo();
-    let home = temp_home();
+    let home = unopened_home();
     std::fs::write(repo.join("a.rs"), "fn main() {}\n// as decided in AMB-D-272\n").unwrap();
     git(&repo, &["add", "-A"]);
 
@@ -3217,7 +3176,7 @@ fn lint_reads_the_staged_diff_by_default() {
 #[test]
 fn lint_reads_a_commit_message_file() {
     let repo = a_repo();
-    let home = temp_home();
+    let home = unopened_home();
     let msg = repo.join("COMMIT_EDITMSG");
     std::fs::write(&msg, "feat(lint): add it\n\ncloses AMB-T-1655\n").unwrap();
 
@@ -3231,7 +3190,7 @@ fn lint_reads_a_commit_message_file() {
 #[test]
 fn lint_reads_stdin_and_leaves_foreign_refs_alone() {
     let repo = a_repo();
-    let home = temp_home();
+    let home = unopened_home();
 
     let (out, _, code) = lint(&repo, &home, &["--stdin"], Some("fixes #12, part of PROJ-9 and T-45\n"));
     assert_eq!(code, 0, "no amenbo ref, so nothing to report: {out}");
@@ -3245,9 +3204,8 @@ fn lint_reads_stdin_and_leaves_foreign_refs_alone() {
 /// that case with its whole usage text, which is no use to anyone.)
 #[test]
 fn lint_outside_a_repository_says_so_plainly() {
-    let dir = scratch("plain");
-    std::fs::create_dir_all(&dir).unwrap();
-    let home = temp_home();
+    let dir = amenbo_scratch::scratch("plain");
+    let home = unopened_home();
 
     let (_, err, code) = lint(&dir, &home, &["--json"], None);
     assert_ne!(code, 0);

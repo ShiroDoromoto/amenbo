@@ -17,6 +17,7 @@ lives on your machine in a single SQLite store and can be exported at any time.
 crates/
   amenbo-core/        domain model, persistence, operations, queries, export
   amenbo-cli/         the `amenbo` binary (clap; human + --json output; `agent --json`)
+  amenbo-scratch/     test support: the throwaway directory a test works in
 ```
 
 Design points:

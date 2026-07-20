@@ -496,8 +496,7 @@ mod export_tests {
     use std::path::Path;
 
     fn scratch(tag: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("amenbo-export-{tag}-{}", crate::tmpdir::suffix()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch(&format!("export-{tag}"));
         dir
     }
 

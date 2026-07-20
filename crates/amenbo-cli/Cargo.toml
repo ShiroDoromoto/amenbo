@@ -35,6 +35,9 @@ rpassword = "7"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+[dev-dependencies]
+amenbo-scratch.workspace = true
+
 # Real-binary end-to-end suite. Gated behind `e2e`; build/run it with `cargo test --features e2e`.
 [[test]]
 name = "cli_e2e"

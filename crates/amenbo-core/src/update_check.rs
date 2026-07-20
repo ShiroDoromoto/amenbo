@@ -437,7 +437,7 @@ mod tests {
     /// The cache round-trips: what we write is what we read back.
     #[test]
     fn cache_round_trip() {
-        let dir = std::env::temp_dir().join(format!("amenbo-update-test-{}", std::process::id()));
+        let dir = amenbo_scratch::scratch("update-test");
         let path = dir.join("update_check.json");
         let env = CacheEnvelope {
             fetched_at: 42,

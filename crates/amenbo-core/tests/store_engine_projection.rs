@@ -5,8 +5,6 @@
 //! drops would rot every fixture, and a column it drops would be a real write losing a field. This
 //! pins that they land.
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use amenbo_core::config::Paths;
 use amenbo_core::model::{ActorKind, Database, Priority, TaskStatus};
@@ -14,13 +12,8 @@ use amenbo_core::ops::{self};
 use amenbo_core::store_engine::{self, StoreEngine};
 use amenbo_core::Store;
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
 fn temp_paths() -> Paths {
-    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let base: PathBuf = std::env::temp_dir().join(format!("amenbo-projection-{}-{}", std::process::id(), n));
-    let _ = std::fs::remove_dir_all(&base);
-    std::fs::create_dir_all(&base).unwrap();
+    let base = amenbo_scratch::scratch("projection");
     Paths::at(base)
 }
 

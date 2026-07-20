@@ -408,8 +408,7 @@ mod tests {
     use super::*;
 
     fn dir(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("amenbo-activity-{tag}-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch(&format!("activity-{tag}"));
         dir
     }
 

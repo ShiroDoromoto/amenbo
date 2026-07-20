@@ -603,8 +603,7 @@ mod tests {
         )
         .unwrap();
 
-        let dir = std::env::temp_dir().join(format!("amenbo-activity-read-{tag}-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch(&format!("activity-read-{tag}"));
         let ledger = dir.join(activity_log::FILE_NAME);
         std::fs::remove_file(&ledger).ok();
         (e, ledger)
@@ -746,8 +745,7 @@ mod tests {
     /// table"), never *where* — and a timeline is read out of one store among many.
     #[test]
     fn a_failed_read_names_the_file_it_was_reading() {
-        let dir = std::env::temp_dir().join(format!("amenbo-activity-name-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("activity-name");
         let db = dir.join(crate::config::STORE_FILE_NAME);
         std::fs::remove_file(&db).ok();
 

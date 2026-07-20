@@ -4289,9 +4289,7 @@ mod tests {
     /// application still has in front of the user.
     #[test]
     fn a_later_open_reclaims_the_temp_copies_the_earlier_ones_could_not() {
-        let dir = std::env::temp_dir().join(format!("amenbo-sweep-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("sweep-test");
 
         let stale = dir.join("amenbo-oldhash.pdf");
         let fresh = dir.join("amenbo-newhash.png");

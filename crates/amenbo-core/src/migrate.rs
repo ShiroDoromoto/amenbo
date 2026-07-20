@@ -408,8 +408,7 @@ mod tests {
     use crate::store_engine::migrate::Apply;
 
     fn scratch(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("amenbo-migrate-{tag}-{}", crate::tmpdir::suffix()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch(&format!("migrate-{tag}"));
         dir
     }
 

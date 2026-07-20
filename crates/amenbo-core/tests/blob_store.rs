@@ -3,8 +3,6 @@
 //! **GC root set** are derived from the live `blob` attachments in the engine read-model — so a blob
 //! survives exactly while some live attachment points at it, and `gc_blobs()` collects the rest.
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, SystemTime};
 
 use amenbo_core::config::Paths;
@@ -12,13 +10,8 @@ use amenbo_core::model::{ActorKind, AttachmentTarget};
 use amenbo_core::store_engine::read;
 use amenbo_core::Store;
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
 fn temp_paths() -> Paths {
-    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let base: PathBuf = std::env::temp_dir().join(format!("amenbo-blobstore-{}-{}", std::process::id(), n));
-    let _ = std::fs::remove_dir_all(&base);
-    std::fs::create_dir_all(&base).unwrap();
+    let base = amenbo_scratch::scratch("blobstore");
     Paths::at(base)
 }
 

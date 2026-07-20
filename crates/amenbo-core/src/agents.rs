@@ -414,9 +414,7 @@ mod tests {
 
     #[test]
     fn upsert_into_dir_writes_both_files_and_is_idempotent() {
-        let dir = std::env::temp_dir().join(format!("amenbo-agents-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("agents-test");
         // Put a hand-written (Class P) CLAUDE.md there: the block must be appended to it and the
         // content preserved.
         std::fs::write(dir.join("CLAUDE.md"), "# Project rules\n\nhand-written.\n").unwrap();
@@ -467,9 +465,7 @@ mod tests {
 
     #[test]
     fn remove_from_dir_strips_blocks_and_deletes_pure_block_files() {
-        let dir = std::env::temp_dir().join(format!("amenbo-agents-remove-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("agents-remove");
         // AGENTS.md holds nothing but the block (bind created it) → it is deleted. CLAUDE.md carries
         // Class P content → only the block is dropped.
         std::fs::write(dir.join("AGENTS.md"), upsert_managed(None, &body())).unwrap();
@@ -557,9 +553,7 @@ mod tests {
         assert_eq!(extract_managed_language(&legacy).as_deref(), Some("Japanese"));
         assert_eq!(strip_managed(&legacy).as_deref(), Some(""), "a legacy block-only file strips to empty");
 
-        let dir = std::env::temp_dir().join(format!("amenbo-agents-legacy-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("agents-legacy");
         std::fs::write(dir.join("CLAUDE.md"), format!("# P\n\n{legacy}\n")).unwrap();
         assert!(dir_has_managed_block(&dir), "clobber guard detects a legacy marker");
         let _ = std::fs::remove_dir_all(&dir);
@@ -571,9 +565,7 @@ mod tests {
         // `(managed)` block with `lang_code = None` (1) raises the marker to the current version,
         // (2) keeps the existing block's language label (None means "not specified — respect what
         // is there"), and (3) changes nothing on a second call (idempotent).
-        let dir = std::env::temp_dir().join(format!("amenbo-agents-resync-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("agents-resync");
         // An old unversioned block an earlier binary wrote with a Japanese label — a language that
         // is distinguishable from the English default None would fall back to.
         let legacy_ja = format!(
@@ -605,9 +597,7 @@ mod tests {
         // AGENTS.md is absent, a resync with `lang_code = None` regenerates AGENTS.md **in
         // Japanese**, matching its sibling — it must not fall back to English, so the two files in
         // one folder never disagree on the language.
-        let dir = std::env::temp_dir().join(format!("amenbo-agents-sibling-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("agents-sibling");
         // CLAUDE.md carries a current-version Japanese block; AGENTS.md is left absent.
         std::fs::write(dir.join("CLAUDE.md"), wrap(&managed_block_body("Japanese", "amenbo"))).unwrap();
         assert!(!dir.join("AGENTS.md").exists(), "AGENTS.md starts absent");
@@ -628,8 +618,7 @@ mod tests {
         // detects it without rewriting, `resync_bound_blocks` raises it to the current version, and
         // the stale list then comes back empty. The GUI and the CLI's doctor/sync-guide both go
         // through these two functions.
-        let base = std::env::temp_dir().join(format!("amenbo-stale-resync-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&base);
+        let base = amenbo_scratch::scratch("stale-resync");
         let bound = base.join("repo");
         std::fs::create_dir_all(&bound).unwrap();
         let legacy = format!(
@@ -670,9 +659,7 @@ mod tests {
     /// A throwaway folder for one test, keyed by name so tests running in parallel in the same
     /// process do not collide.
     fn scratch_dir(key: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("amenbo-agents-{key}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch(&format!("agents-{key}"));
         dir
     }
 
@@ -758,9 +745,7 @@ mod tests {
 
     #[test]
     fn dir_has_managed_block_detects_existing_markers() {
-        let dir = std::env::temp_dir().join(format!("amenbo-agents-hasblock-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("agents-hasblock");
         assert!(!dir_has_managed_block(&dir), "empty dir has no managed block");
         // A hand-written CLAUDE.md with no markers does not count.
         std::fs::write(dir.join("CLAUDE.md"), "# hand-written only\n").unwrap();
@@ -775,9 +760,7 @@ mod tests {
     fn unset_language_preserves_an_existing_block_instead_of_downgrading_to_english() {
         // Updating an existing Japanese block with the language unset (None) keeps it Japanese
         // rather than flattening it to English.
-        let dir = std::env::temp_dir().join(format!("amenbo-agents-langpreserve-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("agents-langpreserve");
         // Given: a Japanese managed block, as another store with language ja would have written it.
         let ja = wrap(&managed_block_body("Japanese", "amenbo"));
         std::fs::write(dir.join("CLAUDE.md"), &ja).unwrap();

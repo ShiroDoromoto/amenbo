@@ -129,8 +129,9 @@ mod tests {
     /// While OFF (the `off` filter) make_writer is never called, so this write never happens and no file is made.
     #[test]
     fn lazy_writer_creates_file_only_on_first_write() {
-        let dir = std::env::temp_dir().join(format!("amenbo-perf-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        // One level below a scratch directory: the point of the test is that nothing exists until the
+        // first write, and `scratch` creates what it hands back.
+        let dir = amenbo_scratch::scratch("perf-test").join("logs");
         let lazy = LazyRolling::new(dir.clone());
 
         // Merely constructing it, and even taking a writer from it, creates nothing (the OFF case).
@@ -154,10 +155,7 @@ mod tests {
     /// the appender on the first write prunes the old generations down to the last [`MAX_LOG_FILES`].
     #[test]
     fn retention_prunes_old_files_to_the_cap() {
-        let dir = std::env::temp_dir()
-            .join(format!("amenbo-perf-retention-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("perf-retention");
 
         // Lay down far more old generations than the cap allows (past dates, not today).
         for day in 1..=(MAX_LOG_FILES + 5) {

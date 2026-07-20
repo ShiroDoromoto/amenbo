@@ -159,8 +159,7 @@ mod tests {
     }
 
     fn temp_store(tag: &str) -> (std::path::PathBuf, std::path::PathBuf) {
-        let dir = std::env::temp_dir().join(format!("amenbo-{tag}-{}", crate::tmpdir::suffix()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch(tag);
         let path = dir.join("store.sqlite");
         (dir, path)
     }

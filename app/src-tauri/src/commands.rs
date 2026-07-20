@@ -4130,8 +4130,7 @@ mod tests {
     #[test]
     fn store_signature_moves_on_an_external_writers_wal_only_commit() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-wal-sig-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("wal-sig");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let project_id = {
@@ -4183,8 +4182,7 @@ mod tests {
     #[test]
     fn task_status_surfaces_not_ready_with_its_reason() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-notready-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("notready");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let project_id = {
@@ -4231,8 +4229,7 @@ mod tests {
     #[test]
     fn task_card_holds_ready_down_until_the_declared_start_day_arrives() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-startday-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("startday");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let project_id = {
@@ -4289,8 +4286,7 @@ mod tests {
     #[test]
     fn task_card_names_the_unsettled_premise_that_holds_ready_down() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-premise-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("premise");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let project_id = {
@@ -4336,8 +4332,7 @@ mod tests {
     #[test]
     fn write_commands_round_trip() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-test");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let project_id = {
@@ -4450,8 +4445,7 @@ mod tests {
     #[test]
     fn decision_comment_commands_round_trip() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-deccomment-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-deccomment");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let project_id = {
@@ -4506,8 +4500,7 @@ mod tests {
     #[test]
     fn decision_card_carries_every_cross_link() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-deccard-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-deccard");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let project_id = {
@@ -4592,8 +4585,7 @@ mod tests {
     #[test]
     fn comment_remove_drops_it_from_the_task_activity() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-commentrm-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-commentrm");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let _ = project_add("PJ".into()).unwrap();
@@ -4627,8 +4619,7 @@ mod tests {
     #[test]
     fn comment_edit_rewrites_the_body_in_place() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-commentedit-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-commentedit");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let _ = project_add("PJ".into()).unwrap();
@@ -4661,8 +4652,7 @@ mod tests {
     #[test]
     fn project_add_provisions_store() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-projadd-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-projadd");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let ack = project_add("新規プロジェクト".into()).unwrap();
@@ -4687,8 +4677,7 @@ mod tests {
     #[test]
     fn project_settings_round_trip_via_command() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-projset-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-projset");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         project_add("設定PJ".into()).unwrap();
@@ -4764,8 +4753,7 @@ mod tests {
     #[test]
     fn project_move_reorders_via_command() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-projmove-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-projmove");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let (a, b, c) = {
@@ -4815,8 +4803,7 @@ mod tests {
     #[test]
     fn comment_attachment_round_trips_via_command() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-cattach-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-cattach");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let project_id = {
@@ -4871,8 +4858,8 @@ mod tests {
     #[test]
     fn project_add_folder_inits_visible_project_and_guards() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-projfolder-home-{}", std::process::id()));
-        let dir = std::env::temp_dir().join(format!("amenbo-app-projfolder-dir-{}", std::process::id()));
+        let tmp = amenbo_scratch::scratch("app-projfolder-home");
+        let dir = amenbo_scratch::scratch("app-projfolder-dir");
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -4905,8 +4892,8 @@ mod tests {
     #[test]
     fn project_add_folder_marker_only_continues_and_recovers_the_pointer() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-markeronly-home-{}", std::process::id()));
-        let dir = std::env::temp_dir().join(format!("amenbo-app-markeronly-dir-{}", std::process::id()));
+        let tmp = amenbo_scratch::scratch("app-markeronly-home");
+        let dir = amenbo_scratch::scratch("app-markeronly-dir");
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -4929,8 +4916,8 @@ mod tests {
     #[test]
     fn project_add_folder_uses_provided_name_over_basename() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-projfolder-name-home-{}", std::process::id()));
-        let dir = std::env::temp_dir().join(format!("amenbo-app-projfolder-name-dir-{}", std::process::id()));
+        let tmp = amenbo_scratch::scratch("app-projfolder-name-home");
+        let dir = amenbo_scratch::scratch("app-projfolder-name-dir");
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -4964,8 +4951,8 @@ mod tests {
     #[test]
     fn project_bind_unbind_folder_round_trips() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-bindfolder-home-{}", std::process::id()));
-        let dir = std::env::temp_dir().join(format!("amenbo-app-bindfolder-dir-{}", std::process::id()));
+        let tmp = amenbo_scratch::scratch("app-bindfolder-home");
+        let dir = amenbo_scratch::scratch("app-bindfolder-dir");
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -5024,8 +5011,8 @@ mod tests {
     #[test]
     fn a_bound_folder_that_lost_its_pointer_says_so() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-nopointer-home-{}", std::process::id()));
-        let dir = std::env::temp_dir().join(format!("amenbo-app-nopointer-dir-{}", std::process::id()));
+        let tmp = amenbo_scratch::scratch("app-nopointer-home");
+        let dir = amenbo_scratch::scratch("app-nopointer-dir");
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -5072,8 +5059,8 @@ mod tests {
     #[test]
     fn bound_folder_rows_inspect_their_pointer() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-pointerscan-home-{}", std::process::id()));
-        let dir = std::env::temp_dir().join(format!("amenbo-app-pointerscan-dir-{}", std::process::id()));
+        let tmp = amenbo_scratch::scratch("app-pointerscan-home");
+        let dir = amenbo_scratch::scratch("app-pointerscan-dir");
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -5127,8 +5114,8 @@ mod tests {
     #[test]
     fn the_gui_sees_and_forgets_folder_bindings_no_project_claims() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-orphanbind-home-{}", std::process::id()));
-        let dir = std::env::temp_dir().join(format!("amenbo-app-orphanbind-dir-{}", std::process::id()));
+        let tmp = amenbo_scratch::scratch("app-orphanbind-home");
+        let dir = amenbo_scratch::scratch("app-orphanbind-dir");
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -5149,8 +5136,7 @@ mod tests {
         project_bind_folder(project_id, dir.to_string_lossy().to_string()).unwrap();
         assert!(orphan_bindings().unwrap().is_empty(), "a folder claimed by a live project is not an orphan");
 
-        let orphan = std::env::temp_dir().join(format!("amenbo-app-orphanbind-left-{}", std::process::id()));
-        std::fs::create_dir_all(&orphan).unwrap();
+        let orphan = amenbo_scratch::scratch("app-orphanbind-left");
         {
             let store = Store::open().unwrap();
             let mut reg = store.bindings();
@@ -5182,8 +5168,8 @@ mod tests {
     #[test]
     fn the_gui_doctor_face_shows_the_same_issues_and_repairs_them() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-doctor-home-{}", std::process::id()));
-        let orphan = std::env::temp_dir().join(format!("amenbo-app-doctor-left-{}", std::process::id()));
+        let tmp = amenbo_scratch::scratch("app-doctor-home");
+        let orphan = amenbo_scratch::scratch("app-doctor-left");
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&orphan);
         std::fs::create_dir_all(&orphan).unwrap();
@@ -5235,8 +5221,8 @@ mod tests {
     /// Finder or a terminal, so it is left untested; only the guard (the is_dir check) is checked.
     #[test]
     fn reveal_and_terminal_reject_missing_folder() {
-        let missing = std::env::temp_dir().join(format!("amenbo-app-missing-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&missing);
+        // One level below a scratch directory, so the name exists nowhere: `scratch` creates what it hands back.
+        let missing = amenbo_scratch::scratch("app-missing").join("gone");
         let path = missing.to_string_lossy().to_string();
         assert!(reveal_folder(path.clone()).is_err(), "reveal_folder rejects a non-existent folder");
         assert!(open_terminal(path).is_err(), "open_terminal rejects a non-existent folder");
@@ -5248,8 +5234,7 @@ mod tests {
     #[test]
     fn axis_commands_round_trip() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-axis-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-axis");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let (project_id, dim_id, v1, v2) = {
@@ -5296,8 +5281,7 @@ mod tests {
     #[test]
     fn task_add_into_empty_project_places_the_task() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-emptypj-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-emptypj");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let project_id = {
@@ -5337,8 +5321,7 @@ mod tests {
     #[test]
     fn task_page_pages_and_filters() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-taskpage-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-taskpage");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let project_id = {
@@ -5405,8 +5388,7 @@ mod tests {
     #[test]
     fn tasks_by_ids_hydrates_in_input_order_and_drops_missing() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-byids-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-byids");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let mut ids = Vec::new();
@@ -5456,8 +5438,7 @@ mod tests {
     #[test]
     fn task_activity_reads_newest_first_from_read_model() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-activity-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-activity");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let (task_id, other_id) = {
@@ -5535,8 +5516,7 @@ mod tests {
     #[test]
     fn read_receipts_round_trip() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-rr-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-rr");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let rr = read_receipts().unwrap();
@@ -5562,8 +5542,7 @@ mod tests {
     #[test]
     fn mailbox_comment_tasks_stays_after_read() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-m5-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-m5");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let id = task_add(None, "受信箱D".into(), None).unwrap().tasks[0];
@@ -5612,8 +5591,7 @@ mod tests {
     #[test]
     fn mailbox_triggered_at_reports_latest_cause() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-trig-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-trig");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         assert!(mailbox_triggered_at(vec![]).unwrap().is_empty(), "empty input is empty");
@@ -5646,8 +5624,7 @@ mod tests {
     #[test]
     fn read_open_matches_full_open() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-readopen-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("app-readopen");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let _seeded = {
@@ -5738,8 +5715,7 @@ mod tests {
     #[test]
     fn changes_since_advances_with_the_cursor() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-feed-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = amenbo_scratch::scratch("feed");
         std::env::set_var("AMENBO_HOME", &tmp);
 
         let project_id = {
@@ -5804,8 +5780,8 @@ mod tests {
     #[test]
     fn hook_offer_is_raised_only_by_a_bound_git_folder_and_only_once() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-hookoffers-home-{}", std::process::id()));
-        let base = std::env::temp_dir().join(format!("amenbo-app-hookoffers-dirs-{}", std::process::id()));
+        let tmp = amenbo_scratch::scratch("app-hookoffers-home");
+        let base = amenbo_scratch::scratch("app-hookoffers-dirs");
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&base);
         std::env::set_var("AMENBO_HOME", &tmp);
@@ -5882,8 +5858,8 @@ mod tests {
     #[test]
     fn a_yes_reaches_folders_bound_later_but_never_an_opted_out_one() {
         let _env = env_guard();
-        let tmp = std::env::temp_dir().join(format!("amenbo-app-hooksettle-home-{}", std::process::id()));
-        let base = std::env::temp_dir().join(format!("amenbo-app-hooksettle-dirs-{}", std::process::id()));
+        let tmp = amenbo_scratch::scratch("app-hooksettle-home");
+        let base = amenbo_scratch::scratch("app-hooksettle-dirs");
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&base);
         std::env::set_var("AMENBO_HOME", &tmp);

@@ -1,0 +1,11 @@
+[package]
+name = "amenbo-scratch"
+description = "Throwaway directories for the tests: one parent, a name nobody else takes, swept on the way in"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# Test support only — nothing here is ever linked into a shipped binary.
+publish = false
+
+[dependencies]

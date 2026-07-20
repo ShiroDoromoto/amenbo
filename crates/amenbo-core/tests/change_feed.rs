@@ -9,22 +9,14 @@
 //! so it inherits the feed without anyone remembering to.
 
 use std::collections::HashSet;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use amenbo_core::config::Paths;
 use amenbo_core::model::ActorKind;
 use amenbo_core::store_engine::read::{self, FeedRow, FeedSlice};
 use amenbo_core::Store;
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
 fn temp_store() -> Store {
-    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let base: PathBuf =
-        std::env::temp_dir().join(format!("amenbo-feed-{}-{}", std::process::id(), n));
-    let _ = std::fs::remove_dir_all(&base);
-    std::fs::create_dir_all(&base).unwrap();
+    let base = amenbo_scratch::scratch("feed");
     Store::open_at(Paths::at(base)).unwrap()
 }
 
@@ -341,11 +333,7 @@ fn a_short_page_says_there_is_more() {
 /// bound, so the shape of the client cannot decide whether the feed is bounded.
 #[test]
 fn the_bound_holds_when_every_write_is_a_new_process() {
-    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let base: PathBuf =
-        std::env::temp_dir().join(format!("amenbo-feed-cli-{}-{}", std::process::id(), n));
-    let _ = std::fs::remove_dir_all(&base);
-    std::fs::create_dir_all(&base).unwrap();
+    let base = amenbo_scratch::scratch("feed-cli");
     let paths = Paths::at(base);
 
     // Grow the feed past the retention, then close the store — as a run of CLI commands leaves it.

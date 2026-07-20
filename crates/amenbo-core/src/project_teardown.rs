@@ -97,9 +97,7 @@ mod tests {
     /// `.amenbo` removed, and the folder forgotten in the bindings indexes.
     #[test]
     fn release_folder_removes_pointer_marker_and_forgets_binding() {
-        let tmp = std::env::temp_dir().join(format!("amenbo-teardown-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
+        let tmp = amenbo_scratch::scratch("teardown");
         let dir = tmp.to_string_lossy().to_string();
 
         // Set up the `.amenbo` pointer and the bindings entry.

@@ -63,6 +63,7 @@ ureq = "3"
 pulldown-cmark = { version = "0.13", default-features = false }
 
 [dev-dependencies]
+amenbo-scratch.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
 # Property/fuzz testing of the hand-rolled parsers, where the input is whatever a user hands us and

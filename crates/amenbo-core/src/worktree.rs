@@ -103,9 +103,7 @@ mod tests {
     use crate::binding::DirBinding;
 
     fn tmp(tag: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("amenbo-wt-{}-{}", std::process::id(), tag));
-        let _ = std::fs::remove_dir_all(&p);
-        std::fs::create_dir_all(&p).unwrap();
+        let p = amenbo_scratch::scratch(&format!("wt-{tag}"));
         // `std::env::temp_dir()` is a symlink on macOS (/tmp → /private/tmp). The predicate compares two
         // paths reached from one CWD, so it needs no canonicalization — but the test builds its paths by
         // hand, so it levels them here.

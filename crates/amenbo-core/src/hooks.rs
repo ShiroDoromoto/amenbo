@@ -1090,8 +1090,7 @@ mod tests {
     #[test]
     fn an_uninstalled_amenbo_never_blocks_a_commit() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!("amenbo-hook-run-{}", crate::tmpdir::suffix()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("hook-run");
         let bin = dir.join("bin");
         std::fs::create_dir_all(&bin).unwrap();
         let fake_amenbo = |body: &str| {
@@ -1163,9 +1162,7 @@ mod tests {
     /// A throwaway git repository, so the tests below exercise the real `git` the installer asks. Returns
     /// the working tree; the caller wipes it.
     fn git_repo(key: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("amenbo-hooks-{key}-{}", crate::tmpdir::suffix()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch(&format!("hooks-{key}"));
         let out = std::process::Command::new("git").current_dir(&dir).args(["init", "-q"]).output().unwrap();
         assert!(out.status.success(), "git init failed: {}", String::from_utf8_lossy(&out.stderr));
         dir
@@ -1444,8 +1441,7 @@ mod tests {
 
     #[test]
     fn outside_a_repository_there_is_nothing_to_probe_or_install() {
-        let dir = std::env::temp_dir().join(format!("amenbo-hooks-bare-{}", crate::tmpdir::suffix()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = amenbo_scratch::scratch("hooks-bare");
 
         assert_eq!(probe(&dir), None);
         assert!(install(&dir, "amenbo").is_err());

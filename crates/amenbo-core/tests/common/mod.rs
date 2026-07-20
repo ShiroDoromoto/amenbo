@@ -17,7 +17,6 @@
 #![allow(dead_code)] // each consumer (bench / guard) uses a different subset of these helpers.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use amenbo_core::model::{
@@ -27,8 +26,6 @@ use amenbo_core::model::{
 use amenbo_core::store_engine::{self, StoreEngine};
 use amenbo_core::query::Filter;
 use amenbo_core::time::{self, Timestamp};
-
-static COUNTER: AtomicU32 = AtomicU32::new(0);
 
 /// Size of the fixed hot carve-out — the set the selective reads (mailbox list, decisions) match,
 /// regardless of N. Above [`amenbo_core::perf::COMPLEXITY_MIN_ROWS`]'s noise floor would defeat the
@@ -57,10 +54,7 @@ impl Drop for Seeded {
 }
 
 fn temp_paths() -> (PathBuf, amenbo_core::config::Paths) {
-    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let base = std::env::temp_dir().join(format!("amenbo-scale-{}-{}", std::process::id(), n));
-    let _ = std::fs::remove_dir_all(&base);
-    std::fs::create_dir_all(&base).unwrap();
+    let base = amenbo_scratch::scratch("scale");
     let paths = amenbo_core::config::Paths::at(base.clone());
     (base, paths)
 }

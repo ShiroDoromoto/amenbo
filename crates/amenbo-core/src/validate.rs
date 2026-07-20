@@ -19,7 +19,7 @@ use crate::reach::Reach;
 
 
 use crate::store_engine::schema::col;
-use crate::store_engine::sql::{same, Expr, Pred, Select, Slot, Sql};
+use crate::store_engine::sql::{same, Expr, Pred, Select, Slot, Sort, Sql};
 use crate::store_engine::{StoreEngineError, Result as StoreEngineResult};
 
 /// A rule that was broken. It is the **template id for the sentence a surface assembles**, and it is also
@@ -232,6 +232,48 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
             DoctorIssueKind::DuplicateOrderKey,
             format!("project:{project_id}"),
             &[("project", &project_id.to_string()), ("order_key", &order_key)],
+        ))
+    })?);
+
+    // A task declared to start after the day it is due. Neither declaration is wrong on its own, so
+    // nothing on the write path refuses the pair — but together they hide the task: it stays out of the
+    // mailbox until a start day that falls after the day it was already due. Raising it here is what was
+    // chosen over an exception in the ready predicate ("it is due, so ignore the start day"), which would
+    // have left nobody able to read which of the two declarations won.
+    //
+    // Done tasks are left out: the contradiction is only worth a sentence while the work is outstanding.
+    // Both columns are stored as `YYYY-MM-DD`, so this is the lexicographic comparison the read model uses
+    // everywhere for a day column.
+    const S: col::task::Cols = col::task::ALL;
+    let mut sel = Select::new();
+    let (bad_id, bad_start, bad_due) = (sel.col(S.id), sel.col(S.start_on), sel.col(S.due_on));
+    let mut sql = Sql::from(&sel, S.table);
+    sql.push_where(
+        Pred::all(
+            [
+                Some(!Pred::is_blank(S.start_on)),
+                Some(!Pred::is_blank(S.due_on)),
+                Some(Pred::plain(format!("{} > {}", S.start_on.to_sql(), S.due_on.to_sql()))),
+                Some(Pred::ne(S.status, crate::model::TaskStatus::Done.as_str())),
+                reach_pred(reach, S),
+            ]
+            .into_iter()
+            .flatten(),
+        )
+        .as_ref(),
+    )
+    .order_by([Sort::by(S.id)]);
+
+    issues.extend(query_issues(conn, &sql, |r| {
+        let id = bad_id.get(r)?;
+        Ok(DoctorIssue::new(
+            DoctorIssueKind::StartAfterDue,
+            format!("task:{id}"),
+            &[
+                ("task", &crate::idref::task(id)),
+                ("start_on", &bad_start.get(r)?.unwrap_or_default()),
+                ("due_on", &bad_due.get(r)?.unwrap_or_default()),
+            ],
         ))
     })?);
 
@@ -495,6 +537,58 @@ mod tests {
 
         assert!(r.issues.is_empty(), "{:?}", r.issues);
         assert!(r.ok);
+    }
+
+    // ─────────────────────── a start day past the deadline ───────────────────────
+
+    /// A store with one task per shape of the start/due pair. Task 1 is the contradiction; the rest are the
+    /// ways of being fine, including the done task that carries the same contradiction.
+    fn dated_tasks() -> StoreEngine {
+        let e = StoreEngine::open_in_memory_unchecked().unwrap();
+        e.put_record("project", 7, &[("name", text("Alpha")), ("order_key", text("a"))]).unwrap();
+        // An unset day is NULL, not an empty string — the schema's CHECK only lets a real `YYYY-MM-DD`
+        // through — so those columns are left off the record rather than written blank.
+        for (id, start, due, status, key) in [
+            (1, Some("2026-09-01"), Some("2026-08-01"), "todo", "a"), // starts a month after it was due
+            (2, Some("2026-08-01"), Some("2026-09-01"), "todo", "b"), // the ordinary way round
+            (3, Some("2026-08-01"), Some("2026-08-01"), "todo", "c"), // same day: not after, so no contradiction
+            (4, None, Some("2026-08-01"), "todo", "d"),               // due only
+            (5, Some("2026-09-01"), None, "todo", "e"),               // start only
+            (6, Some("2026-09-01"), Some("2026-08-01"), "done", "f"), // the same contradiction, already finished
+        ] {
+            let mut cols: Vec<(&str, Value)> = vec![
+                ("title", text("t")),
+                ("project_id", Value::Integer(7)),
+                ("order_key", text(key)),
+                ("status", text(status)),
+            ];
+            if let Some(d) = start {
+                cols.push(("start_on", text(d)));
+            }
+            if let Some(d) = due {
+                cols.push(("due_on", text(d)));
+            }
+            e.put_record("task", id, &cols).unwrap();
+        }
+        e
+    }
+
+    #[test]
+    fn a_start_day_after_the_due_day_is_raised_with_both_dates() {
+        let r = doctor(dated_tasks().conn(), Reach::All).unwrap();
+
+        let raised: Vec<&DoctorIssue> =
+            r.issues.iter().filter(|i| i.kind == DoctorIssueKind::StartAfterDue).collect();
+        assert_eq!(
+            raised.iter().map(|i| i.target.as_str()).collect::<Vec<_>>(),
+            vec!["task:1"],
+            "only the outstanding contradiction — not the right way round, not the same day, not one date \
+             alone, and not the one already done"
+        );
+        // The sentence a surface assembles needs both days, so the issue has to carry both.
+        assert_eq!(raised[0].params.get("start_on").map(String::as_str), Some("2026-09-01"));
+        assert_eq!(raised[0].params.get("due_on").map(String::as_str), Some("2026-08-01"));
+        assert!(r.ok, "a contradiction between two declarations has broken nothing in the store");
     }
 
     // ─────────────────────── dead refs ───────────────────────

@@ -20,6 +20,7 @@ export const DOCTOR_ISSUE_KINDS = [
   "missing_pointer_ambiguous",
   "orphan_binding",
   "dead_ref",
+  "start_after_due",
 ] as const;
 
 /** The type of a contract kind (single source). The DOCTOR table is a `Record` over it with every key required, so a new kind does not typecheck until its message is written. */

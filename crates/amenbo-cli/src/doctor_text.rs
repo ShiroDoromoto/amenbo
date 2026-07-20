@@ -56,6 +56,13 @@ pub fn message(issue: &DoctorIssue) -> String {
             p(issue, "at"),
             p(issue, "refs"),
         ),
+        DoctorIssueKind::StartAfterDue => format!(
+            "Task {} is declared to start on {} but was due on {}: it stays out of the mailbox until \
+             a day that has already passed its deadline.",
+            p(issue, "task"),
+            p(issue, "start_on"),
+            p(issue, "due_on"),
+        ),
     }
 }
 
@@ -94,6 +101,12 @@ pub fn fix_hint(issue: &DoctorIssue) -> String {
             "Open the body (`amenbo task show` / `decision show` / `comment list`) and edit it: drop the \
              ref, or point it at what stands in its place. Nothing rewrites a body on your behalf - \
              only a person knows what it meant to say."
+                .to_string()
+        }
+        DoctorIssueKind::StartAfterDue => {
+            "Correct whichever of the two declarations is wrong: `amenbo task update <task> --start <date>` \
+             or `--due <date>`. Nothing picks a winner between them on your behalf - a start day that \
+             falls after the deadline could mean either one was mistyped."
                 .to_string()
         }
     }

@@ -822,6 +822,10 @@ const DOCTOR: Record<Lang, Record<DoctorIssueKind, DoctorTemplate>> = {
       message: "{at} の本文が {refs} を指していますが、その先はありません（読んだ人は空振りします）。",
       fix: "本文を開いて直してください——参照を消すか、代わりになるものへ向け直します。何が言いたかったかは書いた人にしか分かりません。",
     },
+    start_after_due: {
+      message: "{task} は着手日 {start_on}・期日 {due_on} です。期日を過ぎた日まで、このタスクは受信箱に出てきません。",
+      fix: "どちらかの宣言が誤りです。着手日か期日のいずれかを直してください。打ち間違いがどちらなのかは決められないので、勝手にどちらかを採ることはしません。",
+    },
   },
   en: {
     self_dependency: {
@@ -861,6 +865,10 @@ const DOCTOR: Record<Lang, Record<DoctorIssueKind, DoctorTemplate>> = {
     dead_ref: {
       message: "The body at {at} points at {refs}, and there is nothing there — a reader sent after one comes back empty-handed.",
       fix: "Open the body and edit it: drop the ref, or point it at what stands in its place. Only the person who wrote it knows what it meant to say.",
+    },
+    start_after_due: {
+      message: "{task} is set to start on {start_on} but was due on {due_on} — it stays out of the inbox until a day that is already past its deadline.",
+      fix: "One of the two is wrong: correct either the start day or the due day. Nothing picks a winner between them, since either one could be the typo.",
     },
   },
 };

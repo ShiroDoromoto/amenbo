@@ -23,6 +23,7 @@ import { confirmDialog } from "../core/dialog";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
 import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sidebarWidth";
 import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollapsed";
+import { dismissUpdate, isUpdateDismissed } from "../core/updateDismissed";
 import { RefNavProvider } from "../core/refNav";
 import { currentLang, doctorText, t, tf } from "../core/i18n";
 import { fetchStaleManagedBlocks, resyncManagedBlocks, fetchOrphanBindings, forgetOrphanBindings, fetchPointerIssues, repairPointers, fetchHookNotices, openLatestInstaller } from "../core/mutations";
@@ -368,12 +369,14 @@ export function AppShell() {
 // Version skew across surfaces, with no network involved: if another surface (CLI or GUI) has touched this store
 // with a version newer than ours, we show "an update is available" right under the TopBar. The "open the installer"
 // button only opens the current OS's all-in-one installer (GUI + CLI bundled) in the default browser — it never
-// self-updates. It can be dismissed with the ✕ for this session (and is evaluated again on the next launch).
+// self-updates. The ✕ dismisses it per version (core/updateDismissed): the version dismissed stays quiet across
+// launches, and the banner returns on its own once a newer one is offered.
 function UpdateBanner() {
   const vs = useSyncExternalStore(subscribe, () => getSnapshot().versionStatus);
+  // Session-only fallback, for the offer that carries no version to remember (and where localStorage is unavailable).
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
-  if (dismissed || !vs.updateAvailable) return null;
+  if (dismissed || !vs.updateAvailable || isUpdateDismissed(vs.newerVersion)) return null;
   const onOpen = async () => {
     setBusy(true);
     try {
@@ -394,7 +397,7 @@ function UpdateBanner() {
       {inTauri() && (
         <button className="healthbanner__action" onClick={onOpen} disabled={busy}>{t("update.open")}</button>
       )}
-      <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("update.dismiss")}</button>
+      <button className="healthbanner__close" onClick={() => { dismissUpdate(vs.newerVersion); setDismissed(true); }}>✕ {t("update.dismiss")}</button>
     </div>
   );
 }

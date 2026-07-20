@@ -1625,9 +1625,11 @@ pub fn gc_device_state() -> Result<(), CmdError> {
     Ok(())
 }
 
-/// The comment slot of the inbox, independent of read state: of the open tasks assigned to me,
-/// return every one that has at least one **comment addressed to me** (something my AI facet said),
-/// as `(task_id, unread)`. The GUI unions these into the inbox view. Membership is decided by **the
+/// The comment slot of the inbox, independent of read state: of the open tasks assigned to **my human
+/// facet**, return every one that has at least one **comment addressed to me** (something my AI facet
+/// said), as `(task_id, unread)`. A task the AI is carrying stays out — its comments are the AI
+/// reporting on its own work, which is read by pulling the task, not by being rung about. The GUI
+/// unions these into the inbox view. Membership is decided by **the
 /// existence of a comment** — marking it read does not remove it; only archiving does — and each
 /// task's comments are pulled straight from the read-model over indexed SQL (the single-pass SQL in
 /// `store_engine::read::mailbox_comment_tasks`). "Is it me?" is decided on the facet alone (the human
@@ -5465,7 +5467,8 @@ mod tests {
     /// The inbox's comment slot, independent of read state: a comment addressed to me on a task
     /// assigned to me shows up in `mailbox_comment_tasks`. Marking it seen (mark_task_seen)
     /// **does not remove it** — only the unread flag goes false (leaving the inbox on archive is
-    /// reads.ts's job). A comment I made myself, as the human, does not show up.
+    /// reads.ts's job). A comment I made myself, as the human, does not show up, and neither does a
+    /// task once the AI is the one carrying it.
     #[test]
     fn mailbox_comment_tasks_stays_after_read() {
         let _env = env_guard();
@@ -5499,6 +5502,14 @@ mod tests {
             mailbox_comment_tasks().unwrap(),
             vec![(id, false)],
             "your own (human) remark does not affect presence/unread"
+        );
+
+        // Handing the task to the AI takes it out: the same comments are now the AI reporting on its
+        // own work, and a report is pulled, not rung.
+        task_assign(id, Some("ai".into())).unwrap();
+        assert!(
+            mailbox_comment_tasks().unwrap().is_empty(),
+            "a task the AI is carrying is out, however many AI comments it holds"
         );
 
         let _ = std::fs::remove_dir_all(&tmp);

@@ -1309,34 +1309,36 @@ pub fn decisions_for_task(conn: &Connection, task_id: i64) -> Result<Vec<LinkedD
     Ok(rows)
 }
 
-/// One mailbox-D task with the **incoming** comments that put it in the inbox: comments by anyone
-/// other than the viewer's own human facet (the viewer's AI facet and other people both count). The
-/// device-local `read_receipts` then derives each task's `unread` flag from these.
+/// One mailbox-D task with the **incoming** comments that put it in the inbox: the AI facet's comments
+/// on a task the human facet is carrying. The device-local `read_receipts` then derives each task's
+/// `unread` flag from these.
 pub struct MailboxTask {
     pub task_id: i64,
     /// Incoming comments, oldest first: `(author_facet, author_is_human, created_at)`.
     pub comments: Vec<(String, bool, String)>,
 }
 
-/// Tasks for the mailbox's D bucket — live, assigned to `me`, not done, and carrying at least one
-/// incoming comment — each bundled with its incoming comments so the caller derives `unread` from
-/// `read_receipts` without a second pass. One indexed pass joins live, not-done tasks assigned to `me`
+/// Tasks for the mailbox's D bucket — live, assigned to my **human** facet, not done, and carrying at
+/// least one incoming comment — each bundled with its incoming comments so the caller derives `unread`
+/// from `read_receipts` without a second pass. One indexed pass joins those tasks
 /// to their **incoming** comments; rows arrive grouped by task (`task_id`) then
 /// oldest-first (`created_at ASC, id ASC`), so a task with no incoming comment yields no rows and is
-/// correctly absent. "Incoming" = `NOT (author = me AND author is human)`, and a NULL facet counts as
-/// human. A closed `reach` bundles only the bound project's tasks.
+/// correctly absent. "Incoming" = the comment's author is the AI facet (`author_kind = 'ai'`).
+/// A closed `reach` bundles only the bound project's tasks.
 pub fn mailbox_comment_tasks(conn: &Connection, reach: crate::reach::Reach) -> Result<Vec<MailboxTask>> {
     let started = std::time::Instant::now();
-    // What the inbox is about is tasks that carry an assignee at all (the assignee facet —
-    // `assignee_kind IS NOT NULL`), and *incoming* means a comment that is not from one's own human facet
-    // — that is, an AI comment (`author_kind = 'ai'`).
+    // The bucket is addressed, not just authored: it holds AI comments (`author_kind = 'ai'`) on tasks
+    // whose assignee is the human facet. A task the AI itself carries is one the AI reports on, and a
+    // report is read by pulling the task's timeline — it is not an inbox item, so it never rings here.
+    // Handing the task back (assignee → human) or blocking it is how the AI asks for a human's move, and
+    // that is bucket C.
     const C: col::task_comment::Cols = col::task_comment::of("c");
     let mut sel = Select::new();
     let (task_id, author_kind, created_at) = (sel.col(C.task_id), sel.col(C.author_kind), sel.col(C.created_at));
     // The reach narrows the same predicate the mailbox is made of, rather than being appended as a
     // fragment whose `?N` had to be counted against the others.
     let scope = reach.project().map(|pid| Pred::eq(T.project_id, pid));
-    let pred = Pred::is_not_null(T.assignee_kind)
+    let pred = Pred::eq(T.assignee_kind, ActorKind::Human.as_str())
         .and(Pred::ne(T.status, "done"))
         .and(Pred::eq(C.author_kind, ActorKind::Ai.as_str()));
     let pred = Pred::all(scope.into_iter().chain([pred])).expect("at least one predicate");
@@ -3701,10 +3703,12 @@ mod tests {
         assert_eq!(texts, vec!["一番目", "二番目"], "oldest-first, no d2 leak");
     }
 
-    /// Mailbox D: `mailbox_comment_tasks` returns only live, not-done tasks assigned to me that carry an
-    /// *incoming* comment (my own human-facet comment does not count), bundling just those incoming
-    /// comments. (The other half of the trigger — the newest `task.assigned` event — is read off the file
-    /// ledger, so it is tested there: [`crate::activity::mailbox_triggered_at`].)
+    /// Mailbox D: `mailbox_comment_tasks` returns only live, not-done tasks assigned to my human facet
+    /// that carry an *incoming* comment (my own human-facet comment does not count), bundling just those
+    /// incoming comments. A task the AI is carrying stays out however loud its AI comments are — that is
+    /// the AI reporting on its own work, not a move being asked of me. (The other half of the trigger —
+    /// the newest `task.assigned` event — is read off the file ledger, so it is tested there:
+    /// [`crate::activity::mailbox_triggered_at`].)
     #[test]
     fn mailbox_d_from_read_model() {
         let e = StoreEngine::open_in_memory_unchecked().unwrap();
@@ -3732,10 +3736,12 @@ mod tests {
         task(2, "done", Some("human")); // assigned but done → out
         task(3, "todo", Some("human")); // assigned but only a human comment → nothing incoming → out
         task(4, "todo", None); // unassigned → out (incoming or not, an unassigned task never enters)
+        task(5, "todo", Some("ai")); // the AI's own task → out, its comments are a report, not a move for me
         comment(1, "1", "human", "2026-06-01T00:00:00Z"); // one's own human comment (not incoming)
         comment(2, "1", "ai", "2026-06-02T00:00:00Z"); // an AI-facet comment (incoming)
         comment(3, "3", "human", "2026-06-01T00:00:00Z"); // not incoming
         comment(4, "4", "ai", "2026-06-01T00:00:00Z"); // incoming, but task 4 is unassigned
+        comment(5, "5", "ai", "2026-06-01T00:00:00Z"); // AI comment on an AI-assigned task → not addressed to me
 
         let conn = e.conn();
         let mb = mailbox_comment_tasks(conn, crate::reach::Reach::All).unwrap();
@@ -4017,7 +4023,7 @@ mod tests {
                     ("title", text(&format!("task {id}"))),
                     ("status", text("todo")),
                     ("project_id", text(project_id)),
-                    ("assignee_kind", text("ai")),
+                    ("assignee_kind", text("human")),
                 ],
             )
             .unwrap();

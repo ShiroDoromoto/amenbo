@@ -197,9 +197,6 @@ export function TaskDetailPane({
       {tab === "detail" && (
         <div className="detail__body">
           <div className="detail__title">
-            <span className="row__check" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => store.toggleDone(taskId)}>
-              {task.status === "done" ? "☑" : "◻"}
-            </span>
             {editingTitle ? (
               <input
                 className="compose__input"

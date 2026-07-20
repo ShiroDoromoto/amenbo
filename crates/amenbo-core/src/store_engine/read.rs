@@ -231,6 +231,45 @@ pub struct TaskPage {
 
 /// Run a `task list` query against the read-model: filter → indexed `WHERE`, sort → `ORDER BY`,
 /// page → `LIMIT`/`OFFSET`. Returns the ordered page of task ids plus the total match count.
+/// How many tasks `q` matches, and the earliest start day among them — one row, no ids. Fed the caller's
+/// own query with `ready:` dropped and `start:future` put in its place, this answers "what is my empty
+/// mailbox not showing me, and when does the first of it arrive".
+///
+/// It is a separate read rather than a page the caller counts because the answer is two numbers: paging
+/// would carry every waiting row back to compute a minimum, and the whole point is that this runs on the
+/// empty-result path where nothing was worth carrying. `None` when nothing is waiting — a store with no
+/// waiting task has no earliest day, and `Some(0)` would be a count with a date that does not exist.
+pub fn waiting_on_start(conn: &Connection, q: &TaskQuery) -> Result<Option<(usize, NaiveDate)>> {
+    let started = std::time::Instant::now();
+    let scope = [q.reach.project(), q.project_id]
+        .into_iter()
+        .flatten()
+        .map(|pid| Pred::eq(T.project_id, pid));
+    let pred = Pred::all(scope.chain(filter_preds(q)));
+
+    let mut sel = Select::new();
+    let count = sel.count_all();
+    // Aggregates over a filtered set: the registry cannot type them, and over no rows `MIN` answers NULL
+    // rather than nothing — which is exactly the "nothing is waiting" case.
+    let earliest = sel.expr::<Option<String>>(format!("MIN({})", T.start_on.name()));
+    let mut sql = Sql::from(&sel, T.table);
+    sql.push_where(pred.as_ref());
+
+    let (count, earliest) = conn
+        .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((count.get(r)?, earliest.get(r)?))
+        })
+        .map_err(StoreEngineError::from)?;
+    // A count-only read: it hands back two aggregates and no rows, so the complexity ratio a page is
+    // judged by does not apply and the time budget is the whole judgement (as in `list_task_ids`).
+    crate::perf::record_count_query("engine.waiting_on_start", count.max(0) as usize, started.elapsed());
+    let Some(earliest) = earliest.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+    else {
+        return Ok(None);
+    };
+    Ok((count > 0).then_some((count as usize, earliest)))
+}
+
 pub fn list_task_ids(conn: &Connection, q: &TaskQuery) -> Result<TaskPage> {
     let started = std::time::Instant::now();
 

@@ -31,7 +31,7 @@ pub use hydrate::hydrate_database;
 pub use read::{
     decision_page, hydrate_task_cards, list_task_ids,
     project_name, project_overview, status_bucket_ids,
-    task_title, DecisionPage,
+    task_title, waiting_on_start, DecisionPage,
     ProjectRow, StatusBucketIds, TaskPage, TaskQuery,
 };
 pub use record::Record;

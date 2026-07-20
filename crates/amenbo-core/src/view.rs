@@ -314,4 +314,8 @@ pub enum ReserveBlocker {
         status: DecisionStatus,
         superseded_by: Option<String>,
     },
+    /// The task declares a start day that has not arrived. Unlike the other two, this one clears itself:
+    /// the day comes and the task is ready, with nothing to do. `start_on` is the declared day, so the
+    /// error can say when the wait ends.
+    NotStartedYet { start_on: NaiveDate },
 }

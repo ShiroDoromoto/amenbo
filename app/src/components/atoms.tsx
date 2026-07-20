@@ -123,7 +123,9 @@ export function DueChip({ due, label }: { due: string | null; label: string | nu
 
 /**
  * The chip that names, in the list itself, the premises blocking a reservation (`ready === false`) before anyone
- * tries to start. ⛔ = an unfinished dependency blocker; ⚠ = a decision not yet settled as grounds. The reason a
+ * tries to start. ⛔ = an unfinished dependency blocker; ⚠ = a decision not yet settled as grounds; ⏳ = a declared
+ * start day that has not come. Every `ready === false` has at least one of the three, so the chip row is never empty
+ * where a reason exists — an unexplained "cannot start" reads as no reason at all. The reason a
  * reservation was refused only ever appears in a toast that vanishes in 4 seconds, so this is the one permanent place
  * it is visible before starting. It is a derived inability to start, on a different axis from a stop a person
  * declared (`status = blocked`), so it speaks in glyphs rather than colour and never blends into the status colour
@@ -158,6 +160,17 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
           aria-label={tf("block.decisions", { refs })}
         >
           {compact ? "⚠" : `⚠ ${decisions.length}`}
+        </span>
+      )}
+      {task.notStartedUntil && (
+        <span
+          className={cls}
+          role="img"
+          title={tf("block.notStarted", { date: task.notStartedUntil })}
+          aria-label={tf("block.notStarted", { date: task.notStartedUntil })}
+        >
+          {/* The date, not a count: one start day is never plural, and the day itself is the fact. */}
+          {compact ? "⏳" : `⏳ ${task.notStartedUntil}`}
         </span>
       )}
     </>

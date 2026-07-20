@@ -99,9 +99,10 @@ function mockErr(code: string, ja: string, en: string): CmdError {
 
 /**
  * Rebuild the dependents when one blocker goes away (completed or deleted). In core, `blocked_by` is
- * derived as "blockers not yet done" and `ready` as "no unfinished blocker and no unsettled grounding
- * decision" (core's `reserve_blockers`, whose emptiness *is* `ready`); the mock runs the same
- * derivation here.
+ * derived as "blockers not yet done" and `ready` as "no unfinished blocker, no unsettled grounding
+ * decision, and the declared start day arrived" (core's `reserve_blockers`, whose emptiness *is*
+ * `ready`); the mock runs the same derivation here. Clearing a blocker cannot clear the other two, so
+ * they are re-read rather than assumed away.
  * **The dependency edges themselves are not in the mock fixtures**, though — the snapshot only carries
  * the already-derived `blockedBy` — so reopening a task (done → todo) **cannot put its blockers back**.
  * That is a face we chose not to act out. To see dependencies re-form during browser iteration, edit
@@ -111,7 +112,9 @@ function unblock(tasks: TaskCard[], blockerId: number): TaskCard[] {
   return tasks.map((x) => {
     if (!x.blockedBy?.some((b) => b.id === blockerId)) return x;
     const blockedBy = x.blockedBy.filter((b) => b.id !== blockerId);
-    return { ...x, blockedBy, ready: blockedBy.length === 0 && x.blockedByDecisions.length === 0 };
+    const ready =
+      blockedBy.length === 0 && x.blockedByDecisions.length === 0 && x.notStartedUntil == null;
+    return { ...x, blockedBy, ready };
   });
 }
 
@@ -158,7 +161,7 @@ export async function addTask(projectId: number | null, title: string, notes?: s
       id, title, notes: notes ?? "", status: "todo", assignee: null, priority: null,
       due: null, dueLabel: null, comments: 0, createdBy: me(),
       ref: taskRef(id), projectId, completedAt: null,
-      ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [],
+      ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], notStartedUntil: null,
     };
     return { ...s, tasks: [...s.tasks, task], activity: [sysItem(id, title, "task.created", tf("act.created", { title })), ...s.activity] };
   });

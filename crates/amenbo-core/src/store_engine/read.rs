@@ -1932,6 +1932,10 @@ pub struct TaskCardRow {
     pub status: String,
     pub priority: Option<String>,
     pub due_on: Option<String>,
+    /// The declared start day, raw. It rides along unread, the way `due_on` does: whether the day has
+    /// come is [`crate::view::not_started_until`]'s to say, and the surface asks it against its own
+    /// `today` rather than the row freezing an answer.
+    pub start_on: Option<String>,
     pub completed_at: Option<String>,
     pub assignee: Option<CardActor>,
     pub created_by: Option<CardActor>,
@@ -1956,6 +1960,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
     let mut sel = Select::new();
     let (id, title, notes, status) = (sel.col(T.id), sel.col(T.title), sel.col(T.notes), sel.col(T.status));
     let (priority, due_on, completed_at) = (sel.col(T.priority), sel.col(T.due_on), sel.col(T.completed_at));
+    let start_on = sel.col(T.start_on);
     let (assignee, creator) = (sel.col(T.assignee_kind), sel.col(T.created_by_kind));
     let mut sql = Sql::from(&sel, T.table);
     sql.push_where(Some(&Pred::eq(T.id, task_id)));
@@ -1970,6 +1975,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
                 status: status.get(r)?,
                 priority: priority.get(r)?,
                 due_on: due_on.get(r)?,
+                start_on: start_on.get(r)?,
                 completed_at: completed_at.get(r)?,
                 assignee: assignee_kind
                     .map(|k| CardActor { name: facet_display(Some(&k)), kind: Some(k) }),

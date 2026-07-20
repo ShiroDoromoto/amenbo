@@ -15,7 +15,7 @@ function card(over: Partial<TaskCard>): TaskCard {
     id: 1, title: "t", ref: "#1", notes: "", projectId: null, status: "todo",
     assignee: null, priority: null, due: null, dueLabel: null, completedAt: null,
     comments: 0, ready: true, blockedBy: [], placement: null, createdBy: null,
-    linkedDecisions: [], blockedByDecisions: [],
+    linkedDecisions: [], blockedByDecisions: [], notStartedUntil: null,
     ...over,
   };
 }
@@ -66,6 +66,24 @@ describe("BlockedChips", () => {
     expect(chips()[0].getAttribute("title")).toContain("D-159");
   });
 
+  it("shows a start day that has not come as ⏳, carrying the day itself rather than a count", () => {
+    render(card({ ready: false, notStartedUntil: "2026-08-01" }));
+    expect(chips()).toHaveLength(1);
+    expect(chips()[0].textContent).toContain("⏳");
+    expect(chips()[0].textContent).toContain("2026-08-01");
+    expect(chips()[0].getAttribute("title")).toContain("2026-08-01");
+  });
+
+  it("shows all three when all three hold it back — no reason hides behind another", () => {
+    render(card({
+      ready: false,
+      blockedBy: [{ id: 2, name: "先行" }],
+      blockedByDecisions: [{ id: 159, name: "根拠", ref: "D-159" }],
+      notStartedUntil: "2026-08-01",
+    }));
+    expect(chips()).toHaveLength(3);
+  });
+
   it("shows both when both are present", () => {
     render(card({
       ready: false,
@@ -100,6 +118,13 @@ describe("BlockedChips compact", () => {
     expect(glyphs()[0].textContent).toBe("⚠");
     expect(glyphs()[0].getAttribute("title")).toContain("D-159");
     expect(glyphs()[0].getAttribute("aria-label")).toContain("D-159");
+  });
+
+  it("drops the date and keeps the glyph, with the day still in the tooltip", () => {
+    renderCompact(card({ ready: false, notStartedUntil: "2026-08-01" }));
+    expect(chips()).toHaveLength(0);
+    expect(glyphs()[0].textContent).toBe("⏳");
+    expect(glyphs()[0].getAttribute("title")).toContain("2026-08-01");
   });
 
   it("shows nothing even on a dense surface when ready", () => {

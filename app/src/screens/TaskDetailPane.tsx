@@ -306,6 +306,16 @@ export function TaskDetailPane({
               </span>
             </div>
           )}
+          {/* The third reason a reservation is refused. It sits beside the other two rather than in the
+              date fields, because what it reports is not when the work starts but why it cannot start yet. */}
+          {task.notStartedUntil && (
+            <div className="detail__field">
+              <span className="detail__flabel">{t("detail.notStarted")}</span>
+              <span title={tf("block.notStarted", { date: task.notStartedUntil })}>
+                ⏳ {task.notStartedUntil}
+              </span>
+            </div>
+          )}
           {task.linkedDecisions && task.linkedDecisions.length > 0 && (
             <div className="detail__field">
               <span className="detail__flabel">{t("detail.linkedDecisions")}</span>

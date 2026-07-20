@@ -649,8 +649,8 @@ ref: string, notes: string, projectId: number | null, status: "todo" | "in_progr
  */
 completedAt: string | null, comments: number, 
 /**
- * Derived from dependencies: can it be reserved? — no open blockers, and every decision it
- * rests on has been settled, the two reasons [`amenbo_core::view::ReserveBlocker`] enumerates.
+ * Can it be reserved? — no open blockers, every decision it rests on settled, and the declared
+ * start day arrived: the three reasons [`amenbo_core::view::ReserveBlocker`] enumerates.
  */
 ready: boolean, 
 /**
@@ -674,7 +674,13 @@ linkedDecisions: Array<DecisionRefDto>,
  * (`not_ready`) only ever appears in a toast that vanishes in seconds, so we name the decisions
  * that are holding it back, letting the detail pane hold the same fact permanently.
  */
-blockedByDecisions: Array<DecisionRefDto>, };
+blockedByDecisions: Array<DecisionRefDto>, 
+/**
+ * The declared start day, when it is still ahead (`YYYY-MM-DD`) — the third reason `ready` is
+ * false, beside `blocked_by` and `blocked_by_decisions`. Always serialized, `null` when the start
+ * day is no reason, so every `ready: false` the GUI draws carries a reason it can name on screen.
+ */
+notStartedUntil: string | null, };
 
 /**
  * One git commit SHA recorded on a task. amenbo keeps the SHA as an opaque string — it

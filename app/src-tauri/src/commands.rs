@@ -417,8 +417,8 @@ pub struct TaskCardDto {
     /// things. None while the task is still open.
     completed_at: Option<String>,
     comments: usize,
-    /// Derived from dependencies: can it be reserved? — no open blockers, and every decision it
-    /// rests on has been settled, the two reasons [`amenbo_core::view::ReserveBlocker`] enumerates.
+    /// Can it be reserved? — no open blockers, every decision it rests on settled, and the declared
+    /// start day arrived: the three reasons [`amenbo_core::view::ReserveBlocker`] enumerates.
     ready: bool,
     /// Dependencies: blockers that are not done yet (id + name). Drives the "waiting on X" line in
     /// the detail pane. Empty means it can be started.
@@ -435,6 +435,10 @@ pub struct TaskCardDto {
     /// (`not_ready`) only ever appears in a toast that vanishes in seconds, so we name the decisions
     /// that are holding it back, letting the detail pane hold the same fact permanently.
     blocked_by_decisions: Vec<DecisionRefDto>,
+    /// The declared start day, when it is still ahead (`YYYY-MM-DD`) — the third reason `ready` is
+    /// false, beside `blocked_by` and `blocked_by_decisions`. Always serialized, `null` when the start
+    /// day is no reason, so every `ready: false` the GUI draws carries a reason it can name on screen.
+    not_started_until: Option<String>,
 }
 
 #[derive(Serialize, TS)]
@@ -768,7 +772,14 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
     let created_by = row.created_by.as_ref().map(|a| facet_actor(config, card_kind(a)));
 
     let due_date = row.due_on.as_deref().and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
-    let ready = row.blocked_by.is_empty() && row.blocked_by_decisions.is_empty();
+    // The start day is read through core's own predicate, so the card cannot drift from what the
+    // reserve enforces — the GUI must not call a task startable that `task status` would refuse.
+    let start_date = row.start_on.as_deref().and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+    let not_started_until =
+        amenbo_core::view::not_started_until(start_date, amenbo_core::time::today());
+    let ready = row.blocked_by.is_empty()
+        && row.blocked_by_decisions.is_empty()
+        && not_started_until.is_none();
     let blocked_by: Vec<TaskRefDto> = row
         .blocked_by
         .into_iter()
@@ -809,6 +820,7 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         created_by,
         linked_decisions,
         blocked_by_decisions,
+        not_started_until: not_started_until.map(date_iso),
     }
 }
 
@@ -4210,6 +4222,63 @@ mod tests {
         assert_eq!(card(dependent).status, "in_progress");
 
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The card derives `ready` itself, so it can drift from what the reserve enforces. A start day
+    /// still ahead holds a reservation down in core; if the card ignored it, the GUI would offer a
+    /// task that `task status` then refuses. It names the day too, so the `ready: false` it draws is
+    /// never one without a reason on screen.
+    #[test]
+    fn task_card_holds_ready_down_until_the_declared_start_day_arrives() {
+        let _env = env_guard();
+        let tmp = std::env::temp_dir().join(format!("amenbo-startday-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "テストPJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+
+        let task = task_add(Some(project_id), "実装".into(), None).unwrap().tasks[0];
+        let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
+
+        let c = card(task);
+        assert!(c.ready, "nothing declared, nothing in the way");
+        assert!(c.not_started_until.is_none(), "no start day is no reason");
+
+        let set_start = |d: chrono::NaiveDate| {
+            let mut store = Store::open().unwrap();
+            store
+                .update_task(task, amenbo_core::ops::task::TaskPatch {
+                    start_on: Some(d),
+                    ..Default::default()
+                })
+                .unwrap();
+        };
+
+        let today = amenbo_core::time::today();
+        set_start(today + chrono::Duration::days(7));
+        let c = card(task);
+        assert!(!c.ready, "a start day still ahead holds the reservation down");
+        assert_eq!(
+            c.not_started_until.as_deref(),
+            Some((today + chrono::Duration::days(7)).to_string().as_str()),
+            "and the card names the day, so the reason is on screen"
+        );
+
+        set_start(today);
+        let c = card(task);
+        assert!(c.ready, "the day arrives and the task is startable");
+        assert!(c.not_started_until.is_none(), "a day that has come is no longer a reason");
     }
 
     /// The reason a reservation was refused shows up only in a toast that vanishes in seconds. The

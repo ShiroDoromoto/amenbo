@@ -37,7 +37,7 @@ type MockTaskInput = Partial<TaskCard> &
   Pick<TaskCard, "id" | "title" | "projectId" | "status" | "assignee" | "priority" | "due" | "dueLabel" | "comments" | "createdBy">;
 const mt = (t: MockTaskInput): TaskCard => ({
   ref: taskRef(t.id), notes: "", completedAt: null,
-  ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [],
+  ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], notStartedUntil: null,
   ...t,
 });
 

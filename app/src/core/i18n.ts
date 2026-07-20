@@ -142,6 +142,7 @@ const UI: Record<Lang, Record<string, string>> = {
     "detail.assignee": "担当", "detail.unassigned": "担当者なし",
     "detail.project": "プロジェクト", "detail.none": "なし",
     "detail.blockedBy": "待ち", "detail.blockedByHint": "着手不可（依存）",
+    "detail.notStarted": "着手日待ち",
     "detail.linkedDecisions": "動機の決定",
     "detail.premiseUnsettled": "根拠が未確定です。裁定を待つか link を外してください（予約できません）",
     "detail.priority": "優先度", "detail.priorityNone": "なし",
@@ -364,6 +365,7 @@ const UI: Record<Lang, Record<string, string>> = {
     "card.addTaskTip": "タスクを追加", "card.assigneeTip": "担当（任せた相手）",
     "block.deps": "着手不可（依存）: {names} の完了待ち",
     "block.decisions": "着手不可（根拠が未確定）: {refs}",
+    "block.notStarted": "着手不可（着手日待ち）: {date} から",
   },
   en: {
     "topbar.refresh": "Refresh from source", "topbar.back": "Back", "topbar.forward": "Forward",
@@ -469,6 +471,7 @@ const UI: Record<Lang, Record<string, string>> = {
     "detail.assignee": "Assignee", "detail.unassigned": "Unassigned",
     "detail.project": "Project", "detail.none": "None",
     "detail.blockedBy": "Waiting on", "detail.blockedByHint": "blocked (dependency)",
+    "detail.notStarted": "Starts on",
     "detail.linkedDecisions": "Motivated by",
     "detail.premiseUnsettled": "premise not settled — wait for the ruling or unlink it (cannot reserve)",
     "detail.priority": "Priority", "detail.priorityNone": "None",
@@ -692,6 +695,7 @@ const UI: Record<Lang, Record<string, string>> = {
     "card.addTaskTip": "Add a task", "card.assigneeTip": "Assignee (whom it's delegated to)",
     "block.deps": "Cannot start (dependency): waiting on {names}",
     "block.decisions": "Cannot start (premise not settled): {refs}",
+    "block.notStarted": "Cannot start (waiting on its start day): from {date}",
   },
 };
 

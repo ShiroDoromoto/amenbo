@@ -53,6 +53,9 @@ pub enum DoctorIssueKind {
     OrphanBinding,
     /// A body whose prose points at refs that resolve to nothing.
     DeadRef,
+    /// A task declared to start after the day it is due. Two declarations that contradict each other,
+    /// and the pair hides: the task stays out of the mailbox while the day it was due goes by.
+    StartAfterDue,
 }
 
 impl DoctorIssueKind {
@@ -68,6 +71,7 @@ impl DoctorIssueKind {
         Self::MissingPointerAmbiguous,
         Self::OrphanBinding,
         Self::DeadRef,
+        Self::StartAfterDue,
     ];
 
     /// The one and only place a kind string is written — `Serialize` goes through here too.
@@ -82,6 +86,7 @@ impl DoctorIssueKind {
             Self::MissingPointerAmbiguous => "missing_pointer_ambiguous",
             Self::OrphanBinding => "orphan_binding",
             Self::DeadRef => "dead_ref",
+            Self::StartAfterDue => "start_after_due",
         }
     }
 
@@ -112,6 +117,7 @@ impl DoctorIssueKind {
             Self::MissingPointerAmbiguous => &["dir", "claims"],
             Self::OrphanBinding => &["dir"],
             Self::DeadRef => &["at", "refs"],
+            Self::StartAfterDue => &["task", "start_on", "due_on"],
         }
     }
 }
@@ -363,6 +369,7 @@ mod tests {
                 "missing_pointer_ambiguous",
                 "orphan_binding",
                 "dead_ref",
+                "start_after_due",
             ]
         );
     }

@@ -546,7 +546,7 @@ pub fn list(
 
     // Keeping the order SQL produced, hydrate only the ids on this page, straight from the
     // read-model. Ids with no live row drop out (an invariant of `hydrate_task_cards`).
-    let tasks = store_engine::hydrate_task_cards(conn, reach, &page.ids)
+    let tasks = store_engine::hydrate_task_cards(conn, reach, &page.ids, today)
         .map_err(crate::error::engine_on(conn))?;
     let count = tasks.len();
     Ok(TaskListResult {
@@ -624,7 +624,7 @@ pub fn status(conn: &rusqlite::Connection, scope: &str, reach: crate::reach::Rea
         .map_err(crate::error::engine_on(conn))?;
 
     let hydrate = |ids: &[i64]| -> Result<Vec<TaskCompact>> {
-        crate::store_engine::hydrate_task_cards(conn, reach, ids)
+        crate::store_engine::hydrate_task_cards(conn, reach, ids, today)
             .map_err(crate::error::engine_on(conn))
     };
 
@@ -1712,9 +1712,14 @@ pub fn task_detail(
         row.blocked_by.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
     let blocked_by_decisions: Vec<DecisionRef> =
         row.blocked_by_decisions.into_iter().map(|(id, name)| DecisionRef { id, name: Some(name) }).collect();
-    // Ready only when there are neither open blockers nor unsettled rationales (the same predicate the
-    // `ready:` filter uses).
-    let ready = blocked_by.is_empty() && blocked_by_decisions.is_empty();
+    let start_on = parse_date(&row.start_on);
+    // The one ready predicate, shared with the task card and the `ready:` filter.
+    let ready = crate::view::is_ready(
+        !blocked_by.is_empty(),
+        !blocked_by_decisions.is_empty(),
+        start_on,
+        time::today(),
+    );
     let blocks: Vec<crate::view::TaskRef> =
         row.blocks.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
 
@@ -1732,7 +1737,7 @@ pub fn task_detail(
         status,
         created_by_kind: parse_kind(&row.created_by_kind),
         assignee_kind: parse_kind(&row.assignee_kind),
-        start_on: parse_date(&row.start_on),
+        start_on,
         due_on: parse_date(&row.due_on),
         priority: row.priority.as_deref().and_then(Priority::parse),
         placement,

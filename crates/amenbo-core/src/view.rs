@@ -14,6 +14,26 @@ use serde::Serialize;
 use crate::model::{ActorKind, Decision, DecisionStatus, Priority, Subtype, Task, TaskStatus};
 use crate::time::Timestamp;
 
+/// **The** ready predicate — every read that projects `ready` derives it here, so the task card, the
+/// task detail and the reserve guard cannot come to disagree about what "this can be started" means.
+/// Three premises, all of them declared by the user rather than by amenbo: no blocker still open, no
+/// linked decision still unsettled, and the declared start day arrived. No `start_on` means nothing was
+/// declared about when to start, which is not a reason to hold the task back.
+///
+/// `today` is the caller's reference day ([`crate::time::today`]), the same one the `status` view's
+/// buckets are cut against — a task the status view calls started must not read as not-yet-started here.
+/// The `ready:` filter says the same thing in SQL, where the three premises are predicates rather than
+/// booleans; that is the one restatement, and it is held to this one by test.
+#[must_use]
+pub fn is_ready(
+    has_open_blocker: bool,
+    has_unsettled_premise: bool,
+    start_on: Option<NaiveDate>,
+    today: NaiveDate,
+) -> bool {
+    !has_open_blocker && !has_unsettled_premise && start_on.is_none_or(|start| start <= today)
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct Ref {
     pub id: String,
@@ -95,7 +115,8 @@ pub struct TaskCompact {
     /// Derived from premises: the decision_ids of linked decisions that are not live grounds. Empty means
     /// the premises hold.
     pub blocked_by_decisions: Vec<i64>,
-    /// Derived: no open blockers and no unsettled grounds, i.e. this can be started.
+    /// Derived: no open blockers, no unsettled grounds, and the declared start day arrived — i.e. this
+    /// can be started ([`is_ready`]).
     pub ready: bool,
 }
 
@@ -132,7 +153,8 @@ pub struct TaskDetail {
     pub blocked_by: Vec<TaskRef>,
     /// Premises: linked decisions that are not live grounds (id + title). Empty means the premises hold.
     pub blocked_by_decisions: Vec<DecisionRef>,
-    /// Derived: no open blockers and no unsettled grounds, i.e. this can be started.
+    /// Derived: no open blockers, no unsettled grounds, and the declared start day arrived — i.e. this
+    /// can be started ([`is_ready`]).
     pub ready: bool,
     /// The reverse of `blocked_by`: the not-yet-done tasks that hold this one as a blocker — what
     /// finishing this task unblocks (empty means nothing waits on it).

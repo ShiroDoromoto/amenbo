@@ -590,6 +590,70 @@ mod tests {
         });
     }
 
+    #[test]
+    fn a_start_day_still_ahead_holds_the_task_back_on_every_read() {
+        // The third premise: a task declared to start later is not ready yet. Every read that projects
+        // `ready` has to say so — the task card, the task detail, and the `ready:` filter that SQL
+        // restates — or the mailbox and `task show` would disagree about the same task.
+        with_numbered_task(|tx, _pid, tid| {
+            let today = crate::time::today();
+            let set_start = |tx: &WriteTx<'_>, d: Option<NaiveDate>| {
+                update(
+                    tx,
+                    tid,
+                    TaskPatch { start_on: d, clear_start: d.is_none(), ..TaskPatch::default() },
+                )
+                .unwrap();
+            };
+            // The card path (`task list`), the detail path (`task show`), and the filter path.
+            let card = |tx: &WriteTx<'_>| {
+                crate::query::list(tx.conn(), crate::reach::Reach::All, list_params(None))
+                    .unwrap()
+                    .tasks
+                    .into_iter()
+                    .find(|t| t.id == tid)
+                    .expect("the task is listed whatever its start day")
+                    .ready
+            };
+            let detail = |tx: &WriteTx<'_>| crate::query::task_detail(tx.conn(), tid).unwrap().ready;
+            let in_mailbox = |tx: &WriteTx<'_>| {
+                crate::query::list(
+                    tx.conn(),
+                    crate::reach::Reach::All,
+                    list_params(Some("ready:yes")),
+                )
+                .unwrap()
+                .tasks
+                .iter()
+                .any(|t| t.id == tid)
+            };
+
+            for (start, want, what) in [
+                (None, true, "no start day declared"),
+                (Some(today - chrono::Duration::days(1)), true, "started yesterday"),
+                (Some(today), true, "starts today"),
+                (Some(today + chrono::Duration::days(1)), false, "starts tomorrow"),
+            ] {
+                set_start(tx, start);
+                assert_eq!(card(tx), want, "card: {what}");
+                assert_eq!(detail(tx), want, "detail: {what}");
+                assert_eq!(in_mailbox(tx), want, "ready:yes filter: {what}");
+            }
+        });
+    }
+
+    /// `ListParams` for a whole-store read, optionally filtered — the three ready paths only differ in
+    /// the filter, so the rest is spelled once.
+    fn list_params(filter: Option<&str>) -> crate::query::ListParams {
+        crate::query::ListParams {
+            project_id: None,
+            filter_expr: filter.map(str::to_string),
+            sort: "created".to_string(),
+            limit: None,
+            offset: None,
+        }
+    }
+
     // --- The crossing guard on rehoming (the three arms of `read::edge_peer_projects`) ---
 
     /// Create one decision and link it to `task` (this builds the far side of the third arm — the decision

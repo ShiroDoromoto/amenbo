@@ -387,10 +387,13 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         });
     }
     if let Some(ready) = f.ready {
-        // A task is ready when it has neither an *open* blocker (a live dependency edge to a live,
-        // not-done blocker) nor an *unsettled premise* (`unsettled_premise`). The reserve guard
-        // (`reserve_blockers`) reads the same two derivations, so the filter and the guard cannot
-        // drift apart.
+        // This is `crate::view::is_ready` restated in SQL, because a filter cannot ask three
+        // booleans of a row it has not read yet. A task is held back by an *open* blocker (a live
+        // dependency edge to a live, not-done blocker), by an *unsettled premise*
+        // (`unsettled_premise`), or by a *start day that has not arrived*. The reserve guard
+        // (`reserve_blockers`) reads the same derivations, so the filter and the guard cannot drift
+        // apart, and `a_start_day_still_ahead_holds_the_task_back_on_every_read` holds this restatement
+        // to the predicate on every arm.
         const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
         const DC: col::decision::Cols = col::decision::of("dc");
         const D: col::task_dependency::Cols = col::task_dependency::of("d");
@@ -408,7 +411,13 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
             .filter(Pred::ne(B.status, TaskStatus::Done.as_str()))
             .pred();
 
-        preds.push(open_blocker.or(premise).negated_if(ready));
+        // A `start_on` that is set and still ahead of today. Blank means nothing was declared about
+        // when to start, which holds nothing back. The dates compare lexicographically (`YYYY-MM-DD`),
+        // as everywhere else the read model compares a day column.
+        let not_started = (!Pred::is_blank(T.start_on))
+            .and(Pred::cmp(T.start_on, ">", q.today.to_string().as_str()));
+
+        preds.push(open_blocker.or(premise).or(not_started).negated_if(ready));
     }
     if let Some(decision) = f.decision {
         // `decision:` — tasks a decision links to (live link, live decision), as an EXISTS so it seeks
@@ -2579,6 +2588,7 @@ pub fn hydrate_task_cards(
     conn: &Connection,
     reach: crate::reach::Reach,
     ids: &[i64],
+    today: NaiveDate,
 ) -> Result<Vec<TaskCompact>> {
     if ids.is_empty() {
         return Ok(Vec::new());
@@ -2714,7 +2724,12 @@ pub fn hydrate_task_cards(
         let ctx = ctx_by_task.get(id);
         let blocked_by_open = blocked_by_task.get(id).cloned().unwrap_or_default();
         let blocked_by_decisions = blocked_by_decision.get(id).cloned().unwrap_or_default();
-        let ready = blocked_by_open.is_empty() && blocked_by_decisions.is_empty();
+        let ready = crate::view::is_ready(
+            !blocked_by_open.is_empty(),
+            !blocked_by_decisions.is_empty(),
+            b.start_on,
+            today,
+        );
         out.push(TaskCompact {
             id: b.id,
             title: b.title.clone(),
@@ -4053,7 +4068,7 @@ mod tests {
 
         // Cards: hydration is the last step before content reaches a face, so an out-of-reach id yields
         // no card — it drops out exactly as a non-live id does.
-        let cards = hydrate_task_cards(conn, bound, &[1, 2]).unwrap();
+        let cards = hydrate_task_cards(conn, bound, &[1, 2], crate::time::today()).unwrap();
         assert_eq!(cards.iter().map(|c| c.id).collect::<Vec<_>>(), vec![1], "no card from project 2");
 
         // The overview shows the one project, with its dimensions and counts and no sight of the other.

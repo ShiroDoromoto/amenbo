@@ -284,6 +284,17 @@ fn pointer_present() -> bool {
         .unwrap_or(false)
 }
 
+/// Is the bound folder — the one holding the `.amenbo` this invocation resolved — inside a git checkout?
+/// This is what gates the agent spec's `worktree` cycle: git advice reaches only the people git reaches. It
+/// asks about that folder rather than the CWD because the binding is what says where the work lives, and a
+/// caller with no pointer at all has no such folder, so the answer is no.
+fn bound_dir_is_under_git() -> bool {
+    std::env::current_dir()
+        .ok()
+        .and_then(|cwd| amenbo_core::binding::find_upward(&cwd))
+        .is_some_and(|(dir, _)| worktree::under_git(&dir))
+}
+
 /// Can this invocation reach a store at all — is one named, by a pointer or by env (AMENBO_HOME /
 /// AMENBO_PROJECT_DIR)? If not, `Store::open()` would quietly create a new one, so "may we open?" is asked
 /// in exactly one place: both the exec guard and the faces that answer without opening (version/update)
@@ -642,6 +653,16 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     "store_status".to_string(),
                     serde_json::to_value(&vs).unwrap_or(serde_json::Value::Null),
                 );
+                // Where git is not in play, drop the `worktree` cycle outright rather than letting it arrive
+                // with a "if you use git" caveat: a caveat still spends the reader's context, and what the
+                // spec advises here is not a thing they can do. The question is about the **bound folder** —
+                // the pointer's, not wherever the caller stands — since that is the checkout the work happens
+                // in. Core stays a static builder; this is the same runtime seam the two fields above use.
+                if !bound_dir_is_under_git() {
+                    if let Some(serde_json::Value::Object(cycles)) = map.get_mut("cycles") {
+                        cycles.remove("worktree");
+                    }
+                }
             }
             print_json(&spec);
         }

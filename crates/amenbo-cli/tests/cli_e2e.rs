@@ -868,6 +868,36 @@ fn nested_worktree_is_refused_but_a_subdirectory_and_a_submodule_are_not() {
     assert!(!wt.join(".amenbo").is_file(), "and it removed the pointer");
 }
 
+/// The agent spec advises a worktree per task — advice that means nothing to someone tracking no VCS, so it
+/// never reaches them: with the bound folder outside any git checkout the `worktree` cycle is absent from
+/// the output entirely, not present with a caveat. Nothing else in the spec moves either way.
+#[test]
+fn the_worktree_cycle_reaches_only_a_bound_folder_under_git() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+
+    let cycles_of = |v: &Value| v["cycles"].as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+
+    // No git anywhere above the bound folder: the cycle is gone, and so is the byte it would have cost.
+    let plain = cli.json(&["agent", "--json"]);
+    let without = cycles_of(&plain);
+    assert!(!without.contains(&"worktree".to_string()), "no git, no worktree cycle: {without:?}");
+    assert!(without.contains(&"commit".to_string()), "the rest of the spec is untouched: {without:?}");
+
+    // Put the folder under git, and the advice arrives — including the step that says to cut one per task.
+    std::fs::create_dir_all(cli.home.join(".git")).unwrap();
+    let under_git = cli.json(&["agent", "--json"]);
+    let with = cycles_of(&under_git);
+    assert!(with.contains(&"worktree".to_string()), "under git, the cycle is served: {with:?}");
+    let backbone = under_git["cycles"]["worktree"]["backbone"].as_array().unwrap();
+    assert_eq!(backbone.len(), 3, "all three steps come through: {backbone:?}");
+    assert_eq!(
+        without.len() + 1,
+        with.len(),
+        "and the gate moves this one cycle only: {without:?} vs {with:?}"
+    );
+}
+
 /// `version` and `update` answer even in a bare, unbound dir — neither ever reads a store (version is a
 /// fact about this build; update turns the published latest.json into an installer URL for this OS). With
 /// no self-update, `update` is the only road for someone who wants a newer build, and answering "init

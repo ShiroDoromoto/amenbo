@@ -97,6 +97,14 @@ pub fn nested(cwd: &Path) -> Option<Nested> {
     Some(Nested { worktree_root, bound_dir })
 }
 
+/// Is `dir` inside a git checkout at all? The agent spec's worktree advice is worthless without a VCS, and
+/// this is the machine-judged fact that keeps it from ever reaching someone who has none. Every shape of
+/// checkout counts — a plain repository, a linked worktree, a submodule — because the question is whether
+/// git is in play, not which shape of checkout this is; the upward walk answers it from a subdirectory too.
+pub fn under_git(dir: &Path) -> bool {
+    checkout(dir).is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

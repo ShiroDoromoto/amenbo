@@ -702,6 +702,52 @@ mod tests {
         });
     }
 
+    #[test]
+    fn a_task_held_back_by_its_start_day_carries_the_date_it_waits_for() {
+        // A `ready: false` with nothing to point at is the failure this guards: a plain `task list` shows
+        // every task, so the one the mailbox skips has to say *why* on the spot. The reason travels beside
+        // `blocked_by_open` / `blocked_by_decisions` on both faces, and it is present exactly when the
+        // start day is the thing holding the task back — never when the task is ready.
+        with_numbered_task(|tx, _pid, tid| {
+            let today = crate::time::today();
+            let tomorrow = today + chrono::Duration::days(1);
+            let card = |tx: &WriteTx<'_>| {
+                crate::query::list(tx.conn(), crate::reach::Reach::All, list_params(None))
+                    .unwrap()
+                    .tasks
+                    .into_iter()
+                    .find(|t| t.id == tid)
+                    .expect("the task is listed whatever its start day")
+            };
+            let detail = |tx: &WriteTx<'_>| crate::query::task_detail(tx.conn(), tid).unwrap();
+
+            for (start, want, what) in [
+                (None, None, "no start day declared"),
+                (Some(today - chrono::Duration::days(1)), None, "started yesterday"),
+                (Some(today), None, "starts today"),
+                (Some(tomorrow), Some(tomorrow), "starts tomorrow"),
+            ] {
+                update(
+                    tx,
+                    tid,
+                    TaskPatch {
+                        start_on: start,
+                        clear_start: start.is_none(),
+                        ..TaskPatch::default()
+                    },
+                )
+                .unwrap();
+                let (card, detail) = (card(tx), detail(tx));
+                assert_eq!(card.not_started_until, want, "card: {what}");
+                assert_eq!(detail.not_started_until, want, "detail: {what}");
+                // The reason and the verdict are one derivation: a reason present means not ready, and a
+                // task that is not ready for want of a start day always has one.
+                assert_eq!(card.ready, want.is_none(), "card ready: {what}");
+                assert_eq!(detail.ready, want.is_none(), "detail ready: {what}");
+            }
+        });
+    }
+
     /// `ListParams` for a whole-store read, optionally filtered — the three ready paths only differ in
     /// the filter, so the rest is spelled once.
     fn list_params(filter: Option<&str>) -> crate::query::ListParams {

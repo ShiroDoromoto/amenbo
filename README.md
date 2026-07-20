@@ -237,9 +237,10 @@ amenbo task list --filter "commit:<full-sha>" --json # walk history -> task insi
 # Dependencies: this task must wait for a blocker to be done first
 amenbo task depend 13 --on 12                # 13 is blocked until 12 is done
 amenbo task undepend 13 --on 12
-# A task is ready when no blocker is open and every decision linked to it is accepted;
-# ready:yes hides what is not ready, ready:no lists what's waiting. Reserving a task
-# that is not ready is refused (not_ready) — resolve the premise; there is no --force
+# A task is ready when no blocker is open, every decision linked to it is accepted, and
+# its declared start day has arrived; ready:yes hides what is not ready, ready:no lists
+# what's waiting — and every task says which of the three is holding it back. Reserving a
+# task that is not ready is refused (not_ready) — resolve the premise; there is no --force
 amenbo task list --filter "ready:yes" --json
 
 # Decision records: append-only "why we chose X" (a Task sibling, not a task —

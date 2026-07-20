@@ -24,7 +24,7 @@ use super::sql::{
 };
 use super::{StoreEngineError, Result};
 use crate::model::{ActorKind, Priority, TaskStatus};
-use crate::query::{AssigneeFilter, DueFilter, Filter};
+use crate::query::{AssigneeFilter, DueFilter, Filter, StartFilter};
 use crate::view::{ProjectRef, TaskCompact};
 
 /// The premise decision `dc` is **unsettled** — it is not `accepted`, or it is not current because a
@@ -334,6 +334,19 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
                 .and(Pred::cmp(T.due_on, "<=", (q.today + Duration::days(7)).to_string())),
             DueFilter::None => Pred::is_blank(T.due_on),
             DueFilter::On(d) => Pred::eq(T.due_on, d.to_string()),
+        });
+    }
+    if let Some(start) = &f.start {
+        // The same reading of `start_on` the ready predicate makes (`view::not_started_until`), said in
+        // SQL: declared and still ahead is the waiting queue, declared and arrived is startable, blank is
+        // nothing declared. Dates compare lexicographically (`YYYY-MM-DD`), as everywhere a day column is
+        // compared here.
+        let today = q.today.to_string();
+        let declared = !Pred::is_blank(T.start_on);
+        preds.push(match start {
+            StartFilter::Today => declared.and(Pred::cmp(T.start_on, "<=", today.as_str())),
+            StartFilter::Future => declared.and(Pred::cmp(T.start_on, ">", today.as_str())),
+            StartFilter::None => Pred::is_blank(T.start_on),
         });
     }
     if let Some(pri) = &f.priority {

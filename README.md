@@ -242,6 +242,9 @@ amenbo task undepend 13 --on 12
 # what's waiting — and every task says which of the three is holding it back. Reserving a
 # task that is not ready is refused (not_ready) — resolve the premise; there is no --force
 amenbo task list --filter "ready:yes" --json
+# start:future is the waiting queue on its own — what a start day still ahead holds back
+# (start:today = the day has come, start:none = no start day declared)
+amenbo task list --filter "start:future" --json
 
 # Decision records: append-only "why we chose X" (a Task sibling, not a task —
 # no mailbox workflow, its own device-global number space)

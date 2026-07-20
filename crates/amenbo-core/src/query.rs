@@ -54,6 +54,10 @@ pub struct Filter {
     /// task has any of them (OR within the key). Never empty: the parser demands at least one value.
     pub status: Option<Vec<TaskStatus>>,
     pub due: Option<DueFilter>,
+    /// `start:` — the declared start day, read as arrived / still ahead / never declared. The way to look
+    /// at the waiting queue on purpose, rather than inferring it from a `ready:no` that three premises
+    /// share.
+    pub start: Option<StartFilter>,
     pub priority: Option<Option<Priority>>, // Some(None)=none, Some(Some(p))=that priority
     /// The reference written in `project:` (an id, or an exact name). Parsing only looks at grammar
     /// (it has no `conn`), so this stays an **unresolved raw string**; the entry point of the read
@@ -229,6 +233,20 @@ pub enum DueFilter {
     On(NaiveDate),
 }
 
+/// The value of `start:` — the read-side counterpart of the start day that `ready` now stands on. It
+/// answers "which tasks is a start day holding back, and until when", which `ready:no` alone cannot: that
+/// lumps the three premises together.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StartFilter {
+    /// The start day has arrived (declared, and on or before today) — the arm that is startable as far as
+    /// the start day is concerned. Not "declared as today": a day that came and went is still arrived.
+    Today,
+    /// The start day is still ahead. The waiting queue.
+    Future,
+    /// No start day declared at all.
+    None,
+}
+
 /// The value of `assignee:`. `me` / `me-ai` resolve through the facet (`assignee_kind` human/ai);
 /// with a single store there is no id to name.
 #[derive(Clone, Debug)]
@@ -354,6 +372,21 @@ impl Filter {
                         other => DueFilter::On(time::parse_date(other, today)?),
                     })
                 }
+                "start" => {
+                    // Three named arms and no bare date: `due:` takes one because a deadline is asked about
+                    // by the day it falls on, whereas a start day is asked about by whether it has come.
+                    f.start = Some(match value {
+                        "today" => StartFilter::Today,
+                        "future" => StartFilter::Future,
+                        "none" => StartFilter::None,
+                        _ => {
+                            return Err(Error::invalid(
+                                "start must be today / future / none",
+                                "start は today / future / none",
+                            ))
+                        }
+                    })
+                }
                 "priority" => {
                     f.priority = Some(match value {
                         "high" => Some(Priority::High),
@@ -435,8 +468,8 @@ impl Filter {
                 }
                 other => {
                     return Err(Error::invalid(
-                        format!("unknown filter key '{other}' (done/status/due/priority/project/text/number/ref/assignee/ai/ready/decision/commit/dim/time_axis)"),
-                        format!("未知のフィルタキー '{other}'（done/status/due/priority/project/text/number/ref/assignee/ai/ready/decision/commit/dim/time_axis）"),
+                        format!("unknown filter key '{other}' (done/status/due/start/priority/project/text/number/ref/assignee/ai/ready/decision/commit/dim/time_axis)"),
+                        format!("未知のフィルタキー '{other}'（done/status/due/start/priority/project/text/number/ref/assignee/ai/ready/decision/commit/dim/time_axis）"),
                     ))
                 }
             }

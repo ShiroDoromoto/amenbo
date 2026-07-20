@@ -748,6 +748,85 @@ mod tests {
         });
     }
 
+    #[test]
+    fn the_start_filter_cuts_the_same_three_ways_the_start_day_is_read() {
+        // `start:` is the doorway to the waiting queue that `ready:no` cannot open on its own — it lumps
+        // three premises together. So each arm has to land on exactly the tasks that arm names, and the
+        // three arms have to partition the store: every task is declared-and-arrived, declared-and-ahead,
+        // or not declared, and never two of those.
+        with_numbered_task(|tx, pid, arrived| {
+            let today = crate::time::today();
+            let matches = |tx: &WriteTx<'_>, filter: &str| -> Vec<i64> {
+                let mut ids = crate::query::list(
+                    tx.conn(),
+                    crate::reach::Reach::All,
+                    list_params(Some(filter)),
+                )
+                .unwrap()
+                .tasks
+                .iter()
+                .map(|t| t.id)
+                .collect::<Vec<_>>();
+                ids.sort_unstable();
+                ids
+            };
+            let with_start = |tx: &WriteTx<'_>, title: &str, start: Option<NaiveDate>| {
+                add(
+                    tx,
+                    NewTask {
+                        title: title.to_string(),
+                        project_id: Some(pid),
+                        due_on: None,
+                        start_on: start,
+                        priority: None,
+                        notes: String::new(),
+                        created_by_kind: None,
+                    },
+                )
+                .unwrap()
+                .id
+            };
+
+            // Yesterday and today both count as arrived — the arm is "has the day come", not "is the day
+            // today", which is where a reader is most likely to expect the other reading.
+            update(
+                tx,
+                arrived,
+                TaskPatch { start_on: Some(today), ..TaskPatch::default() },
+            )
+            .unwrap();
+            let long_arrived = with_start(tx, "started yesterday", Some(today - chrono::Duration::days(1)));
+            let ahead = with_start(tx, "starts tomorrow", Some(today + chrono::Duration::days(1)));
+            let undeclared = with_start(tx, "no start day", None);
+
+            let mut want_arrived = vec![arrived, long_arrived];
+            want_arrived.sort_unstable();
+            assert_eq!(matches(tx, "start:today"), want_arrived, "start:today = the day has come");
+            assert_eq!(matches(tx, "start:future"), vec![ahead], "start:future = still ahead");
+            assert_eq!(matches(tx, "start:none"), vec![undeclared], "start:none = nothing declared");
+
+            // The three partition the store: no task is missing from all of them, and none is in two.
+            let mut all = matches(tx, "start:today");
+            all.extend(matches(tx, "start:future"));
+            all.extend(matches(tx, "start:none"));
+            all.sort_unstable();
+            let mut every = matches(tx, "");
+            every.sort_unstable();
+            assert_eq!(all, every, "the three arms partition the store");
+        });
+    }
+
+    #[test]
+    fn an_unknown_start_arm_is_an_error_rather_than_an_empty_result() {
+        // A misspelt arm silently matching nothing would read as "nothing is waiting" — the one answer a
+        // waiting queue must never give wrongly.
+        let err = crate::query::Filter::parse("start:tomorrow", crate::time::today()).unwrap_err();
+        assert!(
+            err.to_string().contains("today / future / none"),
+            "the message names the arms: {err}"
+        );
+    }
+
     /// `ListParams` for a whole-store read, optionally filtered — the three ready paths only differ in
     /// the filter, so the rest is spelled once.
     fn list_params(filter: Option<&str>) -> crate::query::ListParams {

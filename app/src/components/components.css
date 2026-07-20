@@ -11,8 +11,6 @@
 .facet__img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .facet__name { font-size: var(--fs-sm); }
 
-.statusbadge { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-xs); color: var(--c-text-muted); flex-shrink: 0; white-space: nowrap; }
-.statusbadge__dot { width: 8px; height: 8px; border-radius: 50%; }
 
 .due--overdue { color: var(--c-due-overdue); }
 .due--today { color: var(--c-due-today); }
@@ -108,7 +106,8 @@
 .card__assign { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); color: var(--c-text-muted); }
 .card__footer { display: flex; align-items: center; gap: var(--s-2); color: var(--c-text-faint); font-size: var(--fs-xs); }
 .card__spacer { flex: 1; }
-.card__status {
+/* A compact select sat inline among a card's or row's chips (the status control, a dimension value). */
+.inlineselect {
   font-size: var(--fs-xs); color: var(--c-text); background: var(--c-surface);
   border: 1px solid var(--c-border-strong); border-radius: var(--r-sm); padding: 0 2px; cursor: pointer;
 }
@@ -343,7 +342,9 @@ button.feed__target:hover { color: var(--c-accent); }
    row does not shift as the dot lights or clears, and only lights while unread. */
 .row__unread { flex: none; width: 8px; display: inline-flex; align-items: center; justify-content: center; }
 .row__unread-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c-accent); }
-.row__check { color: var(--c-text-faint); }
+/* The status control takes a fixed slot at the head of the row, so titles line up down the list
+   whatever each row's status is. */
+.row__status { flex: none; }
 /* A list row's title truncates to one line. With wrapping (overflow-wrap: anywhere)
    instead, widening the detail pane narrows the centre list column until the title plus
    the chips on the right exceed it; the title, at min-width:0, is then crushed to near

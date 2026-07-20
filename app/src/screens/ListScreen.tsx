@@ -1,9 +1,9 @@
 import { memo, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useStore } from "../store/store";
-import type { TaskCard } from "../mock/types";
+import type { Status, TaskCard } from "../mock/types";
 import {
-  BlockedChips, DueChip, FacetAvatar, PriorityDot, StatusBadge, TaskIdChip, TriggeredAtChip,
+  BlockedChips, DueChip, FacetAvatar, PriorityDot, StatusSelect, TaskIdChip, TriggeredAtChip,
 } from "../components/atoms";
 import { Pager, PAGE_SIZE } from "../components/Pager";
 import { useSmartView } from "../core/reads";
@@ -83,7 +83,7 @@ export function ListScreen({
                 onArchive={isInbox && !archived ? store.archiveInbox : undefined}
                 onUnarchive={archived ? store.unarchiveInbox : undefined}
                 onSelect={onSelectTask}
-                onToggleDone={store.toggleDone}
+                onStatus={store.setStatus}
               />
             ))}
           </div>
@@ -106,7 +106,7 @@ export function ListScreen({
 // (the store's mutators, AppShell's onSelectTask) and the row binds task.id when it calls them. Only
 // the rows whose props actually changed — selected, say — re-render.
 const TaskRow = memo(function TaskRow({
-  task, selected, showUnread, onMarkRead, onArchive, onUnarchive, onSelect, onToggleDone,
+  task, selected, showUnread, onMarkRead, onArchive, onUnarchive, onSelect, onStatus,
 }: {
   task: TaskCard;
   selected: boolean;
@@ -121,7 +121,7 @@ const TaskRow = memo(function TaskRow({
   // Archive tab only: unarchive the row back into the inbox. undefined — and so hidden — everywhere else.
   onUnarchive?: (id: number) => void;
   onSelect: (id: number) => void;
-  onToggleDone: (id: number) => void;
+  onStatus: (id: number, status: Status) => void;
 }) {
   const unread = showUnread && !!task.unread;
   return (
@@ -129,14 +129,11 @@ const TaskRow = memo(function TaskRow({
       <span className="row__unread" aria-hidden={!unread}>
         {unread && <span className="row__unread-dot" role="img" aria-label={t("list.unread")} />}
       </span>
-      <span className="row__check" onClick={(e) => { e.stopPropagation(); onToggleDone(task.id); }}>
-        {task.status === "done" ? "☑" : "◻"}
-      </span>
+      <span className="row__status"><StatusSelect id={task.id} status={task.status} onStatus={onStatus} /></span>
       <span className={`row__title ${task.status === "done" ? "row__title--done" : ""}`}>{task.title}</span>
       <span className="row__spacer" />
       <TaskIdChip id={task.id} />
       <BlockedChips task={task} />
-      <StatusBadge status={task.status} />
       {task.assignee && <FacetAvatar actor={task.assignee} />}
       <PriorityDot priority={task.priority} />
       {showUnread && <TriggeredAtChip at={task.triggeredAt} />}

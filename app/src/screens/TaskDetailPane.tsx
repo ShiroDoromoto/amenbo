@@ -11,12 +11,12 @@ import { addComment as mutAddComment, editComment as mutEditComment, removeComme
 import { loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
 import {
-  DueChip, FacetAvatar, PriorityDot, TaskIdChip,
+  DueChip, FacetAvatar, PriorityDot, StatusSelect, TaskIdChip,
 } from "../components/atoms";
-import { errText, priorityLabel, statusLabel, t, tf } from "../core/i18n";
+import { errText, priorityLabel, t, tf } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
 import { useRefNav } from "../core/refNav";
-import type { Actor, ActivityItem, Facet, Membership, Priority, Status, TaskCard } from "../mock/types";
+import type { Actor, ActivityItem, Facet, Membership, Priority, TaskCard } from "../mock/types";
 
 // The memberships to display. The Tauri DTO already carries task.memberships (names included); the mock
 // fallback builds a single entry by resolving the primary membership (projectId) against snapshot.projects.
@@ -221,11 +221,7 @@ export function TaskDetailPane({
           </div>
 
           <div className="detail__actions">
-            <select className="btn" value={task.status} onChange={(e) => store.setStatus(taskId, e.target.value as Status)}>
-              {(["todo", "in_progress", "done", "blocked"] as const).map((s) => (
-                <option key={s} value={s}>{statusLabel(s)}</option>
-              ))}
-            </select>
+            <StatusSelect id={taskId} status={task.status} onStatus={store.setStatus} className="btn" />
             <PriorityDot priority={task.priority} />
             <select
               className="btn"
@@ -270,7 +266,7 @@ export function TaskDetailPane({
               <span className="detail__flabel">{dim.name}</span>
               <span>
                 <select
-                  className="card__status"
+                  className="inlineselect"
                   value={dimValues[dim.id] ?? ""}
                   onChange={(e) => {
                     const valueId = Number(e.target.value);

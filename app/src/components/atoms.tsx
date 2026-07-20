@@ -28,12 +28,6 @@ export function TaskIdChip({ id }: { id: number }) {
   );
 }
 
-const STATUS_VAR: Record<Status, string> = {
-  todo: "var(--c-todo)",
-  in_progress: "var(--c-progress)",
-  done: "var(--c-done)",
-  blocked: "var(--c-blocked)",
-};
 const PRIORITY_COLOR: Record<Priority, string> = {
   high: "var(--c-pri-high)",
   medium: "var(--c-pri-med)",
@@ -76,12 +70,38 @@ export function FacetAvatar({ actor, showName }: { actor: Actor; showName?: bool
   );
 }
 
-export function StatusBadge({ status }: { status: Status }) {
+/** The status axis in display order — the board's columns and the status control's options are the same four values. */
+export const STATUS_ORDER: Status[] = ["todo", "in_progress", "blocked", "done"];
+
+/**
+ * The one control that changes a task's status. Every surface offering the change — board card, list row,
+ * inbox row — mounts this, so all four values stay reachable everywhere and no surface can express the axis
+ * as a two-value toggle (a toggle has to pick a landing status for the user, and picking `todo` silently
+ * discards an `in_progress` reservation). It shows the current status by being set to it, so a row carrying
+ * this needs no separate StatusBadge. It stops propagation itself: it always sits inside a row or card whose
+ * own click selects the task, and changing status must not double as selecting.
+ */
+export function StatusSelect({ id, status, onStatus, className = "inlineselect" }: {
+  id: number;
+  status: Status;
+  onStatus: (id: number, status: Status) => void;
+  // The surfaces differ in how the control is dressed — compact among a card's chips, a full button in the
+  // detail pane's action row — but it is one control, so the styling is the only thing a caller may vary.
+  className?: string;
+}) {
   return (
-    <span className="statusbadge">
-      <span className="statusbadge__dot" style={{ background: STATUS_VAR[status] }} />
-      {statusLabel(status)}
-    </span>
+    <select
+      className={className}
+      value={status}
+      title={t("status.changeTip")}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => { e.stopPropagation(); onStatus(id, e.target.value as Status); }}
+    >
+      {STATUS_ORDER.map((s) => (
+        <option key={s} value={s}>{statusLabel(s)}</option>
+      ))}
+    </select>
   );
 }
 
@@ -106,8 +126,8 @@ export function DueChip({ due, label }: { due: string | null; label: string | nu
  * tries to start. ⛔ = an unfinished dependency blocker; ⚠ = a decision not yet settled as grounds. The reason a
  * reservation was refused only ever appears in a toast that vanishes in 4 seconds, so this is the one permanent place
  * it is visible before starting. It is a derived inability to start, on a different axis from a stop a person
- * declared (`status = blocked`, the StatusBadge's `--c-blocked`), so it speaks in glyphs rather than colour and never
- * blends into the status colour range. `compact` is for the dense surfaces where the chip shares one line with a row
+ * declared (`status = blocked`), so it speaks in glyphs rather than colour and never blends into the status colour
+ * range. `compact` is for the dense surfaces where the chip shares one line with a row
  * label (calendar, timeline): it drops the count and the chip background and leaves just the glyph (the tooltip names
  * what is blocking).
  */

@@ -4,7 +4,7 @@ import { dataAdapter } from "../mock/adapter";
 import { useStore } from "../store/store";
 import type { Status, TaskCard } from "../mock/types";
 import {
-  BlockedChips, DueChip, FacetAvatar, PriorityDot, StatusBadge, TaskIdChip,
+  BlockedChips, DueChip, FacetAvatar, PriorityDot, STATUS_ORDER, StatusSelect, TaskIdChip,
 } from "../components/atoms";
 import { Pager, usePager } from "../components/Pager";
 import { useTaskPage } from "../core/reads";
@@ -24,7 +24,6 @@ const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
 // What the board's columns group by: `"status"` (a first-class field — the columns fall out of it), or the id
 // of one of the project's dimensions, which splits the board into one column per value of that dimension.
 const STATUS_GROUP = "status";
-const STATUS_COLUMNS: Status[] = ["todo", "in_progress", "blocked", "done"];
 
 // Order of the done column: most recently completed first (RFC3339 sorts lexicographically = chronologically).
 // Tasks with no completion time sink to the bottom.
@@ -259,7 +258,7 @@ export function BoardScreen({
 
       {view === "board" && !groupingDim && (
         <div className="board">
-          {STATUS_COLUMNS.map((st) => {
+          {STATUS_ORDER.map((st) => {
             const colTasks = tasks.filter((t) => t.status === st);
             const isDone = st === "done";
             const sorted = isDone ? colTasks.slice().sort(byCompletedDesc) : colTasks;
@@ -343,17 +342,17 @@ export function BoardScreen({
       {view === "list" && (
         <>
           <div className="list">
+            {/* The row is a div, not a button: it carries the status control, and a select may not nest inside a button. */}
             {listPager.pageItems.map((t) => (
-              <button key={t.id} className={`row ${t.id === selectedTaskId ? "row--selected" : ""}`} onClick={() => onSelectTask(t.id)} data-pane-select>
-                <span className="row__check" onClick={(e) => { e.stopPropagation(); store.toggleDone(t.id); }}>{t.status === "done" ? "☑" : "◻"}</span>
+              <div key={t.id} className={`row ${t.id === selectedTaskId ? "row--selected" : ""}`} onClick={() => onSelectTask(t.id)} role="button" data-pane-select>
+                <span className="row__status"><StatusSelect id={t.id} status={t.status} onStatus={store.setStatus} /></span>
                 <span className={`row__title ${t.status === "done" ? "row__title--done" : ""}`}>{t.title}</span>
                 <span className="row__spacer" />
                 <BlockedChips task={t} />
-                <StatusBadge status={t.status} />
                 {t.assignee && <FacetAvatar actor={t.assignee} />}
                 <PriorityDot priority={t.priority} />
                 <DueChip due={t.due} label={t.dueLabel} />
-              </button>
+              </div>
             ))}
           </div>
           <Pager
@@ -559,18 +558,7 @@ const TaskCardView = memo(function TaskCardView({
         {task.comments > 0 && <span>💬 {task.comments}</span>}
         <TaskIdChip id={task.id} />
         <span className="card__spacer" />
-        <select
-          className="card__status"
-          value={task.status}
-          title={t("card.statusTip")}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) => { e.stopPropagation(); onStatus(task.id, e.target.value as Status); }}
-        >
-          {STATUS_COLUMNS.map((s) => (
-            <option key={s} value={s}>{statusLabel(s)}</option>
-          ))}
-        </select>
+        <StatusSelect id={task.id} status={task.status} onStatus={onStatus} />
       </div>
     </div>
   );

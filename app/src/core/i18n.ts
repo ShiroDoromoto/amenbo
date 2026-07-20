@@ -360,7 +360,7 @@ const UI: Record<Lang, Record<string, string>> = {
     // Archived tab row action: restore to the inbox (unarchive).
     "list.unarchive": "戻す", "list.unarchiveTitle": "受信箱へ戻す",
     // board / detail tooltips
-    "card.statusTip": "ステータスを変更",
+    "status.changeTip": "ステータスを変更",
     "card.addTaskTip": "タスクを追加", "card.assigneeTip": "担当（任せた相手）",
     "block.deps": "着手不可（依存）: {names} の完了待ち",
     "block.decisions": "着手不可（根拠が未確定）: {refs}",
@@ -688,7 +688,7 @@ const UI: Record<Lang, Record<string, string>> = {
     // Archived tab row action: restore to the inbox (unarchive).
     "list.unarchive": "Restore", "list.unarchiveTitle": "Restore to inbox",
     // board / detail tooltips
-    "card.statusTip": "Change status",
+    "status.changeTip": "Change status",
     "card.addTaskTip": "Add a task", "card.assigneeTip": "Assignee (whom it's delegated to)",
     "block.deps": "Cannot start (dependency): waiting on {names}",
     "block.decisions": "Cannot start (premise not settled): {refs}",

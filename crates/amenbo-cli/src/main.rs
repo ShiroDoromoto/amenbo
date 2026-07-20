@@ -2428,6 +2428,19 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                 print_json(&result);
             } else {
                 human(flags, count_header(result.count, result.total_matched, "task"));
+                // An empty mailbox that means "not yet" has to say so on the spot. A start day mistyped far
+                // into the future hides a task in the one way nothing else catches — the list is empty and
+                // reads as finished — so the count and the first day arrive with the emptiness.
+                if let Some(w) = &result.waiting_on_start {
+                    human(
+                        flags,
+                        format!(
+                            "  ({} waiting on a start day — earliest {})",
+                            w.count,
+                            time::date_to_string(w.earliest)
+                        ),
+                    );
+                }
                 for t in &result.tasks {
                     let check = if t.completed { "x" } else { " " };
                     let due = t.due_on.map(|d| format!(" due:{}", time::date_to_string(d))).unwrap_or_default();

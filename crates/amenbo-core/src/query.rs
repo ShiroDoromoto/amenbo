@@ -495,6 +495,23 @@ pub struct TaskListResult {
     pub count: usize,
     pub total_matched: usize,
     pub tasks: Vec<TaskCompact>,
+    /// What a `ready:yes` query with no matches is not showing: the tasks the same query would have
+    /// matched but for a start day still ahead. Always serialized (`null` when there is nothing to say),
+    /// and only ever filled in on that path — see [`WaitingOnStart`].
+    pub waiting_on_start: Option<WaitingOnStart>,
+}
+
+/// The waiting queue behind an empty mailbox: how many tasks a start day is holding back, and the earliest
+/// of those days.
+///
+/// It exists because a start day mistyped far into the future is invisible in exactly the way that matters
+/// — the task drops out of the mailbox, and an empty mailbox reads as "nothing to do" rather than "three
+/// tasks, the first in eleven months". The count is what makes the mistake noticeable; the date is what
+/// makes it obviously a mistake.
+#[derive(Clone, Debug, Serialize)]
+pub struct WaitingOnStart {
+    pub count: usize,
+    pub earliest: NaiveDate,
 }
 
 #[derive(Default)]
@@ -582,6 +599,31 @@ pub fn list(
     let tasks = store_engine::hydrate_task_cards(conn, reach, &page.ids, today)
         .map_err(crate::error::engine_on(conn))?;
     let count = tasks.len();
+
+    // Nothing matched a query that asked for ready work: say what a start day is holding back, so an empty
+    // mailbox cannot be read as "nothing to do" when it means "not yet". The same filter is reused with
+    // `ready:` dropped and `start:future` in its place — anything else would count tasks the caller never
+    // asked about (someone else's, another project's). Off the empty path this is not read at all.
+    let waiting_on_start = if page.total_matched == 0 && filter.ready == Some(true) {
+        let waiting = Filter { ready: None, start: Some(StartFilter::Future), ..filter.clone() };
+        store_engine::waiting_on_start(
+            conn,
+            &TaskQuery {
+                reach,
+                project_id,
+                filter: &waiting,
+                sort: &params.sort,
+                today,
+                limit: None,
+                offset: None,
+            },
+        )
+        .map_err(crate::error::engine_on(conn))?
+        .map(|(count, earliest)| WaitingOnStart { count, earliest })
+    } else {
+        None
+    };
+
     Ok(TaskListResult {
         query: ListQueryEcho {
             project: params.project_id,
@@ -591,6 +633,7 @@ pub fn list(
         total_matched: page.total_matched,
         count,
         tasks,
+        waiting_on_start,
     })
 }
 

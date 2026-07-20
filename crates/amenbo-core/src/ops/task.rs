@@ -817,6 +817,64 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_ready_query_says_what_a_start_day_is_holding_back() {
+        // The forgetting this closes: a start day mistyped far into the future empties the mailbox, and an
+        // empty mailbox reads as "nothing to do". So the count and the first day ride along with the
+        // emptiness — and only there: a query that matched something has nothing to explain, and the
+        // waiting set is the caller's own, not the whole store's.
+        with_numbered_task(|tx, pid, ready| {
+            let today = crate::time::today();
+            let soon = today + chrono::Duration::days(30);
+            let far = today + chrono::Duration::days(400);
+            let waiting = |tx: &WriteTx<'_>, filter: &str| {
+                crate::query::list(tx.conn(), crate::reach::Reach::All, list_params(Some(filter)))
+                    .unwrap()
+                    .waiting_on_start
+                    .map(|w| (w.count, w.earliest))
+            };
+            let mine = "assignee:me-ai status:todo ready:yes";
+
+            for (title, start) in [("mistyped, far ahead", far), ("waiting, sooner", soon)] {
+                let id = add(
+                    tx,
+                    NewTask {
+                        title: title.to_string(),
+                        project_id: Some(pid),
+                        due_on: None,
+                        start_on: Some(start),
+                        priority: None,
+                        notes: String::new(),
+                        created_by_kind: None,
+                    },
+                )
+                .unwrap()
+                .id;
+                set_assignee(tx, id, Some(ActorKind::Ai)).unwrap();
+            }
+            set_assignee(tx, ready, Some(ActorKind::Ai)).unwrap();
+
+            // While something is ready, the mailbox is not empty and there is nothing to explain.
+            assert_eq!(waiting(tx, mine), None, "a query that matched says nothing about the queue");
+
+            // Empty it, and the two waiting tasks are named — the earliest day being the sooner one, not
+            // the mistyped one that would otherwise be the only sign anything is wrong.
+            set_status(tx, ready, TaskStatus::Done).unwrap();
+            assert_eq!(waiting(tx, mine), Some((2, soon)), "the empty mailbox says what it is not showing");
+
+            // The waiting set is the same query's: a mailbox belonging to the human is empty with nothing
+            // behind it, even though the AI's queue is full.
+            assert_eq!(
+                waiting(tx, "assignee:me status:todo ready:yes"),
+                None,
+                "the queue counted is the one the caller asked about",
+            );
+
+            // Only a query that asked for ready work explains itself; a plain listing is not a mailbox.
+            assert_eq!(waiting(tx, "status:done text:nothing-matches-this"), None, "not a ready query");
+        });
+    }
+
+    #[test]
     fn an_unknown_start_arm_is_an_error_rather_than_an_empty_result() {
         // A misspelt arm silently matching nothing would read as "nothing is waiting" — the one answer a
         // waiting queue must never give wrongly.

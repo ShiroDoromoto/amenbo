@@ -208,7 +208,7 @@ pub struct TaskQuery<'a> {
     /// be handed every project. A closed reach narrows the rows here too, so the guard does not depend on
     /// the caller having gone through [`crate::query::list`].
     pub reach: crate::reach::Reach,
-    /// Restrict to tasks with a live membership in this project (exact id).
+    /// Restrict to tasks placed in this project (exact id).
     pub project_id: Option<i64>,
     /// Already-parsed filter (the grammar lives in [`crate::query::Filter`]).
     pub filter: &'a Filter,
@@ -931,7 +931,7 @@ pub fn max_attachment_order_key(
 /// tasks, ordered by `order_key` ASC (BINARY collation agrees with Rust's byte-wise `String` ordering
 /// that [`crate::ops::place`] assumes). `exclude_task` drops one task id (the one being moved); the
 /// caller feeds the result to `ops::place` unchanged.
-pub fn membership_siblings(
+pub fn placement_siblings(
     conn: &Connection,
     project_id: i64,
     exclude_task: Option<i64>,
@@ -1621,17 +1621,17 @@ pub fn decision_detail(conn: &Connection, decision_id: i64) -> Result<Option<Dec
     Ok(Some(row))
 }
 
-/// One home of a task in [`TaskDetailRow`] (the `task show` membership list). `project_name` is
-/// live-only (LEFT JOIN; the caller renders a missing name as "").
-pub struct MembershipRow {
+/// Where a task sits, as carried by [`TaskDetailRow`]. `project_name` is live-only (LEFT JOIN; the
+/// caller renders a missing name as "").
+pub struct PlacementRow {
     pub project_id: i64,
     pub project_name: Option<String>,
     pub order_key: String,
 }
 
-/// The task's placement, with the live-only project name. Placement is task-held, so this yields no row
-/// for an unplaced (inbox) task and one otherwise — the shape a detail row and a card both carry.
-fn memberships_of(conn: &Connection, task_id: i64) -> Result<Vec<MembershipRow>> {
+/// The task's placement, with the live-only project name. Placement is task-held, so this yields nothing
+/// for an unplaced (inbox) task and one row otherwise — the shape a detail row and a card both carry.
+fn placement_of(conn: &Connection, task_id: i64) -> Result<Option<PlacementRow>> {
     const T: col::task::Cols = col::task::of("t");
     const P: col::project::Cols = col::project::of("p");
     let mut sel = Select::new();
@@ -1647,16 +1647,16 @@ fn memberships_of(conn: &Connection, task_id: i64) -> Result<Vec<MembershipRow>>
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let rows = stmt
         .query_map(rusqlite::params_from_iter(sql.params()), |r| {
-            Ok(MembershipRow {
+            Ok(PlacementRow {
                 project_id: project_id.get(r)?,
                 project_name: project_name.get(r)?,
                 order_key: order_key.get(r)?.unwrap_or_default(),
             })
         })
         .map_err(StoreEngineError::from)?
-        .collect::<rusqlite::Result<Vec<MembershipRow>>>()
+        .collect::<rusqlite::Result<Vec<PlacementRow>>>()
         .map_err(StoreEngineError::from)?;
-    Ok(rows)
+    Ok(rows.into_iter().next())
 }
 
 /// Open blockers: live dependency → not-done blocker, in dependency-`id` order, with title. `ready` is
@@ -1697,8 +1697,7 @@ fn comment_count(conn: &Connection, task_id: i64) -> Result<usize> {
 /// instead of a scan per part. The query layer ([`crate::query::task_detail`]) parses the text fields and
 /// assembles a `view::TaskDetail`; what this row promises is that the task is fetched by id (a row
 /// exists ⇒ it is live, so a deleted task is `None` here and `show` reports "no such task"), that
-/// `memberships` are every live home in store (`id`) order with
-/// the live-only project name, that `blocked_by` are the live, not-done blockers in dependency-`id` order
+/// `placement` is where the task sits (absent when it is unplaced) with the live-only project name, that `blocked_by` are the live, not-done blockers in dependency-`id` order
 /// with their titles and `blocked_by_decisions` the live, unsettled linked decisions (`ready` is derived
 /// as both being empty), and that `num_comments` is the live comment count.
 pub struct TaskDetailRow {
@@ -1715,7 +1714,7 @@ pub struct TaskDetailRow {
     pub priority: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    pub memberships: Vec<MembershipRow>,
+    pub placement: Option<PlacementRow>,
     /// `(id, title)` of live, not-done blockers, in dependency-`id` order.
     pub blocked_by: Vec<(i64, String)>,
     /// `(id, title)` of live, not-done dependents (this task is their blocker), in dependency-`id`
@@ -1754,7 +1753,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
                 priority: priority.get(r)?,
                 created_at: created_at.get(r)?,
                 updated_at: updated_at.get(r)?,
-                memberships: Vec::new(),
+                placement: None,
                 blocked_by: Vec::new(),
                 blocks: Vec::new(),
                 blocked_by_decisions: Vec::new(),
@@ -1768,7 +1767,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
         None => return Ok(None),
     };
 
-    row.memberships = memberships_of(conn, task_id)?;
+    row.placement = placement_of(conn, task_id)?;
     row.blocked_by = open_blockers(conn, task_id)?;
 
     // Dependents (reverse of `blocked_by`): live dependency → live, not-done task that has this task as
@@ -1816,7 +1815,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
 
     row.num_comments = comment_count(conn, task_id)?;
 
-    crate::perf::record_query("engine.task_detail", 1, row.memberships.len(), started.elapsed());
+    crate::perf::record_query("engine.task_detail", 1, usize::from(row.placement.is_some()), started.elapsed());
     Ok(Some(row))
 }
 
@@ -1839,8 +1838,8 @@ fn facet_display(kind: Option<&str>) -> String {
 }
 
 /// Everything a GUI task card (`TaskCardDto`) needs, read per id off the indexed read-model so a page
-/// of cards costs O(result) instead of a full-store pass per tick. What one row carries: memberships in
-/// store (`id`) order (`[0]` = primary), open blockers (id + title), the live comment count, and the
+/// of cards costs O(result) instead of a full-store pass per tick. What one row carries: the task's
+/// placement (absent when it is unplaced), open blockers (id + title), the live comment count, and the
 /// actors with fallback-to-id names. The command layer derives the top-level project
 /// id, `is_mine`/`is_my_other_session`, and `ready` (= `blocked_by` and `blocked_by_decisions` both
 /// empty).
@@ -1854,8 +1853,8 @@ pub struct TaskCardRow {
     pub completed_at: Option<String>,
     pub assignee: Option<CardActor>,
     pub created_by: Option<CardActor>,
-    /// Every live home in store (`id`) order; `memberships[0]` is the primary.
-    pub memberships: Vec<MembershipRow>,
+    /// Where the task sits; absent when it is unplaced (inbox).
+    pub placement: Option<PlacementRow>,
     /// `(id, title)` of live, not-done blockers, in dependency-`id` order.
     pub blocked_by: Vec<(i64, String)>,
     pub num_comments: usize,
@@ -1894,7 +1893,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
                     .map(|k| CardActor { name: facet_display(Some(&k)), kind: Some(k) }),
                 created_by: created_by_kind
                     .map(|k| CardActor { name: facet_display(Some(&k)), kind: Some(k) }),
-                memberships: Vec::new(),
+                placement: None,
                 blocked_by: Vec::new(),
                 num_comments: 0,
                 linked_decisions: Vec::new(),
@@ -1908,7 +1907,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
         None => return Ok(None),
     };
 
-    row.memberships = memberships_of(conn, task_id)?;
+    row.placement = placement_of(conn, task_id)?;
     row.blocked_by = open_blockers(conn, task_id)?;
     row.num_comments = comment_count(conn, task_id)?;
 
@@ -1954,7 +1953,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
         }
     }
 
-    crate::perf::record_query("engine.task_card_row", 1, row.memberships.len(), started.elapsed());
+    crate::perf::record_query("engine.task_card_row", 1, usize::from(row.placement.is_some()), started.elapsed());
     Ok(Some(row))
 }
 
@@ -2548,7 +2547,7 @@ fn card_enum_opt<T, N: Nullability>(
 }
 
 /// Task base fields a [`TaskCompact`] card needs from the `task` table (everything not resolved by
-/// a join: membership context, assignee name and open-blocker derivation are filled separately).
+/// a join: placement context, assignee name and open-blocker derivation are filled separately).
 struct CardBase {
     id: i64,
     title: String,
@@ -2559,16 +2558,16 @@ struct CardBase {
     assignee_kind: Option<ActorKind>,
 }
 
-/// The primary-membership context of a task: the project ref resolved from its placement,
+/// The placement context of a task: the project ref resolved from its placement,
 /// `None` when there is no such referent.
 struct PrimaryCtx {
     project: Option<ProjectRef>,
 }
 
 /// Hydrate a set of task ids into [`TaskCompact`] cards **directly from the SQL read-model**: rather
-/// than indexing every record, it joins only the page's tasks to their primary membership / assignee /
+/// than indexing every record, it joins only the page's tasks to their placement / assignee /
 /// open blockers. Cards come back in the input order; an id with no *live* task is skipped. A card takes
-/// the first live membership by `id` as its project, gates the project name on liveness, and carries the
+/// the project it is placed in as its project, gates the project name on liveness, and carries the
 /// live, not-done blockers in dependency-`id` order. The ids come from somewhere — a query, a feed, a
 /// caller's own list — so the reach is declared here too: under a closed one, an id outside the bound
 /// project hydrates no card, exactly as a non-live id does. Hydration is the last step before content
@@ -2631,7 +2630,7 @@ pub fn hydrate_task_cards(
     }
 
     // 2) Placement (task-held) + project name. The LEFT JOIN gates the ref on the referent being live,
-    //    exactly as the per-id `memberships_of` does.
+    //    exactly as the per-id `placement_of` does.
     let mut ctx_by_task: HashMap<i64, PrimaryCtx> = HashMap::new();
     {
         const T: col::task::Cols = col::task::of("t");
@@ -2639,7 +2638,7 @@ pub fn hydrate_task_cards(
         let mut sel = Select::new();
         let task = sel.col(T.id);
         // Present by the WHERE, and absent through the LEFT JOIN when the project is gone — neither
-        // optionality is the column's own (see `memberships_of`).
+        // optionality is the column's own (see `placement_of`).
         let project_id = sel.col(T.project_id.required());
         let pname = sel.col(P.name.nullable());
         let pred =

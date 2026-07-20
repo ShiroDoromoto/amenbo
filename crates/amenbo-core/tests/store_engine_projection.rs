@@ -79,7 +79,7 @@ fn build_backlog(paths: &Paths) -> (String, i64) {
             .add_task_commit(t1, "0123456789abcdef0123456789abcdef01234567", Some(ActorKind::Ai))
             .unwrap();
 
-        // Placement is task-held: a task has exactly one home, so there is no multi-membership
+        // Placement is task-held: a task sits in exactly one project, so there is no multi-project
         // scenario to seed here. Delete t4 to exercise a deleted task in the projection.
         store.delete_task(t4, amenbo_core::model::ActorKind::Human).unwrap();
         numbered = t1;

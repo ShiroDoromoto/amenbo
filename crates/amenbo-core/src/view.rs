@@ -99,8 +99,9 @@ pub struct TaskCompact {
     pub ready: bool,
 }
 
+/// Where a task sits: the project it is placed in, and its order within that project.
 #[derive(Clone, Debug, Serialize)]
-pub struct MembershipView {
+pub struct PlacementView {
     pub project: ProjectRef,
     pub order_key: String,
 }
@@ -125,7 +126,8 @@ pub struct TaskDetail {
     pub priority: Option<Priority>,
     /// The conversational ref, i.e. the displayed `AMB-T-<n>` (rendered from `id`).
     pub r#ref: String,
-    pub memberships: Vec<MembershipView>,
+    /// Where the task sits; absent when it is unplaced (inbox).
+    pub placement: Option<PlacementView>,
     /// Dependencies: blockers that are not done yet (id + title). Empty means nothing is in the way.
     pub blocked_by: Vec<TaskRef>,
     /// Premises: linked decisions that are not live grounds (id + title). Empty means the premises hold.

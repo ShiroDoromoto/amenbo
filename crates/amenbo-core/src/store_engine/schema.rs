@@ -758,7 +758,7 @@ const EXTRA_SQL: &str = r#"
 PRAGMA journal_mode = WAL;
 
 -- Foreign-key indexes for the read layer's correlated subqueries over child tables
--- (`read::list_task_ids`: the project membership EXISTS + the `order` sort's per-row membership
+-- (`read::list_task_ids`: the project placement EXISTS + the `order` sort's per-row placement
 -- lookup and the ready/blocked dependency EXISTS). Without them every such subquery table-scans the
 -- whole child table once per task — O(tasks × child), i.e. O(N²) on an unfiltered board page, which
 -- is seconds rather than milliseconds on a board of ten thousand tasks. These reference base registry
@@ -783,7 +783,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS decision_edge_pair ON decision_edge(decision_i
 CREATE INDEX IF NOT EXISTS decision_edge_by_target ON decision_edge(target_decision_id);
 -- FK index over the task↔value link of the dimension model, so an axis filter's EXISTS seeks a task's
 -- own assignments instead of scanning the whole link table (the convention every child table follows:
--- task_membership_by_task etc.). No read path consumes it yet; it is here so that moving the axes onto
+-- task_dependency_by_task etc.). No read path consumes it yet; it is here so that moving the axes onto
 -- the link table cannot reintroduce the O(N²) scan the other FK indexes exist to prevent.
 CREATE INDEX IF NOT EXISTS task_dimension_value_by_task ON task_dimension_value(task_id);
 -- A task's commit SHAs. The pair is UNIQUE so the same commit cannot be recorded twice on one task

@@ -135,7 +135,7 @@ current: boolean,
 /**
  * The project it lives under (the id is an integer key).
  */
-project: MembershipRefDto | null, 
+project: ProjectRefDto | null, 
 /**
  * Decisions this one replaced (supersession, forward). One decision can replace several.
  */
@@ -316,17 +316,6 @@ cmd: string, };
 export type LinkedTaskRefDto = { id: number, name: string, ref?: string, status: "todo" | "in_progress" | "done" | "blocked", };
 
 /**
- * The membership of one task (project only — classification lives on the dimension axes). The real
- * data behind the membership row in the task detail view.
- */
-export type MembershipDto = { project: MembershipRefDto, };
-
-/**
- * A reference to the project a membership names (id + display name). The id is an integer key.
- */
-export type MembershipRefDto = { id: number, name: string, };
-
-/**
  * [`amenbo_core::migrate::MigrationReport`] as the completion panel reads it.
  */
 export type MigrationDoneDto = { 
@@ -432,6 +421,12 @@ report: MigrationDoneDto | null,
 error: { code: string; message: string; message_en: string; fields: Record<string, unknown> | null } | null, };
 
 /**
+ * Where one task sits (project only — classification lives on the dimension axes). The real data
+ * behind the project row in the task detail view.
+ */
+export type PlacementDto = { project: ProjectRefDto, };
+
+/**
  * A reference with no entity key behind it (a decision's `decided_by` — an opaque token that
  * cannot be looked up).
  */
@@ -487,6 +482,11 @@ proposedDecisionCount: number,
  * happens on these axes and nowhere else.
  */
 dimensions: Array<DimensionDto>, };
+
+/**
+ * A reference to a project (id + display name). The id is an integer key.
+ */
+export type ProjectRefDto = { id: number, name: string, };
 
 /**
  * The editable fields of one project, so the project settings screen can prefill its form.
@@ -659,11 +659,10 @@ ready: boolean,
  */
 blockedBy: Array<TaskRefDto>, 
 /**
- * Membership (with the project's display name), so the detail pane's membership row renders
- * from real data. One task has one membership, but an unfiled task (inbox) can have none, so
- * this stays a Vec. The primary membership is `memberships[0]`.
+ * Where the task sits (with the project's display name), so the detail pane's project row
+ * renders from real data. Absent when the task is unplaced (inbox).
  */
-memberships: Array<MembershipDto>, createdBy: ActorDto | null, 
+placement: PlacementDto | null, createdBy: ActorDto | null, 
 /**
  * The decision records that motivated this task (cross-link). Symmetric with
  * `DecisionDto.linked_tasks`; drives navigation from the task detail view to the decision record.

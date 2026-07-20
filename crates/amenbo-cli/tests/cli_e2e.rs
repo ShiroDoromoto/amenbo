@@ -128,7 +128,7 @@ fn full_task_lifecycle() {
     let tid = id_str(&t["task"]["id"]);
     assert_eq!(t["task"]["due_on"], "2026-06-30");
     assert_eq!(t["task"]["priority"], "high");
-    assert_eq!(id_str(&t["task"]["memberships"][0]["project"]["id"]), pid);
+    assert_eq!(id_str(&t["task"]["placement"]["project"]["id"]), pid);
 
     // Breaking work down means another task plus a dependency edge.
     let t2 = cli.json(&[
@@ -364,7 +364,7 @@ fn task_add_requires_project() {
     // With --project it goes through and is numbered inside its project.
     let ok = cli.json(&["task", "add", "--title", "所属あり", "--project", &pid, "--json"]);
     assert_eq!(ok["task"]["title"], "所属あり");
-    assert_eq!(id_str(&ok["task"]["memberships"][0]["project"]["id"]), pid);
+    assert_eq!(id_str(&ok["task"]["placement"]["project"]["id"]), pid);
     // Not a single project-less task was created.
     let all = cli.json(&["task", "list", "--json"]);
     assert_eq!(all["count"], 1, "only the one task with a project was created");
@@ -453,9 +453,9 @@ fn task_add_delegates_in_one_step() {
     assert_eq!(before, after, "no task must be created when resolution fails");
 }
 
-/// A task lives in exactly one project, and `task move` rehomes it: membership stays a single row.
+/// A task lives in exactly one project, and `task move` rehomes it: placement names the new one.
 #[test]
-fn task_move_rehomes_single_membership() {
+fn task_move_rehomes_single_placement() {
     let cli = Cli::new();
     let pa = cli.json(&["project", "add", "--name", "PJ-A", "--json"]);
     let pa_id = id_str(&pa["project"]["id"]);
@@ -465,13 +465,13 @@ fn task_move_rehomes_single_membership() {
     let tid = id_str(&t["task"]["id"]);
 
     // Freshly created, it belongs to PJ-A.
-    assert_eq!(t["task"]["memberships"].as_array().unwrap().len(), 1);
+    assert_eq!(id_str(&t["task"]["placement"]["project"]["id"]), pa_id);
     assert_eq!(cli.json(&["task", "list", "--project", &pa_id, "--json"])["count"], 1);
 
     // After the move it belongs to PJ-B alone: gone from A's listing, present in B's.
     let moved = cli.json(&["task", "move", &tid, "--project", &pb_id, "--json"]);
     assert_eq!(moved["action"], "task.move");
-    assert_eq!(moved["task"]["memberships"].as_array().unwrap().len(), 1);
+    assert_eq!(id_str(&moved["task"]["placement"]["project"]["id"]), pb_id);
     assert_eq!(cli.json(&["task", "list", "--project", &pa_id, "--json"])["count"], 0);
     assert_eq!(cli.json(&["task", "list", "--project", &pb_id, "--json"])["count"], 1);
     let f = cli.json(&["task", "list", "--filter", &format!("project:{pb_id}"), "--json"]);
@@ -2886,7 +2886,7 @@ fn an_ai_does_not_pick_a_project_the_binding_does() {
 
     // The AI writes with no `--project` and the binding fills the place in — a project-less task stays impossible.
     let t = cli.json(&["task", "add", "--title", "束縛が決める", "--actor", "ai", "--json"]);
-    assert_eq!(id_str(&t["task"]["memberships"][0]["project"]["id"]), bound);
+    assert_eq!(id_str(&t["task"]["placement"]["project"]["id"]), bound);
     let d = cli.json(&["decision", "add", "--title", "束縛が決める", "--actor", "ai", "--json"]);
     assert_eq!(id_str(&d["decision"]["project"]["id"]), bound);
     assert_eq!(cli.json(&["task", "list", "--actor", "ai", "--json"])["count"], 1);
@@ -2951,7 +2951,7 @@ fn an_ai_writes_only_inside_the_project_its_folder_is_bound_to() {
     // Inside the binding, writing works as usual, and the binding fills in where things land.
     let created = cli.json(&["task", "add", "--title", "mine", "--actor", "ai", "--json"]);
     assert_eq!(
-        id_str(&created["task"]["memberships"][0]["project"]["id"]),
+        id_str(&created["task"]["placement"]["project"]["id"]),
         bound,
         "a task the AI creates lands in the bound project"
     );
@@ -3000,7 +3000,7 @@ fn an_ai_in_an_unbound_folder_reaches_nothing() {
     let t = fresh.json(&["task", "add", "--title", "束縛の中", "--actor", "ai", "--json"]);
     assert_eq!(t["task"]["title"], "束縛の中");
     assert_eq!(
-        id_str(&t["task"]["memberships"][0]["project"]["id"]),
+        id_str(&t["task"]["placement"]["project"]["id"]),
         fresh.bound_project(),
         "the home is filled from the binding"
     );

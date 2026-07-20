@@ -4,7 +4,7 @@ import { t } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
 
 // Creating a new task in the right pane: enter a title plus notes (Markdown) and create it. Where it is created is
-// chosen by the caller (the ＋ in a column header). A task only gets a project membership; classification (assigning
+// chosen by the caller (the ＋ in a column header). A task only gets placed in a project; classification (assigning
 // it to a dimension) is added afterwards from the task detail.
 export function TaskComposePane({
   projectId, label, onCreated, onCancel, onDirtyChange,

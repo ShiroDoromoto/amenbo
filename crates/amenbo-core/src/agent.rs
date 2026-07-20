@@ -57,7 +57,7 @@ const JA_PHRASEBOOK: &[(&str, &str)] = &[
     // capability (the group headings)
     ("Register a task", "タスクを登録する"),
     ("Find and filter tasks (see filterGrammar)", "タスクを検索・絞り込む（filterGrammar 参照）"),
-    ("See a task's details, memberships, blockers and dependents", "タスクの詳細・所属・ブロッカー・被依存を見る"),
+    ("See a task's details, project, blockers and dependents", "タスクの詳細・プロジェクト・ブロッカー・被依存を見る"),
     ("Edit a task's fields (title / notes / due / start / priority)", "タスクのフィールドを編集する（タイトル / メモ / 期日 / 開始日 / 優先度）"),
     ("Track progress and reserve a task by moving it to in_progress (todo / in_progress / done / blocked)", "進捗を管理し、in_progress にしてタスクを予約する（未着手 / 進行中 / 完了 / ブロック）"),
     ("Split larger work into separate tasks and link blockers (there are no subtasks)", "大きな作業を別タスクに分割しブロッカーを結ぶ（サブタスクは無い）"),
@@ -144,7 +144,7 @@ const JA_PHRASEBOOK: &[(&str, &str)] = &[
     ("Clears a task's value of a dimension.", "タスクの次元の値をクリアします。"),
     ("Creates a task in a project. Break larger work into separate tasks linked with task depend (no subtasks).", "プロジェクトにタスクを作成します。大きな作業は task depend で結んだ別タスクに分けます（サブタスクは無い）。"),
     ("Lists tasks. --limit/--offset page in sort order (JSON carries total_matched = the count before paging, count = this page).", "タスクを一覧します。--limit/--offset はソート順でページングします（JSON は total_matched = ページング前の件数、count = このページの件数を持ちます）。"),
-    ("Shows task details — memberships, blockers (blocked_by) and dependents (blocks: what finishing this task would unblock).", "タスクの詳細を表示します ── 所属、ブロッカー（blocked_by）、被依存（blocks: このタスクを終えると着手可能になるもの）。"),
+    ("Shows task details — project, blockers (blocked_by) and dependents (blocks: what finishing this task would unblock).", "タスクの詳細を表示します ── プロジェクト、ブロッカー（blocked_by）、被依存（blocks: このタスクを終えると着手可能になるもの）。"),
     ("Updates a task.", "タスクを更新します。"),
     ("Marks a task done.", "タスクを完了にします。"),
     ("Returns a completed task to not-done (sugar for status=todo).", "完了したタスクを未完了に戻します（status=todo の糖衣）。"),
@@ -554,7 +554,7 @@ fn capabilities() -> Value {
     let caps = vec![
         cap("Register a task", &["task add"]),
         cap("Find and filter tasks (see filterGrammar)", &["task list"]),
-        cap("See a task's details, memberships, blockers and dependents", &["task show"]),
+        cap("See a task's details, project, blockers and dependents", &["task show"]),
         cap("Edit a task's fields (title / notes / due / start / priority)", &["task update"]),
         cap(
             "Track progress and reserve a task by moving it to in_progress (todo / in_progress / done / blocked)",
@@ -878,7 +878,7 @@ fn all_commands() -> Value {
             json!(["amenbo task list --json",
                    "amenbo task list --filter \"done:false due:today\" --json",
                    "amenbo task list --sort -created --limit 20 --offset 20 --json"])),
-        json!({ "name": "task show", "summary": "Shows task details — memberships, blockers (blocked_by) and dependents (blocks: what finishing this task would unblock).",
+        json!({ "name": "task show", "summary": "Shows task details — project, blockers (blocked_by) and dependents (blocks: what finishing this task would unblock).",
             "args": [{ "name": "id", "required": true, "help": "task ID" }],
             "flags": [{ "name": "--json", "help": "machine-readable output" }],
             "examples": ["amenbo task show AMB-T-<n> --json"] }),

@@ -7,7 +7,7 @@
 //! What the transaction guards, and what it deliberately does not:
 //!
 //! - **It guards the body UPSERTs, and only those.** One logical operation touches several rows (the
-//!   `task` row plus its membership, its dependency edges, its dimension values …). Partial
+//!   `task` row plus its placement, its dependency edges, its dimension values …). Partial
 //!   application — the task row written, the edges lost — leaves the store inconsistent, so the batch
 //!   is all-or-nothing.
 //! - **It guards read-then-write.** `add_task` reads the next id then INSERTs; `task move` scans

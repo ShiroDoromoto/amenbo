@@ -5,7 +5,7 @@
 // derive plants an `export_bindings_*` test that writes `app/src/bindings/bindings.ts`).
 import type {
   ActorDto,
-  MembershipDto,
+  PlacementDto,
   TaskCardDto,
   ProjectDto,
   ActivityItemDto,
@@ -22,8 +22,8 @@ export type Actor = ActorDto;
 /** assignee = a person + facet. kind:"ai" means "that person's AI". null = unassigned. */
 export type Assignee = Actor | null;
 
-/** One membership of a task (several when it is multi-homed). The real data behind the memberships field in the detail pane. */
-export type Membership = MembershipDto;
+/** Where a task sits. The real data behind the project field in the detail pane. */
+export type Placement = PlacementDto;
 
 /**
  * A task card. The wire part is the generated `TaskCardDto` (core always sends every field). The last two are

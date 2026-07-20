@@ -32,7 +32,7 @@ import type { DoctorIssueDto, HookNoticeDto, StaleBlockDto } from "../bindings/b
 export type Nav = { type: "view" | "project" | "projectSettings"; id: string };
 
 /**
- * Where a new task gets created. A task only gets a project membership; classification (assigning it to a
+ * Where a new task gets created. A task only gets placed in a project; classification (assigning it to a
  * dimension) is added afterwards from the task detail. `label` is the heading of the compose pane (the project
  * name), while write routing resolves from `projectId`.
  */

@@ -141,7 +141,7 @@ impl Store {
     }
 
     /// The read behind `task show`. Served by indexed SQL ([`crate::query::task_detail`]), which avoids
-    /// `view::task_detail`'s per-task full scans (resolving membership, the assignee's name, open
+    /// `view::task_detail`'s per-task full scans (resolving placement, the assignee's name, open
     /// blockers, the comment count). Pass an already-resolved `task_id` (the CLI's `resolve_task` has
     /// run).
     pub fn task_detail(&self, task_id: i64) -> Result<crate::view::TaskDetail> {

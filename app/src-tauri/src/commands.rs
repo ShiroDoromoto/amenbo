@@ -328,7 +328,7 @@ pub struct DecisionDto {
     /// points at it.
     current: bool,
     /// The project it lives under (the id is an integer key).
-    project: Option<MembershipRefDto>,
+    project: Option<ProjectRefDto>,
     /// Decisions this one replaced (supersession, forward). One decision can replace several.
     supersedes: Vec<DecisionRefDto>,
     /// Decisions that replaced this one (reverse lookup).
@@ -365,11 +365,11 @@ pub struct LinkedTaskRefDto {
     status: String,
 }
 
-/// A reference to the project a membership names (id + display name). The id is an integer key.
+/// A reference to a project (id + display name). The id is an integer key.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
-pub struct MembershipRefDto {
+pub struct ProjectRefDto {
     #[ts(type = "number")]
     id: i64,
     name: String,
@@ -385,13 +385,13 @@ pub struct TaskRefDto {
     name: String,
 }
 
-/// The membership of one task (project only — classification lives on the dimension axes). The real
-/// data behind the membership row in the task detail view.
+/// Where one task sits (project only — classification lives on the dimension axes). The real data
+/// behind the project row in the task detail view.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
-pub struct MembershipDto {
-    project: MembershipRefDto,
+pub struct PlacementDto {
+    project: ProjectRefDto,
 }
 
 #[derive(Serialize, TS)]
@@ -423,10 +423,9 @@ pub struct TaskCardDto {
     /// Dependencies: blockers that are not done yet (id + name). Drives the "waiting on X" line in
     /// the detail pane. Empty means it can be started.
     blocked_by: Vec<TaskRefDto>,
-    /// Membership (with the project's display name), so the detail pane's membership row renders
-    /// from real data. One task has one membership, but an unfiled task (inbox) can have none, so
-    /// this stays a Vec. The primary membership is `memberships[0]`.
-    memberships: Vec<MembershipDto>,
+    /// Where the task sits (with the project's display name), so the detail pane's project row
+    /// renders from real data. Absent when the task is unplaced (inbox).
+    placement: Option<PlacementDto>,
     created_by: Option<ActorDto>,
     /// The decision records that motivated this task (cross-link). Symmetric with
     /// `DecisionDto.linked_tasks`; drives navigation from the task detail view to the decision record.
@@ -751,23 +750,19 @@ fn render_event(ev: &serde_json::Value, title: &str, lang: &str) -> EventDto {
 /// This is the card path: the row already carries the resolved project names, the actors' facets,
 /// the open blockers and the comment count, so a card costs one indexed query. Actors are facet
 /// one — the display name comes from `config` (`human_name`/`ai_name`). The top-level project id
-/// comes from the primary (first) membership.
+/// comes from the placement.
 fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskCardRow) -> TaskCardDto {
     let config = &store.config;
     let card_kind = |a: &amenbo_core::store_engine::read::CardActor| a.kind.as_deref().and_then(ActorKind::parse);
 
-    let project_id = row.memberships.first().map(|m| m.project_id);
+    let project_id = row.placement.as_ref().map(|p| p.project_id);
 
-    let membership_dtos: Vec<MembershipDto> = row
-        .memberships
-        .iter()
-        .map(|m| MembershipDto {
-            project: MembershipRefDto {
-                id: m.project_id,
-                name: m.project_name.clone().unwrap_or_default(),
-            },
-        })
-        .collect();
+    let placement_dto = row.placement.as_ref().map(|p| PlacementDto {
+        project: ProjectRefDto {
+            id: p.project_id,
+            name: p.project_name.clone().unwrap_or_default(),
+        },
+    });
 
     let assignee = row.assignee.as_ref().map(|a| facet_actor(config, card_kind(a)));
     let created_by = row.created_by.as_ref().map(|a| facet_actor(config, card_kind(a)));
@@ -810,7 +805,7 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         comments: row.num_comments,
         ready,
         blocked_by,
-        memberships: membership_dtos,
+        placement: placement_dto,
         created_by,
         linked_decisions,
         blocked_by_decisions,
@@ -843,7 +838,7 @@ fn decision_card_from_row(row: amenbo_core::store_engine::read::DecisionCardRow)
         body: row.body,
         status: row.status,
         current: row.current,
-        project: row.project.map(|p| MembershipRefDto { id: p.id, name: p.name }),
+        project: row.project.map(|p| ProjectRefDto { id: p.id, name: p.name }),
         supersedes: row.supersedes.into_iter().map(to_ref).collect(),
         superseded_by: row.superseded_by.into_iter().map(to_ref).collect(),
         amends: row.amends.into_iter().map(to_ref).collect(),
@@ -5220,10 +5215,10 @@ mod tests {
     }
 
     /// A task can be added straight into an empty project by passing `project_id` to `task_add` —
-    /// what the + in the "To do" column of the GUI's status board does. The project membership is
-    /// created, so the task shows up in a project-scoped `task_page`, which is the board's read path.
+    /// what the + in the "To do" column of the GUI's status board does. The task is placed there, so it
+    /// shows up in a project-scoped `task_page`, which is the board's read path.
     #[test]
-    fn task_add_into_empty_project_uses_project_membership() {
+    fn task_add_into_empty_project_places_the_task() {
         let _env = env_guard();
         let tmp = std::env::temp_dir().join(format!("amenbo-app-emptypj-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);

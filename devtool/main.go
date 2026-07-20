@@ -334,9 +334,30 @@ func taskFinish(id, base string, force, rel bool) error {
 
 	logf("✓ torn down task %s (worktree + branch %s removed)", id, branchName(id))
 	if !rel {
-		logf("  note: the task's in_progress status was left as-is (use --reset, or `amenbo task done %s`)", id)
+		t, err := show(root, id)
+		status := t.Status
+		if err != nil {
+			status = ""
+		}
+		if note := leftoverReservationNote(id, status); note != "" {
+			logf("%s", note)
+		}
 	}
 	return nil
+}
+
+// leftoverReservationNote is the teardown's parting note, split from the lookup so both
+// arms are testable. Teardown removes the worktree, never the reservation — but the usual
+// route here is a task already closed with `amenbo task done`, and telling that session
+// its status "was left as-is" states the opposite of what the backlog holds. So the note
+// fires on in_progress only, which is the one status that is genuinely left dangling: a
+// reservation no worktree points at any more, out of every mailbox and visible to no one.
+// An unreadable status ("") keeps the note — not knowing is a reason to say something.
+func leftoverReservationNote(id, status string) string {
+	if status != "" && status != "in_progress" {
+		return ""
+	}
+	return fmt.Sprintf("  note: the task's in_progress status was left as-is (use --reset, or `amenbo task done %s`)", id)
 }
 
 // shellQuote single-quotes a path for safe eval in a POSIX shell.

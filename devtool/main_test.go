@@ -171,6 +171,24 @@ func TestVerifyReserved(t *testing.T) {
 	}
 }
 
+// TestLeftoverReservationNote pins that teardown's parting note tracks what the backlog
+// actually holds: a task closed with `task done` first — the ordinary route — must not be
+// told its in_progress status was left as-is, while a genuinely dangling reservation, and a
+// status we could not read, both still get told.
+func TestLeftoverReservationNote(t *testing.T) {
+	if note := leftoverReservationNote("1858", "in_progress"); !strings.Contains(note, "left as-is") {
+		t.Fatalf("a dangling reservation must be called out: %q", note)
+	}
+	if note := leftoverReservationNote("1858", ""); !strings.Contains(note, "left as-is") {
+		t.Fatalf("an unreadable status must keep the note: %q", note)
+	}
+	for _, status := range []string{"done", "todo", "blocked"} {
+		if note := leftoverReservationNote("1858", status); note != "" {
+			t.Fatalf("status %q is not a dangling reservation, but was told it was: %q", status, note)
+		}
+	}
+}
+
 // TestWorktreeConflictNamesTheAccident pins that the refusal names which accident a
 // pre-existing worktree is: another session at work reads nothing like a worktree you
 // forgot to tear down, and a refusal that cannot tell them apart is one an agent waves

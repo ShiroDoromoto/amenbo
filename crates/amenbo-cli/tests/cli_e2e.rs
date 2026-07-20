@@ -69,6 +69,29 @@ impl Cli {
         serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("failed to parse JSON {args:?}: {e}\n{stdout}"))
     }
 
+    /// Run with `--json`, piping `stdin` in — for the body options' `-`, whose whole point is text that
+    /// never passes through the shell.
+    fn json_stdin(&self, args: &[&str], stdin: &str) -> Value {
+        use std::io::Write;
+        let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &self.home)
+            .env("AMENBO_ACTOR", "human")
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&self.home)
+            .args(args)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("failed to run the binary");
+        child.stdin.as_mut().unwrap().write_all(stdin.as_bytes()).unwrap();
+        drop(child.stdin.take());
+        let out = child.wait_with_output().expect("failed to wait for the binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+        assert_eq!(out.status.code(), Some(0), "command {args:?} exited non-zero: {stdout}");
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("failed to parse JSON {args:?}: {e}\n{stdout}"))
+    }
+
     /// Run the binary and return (stderr, exit_code); used for the error paths.
     fn run_err(&self, args: &[&str]) -> (String, i32) {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
@@ -3433,4 +3456,38 @@ fn a_closed_pipe_ends_the_run_without_a_panic() {
         out.status
     );
     assert!(!stderr.contains("panicked"), "the run should say nothing on its way out (stderr: {stderr})");
+}
+
+/// Every body option takes `-` as "the body comes in on stdin". Bodies here are Markdown thick with
+/// code spans, and a shell eats those out of a quoted argument by command substitution — silently,
+/// taking the word with it — so the text has to be able to arrive without word expansion at all.
+/// The value is passed through byte for byte, and a value that is not `-` is still the text itself.
+#[test]
+fn a_body_option_reads_stdin_on_dash() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "本文PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    // A body of the kind actually written here: code spans, which a shell would eat.
+    const BODY: &str = "`--text` に直書きすると消える\n\n- `a` と `b`\n";
+
+    let t = cli.json_stdin(&["task", "add", "--title", "本文", "--project", &pid, "--notes", "-", "--json"], BODY);
+    let tid = id_str(&t["task"]["id"]);
+    assert_eq!(t["task"]["notes"], BODY, "task add --notes - takes the body off stdin");
+
+    let e = cli.json_stdin(&["task", "update", &tid, "--notes", "-", "--json"], "書き換え `x`");
+    assert_eq!(e["task"]["notes"], "書き換え `x`", "task update --notes - too");
+
+    let c = cli.json_stdin(&["comment", "add", &tid, "--text", "-", "--json"], BODY);
+    assert_eq!(c["comment"]["text"], BODY, "comment add --text - too");
+
+    let d = cli.json_stdin(&["decision", "add", "--title", "決定", "--project", &pid, "--body", "-", "--json"], BODY);
+    let did = id_str(&d["decision"]["id"]);
+    assert_eq!(d["decision"]["body"], BODY, "decision add --body - too");
+
+    let dc = cli.json_stdin(&["decision", "comment", "add", &did, "--text", "-", "--json"], BODY);
+    assert_eq!(dc["comment"]["text"], BODY, "decision comment add --text - too");
+
+    // The ordinary path is untouched: a value that is not `-` is the body, stdin unread.
+    let plain = cli.json(&["comment", "add", &tid, "--text", "そのまま", "--json"]);
+    assert_eq!(plain["comment"]["text"], "そのまま", "a non-dash value is still the text");
 }

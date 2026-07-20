@@ -2378,6 +2378,8 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                     "--ai は --to と併せて使います",
                 )));
             }
+            // After the argument checks: a rejected invocation should not have drained the pipe first.
+            let notes = body_arg(notes)?;
             // Resolve `--to` to a facet first, so an unknown assignee is refused before the task exists — an
             // error after creation would leave an orphan behind. The assignee is a facet and nothing else:
             // `--ai` means the AI facet, otherwise the token is resolved to one.
@@ -2531,6 +2533,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             }
         }
         TaskCmd::Update { id, title, notes, due, start, priority, clear_due, clear_start, clear_priority } => {
+            let notes = body_arg_opt(notes)?;
             let tid = resolve_task(store, &id).map_err(CliError::from)?;
             let mut changed = Vec::new();
             if title.is_some() { changed.push("title".to_string()); }
@@ -2555,7 +2558,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
         TaskCmd::Done { id } => return task_complete(store, flags, &id, true),
         TaskCmd::Reopen { id } => return task_complete(store, flags, &id, false),
         TaskCmd::Status { id, status } => return task_set_status(store, flags, &id, &status),
-        TaskCmd::Block { id, reason } => return task_block(store, flags, &id, reason),
+        TaskCmd::Block { id, reason } => return task_block(store, flags, &id, body_arg_opt(reason)?),
         TaskCmd::Move { id, project, before, after, top, bottom } => {
             let tid = resolve_task(store, &id).map_err(CliError::from)?;
             let project_id = project.map(|p| store.resolve_project_ref(&p)).transpose().map_err(CliError::from)?;
@@ -2679,6 +2682,7 @@ fn task_commit(store: &mut Store, flags: &Flags, sub: TaskCommitCmd) -> Result<i
 fn comment(store: &mut Store, flags: &Flags, sub: CommentCmd) -> Result<i32, CliError> {
     match sub {
         CommentCmd::Add { task, text } => {
+            let text = body_arg(text)?;
             let tid = resolve_task(store, &task).map_err(CliError::from)?;
             // The author is our own facet; add_comment's author argument is the trace string for the audit log.
             let s = store.add_task_comment(tid, flags.actor, &text).map_err(CliError::from)?;
@@ -2706,6 +2710,7 @@ fn comment(store: &mut Store, flags: &Flags, sub: CommentCmd) -> Result<i32, Cli
             write_envelope(flags, "comment.rm", "comment", json!({ "id": cid, "deleted": true }), None, !changed, format!("✓ Deleted comment: {}", comment_label(cid)));
         }
         CommentCmd::Edit { comment, text } => {
+            let text = body_arg(text)?;
             let cid = resolve_live_task_comment(store, &comment)?;
             let c = store.edit_task_comment(cid, &text).map_err(CliError::from)?;
             warn_body(&text); // non-blocking readability hint on write (stderr)
@@ -2784,6 +2789,7 @@ fn project_name(store: &Store, project_id: Option<i64>) -> Result<Option<String>
 fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, CliError> {
     match sub {
         DecisionCmd::Add { title, body, project } => {
+            let body = body_arg(body)?;
             let project_id = project_or_bound(store, project)?;
             let d = store.add_decision(ops::decision::NewDecision {
                 title, body, project_id,
@@ -2886,6 +2892,7 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             }
         }
         DecisionCmd::Edit { id, title, body } => {
+            let body = body_arg_opt(body)?;
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
             let mut changed = Vec::new();
             if title.is_some() { changed.push("title".to_string()); }
@@ -2895,6 +2902,7 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             write_envelope(flags, "decision.edit", "decision", serde_json::to_value(&detail).unwrap(), Some(changed), false, format!("✓ Edited decision: {}", decision_label(d.id)));
         }
         DecisionCmd::Accept { id, reason } => {
+            let reason = body_arg_opt(reason)?;
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
             let by = flags.actor.as_str().to_string();
             let (d, changed) = store.accept_decision(did, Some(by)).map_err(CliError::from)?;
@@ -2912,6 +2920,7 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             }
         }
         DecisionCmd::Reject { id, reason } => {
+            let reason = body_arg_opt(reason)?;
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
             // Read the blast radius (one hop) before rejecting. A reject leaves the edges in place, but
             // keeping the order the same gives all three verbs the same shape.
@@ -3056,6 +3065,7 @@ fn add_reason_comment(store: &mut Store, flags: &Flags, decision_id: i64, reason
 fn decision_comment(store: &mut Store, flags: &Flags, sub: DecisionCommentCmd) -> Result<i32, CliError> {
     match sub {
         DecisionCommentCmd::Add { decision, text } => {
+            let text = body_arg(text)?;
             let did = resolve_decision(store, &decision).map_err(CliError::from)?;
             // The author is our own facet; add_comment's author argument is the trace string for the audit log.
             let c = store.add_decision_comment(did, flags.actor, &text).map_err(CliError::from)?;
@@ -3083,6 +3093,7 @@ fn decision_comment(store: &mut Store, flags: &Flags, sub: DecisionCommentCmd) -
             write_envelope(flags, "decision.comment.rm", "comment", json!({ "id": cid, "deleted": true }), None, !changed, format!("✓ Deleted comment: {}", comment_label(cid)));
         }
         DecisionCommentCmd::Edit { comment, text } => {
+            let text = body_arg(text)?;
             let cid = resolve_live_decision_comment(store, &comment)?;
             let c = store.edit_decision_comment(cid, &text).map_err(CliError::from)?;
             warn_body(&text);
@@ -4019,6 +4030,44 @@ fn resolve_comment(store: &Store, id: &str) -> Result<i64, CliError> {
             hint: Some("List comment ids with `amenbo comment list <task> --json`.".to_string()),
             exit: 2,
         })
+}
+
+/// A body-carrying argument, where the value `-` means "the body arrives on stdin" instead.
+///
+/// Bodies here are Markdown, and in practice they are thick with code spans — which a shell eats out of
+/// a double-quoted `--text` argument by command substitution, silently, taking the word with it. `-` lets
+/// the text reach amenbo without passing through word expansion at all (a heredoc piped in).
+///
+/// `-` is the spelling because it is the only one that works on every body option: omitting the flag is
+/// already spoken for and means something different per command ("empty" on an add, "leave it alone" on
+/// an edit), so `hard-erase decision`'s implicit-stdin shape ([`read_body_input`]) does not generalize.
+/// A terminal on stdin is refused rather than waited on, so a `-` typed by hand never looks like a hang.
+fn body_arg(v: String) -> Result<String, CliError> {
+    if v != "-" {
+        return Ok(v);
+    }
+    if std::io::stdin().is_terminal() {
+        return Err(CliError {
+            code: "invalid_value",
+            message: "`-` says the body comes in on stdin, but stdin is a terminal".to_string(),
+            hint: Some("Pipe the body in (`… | amenbo … -`), or pass the text itself.".to_string()),
+            exit: 2,
+        });
+    }
+    use std::io::Read;
+    let mut s = String::new();
+    std::io::stdin().read_to_string(&mut s).map_err(|e| CliError {
+        code: "io_error",
+        message: format!("Cannot read the body from stdin: {e}"),
+        hint: None,
+        exit: 1,
+    })?;
+    Ok(s)
+}
+
+/// [`body_arg`] for an optional body — an absent flag stays absent (it is not a `-`).
+fn body_arg_opt(v: Option<String>) -> Result<Option<String>, CliError> {
+    v.map(body_arg).transpose()
 }
 
 /// The replacement body for `hard-erase decision`: `--body`, else `--body-file`, else stdin (for a

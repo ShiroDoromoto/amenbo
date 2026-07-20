@@ -567,6 +567,7 @@ pub enum TaskCmd {
         priority: Option<String>,
         /// description / notes, as Markdown (GUI renders GFM tables/task lists + ```mermaid; no raw HTML).
         /// Lead with the conclusion, prefer bullets/tables, one point per line (a single newline is a break).
+        /// Pass `-` to read it from stdin (a shell eats code spans out of a quoted argument).
         #[arg(long, default_value = "")]
         notes: String,
         /// delegate the new task to a facet in one step — `me`/`self`/`human` or the human's name →
@@ -599,6 +600,7 @@ pub enum TaskCmd {
         title: Option<String>,
         /// replacement notes, as Markdown (GUI renders GFM tables/task lists + ```mermaid; no raw HTML).
         /// Lead with the conclusion, prefer bullets/tables, one point per line (a single newline is a break).
+        /// Pass `-` to read it from stdin (a shell eats code spans out of a quoted argument).
         #[arg(long)]
         notes: Option<String>,
         #[arg(long)]
@@ -628,7 +630,7 @@ pub enum TaskCmd {
     /// Mark blocked (stuck)
     Block {
         id: String,
-        /// reason (recorded as a comment)
+        /// reason (recorded as a comment). Pass `-` to read it from stdin
         #[arg(long)]
         reason: Option<String>,
     },
@@ -729,6 +731,7 @@ pub enum CommentCmd {
         task: String,
         /// comment body, as Markdown (GUI renders GFM tables/task lists + ```mermaid; no raw HTML).
         /// Lead with the conclusion, prefer bullets/tables, one point per line (a single newline is a break).
+        /// Pass `-` to read it from stdin (a shell eats code spans out of a quoted argument).
         #[arg(long)]
         text: String,
     },
@@ -753,7 +756,8 @@ pub enum CommentCmd {
     Edit {
         /// target comment ref, AMB-C-n (from `comment list`)
         comment: String,
-        /// the new body, as Markdown — it replaces the old one outright
+        /// the new body, as Markdown — it replaces the old one outright. Pass `-` to read it from stdin
+        /// (a shell eats code spans out of a quoted argument).
         #[arg(long)]
         text: String,
     },
@@ -781,6 +785,7 @@ pub enum DecisionCmd {
         title: String,
         /// the decision body: conclusion + rationale (compress; do not paste raw discussion). Markdown —
         /// GUI renders GFM tables/task lists + ```mermaid (no raw HTML); a single newline shows as a break.
+        /// Pass `-` to read it from stdin (a shell eats code spans out of a quoted argument).
         #[arg(long, default_value = "")]
         body: String,
         /// project (name or ID; defaults to the bound project)
@@ -817,20 +822,22 @@ pub enum DecisionCmd {
         id: String,
         #[arg(long)]
         title: Option<String>,
+        /// replacement body (Markdown). Pass `-` to read it from stdin
+        /// (a shell eats code spans out of a quoted argument).
         #[arg(long)]
         body: Option<String>,
     },
     /// Accept a decision (proposed → accepted)
     Accept {
         id: String,
-        /// reason for accepting — recorded as a decision comment, not a dedicated field
+        /// reason for accepting — recorded as a decision comment, not a dedicated field. Pass `-` to read it from stdin
         #[arg(long)]
         reason: Option<String>,
     },
     /// Reject a decision (proposed → rejected)
     Reject {
         id: String,
-        /// reason for rejecting — recorded as a decision comment, not a dedicated field
+        /// reason for rejecting — recorded as a decision comment, not a dedicated field. Pass `-` to read it from stdin
         #[arg(long)]
         reason: Option<String>,
     },
@@ -928,6 +935,7 @@ pub enum DecisionCommentCmd {
         decision: String,
         /// comment body, as Markdown (GUI renders GFM tables/task lists + ```mermaid; no raw HTML).
         /// Lead with the conclusion, prefer bullets/tables, one point per line (a single newline is a break).
+        /// Pass `-` to read it from stdin (a shell eats code spans out of a quoted argument).
         #[arg(long)]
         text: String,
     },
@@ -953,7 +961,8 @@ pub enum DecisionCommentCmd {
     Edit {
         /// target comment ref, AMB-C-n (from `decision comment list`)
         comment: String,
-        /// the new body, as Markdown — it replaces the old one outright
+        /// the new body, as Markdown — it replaces the old one outright. Pass `-` to read it from stdin
+        /// (a shell eats code spans out of a quoted argument).
         #[arg(long)]
         text: String,
     },

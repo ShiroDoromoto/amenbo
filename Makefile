@@ -92,6 +92,7 @@ help:
 	@echo "make shell-gate   - shellcheck tracked shell (scripts/, guards/, .githooks/) and actionlint the run: in workflows (automatic at the start of make test; needs shellcheck 0.10+/actionlint)"
 	@echo "make comment-gate - audit every comment in the tree, and the prose and config values of every tracked file that carries no code, against esorp.yaml = the same commands CI runs (automatic at the start of make test; skipped without esorp)"
 	@echo "make go-gate      - gofmt/vet/test the optional devtool module = the same checks CI's go job runs (automatic at the start of make test; skipped without Go)"
+	@echo "make shim-gate    - assert the GUI/CLI version-skew invariant holds (mac CLI symlinked into the .app, win CLI co-located in the per-user \$$INSTDIR) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make sweep-stale  - if the cargo cache exceeds $(SWEEP_LIMIT_GB)GB, drop artifacts untouched for $(SWEEP_DAYS) days (automatic at the end of make test)"
 	@echo "make dist-gui     - build the prod GUI (mac dmg) with build-time signing into dist/ (a supplement for non-installer users; not a wharfy bundle)"
 	@echo "make dist-gui-mac - build the mac unified .pkg (GUI to /Applications, CLI to /usr/local/bin) into dist/ (the mac release bundle itself; Intel build via MAC_GUI_ARCH=amd64)"
@@ -319,6 +320,7 @@ test:
 	$(MAKE) --no-print-directory shell-gate
 	$(MAKE) --no-print-directory comment-gate
 	$(MAKE) --no-print-directory go-gate
+	$(MAKE) --no-print-directory shim-gate
 	cargo nextest run --features scale,e2e
 	cargo test --doc --features scale,e2e
 	$(MAKE) --no-print-directory doc-gate
@@ -419,6 +421,13 @@ comment-gate:
 	  echo "→ esorp not installed — comment gate skipped (see CONTRIBUTING.md)"; \
 	fi
 	@guards/check-prose.sh
+
+## Guard the GUI/CLI version-skew invariant: the CLI on PATH must be the binary the GUI update
+## replaces — a mac symlink into the .app, a win CLI co-located in the per-user $INSTDIR — never a
+## frozen copy. A build is green either way, so this is the only thing that would notice a regression.
+## Declared once and shared: `make test` and CI's tree-guards both run this file.
+shim-gate:
+	@guards/check-cli-shim.sh
 
 ## Trim a bloated cargo cache by atime LRU. `target/` has no GC, and old artifacts with a different
 ## hash pile up forever (measured ~3.7GB/day). A periodic run would eat idle time, so sweep at the end

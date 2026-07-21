@@ -472,10 +472,12 @@ jobs:
           guards/check-prose.sh
 
   tree-guards:
-    name: Tree guards (internal-note refs, test prose)
+    name: Tree guards (internal-note refs, test prose, CLI shim)
     runs-on: ubuntu-latest
-    # Backstop for the local pre-commit hook, which runs the same two scans over
-    # staged additions only. Both have fixed patterns — no secret needed.
+    # Backstop for the local pre-commit hook, which runs the first two scans over
+    # staged additions only. All have fixed patterns — no secret needed. The CLI
+    # shim guard is the odd one out: it asserts a build-config invariant rather than
+    # scanning added lines, so it lives in `make test` and here, not in pre-commit.
     steps:
       - uses: actions/checkout@v7
 
@@ -488,3 +490,8 @@ jobs:
         run: |
           chmod +x guards/check-test-prose.sh
           git ls-files -z | xargs -0 guards/check-test-prose.sh --
+
+      - name: Assert the GUI/CLI version-skew invariant holds
+        run: |
+          chmod +x guards/check-cli-shim.sh
+          guards/check-cli-shim.sh

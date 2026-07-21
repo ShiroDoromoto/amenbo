@@ -12,10 +12,10 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
+use tracing::subscriber::set_global_default;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{reload, EnvFilter, Layer, Registry};
 
 use amenbo_core::config::{Config, PerfLog};
@@ -94,7 +94,10 @@ fn initial_filter(config: &Config) -> EnvFilter {
 
 /// Install the perf subscriber exactly once (called from `tauri` setup). The filter is held reloadable, so even
 /// when it starts OFF, `config_set_perf_log` can switch it ON while the app runs. It coexists with
-/// `tauri_plugin_log` (the `log` crate), which is a separate ecosystem.
+/// `tauri_plugin_log` (the `log` crate, registered in debug builds), which is a separate ecosystem — we take the
+/// global *tracing* subscriber but deliberately leave the `log` global logger alone, so `tauri_plugin_log` can own
+/// it. (`SubscriberInitExt::try_init` would instead install the `tracing-log` bridge and grab that logger, so the
+/// later `tauri_plugin_log` `set_logger` would panic on a double init.)
 pub fn install(config: &Config) {
     let (filter, handle) = reload::Layer::new(initial_filter(config));
     if RELOAD.set(handle).is_err() {
@@ -107,8 +110,9 @@ pub fn install(config: &Config) {
         .with_writer(LazyRolling::new(log_dir()))
         .with_filter(filter);
     // A layer-level filter (`with_filter`) lets only perf through, so no other target ends up here.
-    // `try_init` does not panic on a double init (an existing global subscriber wins).
-    let _ = Registry::default().with(fmt_layer).try_init();
+    // `set_global_default` errors (rather than panics) on a double init — the RELOAD guard above already
+    // returned early on that path, so this only runs once; the `let _` is belt-and-suspenders.
+    let _ = set_global_default(Registry::default().with(fmt_layer));
 }
 
 /// After `config.perf_log` is saved, reload the running filter to the new level (no restart needed). A no-op

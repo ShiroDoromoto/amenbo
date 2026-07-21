@@ -444,10 +444,10 @@ fn self_update_cmd(
             }
             Ok(0)
         }
-        // Genuine failures — including a platform without in-place self-update (fall back to the installer).
+        // Genuine failures — e.g. no CLI archive listed for this platform (fall back to the installer).
         Err(e) => {
             let hint = match e {
-                SelfUpdateError::Unsupported | SelfUpdateError::NoArchive { .. } => {
+                SelfUpdateError::NoArchive { .. } => {
                     Some("run `amenbo update` to open the installer instead.".to_string())
                 }
                 _ => Some("try again, or run `amenbo update` to open the installer.".to_string()),

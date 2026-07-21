@@ -148,7 +148,7 @@ desktop app and the CLI at once. amenbo notices when a newer version is out (see
 update check below) and points you at that installer. A **standalone CLI** (installed
 without the desktop app) can also update itself in place: `amenbo update --apply`
 downloads the new CLI over TLS and swaps this binary — no installer, no elevation. A
-CLI installed alongside the desktop app is a shim into it and is updated with the app,
+CLI installed alongside the desktop app is managed by it and is updated with the app,
 not on its own (`--apply` there points you back to the installer). Either way, applying
 an update is always your explicit call — amenbo never updates itself in the background.
 

@@ -34,7 +34,7 @@ dependencies = [
 
 [[package]]
 name = "amenbo-app"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "amenbo-core",
  "amenbo-scratch",
@@ -66,7 +66,7 @@ dependencies = [
 
 [[package]]
 name = "amenbo-core"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "amenbo-scratch"
-version = "1.7.0"
+version = "1.8.0"
 
 [[package]]
 name = "android_log-sys"

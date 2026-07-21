@@ -60,3 +60,22 @@ export function isUpdateDismissed(version: string | null): boolean {
   if (!version) return false; // no version to compare: show it and let the session dismissal handle it
   return !versionIsNewer(version, dismissed);
 }
+
+/**
+ * A per-session dismissal, kept in the banner's own state (not persisted) — it is what silences the version-less
+ * offer that {@link dismissUpdate} cannot record, and the belt-and-suspenders for when localStorage is unavailable.
+ * `undefined` — nothing dismissed this session; `null` — a version-less offer was dismissed; a string — that version.
+ */
+export type SessionDismiss = string | null | undefined;
+
+/**
+ * Whether a session dismissal still covers the offer of `offered`. Keyed by version so a *newer* offer surfaced later
+ * in the same session is never covered (mirrors {@link isUpdateDismissed}); a version-less dismissal covers only the
+ * version-less offer. An explicit manual re-check clears the session dismissal outright rather than relying on this.
+ */
+export function sessionDismissCovers(dismissed: SessionDismiss, offered: string | null): boolean {
+  if (dismissed === undefined) return false; // nothing dismissed this session
+  if (dismissed === null) return offered === null; // a version-less dismissal covers only the version-less offer
+  if (offered === null) return false; // a versioned dismissal does not cover a later version-less offer
+  return !versionIsNewer(offered, dismissed); // the dismissed version (or older) stays quiet; a newer one surfaces
+}

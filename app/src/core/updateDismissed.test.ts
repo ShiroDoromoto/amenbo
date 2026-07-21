@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { dismissUpdate, getDismissedUpdate, isUpdateDismissed, versionIsNewer } from "./updateDismissed";
+import { dismissUpdate, getDismissedUpdate, isUpdateDismissed, sessionDismissCovers, versionIsNewer } from "./updateDismissed";
 
 // The version comparison is a port of core's `version_is_newer`, so it is held to core's own test cases rather than a
 // second hand-written list: the Rust test is pulled in with Vite's `?raw` and its assertions are replayed here. Change
@@ -58,5 +58,28 @@ describe("update dismissal", () => {
   it("shows a version-less offer even after an earlier dismissal", () => {
     dismissUpdate("1.3.0");
     expect(isUpdateDismissed(null)).toBe(false);
+  });
+});
+
+describe("sessionDismissCovers", () => {
+  it("covers nothing when nothing was dismissed this session", () => {
+    expect(sessionDismissCovers(undefined, "1.3.0")).toBe(false);
+    expect(sessionDismissCovers(undefined, null)).toBe(false);
+  });
+
+  it("keeps the dismissed version and older ones quiet, but lets a newer offer through", () => {
+    expect(sessionDismissCovers("1.3.0", "1.3.0")).toBe(true);
+    expect(sessionDismissCovers("1.3.0", "1.2.0")).toBe(true);
+    expect(sessionDismissCovers("1.3.0", "1.4.0")).toBe(false);
+    expect(sessionDismissCovers("1.3.0", "1.3.1")).toBe(false);
+  });
+
+  it("treats a version-less dismissal as covering only the version-less offer", () => {
+    expect(sessionDismissCovers(null, null)).toBe(true);
+    expect(sessionDismissCovers(null, "1.3.0")).toBe(false);
+  });
+
+  it("does not let a versioned dismissal cover a later version-less offer", () => {
+    expect(sessionDismissCovers("1.3.0", null)).toBe(false);
   });
 });

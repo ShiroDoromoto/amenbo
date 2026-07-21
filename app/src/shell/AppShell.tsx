@@ -23,7 +23,7 @@ import { confirmDialog } from "../core/dialog";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
 import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sidebarWidth";
 import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollapsed";
-import { dismissUpdate, isUpdateDismissed } from "../core/updateDismissed";
+import { dismissUpdate, isUpdateDismissed, sessionDismissCovers, type SessionDismiss } from "../core/updateDismissed";
 import { RefNavProvider } from "../core/refNav";
 import { currentLang, doctorText, t, tf } from "../core/i18n";
 import { fetchStaleManagedBlocks, resyncManagedBlocks, fetchOrphanBindings, forgetOrphanBindings, fetchPointerIssues, repairPointers, fetchHookNotices, openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
@@ -84,6 +84,9 @@ export function AppShell() {
   // The app menu's "check for updates" action reports its progress here: `checking` while the fresh query runs, then
   // `null` when an update was found (the UpdateBanner takes over), or `uptodate` / `error` as a short-lived note.
   const [updateCheck, setUpdateCheck] = useState<"checking" | "uptodate" | "error" | null>(null);
+  // Bumped each time a manual check surfaces an offer, so the UpdateBanner can lift a session dismissal the user has
+  // now explicitly overridden by asking again (its persistent dismissal is already cleared in `checkForUpdatesFresh`).
+  const [updateRecheck, setUpdateRecheck] = useState(0);
 
   // The slot the project header (the board toolbar) renders into. grid-area:header is a row spanning the full width
   // of main plus the right pane; BoardScreen portals its toolbar in here and the right pane sits below it.
@@ -240,7 +243,10 @@ export function AppShell() {
       .then(({ listen }) =>
         listen("menu://check-updates", () => {
           setUpdateCheck("checking");
-          void checkForUpdatesFresh().then((r) => setUpdateCheck(r === "available" ? null : r));
+          void checkForUpdatesFresh().then((r) => {
+            setUpdateCheck(r === "available" ? null : r);
+            if (r === "available") setUpdateRecheck((n) => n + 1); // lift any session dismissal for the surfaced offer
+          });
         }),
       )
       .then((un) => {
@@ -282,7 +288,7 @@ export function AppShell() {
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
       />
-      <UpdateBanner />
+      <UpdateBanner recheck={updateRecheck} />
       <UpdateCheckFeedback state={updateCheck} onDismiss={() => setUpdateCheck(null)} />
       <HealthBanner />
       <ManagedBlockBanner />
@@ -416,13 +422,19 @@ function updatePhaseHint(progress: UpdateProgress | null): string {
 // so the user is never stuck. The ✕ dismisses it per version (core/updateDismissed): the version dismissed stays quiet
 // across launches, and the banner returns on its own once a newer one is offered.
 type UpdateStage = "idle" | "working" | "ready";
-function UpdateBanner() {
+function UpdateBanner({ recheck }: { recheck: number }) {
   const vs = useSyncExternalStore(subscribe, () => getSnapshot().versionStatus);
-  // Session-only fallback, for the offer that carries no version to remember (and where localStorage is unavailable).
-  const [dismissed, setDismissed] = useState(false);
+  // Session dismissal, keyed to the version dismissed (core/updateDismissed): it silences the version-less offer that
+  // `dismissUpdate` cannot persist, and stands in where localStorage is unavailable. Keyed so a newer offer surfaced
+  // this session still shows; a manual re-check (`recheck`) clears it, since asking again overrides an earlier dismiss.
+  const [dismissed, setDismissed] = useState<SessionDismiss>(undefined);
   const [stage, setStage] = useState<UpdateStage>("idle");
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
-  if (dismissed || !vs.updateAvailable || isUpdateDismissed(vs.newerVersion)) return null;
+  useEffect(() => {
+    if (recheck > 0) setDismissed(undefined); // a manual re-check surfaced an offer: drop the session dismissal
+  }, [recheck]);
+  if (sessionDismissCovers(dismissed, vs.newerVersion) || !vs.updateAvailable || isUpdateDismissed(vs.newerVersion))
+    return null;
 
   const onUpdate = async () => {
     setStage("working");
@@ -474,7 +486,7 @@ function UpdateBanner() {
       )}
       {/* No dismiss while the download/install is running — walking away mid-swap is exactly what we do not offer. */}
       {stage !== "working" && (
-        <button className="healthbanner__close" onClick={() => { dismissUpdate(vs.newerVersion); setDismissed(true); }}>✕ {t("update.dismiss")}</button>
+        <button className="healthbanner__close" onClick={() => { dismissUpdate(vs.newerVersion); setDismissed(vs.newerVersion); }}>✕ {t("update.dismiss")}</button>
       )}
     </div>
   );

@@ -354,6 +354,25 @@ jobs:
             dist/latest-tauri.json \
             --clobber
 
+      # wharfy attests everything IT uploads, but the updater artifacts above ride via gh, so wharfy
+      # never sees them — leaving them the only release assets without build provenance. wharfy verify
+      # (and the weekly rot check) flags any partly-attested release red (attest_unverified), so attest
+      # these here too, with the same keyless OIDC identity, bound to the exact bytes just uploaded.
+      # (The windows setup.exe itself is a wharfy-declared bundle and is already attested; only its
+      # detached .sig rides via gh, so only the .sig is listed here.)
+      - name: Attest the gh-attached updater artifacts
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/amenbo-darwin-arm64.app.tar.gz
+            dist/amenbo-darwin-arm64.app.tar.gz.sig
+            dist/amenbo-darwin-amd64.app.tar.gz
+            dist/amenbo-darwin-amd64.app.tar.gz.sig
+            dist/amenbo-app-windows-x64-setup.exe.sig
+            dist/amenbo-app-linux-x86_64.AppImage
+            dist/amenbo-app-linux-x86_64.AppImage.sig
+            dist/latest-tauri.json
+
       # A green release job is not proof of a release. If wharfy ever prints its plan
       # and exits 0 without uploading (a real near-miss once left 5 jobs green and 0
       # releases), nothing above catches it — attest_unavailable stays silent when

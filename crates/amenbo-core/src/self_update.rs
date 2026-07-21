@@ -36,6 +36,10 @@ pub enum SelfUpdateError {
     /// No CLI archive is listed for this platform in the manifest.
     #[error("no CLI archive for {platform} in the release manifest")]
     NoArchive { platform: String },
+    /// A rollback was asked for but no retained previous binary (`amenbo.bak`) exists — nothing to
+    /// restore. The first `--apply` writes one; a fresh install, or a store already rolled back, has none.
+    #[error("no previous amenbo to roll back to (none retained at {})", .path.display())]
+    NoBackup { path: PathBuf },
     /// Self-update over an in-place binary swap is not wired for this platform yet (Windows: needs the
     /// GUI-shim layout to guard against replacing the bundled binary through a symlink).
     #[error("self-update is not available on this platform yet — run `amenbo update` for the installer")]
@@ -62,6 +66,22 @@ pub struct Applied {
     /// The version now installed.
     pub to: String,
     /// The executable path that was replaced.
+    pub path: PathBuf,
+    /// Where the replaced (previous) binary was retained, so a bad update can be undone with
+    /// [`rollback`] — no network, no re-download. One copy is kept (overwritten by the next apply).
+    pub backup: PathBuf,
+}
+
+/// A completed rollback: the running version that was undone, and the path now holding the restored
+/// binary. `restored` is the version the retained binary reported at apply time — `None` if the sidecar
+/// that recorded it is missing (the binary is still restored; only its version label is unknown).
+#[derive(Debug, Clone)]
+pub struct RolledBack {
+    /// The version that was running before the rollback (the one being undone).
+    pub from: String,
+    /// The version now restored, when it was recorded; `None` if unknown.
+    pub restored: Option<String>,
+    /// The executable path that was restored.
     pub path: PathBuf,
 }
 
@@ -115,9 +135,70 @@ pub fn apply(latest: &LatestRelease) -> Result<Applied, SelfUpdateError> {
 
     let archive = download(url).map_err(SelfUpdateError::Download)?;
     let binary = extract_amenbo_binary(&archive).map_err(SelfUpdateError::Extract)?;
+
+    // Retain the current binary before replacing it, so a bad update can be undone offline (see
+    // `rollback`). This runs before the swap: if it fails, the live binary is untouched and we abort
+    // rather than update with no way back. One copy is kept — the next apply overwrites it.
+    let backup = backup_path(&exe);
+    std::fs::copy(&exe, &backup).map_err(SelfUpdateError::Replace)?;
+    // Record the retained version for a useful rollback message. Best-effort: a missing sidecar only
+    // costs the version label, never the restore itself.
+    let _ = std::fs::write(backup_version_path(&exe), running);
+
     swap_running_binary(&exe, &binary).map_err(SelfUpdateError::Replace)?;
 
-    Ok(Applied { from: running.to_string(), to: latest.version.clone(), path: exe })
+    Ok(Applied { from: running.to_string(), to: latest.version.clone(), path: exe, backup })
+}
+
+/// Undo the last [`apply`] by restoring the binary it retained at [`backup_path`]. Offline and instant —
+/// no download, no version check (a rollback is a deliberate downgrade). Refuses the same GUI-managed and
+/// platform cases as [`apply`], and reports [`SelfUpdateError::NoBackup`] when no retained binary exists.
+/// On success the retained copy is consumed (there is nothing further to roll back to).
+pub fn rollback() -> Result<RolledBack, SelfUpdateError> {
+    // Same platform / shim guards as apply: Windows falls back to the installer, and a GUI-managed CLI
+    // is owned by the desktop updater — neither self-replaces here.
+    if cfg!(windows) {
+        return Err(SelfUpdateError::Unsupported);
+    }
+    let exe = std::env::current_exe().map_err(SelfUpdateError::Exe)?;
+    let exe = std::fs::canonicalize(&exe).unwrap_or(exe);
+    if is_gui_managed(&exe) {
+        return Err(SelfUpdateError::GuiManaged { exe });
+    }
+
+    let backup = backup_path(&exe);
+    if !backup.exists() {
+        return Err(SelfUpdateError::NoBackup { path: backup });
+    }
+    let bytes = std::fs::read(&backup).map_err(SelfUpdateError::Replace)?;
+    let restored = std::fs::read_to_string(backup_version_path(&exe))
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+
+    swap_running_binary(&exe, &bytes).map_err(SelfUpdateError::Replace)?;
+    // The retained copy is now the running binary — nothing is left to roll back to. Clear both so a
+    // stale `.bak` never masquerades as a fresh one.
+    let _ = std::fs::remove_file(&backup);
+    let _ = std::fs::remove_file(backup_version_path(&exe));
+
+    Ok(RolledBack { from: crate::agent::VERSION.to_string(), restored, path: exe })
+}
+
+/// Where the previous binary is retained beside the running one: `amenbo` → `amenbo.bak`. A sibling on
+/// the same filesystem, so retaining it is a cheap copy and restoring it is the same atomic swap.
+#[must_use]
+pub fn backup_path(exe: &Path) -> PathBuf {
+    exe.with_extension("bak")
+}
+
+/// The sidecar recording the retained binary's version (`amenbo.bak.version`), so a rollback can name
+/// what it restored. Purely advisory — its absence never blocks a restore.
+#[must_use]
+fn backup_version_path(exe: &Path) -> PathBuf {
+    let mut p = backup_path(exe).into_os_string();
+    p.push(".version");
+    PathBuf::from(p)
 }
 
 /// Fetch the archive bytes over TLS, with the same short-lived agent as the update check but a
@@ -188,6 +269,18 @@ mod tests {
             "/Users/alice/Applications/amenbo.app/Contents/MacOS/amenbo"
         )));
         assert!(is_gui_managed(Path::new("/Applications/amenbo.app/Contents/MacOS/amenbo")));
+    }
+
+    /// The retained-binary path is the executable's own name with a `.bak` extension, and its version
+    /// sidecar sits right beside it — both plain siblings on the same filesystem as the running binary.
+    #[test]
+    fn backup_paths_sit_beside_the_running_binary() {
+        let exe = Path::new("/Users/alice/.local/bin/amenbo");
+        assert_eq!(backup_path(exe), Path::new("/Users/alice/.local/bin/amenbo.bak"));
+        assert_eq!(
+            backup_version_path(exe),
+            Path::new("/Users/alice/.local/bin/amenbo.bak.version")
+        );
     }
 
     /// The archive URL is the platform's suffix-less `os-arch` key — the CLI archive, never an installer.

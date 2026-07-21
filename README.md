@@ -149,8 +149,10 @@ update check below) and points you at that installer. A **standalone CLI** (inst
 without the desktop app) can also update itself in place: `amenbo update --apply`
 downloads the new CLI over TLS and swaps this binary — no installer, no elevation. A
 CLI installed alongside the desktop app is a shim into it and is updated with the app,
-not on its own (`--apply` there points you back to the installer). Either way, applying
-an update is always your explicit call — amenbo never updates itself in the background.
+not on its own (`--apply` there points you back to the installer). An `--apply` keeps the
+binary it replaces beside the new one, so `amenbo update --rollback` undoes the last update
+offline — no download — if the new version misbehaves. Either way, applying an update is
+always your explicit call — amenbo never updates itself in the background.
 
 **Verifying a download (optional).** Every release is built by this repository's
 public CI, and each asset carries a build attestation signed with the release

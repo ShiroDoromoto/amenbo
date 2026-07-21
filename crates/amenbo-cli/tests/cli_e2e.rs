@@ -972,6 +972,43 @@ fn update_apply_declines_gracefully_without_manifest() {
     assert_eq!(v["error"]["code"], "io_error", "a plain io error, not a panic: {err}");
 }
 
+/// `amenbo update --rollback` undoes the last `--apply` offline. Two network-free checks of the wiring:
+/// `--rollback` is mutually exclusive with `--apply` and `--print` (clap turns them away), and with no
+/// previous binary retained beside the running one it declines plainly (`no_backup`, exit 0) rather than
+/// swapping onto nothing. The actual restore is covered by `amenbo-core`'s `self_update` unit tests; here
+/// the test binary has no sibling `.bak`, so the `NoBackup` guard fires before any swap could touch it.
+#[test]
+fn update_rollback_declines_gracefully_without_a_retained_binary() {
+    let dir = temp_home();
+    std::fs::create_dir_all(&dir).unwrap();
+    let run = |args: &[&str]| {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env_remove("AMENBO_HOME")
+            .env_remove("AMENBO_PROJECT_DIR")
+            .env("AMENBO_ACTOR", "ai")
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&dir)
+            .args(args)
+            .output()
+            .expect("failed to run the binary");
+        (out.status.code(), String::from_utf8_lossy(&out.stdout).to_string(), String::from_utf8_lossy(&out.stderr).to_string())
+    };
+
+    // Mutually exclusive with --apply and --print: clap refuses the pair before anything runs.
+    let (code, _out, err) = run(&["update", "--rollback", "--apply"]);
+    assert_eq!(code, Some(2), "clap turns away --rollback with --apply: {err}");
+    let (code, _out, err) = run(&["update", "--rollback", "--print"]);
+    assert_eq!(code, Some(2), "clap turns away --rollback with --print: {err}");
+
+    // Nothing retained: a plain, zero-exit decline naming no_backup — never a swap onto nothing.
+    let (code, out, err) = run(&["update", "--rollback", "--json"]);
+    assert_eq!(code, Some(0), "no backup is a decline, not an error: {err}");
+    let v: Value = serde_json::from_str(out.trim()).unwrap_or_else(|_| panic!("rollback JSON: {out}"));
+    assert_eq!(v["action"], "self_rollback");
+    assert_eq!(v["rolled_back"], false);
+    assert_eq!(v["reason"], "no_backup");
+}
+
 /// Clobber guard: re-initing a folder that already carries `.amenbo` would create a new store and
 /// overwrite the pointer unasked, orphaning the old one. Refused by default; only `--force` allows it.
 #[test]

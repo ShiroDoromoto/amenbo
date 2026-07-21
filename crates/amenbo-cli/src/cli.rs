@@ -59,7 +59,8 @@ pub enum Command {
     /// (resolved from the published latest.json, falling back to the releases page) in your browser.
     /// Pass --apply to self-update the standalone CLI in place instead — download the new CLI archive
     /// over TLS and swap this binary, no installer, no elevation (CLI-only installs; a GUI-managed CLI
-    /// is updated from the desktop app). Pass --print to only print the installer URL (no browser).
+    /// is updated from the desktop app). Pass --rollback to undo the last --apply, restoring the binary
+    /// it kept aside (offline, no download). Pass --print to only print the installer URL (no browser).
     Update {
         /// print the installer URL instead of opening a browser (headless / scripted use)
         #[arg(long)]
@@ -67,6 +68,9 @@ pub enum Command {
         /// self-update the standalone CLI in place (download + swap this binary) instead of opening the installer
         #[arg(long, conflicts_with = "print")]
         apply: bool,
+        /// undo the last --apply, restoring the previous binary kept beside this one (offline, no download)
+        #[arg(long, conflicts_with_all = ["print", "apply"])]
+        rollback: bool,
     },
     /// Show / change configuration
     Config {

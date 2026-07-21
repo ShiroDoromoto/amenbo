@@ -412,10 +412,12 @@ fn self_update_cmd(
                     "from": done.from,
                     "to": done.to,
                     "path": done.path.display().to_string(),
+                    "backup": done.backup.display().to_string(),
                 }));
             } else {
                 human(flags, format!("Updated amenbo: {} → {}.", done.from, done.to));
                 human(flags, "Restart amenbo to run the new version.");
+                human(flags, format!("The previous binary is kept at {} — undo with `amenbo update --rollback`.", done.backup.display()));
             }
             Ok(0)
         }
@@ -454,6 +456,68 @@ fn self_update_cmd(
             };
             Err(CliError { code: "io_error", message: e.to_string(), hint, exit: 1 })
         }
+    }
+}
+
+/// `amenbo update --rollback`: undo the last `--apply` by restoring the binary it retained beside the
+/// running one — offline and instant, no download and no version check (a rollback is a deliberate
+/// downgrade). Touches no store, like `--apply`. `NoBackup` (nothing was retained) and the two declined
+/// outcomes (`GuiManaged` / `Unsupported`, where self-replace does not apply) are reported plainly with a
+/// zero exit; a failed restore is a genuine error.
+fn self_rollback_cmd(flags: &Flags) -> Result<i32, CliError> {
+    use amenbo_core::self_update::{self, SelfUpdateError};
+    match self_update::rollback() {
+        Ok(done) => {
+            let restored = done.restored.clone();
+            if flags.json {
+                print_json(&json!({
+                    "action": "self_rollback",
+                    "rolled_back": true,
+                    "from": done.from,
+                    "restored": restored,
+                    "path": done.path.display().to_string(),
+                }));
+            } else {
+                match &restored {
+                    Some(v) => human(flags, format!("Rolled back amenbo: {} → {}.", done.from, v)),
+                    None => human(flags, format!("Rolled back amenbo from {} to the previous version.", done.from)),
+                }
+                human(flags, "Restart amenbo to run the restored version.");
+            }
+            Ok(0)
+        }
+        // Not failures: nothing retained to roll back to, or a GUI-managed / unsupported CLI that does not
+        // self-replace here. Report plainly with a zero exit.
+        Err(e @ (SelfUpdateError::NoBackup { .. } | SelfUpdateError::GuiManaged { .. } | SelfUpdateError::Unsupported)) => {
+            if flags.json {
+                let reason = match &e {
+                    SelfUpdateError::NoBackup { .. } => "no_backup",
+                    SelfUpdateError::GuiManaged { .. } => "gui_managed",
+                    SelfUpdateError::Unsupported => "unsupported",
+                    _ => unreachable!(),
+                };
+                print_json(&json!({
+                    "action": "self_rollback",
+                    "rolled_back": false,
+                    "reason": reason,
+                    "current_version": agent::VERSION,
+                    "message": e.to_string(),
+                }));
+            } else {
+                human(flags, e.to_string());
+                if matches!(e, SelfUpdateError::GuiManaged { .. }) {
+                    human(flags, "The desktop app owns updates for this CLI — use its own version history.");
+                }
+            }
+            Ok(0)
+        }
+        // A genuine failed restore.
+        Err(e) => Err(CliError {
+            code: "io_error",
+            message: e.to_string(),
+            hint: Some("try again, or run `amenbo update` to reinstall from the installer.".to_string()),
+            exit: 1,
+        }),
     }
 }
 
@@ -550,8 +614,14 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Some(Command::GithookPreCommit) => return lint_cmd(flags, Vec::new(), false),
         Some(Command::GithookCommitMsg { path }) => return lint_cmd(flags, vec![path.clone()], false),
         Some(Command::Version) if !store_reachable() => return version_unbound(flags),
-        Some(Command::Update { print, apply }) if !store_reachable() => {
-            return if *apply { self_update_cmd(flags, None) } else { update_cmd(flags, None, *print) };
+        Some(Command::Update { print, apply, rollback }) if !store_reachable() => {
+            return if *rollback {
+                self_rollback_cmd(flags)
+            } else if *apply {
+                self_update_cmd(flags, None)
+            } else {
+                update_cmd(flags, None, *print)
+            };
         }
         _ => {}
     }
@@ -778,8 +848,14 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 }
             }
         }
-        Command::Update { print, apply } => {
-            return if apply { self_update_cmd(flags, upstream) } else { update_cmd(flags, upstream, print) };
+        Command::Update { print, apply, rollback } => {
+            return if rollback {
+                self_rollback_cmd(flags)
+            } else if apply {
+                self_update_cmd(flags, upstream)
+            } else {
+                update_cmd(flags, upstream, print)
+            };
         }
         Command::Whoami => return whoami(&store, flags),
         Command::Bind { project, dir, force } => return bind_cmd(&store, flags, project, dir, force),
@@ -4554,7 +4630,7 @@ mod tests {
         assert!(!requires_pointer(&Some(Command::Init { name: None, language: None, force: false })));
         assert!(!requires_pointer(&Some(Command::Bind { project: None, dir: None, force: false })));
         assert!(!requires_pointer(&Some(Command::Version)));
-        assert!(!requires_pointer(&Some(Command::Update { print: true, apply: false })));
+        assert!(!requires_pointer(&Some(Command::Update { print: true, apply: false, rollback: false })));
         // Everything else opens the store and therefore needs a pointer. `agent` is the AI's entry point, so
         // it gets no exemption.
         assert!(requires_pointer(&None)); // discover

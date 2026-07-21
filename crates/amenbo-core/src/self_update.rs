@@ -3,10 +3,14 @@
 //! [`update_check`](crate::update_check) only ever *notices* a newer release; this module is the one
 //! that acts on it — downloading the new CLI archive and swapping the running binary for it, with no
 //! installer and no elevation. It exists for the **CLI-only** user (no desktop app): their
-//! `~/.local/bin/amenbo` is a plain, user-writable file, so a temp-download → verify-version →
-//! atomic-rename swap is enough. Where a GUI is installed the CLI is a shim into the `.app` bundle
-//! and the desktop updater owns replacement — [`is_gui_managed`] detects that and this module
-//! refuses, so it can never corrupt a signed bundle.
+//! `~/.local/bin/amenbo` (or a standalone `amenbo.exe` on Windows) is a plain, user-writable file, so a
+//! temp-download → verify-version → atomic-rename swap is enough. Where a GUI is installed the desktop
+//! updater owns replacement of the bundled CLI — a shim into the `.app` bundle on macOS, a real copy
+//! beside the GUI `amenbo-app.exe` in the NSIS `$INSTDIR` on Windows — and [`is_gui_managed`] detects
+//! either shape so this module refuses, never corrupting a signed bundle or an installer-managed copy.
+//!
+//! The archive is a gzip'd tar on mac/linux and a zip on Windows; [`extract_amenbo_binary`] reads the
+//! `amenbo` / `amenbo.exe` entry out of whichever this platform ships.
 //!
 //! The trust model matches the first install: the archive is fetched over TLS from the same public
 //! release host, and downgrades are refused by the existing version monotonicity
@@ -40,10 +44,6 @@ pub enum SelfUpdateError {
     /// restore. The first `--apply` writes one; a fresh install, or a store already rolled back, has none.
     #[error("no previous amenbo to roll back to (none retained at {})", .path.display())]
     NoBackup { path: PathBuf },
-    /// Self-update over an in-place binary swap is not wired for this platform yet (Windows: needs the
-    /// GUI-shim layout to guard against replacing the bundled binary through a symlink).
-    #[error("self-update is not available on this platform yet — run `amenbo update` for the installer")]
-    Unsupported,
     /// Could not resolve the path of the running executable.
     #[error("could not locate the running executable: {0}")]
     Exe(std::io::Error),
@@ -85,14 +85,32 @@ pub struct RolledBack {
     pub path: PathBuf,
 }
 
-/// Whether `exe` is a GUI-managed binary: it resolves to somewhere inside a macOS `.app` bundle. The
-/// CLI-only install is a plain file under `~/.local/bin`, so any `.app` component in the *resolved*
-/// path means this process was reached through the desktop shim — where the desktop updater, not this
-/// one, does replacement. Pure over the path so it can be tested without a real install.
+/// Whether `exe` is a GUI-managed binary that the desktop updater — not this module — replaces. The
+/// desktop app ships the CLI in a different shape on each OS it targets:
+///
+/// - **macOS**: the CLI is a shim resolving into an `.app` bundle, so any `.app` component in the
+///   *resolved* path means this process was reached through the desktop shim.
+/// - **Windows**: the unified NSIS installer drops the CLI as `amenbo.exe` beside the GUI
+///   `amenbo-app.exe` in its per-user `$INSTDIR` (under `%LOCALAPPDATA%`), and a reinstall overwrites
+///   that copy — so a sibling `amenbo-app.exe` marks this binary as the bundled one. There is no
+///   symlink to follow as on macOS; NSIS installs a real copy, so the marker is the sibling file.
+///
+/// A standalone CLI-only install — a plain, user-writable file with neither marker — is the only shape
+/// this module self-replaces. The macOS check is pure over the path; the Windows check reads the
+/// filesystem for the sibling.
 #[must_use]
 pub fn is_gui_managed(exe: &Path) -> bool {
-    exe.components()
-        .any(|c| c.as_os_str().to_string_lossy().ends_with(".app"))
+    // macOS: a shim resolving into an `.app` bundle.
+    if exe.components().any(|c| c.as_os_str().to_string_lossy().ends_with(".app")) {
+        return true;
+    }
+    // Windows: the NSIS-bundled CLI sits beside the GUI `amenbo-app.exe` in $INSTDIR; a standalone CLI
+    // has no such sibling.
+    #[cfg(windows)]
+    if exe.parent().is_some_and(|dir| dir.join("amenbo-app.exe").exists()) {
+        return true;
+    }
+    false
 }
 
 /// The CLI archive URL for the running platform: the `os-arch` (suffix-less) key in the manifest's
@@ -111,12 +129,6 @@ pub fn cli_archive_url(latest: &LatestRelease) -> Option<&str> {
 /// network I/O, so a no-op update stays silent and traffic-free.
 pub fn apply(latest: &LatestRelease) -> Result<Applied, SelfUpdateError> {
     let running = crate::agent::VERSION;
-
-    // Windows self-update waits on the GUI-shim layout (task C) to guard a symlinked CLI from
-    // replacing the bundled binary; until then Windows falls back to the installer.
-    if cfg!(windows) {
-        return Err(SelfUpdateError::Unsupported);
-    }
 
     // Downgrade guard first — the whole point is monotonic versions, and it costs nothing.
     if !latest.is_newer_than(running) {
@@ -151,15 +163,13 @@ pub fn apply(latest: &LatestRelease) -> Result<Applied, SelfUpdateError> {
 }
 
 /// Undo the last [`apply`] by restoring the binary it retained at [`backup_path`]. Offline and instant —
-/// no download, no version check (a rollback is a deliberate downgrade). Refuses the same GUI-managed and
-/// platform cases as [`apply`], and reports [`SelfUpdateError::NoBackup`] when no retained binary exists.
-/// On success the retained copy is consumed (there is nothing further to roll back to).
+/// no download, no version check (a rollback is a deliberate downgrade). Refuses the same GUI-managed case
+/// as [`apply`] (the desktop updater owns a bundled CLI), and reports [`SelfUpdateError::NoBackup`] when no
+/// retained binary exists. On success the retained copy is consumed (there is nothing further to roll back
+/// to).
 pub fn rollback() -> Result<RolledBack, SelfUpdateError> {
-    // Same platform / shim guards as apply: Windows falls back to the installer, and a GUI-managed CLI
-    // is owned by the desktop updater — neither self-replaces here.
-    if cfg!(windows) {
-        return Err(SelfUpdateError::Unsupported);
-    }
+    // Same shim guard as apply: a GUI-managed CLI is owned by the desktop updater, so it does not
+    // self-replace here. A standalone CLI (any OS) does.
     let exe = std::env::current_exe().map_err(SelfUpdateError::Exe)?;
     let exe = std::fs::canonicalize(&exe).unwrap_or(exe);
     if is_gui_managed(&exe) {
@@ -185,8 +195,9 @@ pub fn rollback() -> Result<RolledBack, SelfUpdateError> {
     Ok(RolledBack { from: crate::agent::VERSION.to_string(), restored, path: exe })
 }
 
-/// Where the previous binary is retained beside the running one: `amenbo` → `amenbo.bak`. A sibling on
-/// the same filesystem, so retaining it is a cheap copy and restoring it is the same atomic swap.
+/// Where the previous binary is retained beside the running one: `amenbo` → `amenbo.bak` (and
+/// `amenbo.exe` → `amenbo.bak` on Windows). A sibling on the same filesystem, so retaining it is a cheap
+/// copy and restoring it is the same atomic swap.
 #[must_use]
 pub fn backup_path(exe: &Path) -> PathBuf {
     exe.with_extension("bak")
@@ -213,10 +224,25 @@ fn download(url: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Read the `amenbo` executable out of a gzip'd tar (the mac/linux CLI archive). We match the entry by
-/// file name (`amenbo`), so extra files (LICENSE, README) and a leading directory both parse. The
-/// bytes are returned rather than unpacked to disk, so the caller owns where they land.
+/// Read the `amenbo` executable out of the downloaded CLI archive. The format is the one wharfy writes
+/// for this platform — a gzip'd tar on mac/linux, a zip on Windows — so extraction dispatches on the
+/// target. Either backend matches the entry by file name (`amenbo` / `amenbo.exe`), so extra files
+/// (LICENSE, README) and a leading directory both parse. The bytes are returned rather than unpacked
+/// to disk, so the caller owns where they land.
 fn extract_amenbo_binary(archive: &[u8]) -> Result<Vec<u8>, String> {
+    #[cfg(not(windows))]
+    {
+        extract_from_tar_gz(archive)
+    }
+    #[cfg(windows)]
+    {
+        extract_from_zip(archive)
+    }
+}
+
+/// The mac/linux path: un-gzip the tar and stream out the `amenbo` entry.
+#[cfg(not(windows))]
+fn extract_from_tar_gz(archive: &[u8]) -> Result<Vec<u8>, String> {
     use std::io::Read;
     let gz = flate2::read::GzDecoder::new(archive);
     let mut tar = tar::Archive::new(gz);
@@ -235,6 +261,28 @@ fn extract_amenbo_binary(archive: &[u8]) -> Result<Vec<u8>, String> {
         }
     }
     Err("archive contains no `amenbo` entry".to_string())
+}
+
+/// The Windows path: read the `amenbo.exe` entry out of the zip (wharfy writes a single Deflate entry).
+/// `enclosed_name` sanitizes the path (no zip-slip), and we match by file name so a leading directory
+/// still resolves — mirroring the tar reader's tolerance.
+#[cfg(windows)]
+fn extract_from_zip(archive: &[u8]) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(archive)).map_err(|e| e.to_string())?;
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
+        let is_amenbo = entry
+            .enclosed_name()
+            .and_then(|p| p.file_name().map(|n| n.to_os_string()))
+            .is_some_and(|n| n == "amenbo.exe");
+        if is_amenbo {
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+            return Ok(buf);
+        }
+    }
+    Err("archive contains no `amenbo.exe` entry".to_string())
 }
 
 /// Write the new binary beside the running one (same filesystem, so the swap is an atomic rename) with
@@ -297,8 +345,8 @@ mod tests {
         assert_eq!(cli_archive_url(&empty), None);
     }
 
-    /// A version that is not newer than the running build declines as `UpToDate` — before any network
-    /// or filesystem touch, so this runs offline.
+    /// A version that is not newer than the running build declines as `UpToDate` — the downgrade guard
+    /// runs first on every platform, before any network or filesystem touch, so this runs offline.
     #[test]
     fn apply_declines_when_not_newer() {
         let same = LatestRelease {
@@ -306,14 +354,14 @@ mod tests {
             notes_url: None,
             assets: BTreeMap::new(),
         };
-        // On Windows the platform guard fires first; either way `apply` never reaches the network.
         match apply(&same) {
-            Err(SelfUpdateError::UpToDate { .. }) | Err(SelfUpdateError::Unsupported) => {}
+            Err(SelfUpdateError::UpToDate { .. }) => {}
             other => panic!("expected a no-op decline, got {other:?}"),
         }
     }
 
     /// The `amenbo` binary is read out of a gzip'd tar even with a leading directory and sibling files.
+    #[cfg(not(windows))]
     #[test]
     fn extract_finds_amenbo_among_siblings() {
         let mut tar_buf = Vec::new();
@@ -342,6 +390,7 @@ mod tests {
     }
 
     /// An archive with no `amenbo` entry is an error, not a silent empty binary.
+    #[cfg(not(windows))]
     #[test]
     fn extract_errors_without_amenbo_entry() {
         let mut tar_buf = Vec::new();
@@ -359,5 +408,59 @@ mod tests {
         let archive = gz.finish().unwrap();
 
         assert!(extract_amenbo_binary(&archive).is_err());
+    }
+
+    /// On Windows the bundled CLI sits beside the GUI `amenbo-app.exe` in the NSIS $INSTDIR; a
+    /// standalone CLI has no such sibling. The guard reads the filesystem, so it is exercised against a
+    /// real scratch directory rather than a bare path.
+    #[cfg(windows)]
+    #[test]
+    fn gui_managed_detects_bundled_sibling_on_windows() {
+        let dir = amenbo_scratch::scratch("self-update-guard");
+        let exe = dir.join("amenbo.exe");
+        std::fs::write(&exe, b"cli").unwrap();
+        // Standalone: no GUI sibling → self-update allowed.
+        assert!(!is_gui_managed(&exe));
+        // Bundled: the installer's GUI `amenbo-app.exe` sits beside it → refused.
+        std::fs::write(dir.join("amenbo-app.exe"), b"gui").unwrap();
+        assert!(is_gui_managed(&exe));
+    }
+
+    /// The `amenbo.exe` binary is read out of a Deflate zip even with a leading directory and siblings.
+    #[cfg(windows)]
+    #[test]
+    fn extract_finds_amenbo_exe_in_zip() {
+        use zip::write::{SimpleFileOptions, ZipWriter};
+        use zip::CompressionMethod;
+        let payload: &[u8] = b"MZ\x90\x00amenbo-exe-bytes";
+        let mut buf = Vec::new();
+        {
+            let mut zw = ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let opts = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+            zw.start_file("amenbo_1.0.3/amenbo.exe", opts).unwrap();
+            zw.write_all(payload).unwrap();
+            zw.start_file("amenbo_1.0.3/README.md", opts).unwrap();
+            zw.write_all(b"docs").unwrap();
+            zw.finish().unwrap();
+        }
+        let got = extract_amenbo_binary(&buf).expect("finds the amenbo.exe entry");
+        assert_eq!(got, payload);
+    }
+
+    /// A zip with no `amenbo.exe` entry is an error, not a silent empty binary.
+    #[cfg(windows)]
+    #[test]
+    fn extract_errors_without_amenbo_exe_in_zip() {
+        use zip::write::{SimpleFileOptions, ZipWriter};
+        use zip::CompressionMethod;
+        let mut buf = Vec::new();
+        {
+            let mut zw = ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let opts = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+            zw.start_file("README.md", opts).unwrap();
+            zw.write_all(b"nope").unwrap();
+            zw.finish().unwrap();
+        }
+        assert!(extract_amenbo_binary(&buf).is_err());
     }
 }

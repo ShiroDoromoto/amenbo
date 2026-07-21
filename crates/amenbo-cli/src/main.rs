@@ -446,10 +446,10 @@ fn self_update_cmd(
             }
             Ok(0)
         }
-        // Genuine failures — including a platform without in-place self-update (fall back to the installer).
+        // Genuine failures — e.g. no CLI archive listed for this platform (fall back to the installer).
         Err(e) => {
             let hint = match e {
-                SelfUpdateError::Unsupported | SelfUpdateError::NoArchive { .. } => {
+                SelfUpdateError::NoArchive { .. } => {
                     Some("run `amenbo update` to open the installer instead.".to_string())
                 }
                 _ => Some("try again, or run `amenbo update` to open the installer.".to_string()),
@@ -461,9 +461,9 @@ fn self_update_cmd(
 
 /// `amenbo update --rollback`: undo the last `--apply` by restoring the binary it retained beside the
 /// running one — offline and instant, no download and no version check (a rollback is a deliberate
-/// downgrade). Touches no store, like `--apply`. `NoBackup` (nothing was retained) and the two declined
-/// outcomes (`GuiManaged` / `Unsupported`, where self-replace does not apply) are reported plainly with a
-/// zero exit; a failed restore is a genuine error.
+/// downgrade). Touches no store, like `--apply`. `NoBackup` (nothing was retained) and `GuiManaged` (the
+/// desktop app owns a bundled CLI, so self-replace does not apply) are reported plainly with a zero exit;
+/// a failed restore is a genuine error.
 fn self_rollback_cmd(flags: &Flags) -> Result<i32, CliError> {
     use amenbo_core::self_update::{self, SelfUpdateError};
     match self_update::rollback() {
@@ -486,14 +486,13 @@ fn self_rollback_cmd(flags: &Flags) -> Result<i32, CliError> {
             }
             Ok(0)
         }
-        // Not failures: nothing retained to roll back to, or a GUI-managed / unsupported CLI that does not
-        // self-replace here. Report plainly with a zero exit.
-        Err(e @ (SelfUpdateError::NoBackup { .. } | SelfUpdateError::GuiManaged { .. } | SelfUpdateError::Unsupported)) => {
+        // Not failures: nothing retained to roll back to, or a GUI-managed CLI that does not self-replace
+        // here. Report plainly with a zero exit.
+        Err(e @ (SelfUpdateError::NoBackup { .. } | SelfUpdateError::GuiManaged { .. })) => {
             if flags.json {
                 let reason = match &e {
                     SelfUpdateError::NoBackup { .. } => "no_backup",
                     SelfUpdateError::GuiManaged { .. } => "gui_managed",
-                    SelfUpdateError::Unsupported => "unsupported",
                     _ => unreachable!(),
                 };
                 print_json(&json!({

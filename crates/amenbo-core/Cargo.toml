@@ -70,6 +70,13 @@ self-replace = "1"
 # live ref dead. Pure Rust, no build script, and the parser rustdoc itself reads doc comments with.
 pulldown-cmark = { version = "0.13", default-features = false }
 
+# The Windows CLI archive is a `.zip` (mac/linux ship a gzip'd tar), so on Windows the self-update
+# extractor un-deflates the zip and streams out its `amenbo.exe` entry — the counterpart to the
+# `flate2`+`tar` path used everywhere else. Windows-only: no other platform ships a zip. Default
+# features off keeps only Deflate (the method wharfy writes), dropping the aes/bzip2/zstd/time extras.
+[target.'cfg(windows)'.dependencies]
+zip = { version = "8", default-features = false, features = ["deflate"] }
+
 [dev-dependencies]
 amenbo-scratch.workspace = true
 serde_json.workspace = true

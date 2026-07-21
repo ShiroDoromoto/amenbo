@@ -10,6 +10,15 @@
 # esorp is optional: an outside contributor without it commits as before.
 set -uo pipefail
 
+# Strip harness-injected attribution trailers (Co-Authored-By: Claude…,
+# Claude-Session:…) from the stored message. Patterns are tight so a verbose diff
+# below the scissors can't match. Runs before the esorp gate so it applies even
+# without esorp installed.
+if [ -f "$1" ]; then
+  cleaned="$(grep -vE '^(Co-Authored-By: Claude .*<noreply@anthropic\.com>|Claude-Session: https?://)' "$1" || true)"
+  printf '%s\n' "$cleaned" > "$1"
+fi
+
 command -v esorp >/dev/null 2>&1 || exit 0
 
 # What git will keep, not what is in the file. The hook is handed the raw buffer:

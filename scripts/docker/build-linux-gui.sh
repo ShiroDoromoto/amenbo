@@ -5,12 +5,16 @@
 # copies the .deb + .rpm + AppImage out to the mounted /out with stable, wharfy-friendly
 # names.
 #
-# The .deb and .rpm ship the GUI *and* the amenbo CLI on PATH. The CLI
-# rides in as a Tauri sidecar (externalBin), which Tauri installs to
-# /usr/bin/amenbo (triple stripped) next to the GUI /usr/bin/amenbo-app — so both land
-# on PATH from one install. The AppImage stays GUI-only ("run without installing"); it
-# does not own PATH exposure. The CLI-on-PATH guarantee is enforced below (a build fails
-# loudly if /usr/bin/amenbo regresses out of a native package).
+# Two Linux routes with different jobs:
+#   .deb / .rpm  — the SYSTEM install (root, /usr/bin). They ship the GUI *and* the amenbo CLI on
+#     PATH: the CLI rides in as a Tauri sidecar (externalBin), installed to /usr/bin/amenbo (triple
+#     stripped) next to the GUI /usr/bin/amenbo-app — both land on PATH from one install. Not
+#     self-updating (a root-owned path needs elevation to replace); a new version means a new package.
+#     The CLI-on-PATH guarantee is enforced below (a build fails loudly if /usr/bin/amenbo regresses).
+#   AppImage — the SELF-UPDATE lead. One user-writable file, so the GUI self-update path
+#     (tauri-plugin-updater) can swap it in place with no /usr/bin permission wall; the user drops it
+#     on PATH themselves (e.g. ~/.local/bin). GUI-only (it does not own CLI PATH exposure). With the
+#     release signing key set it also carries its minisign updater signature (see SIGN_UPDATER below).
 #
 # The container's arch IS the build arch: on Apple Silicon, `docker run` defaults to
 # linux/arm64, so `make dist-gui-linux` passes --platform to pin it and hands us
@@ -75,6 +79,15 @@ shopt -s nullglob
 DIST_DEB="/out/amenbo-app-linux-${DEB_ARCH}.deb"
 DIST_RPM="/out/amenbo-app-linux-${RPM_ARCH}.rpm"
 DIST_IMG="/out/amenbo-app-linux-${IMG_ARCH}.AppImage"
+DIST_IMG_SIG="${DIST_IMG}.sig"
+
+# Signed updater artifact: only when the release CI's signing key is present. With it set, the
+# AppImage stage layers createUpdaterArtifacts (updater.conf.json) so tauri minisign-signs the
+# AppImage in place and writes <name>.AppImage.sig beside it — the artifact the GUI self-update
+# path (tauri-plugin-updater) consumes (Tauri v2 re-uses the .AppImage itself, not a .tar.gz). A
+# local keyless build skips it: the AppImage is still produced (GUI-only), just unsigned.
+SIGN_UPDATER=0
+if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then SIGN_UPDATER=1; fi
 
 # What we managed to collect vs what's missing, so the final summary can name both — a
 # partial build must never read as "distributable" (a release needs all three).
@@ -153,13 +166,21 @@ retryable() {
   grep -qiE 'too many requests|rate.?limit|(http|status|code|error)[^0-9]{0,10}429|429 (too many|rate)|connection (reset|refused|timed out)|network is unreachable|temporary failure in name resolution|tls handshake' "$1"
 }
 
+# The AppImage build args. With signing, layer updater.conf.json (createUpdaterArtifacts) so
+# tauri emits the signed updater artifact; the path is relative to the tauri project dir (cwd is
+# /build/app), mirroring the windows release job. Keyless builds omit it — createUpdaterArtifacts
+# with a pubkey but no private key fails the build, so a local `make dist-gui-linux` must not pass it.
+img_args=(--bundles appimage)
+if [ "$SIGN_UPDATER" = 1 ]; then img_args+=(-c src-tauri/updater.conf.json); fi
+
 img_failed=0
 if want appimage; then
-  echo "→ [container] tauri build (appimage)"
+  [ "$SIGN_UPDATER" = 1 ] && sign_note=", signed updater artifact" || sign_note=""
+  echo "→ [container] tauri build (appimage${sign_note})"
   build_ok=0
   log="$(mktemp)"
   for attempt in 1 2 3; do
-    if npm run tauri build -- --bundles appimage 2>&1 | tee "$log"; then build_ok=1; break; fi
+    if npm run tauri build -- "${img_args[@]}" 2>&1 | tee "$log"; then build_ok=1; break; fi
     if ! retryable "$log"; then
       echo "✗ [container] appimage build failed for a reason a retry cannot fix — its own last words:" >&2
       tail -n 20 "$log" >&2
@@ -178,6 +199,15 @@ if want appimage; then
     "$DIST_IMG" --appimage-extract >/dev/null 2>&1 && echo "  AppImage unpacks OK" || echo "  (AppImage extract check skipped)"
     rm -rf /build/app/squashfs-root 2>/dev/null || true
     collected+=("$DIST_IMG")
+    # The signed updater artifact rides beside the AppImage. tauri writes <name>.AppImage.sig; the
+    # signature is over the bytes, so renaming the AppImage to its release name keeps it valid.
+    if [ "$SIGN_UPDATER" = 1 ]; then
+      sigs=("$BUNDLE"/appimage/*.AppImage.sig)
+      [ "${#sigs[@]}" -eq 1 ] || { echo "✗ signing was requested but expected exactly one .AppImage.sig, found ${#sigs[@]}: ${sigs[*]:-none}" >&2; exit 1; }
+      cp "${sigs[0]}" "$DIST_IMG_SIG"
+      echo "→ [container] updater signature: $DIST_IMG_SIG"
+      collected+=("$DIST_IMG_SIG")
+    fi
   else
     img_failed=1
     missing+=("$DIST_IMG")

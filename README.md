@@ -137,6 +137,12 @@ first launch shows the operating system's unsigned-app prompt (on macOS,
 right-click → **Open**; on Windows, SmartScreen's **More info** → **Run anyway**);
 once approved it does not recur.
 
+On Linux the `.deb`/`.rpm` are the system-wide route — they install to `/usr/bin`
+and put both the GUI and the CLI on PATH. A Linux GUI **AppImage** is published
+alongside as well: a single self-contained file that needs no root — place it on
+your PATH yourself (e.g. `~/.local/bin`) and run it. It carries the GUI only (use
+the CLI installer or the `.deb`/`.rpm` for the `amenbo` command).
+
 To update, download the latest installer and run it again — it replaces both at
 once. amenbo notices when a newer version is out (see the update check below) and
 points you at that installer; there is no other update path. It never self-updates

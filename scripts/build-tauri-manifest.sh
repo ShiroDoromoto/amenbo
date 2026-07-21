@@ -21,11 +21,13 @@ base="https://github.com/ShiroDoromoto/amenbo/releases/download/${tag}"
 pub_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # platform-key : dist artifact basename. The url is base/<artifact>; the signature is <artifact>.sig.
-# Linux is intentionally absent until the AppImage updater artifact lands (a later slice).
+# Linux's updater artifact is the AppImage itself (Tauri v2 re-uses it — no .tar.gz); its .sig rides
+# beside it. A row whose .sig is absent is skipped, so a keyless build simply drops that platform.
 rows=(
   "darwin-aarch64:amenbo-darwin-arm64.app.tar.gz"
   "darwin-x86_64:amenbo-darwin-amd64.app.tar.gz"
   "windows-x86_64:amenbo-app-windows-x64-setup.nsis.zip"
+  "linux-x86_64:amenbo-app-linux-x86_64.AppImage"
 )
 
 platforms='{}'

@@ -84,9 +84,14 @@ jobs:
       # target triple; the Intel build cross-compiles from Apple Silicon.
       # MAC_SIGN_IDENTITY makes dist-gui-mac re-sign each .app with the imported
       # identity before packaging (unset → tauri's ad-hoc signature is kept).
+      # TAURI_SIGNING_* present → dist-gui-mac also emits the updater artifact (.app.tar.gz + .sig,
+      # tar of the re-signed .app). Absent on a fork → the updater step self-skips, the .pkg still
+      # builds. The key is password-protected, so both secrets are required.
       - name: Build the mac installers (.pkg, both archs)
         env:
           MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           make dist-gui-mac MAC_GUI_ARCH=arm64
           make dist-gui-mac MAC_GUI_ARCH=amd64
@@ -99,6 +104,10 @@ jobs:
             dist/amenbo-darwin-amd64
             dist/amenbo-darwin-arm64.pkg
             dist/amenbo-darwin-amd64.pkg
+            dist/amenbo-darwin-arm64.app.tar.gz
+            dist/amenbo-darwin-arm64.app.tar.gz.sig
+            dist/amenbo-darwin-amd64.app.tar.gz
+            dist/amenbo-darwin-amd64.app.tar.gz.sig
           if-no-files-found: error
 
   linux:
@@ -222,14 +231,24 @@ jobs:
       # NSIS / Authenticode all expect Windows). tauri's beforeBuildCommand builds the
       # CLI sidecar; the installer is unsigned (SmartScreen's first-run warning
       # is accepted).
+      # -c src-tauri/updater.conf.json layers createUpdaterArtifacts over tauri.conf.json for this
+      # build alone (kept out of the committed config so keyless dev builds never require the key),
+      # so tauri also emits the signed updater artifact (*-setup.nsis.zip + .sig). The key is
+      # password-protected, so both secrets are required.
       - name: Build the Windows installer (NSIS)
         working-directory: app
-        run: npm run tauri build -- --bundles nsis
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build -- --bundles nsis -c src-tauri/updater.conf.json
 
-      # Copy the produced installer to the stable, wharfy-declared asset name.
-      - name: Collect the installer under its release name
+      # Copy the produced installer and its updater artifact to stable, release-declared names.
+      - name: Collect the installer + updater artifact under their release names
         shell: bash
-        run: cp app/src-tauri/target/release/bundle/nsis/*setup.exe dist/amenbo-app-windows-x64-setup.exe
+        run: |
+          cp app/src-tauri/target/release/bundle/nsis/*setup.exe dist/amenbo-app-windows-x64-setup.exe
+          cp app/src-tauri/target/release/bundle/nsis/*setup.nsis.zip dist/amenbo-app-windows-x64-setup.nsis.zip
+          cp app/src-tauri/target/release/bundle/nsis/*setup.nsis.zip.sig dist/amenbo-app-windows-x64-setup.nsis.zip.sig
 
       - uses: actions/upload-artifact@v7
         with:
@@ -237,6 +256,8 @@ jobs:
           path: |
             dist/amenbo-windows-amd64.exe
             dist/amenbo-app-windows-x64-setup.exe
+            dist/amenbo-app-windows-x64-setup.nsis.zip
+            dist/amenbo-app-windows-x64-setup.nsis.zip.sig
           if-no-files-found: error
 
   release:
@@ -298,6 +319,29 @@ jobs:
             exit 1
           fi
 
+      # The GUI self-update path (tauri-plugin-updater) reads a Tauri-schema manifest that is NOT
+      # wharfy's latest.json — assemble it from the per-OS updater artifacts' signatures and attach
+      # it, plus the updater artifacts themselves, onto the same prerelease. wharfy uploads only what
+      # wharfy.yaml declares, so these ride alongside via gh (amenbo owns its updater manifest;
+      # wharfy stays a generic distributor). The tag resolves the same way the verify step does.
+      - name: Attach the Tauri updater artifacts + manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="$(git describe --tags --abbrev=0 --match 'v*')"
+          fi
+          scripts/build-tauri-manifest.sh "$TAG" dist
+          gh release upload "$TAG" \
+            dist/amenbo-darwin-arm64.app.tar.gz dist/amenbo-darwin-arm64.app.tar.gz.sig \
+            dist/amenbo-darwin-amd64.app.tar.gz dist/amenbo-darwin-amd64.app.tar.gz.sig \
+            dist/amenbo-app-windows-x64-setup.nsis.zip dist/amenbo-app-windows-x64-setup.nsis.zip.sig \
+            dist/latest-tauri.json \
+            --clobber
+
       # A green release job is not proof of a release. If wharfy ever prints its plan
       # and exits 0 without uploading (a real near-miss once left 5 jobs green and 0
       # releases), nothing above catches it — attest_unavailable stays silent when
@@ -335,6 +379,13 @@ jobs:
           mapfile -t expected < <(awk '/^bundle:/{f=1} f' wharfy.yaml \
             | grep -oE 'path: dist/[^ }]+' | sed 's|.*/||')
           expected+=("latest.json")
+          # The Tauri updater artifacts + manifest attached alongside (gh, not wharfy).
+          expected+=(
+            "amenbo-darwin-arm64.app.tar.gz" "amenbo-darwin-arm64.app.tar.gz.sig"
+            "amenbo-darwin-amd64.app.tar.gz" "amenbo-darwin-amd64.app.tar.gz.sig"
+            "amenbo-app-windows-x64-setup.nsis.zip" "amenbo-app-windows-x64-setup.nsis.zip.sig"
+            "latest-tauri.json"
+          )
 
           assets="$(jq -r '.assets[].name' <<<"$rel")"
           echo "Release assets:"; echo "$assets"

@@ -45,6 +45,13 @@ GUI_PKG_DIST := $(DIST_DIR)/amenbo-darwin-$(MAC_GUI_ARCH).pkg
 # not what goes out.
 GUI_PKG_ARM64 := $(DIST_DIR)/amenbo-darwin-arm64.pkg
 GUI_PKG_AMD64 := $(DIST_DIR)/amenbo-darwin-amd64.pkg
+# Tauri updater artifact for macOS (GUI self-update). Built ONLY when the minisign signing key is in
+# the environment (release CI: secret TAURI_SIGNING_PRIVATE_KEY); ordinary dev/dist builds never
+# require it. Unlike tauri's createUpdaterArtifacts (which tars the .app BEFORE the stable-identity
+# re-sign), we tar the RE-SIGNED .app ourselves so the updater delivers the same fixed-leaf .app the
+# installer does (notification authorization survives updates). The tar is AppleDouble-free
+# (COPYFILE_DISABLE) — a stray ._ file breaks the update's signature seal — then minisign-signed.
+MAC_UPDATER_DIST := $(DIST_DIR)/amenbo-darwin-$(MAC_GUI_ARCH).app.tar.gz
 # Linux GUI bundles are built inside a container for an explicit arch, pinned via --platform.
 # amd64 is the default (Linux desktop is overwhelmingly x86_64); override with
 # LINUX_GUI_ARCH=arm64. deb uses amd64/arm64, rpm/AppImage use x86_64/aarch64, matching
@@ -168,6 +175,15 @@ dist-gui-mac:
 	scripts/codesign-release-mac.sh "$(MAC_GUI_APP)"
 	scripts/build-pkg-mac.sh "$(MAC_GUI_APP)" "$(GUI_PKG_DIST)" "$(VERSION)" "$(MAC_GUI_ARCH)"
 	@ls -1 "$(GUI_PKG_DIST)"
+	@# Updater artifact: tar the re-signed .app (AppleDouble-free) and minisign-sign it, only when
+	@# the signing key is present (release CI). Skipped silently for keyless dev/dist builds.
+	@if [ -n "$$TAURI_SIGNING_PRIVATE_KEY" ]; then \
+	  COPYFILE_DISABLE=1 tar czf "$(MAC_UPDATER_DIST)" -C "$(MAC_BUNDLE_DIR)/macos" amenbo.app; \
+	  ( cd app && npx tauri signer sign "$(CURDIR)/$(MAC_UPDATER_DIST)" ); \
+	  echo "→ $(MAC_UPDATER_DIST) (+ .sig)"; \
+	else \
+	  echo "updater artifact skipped (TAURI_SIGNING_PRIVATE_KEY unset)"; \
+	fi
 
 ## Run the shipped build (the CLI bundled in dist/'s mac .pkg) against a clone of the prod store and
 ## exercise whether **a store already out in the wild still opens and reads back**.

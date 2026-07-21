@@ -26,7 +26,7 @@ pub_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 rows=(
   "darwin-aarch64:amenbo-darwin-arm64.app.tar.gz"
   "darwin-x86_64:amenbo-darwin-amd64.app.tar.gz"
-  "windows-x86_64:amenbo-app-windows-x64-setup.nsis.zip"
+  "windows-x86_64:amenbo-app-windows-x64-setup.exe"
   "linux-x86_64:amenbo-app-linux-x86_64.AppImage"
 )
 

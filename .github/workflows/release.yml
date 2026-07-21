@@ -242,7 +242,9 @@ jobs:
       # is accepted).
       # -c src-tauri/updater.conf.json layers createUpdaterArtifacts over tauri.conf.json for this
       # build alone (kept out of the committed config so keyless dev builds never require the key),
-      # so tauri also emits the signed updater artifact (*-setup.nsis.zip + .sig). The key is
+      # so tauri also emits the signed updater artifact. With createUpdaterArtifacts: true (not the
+      # "v1Compatible" zip form) that artifact is the bare installer itself (*-setup.exe + .exe.sig),
+      # so the Windows updater target and the distributed installer are the same file. The key is
       # password-protected, so both secrets are required.
       - name: Build the Windows installer (NSIS)
         working-directory: app
@@ -251,13 +253,14 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build -- --bundles nsis -c src-tauri/updater.conf.json
 
-      # Copy the produced installer and its updater artifact to stable, release-declared names.
+      # Copy the produced installer and its updater signature to stable, release-declared names.
+      # The installer .exe doubles as the Windows updater artifact, so its detached .exe.sig rides
+      # alongside; there is no separate .nsis.zip under createUpdaterArtifacts: true.
       - name: Collect the installer + updater artifact under their release names
         shell: bash
         run: |
           cp app/src-tauri/target/release/bundle/nsis/*setup.exe dist/amenbo-app-windows-x64-setup.exe
-          cp app/src-tauri/target/release/bundle/nsis/*setup.nsis.zip dist/amenbo-app-windows-x64-setup.nsis.zip
-          cp app/src-tauri/target/release/bundle/nsis/*setup.nsis.zip.sig dist/amenbo-app-windows-x64-setup.nsis.zip.sig
+          cp app/src-tauri/target/release/bundle/nsis/*setup.exe.sig dist/amenbo-app-windows-x64-setup.exe.sig
 
       - uses: actions/upload-artifact@v7
         with:
@@ -265,8 +268,7 @@ jobs:
           path: |
             dist/amenbo-windows-amd64.exe
             dist/amenbo-app-windows-x64-setup.exe
-            dist/amenbo-app-windows-x64-setup.nsis.zip
-            dist/amenbo-app-windows-x64-setup.nsis.zip.sig
+            dist/amenbo-app-windows-x64-setup.exe.sig
           if-no-files-found: error
 
   release:
@@ -347,7 +349,7 @@ jobs:
           gh release upload "$TAG" \
             dist/amenbo-darwin-arm64.app.tar.gz dist/amenbo-darwin-arm64.app.tar.gz.sig \
             dist/amenbo-darwin-amd64.app.tar.gz dist/amenbo-darwin-amd64.app.tar.gz.sig \
-            dist/amenbo-app-windows-x64-setup.nsis.zip dist/amenbo-app-windows-x64-setup.nsis.zip.sig \
+            dist/amenbo-app-windows-x64-setup.exe.sig \
             dist/amenbo-app-linux-x86_64.AppImage dist/amenbo-app-linux-x86_64.AppImage.sig \
             dist/latest-tauri.json \
             --clobber
@@ -393,7 +395,7 @@ jobs:
           expected+=(
             "amenbo-darwin-arm64.app.tar.gz" "amenbo-darwin-arm64.app.tar.gz.sig"
             "amenbo-darwin-amd64.app.tar.gz" "amenbo-darwin-amd64.app.tar.gz.sig"
-            "amenbo-app-windows-x64-setup.nsis.zip" "amenbo-app-windows-x64-setup.nsis.zip.sig"
+            "amenbo-app-windows-x64-setup.exe.sig"
             "amenbo-app-linux-x86_64.AppImage" "amenbo-app-linux-x86_64.AppImage.sig"
             "latest-tauri.json"
           )

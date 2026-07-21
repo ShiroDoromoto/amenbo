@@ -11,6 +11,7 @@
     "dialog:allow-save",
     "dialog:allow-confirm",
     "notification:default",
-    "opener:allow-open-url"
+    "opener:allow-open-url",
+    "updater:default"
   ]
 }

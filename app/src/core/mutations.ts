@@ -583,6 +583,58 @@ export async function openLatestInstaller(): Promise<string | null> {
   return await invoke<string>("open_latest_installer");
 }
 
+/** What the in-app self-update is doing, for the banner to draw. `downloading` carries bytes so far and
+ *  the total when the manifest gave one (`null` = size unknown → an indeterminate bar). */
+export type UpdateProgress =
+  | { phase: "checking" }
+  | { phase: "downloading"; downloaded: number; total: number | null }
+  | { phase: "installing" }
+  | { phase: "ready" };
+
+/**
+ * Run the in-app self-update. It asks the Tauri updater manifest (`latest-tauri.json`) whether a newer
+ * signed build exists and, if so, downloads it — minisign verification is mandatory and cannot be
+ * disabled — then installs it in place, reporting progress through `onProgress`. The caller restarts
+ * (`restartApp`) once this resolves with `true`, which is the user-pressed apply step; there is no
+ * silent background update. Returns `false` when the manifest offers nothing newer (the banner then
+ * falls back to opening the installer), and outside Tauri it returns `false` too. The detection that
+ * raises the banner still comes from core's `latest.json` (`version_status`); this only runs once the
+ * user acts on it.
+ */
+export async function installUpdate(onProgress: (p: UpdateProgress) => void): Promise<boolean> {
+  if (!inTauri()) return false;
+  const { check } = await import("@tauri-apps/plugin-updater");
+  onProgress({ phase: "checking" });
+  const update = await check();
+  if (!update) return false;
+  let downloaded = 0;
+  let total: number | null = null;
+  await update.downloadAndInstall((event) => {
+    switch (event.event) {
+      case "Started":
+        total = event.data.contentLength ?? null;
+        onProgress({ phase: "downloading", downloaded: 0, total });
+        break;
+      case "Progress":
+        downloaded += event.data.chunkLength;
+        onProgress({ phase: "downloading", downloaded, total });
+        break;
+      case "Finished":
+        onProgress({ phase: "installing" });
+        break;
+    }
+  });
+  onProgress({ phase: "ready" });
+  return true;
+}
+
+/** Exit and relaunch the executable (the "restart to apply" step after an in-app update installs). No
+ *  network, no store write — it just becomes the binary already on disk. Outside Tauri it does nothing. */
+export async function restartApp(): Promise<void> {
+  if (!inTauri()) return;
+  await invoke("restart_app");
+}
+
 /**
  * The general assignment call. The facet (kind = the human, or that person's AI) is what a task is
  * assigned to; kind=null unassigns. Corresponds to the CLI's task assign.

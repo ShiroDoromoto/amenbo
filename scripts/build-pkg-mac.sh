@@ -83,14 +83,18 @@ cp -R "$APP" "$STAGE/"
 APP_LAUNCH_NAME="${APP_NAME%.app}"
 
 # postinstall: (1) expose the bundled CLI on PATH via a symlink into the installed
-# app, (2) put ~/.local/bin on the user's login PATH, then (3) quit the old GUI and
-# relaunch the freshly installed one. Without (3), a GUI running during the update
-# keeps showing the "update available" banner until the user manually quits and
-# reopens it.
+# app, (2) retire an older *system-wide* install (one-time, admin-gated) so the new
+# per-user build is the one that runs, (3) put ~/.local/bin on the user's login PATH,
+# then (4) quit the old GUI and relaunch the freshly installed one. Without (4), a GUI
+# running during the update keeps showing the "update available" banner until the user
+# manually quits and reopens it.
 # This is a per-user (currentUserHome) install, so the script runs AS the console
 # user — not root — and lands in that user's GUI session directly: no
-# `launchctl asuser` is needed to reach it. The installer passes $2 = the resolved
-# install directory (~/Applications); its parent is the user's home.
+# `launchctl asuser` is needed to reach it. The one exception is step (2): the old
+# system copy is root-owned, so its removal elevates via a single osascript admin
+# prompt — the only elevation in the per-user lifetime (self-update never asks). The
+# installer passes $2 = the resolved install directory (~/Applications); its parent is
+# the user's home.
 # Order matters: quit first (else `open` just re-activates the stale instance
 # instead of launching the new binary), pause for the quit to land, then open. The
 # relaunch/PATH block is best-effort — wrapped so no failure can abort postinstall
@@ -109,8 +113,37 @@ BIN_DIR="\$HOME_DIR/.local/bin"
 mkdir -p "\$BIN_DIR"
 ln -sf "\$APP_DIR/$APP_NAME/Contents/MacOS/amenbo" "\$BIN_DIR/amenbo"
 
-# best-effort: PATH registration + clear the stale banner by relaunching the new build.
+# best-effort: retire any old system-wide install, register PATH, and clear the stale
+# banner by relaunching the new build.
 {
+  # One-time migration off an older *system-wide* install. Older releases installed to
+  # /Applications/<app> + /usr/local/bin/amenbo (root-owned); the per-user build we just
+  # staged must be the one that runs, and /usr/local/bin precedes ~/.local/bin on the
+  # stock PATH, so a leftover old CLI would shadow the new one. New is already in place
+  # (the symlink above); now retire the old. Root owns it, so this needs one admin prompt
+  # — the only elevation in the per-user lifetime; self-update never asks.
+  # Idempotent: a fresh or already-migrated user has neither target, so nothing prompts.
+  # Channel-safe: OLD_SYS_APP is the app we just installed, by name, under /Applications
+  # (a dev bundle never matches the prod system paths); the CLI link is retired only when
+  # it resolves into THAT bundle, never a sibling channel's.
+  OLD_SYS_APP="/Applications/$APP_NAME"
+  OLD_SYS_CLI="/usr/local/bin/amenbo"
+  RM_CMD=""
+  if [ -d "\$OLD_SYS_APP" ]; then RM_CMD="rm -rf \\"\$OLD_SYS_APP\\""; fi
+  if [ -L "\$OLD_SYS_CLI" ]; then
+    dest="\$(readlink "\$OLD_SYS_CLI" 2>/dev/null || true)"
+    case "\$dest" in
+      "\$OLD_SYS_APP"/*)
+        [ -n "\$RM_CMD" ] && RM_CMD="\$RM_CMD; "
+        RM_CMD="\${RM_CMD}rm -f \\"\$OLD_SYS_CLI\\""
+        ;;
+    esac
+  fi
+  if [ -n "\$RM_CMD" ]; then
+    export RM_CMD
+    /usr/bin/osascript -e 'do shell script (system attribute "RM_CMD") with administrator privileges with prompt "amenbo has moved to a per-user install. Enter your password once to remove the old system-wide copy; future updates need no password."' 2>/dev/null || true
+  fi
+
   # Put ~/.local/bin on the login PATH, once. macOS defaults to zsh; also cover bash.
   # A marker line keeps re-runs (every update) from appending duplicates.
   marker="# added by amenbo installer"

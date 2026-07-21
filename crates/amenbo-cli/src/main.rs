@@ -305,6 +305,20 @@ fn store_reachable() -> bool {
         || pointer_present()
 }
 
+/// Nudge a Linux user off an older *system-wide* install. The retired `.deb`/`.rpm` left the GUI and CLI
+/// under `/usr/bin` (root-owned); the per-user build cannot retire those, and by policy it advises
+/// rather than auto-strips them. On stderr (so `--json` stdout stays clean), no-op off Linux or once the
+/// packages are gone — mirroring the "newer version available" advisory it sits beside. The package name
+/// is the productName (`amenbo`); `apt` covers Debian/Ubuntu, `dpkg -r` / `rpm -e` the rest.
+fn advise_linux_system_orphan() {
+    if amenbo_core::self_update::linux_system_orphan_present() {
+        eprintln!(
+            "⚠ An older system-wide amenbo is still installed under /usr/bin. Remove it with your \
+             package manager: `sudo apt remove amenbo` (or `dpkg -r amenbo` / `rpm -e amenbo`)."
+        );
+    }
+}
+
 /// `version` outside a binding: report only what this build knows about itself. Two things are dropped, and
 /// both for the same reason — they cannot be answered without opening a store. `format_version` (the version
 /// the store records) has nothing to read, and opening one would create it; and whether to query the upstream
@@ -612,8 +626,12 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // diff (no paths), `commit-msg` lints the message file git hands over.
         Some(Command::GithookPreCommit) => return lint_cmd(flags, Vec::new(), false),
         Some(Command::GithookCommitMsg { path }) => return lint_cmd(flags, vec![path.clone()], false),
-        Some(Command::Version) if !store_reachable() => return version_unbound(flags),
+        Some(Command::Version) if !store_reachable() => {
+            advise_linux_system_orphan();
+            return version_unbound(flags);
+        }
         Some(Command::Update { print, apply, rollback }) if !store_reachable() => {
+            advise_linux_system_orphan();
             return if *rollback {
                 self_rollback_cmd(flags)
             } else if *apply {
@@ -675,6 +693,10 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             );
         }
     }
+
+    // A one-time nudge for a Linux user who migrated off the old `.deb`/`.rpm` but still has the retired
+    // `/usr/bin` copy. Self-clearing and no-op off Linux, so it sits harmlessly beside the version advisory.
+    advise_linux_system_orphan();
 
     // If this invocation is inside a bound folder, whatever that folder still carries on disk — an outdated
     // managed block, a legacy `.amenbo` — is brought up to the current form here: resolving is what repairs

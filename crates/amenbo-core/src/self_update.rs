@@ -113,6 +113,42 @@ pub fn is_gui_managed(exe: &Path) -> bool {
     false
 }
 
+/// An older *system-wide* Linux install left behind after the move to the per-user AppImage/CLI.
+///
+/// The retired `.deb`/`.rpm` packages placed the GUI (`amenbo-app`) and the CLI (`amenbo`) under
+/// `/usr/bin` — root-owned, package-managed. The per-user build cannot retire those: it is not root, and
+/// it never auto-strips them either — it advises, and the user removes them with their package manager.
+/// This detects that lingering system copy so the caller can print that guidance. It is
+/// self-clearing — once the packages are gone this returns `false`, so no marker or state is needed and
+/// it is idempotent by construction. On the stock PATH `~/.local/bin` precedes `/usr/bin`, so the orphan
+/// does no harm beyond version skew; the advice is a courtesy, not a repair.
+///
+/// Advise only when the *running* binary is not itself the system copy: a user still running
+/// `/usr/bin/amenbo` has not migrated, and telling them to delete the binary under their feet is wrong.
+/// Pure over its inputs so it is testable off Linux; [`linux_system_orphan_present`] supplies the real
+/// `current_exe()` and `/usr/bin`, gated to Linux.
+#[must_use]
+pub fn linux_system_orphan(running_exe: &Path, system_dir: &Path) -> bool {
+    if running_exe.starts_with(system_dir) {
+        return false; // still running the old system copy — not migrated yet
+    }
+    system_dir.join("amenbo").exists() || system_dir.join("amenbo-app").exists()
+}
+
+/// The real-path, Linux-only entry: `false` off Linux, else [`linux_system_orphan`] over `current_exe()`
+/// and `/usr/bin`. `cfg!` (not `#[cfg]`) so the whole thing compiles on every platform and only the
+/// boolean differs — the logic above stays covered by tests that run everywhere.
+#[must_use]
+pub fn linux_system_orphan_present() -> bool {
+    if !cfg!(target_os = "linux") {
+        return false;
+    }
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    linux_system_orphan(&exe, Path::new("/usr/bin"))
+}
+
 /// The CLI archive URL for the running platform: the `os-arch` (suffix-less) key in the manifest's
 /// `assets` — the same tar.gz/zip the first install came from. `None` when this platform is not listed.
 #[must_use]
@@ -317,6 +353,31 @@ mod tests {
             "/Users/alice/Applications/amenbo.app/Contents/MacOS/amenbo"
         )));
         assert!(is_gui_managed(Path::new("/Applications/amenbo.app/Contents/MacOS/amenbo")));
+    }
+
+    /// The Linux system-wide orphan is detected only when a per-user build is what ran and a `/usr/bin`
+    /// copy (CLI or GUI) is still present. Running the old `/usr/bin` copy itself is not a migration, so
+    /// it never advises deleting the binary under the user's feet. Touches a real scratch dir standing in
+    /// for `/usr/bin`, so it runs on every platform.
+    #[test]
+    fn linux_system_orphan_wants_a_per_user_run_and_a_lingering_system_copy() {
+        let sys = amenbo_scratch::scratch("self-update-orphan");
+        let per_user = std::path::Path::new("/home/alice/.local/bin/amenbo");
+
+        // No system copy at all → nothing to retire.
+        assert!(!linux_system_orphan(per_user, &sys));
+
+        // A lingering system CLI → advise the per-user run.
+        std::fs::write(sys.join("amenbo"), b"cli").unwrap();
+        assert!(linux_system_orphan(per_user, &sys));
+
+        // Still running the old system copy → not migrated yet, so no advice.
+        assert!(!linux_system_orphan(&sys.join("amenbo"), &sys));
+
+        // The GUI sidecar alone is enough to trigger it (the `.deb`/`.rpm` shipped both).
+        std::fs::remove_file(sys.join("amenbo")).unwrap();
+        std::fs::write(sys.join("amenbo-app"), b"gui").unwrap();
+        assert!(linux_system_orphan(per_user, &sys));
     }
 
     /// The retained-binary path is the executable's own name with a `.bak` extension, and its version

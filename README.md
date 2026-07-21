@@ -143,6 +143,12 @@ alongside as well: a single self-contained file that needs no root — place it 
 your PATH yourself (e.g. `~/.local/bin`) and run it. It carries the GUI only (use
 the CLI installer or the `.deb`/`.rpm` for the `amenbo` command).
 
+If you move from the `.deb`/`.rpm` to the per-user AppImage/CLI, retire the old
+system-wide copy yourself — the per-user build cannot (it is not root): `sudo apt
+remove amenbo` on Debian/Ubuntu, or `dpkg -r amenbo` / `rpm -e amenbo` elsewhere.
+The CLI reminds you once while a `/usr/bin` copy is still present; on the stock PATH
+`~/.local/bin` wins, so a leftover copy is harmless beyond the version skew.
+
 To update, download the latest installer and run it again — it replaces both the
 desktop app and the CLI at once. amenbo notices when a newer version is out (see the
 update check below) and points you at that installer. A **standalone CLI** (installed

@@ -28,7 +28,7 @@ dependencies = [
 
 [[package]]
 name = "amenbo-cli"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "amenbo-core",
  "amenbo-scratch",
@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "amenbo-core"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "amenbo-scratch",
  "base64",
@@ -65,7 +65,7 @@ dependencies = [
 
 [[package]]
 name = "amenbo-scratch"
-version = "1.4.0"
+version = "1.5.0"
 
 [[package]]
 name = "android_system_properties"

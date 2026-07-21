@@ -91,7 +91,13 @@ export function BoardScreen({
   // The board surface, for the move flourish. Only one `.board` mounts at a time, so both grouping
   // layouts share this ref. useBoardFlip is inert outside Tauri and when its flag is off.
   const boardRef = useRef<HTMLDivElement>(null);
-  useBoardFlip(boardRef, draggingId);
+  const armMove = useBoardFlip(boardRef, draggingId);
+  // The status pull-down on a card is a local move we do want to animate (unlike a drag): arm the flourish just
+  // before the write, so the card slides to its new column. A stable ref, to keep the cards' memo intact.
+  const setStatusAnimated = useCallback((id: number, status: Status) => {
+    armMove();
+    store.setStatus(id, status);
+  }, [armMove, store]);
   const project = dataAdapter.getProject(projectId);
   const rawQ = search.trim();
   const q = rawQ.toLowerCase();
@@ -279,7 +285,7 @@ export function BoardScreen({
                 overflow={overflow}
                 selectedTaskId={selectedTaskId}
                 onSelectTask={onSelectTask}
-                onStatus={store.setStatus}
+                onStatus={setStatusAnimated}
                 onSeeAllList={() => setView("list")}
                 // Only the todo column offers "add". The ＋ in the column head composes in the right pane and
                 // adds the task directly under the project (a dimension value is assigned later, from the detail).

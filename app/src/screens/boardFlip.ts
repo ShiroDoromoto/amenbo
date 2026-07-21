@@ -12,7 +12,7 @@
 // It is deliberately best-effort and degrades to the current (no-animation) behaviour whenever it cannot do
 // better: `prefers-reduced-motion`, a card mounted in only one of the two layouts, a card outside the viewport,
 // the card being dragged (a local move, not an outside one), or too many cards moving at once.
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import { subscribeStoreChangeReflected } from "../core/snapshot";
 
 // The one flag. Off ≡ removed: no snapshot is taken, no attribute is emitted, and the board behaves exactly as
@@ -20,7 +20,7 @@ import { subscribeStoreChangeReflected } from "../core/snapshot";
 export const BOARD_FLIP = true;
 
 // How long a card takes to slide to its new column.
-const FLIP_MS = 260;
+const FLIP_MS = 400;
 // Ceiling on cards animated in one reflected write. A high-frequency AI burst can move many at once; past this
 // we place the rest instantly rather than storm the compositor.
 const FLIP_MAX_CARDS = 8;
@@ -112,27 +112,33 @@ function playMove(board: HTMLElement, move: FlipMove): void {
 }
 
 /**
- * Wires the flourish to a board container. On each reflected outside write it snapshots the cards' positions,
- * then plays the FLIP once the refetch re-render places them anew. The snapshot stays armed across renders until
- * a move is seen or the window elapses, so the async refetch has time to land. Outside Tauri the reflect
- * notification never fires, so this is inert.
+ * Wires the flourish to a board container and returns an `armLocalMove` trigger. It plays the FLIP on two kinds
+ * of move: an outside write reflected here (subscribed automatically), and a local status change the caller
+ * announces via the returned trigger — the status pull-down calls it just before writing, so a pull-down slides
+ * too, while a drag (which never calls it, and is guarded by `draggingId`) still lands instantly. Either way it
+ * snapshots the cards' positions, then plays once the write's re-render places them anew; the snapshot stays
+ * armed across renders until a move is seen or the window elapses, so the async write has time to land. Outside
+ * Tauri the reflect notification never fires, and a caller may still arm — both are safe and inert.
  */
-export function useBoardFlip(boardRef: RefObject<HTMLDivElement | null>, draggingId: number | null): void {
+export function useBoardFlip(boardRef: RefObject<HTMLDivElement | null>, draggingId: number | null): () => void {
   const dragging = useRef(draggingId);
   dragging.current = draggingId;
   const armed = useRef<{ rects: Map<number, FlipRect>; at: number } | null>(null);
 
+  // Snapshot "First" now — the board's data is behind an async write, so at this instant the DOM still shows the
+  // old layout. Shared by the outside-write subscription and the local-move trigger below.
+  const arm = useCallback(() => {
+    if (!BOARD_FLIP) return;
+    const board = boardRef.current;
+    if (!board) return;
+    if (prefersReducedMotion()) return;
+    armed.current = { rects: snapshotRects(board), at: Date.now() };
+  }, [boardRef]);
+
   useEffect(() => {
     if (!BOARD_FLIP) return;
-    return subscribeStoreChangeReflected(() => {
-      const board = boardRef.current;
-      if (!board) return;
-      if (prefersReducedMotion()) return;
-      // The board's data is behind an async refetch, so at this instant the DOM still shows the old layout — this
-      // captures "First" before the outside write's rows arrive on screen.
-      armed.current = { rects: snapshotRects(board), at: Date.now() };
-    });
-  }, [boardRef]);
+    return subscribeStoreChangeReflected(arm);
+  }, [arm]);
 
   useLayoutEffect(() => {
     if (!BOARD_FLIP) return;
@@ -154,4 +160,6 @@ export function useBoardFlip(boardRef: RefObject<HTMLDivElement | null>, draggin
     }
     // else: positions have not changed yet — keep armed for the refetch render still in flight.
   });
+
+  return arm;
 }

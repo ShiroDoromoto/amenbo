@@ -77,9 +77,17 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
   }
   #[cfg(not(target_os = "macos"))]
   {
+    // A File submenu carries Exit so the menu bar is not a single lonely Help entry (macOS keeps
+    // Quit under its app menu instead). Predefined quit exits the app; the label is localized.
+    let quit = PredefinedMenuItem::quit(handle, Some(if lang == "en" { "Exit" } else { "終了" }))?;
+    let file_menu = SubmenuBuilder::new(handle, if lang == "en" { "File" } else { "ファイル" })
+      .item(&quit)
+      .build()?;
     let help_menu = SubmenuBuilder::new(handle, if lang == "en" { "Help" } else { "ヘルプ" })
       .item(&about)
       .build()?;
-    MenuBuilder::new(handle).item(&help_menu).build()
+    MenuBuilder::new(handle)
+      .items(&[&file_menu, &help_menu])
+      .build()
   }
 }

@@ -5,8 +5,9 @@
 ; `amenbo-app.exe`. These hooks put $INSTDIR on the *user* PATH so `amenbo`
 ; works from any terminal — one installer lands GUI + CLI on PATH.
 ;
-; Per-user PATH (HKCU\Environment) matches Tauri's default `currentUser`
-; install mode. WriteRegExpandStr keeps PATH a REG_EXPAND_SZ; the
+; Per-user PATH (HKCU\Environment) matches the `currentUser` install mode set
+; in tauri.conf.json — INSTDIR under %LOCALAPPDATA%, no UAC, so the app can
+; self-replace without elevation. WriteRegExpandStr keeps PATH a REG_EXPAND_SZ; the
 ; WM_SETTINGCHANGE broadcast lets already-open shells and Explorer pick up the
 ; change without a reboot (new terminals only — an open shell keeps its own copy).
 

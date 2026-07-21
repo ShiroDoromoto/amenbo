@@ -133,7 +133,14 @@ jobs:
       # shared Docker recipe on this NATIVE amd64 runner, because Apple Silicon can't
       # build amd64 under qemu (the Tauri CLI SIGABRTs). Docker is preinstalled and
       # runs natively here.
-      - name: Build the Linux GUI bundle (.deb + .rpm)
+      # TAURI_SIGNING_* present → the AppImage stage layers createUpdaterArtifacts and
+      # minisign-signs the AppImage in place, emitting the .AppImage.sig updater artifact the
+      # GUI self-update path reads. Absent on a fork → the AppImage still builds,
+      # just unsigned (no updater artifact), and the manifest step skips linux.
+      - name: Build the Linux GUI bundle (.deb + .rpm + AppImage)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: make dist-gui-linux LINUX_GUI_ARCH=amd64
 
       # Run the real .deb GUI under Xvfb, write to the store from a separate CLI
@@ -158,6 +165,8 @@ jobs:
             dist/amenbo-linux-amd64
             dist/amenbo-app-linux-amd64.deb
             dist/amenbo-app-linux-x86_64.rpm
+            dist/amenbo-app-linux-x86_64.AppImage
+            dist/amenbo-app-linux-x86_64.AppImage.sig
           if-no-files-found: error
 
   linux-arm-cli:
@@ -339,6 +348,7 @@ jobs:
             dist/amenbo-darwin-arm64.app.tar.gz dist/amenbo-darwin-arm64.app.tar.gz.sig \
             dist/amenbo-darwin-amd64.app.tar.gz dist/amenbo-darwin-amd64.app.tar.gz.sig \
             dist/amenbo-app-windows-x64-setup.nsis.zip dist/amenbo-app-windows-x64-setup.nsis.zip.sig \
+            dist/amenbo-app-linux-x86_64.AppImage dist/amenbo-app-linux-x86_64.AppImage.sig \
             dist/latest-tauri.json \
             --clobber
 
@@ -384,6 +394,7 @@ jobs:
             "amenbo-darwin-arm64.app.tar.gz" "amenbo-darwin-arm64.app.tar.gz.sig"
             "amenbo-darwin-amd64.app.tar.gz" "amenbo-darwin-amd64.app.tar.gz.sig"
             "amenbo-app-windows-x64-setup.nsis.zip" "amenbo-app-windows-x64-setup.nsis.zip.sig"
+            "amenbo-app-linux-x86_64.AppImage" "amenbo-app-linux-x86_64.AppImage.sig"
             "latest-tauri.json"
           )
 

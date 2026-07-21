@@ -210,9 +210,13 @@ dist-gui-linux:
 	@# at the mounted volume. Per-arch volume (the tools are arch-specific).
 	@# BUNDLES lets you build a subset (e.g. `make dist-gui-linux BUNDLES=deb`) for a fast
 	@# partial verify; empty passes through as the container's default (deb,rpm,appimage).
+	@# TAURI_SIGNING_* (release CI secret) flows through so the AppImage stage emits the signed
+	@# updater artifact (.AppImage.sig); unset for a local build, where the AppImage stays
+	@# unsigned (GUI-only, no updater artifact).
 	docker run --rm --platform linux/$(LINUX_GUI_ARCH) \
 	  -e VERSION="$(VERSION)" -e TARGET_ARCH="$(LINUX_GUI_ARCH)" -e XDG_CACHE_HOME=/cache \
 	  -e BUNDLES="$(BUNDLES)" \
+	  -e TAURI_SIGNING_PRIVATE_KEY -e TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
 	  -v "amenbo-tauri-cache-$(LINUX_GUI_ARCH):/cache" \
 	  -v "$(CURDIR):/src:ro" \
 	  -v "$(CURDIR)/$(DIST_DIR):/out" \

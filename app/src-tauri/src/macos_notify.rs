@@ -102,11 +102,30 @@ impl Delegate {
 /// arrival gets a fresh one. No `Date`, no randomness.
 static SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// Are we running inside a `.app` bundle? `UNUserNotificationCenter` needs the app's bundle ID (see
+/// module docs); an unbundled binary — `tauri dev`, or a bare `cargo run` — has no bundle proxy, so
+/// `currentNotificationCenter` throws an NSException (`bundleProxyForCurrentProcess is nil`) and
+/// aborts the process. Detect the bundle by the executable's location so both entry points below can
+/// no-op out of a dev run rather than crash it; a real install always runs from `.app/Contents/MacOS/`.
+fn is_bundled() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.to_str().map(|s| s.contains(".app/Contents/MacOS/")))
+        .unwrap_or(false)
+}
+
 /// Once at startup: install the delegate, ask for permission, and register the app.
 ///
 /// Call this from the main thread (from Tauri's `setup` closure). `setDelegate:` keeps only a weak
 /// reference, so the delegate is `forget`ed and lives for the life of the app.
 pub fn init(app: tauri::AppHandle) {
+    // Unbundled (dev) run: `currentNotificationCenter` would abort the process, so skip OS
+    // notifications entirely. `send` is guarded the same way.
+    if !is_bundled() {
+        log::info!("macos notifications disabled: not running from a .app bundle");
+        return;
+    }
+
     // Hold on to the AppHandle so the click response (`on_activated`) can reach the front end (once;
     // later calls are ignored).
     let _ = APP.set(app);
@@ -137,6 +156,12 @@ pub fn init(app: tauri::AppHandle) {
 /// Raise one OS notification with the given title and body. Without permission the OS drops it
 /// silently (the sound comes from a separate path).
 pub fn send(title: &str, body: &str) {
+    // Unbundled (dev) run: no bundle proxy, so `currentNotificationCenter` would abort. `init` already
+    // logged that notifications are off; here we just drop the toast.
+    if !is_bundled() {
+        return;
+    }
+
     let center = UNUserNotificationCenter::currentNotificationCenter();
 
     let content = UNMutableNotificationContent::new();

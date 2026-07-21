@@ -44,11 +44,13 @@ cleanup() {
 trap cleanup EXIT
 
 # The binary the users will get, not the one this checkout can build: the .pkg carries the CLI as a
-# sidecar inside the .app (build-pkg-mac.sh), and `pkgutil --expand-full` unpacks the payload.
+# sidecar inside the .app (build-pkg-mac.sh), and `pkgutil --expand-full` unpacks the payload. The
+# .pkg is a product archive (productbuild wraps a component pkg for the per-user home domain), so the
+# payload sits under a nested <component>.pkg/Payload rather than at the top — find it either way.
 echo "→ existing-store check: extract the shipped CLI from $PKG"
 pkgutil --expand-full "$PKG" "$WORK/pkg" >/dev/null
-CLI="$WORK/pkg/Payload/amenbo.app/Contents/MacOS/amenbo"
-[ -x "$CLI" ] || { echo "✗ no CLI sidecar inside the .pkg: ${CLI} (the bundle is broken)"; exit 1; }
+CLI="$(find "$WORK/pkg" -type f -path '*/amenbo.app/Contents/MacOS/amenbo' 2>/dev/null | head -1)"
+[ -n "$CLI" ] && [ -x "$CLI" ] || { echo "✗ no CLI sidecar inside the .pkg (the bundle is broken)"; exit 1; }
 
 # Clone the real app-data. logs/ and the archives are not store state — they are large and nothing
 # here reads them — but everything the store *is* comes across as-is: the point is to hand this build

@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 # build-pkg-mac.sh — package an already-built amenbo GUI .app into a macOS .pkg
-# installer that drops the app in /Applications and puts the bundled CLI on PATH
+# installer that drops the app in ~/Applications and puts the bundled CLI on PATH
 # (one installer = GUI + CLI). This is the mac arm of the unified installer;
 # the Windows NSIS and Linux deb/rpm packagers are the peers.
 #
+# Per-user install: the payload lands under the user's home domain —
+# GUI at ~/Applications/<app>.app, CLI symlinked to ~/.local/bin/amenbo — so no
+# elevation is needed and the executables sit where a per-user self-update can
+# replace them without sudo. A productbuild distribution wrapper enables the
+# currentUserHome install domain only; a bare component pkg (pkgbuild) has no
+# domain and Installer.app would default to the admin-only system domain.
+#
 # The .app already ships the CLI as a Tauri sidecar at Contents/MacOS/amenbo,
 # so PATH exposure is just a symlink created in a postinstall script —
-# /usr/local/bin/amenbo → the sidecar inside the installed .app. A symlink (not a
-# copy) keeps the CLI and GUI atomically in sync across updates.
+# ~/.local/bin/amenbo → the sidecar inside the installed .app. A symlink (not a
+# copy) keeps the CLI and GUI atomically in sync across updates. The postinstall
+# also adds ~/.local/bin to the user's login PATH (idempotent).
 #
 # Signing model: the .pkg is an unsigned *container*; the .app and its nested
 # binaries inside carry the signature codesign-release-mac.sh applied just before
@@ -32,6 +40,7 @@ ARCH="${4:-}"
 
 [ "$(uname -s)" = "Darwin" ] || { echo "✗ build-pkg-mac.sh is macOS-only (needs pkgbuild)"; exit 1; }
 command -v pkgbuild >/dev/null 2>&1 || { echo "✗ pkgbuild not found (Xcode command line tools)"; exit 1; }
+command -v productbuild >/dev/null 2>&1 || { echo "✗ productbuild not found (Xcode command line tools)"; exit 1; }
 [ -d "$APP" ] || { echo "✗ app bundle not found: $APP"; exit 1; }
 
 # The sidecar CLI the postinstall symlink will target; fail loudly if the sidecar
@@ -60,68 +69,62 @@ fi
 STAGE="$(mktemp -d)"
 SCRIPTS="$(mktemp -d)"
 PLIST="$STAGE.plist"
-cleanup() { rm -rf "$STAGE" "$SCRIPTS" "$PLIST"; }
+COMPONENT="$STAGE.component.pkg"
+COMPONENT_EXP="$STAGE.component.expanded"
+DIST="$STAGE.dist.xml"
+cleanup() { rm -rf "$STAGE" "$SCRIPTS" "$PLIST" "$COMPONENT" "$COMPONENT_EXP" "$DIST"; }
 trap cleanup EXIT
 
-# Payload: the .app installed under /Applications.
+# Payload: the .app, installed under ~/Applications via the home-domain wrapper below.
 cp -R "$APP" "$STAGE/"
 
 # The app's launch name (bundle name without .app) — used to quit/relaunch the
 # running GUI below. Channel-agnostic: "amenbo" for prod, "amenbo (dev)" for dev.
 APP_LAUNCH_NAME="${APP_NAME%.app}"
 
-# preinstall: refuse a per-user install (`installer -target CurrentUserHomeDirectory`)
-# up front, before any payload is laid down. This installer is system-wide only:
-# --install-location /Applications, the CLI symlink lands in root-owned /usr/local/bin,
-# and postinstall relaunches /Applications by absolute path — none of which a home-dir
-# install can satisfy. Left unchecked, a per-user install exits 0 while splitting the
-# world (old /Applications build + orphaned ~/Applications copy, `amenbo --version`
-# reporting the stale one). Better to fail loudly than to break quietly.
-# $3 is the destination volume/mountpoint: `/` for a system install, the user's home
-# for a home-directory target. Guarding here (preinstall, not postinstall) means the
-# abort happens before the payload is written, so no orphan .app is left behind.
-cat > "$SCRIPTS/preinstall" <<'PREINSTALL'
-#!/bin/bash
-if [ "$3" != "/" ]; then
-  echo "✗ amenbo installs system-wide only; a per-user install is not supported." >&2
-  echo "  Re-run for all users, e.g.  sudo installer -pkg <this>.pkg -target /" >&2
-  exit 1
-fi
-exit 0
-PREINSTALL
-chmod +x "$SCRIPTS/preinstall"
-
 # postinstall: (1) expose the bundled CLI on PATH via a symlink into the installed
-# app, then (2) quit the old GUI and relaunch the freshly installed one.
-# Without (2), a GUI running during the update keeps showing the "update available"
-# banner until the user manually quits and reopens it.
-# postinstall runs as *root*, so root's own Apple Events / `open` never reach the
-# console user's GUI session — BOTH the quit and the relaunch must go through
-# `launchctl asuser <uid>` (uid = the logged-in console user) to land in that
-# session. Order matters: quit first (else `open -a` just re-activates the stale
-# instance instead of launching the new binary), pause for the quit to land, then
-# open. The whole block is best-effort — wrapped so no failure can abort postinstall
+# app, (2) put ~/.local/bin on the user's login PATH, then (3) quit the old GUI and
+# relaunch the freshly installed one. Without (3), a GUI running during the update
+# keeps showing the "update available" banner until the user manually quits and
+# reopens it.
+# This is a per-user (currentUserHome) install, so the script runs AS the console
+# user — not root — and lands in that user's GUI session directly: no
+# `launchctl asuser` is needed to reach it. The installer passes $2 = the resolved
+# install directory (~/Applications); its parent is the user's home.
+# Order matters: quit first (else `open` just re-activates the stale instance
+# instead of launching the new binary), pause for the quit to land, then open. The
+# relaunch/PATH block is best-effort — wrapped so no failure can abort postinstall
 # (which would fail the install), with `set -e` scoped to the CLI symlink that must
 # succeed. Self-signed/un-notarized, so the relaunched app may hit Gatekeeper on
 # first open — verified at release time.
 cat > "$SCRIPTS/postinstall" <<POSTINSTALL
 #!/bin/bash
 set -e
-BIN_DIR=/usr/local/bin
+# \$2 is the resolved install directory (~/Applications); its parent is the user's
+# home. Deriving HOME_DIR from \$2 rather than \$HOME keeps this correct even if the
+# environment's \$HOME is not the target user's.
+APP_DIR="\$2"
+HOME_DIR="\$(dirname "\$APP_DIR")"
+BIN_DIR="\$HOME_DIR/.local/bin"
 mkdir -p "\$BIN_DIR"
-ln -sf "/Applications/$APP_NAME/Contents/MacOS/amenbo" "\$BIN_DIR/amenbo"
+ln -sf "\$APP_DIR/$APP_NAME/Contents/MacOS/amenbo" "\$BIN_DIR/amenbo"
 
-# best-effort: clear the stale banner by relaunching the new build.
+# best-effort: PATH registration + clear the stale banner by relaunching the new build.
 {
-  uid=\$(stat -f %u /dev/console 2>/dev/null || true)
-  if [ -n "\$uid" ]; then
-    # Graceful quit inside the user's session (root's own osascript can't reach it),
-    # with a signal fallback, then relaunch the freshly installed build.
-    launchctl asuser "\$uid" osascript -e 'quit app "$APP_LAUNCH_NAME"' 2>/dev/null || true
-    pkill -x amenbo 2>/dev/null || true
-    sleep 1
-    launchctl asuser "\$uid" open -a "/Applications/$APP_NAME" || true
-  fi
+  # Put ~/.local/bin on the login PATH, once. macOS defaults to zsh; also cover bash.
+  # A marker line keeps re-runs (every update) from appending duplicates.
+  marker="# added by amenbo installer"
+  for rc in "\$HOME_DIR/.zprofile" "\$HOME_DIR/.bash_profile"; do
+    if [ ! -e "\$rc" ] || ! grep -qF "\$marker" "\$rc"; then
+      printf '\n%s\n%s\n' "\$marker" 'export PATH="\$HOME/.local/bin:\$PATH"' >> "\$rc"
+    fi
+  done
+
+  # Graceful quit, with a signal fallback, then relaunch the freshly installed build.
+  osascript -e 'quit app "$APP_LAUNCH_NAME"' 2>/dev/null || true
+  pkill -x amenbo 2>/dev/null || true
+  sleep 1
+  open -a "\$APP_DIR/$APP_NAME" || true
 } || true
 
 exit 0
@@ -144,6 +147,10 @@ while /usr/libexec/PlistBuddy -c "Print :$i:BundleIsRelocatable" "$PLIST" >/dev/
 done
 
 mkdir -p "$(dirname "$OUT")"
+
+# Component pkg: the payload + scripts. --install-location /Applications is
+# interpreted relative to the chosen install domain, so under the home domain the
+# wrapper selects below it lands at ~/Applications.
 pkgbuild \
   --root "$STAGE" \
   --component-plist "$PLIST" \
@@ -151,7 +158,43 @@ pkgbuild \
   --scripts "$SCRIPTS" \
   --identifier work.amenbo.app.installer \
   --version "$VERSION" \
+  "$COMPONENT"
+
+# pkgbuild stamps the component `auth="root"`, which would make even the home-domain
+# install prompt for admin credentials — defeating the point of a no-elevation
+# per-user install. Rewrite it to `auth="none"` so the payload lands under ~/ and the scripts run as
+# the user with no password. Requires an expand/patch/flatten round-trip since the
+# built pkg is a flat xar and pkgbuild has no auth flag.
+pkgutil --expand "$COMPONENT" "$COMPONENT_EXP" >/dev/null
+/usr/bin/sed -i '' 's/ auth="root"/ auth="none"/' "$COMPONENT_EXP/PackageInfo"
+grep -q ' auth="none"' "$COMPONENT_EXP/PackageInfo" || { echo "✗ failed to set auth=none on the component (per-user install would demand admin)"; exit 1; }
+rm -f "$COMPONENT"
+pkgutil --flatten "$COMPONENT_EXP" "$COMPONENT"
+
+# Distribution wrapper: enable ONLY the currentUserHome domain, so the install is
+# per-user (no elevation) and the payload resolves under ~/. A bare component pkg
+# carries no domain and Installer.app would fall back to the admin-only system
+# domain. `customize="never"` hides the install-type picker: one fixed choice.
+cat > "$DIST" <<DISTXML
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>amenbo</title>
+  <domains enable_anywhere="false" enable_currentUserHome="true" enable_localSystem="false"/>
+  <options customize="never"/>
+  <choices-outline>
+    <line choice="default"/>
+  </choices-outline>
+  <choice id="default" title="amenbo">
+    <pkg-ref id="work.amenbo.app.installer"/>
+  </choice>
+  <pkg-ref id="work.amenbo.app.installer" version="$VERSION">$(basename "$COMPONENT")</pkg-ref>
+</installer-gui-script>
+DISTXML
+
+productbuild \
+  --distribution "$DIST" \
+  --package-path "$(dirname "$COMPONENT")" \
   "$OUT"
 
-echo "→ built $OUT (installs $APP_NAME to /Applications, symlinks CLI to /usr/local/bin/amenbo)"
+echo "→ built $OUT (per-user: installs $APP_NAME to ~/Applications, symlinks CLI to ~/.local/bin/amenbo)"
 echo "  unsigned container (self-signed .app inside); Gatekeeper warns on first open (right-click → Open)"

@@ -149,9 +149,9 @@ dist-gui:
 	@codesign --verify --deep --verbose=2 "$(GUI_DMG_DIST)" 2>&1 | head -1 || true
 	@ls -1 "$(GUI_DMG_DIST)"
 
-## Build the mac unified .pkg installer into dist/. The GUI .app goes to /Applications, and the
-## bundled CLI (sidecar) is symlinked to /usr/local/bin/amenbo in postinstall = GUI+CLI from one
-## installer. After the tauri build, codesign-release-mac.sh re-signs the .app with the stable
+## Build the mac unified .pkg installer into dist/. Per-user: the GUI .app goes to
+## ~/Applications and the bundled CLI (sidecar) is symlinked to ~/.local/bin/amenbo in postinstall
+## = GUI+CLI from one installer, no elevation. After the tauri build, codesign-release-mac.sh re-signs the .app with the stable
 ## self-signed release identity when MAC_SIGN_IDENTITY is set (the release CI, after
 ## import-signing-cert-mac.sh); with it unset (a local build) the .app keeps tauri's ad-hoc
 ## signature. A fixed leaf across versions is what lets the end user's notification authorization

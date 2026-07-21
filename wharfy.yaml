@@ -33,8 +33,8 @@ prebuilt:
 # BYO-bundle: the unified installer (GUI + bundled CLI). Built on the amenbo side and brought in;
 # wharfy does not re-sign (relay) and uploads it to the GitHub Release. Stable distribution signing is
 # retired = mac stays ad-hoc self-signed.
-#   mac  .pkg  … `make dist-gui-mac` (GUI to /Applications, CLI to /usr/local/bin; the .app is ad-hoc
-#                self-signed / the .pkg is unsigned)
+#   mac  .pkg  … `make dist-gui-mac` (per-user: GUI to ~/Applications, CLI to ~/.local/bin, no
+#                elevation; the .app is ad-hoc self-signed / the .pkg is unsigned)
 #                two builds, arm64 / amd64 (the Intel build is cross-built with `MAC_GUI_ARCH=amd64`).
 #                It is not a single universal build because the asset-key scheme (os-arch) and the
 #                update_check mapping assume a per-arch layout.

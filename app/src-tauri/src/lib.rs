@@ -30,6 +30,12 @@ mod windows_notify;
 /// [`blobproto`] builds to the src of an img, audio, video or iframe element.
 const BLOB_SCHEME: &str = "amenboblob";
 
+/// Emitted to the webview when the user picks "check for updates" from the app menu
+/// (`menu::CHECK_UPDATES_ID`). The front end runs a fresh check and shows the update banner, or an
+/// "up to date" note when there is nothing newer. Nothing is checked in the menu handler itself —
+/// the network call belongs on the UI side, where its progress and result can be shown.
+const CHECK_UPDATES_EVENT: &str = "menu://check-updates";
+
 /// Starts the long-lived threads that keep the store open. Call it **only once migration is
 /// through**, so nothing ever reads a store caught mid-version or left at an old one — which is why
 /// there are exactly two callers: startup (no migration needed, or migration succeeded) and a
@@ -49,6 +55,12 @@ fn start_store_threads(app: tauri::AppHandle) {
 pub fn run() {
   tauri::Builder::default()
     .menu(menu::build)
+    .on_menu_event(|app, event| {
+      if event.id() == menu::CHECK_UPDATES_ID {
+        use tauri::Emitter;
+        let _ = app.emit(CHECK_UPDATES_EVENT, ());
+      }
+    })
     .register_asynchronous_uri_scheme_protocol(BLOB_SCHEME, |_ctx, request, responder| {
       // Keep the file IO (the Range read) off the webview and main threads.
       std::thread::spawn(move || responder.respond(blobproto::serve(&request)));
@@ -95,6 +107,7 @@ pub fn run() {
       commands::snapshot,
       commands::store_signature,
       commands::version_status,
+      commands::check_updates_fresh,
       commands::store_locations,
       commands::activity_page,
       commands::changes_since,

@@ -45,6 +45,14 @@ export function dismissUpdate(version: string | null): void {
   try { localStorage.setItem(KEY, version); } catch { /* dismiss for this session even where localStorage is unavailable */ }
 }
 
+/**
+ * Forget any dismissed version, so the banner is no longer silenced. The manual "check for updates" action calls this
+ * when its fresh check finds an update: asking explicitly should surface the offer even if a prior dismissal covered it.
+ */
+export function clearDismissedUpdate(): void {
+  try { localStorage.removeItem(KEY); } catch { /* nothing was persisted, so nothing to clear */ }
+}
+
 /** Whether the offer of `version` is already covered by an earlier dismissal (a newer offer is never covered). */
 export function isUpdateDismissed(version: string | null): boolean {
   const dismissed = getDismissedUpdate();

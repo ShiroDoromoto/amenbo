@@ -1156,6 +1156,26 @@ pub fn version_status() -> Result<VersionStatusDto, CmdError> {
     Ok(dto)
 }
 
+/// A **fresh** update check, for the app menu's manual "check for updates" action. Where
+/// [`version_status`] answers from the TTL cache (so alt-tabbing stays cheap and never bypasses it),
+/// this queries upstream every time (`check_fresh`) because the user explicitly asked "is there one
+/// right now". It forces the check on regardless of the `update_check` config toggle — the same "an
+/// explicit user action goes and fetches" stance as [`open_latest_installer`] and
+/// `resolve_update_url` — so it still works for someone who turned automatic checking off, which is
+/// the whole point of the manual action; only the env kill switch silences it. Returns the same
+/// [`VersionStatusDto`]: the menu path shows the update banner when it reports one and an "up to
+/// date" note when it does not.
+#[tauri::command]
+pub fn check_updates_fresh() -> Result<VersionStatusDto, CmdError> {
+    let upstream = amenbo_core::update_check::check_fresh(true);
+    let mut dto = VersionStatusDto::default();
+    with_store_read(|store| {
+        dto.absorb(store, upstream.as_ref());
+        Ok(())
+    })?;
+    Ok(dto)
+}
+
 /// For the "location" line under Settings > Data. Returns the real, OS-independent path (the
 /// app-data root).
 #[derive(Serialize, TS)]

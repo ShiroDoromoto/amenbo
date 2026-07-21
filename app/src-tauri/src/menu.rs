@@ -6,10 +6,17 @@
 //! here: dropping the Edit submenu would strip the webview of Cmd+C/V/X/A, which the default menu
 //! had been providing. On Windows/Linux a single Help submenu carries About.
 
-use tauri::menu::{AboutMetadataBuilder, Menu, MenuBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::menu::{
+  AboutMetadataBuilder, Menu, MenuBuilder, MenuItem, PredefinedMenuItem, SubmenuBuilder,
+};
 
 /// Product site — the About dialog links here.
 const WEBSITE: &str = "https://amenbo.work/";
+
+/// Menu id of the manual "check for updates" item. `lib.rs`'s `on_menu_event` matches this and, on a
+/// click, tells the webview to run a fresh check (which then shows the update banner or an "up to
+/// date" note).
+pub const CHECK_UPDATES_ID: &str = "check-updates";
 
 /// Normalize `config.language` to "ja" or "en" (unset / unknown → ja), matching the GUI's own
 /// fallback (`lang_code` in commands.rs). Kept local so the menu can label itself at build time
@@ -42,11 +49,23 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
   };
   let about = PredefinedMenuItem::about(handle, Some(about_text), Some(about_meta))?;
 
+  // A manual, on-demand update check that sits with About (the version affordance). Its click is
+  // handled in lib.rs; no accelerator (checking is a rare, deliberate action).
+  let check_updates = MenuItem::with_id(
+    handle,
+    CHECK_UPDATES_ID,
+    if lang == "en" { "Check for Updates" } else { "更新を確認" },
+    true,
+    None::<&str>,
+  )?;
+
   #[cfg(target_os = "macos")]
   {
     // The first submenu becomes the application menu; macOS localizes the predefined items itself.
     let app_menu = SubmenuBuilder::new(handle, "amenbo")
       .item(&about)
+      .separator()
+      .item(&check_updates)
       .separator()
       .services()
       .separator()
@@ -85,6 +104,7 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
       .build()?;
     let help_menu = SubmenuBuilder::new(handle, if lang == "en" { "Help" } else { "ヘルプ" })
       .item(&about)
+      .item(&check_updates)
       .build()?;
     MenuBuilder::new(handle)
       .items(&[&file_menu, &help_menu])

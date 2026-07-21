@@ -18,7 +18,7 @@ import { TaskDetailPane } from "../screens/TaskDetailPane";
 import { DecisionDetailPane } from "../screens/DecisionDetailPane";
 import { TaskComposePane } from "../screens/TaskComposePane";
 import { dataAdapter } from "../mock/adapter";
-import { getSnapshot, inTauri, subscribe } from "../core/snapshot";
+import { checkForUpdatesFresh, getSnapshot, inTauri, subscribe } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
 import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sidebarWidth";
@@ -80,6 +80,10 @@ export function AppShell() {
   const onHooksAsked = useCallback(() => setHooksAsked(true), []);
 
   const lang = useSyncExternalStore(subscribe, currentLang);
+
+  // The app menu's "check for updates" action reports its progress here: `checking` while the fresh query runs, then
+  // `null` when an update was found (the UpdateBanner takes over), or `uptodate` / `error` as a short-lived note.
+  const [updateCheck, setUpdateCheck] = useState<"checking" | "uptodate" | "error" | null>(null);
 
   // The slot the project header (the board toolbar) renders into. grid-area:header is a row spanning the full width
   // of main plus the right pane; BoardScreen portals its toolbar in here and the right pane sits below it.
@@ -226,6 +230,29 @@ export function AppShell() {
     };
   }, [navTo]);
 
+  // The app menu's "check for updates" click arrives as a Tauri event (menu.rs → lib.rs). Run the fresh check and let
+  // the outcome drive the feedback note; `available` clears the note because the UpdateBanner shows the offer instead.
+  useEffect(() => {
+    if (!inTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen("menu://check-updates", () => {
+          setUpdateCheck("checking");
+          void checkForUpdatesFresh().then((r) => setUpdateCheck(r === "available" ? null : r));
+        }),
+      )
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   const isTaskScreen = nav.type === "project" || (nav.type === "view" && LIST_VIEWS.includes(nav.id));
   const isActivityScreen = nav.type === "view" && nav.id === "activity";
   const showRight = (isTaskScreen || isActivityScreen) && (selectedTaskId !== null || compose !== null || selectedDecisionId !== null);
@@ -256,6 +283,7 @@ export function AppShell() {
         onToggleSidebar={toggleSidebar}
       />
       <UpdateBanner />
+      <UpdateCheckFeedback state={updateCheck} onDismiss={() => setUpdateCheck(null)} />
       <HealthBanner />
       <ManagedBlockBanner />
       <OrphanBindingBanner />
@@ -448,6 +476,50 @@ function UpdateBanner() {
       {stage !== "working" && (
         <button className="healthbanner__close" onClick={() => { dismissUpdate(vs.newerVersion); setDismissed(true); }}>✕ {t("update.dismiss")}</button>
       )}
+    </div>
+  );
+}
+
+// The manual "check for updates" menu action reports here. While the fresh check runs it says so (`checking`); after
+// that it shows nothing when an update was found — the UpdateBanner above is the standing offer — and a short-lived
+// "up to date" / "couldn't check" note otherwise. The note auto-dismisses because it is only an acknowledgement, unlike
+// an available update, which stays up until acted on or dismissed. Hidden while `state` is null, and outside Tauri the
+// menu event never fires, so it never appears there.
+function UpdateCheckFeedback({
+  state,
+  onDismiss,
+}: {
+  state: "checking" | "uptodate" | "error" | null;
+  onDismiss: () => void;
+}) {
+  const appVersion = useSyncExternalStore(subscribe, () => getSnapshot().versionStatus.appVersion);
+  useEffect(() => {
+    if (state !== "uptodate" && state !== "error") return;
+    const id = setTimeout(onDismiss, 6000);
+    return () => clearTimeout(id);
+  }, [state, onDismiss]);
+
+  if (!state) return null;
+  if (state === "checking") {
+    return (
+      <div className="healthbanner" role="status">
+        <span className="healthbanner__icon" aria-hidden>⟳</span>
+        <div className="healthbanner__body">
+          <div className="healthbanner__title">{t("update.checking")}</div>
+        </div>
+      </div>
+    );
+  }
+  const failed = state === "error";
+  return (
+    <div className="healthbanner" role="status">
+      <span className="healthbanner__icon" aria-hidden>{failed ? "⚠" : "✓"}</span>
+      <div className="healthbanner__body">
+        <div className="healthbanner__title">
+          {failed ? t("update.checkFailed") : tf("update.upToDate", { version: appVersion })}
+        </div>
+      </div>
+      <button className="healthbanner__close" onClick={onDismiss}>✕ {t("health.dismiss")}</button>
     </div>
   );
 }

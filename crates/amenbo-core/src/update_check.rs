@@ -9,8 +9,9 @@
 //! The policy: **on by default**, with a config knob to disable it
 //! ([`crate::config::Config::update_check`]); **timed out**; **silent on failure** (a failed update
 //! check must never get in the way of the real work); and **cached**, so we do not talk to the
-//! network on every command. Self-update — downloading and swapping the binary in-app — remains a
-//! non-goal: all this returns is the awareness.
+//! network on every command. This module returns only the awareness; **acting** on it — downloading
+//! and swapping the binary in place — is [`crate::self_update`]'s job (the standalone CLI), which
+//! reuses the [`LatestRelease`] fetched here.
 //!
 //! The module does nothing but query and fetch. Comparing the fetched version against the running
 //! binary to derive `update_available` is the caller's job (it is folded into
@@ -33,8 +34,8 @@ pub const LATEST_JSON_URL: &str =
 /// Where the "apply the update" affordance falls back to: the download page of the latest release.
 /// We land here whenever the unified-installer URL for the current OS cannot be read out of
 /// `latest.json` — the query failed, the asset is not listed, or the env var disabled the check —
-/// and the user can pick from the list by hand. Since we never self-update, this affordance only
-/// ever *opens* a page.
+/// and the user can pick from the list by hand. This installer affordance only ever *opens* a page;
+/// the in-place swap is [`crate::self_update`]'s separate path (`amenbo update --apply`).
 pub const LATEST_RELEASE_PAGE: &str = "https://github.com/ShiroDoromoto/amenbo/releases/latest";
 
 /// Timeout on the query. We give up silently on failure, so keep it short enough that it never
@@ -88,8 +89,9 @@ impl LatestRelease {
 
     /// The URL the "apply the update" affordance should open: the current OS's unified installer if
     /// there is one, else the release-notes page (`notes_url`), else the latest-release page
-    /// ([`LATEST_RELEASE_PAGE`]). We do not self-update — that is a non-goal — so the CLI and GUI
-    /// merely **open** this URL in the OS's default browser.
+    /// ([`LATEST_RELEASE_PAGE`]). This is the **installer** affordance — the CLI and GUI merely
+    /// **open** this URL in the OS's default browser; the standalone CLI's in-place swap is a separate
+    /// path ([`crate::self_update`], `amenbo update --apply`).
     #[must_use]
     pub fn update_url(&self) -> &str {
         self.installer_for_current_platform()

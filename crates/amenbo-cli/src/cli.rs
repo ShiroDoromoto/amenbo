@@ -55,13 +55,18 @@ pub enum Command {
     },
     /// Version information
     Version,
-    /// Open the latest amenbo installer for this OS — the update path (amenbo does not self-update).
-    /// Resolves the one-piece installer URL from the published latest.json (falling back to the
-    /// releases page) and opens it in your browser. Pass --print to only print the URL (no browser)
+    /// Update amenbo to the latest release. By default this opens this OS's one-piece installer
+    /// (resolved from the published latest.json, falling back to the releases page) in your browser.
+    /// Pass --apply to self-update the standalone CLI in place instead — download the new CLI archive
+    /// over TLS and swap this binary, no installer, no elevation (CLI-only installs; a GUI-managed CLI
+    /// is updated from the desktop app). Pass --print to only print the installer URL (no browser).
     Update {
         /// print the installer URL instead of opening a browser (headless / scripted use)
         #[arg(long)]
         print: bool,
+        /// self-update the standalone CLI in place (download + swap this binary) instead of opening the installer
+        #[arg(long, conflicts_with = "print")]
+        apply: bool,
     },
     /// Show / change configuration
     Config {

@@ -143,10 +143,14 @@ alongside as well: a single self-contained file that needs no root — place it 
 your PATH yourself (e.g. `~/.local/bin`) and run it. It carries the GUI only (use
 the CLI installer or the `.deb`/`.rpm` for the `amenbo` command).
 
-To update, download the latest installer and run it again — it replaces both at
-once. amenbo notices when a newer version is out (see the update check below) and
-points you at that installer; there is no other update path. It never self-updates
-by downloading and swapping its own binary — applying an update stays your call.
+To update, download the latest installer and run it again — it replaces both the
+desktop app and the CLI at once. amenbo notices when a newer version is out (see the
+update check below) and points you at that installer. A **standalone CLI** (installed
+without the desktop app) can also update itself in place: `amenbo update --apply`
+downloads the new CLI over TLS and swaps this binary — no installer, no elevation. A
+CLI installed alongside the desktop app is a shim into it and is updated with the app,
+not on its own (`--apply` there points you back to the installer). Either way, applying
+an update is always your explicit call — amenbo never updates itself in the background.
 
 **Verifying a download (optional).** Every release is built by this repository's
 public CI, and each asset carries a build attestation signed with the release
@@ -167,8 +171,9 @@ leaves your device. The one exception is an **infra-side update check**: amenbo
 reads a small static `latest.json` from this repository's latest release to notice when a
 newer version is out. That request carries no task data, is on by default, and can
 be turned off (`amenbo config set update_check false`, or `AMENBO_UPDATE_CHECK=0`).
-amenbo still never self-updates by downloading and swapping its own binary —
-applying an update stays your call.
+The check only reads that static file; amenbo never updates itself in the background —
+downloading and applying a new version is always something you set off yourself
+(`amenbo update`, or `amenbo update --apply` for the standalone CLI).
 
 ## Commands
 

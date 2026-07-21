@@ -936,6 +936,42 @@ fn version_and_update_answer_without_a_pointer() {
     assert_eq!(v["opened"], false, "--print does not open, it only prints the URL: {stdout}");
 }
 
+/// `update --apply` (CLI self-update) is wired the same store-free way as `update`, and stays graceful
+/// when it cannot proceed. Two cheap, network-free checks of the wiring: `--apply` and `--print` are
+/// mutually exclusive (clap turns them away), and with the upstream lookup disabled `--apply` cannot
+/// reach the manifest and fails with a plain error pointing at the installer — never a self-replace on
+/// nothing. The download-and-swap path is covered by `amenbo-core`'s `self_update` unit tests, which
+/// exercise the version gate, the `.app` guard, and archive extraction without touching a real binary.
+#[test]
+fn update_apply_declines_gracefully_without_manifest() {
+    let dir = temp_home();
+    std::fs::create_dir_all(&dir).unwrap();
+    let run = |args: &[&str], check_off: bool| {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_amenbo"));
+        cmd.env_remove("AMENBO_HOME")
+            .env_remove("AMENBO_PROJECT_DIR")
+            .env("AMENBO_ACTOR", "ai")
+            .current_dir(&dir)
+            .args(args);
+        if check_off {
+            cmd.env("AMENBO_UPDATE_CHECK", "0"); // no upstream lookup — the manifest is unreachable
+        }
+        let out = cmd.output().expect("failed to run the binary");
+        (out.status.code(), String::from_utf8_lossy(&out.stdout).to_string(), String::from_utf8_lossy(&out.stderr).to_string())
+    };
+
+    // Mutually exclusive with --print: clap refuses the pair before anything runs.
+    let (code, _out, err) = run(&["update", "--apply", "--print"], true);
+    assert_eq!(code, Some(2), "clap turns away conflicting flags: {err}");
+
+    // With the upstream lookup disabled the manifest cannot be read, so --apply fails plainly (exit 1)
+    // rather than attempting a swap, and names io_error with the installer as the way out.
+    let (code, _out, err) = run(&["update", "--apply", "--json"], true);
+    assert_eq!(code, Some(1), "no manifest, no self-update: {err}");
+    let v: Value = serde_json::from_str(err.trim()).unwrap_or_else(|_| panic!("error JSON: {err}"));
+    assert_eq!(v["error"]["code"], "io_error", "a plain io error, not a panic: {err}");
+}
+
 /// Clobber guard: re-initing a folder that already carries `.amenbo` would create a new store and
 /// overwrite the pointer unasked, orphaning the old one. Refused by default; only `--force` allows it.
 #[test]

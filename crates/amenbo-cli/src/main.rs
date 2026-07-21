@@ -379,6 +379,84 @@ fn update_cmd(
     Ok(0)
 }
 
+/// `amenbo update --apply`: self-update the standalone CLI in place. Downloads this platform's CLI
+/// archive over TLS, checks version monotonicity, and swaps the running binary — no installer, no
+/// elevation. Reuses whatever startup already fetched (`upstream`), querying otherwise. Callable from
+/// outside a binding (a CLI-only user updates without a store), so it never touches the store. The two
+/// "correctly declined" outcomes (already current / GUI-managed) are reported as plain messages with a
+/// zero exit; genuine failures (download, extract, swap, no archive) are errors.
+fn self_update_cmd(
+    flags: &Flags,
+    upstream: Option<amenbo_core::update_check::LatestRelease>,
+) -> Result<i32, CliError> {
+    use amenbo_core::self_update::{self, SelfUpdateError};
+    let latest = match upstream {
+        Some(rel) => Some(rel),
+        None => amenbo_core::update_check::check(true),
+    };
+    let Some(latest) = latest else {
+        return Err(CliError {
+            code: "io_error",
+            message: "could not reach the release manifest to check for an update".to_string(),
+            hint: Some("check your connection, or run `amenbo update` to open the installer.".to_string()),
+            exit: 1,
+        });
+    };
+
+    match self_update::apply(&latest) {
+        Ok(done) => {
+            if flags.json {
+                print_json(&json!({
+                    "action": "self_update",
+                    "updated": true,
+                    "from": done.from,
+                    "to": done.to,
+                    "path": done.path.display().to_string(),
+                }));
+            } else {
+                human(flags, format!("Updated amenbo: {} → {}.", done.from, done.to));
+                human(flags, "Restart amenbo to run the new version.");
+            }
+            Ok(0)
+        }
+        // Not failures: already current, or a GUI-managed CLI that the desktop app updates. Report
+        // plainly with a zero exit.
+        Err(e @ (SelfUpdateError::UpToDate { .. } | SelfUpdateError::GuiManaged { .. })) => {
+            if flags.json {
+                let (updated, reason) = match &e {
+                    SelfUpdateError::UpToDate { .. } => (false, "up_to_date"),
+                    SelfUpdateError::GuiManaged { .. } => (false, "gui_managed"),
+                    _ => unreachable!(),
+                };
+                print_json(&json!({
+                    "action": "self_update",
+                    "updated": updated,
+                    "reason": reason,
+                    "current_version": agent::VERSION,
+                    "latest_version": latest.version,
+                    "message": e.to_string(),
+                }));
+            } else {
+                human(flags, e.to_string());
+                if matches!(e, SelfUpdateError::GuiManaged { .. }) {
+                    human(flags, "Run `amenbo update` to open the desktop installer instead.");
+                }
+            }
+            Ok(0)
+        }
+        // Genuine failures — including a platform without in-place self-update (fall back to the installer).
+        Err(e) => {
+            let hint = match e {
+                SelfUpdateError::Unsupported | SelfUpdateError::NoArchive { .. } => {
+                    Some("run `amenbo update` to open the installer instead.".to_string())
+                }
+                _ => Some("try again, or run `amenbo update` to open the installer.".to_string()),
+            };
+            Err(CliError { code: "io_error", message: e.to_string(), hint, exit: 1 })
+        }
+    }
+}
+
 /// `amenbo lint`: report the amenbo refs in text on its way out of this store, and exit non-zero if there
 /// are any. The exit code is the whole verdict, because the callers that matter are machines: a git hook
 /// and CI both judge by it, and an AI runs this before it commits — so a hit is not rendered as a
@@ -472,7 +550,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Some(Command::GithookPreCommit) => return lint_cmd(flags, Vec::new(), false),
         Some(Command::GithookCommitMsg { path }) => return lint_cmd(flags, vec![path.clone()], false),
         Some(Command::Version) if !store_reachable() => return version_unbound(flags),
-        Some(Command::Update { print }) if !store_reachable() => return update_cmd(flags, None, *print),
+        Some(Command::Update { print, apply }) if !store_reachable() => {
+            return if *apply { self_update_cmd(flags, None) } else { update_cmd(flags, None, *print) };
+        }
         _ => {}
     }
 
@@ -698,7 +778,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 }
             }
         }
-        Command::Update { print } => return update_cmd(flags, upstream, print),
+        Command::Update { print, apply } => {
+            return if apply { self_update_cmd(flags, upstream) } else { update_cmd(flags, upstream, print) };
+        }
         Command::Whoami => return whoami(&store, flags),
         Command::Bind { project, dir, force } => return bind_cmd(&store, flags, project, dir, force),
         Command::Init { .. } => {
@@ -4472,7 +4554,7 @@ mod tests {
         assert!(!requires_pointer(&Some(Command::Init { name: None, language: None, force: false })));
         assert!(!requires_pointer(&Some(Command::Bind { project: None, dir: None, force: false })));
         assert!(!requires_pointer(&Some(Command::Version)));
-        assert!(!requires_pointer(&Some(Command::Update { print: true })));
+        assert!(!requires_pointer(&Some(Command::Update { print: true, apply: false })));
         // Everything else opens the store and therefore needs a pointer. `agent` is the AI's entry point, so
         // it gets no exemption.
         assert!(requires_pointer(&None)); // discover

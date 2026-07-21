@@ -48,10 +48,18 @@ rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl",
 # `VACUUM INTO` snapshot plus `manifest.json`. tar streams entries file-by-file, so memory stays
 # bounded; no compression — SQLite snapshots compress poorly and streaming stays simpler.
 tar = "0.4"
-# HTTP client for the static latest.json lookup. Synchronous and light, so the CLI carries no async
-# runtime. rustls (the default) bundles TLS certificate verification, so no system crypto lib is
-# required cross-OS. It serves update awareness and nothing else.
+# HTTP client for the static latest.json lookup and the CLI self-update download. Synchronous and
+# light, so the CLI carries no async runtime. rustls (the default) bundles TLS certificate
+# verification, so no system crypto lib is required cross-OS.
 ureq = "3"
+# The CLI archive is a gzip'd tar (same asset as the first install); `flate2` un-gzips it so the
+# existing `tar` reader can stream out the `amenbo` binary. Pure-Rust backend (miniz_oxide) — no
+# system zlib, so cross-OS builds stay self-contained. Self-update (`self_update`) only.
+flate2 = "1"
+# The atomic binary swap behind CLI self-update: moves the live executable aside and renames the new
+# one into place, cross-platform. Tiny and single-purpose — we own download/extract/version-gate and
+# hand it only the final swap, the one step with the platform-specific "replace a running exe" edges.
+self-replace = "1"
 # Markdown, read as a structure rather than as bytes: `refscan` has to tell a ref written as prose from
 # one shown as a code span, a fenced block, or an existing link, and those are distinctions only a parser
 # draws. Body text is Markdown by contract (`agent`'s `conventions.markdown`), and the GUI already renders

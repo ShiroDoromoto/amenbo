@@ -67,6 +67,11 @@ pub fn run() {
       app.handle().plugin(tauri_plugin_dialog::init())?;
       app.handle().plugin(tauri_plugin_notification::init())?;
       app.handle().plugin(tauri_plugin_opener::init())?;
+      // GUI self-update (desktop only; the plugin has no mobile target). It only exposes check /
+      // download+install to the front end — the apply is a user action from the update banner, and
+      // minisign verification is mandatory (the pubkey lives in tauri.conf.json's `plugins.updater`).
+      #[cfg(desktop)]
+      app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
       #[cfg(target_os = "macos")]
       macos_notify::init(app.handle().clone());
       let handle = app.handle().clone();

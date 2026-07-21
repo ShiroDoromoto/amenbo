@@ -47,6 +47,14 @@ tracing-appender = "0.2"
 # similarly named `notify-rust` (OS notifications), which is a different crate.
 notify = "8"
 
+# GUI self-update: check the Tauri updater manifest (`latest-tauri.json`, its own endpoint separate from
+# wharfy's `latest.json`) and, when it names a newer signed build, download + minisign-verify (mandatory,
+# cannot be disabled) + install it in place. The apply is a user action from the update banner — there is
+# no silent background update. Desktop-only crate, pulled in off mobile targets alone (matches the
+# `#[cfg(desktop)]` registration in lib.rs).
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
+
 # The store-watch tests (`tests/store_watch.rs`) dig real directories on a real filesystem.
 [dev-dependencies]
 amenbo-scratch = { path = "../../crates/amenbo-scratch" }

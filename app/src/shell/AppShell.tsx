@@ -26,7 +26,8 @@ import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollaps
 import { dismissUpdate, isUpdateDismissed } from "../core/updateDismissed";
 import { RefNavProvider } from "../core/refNav";
 import { currentLang, doctorText, t, tf } from "../core/i18n";
-import { fetchStaleManagedBlocks, resyncManagedBlocks, fetchOrphanBindings, forgetOrphanBindings, fetchPointerIssues, repairPointers, fetchHookNotices, openLatestInstaller } from "../core/mutations";
+import { fetchStaleManagedBlocks, resyncManagedBlocks, fetchOrphanBindings, forgetOrphanBindings, fetchPointerIssues, repairPointers, fetchHookNotices, openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
+import type { UpdateProgress } from "../core/mutations";
 import type { DoctorIssueDto, HookNoticeDto, StaleBlockDto } from "../bindings/bindings";
 
 /** `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the ⚙ in the board toolbar. */
@@ -366,39 +367,87 @@ export function AppShell() {
   );
 }
 
+// One line for the phase the in-app update is in — the hint that replaces `update.hint` while it runs. A download with
+// a known size shows a percentage; without one (the manifest carried no length) it is just "Downloading…".
+function updatePhaseHint(progress: UpdateProgress | null): string {
+  if (!progress || progress.phase === "checking") return t("update.checking");
+  if (progress.phase === "downloading") {
+    return progress.total
+      ? tf("update.downloading", { pct: Math.round((progress.downloaded / progress.total) * 100) })
+      : t("update.downloadingUnknown");
+  }
+  return t("update.installing"); // "installing" | "ready" — the ready copy is shown by the caller, not here.
+}
+
 // A newer release exists upstream: when the published `latest.json` names a version newer than the one running, we
 // show "an update is available" right under the TopBar. That is the only thing that raises the flag — the local
-// version state on its own never does. The "open the installer" button only opens the current OS's all-in-one
-// installer (GUI + CLI bundled) in the default browser — it never self-updates. The ✕ dismisses it per version
-// (core/updateDismissed): the version dismissed stays quiet across launches, and the banner returns on its own once
-// a newer one is offered.
+// version state on its own never does. Pressing "update now" runs the in-app self-update: the Tauri updater
+// downloads + minisign-verifies + installs the newer signed build (`installUpdate`), then the banner offers a restart
+// to apply it. Both the apply and the restart are user actions — nothing updates in the background. If the updater
+// manifest offers nothing (or the update errors), it falls back to opening the all-in-one installer in the browser,
+// so the user is never stuck. The ✕ dismisses it per version (core/updateDismissed): the version dismissed stays quiet
+// across launches, and the banner returns on its own once a newer one is offered.
+type UpdateStage = "idle" | "working" | "ready";
 function UpdateBanner() {
   const vs = useSyncExternalStore(subscribe, () => getSnapshot().versionStatus);
   // Session-only fallback, for the offer that carries no version to remember (and where localStorage is unavailable).
   const [dismissed, setDismissed] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<UpdateStage>("idle");
+  const [progress, setProgress] = useState<UpdateProgress | null>(null);
   if (dismissed || !vs.updateAvailable || isUpdateDismissed(vs.newerVersion)) return null;
-  const onOpen = async () => {
-    setBusy(true);
+
+  const onUpdate = async () => {
+    setStage("working");
+    setProgress({ phase: "checking" });
     try {
-      await openLatestInstaller(); // core resolves the installer URL for the current OS and opens it (falling back to the releases page).
+      const applied = await installUpdate(setProgress);
+      if (applied) {
+        setStage("ready"); // installed — offer the restart that applies it.
+      } else {
+        // The updater manifest offered nothing newer: fall back to the installer in the browser and step back.
+        await openLatestInstaller();
+        setStage("idle");
+      }
     } catch {
-      // Leave the banner up even if it will not open (the user can retry, or download it by hand).
-    } finally {
-      setBusy(false);
+      // The in-app update failed (network, signature, disk). Fall back to the installer so the user is not stuck,
+      // and drop back to idle so they can retry.
+      try { await openLatestInstaller(); } catch { /* leave the banner up to retry by hand */ }
+      setStage("idle");
     }
   };
+
+  const onRestart = async () => {
+    try { await restartApp(); } catch { /* the relaunch did not take; the banner stays up to retry */ }
+  };
+
+  const pct = stage === "working" && progress?.phase === "downloading" && progress.total
+    ? Math.round((progress.downloaded / progress.total) * 100)
+    : null;
+
   return (
     <div className="healthbanner" role="alert">
       <span className="healthbanner__icon" aria-hidden>⬆</span>
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("update.title")}{vs.newerVersion ? ` (${vs.newerVersion})` : ""}</div>
-        <div className="healthbanner__hint">{t("update.hint")}</div>
+        <div className="healthbanner__hint">
+          {stage === "working" ? updatePhaseHint(progress) : stage === "ready" ? t("update.ready") : t("update.hint")}
+        </div>
+        {stage === "working" && (
+          <div style={{ height: 6, marginTop: 6, background: "var(--c-border)", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ width: pct !== null ? `${pct}%` : "100%", height: "100%", background: "var(--c-accent)" }} />
+          </div>
+        )}
       </div>
-      {inTauri() && (
-        <button className="healthbanner__action" onClick={onOpen} disabled={busy}>{t("update.open")}</button>
+      {inTauri() && stage === "idle" && (
+        <button className="healthbanner__action" onClick={onUpdate}>{t("update.open")}</button>
       )}
-      <button className="healthbanner__close" onClick={() => { dismissUpdate(vs.newerVersion); setDismissed(true); }}>✕ {t("update.dismiss")}</button>
+      {inTauri() && stage === "ready" && (
+        <button className="healthbanner__action" onClick={onRestart}>{t("update.restart")}</button>
+      )}
+      {/* No dismiss while the download/install is running — walking away mid-swap is exactly what we do not offer. */}
+      {stage !== "working" && (
+        <button className="healthbanner__close" onClick={() => { dismissUpdate(vs.newerVersion); setDismissed(true); }}>✕ {t("update.dismiss")}</button>
+      )}
     </div>
   );
 }

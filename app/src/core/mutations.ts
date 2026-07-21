@@ -708,7 +708,14 @@ export async function openExternalUrl(url: string): Promise<void> {
     return;
   }
   const { openUrl } = await import("@tauri-apps/plugin-opener");
-  await openUrl(url);
+  try {
+    await openUrl(url);
+  } catch (e) {
+    // Callers fire this as `void openExternalUrl(...)`, so a rejection would vanish silently — and the
+    // opener plugin rejects when the URL is outside the granted scope, which looks exactly like "the
+    // link does nothing." Surface it instead of swallowing it.
+    console.error("[amenbo] openExternalUrl failed:", url, e);
+  }
 }
 
 /**

@@ -8,6 +8,7 @@ mod commands;
 mod error;
 #[cfg(target_os = "macos")]
 mod macos_notify;
+mod menu;
 /// Migration at startup. It runs through the same execution site as the CLI, ahead of anything that
 /// opens the store: neither the watcher nor a command may read a store caught mid-version, and if
 /// the CLI got there first we wait at the same lock — one path, mutually exclusive. The waiting
@@ -47,6 +48,7 @@ fn start_store_threads(app: tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .menu(menu::build)
     .register_asynchronous_uri_scheme_protocol(BLOB_SCHEME, |_ctx, request, responder| {
       // Keep the file IO (the Range read) off the webview and main threads.
       std::thread::spawn(move || responder.respond(blobproto::serve(&request)));

@@ -135,6 +135,64 @@ fn emit_decision_verdict(
     Ok(())
 }
 
+/// `task.created`: a task was created (`AMB-D-367`). The name is the whole state, so it carries no
+/// `new`, and it fires unconditionally — every `add_task` is a creation to observe. The actor is the
+/// creator's facet (`NewTask::created_by_kind`), which defaults to human when the creator was unstated.
+fn emit_task_created(
+    tx: &WriteTx<'_>,
+    task: &crate::model::Task,
+    actor: crate::model::ActorKind,
+) -> Result<()> {
+    let at = task.created_at.to_rfc3339_z();
+    tx.emit_event(&crate::store_engine::outbox::EventRow {
+        event: crate::plugin_payload::name::TASK_CREATED,
+        record_id: task.id,
+        actor: actor.as_str(),
+        at: &at,
+        new_state: None,
+    })?;
+    Ok(())
+}
+
+/// `task.deleted`: a task was hard-deleted (`AMB-D-367`). The name is the whole state (no `new`) and
+/// `id` is the task's own — the row is gone after the delete, but the outbox is a separate table, so the
+/// event outlives it. Only the task itself is observed; the cascade children the delete takes with it are
+/// not v1 events. The caller passes the deletion's clock as `at`, shared with the ledger line.
+fn emit_task_deleted(
+    tx: &WriteTx<'_>,
+    id: i64,
+    actor: crate::model::ActorKind,
+    at: &str,
+) -> Result<()> {
+    tx.emit_event(&crate::store_engine::outbox::EventRow {
+        event: crate::plugin_payload::name::TASK_DELETED,
+        record_id: id,
+        actor: actor.as_str(),
+        at,
+        new_state: None,
+    })?;
+    Ok(())
+}
+
+/// `comment.added`: a comment was added to a task (`AMB-D-367`). `id` is the comment's own id and the
+/// actor is its author; the name is the whole state, so no `new`. Fired for task comments only — a
+/// decision comment is not a v1 event, so its write point does not call this.
+fn emit_comment_added(
+    tx: &WriteTx<'_>,
+    comment: &crate::model::TaskComment,
+    actor: crate::model::ActorKind,
+) -> Result<()> {
+    let at = comment.created_at.to_rfc3339_z();
+    tx.emit_event(&crate::store_engine::outbox::EventRow {
+        event: crate::plugin_payload::name::COMMENT_ADDED,
+        record_id: comment.id,
+        actor: actor.as_str(),
+        at: &at,
+        new_state: None,
+    })?;
+    Ok(())
+}
+
 impl Store {
     /// **One logical operation = one transaction.** Opens `BEGIN IMMEDIATE`, hands it to `op`, and
     /// commits if `op` succeeds. If `op` returns early via `?` the guard drops before the commit and
@@ -172,6 +230,8 @@ impl Store {
     /// without it.
     pub fn add_task(&mut self, input: crate::ops::task::NewTask) -> Result<crate::model::Task> {
         let today = crate::time::today();
+        // The creator's facet, read before `input` is moved into the op — the actor of `task.created`.
+        let actor = input.created_by_kind.unwrap_or_default();
         let home = WriteTarget::NewIn(input.project_id);
         self.write_one(&[home], |tx| {
             let task = crate::ops::task::add(tx, input)?;
@@ -182,6 +242,7 @@ impl Store {
                     crate::ops::dimension::set(tx, task.id, value_id)?;
                 }
             }
+            emit_task_created(tx, &task, actor)?;
             Ok(task)
         })
     }
@@ -261,9 +322,12 @@ impl Store {
             let project = crate::store_engine::read::task_project_id(tx.conn(), id)?;
             let activity_id = mint_activity_id(tx)?;
             let orphaned = crate::ops::task::delete(tx, id)?;
+            // One clock for the deletion — the plugin event and the ledger line record the same instant.
+            let now = crate::time::Timestamp::now();
+            emit_task_deleted(tx, id, actor, &now.to_rfc3339_z())?;
             let entry = crate::activity_log::Entry {
                 id: activity_id,
-                at: crate::time::Timestamp::now(),
+                at: now,
                 actor: Some(actor),
                 project,
                 task: Some(id),
@@ -594,7 +658,9 @@ impl Store {
         text: &str,
     ) -> Result<crate::model::TaskComment> {
         self.write_one(&[WriteTarget::Task(task_id)], |tx| {
-            crate::ops::comment::add_comment(tx, task_id, author_kind, text)
+            let comment = crate::ops::comment::add_comment(tx, task_id, author_kind, text)?;
+            emit_comment_added(tx, &comment, author_kind)?;
+            Ok(comment)
         })
     }
 

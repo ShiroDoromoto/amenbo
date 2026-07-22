@@ -1,5 +1,5 @@
 //! Hard-erase must make specific content *physically gone* from the truth source — not tombstoned. A
-//! comment is removed in full (with the files attached to it); an accepted decision's frozen body is
+//! comment is removed in full (with the files attached to it); an accepted decision's body is
 //! redacted while the decision itself survives. In both cases the old content must vanish from the
 //! read model (not merely be tombstoned) and stay gone across a reopen.
 
@@ -26,7 +26,7 @@ fn rows_for(store: &Store, dataset: &str, row: i64) -> i64 {
     store.debug_rows_for(dataset, row)
 }
 
-/// A store with one task carrying a secret comment, and one accepted (frozen) decision whose body
+/// A store with one task carrying a secret comment, and one accepted decision whose body
 /// carries a secret section. Returns the store plus the task, comment and decision ids.
 fn build() -> (Store, i64, i64, i64) {
     let paths = temp_paths();
@@ -109,7 +109,7 @@ fn hard_erase_comment_removes_it_physically() {
 }
 
 #[test]
-fn hard_erase_redacts_frozen_decision_body_keeping_the_decision() {
+fn hard_erase_redacts_accepted_decision_body_keeping_the_decision() {
     let (mut store, _task, _comment, decision) = build();
     assert!(content_containing(&store, SECRET_SECTION) > 0, "precondition: the section is in the read model");
 

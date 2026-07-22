@@ -1115,7 +1115,7 @@ export async function reopenDecision(id: number): Promise<void> {
   return invokeAck("decision_reopen", { id });
 }
 
-/** Edit a decision while it is still under discussion; once accepted, it is frozen. */
+/** Edit a decision's title/body in place — proposed or accepted alike (`AMB-D-363`); rejected is terminal. */
 export async function editDecision(id: number, title: string | null, body: string | null): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("decision_edit", { id, title, body });

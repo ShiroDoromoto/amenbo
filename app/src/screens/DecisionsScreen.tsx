@@ -6,9 +6,9 @@ import { Pager, usePager } from "../components/Pager";
 import { currentLang, t } from "../core/i18n";
 import { parseRefQuery } from "../core/filters";
 
-// The list of decision records. A decision is a first-class entity that keeps "why we went with X",
-// frozen and only ever appended to, and it lives on a plane of its own, apart from tasks (which have
-// a mailbox). The list is scoped to one project and embeds in the board as its decisions tab.
+// The list of decision records. A decision is a first-class entity that keeps "why we went with X"
+// (edited in place to refine, superseded to overturn), and it lives on a plane of its own, apart from
+// tasks (which have a mailbox). The list is scoped to one project and embeds in the board as its decisions tab.
 type DecisionSort = "numberDesc" | "numberAsc" | "decidedDesc" | "decidedAsc";
 const SORTS: DecisionSort[] = ["numberDesc", "numberAsc", "decidedDesc", "decidedAsc"];
 

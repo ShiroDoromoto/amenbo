@@ -293,9 +293,9 @@ pub enum Command {
 
     /// Physically erase content from this store's truth source.
     ///
-    /// An ordinary delete removes the row but leaves its bytes in the file's freed pages, and an accepted
-    /// decision's body is frozen (supersede keeps the old body in the chain), so the everyday commands
-    /// cannot make content leave the file. This is the deliberate, gated exception: it deletes the
+    /// An ordinary delete removes the row but leaves its bytes in the file's freed pages, and editing a
+    /// decision body in place (`decision edit`) likewise leaves the prior bytes there, so the everyday
+    /// commands cannot make content leave the file. This is the deliberate, gated exception: it deletes the
     /// read-model row / overwrites the field in place and VACUUMs so the bytes leave the file,
     /// unrecoverable.
     ///
@@ -335,8 +335,8 @@ pub enum HardEraseCmd {
         #[arg(required = true)]
         ids: Vec<String>,
     },
-    /// Redact an accepted decision's frozen body: overwrite it in place with the given text, so the
-    /// prior body is gone. The decision — its number, links and other fields — stays.
+    /// Redact an accepted decision's body: overwrite it in place with the given text and scrub the prior
+    /// bytes from the file (which `decision edit` alone does not). The decision — its number, links and other fields — stays.
     Decision {
         /// decision reference (AMB-D-n)
         id: String,
@@ -826,7 +826,7 @@ pub enum DecisionCmd {
         /// decision ref (AMB-D-n)
         id: String,
     },
-    /// Edit a proposed decision (frozen once accepted — supersede instead)
+    /// Edit a decision's title/body in place — proposed or accepted alike (supersede to overturn an accepted one, not edit)
     Edit {
         id: String,
         #[arg(long)]
@@ -850,7 +850,7 @@ pub enum DecisionCmd {
         #[arg(long)]
         reason: Option<String>,
     },
-    /// Reopen an accepted decision for editing (accepted → proposed; then edit and re-accept). Non-destructive and audited
+    /// Return an accepted decision to discussion (accepted → proposed) — un-settle it. Editing does not need it. Non-destructive and audited
     Reopen {
         id: String,
     },

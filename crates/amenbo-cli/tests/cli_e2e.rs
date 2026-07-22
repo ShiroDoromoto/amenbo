@@ -2561,7 +2561,7 @@ fn comment_rm_deletes_the_comment_and_its_attachment() {
 }
 
 /// A post you only want to reword is rewritten in place by `comment edit`: id, position in the thread and
-/// attachments all survive, unlike delete-and-repost. Decision comments mirror it, even under a frozen decision.
+/// attachments all survive, unlike delete-and-repost. Decision comments mirror it, even under an accepted decision.
 #[test]
 fn comment_edit_rewrites_the_body_and_keeps_the_id_and_its_attachment() {
     let cli = Cli::new();

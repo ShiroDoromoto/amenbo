@@ -7,9 +7,10 @@
 //!
 //! The read model is the store's only copy of a value. Even so, ordinary commands cannot make content
 //! *gone*: a delete is physical (and a comment posted by mistake has its own delete — `comment rm`), but
-//! the freed pages stay in the file with their bytes readable until something reclaims them; and an
-//! accepted decision body is frozen (supersede keeps the old body in the chain). Erasing content
-//! therefore needs a deliberate, gated exception.
+//! the freed pages stay in the file with their bytes readable until something reclaims them; and
+//! overwriting a decision body in place (`decision edit`) likewise replaces the row but leaves the
+//! prior bytes in those freed pages, while supersede keeps the old body in the chain by design.
+//! Erasing content therefore needs a deliberate, gated exception.
 //!
 //! This is a maintenance capability, not an everyday op — a surgery a human runs deliberately. The
 //! caller (the CLI) owns the human gate and the backup-first
@@ -102,7 +103,7 @@ impl Store {
                     }
                     // Overwrite the field in place: a field write UPSERTs straight into the read-model
                     // column, so the prior value is replaced — no history is left behind to leak it. This
-                    // is how an accepted decision's frozen body loses one section while the decision stays.
+                    // is how an accepted decision's body loses one section (scrubbed from the file) while the decision stays.
                     HardEraseTarget::DecisionBody { id, new_body } => {
                         tx.set_field("decision", *id, "body", Value::Text(new_body.clone()))?;
                         report.decisions_redacted.push(*id);

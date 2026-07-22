@@ -4158,8 +4158,8 @@ struct HardEraseJson<'a> {
 }
 
 /// `hard-erase`: physically erase content from the truth source (plaintext SQLite) — a comment in full (its
-/// attachments' bytes with it), or one accepted decision's frozen body. An ordinary delete leaves the freed
-/// pages readable in the file and an accepted body is frozen, so this is the deliberate, gated exception
+/// attachments' bytes with it), or one accepted decision's body. An ordinary delete leaves the freed
+/// pages readable in the file, and editing a body in place does too, so this is the deliberate, gated exception
 /// (see the `HardErase` command doc + `store::hard_erase`). Destructive: resolve targets, confirm (unless
 /// `--yes`), take a safety backup, then erase + VACUUM. The safety backup still holds the erased content, so
 /// we tell the operator to delete it after verifying. Exit 0 on success, 1 on an interactive abort.

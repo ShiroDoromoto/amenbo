@@ -1,9 +1,12 @@
 //! Decision-record operations.
 //!
-//! Decisions are **append-only**: you do not rewrite one in place, you `supersede` it with a new
-//! one. The single exception is a decision still under discussion (`Proposed`), whose body stays
-//! editable until it is accepted (edit-while-proposed). Once `Accepted`, a decision is frozen and
-//! any replacement goes through `supersede`. Decisions have no mailbox workflow the way tasks do.
+//! A decision records *why*. Its body is **edited in place**, whatever its status: a proposed
+//! decision while it is still under discussion, and an accepted one for a later correction or
+//! refinement (`AMB-D-363`). Editing is not re-deciding — an edit leaves the `decided_*` stamps
+//! standing — and there is no revision history. What edit does *not* do is overturn: to replace an
+//! accepted decision with a different conclusion, `supersede` it (the old one stays readable in the
+//! chain); to pull a too-hastily accepted one back into debate, `reopen` it to `Proposed`. A rejected
+//! decision is terminal. Decisions have no mailbox workflow the way tasks do.
 //! They are numbered and resolved in a namespace of their own, separate from tasks, and displayed
 //! as `D-N`.
 //!
@@ -125,15 +128,17 @@ pub struct DecisionPatch {
     pub body: Option<String>,
 }
 
-/// Edit the body of a decision that is still under discussion (edit-while-proposed). Once accepted
-/// it is frozen — use `supersede` to replace it. Editing anything other than a `Proposed` decision
-/// is an error.
+/// Edit a decision's title/body in place. Both a `Proposed` decision (edit-while-proposed) and an
+/// `Accepted` one edit directly — accepting no longer freezes the body (`AMB-D-363`). Editing is not
+/// re-deciding, so `decided_at`/`decided_by` are left untouched, and there is no versioning: to
+/// overturn an accepted decision rather than refine it, `supersede` it. A `Rejected` decision is
+/// terminal and cannot be edited.
 pub fn update(tx: &WriteTx<'_>, id: i64, patch: DecisionPatch) -> Result<Decision> {
     let before = live_before(tx, id)?;
-    if before.status != DecisionStatus::Proposed {
+    if before.status == DecisionStatus::Rejected {
         return Err(Error::invalid(
-            format!("decision '{id}' is {} and is frozen; supersede it instead of editing", before.status.as_str()),
-            format!("決定 '{id}' は {} で凍結されています。編集ではなく supersede してください", before.status.as_str()),
+            format!("decision '{id}' is rejected and cannot be edited"),
+            format!("決定 '{id}' は却下済みのため編集できません"),
         ));
     }
     let mut d = before.clone();
@@ -212,16 +217,16 @@ pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
     Ok((after, true))
 }
 
-/// Return an accepted decision to discussion (`Accepted` → `Proposed`). The freeze on accept (which
-/// pins the agreement) still stands; this is the sanctioned route for fixing the small blemishes
-/// spotted right after acceptance — a typo, a line gone stale — without polluting the supersede
-/// chain. It clears `decided_at`/`decided_by`; from there the body is fixed with
-/// edit-while-proposed ([`update`]) and settled again with [`accept`]. The freeze invariant itself
-/// is preserved: nothing becomes editable until someone explicitly reopens it. Idempotent (a noop)
-/// when it is already `Proposed`. A `Rejected` decision cannot be reopened — reject has no inverse.
-/// A superseded decision *can* be, because being superseded is not a status but a projection of the
-/// edges: drop the edge behind an erroneous supersede and the target is current again. Reopen is
-/// non-destructive and reversible, so it is open to AI actors too.
+/// Return an accepted decision to discussion (`Accepted` → `Proposed`), un-settling it. It clears
+/// `decided_at`/`decided_by` and, as a side effect unique to this route, sends the tasks that rest on
+/// it back to `ready:no`. Use it to pull a too-hastily accepted decision back into debate — a use
+/// neither `reject` (a negative verdict) nor `supersede` (a replacement) expresses. It is **not** a
+/// precondition for editing: an accepted decision edits in place ([`update`], `AMB-D-363`), so reopen
+/// is only for un-deciding. Idempotent (a noop) when it is already `Proposed`. A `Rejected` decision
+/// cannot be reopened — reject has no inverse. A superseded decision *can* be, because being
+/// superseded is not a status but a projection of the edges: drop the edge behind an erroneous
+/// supersede and the target is current again. Reopen is non-destructive and reversible, so it is open
+/// to AI actors too.
 pub fn reopen(tx: &WriteTx<'_>, id: i64) -> Result<Decision> {
     let before = live_before(tx, id)?;
     match before.status {
@@ -296,8 +301,8 @@ pub fn supersede(
 /// `new_id → old_id` edge but, unlike supersede, **leaves `old_id` current**: the target is not
 /// greyed out, and the two are read together. Amend confines itself to recording the revision link
 /// and **does not move the new side's status either**: you can amend
-/// while still `Proposed`. Accepting is left to a separate operation so that a body does not freeze
-/// (`Accepted` means frozen) before a human has ruled on it. Edges are rows, so **one decision can
+/// while still `Proposed`. Accepting is left to a separate operation so that the new side is not
+/// settled before a human has ruled on it. Edges are rows, so **one decision can
 /// amend several old ones** (a DAG). Self-reference is rejected.
 pub fn amend(tx: &WriteTx<'_>, new_id: i64, old_id: i64) -> Result<Decision> {
     if new_id == old_id {
@@ -348,9 +353,9 @@ pub fn builds_on(tx: &WriteTx<'_>, new_id: i64, old_id: i64) -> Result<Decision>
 /// Drop one decision-to-decision edge (the same call for all three kinds). Name the pair in the
 /// direction it was drawn, new → old, and the row is **hard-deleted** (`decision_edge_pair` is
 /// UNIQUE, so a pair pins exactly one edge and the kind never has to be named). A noop (`false`) if
-/// there is none. A decision's **body** is append-only — frozen once accepted, corrected by adding
-/// new rows through supersede/amend — but an edge is not body, it is **wiring**, and a misspoken
-/// wire is corrected rather than kept as history. Currency is a derived projection (is this
+/// there is none. Overturning a decision is a change of mind that supersede records as history — but
+/// an edge is not the decision, it is **wiring**, and a misspoken wire is corrected rather than kept
+/// as history. Currency is a derived projection (is this
 /// decision pointed at by a live `supersedes` edge?), so removing a `supersedes` edge **makes the
 /// target current again on its own**. There is nothing to clean up afterwards.
 pub fn unlink_edge(tx: &WriteTx<'_>, decision_id: i64, target_decision_id: i64) -> Result<bool> {
@@ -409,9 +414,9 @@ fn put_edge(
     Ok(true)
 }
 
-/// Hard-delete a decision, `Accepted` ones included: deleting is retiring a record, not rewriting
-/// its body, so it sits fine alongside the append-only rule that an accepted body is frozen (if all
-/// you want is to replace it, use `supersede`).
+/// Hard-delete a decision, `Accepted` ones included: deleting retires a record outright, a different
+/// act from editing its body or superseding it — if all you want is to replace an accepted decision
+/// while keeping it readable, use `supersede`.
 pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let before = live_before(tx, id)?;
     delete_subtree(tx, before.id)
@@ -654,8 +659,8 @@ mod tests {
         assert!(!remove_comment(tx, 9999).unwrap());
     }
 
-    /// A comment can be fixed in place even under an accepted (frozen) decision: what freezes is
-    /// the decision's body, not the discussion held underneath it.
+    /// A comment can be fixed in place even under an accepted decision — accepting settles the
+    /// decision, it does not lock the discussion held underneath it.
     #[test]
     fn edit_comment_works_even_under_an_accepted_decision() {
         let e = new_engine();
@@ -976,11 +981,12 @@ mod tests {
     }
 
     #[test]
-    fn update_only_while_proposed() {
+    fn update_edits_proposed_and_accepted_but_not_rejected() {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let d = new_decision(tx, pid, "old title");
+        // While proposed, edit freely.
         let edited = update(tx, d.id, DecisionPatch {
             title: Some("new title".to_string()),
             body: Some("詳しい根拠".to_string()),
@@ -988,9 +994,18 @@ mod tests {
         .unwrap();
         assert_eq!(edited.title, "new title");
         assert_eq!(edited.body, "詳しい根拠");
-        // Frozen once accepted: no more editing.
-        accept(tx, d.id, None).unwrap();
-        assert!(update(tx, d.id, DecisionPatch { title: Some("z".to_string()), ..Default::default() }).is_err());
+        // Accepted edits in place too (`AMB-D-363`), and editing does not re-decide: the decided_* stamps stand.
+        let (accepted, _) = accept(tx, d.id, Some("user-1".to_string())).unwrap();
+        let decided_at = accepted.decided_at;
+        let reedited = update(tx, d.id, DecisionPatch { body: Some("採択後に直した本文".to_string()), ..Default::default() }).unwrap();
+        assert_eq!(reedited.status, DecisionStatus::Accepted, "editing an accepted decision does not un-settle it");
+        assert_eq!(reedited.body, "採択後に直した本文");
+        assert_eq!(reedited.decided_by.as_deref(), Some("user-1"), "edit leaves decided_by untouched");
+        assert_eq!(reedited.decided_at, decided_at, "edit leaves decided_at untouched");
+        // A rejected decision is terminal: it cannot be edited.
+        let r = new_decision(tx, pid, "却下する案");
+        reject(tx, r.id).unwrap();
+        assert!(update(tx, r.id, DecisionPatch { body: Some("x".to_string()), ..Default::default() }).is_err());
     }
 
     #[test]
@@ -1030,22 +1045,19 @@ mod tests {
     }
 
     #[test]
-    fn reopen_returns_accepted_to_editable_and_is_auditable() {
+    fn reopen_un_settles_an_accepted_decision_and_is_auditable() {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
-        let d = new_decision(tx, pid, "採択直後に誤字が見つかる決定");
+        let d = new_decision(tx, pid, "早すぎた採択を議論へ戻す決定");
         accept(tx, d.id, Some("user-1".to_string())).unwrap();
-        // Frozen once accepted: no more editing.
-        assert!(update(tx, d.id, DecisionPatch { body: Some("x".to_string()), ..Default::default() }).is_err());
-        // reopen returns it to discussion, clearing decided_*.
+        // reopen un-settles it back to discussion, clearing decided_* — this is its whole job now
+        // (editing does not need it: an accepted decision edits in place, see the update test).
         let re = reopen(tx, d.id).unwrap();
         assert_eq!(re.status, DecisionStatus::Proposed);
         assert!(re.decided_at.is_none(), "decided_at is cleared");
         assert!(re.decided_by.is_none(), "decided_by is cleared");
-        // From here it is editable again through edit-while-proposed, and re-accepting settles it.
-        let edited = update(tx, d.id, DecisionPatch { body: Some("誤字を直した本文".to_string()), ..Default::default() }).unwrap();
-        assert_eq!(edited.body, "誤字を直した本文");
+        // Re-accepting settles it again — a real transition.
         let (reaccepted, changed) = accept(tx, d.id, Some("user-1".to_string())).unwrap();
         assert!(changed, "accepting again after a reopen is a real transition");
         assert_eq!(reaccepted.status, DecisionStatus::Accepted);
@@ -1057,14 +1069,14 @@ mod tests {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
-        // Proposed is idempotent: it is already editable.
+        // Proposed is idempotent: it is already un-settled.
         let d = new_decision(tx, pid, "議論中の決定");
         assert_eq!(reopen(tx, d.id).unwrap().status, DecisionStatus::Proposed);
         // Rejected cannot be reopened: reject has no inverse.
         let r = new_decision(tx, pid, "却下した決定");
         reject(tx, r.id).unwrap();
         assert!(reopen(tx, r.id).is_err(), "Rejected cannot be reopened");
-        // A superseded decision is not frozen by status — it stays accepted — so reopen works.
+        // A superseded decision stays accepted (being superseded is a derived projection, not a status), so reopen works.
         let old = new_decision(tx, pid, "旧: 置き換えられる");
         accept(tx, old.id, None).unwrap();
         let newer = new_decision(tx, pid, "新: 置き換える");
@@ -1439,8 +1451,8 @@ mod tests {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
-        // Even an accepted (frozen) decision can be deleted: retiring one is compatible with
-        // append-only, because it is not a rewrite of the body.
+        // Even an accepted decision can be deleted: retiring a record outright is a different act from
+        // editing or superseding it.
         let d = new_decision(tx, pid, "退役させる商用決定");
         accept(tx, d.id, None).unwrap();
         let t = add_task_in(tx, pid, "linked task");

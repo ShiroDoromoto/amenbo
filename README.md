@@ -266,18 +266,19 @@ amenbo task list --filter "ready:yes" --json
 # (start:today = the day has come, start:none = no start day declared)
 amenbo task list --filter "start:future" --json
 
-# Decision records: append-only "why we chose X" (a Task sibling, not a task —
+# Decision records: durable "why we chose X" (a Task sibling, not a task —
 # no mailbox workflow, its own device-global number space)
 amenbo decision add --title "SQLite as the source of truth" \
   --body "the local SQLite store is the single truth source" --project "Website refresh"
 amenbo decision accept AMB-D-<n>              # proposed -> accepted
 amenbo decision accept AMB-D-<n> --reason "agreed after the perf review" # ...and note why (reason lands as a decision comment)
 amenbo decision reject AMB-D-<n> --reason "the simpler one covers it" # proposed -> rejected, with a reason comment
-amenbo decision comment add AMB-D-<n> --text "revisited after the 10k benchmark — still holds" # discuss on the timeline (body stays frozen)
+amenbo decision edit AMB-D-<n> --body "…refined rationale…" # edit title/body in place — proposed or accepted alike (supersede to overturn; rejected is terminal)
+amenbo decision comment add AMB-D-<n> --text "revisited after the 10k benchmark — still holds" # discuss on the timeline (comments are the discussion around the body)
 amenbo decision comment list AMB-D-<n> --json # oldest first; --limit/--offset page
-amenbo decision comment edit 7 --text "corrected" # rewrite one in place (the frozen body is the decision's, not the comment's)
+amenbo decision comment edit 7 --text "corrected" # rewrite one in place (this edits a comment, not the decision's own body)
 amenbo decision comment rm 7 --yes           # delete one posted by mistake (permanent, attachments go too)
-amenbo decision reopen AMB-D-<n>              # accepted -> proposed (light fix: reopen, edit, re-accept)
+amenbo decision reopen AMB-D-<n>              # accepted -> proposed: un-settle a too-hasty acceptance (editing needs no reopen)
 amenbo decision supersede AMB-D-<n> --replaces AMB-D-<m> # record a replacement (chain)
 amenbo decision amend AMB-D-<n> --amends AMB-D-<m> # partial revision (target stays current, not superseded)
 amenbo decision builds-on AMB-D-<n> --on AMB-D-<m> # the premise: read it first, and revisit this one if it is overturned

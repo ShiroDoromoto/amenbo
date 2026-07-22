@@ -2362,7 +2362,7 @@ pub fn decision_reopen(id: i64) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["decisions"]).decision(id))
 }
 
-/// Edit a decision's body (Proposed only — once accepted, it is frozen).
+/// Edit a decision's title/body in place — proposed or accepted alike (`AMB-D-363`); rejected is terminal.
 #[tauri::command]
 pub fn decision_edit(id: i64, title: Option<String>, body: Option<String>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {

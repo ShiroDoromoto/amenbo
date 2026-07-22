@@ -1,0 +1,16 @@
+[package]
+name = "amenbo-verify-cli"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+description = "CLI driver: maps a verification scenario to shipped-binary invocations and asserts via --json."
+
+[[bin]]
+name = "verify-cli"
+path = "src/main.rs"
+
+[dependencies]
+amenbo-scenario = { path = "../core" }
+serde_json = "1"
+serde_yaml = "0.9"

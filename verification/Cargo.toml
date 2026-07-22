@@ -5,4 +5,4 @@
 # driver crates (later tasks) will join as members and depend on it. See verification/README.md.
 [workspace]
 resolver = "2"
-members = ["core"]
+members = ["core", "cli"]

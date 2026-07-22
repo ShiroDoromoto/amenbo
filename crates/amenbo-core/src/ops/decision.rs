@@ -258,15 +258,18 @@ pub fn reopen(tx: &WriteTx<'_>, id: i64) -> Result<Decision> {
 /// breath. Edges are rows, so **one decision can supersede several old ones** (a DAG).
 /// Self-reference is rejected.
 ///
-/// Returns `(new_decision, changed)`. `changed` is `false` only when the supersedes edge was already
-/// there and the new side was already `Accepted` — i.e. re-running it did nothing — so the caller
-/// does not announce a fresh supersession that never happened.
+/// Returns `(new_decision, changed, promoted)`. `changed` is `false` only when the supersedes edge was
+/// already there and the new side was already `Accepted` — i.e. re-running it did nothing — so the
+/// caller does not announce a fresh supersession that never happened. `promoted` is the narrower fact:
+/// `true` only when this call moved the new side `Proposed → Accepted`, so a caller that observes
+/// acceptances (`decision.accepted`) fires on the promotion alone, not on merely drawing the edge over
+/// an already-accepted side.
 pub fn supersede(
     tx: &WriteTx<'_>,
     new_id: i64,
     old_id: i64,
     decided_by: Option<String>,
-) -> Result<(Decision, bool)> {
+) -> Result<(Decision, bool, bool)> {
     if new_id == old_id {
         return Err(Error::invalid(
             "a decision cannot supersede itself",
@@ -294,7 +297,7 @@ pub fn supersede(
         emit_update(tx, record::decision(&new_before), record::decision(&new_after))?;
         promoted = true;
     }
-    Ok((live_before(tx, new_id)?, edge_changed || promoted))
+    Ok((live_before(tx, new_id)?, edge_changed || promoted, promoted))
 }
 
 /// Amend part of decision `old_id` with decision `new_id` (an `amends` edge). It draws the
@@ -1093,14 +1096,16 @@ mod tests {
         accept(tx, old.id, None).unwrap();
         let new = new_decision(tx, pid, "v2: RDB を真実源");
         // new (Proposed) supersedes old, and is promoted to Accepted on the way.
-        let (res, changed) = supersede(tx, new.id, old.id, Some("user-1".to_string())).unwrap();
+        let (res, changed, promoted) = supersede(tx, new.id, old.id, Some("user-1".to_string())).unwrap();
         assert!(changed, "drawing the edge and promoting the new side is a real change");
+        assert!(promoted, "the new side moved Proposed → Accepted");
         assert_eq!(res.status, DecisionStatus::Accepted);
         assert_eq!(targets(tx, new.id, DecisionEdgeKind::Supersedes), vec![old.id]);
         assert!(res.decided_at.is_some());
         // Re-running it changes nothing: the edge is already there and the new side already settled.
-        let (_, changed2) = supersede(tx, new.id, old.id, Some("user-2".to_string())).unwrap();
+        let (_, changed2, promoted2) = supersede(tx, new.id, old.id, Some("user-2".to_string())).unwrap();
         assert!(!changed2, "re-superseding an already-superseded pair reports unchanged");
+        assert!(!promoted2, "re-superseding promotes nothing — the new side was already accepted");
         // The old row is untouched: its status stays accepted, and being superseded shows up in the
         // derived currency instead.
         assert_eq!(read::decision(tx.conn(), old.id).unwrap().unwrap().status, DecisionStatus::Accepted, "the old side's status is unchanged");

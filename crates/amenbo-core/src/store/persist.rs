@@ -672,16 +672,28 @@ impl Store {
 
     /// Supersede one decision with another (one operation = one transaction). Inserting the
     /// `supersedes` edge and promoting the new decision ride together; the old decision's row is left
-    /// untouched, because whether it is current is derived from the edges.
+    /// untouched, because whether it is current is derived from the edges. When the supersession
+    /// promotes the new side `Proposed → Accepted`, that acceptance is a real verdict, so a
+    /// `decision.accepted` event is emitted on the promotion (and only then — drawing the edge over an
+    /// already-accepted side promotes nothing and observes nothing). `actor` is the process facet,
+    /// stamped onto that event. Returns `(new_decision, changed)`.
     pub fn supersede_decision(
         &mut self,
         new_id: i64,
         old_id: i64,
         decided_by: Option<String>,
+        actor: crate::model::ActorKind,
     ) -> Result<(crate::model::Decision, bool)> {
         self.write_one(
             &[WriteTarget::Decision(new_id), WriteTarget::Decision(old_id)],
-            |tx| crate::ops::decision::supersede(tx, new_id, old_id, decided_by),
+            |tx| {
+                let (decision, changed, promoted) =
+                    crate::ops::decision::supersede(tx, new_id, old_id, decided_by)?;
+                if promoted {
+                    emit_decision_verdict(tx, &decision, crate::plugin_payload::name::DECISION_ACCEPTED, actor)?;
+                }
+                Ok((decision, changed))
+            },
         )
     }
 

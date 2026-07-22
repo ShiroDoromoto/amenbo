@@ -41,6 +41,7 @@ pub mod plugin_inject;
 pub mod plugin_manifest;
 pub mod plugin_payload;
 pub mod plugin_secret;
+pub mod plugin_subscribe;
 pub mod plugin_trust;
 pub mod progress;
 pub mod project_teardown;

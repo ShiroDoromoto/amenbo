@@ -146,6 +146,19 @@ pub struct Manifest {
     /// empty forms stay the same document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub config: Vec<ConfigField>,
+    /// The observation events this plugin subscribes to — the v1 event names
+    /// ([`plugin_payload::V1_EVENTS`](crate::plugin_payload::V1_EVENTS)) it wants to be fired for. The
+    /// subscription resolver (`AMB-D-367`, `AMB-T-2032`) fires an enabled plugin only for an event whose
+    /// name appears here, so a plugin with no `events` observes nothing — a command-only plugin declares an
+    /// empty list.
+    ///
+    /// **This module only carries the strings**; that each names a real v1 event is the validator's to
+    /// enforce (`AMB-D-354` / `AMB-T-1988`) — the one home for the rules — and an unrecognised name is
+    /// simply inert here, since only catalog events are ever fired. Absent means no subscription, and an
+    /// empty list does not serialize, so a re-emitted manifest for a command-only plugin is byte-for-byte
+    /// what an author who omitted `events` wrote (the same absent-equals-empty rule as `config`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<String>,
 }
 
 /// One field of a plugin's configuration schema (`AMB-D-356`). The author declares a flat list of these
@@ -284,6 +297,25 @@ mod tests {
                 "a config field missing `{field}` must not parse"
             );
         }
+    }
+
+    #[test]
+    fn events_default_to_no_subscription_when_absent_and_round_trip() {
+        // A manifest with no `events` key subscribes to nothing — a command-only plugin, not a parse error.
+        let m: Manifest = serde_json::from_value(full_json()).unwrap();
+        assert!(m.events.is_empty(), "no `events` key ⇒ no subscription");
+        // An empty list does not re-serialize, mirroring `config` (absent equals empty).
+        assert!(serde_json::to_value(&m).unwrap().get("events").is_none());
+
+        // A declared subscription round-trips verbatim.
+        let mut v = full_json();
+        v["events"] = serde_json::json!(["task.created", "comment.added"]);
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        assert_eq!(m.events, vec!["task.created".to_string(), "comment.added".to_string()]);
+        assert_eq!(
+            serde_json::to_value(&m).unwrap()["events"],
+            serde_json::json!(["task.created", "comment.added"])
+        );
     }
 
     #[test]

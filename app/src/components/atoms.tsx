@@ -1,7 +1,9 @@
 import { useState } from "react";
 import type { Actor, Priority, Status, TaskCard } from "../mock/types";
+import type { PremiseChangeDto } from "../bindings/bindings";
 import { currentLang, priorityLabel, statusLabel, t, tf } from "../core/i18n";
 import { getSnapshot } from "../core/snapshot";
+import { pushNotice } from "../core/notice";
 import { taskRef } from "../core/idref";
 import { Identicon } from "./identicon";
 
@@ -81,14 +83,28 @@ export const STATUS_ORDER: Status[] = ["todo", "in_progress", "blocked", "done"]
  * this needs no separate StatusBadge. It stops propagation itself: it always sits inside a row or card whose
  * own click selects the task, and changing status must not double as selecting.
  */
-export function StatusSelect({ id, status, onStatus, className = "inlineselect" }: {
+export function StatusSelect({ id, status, onStatus, premiseChange, className = "inlineselect" }: {
   id: number;
   status: Status;
   onStatus: (id: number, status: Status) => void;
+  // The holder-side safety net of `AMB-D-366`: the premises pinned on after this task was reserved, if any.
+  // Leaving `in_progress` (finishing, blocking) is the moment that must not be missed — so on that
+  // transition, with a change present, a firm toast fires before the change is handed on. The transition is
+  // never blocked (surface, not veto): the holder may still ship the part that stands on its own.
+  premiseChange?: PremiseChangeDto | null;
   // The surfaces differ in how the control is dressed — compact among a card's chips, a full button in the
   // detail pane's action row — but it is one control, so the styling is the only thing a caller may vary.
   className?: string;
 }) {
+  const change = (next: Status) => {
+    if (status === "in_progress" && next !== "in_progress" && premiseChange) {
+      const blockers = premiseChange.addedBlockers.map((b) => `${taskRef(b.id)} ${b.name}`).join(", ");
+      const decisions = premiseChange.addedDecisions.map((d) => `${d.ref ?? ""} ${d.name ?? ""}`.trim()).join(", ");
+      const detail = [blockers, decisions].filter(Boolean).join(" / ");
+      pushNotice(tf("premise.warn", { detail }));
+    }
+    onStatus(id, next);
+  };
   return (
     <select
       className={className}
@@ -96,7 +112,7 @@ export function StatusSelect({ id, status, onStatus, className = "inlineselect" 
       title={t("status.changeTip")}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
-      onChange={(e) => { e.stopPropagation(); onStatus(id, e.target.value as Status); }}
+      onChange={(e) => { e.stopPropagation(); change(e.target.value as Status); }}
     >
       {STATUS_ORDER.map((s) => (
         <option key={s} value={s}>{statusLabel(s)}</option>
@@ -174,6 +190,31 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
         </span>
       )}
     </>
+  );
+}
+
+/**
+ * The holder-side surface of `AMB-D-366`: a chip on the row of a task whose premises shifted **after it was
+ * reserved** — a blocker or an unsettled decision pinned on since it went `in_progress`, silently withdrawing
+ * readiness. 🔔 = "something changed under your reservation"; the tooltip names what. It sits beside
+ * {@link BlockedChips} but reads a different axis — not "why it cannot start" (a live derivation for anyone)
+ * but "what changed since *you* took it" (only the holder is at risk) — so it speaks in its own glyph. Core
+ * only ever fills `premiseChange` for an `in_progress` task that actually acquired one, so the chip draws
+ * exactly when it matters and nothing renders otherwise. `compact` drops the count for the dense surfaces,
+ * matching `BlockedChips`.
+ */
+export function PremiseChangedChip({ task, compact = false }: { task: TaskCard; compact?: boolean }) {
+  const pc = task.premiseChange;
+  if (!pc) return null;
+  const blockers = pc.addedBlockers.map((b) => `${taskRef(b.id)} ${b.name}`).join(", ");
+  const decisions = pc.addedDecisions.map((d) => `${d.ref ?? ""} ${d.name ?? ""}`.trim()).join(", ");
+  const detail = [blockers, decisions].filter(Boolean).join(" / ");
+  const count = pc.addedBlockers.length + pc.addedDecisions.length;
+  const cls = compact ? "chip--blockglyph" : "chip chip--premise";
+  return (
+    <span className={cls} role="img" title={tf("premise.changed", { detail })} aria-label={tf("premise.changed", { detail })}>
+      {compact ? "🔔" : `🔔 ${count}`}
+    </span>
   );
 }
 

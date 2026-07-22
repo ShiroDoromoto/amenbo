@@ -448,6 +448,22 @@ repaired: Array<string>,
 unresolved: Array<string>, };
 
 /**
+ * Premises pinned on a task **after it was reserved** (`AMB-D-366`) — the holder-side surface. Each list
+ * is the premises added since the task went `in_progress` that still bear on readiness: a not-done
+ * blocker, a decision linked but not yet settled. Carried on the card only when there is a change to show
+ * (see [`TaskCardDto::premise_change`]), so the screen draws the note exactly when it matters.
+ */
+export type PremiseChangeDto = { 
+/**
+ * Not-done blockers whose dependency edge was added after the reservation, in edge order.
+ */
+addedBlockers: Array<TaskRefDto>, 
+/**
+ * Unsettled decisions linked after the reservation, in link order.
+ */
+addedDecisions: Array<DecisionRefDto>, };
+
+/**
  * A reference to a premise decision (the far end of builds_on). It is more than a
  * [`DecisionRefDto`] because it carries **whether the premise is still alive** — surfacing on
  * screen the decisions that stand on a rotten premise (the whole reason this type exists).
@@ -680,7 +696,15 @@ blockedByDecisions: Array<DecisionRefDto>,
  * false, beside `blocked_by` and `blocked_by_decisions`. Always serialized, `null` when the start
  * day is no reason, so every `ready: false` the GUI draws carries a reason it can name on screen.
  */
-notStartedUntil: string | null, };
+notStartedUntil: string | null, 
+/**
+ * Premises pinned on **after this task was reserved** (`AMB-D-366`, the holder-side surface): a
+ * blocker or an unsettled decision added since it went `in_progress`, silently withdrawing readiness
+ * the holder never asked to give up. Present only for an `in_progress` task that actually acquired
+ * one — `null` for every other status and when nothing changed — so the surface (a chip on the row,
+ * a firm warn when the holder leaves `in_progress`) draws exactly when it should.
+ */
+premiseChange?: PremiseChangeDto, };
 
 /**
  * One git commit SHA recorded on a task. amenbo keeps the SHA as an opaque string — it

@@ -375,6 +375,10 @@ const UI: Record<Lang, Record<string, string>> = {
     "block.deps": "着手不可（依存）: {names} の完了待ち",
     "block.decisions": "着手不可（根拠が未確定）: {refs}",
     "block.notStarted": "着手不可（着手日待ち）: {date} から",
+    "premise.changed": "予約後に前提が変わった: {detail}",
+    "premise.warn": "予約後に前提が変わりました（AMB-D-366）: {detail}。独立に仕上がる部分だけ完了するか、todo に戻して手放してください。",
+    "detail.premiseChanged": "予約後の変化",
+    "detail.premiseChangedHint": "予約後に付いた前提（着手可否が下がった）",
   },
   en: {
     "topbar.refresh": "Refresh from source", "topbar.back": "Back", "topbar.forward": "Forward",
@@ -714,6 +718,10 @@ const UI: Record<Lang, Record<string, string>> = {
     "block.deps": "Cannot start (dependency): waiting on {names}",
     "block.decisions": "Cannot start (premise not settled): {refs}",
     "block.notStarted": "Cannot start (waiting on its start day): from {date}",
+    "premise.changed": "Premises changed after you reserved this: {detail}",
+    "premise.warn": "Premises changed after you reserved this (AMB-D-366): {detail}. Finish only the part that stands on its own, or hand it back by setting it to todo.",
+    "detail.premiseChanged": "Changed since reserved",
+    "detail.premiseChangedHint": "Premises pinned on after you reserved this (readiness withdrawn)",
   },
 };
 

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useStore } from "../store/store";
 import type { Status, TaskCard } from "../mock/types";
 import {
-  BlockedChips, DueChip, FacetAvatar, PriorityDot, StatusSelect, TaskIdChip, TriggeredAtChip,
+  BlockedChips, DueChip, FacetAvatar, PremiseChangedChip, PriorityDot, StatusSelect, TaskIdChip, TriggeredAtChip,
 } from "../components/atoms";
 import { Pager, PAGE_SIZE } from "../components/Pager";
 import { useSmartView } from "../core/reads";
@@ -129,11 +129,12 @@ const TaskRow = memo(function TaskRow({
       <span className="row__unread" aria-hidden={!unread}>
         {unread && <span className="row__unread-dot" role="img" aria-label={t("list.unread")} />}
       </span>
-      <span className="row__status"><StatusSelect id={task.id} status={task.status} onStatus={onStatus} /></span>
+      <span className="row__status"><StatusSelect id={task.id} status={task.status} onStatus={onStatus} premiseChange={task.premiseChange} /></span>
       <span className={`row__title ${task.status === "done" ? "row__title--done" : ""}`}>{task.title}</span>
       <span className="row__spacer" />
       <TaskIdChip id={task.id} />
       <BlockedChips task={task} />
+      <PremiseChangedChip task={task} />
       {task.assignee && <FacetAvatar actor={task.assignee} />}
       <PriorityDot priority={task.priority} />
       {showUnread && <TriggeredAtChip at={task.triggeredAt} />}

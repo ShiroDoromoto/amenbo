@@ -4,7 +4,7 @@ import { dataAdapter } from "../mock/adapter";
 import { useStore } from "../store/store";
 import type { Status, TaskCard } from "../mock/types";
 import {
-  BlockedChips, DueChip, FacetAvatar, PriorityDot, STATUS_ORDER, StatusSelect, TaskIdChip,
+  BlockedChips, DueChip, FacetAvatar, PremiseChangedChip, PriorityDot, STATUS_ORDER, StatusSelect, TaskIdChip,
 } from "../components/atoms";
 import { Pager, usePager } from "../components/Pager";
 import { useTaskPage } from "../core/reads";
@@ -355,10 +355,11 @@ export function BoardScreen({
             {/* The row is a div, not a button: it carries the status control, and a select may not nest inside a button. */}
             {listPager.pageItems.map((t) => (
               <div key={t.id} className={`row ${t.id === selectedTaskId ? "row--selected" : ""}`} onClick={() => onSelectTask(t.id)} role="button" data-pane-select>
-                <span className="row__status"><StatusSelect id={t.id} status={t.status} onStatus={store.setStatus} /></span>
+                <span className="row__status"><StatusSelect id={t.id} status={t.status} onStatus={store.setStatus} premiseChange={t.premiseChange} /></span>
                 <span className={`row__title ${t.status === "done" ? "row__title--done" : ""}`}>{t.title}</span>
                 <span className="row__spacer" />
                 <BlockedChips task={t} />
+                <PremiseChangedChip task={t} />
                 {t.assignee && <FacetAvatar actor={t.assignee} />}
                 <PriorityDot priority={t.priority} />
                 <DueChip due={t.due} label={t.dueLabel} />
@@ -564,13 +565,14 @@ const TaskCardView = memo(function TaskCardView({
         <PriorityDot priority={task.priority} />
         <DueChip due={task.due} label={task.dueLabel} />
         <BlockedChips task={task} />
+        <PremiseChangedChip task={task} />
       </div>
 
       <div className="card__footer">
         {task.comments > 0 && <span>💬 {task.comments}</span>}
         <TaskIdChip id={task.id} />
         <span className="card__spacer" />
-        <StatusSelect id={task.id} status={task.status} onStatus={onStatus} />
+        <StatusSelect id={task.id} status={task.status} onStatus={onStatus} premiseChange={task.premiseChange} />
       </div>
     </div>
   );

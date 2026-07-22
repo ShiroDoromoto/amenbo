@@ -221,7 +221,7 @@ export function TaskDetailPane({
           </div>
 
           <div className="detail__actions">
-            <StatusSelect id={taskId} status={task.status} onStatus={store.setStatus} className="btn" />
+            <StatusSelect id={taskId} status={task.status} onStatus={store.setStatus} premiseChange={task.premiseChange} className="btn" />
             <PriorityDot priority={task.priority} />
             <select
               className="btn"
@@ -313,6 +313,40 @@ export function TaskDetailPane({
               <span className="detail__flabel">{t("detail.notStarted")}</span>
               <span title={tf("block.notStarted", { date: task.notStartedUntil })}>
                 ⏳ {task.notStartedUntil}
+              </span>
+            </div>
+          )}
+          {/* Holder-side surface of `AMB-D-366`: premises pinned on after this task was reserved. It reads a
+              different axis from `blockedBy` above (why anyone cannot start it) — here it is what changed since
+              the holder took it — so it is its own field, permanent beside the transient toast the safety net
+              fires at status change. */}
+          {task.premiseChange && (
+            <div className="detail__field">
+              <span className="detail__flabel">{t("detail.premiseChanged")}</span>
+              <span title={t("detail.premiseChangedHint")}>
+                🔔{" "}
+                {task.premiseChange.addedBlockers.map((b) => (
+                  <button
+                    type="button"
+                    className="chip chip--link"
+                    key={`b${b.id}`}
+                    style={{ marginRight: 4 }}
+                    onClick={() => refNav.selectTask?.(b.id)}
+                  >
+                    ⛔ {b.name}
+                  </button>
+                ))}
+                {task.premiseChange.addedDecisions.map((d) => (
+                  <button
+                    type="button"
+                    className="chip chip--link"
+                    key={`d${d.id}`}
+                    style={{ marginRight: 4 }}
+                    onClick={() => onSelectDecision?.(d.id)}
+                  >
+                    ⚠ {d.ref ?? ""} {d.name ?? t("dec.unknownName")}
+                  </button>
+                ))}
               </span>
             </div>
           )}

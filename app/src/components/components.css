@@ -226,6 +226,10 @@
    from the human-declared status=blocked and its --c-blocked, so it borrows none of that
    colour and speaks through its glyph and spacing alone — the two must not be confused. */
 .chip--block { white-space: nowrap; cursor: default; }
+/* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from
+   --block (why anyone cannot start it) — this is what changed since *you* took it — so it speaks through its
+   own 🔔 glyph and, like --block, borrows no status colour. */
+.chip--premise { white-space: nowrap; cursor: default; }
 /* The glyph-only form of the same block, for dense surfaces (a calendar chip, a timeline's
    row label). It shares a line with the title, so it drops the chip background and the
    count and borrows the width of a single character. */

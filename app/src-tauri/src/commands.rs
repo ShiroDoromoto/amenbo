@@ -394,6 +394,20 @@ pub struct PlacementDto {
     project: ProjectRefDto,
 }
 
+/// Premises pinned on a task **after it was reserved** (`AMB-D-366`) — the holder-side surface. Each list
+/// is the premises added since the task went `in_progress` that still bear on readiness: a not-done
+/// blocker, a decision linked but not yet settled. Carried on the card only when there is a change to show
+/// (see [`TaskCardDto::premise_change`]), so the screen draws the note exactly when it matters.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PremiseChangeDto {
+    /// Not-done blockers whose dependency edge was added after the reservation, in edge order.
+    added_blockers: Vec<TaskRefDto>,
+    /// Unsettled decisions linked after the reservation, in link order.
+    added_decisions: Vec<DecisionRefDto>,
+}
+
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -439,6 +453,14 @@ pub struct TaskCardDto {
     /// false, beside `blocked_by` and `blocked_by_decisions`. Always serialized, `null` when the start
     /// day is no reason, so every `ready: false` the GUI draws carries a reason it can name on screen.
     not_started_until: Option<String>,
+    /// Premises pinned on **after this task was reserved** (`AMB-D-366`, the holder-side surface): a
+    /// blocker or an unsettled decision added since it went `in_progress`, silently withdrawing readiness
+    /// the holder never asked to give up. Present only for an `in_progress` task that actually acquired
+    /// one — `null` for every other status and when nothing changed — so the surface (a chip on the row,
+    /// a firm warn when the holder leaves `in_progress`) draws exactly when it should.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    premise_change: Option<PremiseChangeDto>,
 }
 
 #[derive(Serialize, TS)]
@@ -797,13 +819,16 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         .map(|r| DecisionRefDto { id: r.id, name: r.name, r#ref: r.display_ref })
         .collect();
 
+    let status = TaskStatus::parse(&row.status).unwrap_or_default();
+    let premise_change = premise_change_dto(store, row.id, status);
+
     TaskCardDto {
         r#ref: amenbo_core::idref::task(row.id),
         id: row.id,
         title: row.title,
         notes: row.notes,
         project_id,
-        status: TaskStatus::parse(&row.status).unwrap_or_default().as_str(),
+        status: status.as_str(),
         assignee,
         priority: row.priority.as_deref().and_then(Priority::parse).map(|p| p.as_str()),
         due: due_date.map(date_iso),
@@ -821,7 +846,39 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         linked_decisions,
         blocked_by_decisions,
         not_started_until: not_started_until.map(date_iso),
+        premise_change,
     }
+}
+
+/// The holder-side premise-change surface for a card (`AMB-D-366`): premises pinned on after the task was
+/// reserved. Only an `in_progress` task carries the reservation at risk, so the read runs for that status
+/// alone; every other status yields `None` without touching the store. A read error also yields `None` —
+/// this is additive context, never a reason to fail the card — as does an in_progress task whose premises
+/// have not shifted, so the field is `Some` exactly when the surface should draw.
+fn premise_change_dto(store: &Store, task_id: i64, status: TaskStatus) -> Option<PremiseChangeDto> {
+    if status != TaskStatus::InProgress {
+        return None;
+    }
+    let change = store.premise_change_since(task_id).ok()?;
+    if !change.any() {
+        return None;
+    }
+    Some(PremiseChangeDto {
+        added_blockers: change
+            .added_blockers
+            .into_iter()
+            .map(|b| TaskRefDto { id: b.id, name: b.name })
+            .collect(),
+        added_decisions: change
+            .added_decisions
+            .into_iter()
+            .map(|d| DecisionRefDto {
+                r#ref: Some(amenbo_core::idref::decision(d.id)),
+                id: d.id,
+                name: d.name,
+            })
+            .collect(),
+    })
 }
 
 /// Scratch accumulator for building the snapshot projection.
@@ -4186,6 +4243,72 @@ mod tests {
         assert_ne!(before, store_signature_string(), "an external writer's commit moves the signature");
 
         assert!(!store_signature_string().contains('|'), "does not mix in the `|` separator");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The card gates the holder-side premise surface (`AMB-D-366`) on `in_progress`: a task that was never
+    /// reserved carries no `premise_change` even with a blocker on it, and a premise that was already there
+    /// *before* the reservation is not a change *after* it. (Detection of a premise pinned on after the
+    /// status began — the `Some` path — is core's, pinned in `store_engine::read`'s own tests; here we pin
+    /// that `task_card_from_row` runs the read only for the holder and forwards a no-change as `None`.)
+    #[test]
+    fn the_card_reads_the_premise_surface_only_for_an_in_progress_holder() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("premise-card");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let mut store = Store::open().unwrap();
+        let project_id = store
+            .project_add(amenbo_core::ops::project::NewProject {
+                name: "テストPJ".into(),
+                view: View::List,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap()
+            .id;
+        let mk = |store: &mut Store, title: &str| {
+            store
+                .add_task(amenbo_core::ops::task::NewTask {
+                    title: title.into(),
+                    project_id: Some(project_id),
+                    due_on: None,
+                    start_on: None,
+                    priority: None,
+                    notes: String::new(),
+                    created_by_kind: Some(ActorKind::Ai),
+                })
+                .unwrap()
+                .id
+        };
+        let held = mk(&mut store, "タスク");
+        let blocker = mk(&mut store, "ブロッカー");
+
+        let card = |store: &Store, id: i64| {
+            let read_model = store.read_model();
+            let row = amenbo_core::store_engine::read::task_card_row(read_model.conn(), id)
+                .unwrap()
+                .unwrap();
+            task_card_from_row(store, row)
+        };
+
+        // A blocker on a task that is still `todo` (never reserved): only a holder is at risk, so no surface.
+        store.depend_task(held, blocker, Some(ActorKind::Ai)).unwrap();
+        assert!(
+            card(&store, held).premise_change.is_none(),
+            "a task that was never reserved carries no holder-side surface, blocker or not"
+        );
+
+        // Drop the blocker so the task is ready, then reserve it. The blocker was there *before* the
+        // reservation and is now gone, so nothing was pinned on *after* the status began → no change.
+        store.undepend_task(held, blocker).unwrap();
+        store.set_task_status(held, TaskStatus::InProgress, ActorKind::Ai).unwrap();
+        assert_eq!(card(&store, held).status, "in_progress", "the task is reserved");
+        assert!(
+            card(&store, held).premise_change.is_none(),
+            "with no premise pinned on after the reservation, the holder sees no change"
+        );
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

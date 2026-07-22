@@ -162,8 +162,13 @@ impl RunningPlugin {
             if start.elapsed() >= timeout {
                 let _ = child.kill();
                 let _ = child.wait();
-                // Reap the drain/writer threads (the closed pipes end them) and drop what they read.
-                drop(finish(writer, stdout, stderr, None));
+                // Return the moment the child is reaped — do **not** join the drain threads here. A
+                // killed child can leave a grandchild behind (a `sh` that spawned a `sleep`, say) still
+                // holding the inherited pipe write-ends, so `read_to_end` would not see EOF until that
+                // grandchild also exits — which is the very overrun we are cutting short. Detach the
+                // threads instead; they end on their own when the pipes finally close, dropping what
+                // they read. Returning promptly at the bound is the whole point of the bound.
+                drop((writer, stdout, stderr));
                 return Ok(None);
             }
             std::thread::sleep(POLL);

@@ -455,6 +455,10 @@ mod tests {
             category: "workflow".into(),
             url: "https://example.com/worktree-v1.tar.gz".into(),
             checksum: format!("sha256:{}", "a".repeat(64)),
+            // signature (provenance) and events (subscription) are other boundaries' to validate — the
+            // manifest-shape validator here neither reads nor checks them.
+            signature: None,
+            events: Vec::new(),
             official: true,
             payload_v: 1,
             min_amenbo: Some("1.8.0".into()),

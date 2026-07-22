@@ -13,11 +13,13 @@ verification/
   scenarios/   the single source of truth (YAML). Every driver reads these.
   core/        the scenario schema + validating loader (crate `amenbo-scenario`, `lint` bin)
   cli/         CLI driver + runner — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
-  gui/         mac harness — scenario → screen checklist + screencapture evidence (crate `amenbo-verify-gui`)
+  gui/         mac harness — scenario → screen checklist + screencapture + Vision OCR verdict (crate `amenbo-verify-gui`)
 ```
 
-`core/` and `cli/` are members of this cargo workspace, outside the main workspace, so they
-are never pulled into `make test`.
+`core/`, `cli/` and `gui/` are members of this cargo workspace, outside the main workspace, so
+they are never pulled into `make test`. Nothing in CI builds or tests them either (it only
+license/audit-scans their lockfile), so `cd verification && cargo clippy --all-targets && cargo
+test` is the gate — run it before you land a change here.
 
 ## CLI driver
 
@@ -67,8 +69,15 @@ errored — so a release gate reads it directly. The `--json` aggregate carries 
 no pixel (`AMB-D-297`): each step becomes a plain-language instruction of what to do or confirm on
 screen, the running GUI's window is located through `app/scripts/uiauto/uiauto.swift`, and every
 step is captured with `screencapture -l <winid>` into an evidence directory (plus a
-`manifest.json` pairing each instruction with its shot). Judging what a shot *shows* — OCR or a
-human eye — is the sibling task; this lays the rail those verdicts run on.
+`manifest.json` pairing each instruction, verdict and shot).
+
+An assert is judged from its shot with macOS's own **Vision** OCR (`gui/ocr.swift`, `AMB-D-355`):
+the harness derives the text the step expects on screen — for a `listed` assert, the bound task's
+title — reads the shot back, and passes when that text is present (or absent, for `present:
+false`). The recognized text is written next to the shot (`NN-…​.txt`) as evidence of the reading.
+An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`: its shot is
+kept for an AI/human eye and does not fail the run. tesseract stays the Linux container path
+(`scripts/docker/gui-e2e.sh`); each driver maps the one scenario source to its own world.
 
 ```sh
 cd verification
@@ -82,9 +91,10 @@ uiauto is the input primitive, called here, never moved: `window <pid>` yields t
 pixel into a click point, and its `click` / `type` / `key` carry out the action steps the
 checklist names. Bring the app to the front first (`--app`, or by hand) — uiauto skips a window
 behind another Space. `--winid <id>` shoots a window directly, skipping uiauto; `--evidence <dir>`
-chooses where the shots and manifest land (default: a fresh dir under the temp tree). Exit is 0
-when every step was captured, non-zero on a load or capture failure — it does not yet assert
-screen content.
+chooses where the shots and manifest land (default: a fresh dir under the temp tree); `--ocr
+<path>` overrides `ocr.swift`. Exit is 0 when every OCR-judged assert passed and every step was
+captured, non-zero on a failed assert or a load/capture/OCR failure — a `Review` step is closed by
+a human from the evidence, not by the exit code.
 
 ## Scenario format
 

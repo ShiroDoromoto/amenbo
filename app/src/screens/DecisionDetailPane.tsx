@@ -245,9 +245,11 @@ export function DecisionDetailPane({ decisionId, onOpenTask, onOpenDecision }: {
             </div>
           </div>
         ) : (
+          // Entry buttons are real buttons, not link-styled feed__action: accepting or rejecting a
+          // decision is the pane's primary act and must not hide among the faint navigation links.
           <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-            <button className="feed__action" onClick={() => setConfirming("accept")}>{t("dec.accept")}</button>
-            <button className="feed__action" onClick={() => setConfirming("reject")}>{t("dec.reject")}</button>
+            <button className="btn btn--primary" onClick={() => setConfirming("accept")}>{t("dec.accept")}</button>
+            <button className="btn btn--danger" onClick={() => setConfirming("reject")}>{t("dec.reject")}</button>
           </div>
         )
       )}

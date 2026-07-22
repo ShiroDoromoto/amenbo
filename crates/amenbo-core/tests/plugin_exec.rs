@@ -73,7 +73,9 @@ mod unix {
     }
 
     /// A child that finishes inside the bound comes back as `Some`, with its output — the bounded wait is
-    /// the unbounded one when nothing overruns.
+    /// the unbounded one when nothing overruns. The bound is generous (60s, not a tight 5s) so a quick
+    /// `cat` never races it under gate-load saturation: this pins the finished-on-its-own path, not how
+    /// fast a loaded kernel schedules the child. The tight-bound kill is `an_overrunning_child_is_killed`.
     #[test]
     fn a_quick_child_finishes_within_the_timeout() {
         let echo = script("timeout-quick.sh", "#!/bin/sh\ncat\n");
@@ -81,7 +83,7 @@ mod unix {
             .stdin_json("hello")
             .spawn()
             .unwrap()
-            .wait_timeout(Duration::from_secs(5))
+            .wait_timeout(Duration::from_secs(60))
             .unwrap();
         let out = out.expect("finished on its own, not timed out");
         assert!(out.succeeded());

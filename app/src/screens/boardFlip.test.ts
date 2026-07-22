@@ -11,7 +11,7 @@ describe("planFlip", () => {
   it("slides a card that moved, with the delta back to its old position", () => {
     const first = new Map([[1, rect(0, 0)]]);
     const last = new Map([[1, rect(300, 40)]]);
-    const moves = planFlip(first, last, { viewport: VP, maxCards: 20 });
+    const moves = planFlip(first, last, { viewport: VP, maxCards: 100 });
     expect(moves).toEqual([{ id: 1, dx: -300, dy: -40 }]);
   });
 
@@ -19,7 +19,7 @@ describe("planFlip", () => {
     // Card 1 crossed columns; card 2 stayed in its column but the vacated slot pulled it up — it slides as well.
     const first = new Map([[1, rect(0, 0)], [2, rect(0, 140)]]);
     const last = new Map([[1, rect(300, 40)], [2, rect(0, 70)]]);
-    const moves = planFlip(first, last, { viewport: VP, maxCards: 20 });
+    const moves = planFlip(first, last, { viewport: VP, maxCards: 100 });
     expect(moves).toEqual([
       { id: 1, dx: -300, dy: -40 },
       { id: 2, dx: 0, dy: 70 },
@@ -29,29 +29,29 @@ describe("planFlip", () => {
   it("ignores a card that did not move", () => {
     const first = new Map([[1, rect(300, 40)]]);
     const last = new Map([[1, rect(300, 40)]]);
-    expect(planFlip(first, last, { viewport: VP, maxCards: 20 })).toEqual([]);
+    expect(planFlip(first, last, { viewport: VP, maxCards: 100 })).toEqual([]);
   });
 
   it("ignores a card mounted in only one layout (entering the view, not moving within it)", () => {
     const first = new Map<number, FlipRect>();
     const last = new Map([[1, rect(300, 40)]]);
-    expect(planFlip(first, last, { viewport: VP, maxCards: 20 })).toEqual([]);
+    expect(planFlip(first, last, { viewport: VP, maxCards: 100 })).toEqual([]);
   });
 
   it("does not animate the card being dragged (a local move, not an outside one)", () => {
     const first = new Map([[1, rect(0, 0)]]);
     const last = new Map([[1, rect(300, 40)]]);
-    expect(planFlip(first, last, { draggingId: 1, viewport: VP, maxCards: 20 })).toEqual([]);
+    expect(planFlip(first, last, { draggingId: 1, viewport: VP, maxCards: 100 })).toEqual([]);
   });
 
   it("skips a card that sits outside the viewport in either layout", () => {
     const offscreenFirst = new Map([[1, rect(0, -500)]]); // above the top
     const last = new Map([[1, rect(0, 40)]]);
-    expect(planFlip(offscreenFirst, last, { viewport: VP, maxCards: 20 })).toEqual([]);
+    expect(planFlip(offscreenFirst, last, { viewport: VP, maxCards: 100 })).toEqual([]);
 
     const first = new Map([[1, rect(0, 40)]]);
     const offscreenLast = new Map([[1, rect(2000, 40)]]); // right of the edge
-    expect(planFlip(first, offscreenLast, { viewport: VP, maxCards: 20 })).toEqual([]);
+    expect(planFlip(first, offscreenLast, { viewport: VP, maxCards: 100 })).toEqual([]);
   });
 
   it("clips a burst to maxCards, in DOM order", () => {

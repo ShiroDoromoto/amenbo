@@ -3219,7 +3219,7 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             // drawn (new_id itself) turns up among the decisions said to want revisiting.
             let standing = standing_on(store, old_id);
             let by = flags.actor.as_str().to_string();
-            let (d, changed) = store.supersede_decision(new_id, old_id, Some(by)).map_err(CliError::from)?;
+            let (d, changed) = store.supersede_decision(new_id, old_id, Some(by), flags.actor).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             let mut resource = serde_json::to_value(&detail).unwrap();
             attach_revisit(&mut resource, &standing);

@@ -358,6 +358,21 @@ impl Store {
         self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::commit::remove(tx, id, sha))
     }
 
+    /// Set (`Some`) or clear (`None`) the per-project override of a plugin text field (one operation = one
+    /// transaction). Returns whether anything changed. The value is validated at the config write boundary
+    /// ([`crate::plugin_config::set`]) before it reaches here; reach is guarded by `WriteTarget::Project`.
+    pub fn set_plugin_config_override(
+        &mut self,
+        project_id: i64,
+        plugin: &str,
+        field_key: &str,
+        value: Option<&str>,
+    ) -> Result<bool> {
+        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+            crate::ops::plugin_config::set(tx, project_id, plugin, field_key, value)
+        })
+    }
+
     /// Create a project (one operation = one transaction). The ordering sibling's `order_key` is read
     /// inside this transaction.
     pub fn project_add(
@@ -672,16 +687,28 @@ impl Store {
 
     /// Supersede one decision with another (one operation = one transaction). Inserting the
     /// `supersedes` edge and promoting the new decision ride together; the old decision's row is left
-    /// untouched, because whether it is current is derived from the edges.
+    /// untouched, because whether it is current is derived from the edges. When the supersession
+    /// promotes the new side `Proposed → Accepted`, that acceptance is a real verdict, so a
+    /// `decision.accepted` event is emitted on the promotion (and only then — drawing the edge over an
+    /// already-accepted side promotes nothing and observes nothing). `actor` is the process facet,
+    /// stamped onto that event. Returns `(new_decision, changed)`.
     pub fn supersede_decision(
         &mut self,
         new_id: i64,
         old_id: i64,
         decided_by: Option<String>,
+        actor: crate::model::ActorKind,
     ) -> Result<(crate::model::Decision, bool)> {
         self.write_one(
             &[WriteTarget::Decision(new_id), WriteTarget::Decision(old_id)],
-            |tx| crate::ops::decision::supersede(tx, new_id, old_id, decided_by),
+            |tx| {
+                let (decision, changed, promoted) =
+                    crate::ops::decision::supersede(tx, new_id, old_id, decided_by)?;
+                if promoted {
+                    emit_decision_verdict(tx, &decision, crate::plugin_payload::name::DECISION_ACCEPTED, actor)?;
+                }
+                Ok((decision, changed))
+            },
         )
     }
 

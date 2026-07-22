@@ -66,12 +66,12 @@ errored — so a release gate reads it directly. The `--json` aggregate carries 
 ## GUI harness (mac)
 
 `verify-gui` reads the same scenario as a **screen checklist**. It bakes in no command line and
-no pixel (`AMB-D-297`): each step becomes a plain-language instruction of what to do or confirm on
+no pixel: each step becomes a plain-language instruction of what to do or confirm on
 screen, the running GUI's window is located through `app/scripts/uiauto/uiauto.swift`, and every
 step is captured with `screencapture -l <winid>` into an evidence directory (plus a
 `manifest.json` pairing each instruction, verdict and shot).
 
-An assert is judged from its shot with macOS's own **Vision** OCR (`gui/ocr.swift`, `AMB-D-355`):
+An assert is judged from its shot with macOS's own **Vision** OCR (`gui/ocr.swift`):
 the harness derives the text the step expects on screen — for a `listed` assert, the bound task's
 title — reads the shot back, and passes when that text is present (or absent, for `present:
 false`). The recognized text is written next to the shot (`NN-…​.txt`) as evidence of the reading.

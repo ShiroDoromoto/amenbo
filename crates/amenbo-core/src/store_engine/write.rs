@@ -97,6 +97,16 @@ impl<'a> WriteTx<'a> {
         self.engine.delete_records_for_target(target_type, target_id)
     }
 
+    /// Append one plugin observation event to the outbox **inside this transaction** — the leak-free half
+    /// of `AMB-D-367`. The event lands with the write that caused it or, on an earlier `?`/drop, not at
+    /// all, so a plugin never sees a change that did not commit. Unlike the change feed (drained from
+    /// SQLite's `update_hook` at [`commit`](Self::commit)), the caller *composes* the event: it alone
+    /// knows the actor, and — for an `update` — which of the six events the new state names. The store
+    /// appends the row it is given and interprets none of its strings. See [`super::outbox`].
+    pub fn emit_event(&self, event: &super::outbox::EventRow<'_>) -> Result<()> {
+        super::outbox::append(&self.tx, event)
+    }
+
     /// Commit the batch. Everything written through this guard lands together; on any earlier `?` the
     /// guard drops and none of it does. Consumes the guard, so a committed transaction cannot be
     /// written to again — and the caller's activity append can only follow this returning `Ok`. **The

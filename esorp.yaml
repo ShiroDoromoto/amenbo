@@ -201,6 +201,20 @@ rules:
         - "!crates/**"
         - "!app/**"
 
+  # The same code-span reference on the text face — a commit message, and the whole of every
+  # tracked file that carries no code (a .md, a .toml), handed in by check-prose.sh. That face has
+  # no path, so the rule above (scoped by path) cannot reach it; without this, a pointer quoted in
+  # a commit message or a README would still slip. The form-is-subject sparing does not apply here:
+  # no reference parser lives in prose, so a quoted reference on this face is always a pointer.
+  - id: internal-ref-codespan-text
+    pattern: '`(AMB-)?[TD]-\d+`'
+    message: |
+      This points at this project's tracker from inside a code span, in a commit message or a
+      prose file a reader with only this repository cannot follow. Say what the change does
+      instead of where it was decided.
+    where:
+      syntax: [text]
+
   # Link syntax in a comment nothing resolves. rustdoc reads `///` and `//!`, so
   # a bracketed code span there is a real link, and a target that goes turns the
   # doc build red. The same characters in a plain `//` are text: no tool reads

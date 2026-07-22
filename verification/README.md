@@ -2,7 +2,7 @@
 
 This subsystem verifies the **shipped / installed** amenbo build as a black box, before a
 release goes out. It is deliberately separate from `make test`, which exercises the
-build-time workspace artifacts — see decision `AMB-D-345`.
+build-time workspace artifacts.
 
 The single source of truth is the set of **scenarios**: declarative YAML describing a
 domain procedure plus its expected results, with no command line or coordinates baked in.
@@ -35,8 +35,8 @@ cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-appears-on-boa
 cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-appears-on-board.yaml --json
 ```
 
-The run is isolated by `AMENBO_HOME` pointed at a throwaway store plus a `.amenbo`-free CWD
-(`AMB-D-336`); the real app-data is never touched, and `AMENBO_UPDATE_CHECK=0` keeps it off the
+The run is isolated by `AMENBO_HOME` pointed at a throwaway store plus a `.amenbo`-free CWD;
+the real app-data is never touched, and `AMENBO_UPDATE_CHECK=0` keeps it off the
 network. Exit code is the machine signal — `0` when every assert passes, non-zero on any failed
 assert or execution error — so the runner reads it directly. `--keep` leaves the throwaway store
 in place for inspection.

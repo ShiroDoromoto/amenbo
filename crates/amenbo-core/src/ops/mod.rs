@@ -21,6 +21,7 @@ pub mod decision;
 pub mod dependency;
 pub mod dimension;
 pub mod comment;
+pub mod plugin_config;
 pub mod project;
 pub mod task;
 pub mod user;

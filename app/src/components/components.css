@@ -146,12 +146,16 @@
 .markdown ul, .markdown ol { margin: var(--s-2) 0; padding-left: 1.25em; }
 .markdown li { margin: 2px 0; }
 .markdown li > p { margin: 0; }
-.markdown h1, .markdown h2, .markdown h3 {
+.markdown h1, .markdown h2, .markdown h3,
+.markdown h4, .markdown h5, .markdown h6 {
   font-weight: var(--fw-bold); line-height: 1.4; margin: var(--s-4) 0 var(--s-2);
 }
 .markdown h1 { font-size: var(--fs-xl); }
 .markdown h2 { font-size: var(--fs-lg); }
-.markdown h3 { font-size: var(--fs-md); color: var(--c-text-muted); }
+/* h3 and deeper all cap at the same muted size — bodies here rarely nest past h3. */
+.markdown h3, .markdown h4, .markdown h5, .markdown h6 {
+  font-size: var(--fs-md); color: var(--c-text-muted);
+}
 .markdown code {
   font-family: var(--font-mono); font-size: 0.92em;
   background: var(--c-surface); border: 1px solid var(--c-border);
@@ -162,6 +166,16 @@
   border-radius: var(--r-md); padding: var(--s-2); overflow-x: auto;
 }
 .markdown pre code { background: none; border: none; padding: 0; }
+/* Other GFM block elements. Token-driven, so dark/light follow automatically. */
+.markdown blockquote {
+  margin: var(--s-2) 0; padding-left: var(--s-3);
+  border-left: 3px solid var(--c-border-strong); color: var(--c-text-muted);
+}
+.markdown hr { border: none; border-top: 1px solid var(--c-border); margin: var(--s-4) 0; }
+.markdown img { max-width: 100%; height: auto; border-radius: var(--r-sm); }
+/* Task lists (`- [ ]`): drop the bullet, keep the checkbox tinted and spaced from the label. */
+.markdown .contains-task-list { list-style: none; padding-left: 0; }
+.markdown .task-list-item input { margin: 0 var(--s-2) 0 0; accent-color: var(--c-accent); }
 /* GFM tables. The right pane is a fixed 480px, so a wide table scrolls sideways in its own
    wrapper (see Markdown.tsx) rather than wrapping and blowing up the row height. */
 .markdown__tablewrap { overflow-x: auto; margin: var(--s-2) 0; }

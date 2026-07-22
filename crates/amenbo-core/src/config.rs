@@ -8,6 +8,7 @@
 //! `identity.json` directly under the base dir and **holds no secrets**. The `accounts/P0/` layout
 //! written by older builds is lifted to the base dir once, on open ([`lift_legacy_identity`]).
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -174,6 +175,19 @@ impl Paths {
     pub fn registry_dir(&self) -> PathBuf {
         self.plugins_dir().join(Self::REGISTRY_DIR_NAME)
     }
+
+    /// On-disk name of the plugin secret file (see [`plugin_secrets_file`](Self::plugin_secrets_file)).
+    pub const PLUGIN_SECRETS_FILE_NAME: &'static str = "plugin-secrets.json";
+
+    /// The **plugin secret file**, `<base>/plugin-secrets.json`: the user-area home a `secret` plugin
+    /// config field is stored in (`AMB-D-356`). It sits flat under the base beside `config.json` — the
+    /// same home as amenbo's own identity — but unlike the store it is **outside the source of truth and
+    /// outside every backup/export**: `backup` snapshots `store.sqlite` and `export` walks the record
+    /// tables, and this file is neither. Written owner-only (0600) by [`crate::plugin_secret`], so amenbo
+    /// holds the secret centrally and injects it at run time rather than the store ever seeing it.
+    pub fn plugin_secrets_file(&self) -> PathBuf {
+        self.base_dir.join(Self::PLUGIN_SECRETS_FILE_NAME)
+    }
 }
 
 /// Whether `name` is reserved by the plugin disk layout and so cannot name a plugin: the registry cache
@@ -311,6 +325,46 @@ pub struct Config {
     /// leave this alone.
     #[serde(default)]
     pub hook_consent: Option<crate::hooks::HookConsent>,
+    /// **Plugin text configuration — machine defaults** (`AMB-D-356` / `AMB-D-350`): the lower of the two
+    /// tiers a *non-secret* plugin setting lives in (the per-project override is the store's
+    /// `plugin_config` record table, read on top of this). Keyed plugin name → field key → value. Written
+    /// only through the config write boundary ([`crate::plugin_config::set`]), never `config set`: a
+    /// plugin's schema is the author's, not a fixed key set. **Secrets are never here** — a `secret` field
+    /// lands in the user-area secret file ([`crate::plugin_secret`]), off the store and off every backup.
+    /// Empty by default; an older config with no key is a machine with no plugin defaults, not a parse
+    /// error, and an empty map does not serialize (no `{}` residue).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub plugin_config: BTreeMap<String, BTreeMap<String, String>>,
+}
+
+impl Config {
+    /// The machine-default value of one plugin text field, if set (`AMB-D-356`, the lower tier). The
+    /// per-project override that may sit on top of it lives in the store, not here.
+    pub fn plugin_text_default(&self, plugin: &str, key: &str) -> Option<&str> {
+        self.plugin_config.get(plugin)?.get(key).map(String::as_str)
+    }
+
+    /// Set (`Some`) or clear (`None`) the machine default of one plugin text field. Clearing removes the
+    /// key, and the plugin's map with it once empty, so an unset field leaves no `{}` residue. Does **not**
+    /// persist — the caller saves the config (through the write boundary).
+    pub fn set_plugin_text_default(&mut self, plugin: &str, key: &str, value: Option<&str>) {
+        match value {
+            Some(v) => {
+                self.plugin_config
+                    .entry(plugin.to_string())
+                    .or_default()
+                    .insert(key.to_string(), v.to_string());
+            }
+            None => {
+                if let Some(fields) = self.plugin_config.get_mut(plugin) {
+                    fields.remove(key);
+                    if fields.is_empty() {
+                        self.plugin_config.remove(plugin);
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Cap on the size of an avatar data URL, in bytes. A loose limit to stop breakage and runaways —
@@ -369,6 +423,7 @@ impl Default for Config {
             human_avatar: None,
             ai_avatar: None,
             hook_consent: None,
+            plugin_config: BTreeMap::new(),
         }
     }
 }

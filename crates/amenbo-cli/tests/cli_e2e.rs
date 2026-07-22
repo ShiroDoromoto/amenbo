@@ -86,6 +86,24 @@ impl Cli {
         serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("failed to parse JSON {args:?}: {e}\n{stdout}"))
     }
 
+    /// Run the binary and return (stdout, stderr, exit_code) — for a command that succeeds on stdout
+    /// while also emitting an advisory on stderr (the two streams inspected together).
+    fn run_both(&self, args: &[&str]) -> (String, String, i32) {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &self.home)
+            .env("AMENBO_ACTOR", "human")
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&self.home)
+            .args(args)
+            .output()
+            .expect("failed to run the binary");
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            String::from_utf8_lossy(&out.stderr).to_string(),
+            out.status.code().unwrap_or(-1),
+        )
+    }
+
     /// Run the binary and return (stderr, exit_code); used for the error paths.
     fn run_err(&self, args: &[&str]) -> (String, i32) {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
@@ -166,6 +184,47 @@ fn full_task_lifecycle() {
     assert_eq!(done["noop"], false);
     let again = cli.json(&["task", "done", &tid, "--json"]);
     assert_eq!(again["noop"], true);
+}
+
+/// Placing a premise (a blocker, or a linked decision) on a reserved (`in_progress`) task silently drops it
+/// to `ready:no`. It stays allowed, but the changer is warned on stderr so it is not silent (`AMB-D-366`,
+/// changer side). A `todo` / `blocked` / `done` target says nothing.
+#[test]
+fn adding_a_premise_to_a_reserved_task_warns_the_changer() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "警告PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    let a = cli.json(&["task", "add", "--title", "予約先", "--project", &pid, "--json"]);
+    let aid = id_str(&a["task"]["id"]);
+    let b = cli.json(&["task", "add", "--title", "前提", "--project", &pid, "--json"]);
+    let bid = id_str(&b["task"]["id"]);
+    let a_ref = a["task"]["ref"].as_str().unwrap();
+
+    // A todo target is silent — no advisory on stderr.
+    let (_o0, e0, c0) = cli.run_both(&["task", "depend", &aid, "--on", &bid, "--json"]);
+    assert_eq!(c0, 0);
+    assert!(!e0.contains('⚠'), "a todo target must not warn: {e0}");
+    // Idempotent-undo so the same edge can be re-added once A is reserved.
+    let _ = cli.json(&["task", "undepend", &aid, "--on", &bid, "--json"]);
+
+    // Reserve A (todo→in_progress), then re-add the blocker: now the holder must be told.
+    cli.json(&["task", "status", &aid, "in_progress", "--json"]);
+    let (o1, e1, c1) = cli.run_both(&["task", "depend", &aid, "--on", &bid, "--json"]);
+    assert_eq!(c1, 0, "the warn does not fail the command: {e1}");
+    assert!(o1.contains("\"action\""), "stdout still carries the JSON envelope: {o1}");
+    assert!(e1.contains('⚠') && e1.contains("reserved"), "a reserved target warns: {e1}");
+    assert!(e1.contains(a_ref), "the warn names the reserved task {a_ref}: {e1}");
+
+    // Re-running the same edge is an idempotent no-op — nothing was added, so no second warn.
+    let (_o2, e2, _c2) = cli.run_both(&["task", "depend", &aid, "--on", &bid, "--json"]);
+    assert!(!e2.contains('⚠'), "a no-op edge must not warn: {e2}");
+
+    // Linking a decision as a premise to the reserved task warns on the same footing.
+    let d = cli.json(&["decision", "add", "--title", "根拠", "--body", "x", "--project", &pid, "--json"]);
+    let did = id_str(&d["decision"]["id"]);
+    let (_o3, e3, c3) = cli.run_both(&["decision", "link", &did, &aid, "--json"]);
+    assert_eq!(c3, 0);
+    assert!(e3.contains('⚠') && e3.contains(a_ref), "linking a premise to a reserved task warns: {e3}");
 }
 
 #[test]

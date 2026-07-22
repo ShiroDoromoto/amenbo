@@ -1,10 +1,10 @@
 //! The outbox emit half of `AMB-D-367`: a write point appends the semantic event it alone can name —
-//! which of the six an `update` split into, the actor that drove it, the new state — to the plugin
-//! outbox, **inside the mutation's own transaction**. These tests drive the events through the public
-//! `Store` wrappers (the one seam CLI and GUI share), read them back through `outbox::events_since`, and
-//! pin three things: the right event fires with the right `new_state`, the actor is stamped from the
-//! caller (the feed is actor-free, so only the write point holds it), and a change that did not happen —
-//! an idempotent re-set, a re-accept, a same-project reorder — emits nothing.
+//! which of the nine v1 events happened, the actor that drove it, the new state — to the plugin outbox,
+//! **inside the mutation's own transaction**. These tests drive the events through the public `Store`
+//! wrappers (the one seam CLI and GUI share), read them back through `outbox::events_since`, and pin
+//! three things: the right event fires with the right `new_state`, the actor is stamped from the caller
+//! (only the write point holds it), and a change that did not happen — an idempotent re-set, a
+//! re-accept, a same-project reorder — emits nothing.
 
 use amenbo_core::config::Paths;
 use amenbo_core::model::{ActorKind, TaskStatus};
@@ -64,6 +64,68 @@ fn only(store: &Store, after: i64) -> OutboxRow {
     let mut rows = since(store, after);
     assert_eq!(rows.len(), 1, "exactly one event: {rows:?}");
     rows.pop().unwrap()
+}
+
+/// Creating a task fires `task.created`: id the task's own, actor the creator's facet from `NewTask`,
+/// and no `new` — the name is the whole state.
+#[test]
+fn creating_a_task_fires_created_with_the_creator_facet() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+
+    let h = head(&store);
+    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+    let ev = only(&store, h);
+    assert_eq!(ev.event, "task.created");
+    assert_eq!(ev.record_id, task);
+    assert_eq!(ev.actor, "ai", "the actor is the creator facet the task was made with");
+    assert_eq!(ev.new_state, None, "the name is the whole state");
+}
+
+/// Deleting a task fires `task.deleted`: id the task's own, actor the caller's, no `new`. The cascade
+/// children the delete takes with it are not v1 events, so exactly one event fires.
+#[test]
+fn deleting_a_task_fires_deleted() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+
+    let h = head(&store);
+    store.delete_task(task, ActorKind::Human).unwrap();
+    let ev = only(&store, h);
+    assert_eq!(ev.event, "task.deleted");
+    assert_eq!(ev.record_id, task);
+    assert_eq!(ev.actor, "human", "the actor is who deleted it");
+    assert_eq!(ev.new_state, None);
+}
+
+/// Adding a task comment fires `comment.added`: `id` is the comment's own (not the task's), actor its
+/// author, no `new`.
+#[test]
+fn adding_a_task_comment_fires_comment_added() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+
+    let h = head(&store);
+    let comment = store.add_task_comment(task, ActorKind::Ai, "コメント").unwrap();
+    let ev = only(&store, h);
+    assert_eq!(ev.event, "comment.added");
+    assert_eq!(ev.record_id, comment.id, "the id is the comment's own, not the task's");
+    assert_eq!(ev.actor, "ai");
+    assert_eq!(ev.new_state, None);
+}
+
+/// A decision comment is not a v1 event: its write point emits nothing (only a *task* comment does).
+#[test]
+fn a_decision_comment_is_not_observed() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let decision = store.add_decision(new_decision("案", project)).unwrap().id;
+
+    let h = head(&store);
+    store.add_decision_comment(decision, ActorKind::Ai, "コメント").unwrap();
+    assert!(since(&store, h).is_empty(), "a decision comment fires no v1 event");
 }
 
 /// A status change fires `task.status_changed` carrying the new status; the specialisation to `done`

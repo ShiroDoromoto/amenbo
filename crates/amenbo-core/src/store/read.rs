@@ -277,6 +277,22 @@ impl Store {
         Ok(crate::store_engine::read::task_commits(self.engine.conn(), task_id)?)
     }
 
+    /// The per-project override value of one plugin text field, or `None` when the project has none (the
+    /// machine default in `config.json` then stands). The upper of the two text tiers (`AMB-D-356`).
+    pub fn plugin_config_override(
+        &self,
+        project_id: i64,
+        plugin: &str,
+        field_key: &str,
+    ) -> Result<Option<String>> {
+        Ok(crate::store_engine::read::plugin_config_value(
+            self.engine.conn(),
+            project_id,
+            plugin,
+            field_key,
+        )?)
+    }
+
     /// A single task comment; `None` if there is none (a row exists ⇒ it is live). The id is a comment id, which
     /// is not a conversational ref, so this is itself a reach entry point — it is the path
     /// `decision promote <comment id>` takes to read the body.

@@ -655,6 +655,24 @@ datasets! {
         created_by_kind: actor_kind,
         order_key: col(ORDER_KEY),
     }
+
+    // Per-project override of a plugin's **text (non-secret)** config value (`AMB-D-356` / `AMB-D-350`).
+    // The machine default is a `config.json` field (`config.plugin_config`); this row overrides it for one
+    // project — the same two-tier shape `hook_consent` (config) / `hook_optout` (store) already use, with
+    // one deliberate difference: this **is** a record table, carried by `export`/`backup`, not a
+    // device-local plain table — text config belongs in the ordinary tiers, backup included, whereas
+    // `hook_optout` is an export-excluded veto. A `secret` field never reaches here — it lives in the
+    // user-area secret file (`crate::plugin_secret`), off the store entirely. `plugin` is the plugin's
+    // manifest name (a string; plugins live on disk, not in the store, so there is no FK for it) and
+    // `field_key` the config field's key (spelled out because `key` is a SQLite keyword). The
+    // `(project_id, plugin, field_key)` triple is unique (`plugin_config_triple` below). CASCADE: the
+    // override is *about* the project, so deleting the project retires it.
+    plugin_config => plugin_config {
+        project_id: fk("project", "CASCADE"),
+        plugin: col(REQ),
+        field_key: col(REQ),
+        value: col(REQ),
+    }
 }
 
 /// The dataset a **record table** belongs to, or `None` when the table is not one of them — the
@@ -823,6 +841,11 @@ CREATE INDEX IF NOT EXISTS task_dimension_value_by_task ON task_dimension_value(
 CREATE UNIQUE INDEX IF NOT EXISTS task_commit_task_sha ON task_commit(task_id, sha);
 CREATE INDEX IF NOT EXISTS task_commit_by_sha  ON task_commit(sha);
 CREATE INDEX IF NOT EXISTS task_commit_by_task ON task_commit(task_id);
+-- One plugin config override per (project, plugin, field): the triple is the natural key, so the write
+-- boundary upserts a value by finding this row rather than appending a second. The unique index *is* that
+-- constraint (the column decls carry no UNIQUE), and its leading columns also serve the reads that seek a
+-- project's overrides — by `project_id`, or by `(project_id, plugin)` for one plugin's whole config.
+CREATE UNIQUE INDEX IF NOT EXISTS plugin_config_triple ON plugin_config(project_id, plugin, field_key);
 "#;
 
 /// Read-model secondary indexes that reference **migrated columns**. Kept separate from

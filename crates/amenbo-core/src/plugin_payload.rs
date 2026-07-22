@@ -1,9 +1,9 @@
 //! The v1 plugin payload: the JSON document a fired event hands to a plugin.
 //!
-//! The event-firing seam is [`plugin_events`](crate::plugin_events) — it reads the change feed and
-//! names what happened. This layer sits on top and defines the *shape* of what a plugin receives for
-//! each named event: the four fields every event carries, plus, where the event name alone does not
-//! say it, the record's **new state**.
+//! Events are appended to the plugin observation outbox at the ops write points (see
+//! [`outbox`](crate::store_engine::outbox) and `AMB-D-367`); this layer defines the *shape* of what a
+//! plugin receives for each named event: the four fields every event carries, plus, where the event name
+//! alone does not say it, the record's **new state**.
 //!
 //! ```json
 //! { "v": 1, "event": "task.status_changed", "id": 42, "actor": "ai", "at": "2026-07-22T09:00:00Z", "new": "in_progress" }
@@ -13,32 +13,32 @@
 //!   name a plugin dispatches on; `id` the affected record; `actor` who drove the write; `at` when.
 //! - **New state** (`new`) — the record's state *after* the change, for the events an `update`
 //!   disambiguates (a status change, an assignment, a move). Absent on events whose name already is the
-//!   whole state (a creation, a deletion, a done, an accept/reject, a comment). The feed carries no
-//!   *before* value by design (see `AMB-D-348` in the decision log), so v1 loads the new state only.
+//!   whole state (a creation, a deletion, a done, an accept/reject, a comment). No *before* value is
+//!   carried by design (see `AMB-D-348` in the decision log), so v1 loads the new state only.
 //! - **Version** `v` — a single integer for the whole contract, `1` today. Adding a field does **not**
 //!   bump it: a consumer ignores keys it does not know, so new fields are additive and silent. `v`
 //!   rises only on a breaking change to an existing field's meaning (see `AMB-D-349`).
 //!
-//! This module defines the payload *type* and the six event names an `update` disambiguates — the ones
-//! [`plugin_events::name`](crate::plugin_events::name) deliberately left to the layer that reads the new
-//! state. It does not read the store or launch anything: a caller on the write path (which alone knows
-//! the actor — the feed is actor-free) builds a [`Payload`] with the values it already holds and hands it
-//! to the hook runner.
+//! This module is the single source of truth for the payload *type* and the [`nine v1 event
+//! names`](name). It does not read the store or launch anything: a caller on the write path (which alone
+//! knows the actor) builds a [`Payload`] with the values it already holds and hands it to the hook runner.
 
 use serde::Serialize;
 
 use crate::model::{ActorKind, TaskStatus};
-use crate::plugin_events::name as ev;
 use crate::time::Timestamp;
 
 /// The payload contract version. A single integer for the whole contract, bumped only on a breaking
 /// change to an existing field — additive fields do not touch it (`AMB-D-349`).
 pub const VERSION: u32 = 1;
 
-/// The six event names an `update` disambiguates, named here alongside the new state that tells them
-/// apart — the half [`plugin_events::name`](crate::plugin_events::name) left to this layer. Together with
-/// the three route-independent names there, they are the v1 catalog ([`V1_EVENTS`]).
+/// The nine v1 event names — the one source of truth for the strings a plugin dispatches on, shared
+/// with the ops write points that emit them. Six are the events an `update` disambiguates (named
+/// alongside the new state that tells them apart); the other three name themselves outright — a
+/// creation, a deletion, a comment. Together they are the v1 catalog ([`V1_EVENTS`]).
 pub mod name {
+    /// A task was created. No `new` — the name is the whole state.
+    pub const TASK_CREATED: &str = "task.created";
     /// A task's status changed (to something other than `done`; see [`TASK_DONE`]). Carries `new`.
     pub const TASK_STATUS_CHANGED: &str = "task.status_changed";
     /// A task was completed — the `status → done` specialization of a status change. No `new`.
@@ -47,25 +47,28 @@ pub mod name {
     pub const TASK_ASSIGNED: &str = "task.assigned";
     /// A task moved to another project. Carries `new`: the destination project's slug.
     pub const TASK_MOVED: &str = "task.moved";
+    /// A task was deleted. No `new` — the name is the whole state.
+    pub const TASK_DELETED: &str = "task.deleted";
     /// A decision was accepted. No `new` — the name is the whole state.
     pub const DECISION_ACCEPTED: &str = "decision.accepted";
     /// A decision was rejected. No `new` — the name is the whole state.
     pub const DECISION_REJECTED: &str = "decision.rejected";
+    /// A comment was added to a task. No `new` — the name is the whole state.
+    pub const COMMENT_ADDED: &str = "comment.added";
 }
 
-/// The complete v1 event catalog: the three names a feed row settles on its own
-/// ([`plugin_events::name`](crate::plugin_events::name)) and the six an `update` disambiguates
-/// ([`name`]). A plugin's subscription is checked against this set.
+/// The complete v1 event catalog — all nine names in [`name`]. A plugin's subscription is checked
+/// against this set.
 pub const V1_EVENTS: [&str; 9] = [
-    ev::TASK_CREATED,
+    name::TASK_CREATED,
     name::TASK_STATUS_CHANGED,
     name::TASK_DONE,
     name::TASK_ASSIGNED,
     name::TASK_MOVED,
-    ev::TASK_DELETED,
+    name::TASK_DELETED,
     name::DECISION_ACCEPTED,
     name::DECISION_REJECTED,
-    ev::COMMENT_ADDED,
+    name::COMMENT_ADDED,
 ];
 
 /// One fired event, ready to serialize to the JSON a plugin receives.
@@ -100,7 +103,7 @@ impl Payload {
 
     /// `task.created` — a task was created.
     pub fn task_created(id: i64, actor: ActorKind, at: Timestamp) -> Self {
-        Self::base(ev::TASK_CREATED, id, actor, at)
+        Self::base(name::TASK_CREATED, id, actor, at)
     }
 
     /// `task.status_changed` — a task's status moved to `new` (a `done` transition is
@@ -126,7 +129,7 @@ impl Payload {
 
     /// `task.deleted` — a task was deleted.
     pub fn task_deleted(id: i64, actor: ActorKind, at: Timestamp) -> Self {
-        Self::base(ev::TASK_DELETED, id, actor, at)
+        Self::base(name::TASK_DELETED, id, actor, at)
     }
 
     /// `decision.accepted` — a decision was accepted.
@@ -141,7 +144,7 @@ impl Payload {
 
     /// `comment.added` — a comment was added; `id` is the comment's id.
     pub fn comment_added(id: i64, actor: ActorKind, at: Timestamp) -> Self {
-        Self::base(ev::COMMENT_ADDED, id, actor, at)
+        Self::base(name::COMMENT_ADDED, id, actor, at)
     }
 }
 

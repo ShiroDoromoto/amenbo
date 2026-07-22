@@ -1762,6 +1762,93 @@ fn open_blockers(conn: &Connection, task_id: i64) -> Result<Vec<(i64, String)>> 
     Ok(rows)
 }
 
+/// What premises a task acquired **after its current status began** — the read behind `AMB-D-366`'s
+/// "surface". Each field lists the premises that were added since [`crate::model::Task::status_changed_at`]
+/// *and* still bear on readiness: blockers that are not yet done, and linked decisions that are unsettled.
+/// That conjunction is deliberate — `D-366` scopes a "premise change" to exactly what **silently drops
+/// `ready`**, so an edge onto an already-done task, or a link onto a settled decision, is not one (it never
+/// moved `ready`). The same `status <> 'done'` and [`unsettled_premise`] predicates the `ready:` filter and
+/// [`task_detail`] apply are reused here, so the detection cannot drift from what actually blocks.
+///
+/// Only *additions* are seen: an edge or link carries a `created_at` to compare, whereas detaching one is a
+/// hard delete ([`crate::ops::dependency::remove`], [`crate::ops::decision::unlink`]) that leaves no row —
+/// and a removal lifts `ready`, never drops it, so it falls outside the scope above regardless.
+pub struct PremiseChangeRow {
+    /// Not-done blockers whose edge was added after the status began (blocker id + title), in edge-`id`
+    /// order.
+    pub added_blockers: Vec<(i64, String)>,
+    /// Unsettled decisions linked after the status began (decision id + title), in link-`id` order.
+    pub added_decisions: Vec<(i64, String)>,
+}
+
+impl PremiseChangeRow {
+    /// Whether any premise was added after the status began — the bare "has it changed?" bit `D-366` asks
+    /// for, leaving *how strongly to react* to the caller.
+    pub fn any(&self) -> bool {
+        !self.added_blockers.is_empty() || !self.added_decisions.is_empty()
+    }
+}
+
+/// Detect premises acquired after a task's current status began (`AMB-D-366`). `None` when the task does
+/// not exist; an empty [`PremiseChangeRow`] when it does but was never stamped (a store predating the
+/// `status_changed_at` column — nothing to compare against). Read-only: the reaction is the caller's.
+pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<PremiseChangeRow>> {
+    let started = std::time::Instant::now();
+    let Some(t) = task(conn, task_id)? else {
+        return Ok(None);
+    };
+    let Some(since) = t.status_changed_at else {
+        // No status clock (older store) — there is no instant to compare a premise's age against.
+        return Ok(Some(PremiseChangeRow { added_blockers: Vec::new(), added_decisions: Vec::new() }));
+    };
+    // Columns store the `to_rfc3339_z` form (fixed-width UTC), so a lexicographic `>` is chronological.
+    let since = since.to_rfc3339_z();
+
+    // Blockers added after the status began that are not yet done.
+    let added_blockers = {
+        const D: col::task_dependency::Cols = col::task_dependency::of("d");
+        const B: col::task::Cols = col::task::of("b");
+        let mut sel = Select::new();
+        let (bid, btitle) = (sel.col(B.id), sel.col(B.title));
+        let pred = Pred::eq(D.task_id, task_id)
+            .and(Pred::ne(B.status, "done"))
+            .and(Pred::cmp(D.created_at, ">", since.clone()));
+        let mut sql = Sql::from(&sel, D.table);
+        sql.join(B.table, same(B.id, D.blocked_by_id)).push_where(Some(&pred)).order_by([Sort::by(D.id)]);
+        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| Ok((bid.get(r)?, btitle.get(r)?)))
+            .map_err(StoreEngineError::from)?
+            .collect::<rusqlite::Result<Vec<(i64, String)>>>()
+            .map_err(StoreEngineError::from)?;
+        rows
+    };
+
+    // Decisions linked after the status began that are unsettled.
+    let added_decisions = {
+        const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
+        const DC: col::decision::Cols = col::decision::of("dc");
+        let mut sel = Select::new();
+        let (did, dtitle) = (sel.col(DC.id), sel.col(DC.title));
+        let pred = Pred::eq(L.task_id, task_id)
+            .and(unsettled_premise(DC))
+            .and(Pred::cmp(L.created_at, ">", since));
+        let mut sql = Sql::from(&sel, L.table);
+        sql.join(DC.table, same(DC.id, L.decision_id)).push_where(Some(&pred)).order_by([Sort::by(L.id)]);
+        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| Ok((did.get(r)?, dtitle.get(r)?)))
+            .map_err(StoreEngineError::from)?
+            .collect::<rusqlite::Result<Vec<(i64, String)>>>()
+            .map_err(StoreEngineError::from)?;
+        rows
+    };
+
+    let n = added_blockers.len() + added_decisions.len();
+    crate::perf::record_query("engine.premise_change_since", n, n, started.elapsed());
+    Ok(Some(PremiseChangeRow { added_blockers, added_decisions }))
+}
+
 /// How many comments the task carries — the count a detail row and a card both show.
 fn comment_count(conn: &Connection, task_id: i64) -> Result<usize> {
     const C: col::task_comment::Cols = col::task_comment::ALL;
@@ -3377,6 +3464,47 @@ pub fn task_commits(conn: &Connection, task_id: i64) -> Result<Vec<crate::model:
     Ok(rows)
 }
 
+/// The live `plugin_config` override row id for `(project_id, plugin, field_key)`, or `None` — what makes
+/// the config write boundary an upsert (find-then-update) and a clear a lookup. The `plugin_config_triple`
+/// UNIQUE index guarantees at most one row.
+pub fn plugin_config_override_id(
+    conn: &Connection,
+    project_id: i64,
+    plugin: &str,
+    field_key: &str,
+) -> Result<Option<i64>> {
+    const C: col::plugin_config::Cols = col::plugin_config::ALL;
+    first_id(
+        conn,
+        C.id,
+        &Pred::eq(C.project_id, project_id)
+            .and(Pred::eq(C.plugin, plugin))
+            .and(Pred::eq(C.field_key, field_key)),
+    )
+}
+
+/// The `plugin_config` override with this id.
+pub fn plugin_config_override(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::PluginConfigOverride>> {
+    super::hydrate::row_by_id(conn, "plugin_config", id, super::hydrate::plugin_config_row)
+}
+
+/// The per-project override value of one plugin text field, or `None` when the project has none (the
+/// machine default then stands). The upper of the two text tiers (`AMB-D-356`).
+pub fn plugin_config_value(
+    conn: &Connection,
+    project_id: i64,
+    plugin: &str,
+    field_key: &str,
+) -> Result<Option<String>> {
+    match plugin_config_override_id(conn, project_id, plugin, field_key)? {
+        Some(id) => Ok(plugin_config_override(conn, id)?.map(|r| r.value)),
+        None => Ok(None),
+    }
+}
+
 /// Both directions of one decision's edges, as the read surfaces render them. Forward (`supersedes` /
 /// `amends` / `builds_on`) is what this decision drew, and the target is resolved for **any** liveness —
 /// a title of `None` means the edge dangles, which the caller renders as the unknown-name placeholder.
@@ -4176,5 +4304,61 @@ mod tests {
         );
         // The bound project's own page still reads.
         assert_eq!(decision_page(conn, bound, 1, None, 0).unwrap().ids, vec![1]);
+    }
+
+    /// `premise_change_since` (`AMB-D-366`): a missing task is `None`; an added blocker/decision that
+    /// still bears on readiness and postdates the status clock is flagged; a done blocker, a settled
+    /// decision, and any premise that predates the clock are not; and a task never stamped reports no
+    /// change rather than erroring. Timestamps are stamped to fixed instants so second-resolution
+    /// wall-clock ties cannot make the ordering flaky.
+    #[test]
+    fn premise_change_since_flags_post_status_readiness_relevant_additions_only() {
+        use crate::model::TaskStatus;
+        use crate::ops::{decision, dependency, task};
+        use crate::ops::test_support::{mk_project, mk_task_in};
+
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let tx = engine.write().unwrap();
+        let pid = mk_project(&tx, "amenbo 開発");
+        let held = mk_task_in(&tx, "held", Some(pid));
+
+        // A task that does not exist has no answer.
+        assert!(premise_change_since(tx.conn(), 9999).unwrap().is_none());
+        // Nothing pinned on yet → no change.
+        assert!(!premise_change_since(tx.conn(), held).unwrap().unwrap().any());
+
+        // Anchor the status clock in the past so every premise added below is unambiguously after it.
+        tx.set_field("task", held, "status_changed_at", text("2020-01-01T00:00:00Z")).unwrap();
+
+        // An open blocker added after — a premise that silently dropped ready. Flagged.
+        let blk = mk_task_in(&tx, "blocker", Some(pid));
+        dependency::add(&tx, held, blk, None).unwrap();
+        // A blocker added after but already done — never blocked, so not a premise change.
+        let done_blk = mk_task_in(&tx, "done blocker", Some(pid));
+        dependency::add(&tx, held, done_blk, None).unwrap();
+        task::set_status(&tx, done_blk, TaskStatus::Done).unwrap();
+
+        // A proposed (unsettled) decision linked after — flagged.
+        let d_open =
+            decision::add(&tx, decision::NewDecision { title: "未採択".into(), body: String::new(), project_id: pid }).unwrap();
+        decision::link(&tx, d_open.id, held).unwrap();
+        // An accepted decision linked after — a settled ground never blocks, so not a premise change.
+        let d_settled =
+            decision::add(&tx, decision::NewDecision { title: "採択済み".into(), body: String::new(), project_id: pid }).unwrap();
+        decision::accept(&tx, d_settled.id, None).unwrap();
+        decision::link(&tx, d_settled.id, held).unwrap();
+
+        let got = premise_change_since(tx.conn(), held).unwrap().unwrap();
+        assert!(got.any());
+        assert_eq!(got.added_blockers.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![blk]);
+        assert_eq!(got.added_decisions.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![d_open.id]);
+
+        // Move the clock past every premise → the same additions now predate it → nothing flagged.
+        tx.set_field("task", held, "status_changed_at", text("2999-01-01T00:00:00Z")).unwrap();
+        assert!(!premise_change_since(tx.conn(), held).unwrap().unwrap().any());
+
+        // A store predating the column (no stamp) has no instant to compare against → no change, not an error.
+        tx.set_field("task", held, "status_changed_at", Value::Null).unwrap();
+        assert!(!premise_change_since(tx.conn(), held).unwrap().unwrap().any());
     }
 }

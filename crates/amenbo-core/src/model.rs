@@ -311,6 +311,29 @@ pub struct TaskCommit {
     pub updated_at: Timestamp,
 }
 
+/// A **per-project override of a plugin's text (non-secret) config value** (`AMB-D-356` / `AMB-D-350`).
+/// One row per `(project, plugin, field)`: the value here takes precedence, for this project, over the
+/// machine default a plugin field carries in `config.json` ([`crate::config::Config::plugin_config`]).
+/// This is the upper of the two text tiers; a `secret` field is never one of these — it lives in the
+/// user-area secret file ([`crate::plugin_secret`]), off the store and off every backup. `plugin` is the
+/// plugin's manifest name (plugins live on disk, not in the store, so there is no id for it) and
+/// `field_key` the config field's key. Unlike `hook_optout` this is a real record, carried by
+/// `export`/`backup` — text config lives in the ordinary tiers, backup included.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PluginConfigOverride {
+    pub id: i64,
+    /// The project this override applies to.
+    pub project_id: i64,
+    /// The plugin's manifest name.
+    pub plugin: String,
+    /// The config field's key (spelled out because `key` is a SQLite keyword).
+    pub field_key: String,
+    /// The overriding value.
+    pub value: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 /// A decision record — a decision, and *why* we made it — as a first-class entity that sits beside Task,
 /// under Project. **Append-only**: you do not edit a decision, you write a new one that `supersedes` it.
 /// Decisions have no status workflow and take no part in the mailbox, so they never clutter a task list.

@@ -30,7 +30,7 @@ use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Database,
     Decision, DecisionComment, DecisionEdge, DecisionEdgeKind, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionCardinality,
-    DimensionRole, DimensionValue, Priority, Project,
+    DimensionRole, DimensionValue, PluginConfigOverride, Priority, Project,
     Subtype, Task, TaskComment, TaskCommit, TaskDependency,
     TaskDimensionValue, TaskStatus, View,
 };
@@ -182,6 +182,20 @@ pub(super) fn task_commit_row(r: &Row) -> rusqlite::Result<TaskCommit> {
         task_id: get(r, C.task_id)?,
         sha: get(r, C.sha)?,
         created_by_kind: enum_opt(r, C.created_by_kind, ActorKind::parse)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn plugin_config_row(r: &Row) -> rusqlite::Result<PluginConfigOverride> {
+    const C: col::plugin_config::Cols = col::plugin_config::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(PluginConfigOverride {
+        id: get(r, C.id)?,
+        project_id: get(r, C.project_id)?,
+        plugin: get(r, C.plugin)?,
+        field_key: get(r, C.field_key)?,
+        value: get(r, C.value)?,
         created_at,
         updated_at,
     })

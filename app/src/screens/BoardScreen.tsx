@@ -18,6 +18,7 @@ import { filterDimensions, parseRefQuery, passesFilters, selectionKey, type Filt
 import { fetchProjectDimensionAssignments } from "../core/mutations";
 import { DimensionManager } from "./DimensionManager";
 import { BOARD_FLIP, useBoardFlip } from "./boardFlip";
+import { BOARD_COLUMN_CAP } from "./boardLayout";
 
 type View = "list" | "board" | "calendar" | "timeline";
 const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
@@ -40,10 +41,8 @@ function byCompletedDesc(a: TaskCard, b: TaskCard): number {
 // the most recent N and sends the rest to the list view through the "see completed in list" affordance.
 const DONE_COLUMN_CAP = 20;
 
-// The other columns must not grow the DOM without bound either. `.column` is not a scroll container (it simply
-// gets taller) and cards are variable-height, so pixel windowing has nothing to bite on: the same cap-plus-
-// affordance the done column uses is what keeps every task from being mounted. Stack the first N, list the rest.
-const BOARD_COLUMN_CAP = 50;
+// The other columns must not grow the DOM without bound either: the same cap-plus-affordance the done column
+// uses keeps every task from being mounted (see BOARD_COLUMN_CAP in ./boardLayout).
 
 /**
  * The board surface for one project: the view switcher (list/board/…) plus the tasks/decisions tabs. The initial

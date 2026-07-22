@@ -246,3 +246,47 @@ fn decision_verdicts_fire_once_on_the_real_transition() {
     assert_eq!(ev.actor, "ai");
     assert_eq!(ev.new_state, None);
 }
+
+/// Superseding with a still-`Proposed` decision promotes it to `Accepted` on the way, and that promotion
+/// is a real verdict — so `decision.accepted` fires once, stamped with the caller's actor. Drawing the
+/// edge again over the now-accepted side promotes nothing and observes nothing.
+#[test]
+fn a_supersede_that_promotes_the_new_side_fires_decision_accepted_once() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+
+    let old = store.add_decision(new_decision("旧案", project)).unwrap().id;
+    store.accept_decision(old, Some("user".to_string()), ActorKind::Human).unwrap();
+    let new = store.add_decision(new_decision("新案", project)).unwrap().id;
+
+    // The new side is still Proposed; superseding promotes it to Accepted, which observes as an acceptance.
+    let h = head(&store);
+    store.supersede_decision(new, old, Some("user".to_string()), ActorKind::Ai).unwrap();
+    let ev = only(&store, h);
+    assert_eq!(ev.event, "decision.accepted");
+    assert_eq!(ev.record_id, new, "the promotion is the new side's acceptance");
+    assert_eq!(ev.actor, "ai");
+    assert_eq!(ev.new_state, None, "the name is the whole state");
+
+    // Re-superseding the same pair promotes nothing (the new side is already accepted), so nothing fires.
+    let h = head(&store);
+    store.supersede_decision(new, old, Some("user".to_string()), ActorKind::Ai).unwrap();
+    assert!(since(&store, h).is_empty(), "a re-supersede promotes nothing and observes nothing");
+}
+
+/// Superseding with a side that is *already* `Accepted` draws the edge but promotes nothing, so no
+/// acceptance is observed — the edge is not a verdict.
+#[test]
+fn a_supersede_over_an_already_accepted_side_emits_nothing() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+
+    let old = store.add_decision(new_decision("旧案", project)).unwrap().id;
+    let new = store.add_decision(new_decision("新案", project)).unwrap().id;
+    // Accept the new side first, so the supersession only draws the edge — no promotion.
+    store.accept_decision(new, Some("user".to_string()), ActorKind::Human).unwrap();
+
+    let h = head(&store);
+    store.supersede_decision(new, old, Some("user".to_string()), ActorKind::Human).unwrap();
+    assert!(since(&store, h).is_empty(), "drawing the edge over an accepted side promotes nothing");
+}

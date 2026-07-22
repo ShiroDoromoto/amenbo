@@ -2377,7 +2377,7 @@ pub fn decision_edit(id: i64, title: Option<String>, body: Option<String>) -> Re
 pub fn decision_supersede(new_id: i64, old_id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         let by = ActorKind::Human.as_str().to_string();
-        store.supersede_decision(new_id, old_id, Some(by))?;
+        store.supersede_decision(new_id, old_id, Some(by), ActorKind::Human)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["decisions"]).decision(new_id).decision(old_id))
@@ -5694,7 +5694,7 @@ mod tests {
                     project_id: p.id,
                 })
                 .unwrap();
-            store.supersede_decision(d2.id, d.id, Some(me.clone())).unwrap();
+            store.supersede_decision(d2.id, d.id, Some(me.clone()), ActorKind::Human).unwrap();
             let d3 = store
                 .add_decision(amenbo_core::ops::decision::NewDecision {
                     title: "方針Y改".into(),

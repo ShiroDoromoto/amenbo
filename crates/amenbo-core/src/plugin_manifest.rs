@@ -107,6 +107,49 @@ pub struct Manifest {
     /// self-declared — absent means `false`.
     #[serde(default)]
     pub official: bool,
+    /// The plugin's configuration schema: a flat list of fields the author declares so amenbo can
+    /// render a form, store the values, and inject them at run time (`AMB-D-356`). Absent means the
+    /// plugin takes no configuration — the safe default is an empty schema, so an older manifest with
+    /// no `config` key is a plugin with no settings, not a parse error.
+    ///
+    /// The list is **the whole schema**: no types, no validation rules. amenbo does not judge what a
+    /// value means (a URL, an email) — that is the author's job at run time. What amenbo reads here is
+    /// only which fields exist, which are secret (so the store never sees them — `AMB-D-356`), and
+    /// which are required (so `enable` is blocked until they are filled — `AMB-D-351`).
+    ///
+    /// An empty schema does not serialize (`skip_serializing_if`), so a re-emitted manifest for a plugin
+    /// with no settings is byte-for-byte what an author who omitted `config` wrote — the absent and the
+    /// empty forms stay the same document.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub config: Vec<ConfigField>,
+}
+
+/// One field of a plugin's configuration schema (`AMB-D-356`). The author declares a flat list of these
+/// in the manifest; amenbo renders each as one form field, routes its value to storage by the `secret`
+/// flag, and injects it into the plugin at run time. **amenbo carries no notion of the field's type or
+/// meaning** — there is no `type`, no pattern, no validation rule here. The only semantics amenbo acts on
+/// are `secret` (where the value is stored and how it is injected) and `required` (whether an empty value
+/// blocks `enable`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfigField {
+    /// The field's stable key — its identity in storage and the name it is injected under (the env var
+    /// for a secret, the JSON key on stdin for the rest). Not shown to the user; `label` is.
+    pub key: String,
+    /// The human-readable label the form shows beside the field. Display text only.
+    pub label: String,
+    /// Whether the value is a secret. **The author declares this; amenbo does not judge it** (`AMB-D-356`)
+    /// — amenbo cannot know a webhook URL is sensitive, so it trusts the flag. A secret is stored in the
+    /// user-area secret file (never the store, never a backup) and injected as an environment variable
+    /// (off argv, off logs); a non-secret is stored in the ordinary two tiers and injected on stdin.
+    /// Absent means `false` — the safe-for-storage default is *not* secret only for a field the author
+    /// left unmarked, which is a plain-text field by construction.
+    #[serde(default)]
+    pub secret: bool,
+    /// Whether the field must hold a value before the plugin may be enabled (`AMB-D-351`, fail-closed).
+    /// amenbo only checks presence (a non-empty value); it does not check the value is *valid*. Absent
+    /// means `false`.
+    #[serde(default)]
+    pub required: bool,
 }
 
 #[cfg(test)]
@@ -173,6 +216,46 @@ mod tests {
         let mut v = full_json();
         v["os"] = serde_json::json!(["macos", "haiku"]);
         assert!(serde_json::from_value::<Manifest>(v).is_err(), "an OS outside the vocabulary is rejected");
+    }
+
+    #[test]
+    fn config_defaults_to_an_empty_schema_when_absent() {
+        // A manifest with no `config` key is a plugin that takes no settings, not a parse error.
+        let m: Manifest = serde_json::from_value(full_json()).unwrap();
+        assert!(m.config.is_empty(), "no `config` key ⇒ no configuration schema");
+    }
+
+    #[test]
+    fn a_config_schema_round_trips() {
+        let mut v = full_json();
+        v["config"] = serde_json::json!([
+            { "key": "webhook_url", "label": "Slack Webhook URL", "secret": true, "required": true },
+            { "key": "events", "label": "通知するイベント" }
+        ]);
+        let m: Manifest = serde_json::from_value(v.clone()).unwrap();
+        assert_eq!(m.config.len(), 2);
+        assert_eq!(m.config[0].key, "webhook_url");
+        assert!(m.config[0].secret && m.config[0].required);
+        // The second field declares neither flag: both default to false.
+        assert_eq!(m.config[1].key, "events");
+        assert!(!m.config[1].secret, "an unmarked field is not a secret");
+        assert!(!m.config[1].required, "an unmarked field is not required");
+        // Re-serializing a schema built from the parsed form yields the same document.
+        assert_eq!(serde_json::to_value(&m).unwrap()["config"], serde_json::to_value(&m.config).unwrap());
+    }
+
+    #[test]
+    fn a_config_field_missing_key_or_label_does_not_parse() {
+        // key and label are the required half of a field's shape (secret/required default).
+        for field in ["key", "label"] {
+            let full = serde_json::json!({ "key": "k", "label": "L", "secret": true, "required": true });
+            let mut one = full.clone();
+            one.as_object_mut().unwrap().remove(field);
+            assert!(
+                serde_json::from_value::<ConfigField>(one).is_err(),
+                "a config field missing `{field}` must not parse"
+            );
+        }
     }
 
     #[test]

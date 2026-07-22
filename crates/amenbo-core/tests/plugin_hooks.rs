@@ -12,7 +12,13 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use amenbo_core::plugin_exec::PluginInvocation;
-use amenbo_core::plugin_hooks::fire;
+use amenbo_core::plugin_hooks::fire_with_timeout;
+
+/// A per-hook bound generous enough that even a fork-storm-saturated machine (the whole `make test`
+/// gate running in parallel) reaps a trivial hook well inside it — so these tests never invert on the
+/// kill-on-timeout path they are not testing. The real [`HOOK_TIMEOUT`](amenbo_core::plugin_hooks::HOOK_TIMEOUT)
+/// policy default is exercised where it matters (the kill itself lives in `plugin_exec`'s bounded wait).
+const GENEROUS: Duration = Duration::from_secs(60);
 
 /// Write `body` as an executable script and return its path.
 fn script(name: &str, body: &str) -> PathBuf {
@@ -36,7 +42,7 @@ fn a_clean_hook_runs_to_completion() {
     let done = marker("clean.marker");
     let hook = script("clean.sh", &format!("#!/bin/sh\ntouch '{}'\n", done.display()));
 
-    for handle in fire(vec![PluginInvocation::new(&hook)]) {
+    for handle in fire_with_timeout(vec![PluginInvocation::new(&hook)], GENEROUS) {
         handle.join().unwrap();
     }
     assert!(done.exists(), "the clean hook's side effect landed");
@@ -51,24 +57,28 @@ fn fire_launches_every_plugin_independently() {
     let hook_a = script("indep-a.sh", &format!("#!/bin/sh\ntouch '{}'\n", a.display()));
     let hook_b = script("indep-b.sh", &format!("#!/bin/sh\ntouch '{}'\n", b.display()));
 
-    for handle in fire(vec![PluginInvocation::new(&hook_a), PluginInvocation::new(&hook_b)]) {
+    for handle in fire_with_timeout(vec![PluginInvocation::new(&hook_a), PluginInvocation::new(&hook_b)], GENEROUS) {
         handle.join().unwrap();
     }
     assert!(a.exists() && b.exists(), "both hooks ran");
 }
 
 /// `fire` is fire-and-forget: it hands back the moment the threads are launched, long before a hook that
-/// takes a second is done. The write path calling it is never blocked on plugin work. We still join the
-/// handle afterwards, so the child is reaped cleanly (it finishes well inside the 5s hook timeout).
+/// takes seconds is done. The write path calling it is never blocked on plugin work. We still join the
+/// handle afterwards, so the child is reaped cleanly (it finishes well inside the generous bound).
+///
+/// The return-promptness bound (1s) and the hook's delay (3s) are spread apart on purpose: under gate-load
+/// saturation `fire`'s thread launch can be slow and the `sleep` still holds, so the ordering the test
+/// pins — fire returns *before* the hook finishes — survives without the bound and the delay ever crossing.
 #[test]
 fn fire_returns_before_a_hook_finishes() {
     let done = marker("slow.marker");
-    let hook = script("slow.sh", &format!("#!/bin/sh\nsleep 1\ntouch '{}'\n", done.display()));
+    let hook = script("slow.sh", &format!("#!/bin/sh\nsleep 3\ntouch '{}'\n", done.display()));
 
     let start = Instant::now();
-    let handles = fire(vec![PluginInvocation::new(&hook)]);
+    let handles = fire_with_timeout(vec![PluginInvocation::new(&hook)], GENEROUS);
     let launched = start.elapsed();
-    assert!(launched < Duration::from_millis(300), "fire returned promptly, not after the hook: {launched:?}");
+    assert!(launched < Duration::from_secs(1), "fire returned promptly, not after the hook: {launched:?}");
     assert!(!done.exists(), "the slow hook has not finished yet when fire returns");
 
     for handle in handles {

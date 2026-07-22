@@ -1421,6 +1421,24 @@ fn emit_unblocks(store: &mut Store, flags: &Flags, blocker_id: i64) {
     }
 }
 
+/// Warn the changer when a premise (a blocker, or a linked decision) is newly placed on a task that is
+/// already reserved (`in_progress`). Such a task silently drops to `ready:no` — its reservation is not
+/// revoked, and its holder gets no interrupt, so they only notice on their next command (`AMB-D-366`, the
+/// changer side; surfacing it to the holder is a separate task). This does not forbid the edge, only breaks
+/// the silence. `todo` / `blocked` say nothing; a `done` target is reopen's business, not a premise change,
+/// so it is left alone here. A failure to read the status never fails the caller — like [`emit_event`], it
+/// warns and moves on.
+fn warn_if_premise_added_to_reserved(store: &Store, id: i64, what: &str) {
+    match store.task(id) {
+        Ok(Some(t)) if t.status == TaskStatus::InProgress => eprintln!(
+            "⚠ {task} is reserved (in progress) — {what}. Its holder is not notified now; they will see it on their next amenbo command.",
+            task = task_label(id),
+        ),
+        Ok(_) => {}
+        Err(e) => eprintln!("warning: could not check whether {} is reserved: {e}", task_label(id)),
+    }
+}
+
 // ───────────────────────── E guardrails (local execution policy) ─────────────────────────
 // These prevent accidents on this device. They assume an honest actor — the facet is self-declared and can
 // be spoofed — so they are not a security boundary. actor=human is unconstrained.
@@ -2807,6 +2825,9 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let tid = resolve_task(store, &id).map_err(CliError::from)?;
             let bid = resolve_task(store, &on).map_err(CliError::from)?;
             let (_edge, created) = store.depend_task(tid, bid, Some(flags.actor)).map_err(CliError::from)?;
+            if created {
+                warn_if_premise_added_to_reserved(store, tid, "you added a blocker it must be done after");
+            }
             let detail = store.task_detail(tid).map_err(CliError::from)?;
             write_envelope(flags, "task.depend", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["blocked_by".to_string()]), !created, format!("✓ Added dependency ({} waits on {}): {}", task_label(tid), task_label(bid), task_label(tid)));
         }
@@ -3238,6 +3259,9 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
                 write_envelope(flags, "decision.unlink", "decision_task_link", json!({ "decision_id": did, "task_id": tid, "unlinked": changed }), None, !changed, format!("✓ Unlinked {} ⇄ {}", decision_label(did), task_label(tid)));
             } else {
                 let (l, created) = store.link_decision(did, tid).map_err(CliError::from)?;
+                if created {
+                    warn_if_premise_added_to_reserved(store, tid, "you linked a decision it now rests on as a premise");
+                }
                 write_envelope(flags, "decision.link", "decision_task_link", serde_json::to_value(&l).unwrap(), None, !created, format!("✓ Linked {} ⇄ {}", decision_label(did), task_label(tid)));
             }
         }

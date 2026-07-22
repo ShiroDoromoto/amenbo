@@ -13,6 +13,11 @@ path = "src/lib.rs"
 name = "lint"
 path = "src/bin/lint.rs"
 
+[[bin]]
+name = "emit"
+path = "src/bin/emit.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
+serde_json = "1"

@@ -32,6 +32,7 @@ pub mod ops;
 pub mod order;
 pub mod overview;
 pub mod perf;
+pub mod plugin_events;
 pub mod progress;
 pub mod project_teardown;
 pub mod query;

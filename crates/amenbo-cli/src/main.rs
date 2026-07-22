@@ -21,6 +21,7 @@ use serde_json::json;
 use amenbo_core::config::Paths;
 use amenbo_core::model::{ActorKind, Attachment, AttachmentTarget, Priority, TaskStatus, View};
 use amenbo_core::ops::Position;
+use amenbo_core::plugin_dispatch::NoSubscribers;
 use amenbo_core::reach::Reach;
 use amenbo_core::worktree;
 use amenbo_core::{activity_log, ops, query, time, Store};
@@ -1015,9 +1016,11 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         }
         Command::Project { sub } => return project(&mut store, flags, sub),
         Command::Dimension { sub } => return dimension(&mut store, flags, sub),
-        Command::Task { sub } => return task(&mut store, flags, sub),
-        Command::Comment { sub } => return comment(&mut store, flags, sub),
-        Command::Decision { sub } => return decision(&mut store, flags, sub),
+        // The three command groups that append observation events to the outbox (`AMB-D-367`): drive the
+        // dispatcher once after each, at the short-lived CLI's write seam (`with_dispatch`).
+        Command::Task { sub } => return with_dispatch(&mut store, |s| task(s, flags, sub)),
+        Command::Comment { sub } => return with_dispatch(&mut store, |s| comment(s, flags, sub)),
+        Command::Decision { sub } => return with_dispatch(&mut store, |s| decision(s, flags, sub)),
         Command::Attach { sub } => return attach(&mut store, flags, sub),
         Command::Export { out } => return export(&store, flags, out),
         Command::Backup { path } => return run_backup(&store, flags, path),
@@ -1390,6 +1393,32 @@ fn parse_date_opt(s: &Option<String>) -> Result<Option<NaiveDate>, CliError> {
         )),
         None => Ok(None),
     }
+}
+
+/// Run a mutating command group, then drive the plugin observation dispatcher once at the short-lived
+/// CLI's write seam (`AMB-T-2033`). After the command committed, drain the outbox from the persisted
+/// cursor, fire the subscribers, persist where it advanced, and **join** the fires before the process
+/// exits so none is cut short (`AMB-D-367` / `AMB-D-352`). Only on success: if the command errored its
+/// mutation rolled back, so there is nothing new to dispatch.
+///
+/// Until the install lifecycle enumerates what is installed (`AMB-T-1979`), [`NoSubscribers`] is the honest
+/// resolver — nothing is installed, so nothing fires; the cursor still walks and persists, so a plugin
+/// enabled later starts from what fires *next*, not the whole backlog. A dispatch failure is a warning,
+/// never the command's exit: the mutation is already committed.
+fn with_dispatch(
+    store: &mut Store,
+    op: impl FnOnce(&mut Store) -> Result<i32, CliError>,
+) -> Result<i32, CliError> {
+    let code = op(store)?;
+    match store.drive_plugins_persisted(&NoSubscribers) {
+        Ok(delivered) => {
+            for hook in delivered.hooks {
+                let _ = hook.join();
+            }
+        }
+        Err(e) => eprintln!("warning: could not dispatch plugin observation hooks: {e}"),
+    }
+    Ok(code)
 }
 
 /// Emit a system event into the ledger, under our own facet. Call it after the mutation wrapper has

@@ -197,6 +197,37 @@ impl Store {
         crate::overview::mark_mailbox_seen(&self.engine, at)
     }
 
+    // ── Plugin observation dispatch (mounting the dispatcher at the write seam) ─────
+    //
+    // The ops write points appended semantic events to the outbox inside their transactions (`AMB-D-367`);
+    // these are the caller `AMB-D-367` hands the cursor to — the single dispatcher's mount. The cursor is
+    // owned here, not by `plugin_dispatch::deliver`, and the two faces differ only in where it lives (see
+    // `crate::plugin_drive`).
+
+    /// Drive the plugin observation dispatcher once from the **persisted** cursor — the short-lived (CLI)
+    /// face (`AMB-T-2033`). Reads the stored cursor, fires the subscribers of everything committed since,
+    /// and persists where it advanced to so the next process continues past it. The returned
+    /// [`Delivered`](crate::plugin_dispatch::Delivered) carries the hooks to **join** before the process
+    /// exits and whether a retention gap was hit. The cursor is already stored on return.
+    pub fn drive_plugins_persisted(
+        &self,
+        subs: &dyn crate::plugin_dispatch::Subscribers,
+    ) -> Result<crate::plugin_dispatch::Delivered> {
+        crate::plugin_drive::drive_persisted(&self.engine, subs)
+    }
+
+    /// Drive the dispatcher from an **in-memory** cursor — the long-lived (GUI) face (`AMB-T-2033`).
+    /// Delivers what committed since `cursor` without persisting; the caller keeps
+    /// [`Delivered::cursor`](crate::plugin_dispatch::Delivered::cursor) in memory for the next drive and
+    /// drops the hooks (fire-and-forget, its process outliving them).
+    pub fn deliver_plugins(
+        &self,
+        cursor: i64,
+        subs: &dyn crate::plugin_dispatch::Subscribers,
+    ) -> Result<crate::plugin_dispatch::Delivered> {
+        crate::plugin_dispatch::deliver(self.engine.conn(), cursor, subs)
+    }
+
     /// The inbox items archived (dismissed) on this machine, as task_ids.
     pub fn inbox_archive_ids(&self) -> Result<Vec<i64>> {
         crate::overview::inbox_archive_ids(&self.engine)

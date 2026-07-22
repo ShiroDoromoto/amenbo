@@ -35,6 +35,7 @@ pub mod perf;
 pub mod plugin_command;
 pub mod plugin_config;
 pub mod plugin_dispatch;
+pub mod plugin_drive;
 pub mod plugin_exec;
 pub mod plugin_hooks;
 pub mod plugin_inject;

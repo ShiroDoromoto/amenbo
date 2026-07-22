@@ -146,6 +146,42 @@ impl Paths {
         Paths::user_base()
     }
 
+    /// The directory name, under the base, holding installed plugins and the registry cache.
+    pub const PLUGINS_DIR_NAME: &'static str = "plugins";
+    /// The name reserved, under [`plugins_dir`](Self::plugins_dir), for the registry cache — it sits
+    /// beside the plugins, so no plugin may claim it (see [`is_reserved_plugin_name`]).
+    pub const REGISTRY_DIR_NAME: &'static str = "registry";
+
+    /// Where installed plugins and the registry cache live: `<base>/plugins/`, machine-global under the
+    /// base (`AMB-D-350`). A plugin's executable is OS/arch-specific and would collide with
+    /// distribution, PII and `.gitignore` if it lived in a project directory, so it never does — and
+    /// never in `.amenbo`, the store-agnostic, sync-safe pointer. Enablement is *not* on disk here: the
+    /// machine default is a `config.json` field and the per-project override is a store table.
+    pub fn plugins_dir(&self) -> PathBuf {
+        self.base_dir.join(Self::PLUGINS_DIR_NAME)
+    }
+
+    /// One plugin's home, `<base>/plugins/<name>/`, holding its executable and files. `name` is the
+    /// plugin's manifest name; [`REGISTRY_DIR_NAME`](Self::REGISTRY_DIR_NAME) is reserved and cannot be
+    /// one — the manifest validator rejects it up front, but do not hand this an unvalidated name.
+    pub fn plugin_dir(&self, name: &str) -> PathBuf {
+        self.plugins_dir().join(name)
+    }
+
+    /// The manifest-registry cache, `<base>/plugins/registry/`: the fetched copy of the plugin catalog.
+    /// There is no central server (local-first); the catalog is a set of git-hosted manifests pulled
+    /// into this directory (`AMB-D-350`).
+    pub fn registry_dir(&self) -> PathBuf {
+        self.plugins_dir().join(Self::REGISTRY_DIR_NAME)
+    }
+}
+
+/// Whether `name` is reserved by the plugin disk layout and so cannot name a plugin: the registry cache
+/// shares the `plugins/` directory with the installed plugins (`AMB-D-350`), so a plugin called
+/// `registry` would clash with it. The manifest validator calls this so the one truth about the layout's
+/// reserved names lives beside the layout.
+pub fn is_reserved_plugin_name(name: &str) -> bool {
+    name == Paths::REGISTRY_DIR_NAME
 }
 
 /// Logging level for the perf instrumentation. One of three values, persisted as `perf_log` in
@@ -610,6 +646,38 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The plugin disk layout hangs off the base: bodies and the registry cache under `plugins/`, a
+    /// plugin's home under its name, and nothing in `.amenbo` (`AMB-D-350`).
+    #[test]
+    fn plugin_layout_hangs_off_the_base_never_the_project() {
+        let base = PathBuf::from("/home/base");
+        let paths = Paths::at(base.clone());
+
+        assert_eq!(paths.plugins_dir(), base.join("plugins"));
+        assert_eq!(paths.plugin_dir("worktree"), base.join("plugins").join("worktree"));
+        assert_eq!(paths.registry_dir(), base.join("plugins").join("registry"));
+
+        // Every plugin path is under the base_dir — the app-data area, not a synced project dir.
+        for p in [paths.plugins_dir(), paths.plugin_dir("x"), paths.registry_dir()] {
+            assert!(p.starts_with(&paths.base_dir), "{} sits under the base", p.display());
+        }
+    }
+
+    /// The registry cache shares `plugins/` with the installed plugins, so `registry` is not a name a
+    /// plugin may take — otherwise `plugin_dir("registry")` and `registry_dir` would be the same path.
+    #[test]
+    fn the_registry_name_is_reserved_against_a_plugin_clash() {
+        assert!(is_reserved_plugin_name("registry"));
+        assert!(!is_reserved_plugin_name("worktree"));
+
+        let paths = Paths::at(PathBuf::from("/home/base"));
+        assert_eq!(
+            paths.plugin_dir(Paths::REGISTRY_DIR_NAME),
+            paths.registry_dir(),
+            "the reason registry is reserved: the paths would collide"
+        );
+    }
 
     /// `config set attachment.*` overrides a capacity limit (byte count) and rejects non-numeric
     /// values, leaving the prior value untouched.

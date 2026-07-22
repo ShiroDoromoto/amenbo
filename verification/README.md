@@ -11,7 +11,7 @@ Every driver reads the same scenario and maps it to its own world.
 ```
 verification/
   scenarios/   the single source of truth (YAML). Every driver reads these.
-  core/        the scenario schema + validating loader (crate `amenbo-scenario`, `lint` bin)
+  core/        the scenario schema + validating loader (crate `amenbo-scenario`, `lint` + `emit` bins)
   cli/         CLI driver + runner — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
   gui/         mac harness — scenario → screen checklist + screencapture + Vision OCR verdict (crate `amenbo-verify-gui`)
 ```
@@ -78,6 +78,19 @@ false`). The recognized text is written next to the shot (`NN-…​.txt`) as ev
 An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`: its shot is
 kept for an AI/human eye and does not fail the run. tesseract stays the Linux container path
 (`scripts/docker/gui-e2e.sh`); each driver maps the one scenario source to its own world.
+
+The Linux container carries no toolchain, so it can't read the scenario itself. Its host launcher
+(`make verify-gui-linux`) resolves the scenario through the `emit` bin and passes the card — the
+`listed`/present title — into the container as `AMENBO_E2E_CARD`. tesseract reads the words but not
+every glyph, so that path matches the title on its alphanumerics, not verbatim. `SCENARIO` selects
+which scenario drives it (default `scenarios/task-appears-on-board.yaml`).
+
+```sh
+cd verification
+# the crate's JSON face over the validated model — a shell consumer reads it through jq,
+# never by reparsing YAML:
+cargo run -p amenbo-scenario --bin emit -- scenarios/task-appears-on-board.yaml
+```
 
 ```sh
 cd verification

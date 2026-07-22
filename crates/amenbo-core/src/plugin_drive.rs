@@ -54,6 +54,17 @@ pub fn drive_persisted(engine: &StoreEngine, subs: &dyn Subscribers) -> Result<D
     let delivered = deliver(engine.conn(), cursor, subs)?;
     if delivered.cursor != cursor {
         engine.set_meta(CURSOR_META, Some(&delivered.cursor.to_string()))?;
+        // Everything through the new cursor is now delivered (or, on a gap resync, jumped past and
+        // accepted as lost — either way the dispatcher will never read it again), so reclaim it
+        // (`AMB-T-2021`). This is the persisted cursor's own retention: the long-lived (GUI) face keeps
+        // its cursor in memory and never persists, so the durable dispatcher is the one consumer trim
+        // waits on — and it has, by definition, passed `delivered.cursor`. The delete and the watermark
+        // that records it must land together (`AMB-D-367`), so they ride one transaction, separate from
+        // the bare cursor persist above; trimming touches only the outbox and its watermark, neither
+        // drained into the change feed.
+        let tx = engine.write()?;
+        crate::store_engine::outbox::trim_delivered(tx.conn(), delivered.cursor)?;
+        tx.commit()?;
     }
     Ok(delivered)
 }
@@ -152,6 +163,29 @@ mod tests {
         let d = drive_persisted(&e, &NoSubscribers).unwrap();
         assert!(d.hooks.is_empty());
         assert_eq!(persisted_cursor(&e).unwrap(), 1, "an empty drive does not move the cursor");
+    }
+
+    /// A persisted drive reclaims what it delivered: once the cursor advances, the events through it are
+    /// trimmed, so the same run that fired them also frees the space (`AMB-T-2021`). What is delivered is
+    /// gone from the outbox, and a cursor behind the new head reads it as the honest gap.
+    #[test]
+    fn a_persisted_drive_trims_what_it_delivered() {
+        use crate::store_engine::outbox::{events_since, OutboxSlice};
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, "task.created", 1);
+        emit(&e, "task.created", 2);
+
+        let d = drive_persisted(&e, &NoSubscribers).unwrap();
+        assert_eq!(persisted_cursor(&e).unwrap(), 2, "the cursor walked to the head");
+        assert!(!d.gapped);
+
+        // The delivered span is trimmed: a bare cursor is now a gap, and the head cursor reads an empty
+        // tail rather than replaying what already fired.
+        assert_eq!(events_since(e.conn(), 0, 10).unwrap(), OutboxSlice::Gap, "everything delivered is gone");
+        let OutboxSlice::Events { rows, more } = events_since(e.conn(), 2, 10).unwrap() else {
+            panic!("a cursor at the head is not a gap");
+        };
+        assert!(rows.is_empty() && !more, "nothing remains past the delivered head");
     }
 
     /// A retention gap resyncs the persisted cursor to the head and reports `gapped`, so the lost span is

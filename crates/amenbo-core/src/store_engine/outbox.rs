@@ -30,7 +30,7 @@ use rusqlite::{Connection, OptionalExtension};
 
 use super::engine::{Result, StoreEngineError};
 use super::schema::col;
-use super::sql::{Expr, Pred, Select, Sort, Sql};
+use super::sql::{Delete, Expr, Pred, Select, Sort, Sql};
 
 /// The `store_meta` key recording how far outbox retention has trimmed — the watermark
 /// [`events_since`] compares a cursor against to answer [`OutboxSlice::Gap`]. It is the outbox's own
@@ -175,6 +175,40 @@ pub fn outbox_head(conn: &Connection) -> Result<i64> {
         .map_err(StoreEngineError::from)
 }
 
+/// Reclaim what has been delivered — the outbox's retention (`AMB-D-367`). Everything at or below
+/// `through` (the dispatcher's delivered high-water mark, the persisted
+/// [`crate::plugin_drive::CURSOR_META`]) is removed, and the watermark [`events_since`] reads to answer
+/// [`OutboxSlice::Gap`] is advanced to `through`. Returns how many rows were removed.
+///
+/// This is deliberately **not** the change feed's window trim: the feed drops its oldest rows once a
+/// count-based window slides past them, consumed or not, because a stale GUI cache re-reads on a gap and
+/// loses nothing that matters. An observation event that is dropped before it is delivered is a hook that
+/// never fired, so retention here is gated on *delivery*, never on age or count — an event survives until
+/// the dispatcher has passed it. `through <= 0` (a dispatcher that never delivered) trims nothing.
+///
+/// Runs on the caller's transaction so the delete and the watermark land together or not at all: a
+/// watermark ahead of the rows it claims are gone would turn a live cursor into a false gap; rows gone
+/// with no watermark to name them would read back as "nothing fired" and freeze the dispatcher. The
+/// watermark is written only when a row was actually removed, so a repeat call on an already-trimmed
+/// outbox is a pure read.
+pub fn trim_delivered(conn: &Connection, through: i64) -> Result<usize> {
+    if through <= 0 {
+        return Ok(0);
+    }
+    let out = col::plugin_outbox::ALL;
+    let removed = Delete::from(out.table)
+        .filter(Pred::cmp(out.id, "<=", through))
+        .sql()
+        .execute(conn)
+        .map_err(StoreEngineError::from)?;
+    if removed == 0 {
+        return Ok(0);
+    }
+    super::engine::upsert_meta(conn, META_OUTBOX_TRUNCATED_THROUGH, Some(&through.to_string()))
+        .map_err(StoreEngineError::from)?;
+    Ok(removed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,5 +341,48 @@ mod tests {
         emit(&e, &ev("task.created", 1, None));
         emit(&e, &ev("task.created", 2, None));
         assert_eq!(outbox_head(e.conn()).unwrap(), 2);
+    }
+
+    /// Trim removes every event through the delivered cursor and records the watermark, so what it cut
+    /// reads back as a gap and what it left reads normally — the two halves the retention contract needs
+    /// (`AMB-T-2021`).
+    #[test]
+    fn trim_delivered_cuts_through_the_cursor_and_records_the_watermark() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        for i in 1..=5 {
+            emit(&e, &ev("comment.added", i, None));
+        }
+        // The dispatcher delivered through id 3.
+        assert_eq!(trim_delivered(e.conn(), 3).unwrap(), 3, "ids 1..=3 are gone");
+
+        // A cursor behind the cut is a gap; a cursor at the cut reads only what remains.
+        assert_eq!(events_since(e.conn(), 0, 10).unwrap(), OutboxSlice::Gap, "the trimmed span is gone");
+        let OutboxSlice::Events { rows, more } = events_since(e.conn(), 3, 10).unwrap() else {
+            panic!("a cursor at the watermark is not a gap");
+        };
+        assert_eq!((rows.iter().map(|r| r.id).collect::<Vec<_>>(), more), (vec![4, 5], false));
+    }
+
+    /// A dispatcher that never delivered (`through = 0`) trims nothing and records no watermark — the
+    /// outbox is untouched and every event still reads.
+    #[test]
+    fn trim_delivered_of_a_nondelivering_cursor_is_a_noop() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, &ev("task.created", 1, None));
+        emit(&e, &ev("task.created", 2, None));
+        assert_eq!(trim_delivered(e.conn(), 0).unwrap(), 0, "nothing delivered, nothing trimmed");
+        assert_eq!(drain_all(&e).len(), 2, "no watermark, so a bare cursor still reads the whole log");
+    }
+
+    /// Re-trimming an already-trimmed outbox removes nothing — the second call is a pure read, so a drive
+    /// that advances the cursor by nothing does not churn the watermark.
+    #[test]
+    fn trim_delivered_is_idempotent() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        for i in 1..=3 {
+            emit(&e, &ev("task.created", i, None));
+        }
+        assert_eq!(trim_delivered(e.conn(), 3).unwrap(), 3);
+        assert_eq!(trim_delivered(e.conn(), 3).unwrap(), 0, "the rows are already gone");
     }
 }

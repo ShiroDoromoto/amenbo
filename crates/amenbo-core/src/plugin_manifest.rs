@@ -74,12 +74,21 @@ impl Os {
     }
 }
 
+/// The payload contract version a manifest targets when it declares none: the v1 baseline (`AMB-D-349`).
+/// A fixed literal, deliberately *not* [`crate::plugin_payload::VERSION`] — an omitted `payload_v` means
+/// the plugin was written against the original contract, so it must not drift upward as amenbo bumps its
+/// own `v`.
+fn default_payload_v() -> u32 {
+    1
+}
+
 /// One catalog entry: everything a browse view needs to list a plugin, plus what an install needs to
 /// fetch it. See the module docs for the design (`AMB-D-347`) and the validation boundary (`AMB-D-354`).
 ///
-/// Every field but `official` is required — a manifest omitting one does not parse, which is the
-/// shape half of the fail-closed door. `official` defaults to `false` when absent, the safe default for
-/// a badge no third party may self-grant.
+/// The core descriptive fields are required — a manifest omitting one does not parse, which is the
+/// shape half of the fail-closed door. The rest carry safe defaults for a manifest that omits them:
+/// `official` ⇒ `false` (a badge no third party may self-grant), `payload_v` ⇒ the v1 baseline,
+/// `min_amenbo` ⇒ no floor, and `config` ⇒ no settings.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Manifest {
     /// The plugin's name — its identity in the catalog and its directory under `plugins/`. Must not be
@@ -107,6 +116,21 @@ pub struct Manifest {
     /// self-declared — absent means `false`.
     #[serde(default)]
     pub official: bool,
+    /// The event-payload contract version this plugin reads (`AMB-D-349` — a single integer `v` for the
+    /// whole contract, evolving additively). It lets amenbo notice when its own `v` has moved past what a
+    /// plugin understands and warn or refuse rather than silently feed it a payload it cannot parse
+    /// (`AMB-D-359`). Absent means the v1 baseline — a manifest written before this field targets the
+    /// original contract, not whatever version the reading amenbo happens to be at. This module only
+    /// *carries* the number; the enable/run-time comparison is the update feature's, not the type's.
+    #[serde(default = "default_payload_v")]
+    pub payload_v: u32,
+    /// The minimum amenbo version this plugin needs, as a semver string — below it, amenbo warns or
+    /// refuses to enable/run the plugin (`AMB-D-359`). Absent means no floor: the plugin declares no
+    /// version requirement. Stored opaquely, like `checksum` — this module neither parses nor compares
+    /// it; that is the validator's and the update feature's job, so the one truth about version ordering
+    /// lives with them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_amenbo: Option<String>,
     /// The plugin's configuration schema: a flat list of fields the author declares so amenbo can
     /// render a form, store the values, and inject them at run time (`AMB-D-356`). Absent means the
     /// plugin takes no configuration — the safe default is an empty schema, so an older manifest with
@@ -166,7 +190,9 @@ mod tests {
             "category": "workflow",
             "url": "https://example.com/worktree-v1.tar.gz",
             "checksum": "sha256:deadbeef",
-            "official": true
+            "official": true,
+            "payload_v": 1,
+            "min_amenbo": "1.8.0"
         })
     }
 
@@ -176,6 +202,8 @@ mod tests {
         assert_eq!(m.name, "worktree");
         assert_eq!(m.os, vec![Os::Macos, Os::Linux]);
         assert!(m.official);
+        assert_eq!(m.payload_v, 1);
+        assert_eq!(m.min_amenbo.as_deref(), Some("1.8.0"));
         // Re-serializing yields the same document.
         assert_eq!(serde_json::to_value(&m).unwrap(), full_json());
     }
@@ -260,10 +288,34 @@ mod tests {
 
     #[test]
     fn an_unknown_key_is_ignored_for_forward_compatibility() {
-        // A field a newer amenbo added (see `AMB-D-359`) must not make an older one refuse the manifest.
+        // A field a newer amenbo added must not make an older one refuse the manifest.
         let mut v = full_json();
-        v["min_amenbo"] = serde_json::json!("2.0.0");
+        v["some_future_field"] = serde_json::json!("whatever a later version wrote");
         let m: Manifest = serde_json::from_value(v).expect("unknown keys are tolerated");
         assert_eq!(m.name, "worktree");
+    }
+
+    #[test]
+    fn the_compat_declaration_defaults_when_absent() {
+        // A manifest written before the compat fields existed still parses: it targets the v1 payload
+        // baseline and declares no amenbo-version floor. The default must be the fixed baseline, not the
+        // reading amenbo's current `v` — an old plugin does not silently start claiming a newer contract.
+        let mut v = full_json();
+        v.as_object_mut().unwrap().remove("payload_v");
+        v.as_object_mut().unwrap().remove("min_amenbo");
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        assert_eq!(m.payload_v, 1, "an omitted payload_v is the v1 baseline");
+        assert!(m.min_amenbo.is_none(), "an omitted min_amenbo is no version floor");
+    }
+
+    #[test]
+    fn an_absent_min_amenbo_does_not_serialize() {
+        // Absent and present-but-none stay one document: a plugin with no version floor re-emits without
+        // the key, mirroring how an empty config schema does not serialize.
+        let mut v = full_json();
+        v.as_object_mut().unwrap().remove("min_amenbo");
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        let out = serde_json::to_value(&m).unwrap();
+        assert!(out.get("min_amenbo").is_none(), "no floor ⇒ no min_amenbo key on the way out");
     }
 }

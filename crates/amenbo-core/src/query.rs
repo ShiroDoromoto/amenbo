@@ -1827,6 +1827,38 @@ pub fn task_detail(
     })
 }
 
+/// Premises a task acquired **after its current status began** (`AMB-D-366`) — the read a caller invokes
+/// to surface, to a holder, that their reservation may have been silently undercut (a blocker or an
+/// unsettled decision pinned on after they reserved). Read-only: it reports *what* changed; the caller
+/// decides how strongly to react. A missing task is `not_found`; a task never stamped (an older store)
+/// reports no change.
+pub fn premise_change_since(
+    conn: &rusqlite::Connection,
+    task_id: i64,
+) -> Result<crate::view::PremiseChange> {
+    use crate::store_engine::read;
+    let row = read::premise_change_since(conn, task_id)
+        .map_err(crate::error::engine_on(conn))?
+        .ok_or_else(|| {
+            Error::not_found(
+                format!("task '{task_id}' not found"),
+                format!("タスク '{task_id}' が見つかりません"),
+            )
+        })?;
+    Ok(crate::view::PremiseChange {
+        added_blockers: row
+            .added_blockers
+            .into_iter()
+            .map(|(id, name)| crate::view::TaskRef { id, name })
+            .collect(),
+        added_decisions: row
+            .added_decisions
+            .into_iter()
+            .map(|(id, name)| DecisionRef { id, name: Some(name) })
+            .collect(),
+    })
+}
+
 /// Orders the fetched rows by the sort key (for [`decision_list`]). Decision ordering is deliberately
 /// not pushed down to SQL: the count is bounded per project, so sorting in memory is more direct than
 /// assembling an `ORDER BY`.

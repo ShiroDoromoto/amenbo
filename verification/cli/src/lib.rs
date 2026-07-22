@@ -1,4 +1,4 @@
-//! The CLI driver's reusable core (decision `AMB-D-345`): drive the **shipped / installed**
+//! The CLI driver's reusable core: drive the **shipped / installed**
 //! `amenbo` binary against one scenario in an isolated throwaway store, and judge the asserts
 //! from that binary's `--json` output. A black-box driver — it knows the domain vocabulary, not
 //! the build under test.

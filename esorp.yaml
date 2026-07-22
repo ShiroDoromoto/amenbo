@@ -168,10 +168,12 @@ rules:
   # `check --text` (a commit message), which is where a reference driven out of
   # a comment goes looking for shelter.
   #
-  # A code span is the one place the form may appear, because some code's whole
-  # subject IS the form: the parser that reads a reference, and the tests that
-  # pin what it accepts, cannot say what they accept without writing it. Outside
-  # a code span a reference is a pointer, so that is where this bites.
+  # A code span is spared here, because some code's whole subject IS the form: the
+  # parser that reads a reference, and the tests that pin what it accepts, cannot
+  # say what they accept without writing it. That sparing is not a licence to quote
+  # a pointer past the guard — the companion rule internal-ref-codespan below bites
+  # a code-span reference everywhere the form is not the subject. Outside a code
+  # span a reference is a pointer wherever it sits, so that is where this one bites.
   - id: internal-ref
     pattern: '(^|[^-A-Za-z`])(AMB-)?[TD]-\d+([^`]|$)|amenbo-task:'
     message: |
@@ -179,6 +181,25 @@ rules:
       outside reader, the next agent — cannot follow it, so say what the code
       does instead of where it was decided.
       If the form itself is the subject, write it as a code span.
+
+  # The same reference, wrapped in a code span. The rule above spares a code span so
+  # the code whose subject IS the form can write it — but that spared form was then
+  # misused to slip a pointer past the guard by quoting it. The reference parser,
+  # resolver, lint and their tests live under crates/ and app/ — the product itself,
+  # whose domain is these references — and are spared by path; anywhere else a quoted
+  # reference is a pointer wearing a code span, which a reader still cannot follow.
+  - id: internal-ref-codespan
+    pattern: '`(AMB-)?[TD]-\d+`'
+    message: |
+      This points at this project's tracker from inside a code span. The code-span
+      form is only for code whose subject is the reference form itself (the parser,
+      its tests) — not a way to quote a pointer past the guard. Say what the code
+      does instead of where it was decided.
+    where:
+      path:
+        - "**"
+        - "!crates/**"
+        - "!app/**"
 
   # Link syntax in a comment nothing resolves. rustdoc reads `///` and `//!`, so
   # a bracketed code span there is a real link, and a target that goes turns the

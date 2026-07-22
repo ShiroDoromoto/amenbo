@@ -1,5 +1,5 @@
 //! amenbo-scenario — the schema and validating loader for pre-distribution
-//! verification scenarios (decision `AMB-D-345`).
+//! verification scenarios.
 //!
 //! A scenario is the single source of truth: one declarative YAML file states a domain
 //! procedure plus its expected results, driver-independent. Every driver reads the SAME

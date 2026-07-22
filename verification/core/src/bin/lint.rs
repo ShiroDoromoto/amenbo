@@ -1,4 +1,4 @@
-//! `lint` — validate one or more scenario files (decision `AMB-D-345`).
+//! `lint` — validate one or more scenario files.
 //!
 //! Usage: `lint <file.yaml> [more.yaml ...]`, or `lint` with no args to lint every
 //! `*.yaml` under `verification/scenarios/`. Prints one line per file and exits non-zero

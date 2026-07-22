@@ -1,6 +1,6 @@
 //! The throwaway store a verification run works in, by the same three rules as the
 //! workspace's `amenbo-scratch` — one parent, a name whose uniqueness does not rest on the
-//! pid, and a sweep on the way *in* (decision `AMB-D-336`). Reimplemented here rather than
+//! pid, and a sweep on the way *in*. Reimplemented here rather than
 //! shared, so the verification workspace stays independent of the main one (it drives the
 //! shipped binary as a black box).
 //!

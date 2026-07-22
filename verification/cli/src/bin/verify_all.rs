@@ -1,5 +1,5 @@
-//! `verify-all` — the multi-scenario runner for pre-distribution verification (decision
-//! `AMB-D-345`). It drives a whole set of scenarios through the CLI driver, one after another,
+//! `verify-all` — the multi-scenario runner for pre-distribution verification.
+//! It drives a whole set of scenarios through the CLI driver, one after another,
 //! and rolls their verdicts into one: green only when every scenario is green, and the exit code
 //! is that roll-up, so a release gate reads it directly.
 //!

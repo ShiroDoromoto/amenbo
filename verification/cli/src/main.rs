@@ -1,4 +1,4 @@
-//! `verify-cli` — the CLI driver for pre-distribution verification (decision `AMB-D-345`).
+//! `verify-cli` — the CLI driver for pre-distribution verification.
 //!
 //! It reads one scenario (the single source of truth), maps each step to an invocation of the
 //! **shipped / installed** `amenbo` binary, and judges the asserts from that binary's `--json`

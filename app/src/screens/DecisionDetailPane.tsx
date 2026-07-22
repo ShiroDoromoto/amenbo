@@ -4,7 +4,7 @@ import { Attachments } from "../components/Attachments";
 import { CommentRow } from "../components/CommentRow";
 import { inTauri, type Decision, type DecisionStatus } from "../core/snapshot";
 import {
-  acceptDecision, addDecisionComment, amendDecision, buildsOnDecision, editDecisionComment,
+  acceptDecision, addDecisionComment, amendDecision, buildsOnDecision, editDecision, editDecisionComment,
   rejectDecision, reopenDecision, removeDecisionComment, supersedeDecision, unlinkDecisionEdge,
 } from "../core/mutations";
 import { useDecision, useDecisionComments, useDecisionPage } from "../core/reads";
@@ -48,7 +48,39 @@ export function DecisionDetailPane({ decisionId, onOpenTask, onOpenDecision }: {
   const [commentError, setCommentError] = useState<string | null>(null);
   const [reopenError, setReopenError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Editing the title/body in place (proposed and accepted alike). One form drives the single `editDecision`
+  // write; a rejected decision is terminal (core refuses it), so the edit affordance is hidden there.
+  const [editing, setEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [bodyDraft, setBodyDraft] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
   if (!d) return <div className="rightpane__empty">{t("dec.notFound")}</div>;
+
+  const editable = d.status !== "rejected";
+  const startEdit = () => {
+    setTitleDraft(d.title);
+    setBodyDraft(d.body ?? "");
+    setEditError(null);
+    setEditing(true);
+  };
+  // Await the write and close only once it lands: a refused edit must not read as a success. On failure the
+  // drafts stay put, so retrying costs nothing. An unchanged form just closes (no write, no needless emit).
+  const saveEdit = async () => {
+    const title = titleDraft.trim();
+    if (!title) return;
+    if (title === d.title && bodyDraft === (d.body ?? "")) { setEditing(false); return; }
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      await editDecision(d.id, title, bodyDraft);
+      setEditing(false);
+    } catch (e) {
+      setEditError(errText(e));
+    } finally {
+      setEditBusy(false);
+    }
+  };
 
   // Await the post and only clear the box once it lands: a refused comment used to blank the input, losing the
   // body the user just wrote. On failure the text stays put and the error is shown, so retrying costs nothing.
@@ -94,18 +126,58 @@ export function DecisionDetailPane({ decisionId, onOpenTask, onOpenDecision }: {
     <div className="detail__body">
       <div className="detail__title" style={{ alignItems: "baseline", gap: 8 }}>
         {d.ref && <span style={{ color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
-        <span>{d.title}</span>
+        {editing ? (
+          <input
+            className="compose__input"
+            style={{ minHeight: "unset", fontSize: "inherit", fontWeight: "inherit", flex: 1 }}
+            autoFocus
+            value={titleDraft}
+            placeholder={t("dec.newTitlePh")}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setEditing(false); } }}
+          />
+        ) : (
+          <span style={editable ? { cursor: "text" } : undefined} title={editable ? t("detail.edit") : undefined} onDoubleClick={editable ? startEdit : undefined}>{d.title}</span>
+        )}
         <span style={{
           fontSize: "var(--fs-xs)", padding: "1px 8px", borderRadius: 10, color: "#fff",
           background: d.current ? statusColor(d.status) : "#8a93a0",
         }}>{d.current ? t(`dec.status.${d.status}`) : t("dec.status.superseded")}</span>
+        {!editing && editable && (
+          <button className="feed__action" style={{ marginLeft: 6 }} onClick={startEdit}>{t("detail.edit")}</button>
+        )}
       </div>
 
-      {d.body && (
-        <div className="markdown" style={{ marginTop: 8, fontSize: "var(--fs-body)", maxWidth: "var(--measure-prose)" }}>
+      {editing ? (
+        <div className="compose" style={{ marginTop: 8, maxWidth: "var(--measure-prose)" }}>
+          <textarea
+            className="compose__input"
+            rows={8}
+            value={bodyDraft}
+            placeholder={t("dec.newBodyPh")}
+            onChange={(e) => setBodyDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void saveEdit(); }
+              if (e.key === "Escape") setEditing(false);
+            }}
+          />
+          {d.status === "accepted" && (
+            <div className="faint" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{t("dec.editAcceptedHint")}</div>
+          )}
+          {editError && <div className="newproj__error" role="alert">⚠ {editError}</div>}
+          <div className="compose__actions">
+            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.notesHint")}</span>
+            <span>
+              <button className="btn" onClick={() => setEditing(false)}>{t("detail.cancel")}</button>
+              <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={editBusy || !titleDraft.trim()} onClick={() => void saveEdit()}>{t("detail.save")}</button>
+            </span>
+          </div>
+        </div>
+      ) : d.body ? (
+        <div className="markdown" style={{ marginTop: 8, fontSize: "var(--fs-body)", maxWidth: "var(--measure-prose)" }} onDoubleClick={editable ? startEdit : undefined}>
           <Markdown>{d.body}</Markdown>
         </div>
-      )}
+      ) : null}
 
       <DecisionEdges d={d} onOpenDecision={onOpenDecision} />
 

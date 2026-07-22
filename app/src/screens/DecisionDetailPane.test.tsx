@@ -52,6 +52,7 @@ vi.mock("../core/mutations", () => {
     reopenDecision: record("reopenDecision"), supersedeDecision: record("supersedeDecision"),
     amendDecision: record("amendDecision"), buildsOnDecision: record("buildsOnDecision"),
     unlinkDecisionEdge: record("unlinkDecisionEdge"), addDecisionComment: record("addDecisionComment"),
+    editDecision: record("editDecision"),
     editDecisionComment: record("editDecisionComment"), removeDecisionComment: record("removeDecisionComment"),
   };
 });
@@ -100,6 +101,14 @@ const click = (b: Element | undefined) => act(() => (b as HTMLButtonElement).cli
 /** Type into a controlled field: React listens for the native setter, so assigning `.value` alone is not seen. */
 function type(el: HTMLTextAreaElement, text: string) {
   const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+  act(() => {
+    set.call(el, text);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+/** The `<input>` sibling of `type` (title field). */
+function typeInput(el: HTMLInputElement, text: string) {
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
   act(() => {
     set.call(el, text);
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -392,5 +401,67 @@ describe("the remaining pane writes report a refusal, not swallow it", () => {
     expect(hoisted.calls).toEqual([["amendDecision", 1, 2]]);
     expect(container.querySelector("[role=alert]")?.textContent).toContain("amendDecision refused");
     expect(container.querySelector("select")).not.toBeNull(); // still open, so a retry costs nothing
+  });
+});
+
+// Editing title/body in place: one form drives the single `editDecision` write, proposed and accepted alike;
+// a rejected decision is terminal and gets no edit affordance.
+describe("editing the title and body in place", () => {
+  const startEdit = () => click(button(t("detail.edit")));
+
+  it("opens a form seeded with the current title/body and writes both on save", async () => {
+    hoisted.decisions.set(1, decision(1, { title: "旧題", body: "旧本文" }));
+    render(1);
+
+    startEdit();
+    const input = container.querySelector("input")!;
+    const textarea = container.querySelector("textarea")!;
+    expect(input.value).toBe("旧題");
+    expect(textarea.value).toBe("旧本文");
+
+    typeInput(input, "新題");
+    type(textarea, "新本文");
+    click(button(t("detail.save")));
+    await settle();
+    expect(hoisted.calls).toEqual([["editDecision", 1, "新題", "新本文"]]);
+  });
+
+  it("an accepted decision is editable and shows the not-a-re-decision hint", () => {
+    hoisted.decisions.set(1, decision(1, { status: "accepted" }));
+    render(1);
+
+    startEdit();
+    expect(container.textContent).toContain(t("dec.editAcceptedHint"));
+  });
+
+  it("a rejected decision has no edit affordance (core refuses editing it)", () => {
+    hoisted.decisions.set(1, decision(1, { status: "rejected" }));
+    render(1);
+    expect(button(t("detail.edit"))).toBeUndefined();
+  });
+
+  it("an unchanged form closes without writing", async () => {
+    hoisted.decisions.set(1, decision(1, { title: "題", body: "本文" }));
+    render(1);
+
+    startEdit();
+    click(button(t("detail.save")));
+    await settle();
+    expect(hoisted.calls).toEqual([]);
+    expect(button(t("detail.edit"))).toBeDefined(); // back to view mode
+  });
+
+  it("a refused edit keeps the form open with the drafts and shows the error", async () => {
+    hoisted.failing.add("editDecision");
+    hoisted.decisions.set(1, decision(1, { title: "題", body: "本文" }));
+    render(1);
+
+    startEdit();
+    type(container.querySelector("textarea")!, "直した本文");
+    click(button(t("detail.save")));
+    await settle();
+    expect(hoisted.calls).toEqual([["editDecision", 1, "題", "直した本文"]]);
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("editDecision refused");
+    expect(container.querySelector("textarea")?.value).toBe("直した本文"); // the draft survives for a retry
   });
 });

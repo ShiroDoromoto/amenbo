@@ -227,24 +227,37 @@ dist-gui-linux:
 	@# than fail on the missing ones (the container already named the collected/missing set).
 	@ls -1 $(DIST_DIR)/amenbo-app-linux-*.deb $(DIST_DIR)/amenbo-app-linux-*.rpm $(DIST_DIR)/amenbo-app-linux-*.AppImage 2>/dev/null || true
 
+## The scenario that drives verify-gui-linux — the single source every driver reads. Its
+## listed/present title is the card the check writes and OCRs back; override to point the
+## Linux check at another scenario.
+SCENARIO ?= verification/scenarios/task-appears-on-board.yaml
+
 ## Exercise "another process writes → the screen updates" on a real Linux GUI app. Put the .deb that
 ## dist-gui-linux built into a container with Xvfb and launch it, write via the CLI, and take
 ## before/after screenshots = confirm the spot where emit reaches WebKitGTK's webview (the last hop
 ## no other test touches).
 ## The judgment is mechanical (OCR): the title of the card the CLI wrote is absent from 1-before.png
-## and present in 2-after.png.
+## and present in 2-after.png. That title is not baked into the container — the host resolves it from
+## $(SCENARIO) through the amenbo-scenario crate and passes it in (the container has no toolchain).
 ## Not on the always-on CI (it needs a full .deb build); it runs in the later stage of release.yml,
 ## which builds the bundle = catch the breaking trigger (a tauri/webview update) right before it
 ## ships.
 verify-gui-linux: $(GUI_DEB_HOST)
 	@command -v docker >/dev/null 2>&1 || { echo "✗ docker is required"; exit 1; }
+	@command -v jq >/dev/null 2>&1 || { echo "✗ jq is required"; exit 1; }
 	@mkdir -p $(DIST_DIR)/gui-e2e
 	cp $(GUI_DEB_HOST) scripts/docker/
 	docker build --platform linux/$(HOST_GUI_ARCH) -f scripts/docker/Dockerfile.linux-gui-e2e \
 	  --build-arg DEB=$(notdir $(GUI_DEB_HOST)) -t amenbo-linux-gui-e2e:latest scripts/docker/
 	rm -f scripts/docker/$(notdir $(GUI_DEB_HOST))
-	docker run --rm --platform linux/$(HOST_GUI_ARCH) \
-	  -v "$(CURDIR)/$(DIST_DIR)/gui-e2e:/out" amenbo-linux-gui-e2e:latest
+	@card="$$(cargo run -q --manifest-path verification/Cargo.toml -p amenbo-scenario --bin emit -- $(SCENARIO) \
+	  | jq -r '([ .steps[] | select(.as != null) | {key: .as, value: .with.title} ] | from_entries) as $$labels \
+	    | ([ .steps[] | select(.type == "assert" and .op == "listed" and (.with.present != false)) | .with.target ] | .[0]) as $$tgt \
+	    | $$labels[$$tgt] // empty')"; \
+	  [ -n "$$card" ] || { echo "✗ $(SCENARIO) has no listed/present title to drive the GUI check"; exit 1; }; \
+	  echo "→ scenario card (from $(SCENARIO)): $$card"; \
+	  docker run --rm --platform linux/$(HOST_GUI_ARCH) -e AMENBO_E2E_CARD="$$card" \
+	    -v "$(CURDIR)/$(DIST_DIR)/gui-e2e:/out" amenbo-linux-gui-e2e:latest
 	@echo "→ screenshots: $(DIST_DIR)/gui-e2e/{1-before,2-after,3-diff}.png"
 
 $(GUI_DEB_HOST):

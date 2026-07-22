@@ -60,9 +60,9 @@ describe("Markdown reference-link rendering", () => {
 });
 
 describe("Markdown GFM extensions", () => {
-  it("renders a table as <table>", () => {
+  it("renders a table as <table>, wrapped for sideways scroll in the fixed-width pane", () => {
     const html = render("| a | b |\n| --- | --- |\n| 1 | 2 |");
-    expect(html).toContain("<table>");
+    expect(html).toContain('<div class="markdown__tablewrap"><table>');
     expect(html).toContain("<th>a</th>");
     expect(html).toContain("<td>1</td>");
   });

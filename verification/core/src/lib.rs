@@ -5,8 +5,10 @@
 //! procedure plus its expected results, driver-independent. Every driver reads the SAME
 //! file — the CLI driver (`verification/cli`) maps each step to a shipped-binary
 //! invocation, the mac GUI harness (`verification/gui`) maps it to a screen instruction,
-//! the Linux OCR harness (`scripts/docker/gui-e2e.sh`) reads it through this crate's JSON
-//! output. Nothing here knows about a command line or a pixel.
+//! the Linux OCR harness (`scripts/docker/gui-e2e.sh`) is fed the card title its host
+//! launcher (`make verify-gui-linux`) resolves through this crate's JSON face (the `emit`
+//! bin), since that container carries no toolchain to read the YAML itself. Nothing here
+//! knows about a command line or a pixel.
 //!
 //! Two layers of checking, both surfaced as clear failures:
 //!   * [`load_str`] / [`load_file`] — the YAML must parse into the typed model
@@ -18,10 +20,10 @@ use std::collections::HashSet;
 use std::fmt;
 use std::path::Path;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// A whole scenario: an ordered list of steps under an id and a human title.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Scenario {
     /// Stable kebab-case identifier, unique across the scenario set.
@@ -37,7 +39,7 @@ pub struct Scenario {
 
 /// One step. `type` selects the variant; every step names the [`Domain`] object it
 /// touches and the `op` performed on it.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Step {
     /// A domain operation that changes state.
@@ -91,7 +93,7 @@ pub type Args = std::collections::BTreeMap<String, serde_yaml::Value>;
 
 /// The domain object a step touches. Kept small and closed on purpose — an unknown domain
 /// is a scenario bug, not an extension point.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Domain {
     Task,

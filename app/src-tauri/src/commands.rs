@@ -1812,7 +1812,7 @@ pub fn task_status(id: i64, status: String) -> Result<WriteAck, CmdError> {
         let current = store.task(id)?.map(|t| t.status);
         if current != Some(new_status) || new_status == TaskStatus::InProgress {
             let old = current.unwrap_or_default();
-            store.set_task_status(id, new_status)?;
+            store.set_task_status(id, new_status, ActorKind::Human)?;
             emit(store, id, amenbo_core::activity_log::event::task_status_changed(old.as_str(), new_status.as_str()));
         }
         Ok(())
@@ -2334,7 +2334,7 @@ pub fn decision_add(project_id: i64, title: String, body: Option<String>) -> Res
 pub fn decision_accept(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         let by = ActorKind::Human.as_str().to_string();
-        store.accept_decision(id, Some(by))?;
+        store.accept_decision(id, Some(by), ActorKind::Human)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["decisions"]).decision(id))
@@ -2344,7 +2344,7 @@ pub fn decision_accept(id: i64) -> Result<WriteAck, CmdError> {
 #[tauri::command]
 pub fn decision_reject(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.reject_decision(id)?;
+        store.reject_decision(id, ActorKind::Human)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["decisions"]).decision(id))
@@ -3137,7 +3137,7 @@ pub fn task_assign(id: i64, kind: Option<String>) -> Result<WriteAck, CmdError> 
         };
         let noop = store.task(id)?.is_some_and(|t| t.assignee_kind == kind_arg);
         if !noop {
-            store.set_task_assignee(id, kind_arg)?;
+            store.set_task_assignee(id, kind_arg, ActorKind::Human)?;
             let ev = amenbo_core::activity_log::event::task_assigned(kind_arg.map(|k| k.as_str()));
             emit(store, id, ev);
         }
@@ -5371,7 +5371,7 @@ mod tests {
                     done_id = Some(t.id);
                 }
             }
-            store.set_task_completed(done_id.unwrap(), true).unwrap();
+            store.set_task_completed(done_id.unwrap(), true, ActorKind::Human).unwrap();
             p.id
         };
 
@@ -5674,8 +5674,8 @@ mod tests {
             };
             let a = mk(&mut store, "親");
             let b = mk(&mut store, "ブロッカー");
-            store.set_task_assignee(a, Some(ActorKind::Ai)).unwrap();
-            store.set_task_status(a, TaskStatus::InProgress).unwrap();
+            store.set_task_assignee(a, Some(ActorKind::Ai), ActorKind::Human).unwrap();
+            store.set_task_status(a, TaskStatus::InProgress, ActorKind::Human).unwrap();
             store.depend_task(a, b, Some(ActorKind::Human)).unwrap();
             store.add_task_comment(a, ActorKind::Human, "確認").unwrap();
             let d = store
@@ -5686,7 +5686,7 @@ mod tests {
                 })
                 .unwrap();
             store.link_decision(d.id, a).unwrap();
-            store.accept_decision(d.id, Some(me.clone())).unwrap();
+            store.accept_decision(d.id, Some(me.clone()), ActorKind::Human).unwrap();
             let d2 = store
                 .add_decision(amenbo_core::ops::decision::NewDecision {
                     title: "方針Y".into(),

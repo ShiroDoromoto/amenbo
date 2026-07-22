@@ -60,8 +60,8 @@ fn build_backlog(paths: &Paths) -> (String, i64) {
         let t3 = add(&mut store, "gamma blocker", Some(Priority::Low));
         let t4 = add(&mut store, "delta gone", None);
 
-        store.set_task_status(t2, TaskStatus::InProgress).unwrap();
-        store.set_task_assignee(t2, Some(ActorKind::Ai)).unwrap();
+        store.set_task_status(t2, TaskStatus::InProgress, ActorKind::Human).unwrap();
+        store.set_task_assignee(t2, Some(ActorKind::Ai), ActorKind::Human).unwrap();
         store.depend_task(t1, t3, Some(ActorKind::Human)).unwrap();
 
         // A comment so the comment dataset is exercised.

@@ -108,6 +108,16 @@ impl Driver {
                 self.run_json(&["comment", "add", &target.to_string(), "--text", text, "--json"])?;
                 Ok(Outcome::action(format!("commented on task {target}")))
             }
+            (Domain::Decision, "create") => {
+                let title = req_str(with, "title")?;
+                let pid = self.project_id.to_string();
+                let v = self.run_json(&["decision", "add", "--title", title, "--project", &pid, "--json"])?;
+                let id = v["decision"]["id"].as_i64().ok_or("decision add did not report an id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
+                Ok(Outcome::action(format!("created decision {id} `{title}`")))
+            }
             _ => Err(unmapped(domain, op)),
         }
     }
@@ -133,6 +143,32 @@ impl Driver {
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))
+            }
+            (Domain::Task, "field") => {
+                let target = self.resolve(with)?;
+                let field = req_str(with, "field")?;
+                // `equals` is any scalar (string / bool / number / null); compare it structurally
+                // against the field's JSON value, so `status: todo` and `completed: false` both work.
+                let expected = with.get("equals").ok_or("arg `equals` is required")?;
+                let expected = serde_json::to_value(expected)
+                    .map_err(|e| format!("arg `equals` is not a valid value: {e}"))?;
+                let v = self.run_json(&["task", "show", &target.to_string(), "--json"])?;
+                match v.get(field) {
+                    None => Ok(Outcome::assert(
+                        false,
+                        format!("task {target} has no field `{field}` in its show output (MISMATCH)"),
+                    )),
+                    Some(actual) => {
+                        let pass = *actual == expected;
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "task {target} field `{field}` = {actual} (expected {expected}, {})",
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                }
             }
             _ => Err(unmapped(domain, op)),
         }

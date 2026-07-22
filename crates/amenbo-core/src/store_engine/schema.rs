@@ -516,6 +516,10 @@ datasets! {
         // There is no separate "done" column: completion is derived from `status == 'done'`.
         completed_at: ts_opt,
         status: enum_col("todo", "in_progress", "done", "blocked"),
+        // When `status` last changed — stamped on a status transition only (`ops::task::set_status`), so
+        // it answers "when did the current status begin" where `updated_at` (moved by any write) cannot.
+        // Nullable: a task from a store that predates the column was never stamped (`AMB-D-366`).
+        status_changed_at: ts_opt,
         created_by_kind: actor_kind,
         assignee_kind: actor_kind,
         start_on: date_opt,

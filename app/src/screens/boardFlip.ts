@@ -14,6 +14,7 @@
 // the card being dragged (a local move, not an outside one), or too many cards moving at once.
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import { subscribeStoreChangeReflected } from "../core/snapshot";
+import { BOARD_COLUMN_CAP } from "./boardLayout";
 
 // The one flag. Off ≡ removed: no snapshot is taken, no attribute is emitted, and the board behaves exactly as
 // it did before this file existed.
@@ -21,10 +22,12 @@ export const BOARD_FLIP = true;
 
 // How long a card takes to slide to its new column.
 const FLIP_MS = 400;
-// Ceiling on cards animated in one write. A single move reflows both its columns, so a comfortable ceiling
-// keeps a normal move (traveller plus the neighbours it pushes) whole; only an extreme burst is clipped, and
-// then the rest place instantly rather than storm the compositor.
-const FLIP_MAX_CARDS = 20;
+// A pure backstop, not a tuning knob. The real governor is the viewport guard in planFlip (`intersectsViewport`),
+// which animates only cards on screen in either layout — so the count is bounded by the physical viewport, not by
+// this number. A status change reflows only two columns (source + dest), so the structural worst case is
+// 2 × the column cap; past that is impossible, not merely "too many". Derive it from the cap so the two stay
+// linked rather than drifting apart as separate literals.
+const FLIP_MAX_CARDS = 2 * BOARD_COLUMN_CAP;
 // How long an armed snapshot waits for the refetch re-render to land before it gives up and places instantly.
 const FLIP_ARM_WINDOW_MS = 1500;
 

@@ -3,6 +3,12 @@
 # Asks the one question the other suites can't: when a SEPARATE process writes to the
 # store, does the running GUI's webview actually repaint?
 #
+# The card title this writes and looks for is NOT baked in here: it comes from the single
+# scenario source (verification/scenarios/), resolved on the host by `make verify-gui-linux`
+# through the `amenbo-scenario` crate and passed in as AMENBO_E2E_CARD — the container
+# carries no toolchain to read the YAML itself. Edit the scenario and this Linux check
+# follows, same as the CLI and mac drivers reading that one source.
+#
 # Screenshots land in the mounted /out (host: ./dist/gui-e2e) — 1-before.png,
 # 2-after.png and their diff. The verdict is read off the picture by OCR, so this can run
 # unattended (it does, in the Linux GUI bundle workflow): the card title the CLI wrote must
@@ -10,7 +16,15 @@
 # between. A pixel diff alone would also go green on a repaint that carried nothing.
 set -euo pipefail
 
-CARD="EXTERNAL WRITE"   # the title the CLI writes; OCR must find it only in the after shot
+# The title the CLI writes; OCR must find it only in the after shot. Sourced from the
+# scenario, not hard-coded — fail loudly if the host launcher forgot to pass it.
+CARD="${AMENBO_E2E_CARD:?AMENBO_E2E_CARD must be set (the scenario-derived card title, see make verify-gui-linux)}"
+
+# Fold a string to a punctuation-insensitive, lower-case, single-spaced form. tesseract on
+# a rendered card reads the words reliably but not every glyph (an em-dash comes back as a
+# dash, a space, or nothing), so the title is matched on its alphanumerics, not verbatim.
+norm() { tr '[:upper:]' '[:lower:]' | tr -c '[:alnum:]' ' ' | tr -s ' '; }
+NEEDLE="$(printf '%s' "$CARD" | norm)"
 
 export AMENBO_HOME=/root/amenbo-home   # a throwaway store; never the real app-data tree
 export AMENBO_ACTOR=ai
@@ -44,7 +58,7 @@ xwininfo -root -children -display :99 | grep -i webkit || { echo "✗ no webview
 import -display :99 -window root /out/1-before.png
 
 echo "== external write from a separate CLI process (the thing under test)"
-amenbo task add --title "$CARD 1175"
+amenbo task add --title "$CARD"
 sleep 6
 import -display :99 -window root /out/2-after.png
 
@@ -56,10 +70,12 @@ echo "== pixels changed: $changed"
 echo "== read the board back off the screen (OCR)"
 tesseract /out/1-before.png /out/1-before 2>/dev/null
 tesseract /out/2-after.png /out/2-after 2>/dev/null
-if grep -qF "$CARD" /out/1-before.txt; then
+before="$(norm < /out/1-before.txt)"
+after="$(norm < /out/2-after.txt)"
+if [[ "$before" == *"$NEEDLE"* ]]; then
   echo "✗ '$CARD' was on the board BEFORE the CLI wrote it — the check proves nothing"; exit 1
 fi
-if ! grep -qF "$CARD" /out/2-after.txt; then
+if [[ "$after" != *"$NEEDLE"* ]]; then
   echo "✗ the webview repainted but the '$CARD' card is not on the board"
   echo "  (what OCR read:)"; cat /out/2-after.txt; exit 1
 fi

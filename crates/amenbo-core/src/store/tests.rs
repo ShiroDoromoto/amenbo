@@ -41,7 +41,7 @@ fn hydrated(s: &Store) -> Database {
             .unwrap();
 
         // The resident side can write too. SQLite decides the order; neither is locked out.
-        resident_writer.set_task_status(t.id, TaskStatus::InProgress).unwrap();
+        resident_writer.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap();
         assert_eq!(hydrated(&resident_writer).tasks.len(), 1);
         drop(gui_read);
     }
@@ -199,7 +199,7 @@ fn hydrated(s: &Store) -> Database {
             created_by_kind: None,
         })
         .unwrap();
-        s.set_task_status(t.id, TaskStatus::InProgress).unwrap();
+        s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap();
         s.add_task_comment(t.id, crate::model::ActorKind::Human, "コメント").unwrap();
         s.add_system_event(
             crate::model::ActorKind::Ai,
@@ -381,7 +381,7 @@ fn task_writes_commit_per_operation() {
 
     let t1 = s.add_task(task("first", Some(proj.id))).unwrap();
     let t2 = s.add_task(task("second", Some(proj.id))).unwrap();
-    s.set_task_status(t2.id, TaskStatus::InProgress).unwrap();
+    s.set_task_status(t2.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap();
     assert_eq!((t1.id, t2.id), (1, 2), "numbering is MAX+1 within the transaction");
     drop(s);
 
@@ -401,9 +401,9 @@ fn task_writes_commit_per_operation() {
 fn reserving_is_a_compare_and_swap_against_the_truth_source() {
     let (mut s, dir) = fresh_store("seam-cas");
     let t = s.add_task(task("reserve me", None)).unwrap();
-    s.set_task_status(t.id, TaskStatus::InProgress).unwrap();
+    s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap();
 
-    let err = s.set_task_status(t.id, TaskStatus::InProgress).unwrap_err();
+    let err = s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap_err();
     assert_eq!(err.code(), "already_reserved", "reservation is rejected when not todo");
     fs::remove_dir_all(&dir).ok();
 }
@@ -418,7 +418,7 @@ fn the_ready_guard_reads_the_blockers_from_the_truth_source() {
     let blocker = s.add_task(task("do me first", None)).unwrap();
     s.depend_task(t.id, blocker.id, None).unwrap();
 
-    let err = s.set_task_status(t.id, TaskStatus::InProgress).unwrap_err();
+    let err = s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap_err();
     assert_eq!(err.code(), "not_ready", "reservation is rejected when there is an unfinished blocker");
     assert_eq!(
         crate::store_engine::read::task_status(s.engine.conn(), t.id).unwrap(),
@@ -427,8 +427,8 @@ fn the_ready_guard_reads_the_blockers_from_the_truth_source() {
     );
 
     // Finish the blocker and the precondition is met, so the reservation goes through.
-    s.set_task_status(blocker.id, TaskStatus::Done).unwrap();
-    assert_eq!(s.set_task_status(t.id, TaskStatus::InProgress).unwrap().status, TaskStatus::InProgress);
+    s.set_task_status(blocker.id, TaskStatus::Done, crate::model::ActorKind::Human).unwrap();
+    assert_eq!(s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap().status, TaskStatus::InProgress);
     fs::remove_dir_all(&dir).ok();
 }
 

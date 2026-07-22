@@ -65,7 +65,7 @@ fn a_committed_mutation_names_the_row_it_changed() {
     );
 
     let head = read::change_feed_head(store.read_model().conn()).unwrap();
-    store.set_task_status(task, amenbo_core::model::TaskStatus::InProgress).unwrap();
+    store.set_task_status(task, amenbo_core::model::TaskStatus::InProgress, ActorKind::Ai).unwrap();
     let rows = feed(&store, head);
     assert!(
         rows.iter().any(|r| r.dataset == "task" && r.row_id == task && r.op == "update"),
@@ -141,7 +141,7 @@ fn one_operation_writes_one_feed_row_per_row_it_touched() {
     let task = store.add_task(new_task("タスク", project)).unwrap().id;
 
     let head = read::change_feed_head(store.read_model().conn()).unwrap();
-    store.set_task_status(task, amenbo_core::model::TaskStatus::InProgress).unwrap();
+    store.set_task_status(task, amenbo_core::model::TaskStatus::InProgress, ActorKind::Ai).unwrap();
 
     let rows = feed(&store, head);
     let on_task: Vec<&FeedRow> = rows.iter().filter(|r| r.dataset == "task").collect();
@@ -240,7 +240,7 @@ fn the_feed_is_bounded_and_stops_growing() {
         } else {
             amenbo_core::model::TaskStatus::Todo
         };
-        store.set_task_status(task, status).unwrap();
+        store.set_task_status(task, status, ActorKind::Ai).unwrap();
     }
 
     let rows: i64 = store
@@ -282,7 +282,7 @@ fn a_cursor_the_truncation_outran_is_declared_a_gap_not_an_empty_answer() {
         } else {
             amenbo_core::model::TaskStatus::Todo
         };
-        store.set_task_status(task, status).unwrap();
+        store.set_task_status(task, status, ActorKind::Ai).unwrap();
     }
 
     let conn = store.read_model().conn();
@@ -294,7 +294,7 @@ fn a_cursor_the_truncation_outran_is_declared_a_gap_not_an_empty_answer() {
 
     // A reader that is current still gets its changes, not a gap.
     let head = read::change_feed_head(conn).unwrap();
-    store.set_task_status(task, amenbo_core::model::TaskStatus::Done).unwrap();
+    store.set_task_status(task, amenbo_core::model::TaskStatus::Done, ActorKind::Ai).unwrap();
     let conn = store.read_model().conn();
     match read::changes_since(conn, head, 100).unwrap() {
         FeedSlice::Changes { rows, more } => {
@@ -314,8 +314,8 @@ fn a_short_page_says_there_is_more() {
     let task = store.add_task(new_task("タスク", project)).unwrap().id;
     let head = read::change_feed_head(store.read_model().conn()).unwrap();
     for _ in 0..5 {
-        store.set_task_status(task, amenbo_core::model::TaskStatus::InProgress).unwrap();
-        store.set_task_status(task, amenbo_core::model::TaskStatus::Todo).unwrap();
+        store.set_task_status(task, amenbo_core::model::TaskStatus::InProgress, ActorKind::Ai).unwrap();
+        store.set_task_status(task, amenbo_core::model::TaskStatus::Todo, ActorKind::Ai).unwrap();
     }
 
     match read::changes_since(store.read_model().conn(), head, 3).unwrap() {
@@ -351,7 +351,7 @@ fn the_bound_holds_when_every_write_is_a_new_process() {
             } else {
                 amenbo_core::model::TaskStatus::Todo
             };
-            store.set_task_status(task, status).unwrap();
+            store.set_task_status(task, status, ActorKind::Ai).unwrap();
         }
     }
     // A fresh process — one `amenbo task add` — finds the feed over its window and cuts it back.

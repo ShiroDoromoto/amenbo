@@ -1,0 +1,10 @@
+# Rejected: `target: ghost` names no earlier `as:` binding.
+id: invalid-dangling-target
+title: a target that resolves to nothing
+steps:
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: ghost
+      assignee: me-ai

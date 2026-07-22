@@ -16,6 +16,18 @@ lives on your machine in a single SQLite store and can be exported at any time.
 > local SQLite database — the single source of truth. There is no server and
 > nothing leaves your machine.
 
+## Contents
+
+- [Layout](#layout)
+- [Toolchain](#toolchain)
+- [Build and run](#build-and-run)
+- [Installing and updating](#installing-and-updating)
+- [Commands](#commands)
+- [Making your AI agent read the spec](#making-your-ai-agent-read-the-spec-optional)
+- [Encryption at rest](#encryption-at-rest)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Layout
 
 ```
@@ -50,6 +62,9 @@ Design points:
 
 ## Toolchain
 
+<details>
+<summary>Pinned Node + Rust, one-shot setup, and the macOS-only GUI note</summary>
+
 Node and Rust versions are pinned in the repo so everyone builds with the same
 toolchain (no OS-global change needed). The pin files — `.nvmrc` / `.node-version`
 (Node 24, Active LTS), `rust-toolchain.toml` (Rust 1.96.0 + rustfmt/clippy), and
@@ -81,7 +96,12 @@ macOS; the CLI builds anywhere Rust does (`make install-dev` for a local dev
 build — the prod CLI ships inside the unified installer, so `make install` is
 retired).
 
+</details>
+
 ## Build and run
+
+<details>
+<summary>Build, the fast/full test split, the nextest + shell gates, and where data lives</summary>
 
 ```bash
 cargo build
@@ -131,7 +151,12 @@ Data is stored under the OS-standard location (on macOS,
 `~/Library/Application Support/amenbo/store.sqlite`). Set `AMENBO_HOME` to
 override the location (useful for tests and explicit setups).
 
+</details>
+
 ## Installing and updating
+
+<details>
+<summary>Per-OS installers, in-place CLI self-update, and verifying a download</summary>
 
 amenbo ships as a single per-OS installer that carries both the GUI and the CLI
 (macOS `.pkg`, Windows NSIS, Linux `.deb`/`.rpm`), published on this repository's
@@ -188,7 +213,12 @@ The check only reads that static file; amenbo never updates itself in the backgr
 downloading and applying a new version is always something you set off yourself
 (`amenbo update`, or `amenbo update --apply` for the standalone CLI).
 
+</details>
+
 ## Commands
+
+<details>
+<summary>The full command tour — projects, tasks, dimensions, decisions, attachments, backup/restore, hooks</summary>
 
 The CLI surface is self-documenting: `amenbo <cmd> --help` and `amenbo agent --json`
 are the authoritative spec (there is no separate command reference to drift out of date).
@@ -389,7 +419,12 @@ face is under *Settings → Integrity*: it lists everything `amenbo doctor` find
 and this machine's bound folders — and runs the same repairs, so the CLI is never required
 to fix what the app shows you.
 
+</details>
+
 ## Making your AI agent read the spec (optional)
+
+<details>
+<summary>Point your AI at the agent spec, and how the binding bounds its reach</summary>
 
 `amenbo init` writes a small managed block into the folder's `CLAUDE.md` /
 `AGENTS.md` whose one job is to tell the AI: *before you work here, run `amenbo
@@ -429,7 +464,12 @@ every session, closing the gap where `init` writes the block mid-session (so it
 does not bind until the *next* one). Use a `UserPromptSubmit` hook instead if you
 would rather re-inject it on each prompt.
 
+</details>
+
 ## Encryption at rest
+
+<details>
+<summary>Plaintext store; on-device secrecy via full-disk encryption</summary>
 
 The truth source is **plaintext** SQLite. amenbo does not encrypt the store at the
 application layer — on-device secrecy is delegated to the operating system's
@@ -445,6 +485,8 @@ already-plaintext store needs nothing.
 Concurrent writers to the same store are serialized by an exclusive file lock, so
 nothing is lost. Different stores (different `AMENBO_HOME`) never contend, which is
 what makes single-machine multi-store isolation safe.
+
+</details>
 
 ## Contributing
 

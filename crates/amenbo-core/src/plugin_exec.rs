@@ -10,12 +10,16 @@
 //!
 //! This is the common ground under both plugin faces. The asynchronous, fire-and-forget hook runner and
 //! the synchronous command caller each build their own policy — a timeout, what stdout *means*, whether
-//! a non-zero exit is fatal — on top of [`PluginInvocation::run`]. This layer holds none of that: it
-//! spawns, feeds, waits, and reports. Nothing here decides how long to wait or what the output means.
+//! a non-zero exit is fatal — on top of this substrate. This layer holds none of that: it spawns, feeds,
+//! waits, and reports. It offers the wait two ways — [`RunningPlugin::wait`] blocks until the child exits,
+//! [`RunningPlugin::wait_timeout`] gives up and kills it after a bound the *caller* names — but it never
+//! decides how long that bound is, nor what the output means.
 
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::Stdio;
+use std::process::{Child, Stdio};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 /// A plugin to run, and everything it is handed. Owned, so a caller can build it and move it onto a
 /// thread (the hook runner launches off the write path).
@@ -58,14 +62,26 @@ impl PluginInvocation {
         self
     }
 
-    /// Run the plugin to completion and capture its output.
+    /// Run the plugin to completion and capture its output — the unbounded wait.
     ///
-    /// The payload is written on a thread, so a child that floods stdout before it drains stdin cannot
-    /// deadlock us against a full pipe — the reader and the writer make progress independently. Failing
+    /// A convenience for the command face, which wants the child's whole output and has its own idea of
+    /// how long to wait: it is exactly [`spawn`](Self::spawn) followed by [`RunningPlugin::wait`]. Failing
     /// to spawn (no such executable, not runnable) is the returned `Err`; a plugin that runs and exits
-    /// non-zero is an `Ok` whose [`PluginOutput::code`] says so — "it ran and failed" is not this
-    /// layer's error to raise.
+    /// non-zero is an `Ok` whose [`PluginOutput::code`] says so — "it ran and failed" is not this layer's
+    /// error to raise.
     pub fn run(&self) -> std::io::Result<PluginOutput> {
+        self.spawn()?.wait()
+    }
+
+    /// Start the plugin and begin draining its output, handing back a [`RunningPlugin`] to wait on.
+    ///
+    /// This is the shared mechanism under both faces. The payload is written, and stdout/stderr are read,
+    /// each on its own thread, so a child that floods stdout before it drains stdin cannot deadlock us
+    /// against a full pipe — writer and readers make progress independently. Only the spawn itself can
+    /// fail here (no such executable, not runnable); everything the child then does is reported by the
+    /// wait. The caller picks the wait: unbounded ([`RunningPlugin::wait`]) or bounded
+    /// ([`RunningPlugin::wait_timeout`]).
+    pub fn spawn(&self) -> std::io::Result<RunningPlugin> {
         let mut cmd = crate::sys::command(&self.program);
         cmd.args(&self.args)
             .stdin(Stdio::piped())
@@ -86,15 +102,90 @@ impl PluginInvocation {
             // Dropping `stdin` closes the pipe, so the child reads EOF.
         });
 
-        let out = child.wait_with_output()?;
-        // The writer has nothing left to do once the child has exited; join to reap it.
-        let _ = writer.join();
+        // Drain stdout and stderr each on their own thread. Reading them out of band is what lets the
+        // bounded wait poll the child for exit without a full pipe wedging it — and it keeps `wait`'s
+        // no-deadlock promise for a child that talks a lot before it reads.
+        let mut child_stdout = child.stdout.take().expect("stdout was configured piped");
+        let stdout = std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = child_stdout.read_to_end(&mut buf);
+            buf
+        });
+        let mut child_stderr = child.stderr.take().expect("stderr was configured piped");
+        let stderr = std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = child_stderr.read_to_end(&mut buf);
+            buf
+        });
 
-        Ok(PluginOutput {
-            code: out.status.code(),
-            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
-        })
+        Ok(RunningPlugin { child, writer, stdout, stderr })
+    }
+}
+
+/// A spawned plugin, its stdin fed and its stdout/stderr draining on background threads. Wait for it to
+/// finish — [`wait`](Self::wait) for as long as it takes, [`wait_timeout`](Self::wait_timeout) up to a
+/// bound — and collect what it left. Either wait reaps the child and joins the drain threads, so there is
+/// no way to hold one of these without eventually reaping the process.
+pub struct RunningPlugin {
+    child: Child,
+    writer: JoinHandle<()>,
+    stdout: JoinHandle<Vec<u8>>,
+    stderr: JoinHandle<Vec<u8>>,
+}
+
+/// How often the bounded wait re-checks a still-running child. Small enough that a hook's kill is prompt,
+/// large enough that a slow plugin does not spin a core while we wait it out.
+const POLL: Duration = Duration::from_millis(20);
+
+impl RunningPlugin {
+    /// Wait for the child to exit however long it takes, then collect its output.
+    pub fn wait(self) -> std::io::Result<PluginOutput> {
+        let RunningPlugin { mut child, writer, stdout, stderr } = self;
+        let status = child.wait()?;
+        Ok(finish(writer, stdout, stderr, status.code()))
+    }
+
+    /// Wait up to `timeout` for the child to exit; if it overruns, **kill it** and report the timeout.
+    ///
+    /// `Ok(Some(output))` is a child that finished on its own within the bound; `Ok(None)` is one that
+    /// ran too long and was killed — the hook face treats that as just another non-success to warn about,
+    /// so its half-written output is dropped rather than returned. A kill needs the child handle, which is
+    /// why the bounded wait lives here and not on top of `run()`: `run()` has already given the child away
+    /// to its own `wait`.
+    pub fn wait_timeout(self, timeout: Duration) -> std::io::Result<Option<PluginOutput>> {
+        let RunningPlugin { mut child, writer, stdout, stderr } = self;
+        let start = Instant::now();
+        loop {
+            if let Some(status) = child.try_wait()? {
+                return Ok(Some(finish(writer, stdout, stderr, status.code())));
+            }
+            if start.elapsed() >= timeout {
+                let _ = child.kill();
+                let _ = child.wait();
+                // Reap the drain/writer threads (the closed pipes end them) and drop what they read.
+                drop(finish(writer, stdout, stderr, None));
+                return Ok(None);
+            }
+            std::thread::sleep(POLL);
+        }
+    }
+}
+
+/// Join the writer and the two drain threads and assemble the captured output. The child has already been
+/// reaped by the caller; this only collects what its pipes carried.
+fn finish(
+    writer: JoinHandle<()>,
+    stdout: JoinHandle<Vec<u8>>,
+    stderr: JoinHandle<Vec<u8>>,
+    code: Option<i32>,
+) -> PluginOutput {
+    let _ = writer.join();
+    let stdout = stdout.join().unwrap_or_default();
+    let stderr = stderr.join().unwrap_or_default();
+    PluginOutput {
+        code,
+        stdout: String::from_utf8_lossy(&stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&stderr).into_owned(),
     }
 }
 

@@ -19,6 +19,7 @@ fn a_missing_program_is_a_spawn_error() {
 mod unix {
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
+    use std::time::{Duration, Instant};
 
     use amenbo_core::plugin_exec::PluginInvocation;
 
@@ -69,5 +70,41 @@ mod unix {
         let out = PluginInvocation::new(&echo).stdin_json(big.clone()).run().unwrap();
         assert!(out.succeeded());
         assert_eq!(out.stdout.len(), big.len());
+    }
+
+    /// A child that finishes inside the bound comes back as `Some`, with its output — the bounded wait is
+    /// the unbounded one when nothing overruns.
+    #[test]
+    fn a_quick_child_finishes_within_the_timeout() {
+        let echo = script("timeout-quick.sh", "#!/bin/sh\ncat\n");
+        let out = PluginInvocation::new(&echo)
+            .stdin_json("hello")
+            .spawn()
+            .unwrap()
+            .wait_timeout(Duration::from_secs(5))
+            .unwrap();
+        let out = out.expect("finished on its own, not timed out");
+        assert!(out.succeeded());
+        assert_eq!(out.stdout, "hello");
+    }
+
+    /// A child that overruns the bound is killed: the wait returns `None` well before the child would have
+    /// finished, and the marker its tail would have written never appears — proof the kill landed, not
+    /// that we merely stopped watching.
+    #[test]
+    fn an_overrunning_child_is_killed() {
+        let dir = amenbo_scratch::scratch("plugin-exec");
+        let marker = dir.join("overrun.marker");
+        let _ = std::fs::remove_file(&marker);
+        let slow = script(
+            "timeout-slow.sh",
+            &format!("#!/bin/sh\nsleep 5\ntouch '{}'\n", marker.display()),
+        );
+
+        let start = Instant::now();
+        let out = PluginInvocation::new(&slow).spawn().unwrap().wait_timeout(Duration::from_millis(200)).unwrap();
+        assert!(out.is_none(), "the overrunning child times out");
+        assert!(start.elapsed() < Duration::from_secs(3), "the wait gives up near the bound, not at sleep's end");
+        assert!(!marker.exists(), "the child was killed before its tail could run");
     }
 }

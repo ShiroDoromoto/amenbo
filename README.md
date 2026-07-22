@@ -2,10 +2,10 @@
 
 **[amenbo.work](https://amenbo.work/)** — downloads, and what this is for.
 
-A **local, single-store** task & project manager where an AI and a human
-collaborate on one machine. It is **CLI-first and AI-agent-friendly**: a Rust core
-library does the domain work and the CLI is a thin shell on top of it. Your data
-lives on your machine in a single SQLite store and can be exported at any time.
+**A task & project manager where an AI and a human collaborate on one machine.**
+
+- **Local, single-store** — your data lives on your machine in a single SQLite store, and can be exported at any time.
+- **CLI-first & AI-agent-friendly** — a Rust core library does the domain work; the CLI is a thin shell on top of it.
 
 > Status: the core, the CLI, and a desktop GUI are implemented. The store is a
 > local SQLite database — the single source of truth. There is no server and

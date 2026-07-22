@@ -35,6 +35,7 @@ pub mod perf;
 pub mod plugin_command;
 pub mod plugin_events;
 pub mod plugin_exec;
+pub mod plugin_hooks;
 pub mod plugin_payload;
 pub mod progress;
 pub mod project_teardown;

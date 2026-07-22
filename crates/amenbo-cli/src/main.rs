@@ -2580,6 +2580,65 @@ fn note_revisit(flags: &Flags, target: i64, standing: &[amenbo_core::view::Decis
     }
 }
 
+/// The holder-side surface of `AMB-D-366`: premises a task acquired **after it was reserved** — a blocker or
+/// an unsettled decision pinned on since `in_progress` began, silently dropping `ready`. Read-only; the
+/// reaction is the caller's (a quiet note on `task show`, a firm warn at completion). Only the reservation
+/// holder is at risk, so callers gate on `status == in_progress`. A read error yields "nothing changed" —
+/// this is additive context, never a reason to fail the command.
+fn premise_change(store: &Store, tid: i64) -> amenbo_core::view::PremiseChange {
+    store
+        .premise_change_since(tid)
+        .unwrap_or_else(|_| amenbo_core::view::PremiseChange { added_blockers: Vec::new(), added_decisions: Vec::new() })
+}
+
+/// `premise_change` when `applies`, an empty change otherwise — so a safety-net site reads the premises only
+/// on the transition that matters (leaving `in_progress`) and skips the query on every other status change.
+fn premise_change_when(store: &Store, tid: i64, applies: bool) -> amenbo_core::view::PremiseChange {
+    if applies {
+        premise_change(store, tid)
+    } else {
+        amenbo_core::view::PremiseChange { added_blockers: Vec::new(), added_decisions: Vec::new() }
+    }
+}
+
+/// The premise-change lines, one per added premise, shared by the quiet and the firm surface.
+fn premise_change_lines(pc: &amenbo_core::view::PremiseChange) -> Vec<String> {
+    let mut out = Vec::new();
+    for b in &pc.added_blockers {
+        out.push(format!("  blocker {} {}", task_label(b.id), b.name));
+    }
+    for d in &pc.added_decisions {
+        out.push(format!("  decision {} {} (not settled)", decision_label(d.id), decision_ref_name(&d.name)));
+    }
+    out
+}
+
+/// The **firm** surface — the safety net that must not be missed: on a status change out of `in_progress`
+/// (completing, blocking), warn that the reservation's premises shifted underneath. On stderr, so it reaches
+/// both a human and a `--json` caller without touching stdout; `attach_premise_change` folds the same fact
+/// into the JSON envelope. It never blocks the transition — `D-366` surfaces the change, it does not forbid
+/// finishing (the holder may still ship the part that stands on its own).
+fn warn_premise_change(pc: &amenbo_core::view::PremiseChange) {
+    if !pc.any() {
+        return;
+    }
+    eprintln!("⚠ Premises changed after you reserved this task — readiness was silently withdrawn (AMB-D-366):");
+    for line in premise_change_lines(pc) {
+        eprintln!("{line}");
+    }
+    eprintln!("  Finish only the part that stands on its own, or hand it back with `amenbo task status <id> todo`.");
+}
+
+/// Fold the premise change into a write command's JSON resource, so a `--json` caller sees it structurally
+/// (not only as a stderr line). Absent when nothing changed, so the key appears exactly when it matters.
+fn attach_premise_change(resource: &mut serde_json::Value, pc: &amenbo_core::view::PremiseChange) {
+    if pc.any() {
+        if let Some(obj) = resource.as_object_mut() {
+            obj.insert("premise_change".to_string(), serde_json::to_value(pc).unwrap_or(json!(null)));
+        }
+    }
+}
+
 /// Resolve a task reference (`AMB-T-n`, or the bare `T-n` / `#n` / `n`). The numbers are globally unique on the device, so no
 /// project context is needed. The id **is** the conversational number: nothing is abbreviated and nothing is
 /// prefix-matched. The return type mirrors core's `resolve`, so `.map_err(CliError::from)?` works as is.
@@ -2694,6 +2753,11 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                     obj.insert("linked_decisions".to_string(), serde_json::to_value(&decisions).unwrap_or(json!([])));
                     obj.insert("recent_comments".to_string(), serde_json::to_value(&comments).unwrap_or(json!([])));
                 }
+                // The holder-side surface of `AMB-D-366`: only the reservation holder (in_progress) is at risk
+                // of a premise silently pinned on after they reserved, so gate on it and fold in what changed.
+                if detail.status == TaskStatus::InProgress {
+                    attach_premise_change(&mut v, &premise_change(store, tid));
+                }
                 print_json(&v);
             } else {
                 // One name only: the ref. The id is the conversational number, so there is no second
@@ -2741,6 +2805,19 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                         flags,
                         format!("not started until: {} (cannot start yet)", time::date_to_string(d)),
                     ),
+                }
+                // The quiet early-warning surface of `AMB-D-366`: if this task is reserved (in_progress) and a
+                // premise was pinned on after the reservation — silently dropping `ready` — say so here, on
+                // an ordinary read, so the holder notices long before they try to complete it. Only printed
+                // when something actually shifted (nothing to say otherwise).
+                if detail.status == TaskStatus::InProgress {
+                    let pc = premise_change(store, tid);
+                    if pc.any() {
+                        human(flags, "premises changed since reserved (readiness withdrawn — AMB-D-366):");
+                        for line in premise_change_lines(&pc) {
+                            human(flags, line);
+                        }
+                    }
                 }
                 // The dependents — what becomes startable once this task is done. Always mark it, printing
                 // `blocks: (none)` when empty; leaving the line out reads to an AI as "nothing follows".
@@ -3743,6 +3820,9 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) ->
         return Ok(0);
     }
     let old = before.map(|t| t.status).unwrap_or_default();
+    // Safety net (`AMB-D-366`): completing a reserved task is the moment not to miss — read the premises pinned on
+    // after the reservation *before* the transition retires the in_progress clock they are measured against.
+    let pc = premise_change_when(store, tid, completed && old == TaskStatus::InProgress);
     let t = store.set_task_completed(tid, completed, flags.actor).map_err(CliError::from)?;
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), t.status.as_str()));
     // Going done may have made dependents ready — emit the unblock signal if so.
@@ -3751,7 +3831,10 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) ->
     }
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
     let msg = if completed { "✓ Marked done" } else { "✓ Reopened" };
-    write_envelope(flags, action, "task", serde_json::to_value(&detail).unwrap(), Some(vec!["completed".to_string(), "status".to_string()]), false, format!("{msg}: {}", task_label(t.id)));
+    let mut resource = serde_json::to_value(&detail).unwrap();
+    attach_premise_change(&mut resource, &pc);
+    write_envelope(flags, action, "task", resource, Some(vec!["completed".to_string(), "status".to_string()]), false, format!("{msg}: {}", task_label(t.id)));
+    warn_premise_change(&pc);
     Ok(0)
 }
 
@@ -3777,6 +3860,14 @@ fn task_set_status(store: &mut Store, flags: &Flags, id: &str, status: &str) -> 
         return Ok(0);
     }
     let old = current.unwrap_or_default();
+    // Safety net (`AMB-D-366`): leaving in_progress to complete or block is the not-to-miss moment; read the
+    // premises acquired since the reservation before the transition retires the clock. Handing it back to
+    // todo needs no warn — the holder is stepping off anyway.
+    let pc = premise_change_when(
+        store,
+        tid,
+        old == TaskStatus::InProgress && matches!(new_status, TaskStatus::Done | TaskStatus::Blocked),
+    );
     let t = store.set_task_status(tid, new_status, flags.actor).map_err(CliError::from)?;
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), new_status.as_str()));
     // Going done may have made dependents ready — emit the unblock signal if so.
@@ -3784,7 +3875,10 @@ fn task_set_status(store: &mut Store, flags: &Flags, id: &str, status: &str) -> 
         emit_unblocks(store, flags, tid);
     }
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
-    write_envelope(flags, "task.status", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["status".to_string(), "completed".to_string()]), false, format!("✓ Set status to {}: {}", new_status.as_str(), task_label(t.id)));
+    let mut resource = serde_json::to_value(&detail).unwrap();
+    attach_premise_change(&mut resource, &pc);
+    write_envelope(flags, "task.status", "task", resource, Some(vec!["status".to_string(), "completed".to_string()]), false, format!("✓ Set status to {}: {}", new_status.as_str(), task_label(t.id)));
+    warn_premise_change(&pc);
     Ok(0)
 }
 
@@ -3792,6 +3886,9 @@ fn task_set_status(store: &mut Store, flags: &Flags, id: &str, status: &str) -> 
 fn task_block(store: &mut Store, flags: &Flags, id: &str, reason: Option<String>) -> Result<i32, CliError> {
     let tid = resolve_task(store, id).map_err(CliError::from)?;
     let old = store.task(tid).map_err(CliError::from)?.map(|t| t.status).unwrap_or_default();
+    // Safety net (`AMB-D-366`): interrupting a reserved task — read the premises acquired since the reservation
+    // before the transition retires the in_progress clock.
+    let pc = premise_change_when(store, tid, old == TaskStatus::InProgress);
     let t = store.set_task_status(tid, TaskStatus::Blocked, flags.actor).map_err(CliError::from)?;
     if old != TaskStatus::Blocked {
         emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), "blocked"));
@@ -3802,7 +3899,10 @@ fn task_block(store: &mut Store, flags: &Flags, id: &str, reason: Option<String>
         store.add_task_comment(tid, flags.actor, r).map_err(CliError::from)?;
     }
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
-    write_envelope(flags, "task.block", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["status".to_string()]), false, format!("✓ Set to blocked: {}", task_label(t.id)));
+    let mut resource = serde_json::to_value(&detail).unwrap();
+    attach_premise_change(&mut resource, &pc);
+    write_envelope(flags, "task.block", "task", resource, Some(vec!["status".to_string()]), false, format!("✓ Set to blocked: {}", task_label(t.id)));
+    warn_premise_change(&pc);
     Ok(0)
 }
 
@@ -4505,6 +4605,27 @@ mod tests {
 
     fn tick(phase: amenbo_core::progress::Phase, done: u64, total: Option<u64>) -> amenbo_core::progress::Progress {
         amenbo_core::progress::Progress { phase, done, total }
+    }
+
+    /// The premise-change fold (`AMB-D-366`): the `premise_change` key appears in a write's JSON envelope
+    /// exactly when a premise shifted, so a `--json` caller reads it structurally and an unchanged
+    /// reservation carries no noise key.
+    #[test]
+    fn attach_premise_change_only_adds_the_key_when_something_changed() {
+        use amenbo_core::view::{PremiseChange, TaskRef};
+
+        // Empty change: the key is absent.
+        let mut v = json!({ "id": 1 });
+        attach_premise_change(&mut v, &PremiseChange { added_blockers: Vec::new(), added_decisions: Vec::new() });
+        assert!(v.get("premise_change").is_none());
+
+        // A pinned-on blocker: the key carries it.
+        let pc = PremiseChange {
+            added_blockers: vec![TaskRef { id: 7, name: "後付け".to_string() }],
+            added_decisions: Vec::new(),
+        };
+        attach_premise_change(&mut v, &pc);
+        assert_eq!(v["premise_change"]["added_blockers"][0]["id"], 7);
     }
 
     /// `attach open` hands its temp copy to another application and returns, so it can never delete what

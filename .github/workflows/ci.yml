@@ -133,6 +133,10 @@ jobs:
               # audit job reads it too, so a bump there has to open this gate.
               - 'app/src-tauri/Cargo.toml'
               - 'app/src-tauri/Cargo.lock'
+              # The verification harness is a third out-of-workspace cargo workspace with its own
+              # lockfile; the cargo-license job reads it too, so a bump there has to open this gate.
+              - 'verification/Cargo.toml'
+              - 'verification/Cargo.lock'
               - '.cargo/audit.toml'
               # The license allow-list the cargo-license job below reads.
               - 'deny.toml'
@@ -315,6 +319,13 @@ jobs:
       # One config governs both trees.
       - name: Check the Tauri host crate's licenses
         run: cargo deny --config deny.toml --manifest-path app/src-tauri/Cargo.toml check licenses
+
+      # And once more for the verification harness: its own cargo workspace, its own lockfile, so
+      # the root check never sees it either. It is publish=false and never shipped, but the
+      # convention is that every lockfile in the tree passes the one allow-list — otherwise a
+      # dependency's license could change here unwatched (Dependabot bumps are auto-merged).
+      - name: Check the verification harness's licenses
+        run: cargo deny --config deny.toml --manifest-path verification/Cargo.toml check licenses
 
   # The same argument, for the other half of what we ship. cargo deny never sees the GUI's npm
   # dependencies, but they ride into the Tauri bundle exactly as the crates do — and they arrive the

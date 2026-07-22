@@ -15,10 +15,12 @@
 //! the delivery function pure is what lets both faces drive it the same way.
 //!
 //! **Who subscribes is a seam.** [`deliver`] asks a [`Subscribers`] which plugins observe an event and
-//! hands each the payload; it does not itself know what is installed or enabled. That resolver is the
-//! install≠enable lifecycle's to supply (`AMB-T-1975` / `AMB-T-1979`): only an *enabled* plugin fires
-//! (`AMB-D-351`). Until it lands, [`NoSubscribers`] is the honest default — nothing is installed, so no
-//! event has an observer, and delivery is a no-op that still advances the cursor.
+//! composes each one's stdin — the event payload, with that plugin's non-secret config folded under
+//! `config` (`AMB-D-356`); it does not itself know what is installed or enabled. The real resolver is
+//! [`EnabledSubscribers`](crate::plugin_subscribe::EnabledSubscribers), which the install≠enable lifecycle
+//! supplies (`AMB-T-2032`): only an *enabled*, subscribed plugin fires (`AMB-D-351`). Where no resolver is
+//! mounted yet, [`NoSubscribers`] is the honest default — nothing is installed, so no event has an
+//! observer, and delivery is a no-op that still advances the cursor.
 //!
 //! **Delivery is best-effort** (`AMB-D-352`). Generation is leak-free (the event landed in the same
 //! transaction as its cause), but firing is after the fact: a hook that will not spawn, exits non-zero, or
@@ -40,15 +42,39 @@ use crate::store_engine::{events_since, outbox_head, OutboxSlice};
 /// one query, not one process.
 const DELIVER_PAGE: i64 = 256;
 
+/// One resolved subscriber: the plugin to fire and its non-secret config to hand it alongside the event.
+///
+/// The resolver builds the `invocation` with its program and the plugin's **secret** config as environment
+/// variables (`AMB-T-2016`, off argv and off logs), and carries the **text** (non-secret) config as
+/// `config` — a JSON object [`deliver`] places under the payload's `config` key on stdin. The split is the
+/// author's `secret` flag's (`AMB-D-356`), resolved by [`plugin_inject`](crate::plugin_inject). The
+/// resolver does **not** set the payload event fields; [`deliver`] composes the whole stdin document, so
+/// the payload channel stays the dispatcher's.
+pub struct Subscriber {
+    /// The plugin to run, with its program and secret env already set. Its stdin is left for [`deliver`].
+    pub invocation: PluginInvocation,
+    /// The plugin's non-secret config, placed under the payload's `config` key on stdin. Empty when the
+    /// plugin has no text settings — [`deliver`] then adds no `config` key at all.
+    pub config: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Subscriber {
+    /// A subscriber with no text config — an invocation whose stdin is entirely [`deliver`]'s payload.
+    pub fn new(invocation: PluginInvocation) -> Self {
+        Self { invocation, config: serde_json::Map::new() }
+    }
+}
+
 /// Resolves which plugins observe an event — the seam the enable lifecycle fills (`AMB-T-1975`).
 ///
-/// Given an event name (one of [`crate::plugin_payload::V1_EVENTS`]), return one [`PluginInvocation`] per
-/// enabled, subscribed plugin: its program, and whatever the resolver injects alongside (a secret env var,
-/// `AMB-T-2016`). The resolver does **not** set the payload — [`deliver`] attaches that to each on stdin,
-/// so the payload channel stays the dispatcher's. Return an empty vector for an event nobody observes.
+/// Given an event name (one of [`crate::plugin_payload::V1_EVENTS`]), return one [`Subscriber`] per
+/// enabled, subscribed plugin: its program, whatever the resolver injects alongside (secret config as env
+/// vars, `AMB-T-2016`), and its non-secret config for the payload's `config` key. The resolver does **not**
+/// set the payload event fields — [`deliver`] composes the stdin document, so the payload channel stays the
+/// dispatcher's. Return an empty vector for an event nobody observes.
 pub trait Subscribers {
-    /// The invocations to fire for `event`, before the payload is attached.
-    fn resolve(&self, event: &str) -> Vec<PluginInvocation>;
+    /// The subscribers to fire for `event`, before the event payload is composed onto stdin.
+    fn resolve(&self, event: &str) -> Vec<Subscriber>;
 }
 
 /// The default resolver until the enable lifecycle supplies a real one (`AMB-T-1975`): nothing is
@@ -57,7 +83,7 @@ pub trait Subscribers {
 pub struct NoSubscribers;
 
 impl Subscribers for NoSubscribers {
-    fn resolve(&self, _event: &str) -> Vec<PluginInvocation> {
+    fn resolve(&self, _event: &str) -> Vec<Subscriber> {
         Vec::new()
     }
 }
@@ -114,9 +140,14 @@ pub fn deliver(conn: &Connection, cursor: i64, subs: &dyn Subscribers) -> Result
                         );
                         continue;
                     };
-                    let json = serde_json::to_string(&payload)?;
-                    for invocation in subs.resolve(payload.event) {
-                        invocations.push(invocation.stdin_json(json.clone()));
+                    // Serialize the event once per row; each subscriber's stdin is this payload with the
+                    // plugin's own text config merged under `config` (`AMB-D-356` — the payload's config
+                    // key). The base payload is a JSON object (`Payload` serializes to a map), so the merge
+                    // is a key insertion, not a re-parse.
+                    let base = serde_json::to_value(&payload)?;
+                    for sub in subs.resolve(payload.event) {
+                        let json = serde_json::to_string(&with_config(base.clone(), sub.config))?;
+                        invocations.push(sub.invocation.stdin_json(json));
                     }
                 }
                 if !more {
@@ -127,6 +158,21 @@ pub fn deliver(conn: &Connection, cursor: i64, subs: &dyn Subscribers) -> Result
     }
     let hooks = crate::plugin_hooks::fire(invocations);
     Ok(Delivered { cursor, hooks, gapped: false })
+}
+
+/// Fold a subscriber's non-secret config into the event payload under `config` (`AMB-D-356`). An empty
+/// config adds no key, so a plugin with no text settings receives the bare event payload — the absent and
+/// the empty forms stay one wire document, as elsewhere in the plugin contract.
+fn with_config(
+    mut payload: serde_json::Value,
+    config: serde_json::Map<String, serde_json::Value>,
+) -> serde_json::Value {
+    if !config.is_empty() {
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert("config".to_string(), serde_json::Value::Object(config));
+        }
+    }
+    payload
 }
 
 #[cfg(test)]
@@ -141,9 +187,9 @@ mod tests {
     }
 
     impl Subscribers for Fixed {
-        fn resolve(&self, event: &str) -> Vec<PluginInvocation> {
+        fn resolve(&self, event: &str) -> Vec<Subscriber> {
             if self.events.contains(&event) {
-                vec![self.invocation.clone()]
+                vec![Subscriber::new(self.invocation.clone())]
             } else {
                 Vec::new()
             }
@@ -246,6 +292,76 @@ mod tests {
         assert!(d.gapped, "a cursor behind the watermark is a gap");
         assert_eq!(d.cursor, 2, "the cursor resyncs to the head");
         assert!(d.hooks.is_empty(), "the lost span is not replayed");
+    }
+
+    /// `with_config` folds a plugin's text config under `config`, and adds no key when the config is empty
+    /// so a plugin with no text settings still receives the bare event payload.
+    #[test]
+    fn with_config_merges_under_the_config_key_only_when_present() {
+        let base = serde_json::json!({ "v": 1, "event": "task.created", "id": 7 });
+
+        // Empty config: the payload is untouched, no `config` key appears.
+        let bare = with_config(base.clone(), serde_json::Map::new());
+        assert!(bare.get("config").is_none(), "an empty config adds no key");
+        assert_eq!(bare, base);
+
+        // Non-empty config: it lands under `config`, the event fields untouched.
+        let mut cfg = serde_json::Map::new();
+        cfg.insert("channel".to_string(), serde_json::Value::String("#ops".to_string()));
+        let merged = with_config(base, cfg);
+        assert_eq!(merged["config"]["channel"], "#ops");
+        assert_eq!(merged["event"], "task.created", "the event fields are left alone");
+    }
+
+    /// The whole chain end to end: a committed event's payload reaches the subscribed plugin on stdin, in
+    /// the v1 wire shape, with the plugin's text config folded under `config`. A real subprocess needs a
+    /// shell, so this is unix-only (the same gate the exec and command round-trip tests use).
+    #[cfg(unix)]
+    #[test]
+    fn the_event_payload_and_config_reach_the_plugin_on_stdin() {
+        /// A resolver that fires one invocation with a fixed text config for the named event.
+        struct WithConfig {
+            event: &'static str,
+            invocation: PluginInvocation,
+            config: serde_json::Map<String, serde_json::Value>,
+        }
+        impl Subscribers for WithConfig {
+            fn resolve(&self, event: &str) -> Vec<Subscriber> {
+                if event == self.event {
+                    vec![Subscriber { invocation: self.invocation.clone(), config: self.config.clone() }]
+                } else {
+                    Vec::new()
+                }
+            }
+        }
+
+        let dir = amenbo_scratch::scratch("plugin-dispatch-config-stdin");
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("payload.json");
+        let _ = std::fs::remove_file(&out);
+
+        let invocation = PluginInvocation::new("/bin/sh")
+            .arg("-c")
+            .arg(format!("cat > {}", out.display()));
+        let mut config = serde_json::Map::new();
+        config.insert("channel".to_string(), serde_json::Value::String("#ops".to_string()));
+        let subs = WithConfig { event: "task.status_changed", invocation, config };
+
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, "task.status_changed", 42, Some("in_progress"));
+
+        let d = deliver(e.conn(), 0, &subs).unwrap();
+        assert_eq!(d.hooks.len(), 1);
+        for h in d.hooks {
+            h.join().unwrap();
+        }
+
+        let got: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
+        assert_eq!(got["event"], "task.status_changed");
+        assert_eq!(got["new"], "in_progress");
+        // The plugin's text config rides the same stdin document, under `config`.
+        assert_eq!(got["config"]["channel"], "#ops");
     }
 
     /// The whole chain end to end: a committed event's payload reaches the subscribed plugin on stdin, in

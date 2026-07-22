@@ -307,6 +307,29 @@ pub enum Command {
         #[command(subcommand)]
         sub: HardEraseCmd,
     },
+
+    /// Author-facing tools for building a plugin.
+    ///
+    /// A plugin is distributed as a manifest in the public catalog repository (`AMB-D-347`). `validate`
+    /// runs the same rules amenbo enforces at the door — a well-formed id, checksum, OS set and config
+    /// schema (`AMB-D-354`/`AMB-D-360`/`AMB-D-356`) — over a manifest file you point it at, so you can
+    /// self-check before opening a catalog PR. It reads no store and needs no binding.
+    Plugin {
+        #[command(subcommand)]
+        sub: PluginCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PluginCmd {
+    /// Validate a plugin manifest file against the catalog rules, reporting every problem it finds
+    /// (`AMB-D-354`). The path may be `.yaml` (the form authored in the catalog repo) or `.json` (the
+    /// aggregated `catalog.json` form) — the format is read from the extension, defaulting to YAML.
+    /// Exits non-zero if the manifest is invalid, so it drops into a pre-submit check.
+    Validate {
+        /// path to the manifest file (`plugins/<name>.yaml` or a `.json` manifest)
+        path: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]

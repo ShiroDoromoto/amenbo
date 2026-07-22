@@ -22,6 +22,9 @@ e2e = []
 amenbo-core = { path = "../amenbo-core" }
 serde.workspace = true
 serde_json.workspace = true
+# Read a `.yaml` manifest an author points `plugin validate` at; JSON is read through serde_json.
+# Parsing lives at this surface, the shared validation rules in amenbo-core.
+serde_norway.workspace = true
 chrono.workspace = true
 clap.workspace = true
 # Hidden password entry for the encrypted recovery kit (`recovery backup`): read the passphrase from

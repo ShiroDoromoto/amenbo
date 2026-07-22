@@ -150,6 +150,7 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         | Command::Lint { .. } // reads the text it is handed; no store, so nothing to stamp a facet onto
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
+        | Command::Plugin { sub: PluginCmd::Validate { .. } } // reads a manifest file the author names; no store
         | Command::Hooks { .. }
         | Command::Config { .. } // settings live in the user layer and leave no activity behind
         | Command::Bind { .. } => false, // only writes the `.amenbo` pointer (no facet recorded)
@@ -241,6 +242,7 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         | Some(Command::Lint { .. })
         | Some(Command::GithookPreCommit)
         | Some(Command::GithookCommitMsg { .. })
+        | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
         | Some(Command::Unbind { .. }) => None,
         Some(Command::Bind { dir: Some(d), .. }) => {
             let p = std::path::PathBuf::from(d);
@@ -599,6 +601,63 @@ fn lint_cmd(flags: &Flags, paths: Vec<String>, stdin: bool) -> Result<i32, CliEr
 /// What the report calls piped text — no path to name it by, so name the stream.
 const STDIN_LABEL: &str = "<stdin>";
 
+/// `plugin validate <path>` — check a manifest file against the catalog rules (`AMB-D-354`), the
+/// author-facing face of the very validator the door uses ([`amenbo_core::plugin_validate`]). A `.json`
+/// path is read as JSON (the aggregated `catalog.json` form), anything else as YAML (the `.yaml` form
+/// authored in the catalog repo). A parse failure is itself a fail-closed refusal — a manifest missing a
+/// required field is the shape half of the door — so it is reported as a problem, not surfaced as a crash.
+/// Exits non-zero when the manifest is invalid, dropping cleanly into a pre-submit check.
+fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
+    let text = std::fs::read_to_string(&path).map_err(|e| CliError {
+        code: "io_error",
+        message: format!("Cannot read {path}: {e}"),
+        hint: None,
+        exit: 1,
+    })?;
+    let is_json =
+        std::path::Path::new(&path).extension().is_some_and(|e| e.eq_ignore_ascii_case("json"));
+    let parsed: Result<amenbo_core::plugin_manifest::Manifest, String> = if is_json {
+        serde_json::from_str(&text).map_err(|e| e.to_string())
+    } else {
+        serde_norway::from_str(&text).map_err(|e| e.to_string())
+    };
+    let manifest = match parsed {
+        Ok(m) => m,
+        Err(e) => {
+            if flags.json {
+                print_json(&json!({ "ok": false, "path": path, "parse_error": e, "problems": [] }));
+            } else {
+                human(flags, format!("✗ {path}: not a valid manifest — {e}"));
+            }
+            return Ok(1);
+        }
+    };
+
+    let problems = amenbo_core::plugin_validate::validate_manifest(&manifest);
+    if flags.json {
+        let arr: Vec<_> = problems
+            .iter()
+            .map(|p| {
+                json!({
+                    "location": p.location,
+                    "code": p.code.as_str(),
+                    "message": p.message.en(),
+                    "message_ja": p.message.ja(),
+                })
+            })
+            .collect();
+        print_json(&json!({ "ok": problems.is_empty(), "path": path, "count": problems.len(), "problems": arr }));
+    } else if problems.is_empty() {
+        human(flags, format!("plugin validate: ok — {path} is a valid manifest."));
+    } else {
+        for p in &problems {
+            human(flags, format!("{}: {}", p.location, p.message.en()));
+        }
+        human(flags, format!("✗ plugin validate: {} problem(s) in {path}.", problems.len()));
+    }
+    Ok(if problems.is_empty() { 0 } else { 1 })
+}
+
 fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // Whether this checkout is a place to use amenbo at all is asked before any dispatch: `init` raises a
     // project in the real store and returns below without ever reaching the guards further down, so a
@@ -626,6 +685,10 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // diff (no paths), `commit-msg` lints the message file git hands over.
         Some(Command::GithookPreCommit) => return lint_cmd(flags, Vec::new(), false),
         Some(Command::GithookCommitMsg { path }) => return lint_cmd(flags, vec![path.clone()], false),
+        // `plugin validate` reads a manifest file the author points at — no store, no binding, no facet, on
+        // the same store-free footing as `lint`. It sits ahead of the exec guard so an author can run it in
+        // any directory (their plugin's, a CI checkout), not only a bound one.
+        Some(Command::Plugin { sub: PluginCmd::Validate { path } }) => return plugin_validate_cmd(flags, path.clone()),
         Some(Command::Version) if !store_reachable() => {
             advise_linux_system_orphan();
             return version_unbound(flags);
@@ -890,6 +953,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             unreachable!("handled before open")
         }
         Command::GithookPreCommit | Command::GithookCommitMsg { .. } => {
+            unreachable!("handled before open")
+        }
+        Command::Plugin { .. } => {
             unreachable!("handled before open")
         }
         Command::Config { sub } => return config(&mut store, flags, sub),

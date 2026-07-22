@@ -74,21 +74,23 @@ pub struct Column {
     pub decl: &'static str,
 }
 
-/// A synced record type: the wire dataset key, its read-model table, and its columns.
+/// A record type the engine reads and writes: its stable dataset key, its read-model table, and its
+/// columns. These are the tables `export`/`archive` carry, as opposed to the device-local plain tables.
 pub struct Dataset {
-    /// Dataset key carried on the wire (`messages.dataset`).
+    /// The dataset's stable key (`task`, `decision`, …) — the name a reader and `export` speak, never the
+    /// physical table name.
     pub name: &'static str,
     /// Read-model table name.
     pub table: &'static str,
     /// Type-specific columns (the universal [`AUDIT`] columns are appended to every table and are
-    /// not repeated here). All are writable through the engine under LWW; `id` never is.
+    /// not repeated here). All are writable through the engine's field-write path; `id` never is.
     pub columns: &'static [Column],
 }
 
 impl Dataset {
     /// Every column written through the log: the type-specific columns plus the universal audit
-    /// columns. Excludes `id` (the row key — carried in every message but never an LWW write) and
-    /// the implicit PRIMARY KEY. This is the registry's truth for both the LWW whitelist and the
+    /// columns. Excludes `id` (the row key — never written as a field) and
+    /// the implicit PRIMARY KEY. This is the registry's truth for both the writable-column whitelist and the
     /// startup column-migration ([`super::engine`]).
     pub fn all_columns(&self) -> impl Iterator<Item = &'static Column> {
         self.columns.iter().chain(AUDIT)
@@ -118,7 +120,7 @@ impl Dataset {
 
 /// A table that is not a record: the store's scalars, the change feed, the folder bindings and the
 /// device-local task sets. It has no `id` surrogate, no audit columns and no field-write path — the
-/// engine's LWW machinery never touches it — so it is declared apart from [`DATASETS`], but declared the
+/// engine's field-write path never touches it — so it is declared apart from [`DATASETS`], but declared the
 /// same way: one line per column, emitting both the DDL and the reader's typed identifier.
 pub struct PlainTable {
     /// Table name.
@@ -428,7 +430,7 @@ macro_rules! plain_type {
 macro_rules! plain_tables {
     ($($(#[$meta:meta])* $table:ident { $($cname:ident : $ckind:ident $(($cc:literal))?),+ $(,)? } $(=> $tc:literal)?)+) => {
         /// The tables that are **not** records: they carry no `id` surrogate, no audit columns and no
-        /// field-write path, so the engine's LWW machinery never touches them and they are not
+        /// field-write path, so the engine's field-write machinery never touches them and they are not
         /// [`DATASETS`] entries. Their DDL is generated from the declarations below, as the registry's is.
         pub const PLAIN_TABLES: &[PlainTable] = &[
             $(PlainTable {
@@ -487,7 +489,7 @@ pub mod col {
 const AUDIT: &[Column] = &[ts!(created_at), ts!(updated_at)];
 
 datasets! {
-    /// The synced record types and their read-model columns (faithful subsets of [`crate::model`]).
+    /// The record types and their read-model columns (faithful subsets of [`crate::model`]).
     /// **Superset invariant:** this registry is the upper bound of every read-model table — a live
     /// table holds a *subset* of the columns declared here, never more. Startup column migration
     /// (`super::engine::migrate_columns`) restores the equality on open, so adding a column is just
@@ -660,7 +662,7 @@ pub fn dataset_of_table(table: &str) -> Option<&'static str> {
     DATASETS.iter().find(|d| d.table == table).map(|d| d.name)
 }
 
-/// Look up a dataset by its wire key.
+/// Look up a dataset by its stable key.
 pub fn dataset(name: &str) -> Option<&'static Dataset> {
     DATASETS.iter().find(|d| d.name == name)
 }
@@ -732,7 +734,7 @@ plain_tables! {
         dir: text,
     } => "PRIMARY KEY (project_id, dir)"
 
-    /// The device-local **read receipts** — a task's last-seen instant. Per-device, never-synced
+    /// The device-local **read receipts** — a task's last-seen instant. Device-local, export-excluded
     /// overview state, so a plain `task_id → last_seen` table is the faithful shape and the row is
     /// UPSERTed directly; `task_id` is the task's `INTEGER` key, the same identifier a record carries.
     /// The mailbox's single last-seen instant is a scalar and lives in `store_meta` (keyed
@@ -743,14 +745,14 @@ plain_tables! {
     }
 
     /// The device-local **inbox archive** — the set of inbox items this device has dismissed (a display
-    /// filter, not a synced record). This is the inbox's only *persistent* state; the mailbox itself is
+    /// filter, not a record table). This is the inbox's only *persistent* state; the mailbox itself is
     /// a computed view over tasks.
     inbox_archive {
         task_id: integer("PRIMARY KEY"),
     }
 
     /// The device-local **mailbox notified set** — the inbox items this device has already raised an OS
-    /// notification for. Per-device, never-synced: the same item may notify once on each device. It
+    /// notification for. Device-local: the same item may notify once on each separate install. It
     /// generalises the mailbox's old in-memory "seen this run" baseline into persistent state, so an
     /// arrival is announced exactly once even across restarts — a startup catch-up announces what landed
     /// while the app was closed, and never re-announces it on the next launch. Presence is the whole

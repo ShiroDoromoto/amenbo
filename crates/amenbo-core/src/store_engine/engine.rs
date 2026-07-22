@@ -67,7 +67,7 @@ pub type Result<T> = std::result::Result<T, StoreEngineError>;
 /// Carries the instruction and nothing more: which dataset, which id, which kind of change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RowChange {
-    /// The dataset's wire key (`task`, `decision`, …) — never the physical table name, which is an
+    /// The dataset's stable key (`task`, `decision`, …) — never the physical table name, which is an
     /// implementation detail the reader does not speak.
     pub dataset: &'static str,
     /// The row's id. Every record table is `INTEGER PRIMARY KEY AUTOINCREMENT`, so SQLite's rowid *is*

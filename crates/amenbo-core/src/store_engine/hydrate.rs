@@ -10,7 +10,7 @@
 //!
 //! Faithfulness: every dataset in [`super::schema`] round-trips field-for-field (the forward
 //! projection and this reverse read share the same column vocabulary). The store-level singleton
-//! scalar `Database::schema_version` has **no per-record dataset** (it is not a per-record LWW write);
+//! scalar `Database::schema_version` has **no per-record dataset** (it is a store-level scalar, not a per-record field);
 //! it lives in the `store_meta` KV table and is read back via [`crate::store_engine::read_meta`].
 //!
 //! Row order is canonical: the `SELECT … ORDER BY id` of every table sorts each collection by `id`

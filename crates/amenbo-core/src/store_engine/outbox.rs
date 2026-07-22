@@ -39,7 +39,7 @@ use super::sql::{Expr, Pred, Select, Sort, Sql};
 /// trimmed carries no row, which reads back as `0` — the same answer, said by the absence.
 pub(super) const META_OUTBOX_TRUNCATED_THROUGH: &str = "plugin_outbox_truncated_through";
 
-/// One semantic event to append to the outbox — the fields a fired event carries, minus the wire
+/// One semantic event to append to the outbox — the fields a fired event carries, minus the payload
 /// version constant. The caller (an ops write point) has already classified the change into its event
 /// name and read whatever new state the event carries; this is the value it hands the store to append
 /// in-transaction. Borrowed throughout: nothing is stored beyond the INSERT, so the row can be built

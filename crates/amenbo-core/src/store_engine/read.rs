@@ -602,7 +602,7 @@ pub fn present_task_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<i64>> {
 pub struct FeedRow {
     /// The feed's monotonic id — what a reader passes back as "everything after this".
     pub id: i64,
-    /// The dataset's wire key (`task`, `decision`, …).
+    /// The dataset's stable key (`task`, `decision`, …).
     pub dataset: String,
     /// The changed row's id (the conversational number, which is the primary key).
     pub row_id: i64,
@@ -732,7 +732,7 @@ pub fn referenced_blob_hashes(conn: &Connection) -> Result<std::collections::Has
 }
 
 /// How many live `blob` attachments reference `hash` — its refcount. Zero means the bytes are
-/// collectible. Counts the synced metadata, independent of whether the bytes are present locally.
+/// collectible. Counts the stored metadata rows, independent of whether the bytes are present locally.
 pub fn blob_refcount(conn: &Connection, hash: &str) -> Result<i64> {
     let mut sel = Select::new();
     let count = sel.count_all();
@@ -749,10 +749,10 @@ fn on_target(target_type: &str, target_id: i64) -> Pred {
     Pred::eq(ATT.target_type, target_type).and(Pred::eq(ATT.target_id, target_id))
 }
 
-/// One live attachment's synced metadata, as carried by the truth source. The blob bytes are
+/// One live attachment's metadata, as the store holds it. The blob bytes are
 /// out-of-band, so this is purely the metadata the GUI viewer needs to dispatch on `mime` and to
 /// build a stream URL (`blob_hash`); `url`-mode rows carry `url` instead. `created_by_kind` is the
-/// wire facet text (`human`/`ai`) or `None` when there is none.
+/// stored facet text (`human`/`ai`) or `None` when there is none.
 #[derive(Debug, Clone)]
 pub struct AttachmentRow {
     pub id: i64,

@@ -37,7 +37,7 @@ use super::sql::{Expr, Pred, Select, Sort, Sql};
 /// key, distinct from the change feed's (`AMB-D-367`: retention here is a *separate policy* — an event
 /// survives until it is delivered, not merely until a window slides past it). A store that has never
 /// trimmed carries no row, which reads back as `0` — the same answer, said by the absence.
-pub(super) const META_OUTBOX_TRUNCATED_THROUGH: &str = "plugin_outbox_truncated_through";
+pub(crate) const META_OUTBOX_TRUNCATED_THROUGH: &str = "plugin_outbox_truncated_through";
 
 /// One semantic event to append to the outbox — the fields a fired event carries, minus the payload
 /// version constant. The caller (an ops write point) has already classified the change into its event

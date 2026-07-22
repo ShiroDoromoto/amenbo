@@ -338,6 +338,10 @@ const JA_PHRASEBOOK: &[(&str, &str)] = &[
     ("decision reference (AMB-D-n)", "決定参照（AMB-D-n）"),
     ("replacement body (Markdown); omit to use --body-file or stdin", "置換本文（Markdown）。省略すると --body-file または標準入力を使います"),
     ("read the replacement body from this file instead of --body/stdin", "--body/標準入力の代わりにこのファイルから置換本文を読みます"),
+    // plugin validate (author-facing manifest check)
+    ("Validate a plugin manifest against the catalog rules before submitting it (an author's self-check)", "提出前にプラグインの manifest を目録の規約に照らして検証する（作者の自己チェック）"),
+    ("Validates a plugin manifest file against the catalog rules — a well-formed id, checksum, https url, repo, non-empty OS set and config schema — reporting every problem it finds so an author can self-check before opening a catalog PR. It reads the same rules amenbo enforces at the install/intake door, so the two never disagree. The path may be .yaml (the form authored in the catalog repo) or .json (the aggregated catalog.json form); the format is taken from the extension, defaulting to YAML. A manifest that does not even parse is reported too — a missing required field is the shape half of the fail-closed door. It opens no store and needs no binding, so it runs anywhere (a plugin checkout, CI). The exit code is the verdict: 0 valid, 1 invalid (or the file could not be read).", "プラグインの manifest ファイルを目録の規約——整った id・checksum・https の url・repo・空でない対応OS集合・config スキーマ——に照らして検証し、見つかった問題をすべて報告します。作者は目録へ PR を出す前に自己チェックできます。amenbo が install/取り込みの入口で強制するのと同じ規約を読むため、両者が食い違うことはありません。パスは .yaml（目録リポで作者が書く形式）でも .json（集約後の catalog.json 形式）でもよく、形式は拡張子で判定し、既定は YAML です。そもそもパースできない manifest も報告します——必須フィールドの欠落は fail-closed の入口の「形」のチェックで弾かれます。ストアを開かず binding も不要なので、どこでも（プラグインのチェックアウトや CI）走ります。終了コードが判定です: 0 は有効、1 は無効（またはファイルを読めなかった）。"),
+    ("path to the manifest file (.yaml or .json)", "manifest ファイルのパス（.yaml または .json）"),
 ];
 
 /// The overlay applied just before display: it swaps only the prose fields of the English spec for
@@ -656,6 +660,10 @@ fn capabilities() -> Value {
         cap(
             "Physically erase content from the store — a comment in full, or one accepted decision's body (human-gated maintenance)",
             &["hard-erase comment", "hard-erase decision"],
+        ),
+        cap(
+            "Validate a plugin manifest against the catalog rules before submitting it (an author's self-check)",
+            &["plugin validate"],
         ),
     ];
     Value::Array(caps)
@@ -1119,6 +1127,10 @@ fn all_commands() -> Value {
             "args": [{ "name": "id", "required": true, "help": "decision reference (AMB-D-n)" }],
             "flags": [{ "name": "--body <text>", "help": "replacement body (Markdown); omit to use --body-file or stdin" }, { "name": "--body-file <path>", "help": "read the replacement body from this file instead of --body/stdin" }, { "name": "--yes/-y", "help": "skip confirmation" }, { "name": "--json", "help": "machine-readable output" }],
             "examples": ["amenbo hard-erase decision AMB-D-<n> --body-file ./redacted.md --yes"] }),
+        json!({ "name": "plugin validate", "summary": "Validates a plugin manifest file against the catalog rules — a well-formed id, checksum, https url, repo, non-empty OS set and config schema — reporting every problem it finds so an author can self-check before opening a catalog PR. It reads the same rules amenbo enforces at the install/intake door, so the two never disagree. The path may be .yaml (the form authored in the catalog repo) or .json (the aggregated catalog.json form); the format is taken from the extension, defaulting to YAML. A manifest that does not even parse is reported too — a missing required field is the shape half of the fail-closed door. It opens no store and needs no binding, so it runs anywhere (a plugin checkout, CI). The exit code is the verdict: 0 valid, 1 invalid (or the file could not be read).",
+            "args": [{ "name": "path", "required": true, "help": "path to the manifest file (.yaml or .json)" }],
+            "flags": [{ "name": "--json", "help": "machine-readable output" }],
+            "examples": ["amenbo plugin validate plugins/worktree.yaml", "amenbo plugin validate ./manifest.json --json"] }),
     ])
 }
 

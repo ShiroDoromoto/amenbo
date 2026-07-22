@@ -42,6 +42,7 @@ pub mod plugin_manifest;
 pub mod plugin_payload;
 pub mod plugin_secret;
 pub mod plugin_trust;
+pub mod plugin_validate;
 pub mod progress;
 pub mod project_teardown;
 pub mod query;

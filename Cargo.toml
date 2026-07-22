@@ -16,6 +16,10 @@ repository = "https://github.com/ShiroDoromoto/amenbo"
 amenbo-scratch = { path = "crates/amenbo-scratch" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# YAML reader for `plugin validate`: authors write manifests as `plugins/<name>.yaml` in the catalog
+# repo, so the author-facing validator must read that form, not only the aggregated `catalog.json`.
+# serde_norway is the maintained fork of the (archived) serde_yaml, drop-in on serde.
+serde_norway = "0.9"
 chrono = { version = "0.4", features = ["serde", "clock"] }
 thiserror = "2"
 directories = "6"

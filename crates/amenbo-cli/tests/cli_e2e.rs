@@ -1156,6 +1156,44 @@ fn status_transitions_and_completed_stays_in_sync() {
     assert_eq!(code, 2);
 }
 
+/// The holder-side surface of `AMB-D-366`: after a task is reserved (`in_progress`), a premise pinned on
+/// afterwards silently drops its readiness. An ordinary `task show` (the early warning) and completing it
+/// (the safety net) both surface the added premise; a fresh reservation and a plain `todo` task show
+/// nothing. Timestamps are whole seconds, so the test waits past the reservation second before adding the
+/// edge — mirroring the real gap between reserving and a later change.
+#[test]
+fn a_premise_pinned_on_after_reservation_surfaces_on_show_and_completion() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.a_project();
+    let a = id_str(&cli.json(&["task", "add", "--title", "保持タスク", "--project", &pid, "--json"])["task"]["id"]);
+    let b = id_str(&cli.json(&["task", "add", "--title", "後付けブロッカー", "--project", &pid, "--json"])["task"]["id"]);
+
+    // A plain todo task surfaces nothing — the surface is scoped to the reservation holder.
+    assert!(cli.json(&["task", "show", &a, "--json"]).get("premise_change").is_none());
+
+    // Reserve A. Its status clock is stamped now; nothing is pinned on yet, so there is still nothing to show.
+    assert_eq!(cli.json(&["task", "status", &a, "in_progress", "--json"])["task"]["status"], "in_progress");
+    assert!(cli.json(&["task", "show", &a, "--json"]).get("premise_change").is_none());
+
+    // Wait past the reservation second so the new edge is unambiguously "after" the status clock.
+    std::thread::sleep(std::time::Duration::from_millis(2000));
+
+    // A blocker is pinned on after the reservation — silently dropping A's readiness under the holder.
+    cli.json(&["task", "depend", &a, "--on", &b, "--json"]);
+
+    // Early warning: an ordinary `task show` now surfaces the added blocker.
+    let show = cli.json(&["task", "show", &a, "--json"]);
+    let blockers = show["premise_change"]["added_blockers"].as_array().expect("premise_change surfaced on show");
+    assert_eq!(id_str(&blockers[0]["id"]), b);
+
+    // Safety net: completing the reserved task folds the same change into the envelope (under the task
+    // resource, the write-envelope shape), and never blocks it.
+    let done = cli.json(&["task", "done", &a, "--json"]);
+    assert_eq!(done["task"]["completed"], true);
+    assert_eq!(id_str(&done["task"]["premise_change"]["added_blockers"][0]["id"]), b);
+}
+
 #[test]
 fn init_places_marker_files_and_bind_links_project() {
     let cli = Cli::new();

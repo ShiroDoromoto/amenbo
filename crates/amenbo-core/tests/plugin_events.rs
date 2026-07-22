@@ -101,7 +101,7 @@ fn an_update_is_seen_but_not_yet_named() {
     let spy = Spy::default();
     let mut layer = EventLayer::new(head).with_sink(Box::new(spy.clone()));
 
-    store.set_task_status(task, amenbo_core::model::TaskStatus::InProgress).unwrap();
+    store.set_task_status(task, amenbo_core::model::TaskStatus::InProgress, ActorKind::Ai).unwrap();
     let fired = layer.pump(store.read_model().conn(), 100).unwrap();
 
     assert_eq!(fired, 0, "an update names no v1 event here");

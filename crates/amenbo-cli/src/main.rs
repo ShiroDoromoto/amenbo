@@ -2609,7 +2609,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             // With `--to`, hand it over here as well, folding create→assign into one command. They are two
             // logical operations and therefore two transactions, so the add survives a failing assign.
             if let Some(kind) = assignee_kind {
-                store.set_task_assignee(t.id, Some(kind)).map_err(CliError::from)?;
+                store.set_task_assignee(t.id, Some(kind), flags.actor).map_err(CliError::from)?;
                 emit_event(store, flags, t.id, activity_log::event::task_assigned(Some(kind.as_str())));
             }
             let detail = store.task_detail(t.id).map_err(CliError::from)?;
@@ -2798,7 +2798,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let after = after.map(|a| resolve_task(store, &a)).transpose().map_err(CliError::from)?;
             let pos = pos_from_keys(top, bottom, before, after)?;
             let project_for_event = project_id.map(|pid| pid.to_string());
-            let t = store.move_task(tid, project_id, pos).map_err(CliError::from)?;
+            let t = store.move_task(tid, project_id, pos, flags.actor).map_err(CliError::from)?;
             emit_event(store, flags, tid, activity_log::event::task_moved(project_for_event.as_deref()));
             let detail = store.task_detail(t.id).map_err(CliError::from)?;
             write_envelope(flags, "task.move", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["placement".to_string()]), false, format!("✓ Moved task: {}", task_label(t.id)));
@@ -2837,7 +2837,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let noop = store.task(tid).map_err(CliError::from)?
                 .is_some_and(|t| t.assignee_kind == Some(kind));
             if !noop {
-                store.set_task_assignee(tid, Some(kind)).map_err(CliError::from)?;
+                store.set_task_assignee(tid, Some(kind), flags.actor).map_err(CliError::from)?;
                 emit_event(store, flags, tid, activity_log::event::task_assigned(Some(kind.as_str())));
             }
             let detail = store.task_detail(tid).map_err(CliError::from)?;
@@ -2849,7 +2849,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let tid = resolve_task(store, &id).map_err(CliError::from)?;
             let noop = store.task(tid).map_err(CliError::from)?.is_some_and(|t| t.assignee_kind.is_none());
             if !noop {
-                store.set_task_assignee(tid, None).map_err(CliError::from)?;
+                store.set_task_assignee(tid, None, flags.actor).map_err(CliError::from)?;
                 emit_event(store, flags, tid, activity_log::event::task_assigned(None));
             }
             let detail = store.task_detail(tid).map_err(CliError::from)?;
@@ -3137,7 +3137,7 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             let reason = body_arg_opt(reason)?;
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
             let by = flags.actor.as_str().to_string();
-            let (d, changed) = store.accept_decision(did, Some(by)).map_err(CliError::from)?;
+            let (d, changed) = store.accept_decision(did, Some(by), flags.actor).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             if changed {
                 // `--reason` is thin sugar for adding one comment with the reason (the same shape as
@@ -3157,7 +3157,7 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             // Read the blast radius (one hop) before rejecting. A reject leaves the edges in place, but
             // keeping the order the same gives all three verbs the same shape.
             let standing = standing_on(store, did);
-            let (d, changed) = store.reject_decision(did).map_err(CliError::from)?;
+            let (d, changed) = store.reject_decision(did, flags.actor).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             let mut resource = serde_json::to_value(&detail).unwrap();
             attach_revisit(&mut resource, &standing);
@@ -3719,7 +3719,7 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) ->
         return Ok(0);
     }
     let old = before.map(|t| t.status).unwrap_or_default();
-    let t = store.set_task_completed(tid, completed).map_err(CliError::from)?;
+    let t = store.set_task_completed(tid, completed, flags.actor).map_err(CliError::from)?;
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), t.status.as_str()));
     // Going done may have made dependents ready — emit the unblock signal if so.
     if t.status == TaskStatus::Done {
@@ -3753,7 +3753,7 @@ fn task_set_status(store: &mut Store, flags: &Flags, id: &str, status: &str) -> 
         return Ok(0);
     }
     let old = current.unwrap_or_default();
-    let t = store.set_task_status(tid, new_status).map_err(CliError::from)?;
+    let t = store.set_task_status(tid, new_status, flags.actor).map_err(CliError::from)?;
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), new_status.as_str()));
     // Going done may have made dependents ready — emit the unblock signal if so.
     if t.status == TaskStatus::Done {
@@ -3768,7 +3768,7 @@ fn task_set_status(store: &mut Store, flags: &Flags, id: &str, status: &str) -> 
 fn task_block(store: &mut Store, flags: &Flags, id: &str, reason: Option<String>) -> Result<i32, CliError> {
     let tid = resolve_task(store, id).map_err(CliError::from)?;
     let old = store.task(tid).map_err(CliError::from)?.map(|t| t.status).unwrap_or_default();
-    let t = store.set_task_status(tid, TaskStatus::Blocked).map_err(CliError::from)?;
+    let t = store.set_task_status(tid, TaskStatus::Blocked, flags.actor).map_err(CliError::from)?;
     if old != TaskStatus::Blocked {
         emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), "blocked"));
     }

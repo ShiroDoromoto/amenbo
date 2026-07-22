@@ -23,6 +23,118 @@ fn mint_activity_id(tx: &WriteTx<'_>) -> Result<i64> {
     Ok(id)
 }
 
+// ── Plugin observation events (the outbox emit half of the write path) ─────────
+//
+// A write wrapper composes the semantic event it alone can name — it knows the operation intent (its
+// own name says status / assigned / moved / accepted / rejected), the actor, and the new state — and
+// appends it to the plugin outbox inside the mutation's own transaction, through `WriteTx::emit_event`.
+// Generation is leak-free (a rollback drops the event with the write it described); delivery is a later,
+// best-effort concern handled by the dispatcher. The store interprets none of the strings — it stores
+// the row it is given. Emitting here, at the one seam both CLI and GUI funnel through, is what makes the
+// same event fire whatever the surface. The rationale for a log kept separate from the change feed lives
+// in the decision log.
+
+/// `task.status_changed` / `task.done`: a task's status moved (`AMB-D-367`). A move to `done` is the
+/// `task.done` specialization (its name is the whole state, so no `new`); every other transition is
+/// `task.status_changed` carrying the new status. An idempotent re-set that did not move the status is
+/// not a change to observe, so it emits nothing.
+fn emit_task_status(
+    tx: &WriteTx<'_>,
+    task: &crate::model::Task,
+    before: crate::model::TaskStatus,
+    actor: crate::model::ActorKind,
+) -> Result<()> {
+    if task.status == before {
+        return Ok(());
+    }
+    let at = task.updated_at.to_rfc3339_z();
+    let (event, new_state) = if task.status == crate::model::TaskStatus::Done {
+        (crate::plugin_payload::name::TASK_DONE, None)
+    } else {
+        (crate::plugin_payload::name::TASK_STATUS_CHANGED, Some(task.status.as_str()))
+    };
+    tx.emit_event(&crate::store_engine::outbox::EventRow {
+        event,
+        record_id: task.id,
+        actor: actor.as_str(),
+        at: &at,
+        new_state,
+    })?;
+    Ok(())
+}
+
+/// `task.assigned`: a task gained or changed its assignee, carrying the new assignee facet as `new`.
+/// Clearing the assignee emits nothing (v1 has no `task.unassigned`), and re-assigning the same facet is
+/// not a change to observe.
+fn emit_task_assigned(
+    tx: &WriteTx<'_>,
+    task: &crate::model::Task,
+    before: Option<crate::model::ActorKind>,
+    actor: crate::model::ActorKind,
+) -> Result<()> {
+    let Some(kind) = task.assignee_kind else { return Ok(()) };
+    if Some(kind) == before {
+        return Ok(());
+    }
+    let at = task.updated_at.to_rfc3339_z();
+    tx.emit_event(&crate::store_engine::outbox::EventRow {
+        event: crate::plugin_payload::name::TASK_ASSIGNED,
+        record_id: task.id,
+        actor: actor.as_str(),
+        at: &at,
+        new_state: Some(kind.as_str()),
+    })?;
+    Ok(())
+}
+
+/// `task.moved`: a task changed which project it belongs to, carrying the destination project's slug as
+/// `new`. A pure reorder within the same project is not a move and emits nothing. The destination is
+/// always a real project (`move_to` refuses the inbox) and a project's slug is derived at creation, so
+/// the slug is present — the fallback only keeps the read total.
+fn emit_task_moved(
+    tx: &WriteTx<'_>,
+    task: &crate::model::Task,
+    before_project: Option<i64>,
+    actor: crate::model::ActorKind,
+) -> Result<()> {
+    if task.project_id == before_project {
+        return Ok(());
+    }
+    let Some(project_id) = task.project_id else { return Ok(()) };
+    let slug = crate::store_engine::read::project(tx.conn(), project_id)?
+        .and_then(|p| p.slug)
+        .unwrap_or_default();
+    let at = task.updated_at.to_rfc3339_z();
+    tx.emit_event(&crate::store_engine::outbox::EventRow {
+        event: crate::plugin_payload::name::TASK_MOVED,
+        record_id: task.id,
+        actor: actor.as_str(),
+        at: &at,
+        new_state: Some(&slug),
+    })?;
+    Ok(())
+}
+
+/// A decision verdict event (`decision.accepted` / `decision.rejected`). The name is the whole state, so
+/// it carries no `new`. The caller emits it only on a real transition — the idempotent re-accept /
+/// re-reject reports `changed = false`, and there is nothing to observe.
+fn emit_decision_verdict(
+    tx: &WriteTx<'_>,
+    decision: &crate::model::Decision,
+    event: &str,
+    actor: crate::model::ActorKind,
+) -> Result<()> {
+    let at = decision.updated_at.to_rfc3339_z();
+    tx.emit_event(&crate::store_engine::outbox::EventRow {
+        event,
+        record_id: decision.id,
+        actor: actor.as_str(),
+        at: &at,
+        new_state: None,
+    })?;
+    Ok(())
+}
+
 impl Store {
     /// **One logical operation = one transaction.** Opens `BEGIN IMMEDIATE`, hands it to `op`, and
     /// commits if `op` succeeds. If `op` returns early via `?` the guard drops before the commit and
@@ -83,28 +195,58 @@ impl Store {
         self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::task::update(tx, id, patch))
     }
 
-    /// Assign or unassign a task's assignee (one operation = one transaction).
+    /// Assign or unassign a task's assignee (one operation = one transaction). `actor` is who performed
+    /// the assignment (the process facet), stamped onto the `task.assigned` observation event; the
+    /// assignee that lands is `kind`, a separate thing.
     pub fn set_task_assignee(
         &mut self,
         id: i64,
         kind: Option<crate::model::ActorKind>,
+        actor: crate::model::ActorKind,
     ) -> Result<crate::model::Task> {
-        self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::task::set_assignee(tx, id, kind))
+        self.write_one(&[WriteTarget::Task(id)], |tx| {
+            let before = crate::store_engine::read::task(tx.conn(), id)?.and_then(|t| t.assignee_kind);
+            let task = crate::ops::task::set_assignee(tx, id, kind)?;
+            emit_task_assigned(tx, &task, before, actor)?;
+            Ok(task)
+        })
     }
 
     /// Set a task's status (one operation = one transaction). The compare-and-swap that reserves a
     /// task (`todo → in_progress`) reads the truth source's current status inside this transaction.
+    /// `actor` is the process facet, stamped onto the `task.status_changed` / `task.done` event.
     pub fn set_task_status(
         &mut self,
         id: i64,
         status: crate::model::TaskStatus,
+        actor: crate::model::ActorKind,
     ) -> Result<crate::model::Task> {
-        self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::task::set_status(tx, id, status))
+        self.write_one(&[WriteTarget::Task(id)], |tx| {
+            let before = crate::store_engine::read::task_status(tx.conn(), id)?;
+            let task = crate::ops::task::set_status(tx, id, status)?;
+            if let Some(before) = before {
+                emit_task_status(tx, &task, before, actor)?;
+            }
+            Ok(task)
+        })
     }
 
-    /// Done / reopen — sugar over `set_task_status` (one operation = one transaction).
-    pub fn set_task_completed(&mut self, id: i64, completed: bool) -> Result<crate::model::Task> {
-        self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::task::set_completed(tx, id, completed))
+    /// Done / reopen — sugar over `set_task_status` (one operation = one transaction). `actor` is the
+    /// process facet, stamped onto the emitted status event.
+    pub fn set_task_completed(
+        &mut self,
+        id: i64,
+        completed: bool,
+        actor: crate::model::ActorKind,
+    ) -> Result<crate::model::Task> {
+        self.write_one(&[WriteTarget::Task(id)], |tx| {
+            let before = crate::store_engine::read::task_status(tx.conn(), id)?;
+            let task = crate::ops::task::set_completed(tx, id, completed)?;
+            if let Some(before) = before {
+                emit_task_status(tx, &task, before, actor)?;
+            }
+            Ok(task)
+        })
     }
 
     /// Delete a task — a hard delete (one operation = one transaction). The task row and its
@@ -160,12 +302,19 @@ impl Store {
         id: i64,
         target_project: Option<i64>,
         pos: crate::ops::Position,
+        actor: crate::model::ActorKind,
     ) -> Result<crate::model::Task> {
         self.write_one(
             // Re-homing touches the destination too: both where it comes from and where it lands
             // have to be within reach.
             &[WriteTarget::Task(id), WriteTarget::NewIn(target_project)],
-            |tx| crate::ops::task::move_to(tx, id, target_project, pos),
+            |tx| {
+                let before_project =
+                    crate::store_engine::read::task(tx.conn(), id)?.and_then(|t| t.project_id);
+                let task = crate::ops::task::move_to(tx, id, target_project, pos)?;
+                emit_task_moved(tx, &task, before_project, actor)?;
+                Ok(task)
+            },
         )
     }
 
@@ -488,14 +637,32 @@ impl Store {
         &mut self,
         id: i64,
         decided_by: Option<String>,
+        actor: crate::model::ActorKind,
     ) -> Result<(crate::model::Decision, bool)> {
-        self.write_one(&[WriteTarget::Decision(id)], |tx| crate::ops::decision::accept(tx, id, decided_by))
+        self.write_one(&[WriteTarget::Decision(id)], |tx| {
+            let (decision, changed) = crate::ops::decision::accept(tx, id, decided_by)?;
+            if changed {
+                emit_decision_verdict(tx, &decision, crate::plugin_payload::name::DECISION_ACCEPTED, actor)?;
+            }
+            Ok((decision, changed))
+        })
     }
 
     /// Reject a decision (one operation = one transaction). Returns `(decision, changed)`; `changed`
-    /// is `false` on the idempotent noop (already rejected).
-    pub fn reject_decision(&mut self, id: i64) -> Result<(crate::model::Decision, bool)> {
-        self.write_one(&[WriteTarget::Decision(id)], |tx| crate::ops::decision::reject(tx, id))
+    /// is `false` on the idempotent noop (already rejected). `actor` is the process facet, stamped onto
+    /// the `decision.rejected` event fired on a real transition.
+    pub fn reject_decision(
+        &mut self,
+        id: i64,
+        actor: crate::model::ActorKind,
+    ) -> Result<(crate::model::Decision, bool)> {
+        self.write_one(&[WriteTarget::Decision(id)], |tx| {
+            let (decision, changed) = crate::ops::decision::reject(tx, id)?;
+            if changed {
+                emit_decision_verdict(tx, &decision, crate::plugin_payload::name::DECISION_REJECTED, actor)?;
+            }
+            Ok((decision, changed))
+        })
     }
 
     /// Return an accepted decision to discussion (one operation = one transaction).

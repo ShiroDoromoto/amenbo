@@ -238,6 +238,14 @@ pub struct Task {
     /// boolean: being done is derived from `status == Done` ([`Task::completed`]).
     #[serde(default)]
     pub status: TaskStatus,
+    /// When the current `status` began — updated **only** on a status change, never on an ordinary field
+    /// write (`updated_at` moves on any write, so it cannot answer "when did this status begin"). Because
+    /// `in_progress` is exclusive (reserving is a CAS from `todo`), while a task is reserved this holds the
+    /// reservation instant, and a reopen re-stamps it to the latest reservation. It is the basis for
+    /// judging whether a premise changed *after* a task was reserved (`AMB-D-366`). `None` for a task that
+    /// predates the column (an older store never stamped it).
+    #[serde(default)]
+    pub status_changed_at: Option<Timestamp>,
     /// The creator's facet. `None` means unknown (older data), which reads as "not authored by the AI".
     #[serde(default)]
     pub created_by_kind: Option<ActorKind>,

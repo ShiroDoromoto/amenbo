@@ -11,9 +11,9 @@
 //!   changed ([`Record::changed_from`] — the one record the op touched, never a scan of the database).
 //!   Structurally, this cannot miss a field the way writing columns out by hand can.
 //!
-//! The wire form of a value (Text / Integer / Null) and the dataset and column names are decided
+//! The stored form of a value (Text / Integer / Null) and the dataset and column names are decided
 //! **here and nowhere else**. Two mappings means one of them goes stale, so even fixtures write through
-//! this one ([`put_database`]). The wire spelling of an enum is defined once on the model itself
+//! this one ([`put_database`]). The stored spelling of an enum is defined once on the model itself
 //! (`as_str` / `parse`), so the forward projection (here) and the reverse one ([`super::hydrate`]) share
 //! a vocabulary rather than each keeping a local copy of it; round-trip tests watch that the two agree.
 
@@ -71,7 +71,7 @@ fn bv(v: bool) -> Value {
 fn iv(n: i64) -> Value {
     Value::Integer(n)
 }
-/// The wire value of a key (`id`, a reference column). The physical column is INTEGER, so it is written
+/// The stored value of a key (`id`, a reference column). The physical column is INTEGER, so it is written
 /// as an integer.
 fn kv(n: i64) -> Value {
     Value::Integer(n)
@@ -138,6 +138,7 @@ pub fn task(t: &Task) -> Record {
                 ("subtype", tv(t.subtype.as_str())),
                 ("completed_at", tsov(&t.completed_at)),
                 ("status", tv(t.status.as_str())),
+                ("status_changed_at", tsov(&t.status_changed_at)),
                 ("created_by_kind", kov(&t.created_by_kind)),
                 ("assignee_kind", kov(&t.assignee_kind)),
                 ("start_on", dov(&t.start_on)),

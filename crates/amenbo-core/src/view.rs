@@ -106,6 +106,27 @@ pub struct PremiseRef {
     pub superseded_by: Option<String>,
 }
 
+/// The premises a task acquired **after its current status began** (`AMB-D-366`) — what a caller surfaces
+/// to a holder whose reservation may have been silently undercut. Each list is the added premises that
+/// still bear on readiness (a not-done blocker, an unsettled decision); an added edge onto a done task or a
+/// link onto a settled decision is not here, because it never moved `ready`. Read-only: *how strongly to
+/// react* (a quiet note on a read, a firm warn at completion) is the caller's, not this type's.
+#[derive(Clone, Debug, Serialize)]
+pub struct PremiseChange {
+    /// Not-done blockers whose dependency edge was added after the status began, in edge order.
+    pub added_blockers: Vec<TaskRef>,
+    /// Unsettled decisions linked after the status began, in link order.
+    pub added_decisions: Vec<DecisionRef>,
+}
+
+impl PremiseChange {
+    /// Whether any premise was added after the status began — the bare "did it change?" bit, leaving the
+    /// reaction to the caller.
+    pub fn any(&self) -> bool {
+        !self.added_blockers.is_empty() || !self.added_decisions.is_empty()
+    }
+}
+
 /// The minimal shape of a task, as returned by `status`, `task list` and friends.
 #[derive(Clone, Debug, Serialize)]
 pub struct TaskCompact {

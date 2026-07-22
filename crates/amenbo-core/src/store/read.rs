@@ -148,6 +148,14 @@ impl Store {
         crate::query::task_detail(self.engine.conn(), task_id)
     }
 
+    /// The read behind the holder-side surface of `AMB-D-366`: premises a task acquired **after its current
+    /// status began** — a blocker or unsettled decision pinned on after it was reserved, which silently
+    /// dropped `ready`. Read-only; the caller (a quiet note on `task show`, a firm warn at completion) picks
+    /// how strongly to react. Pass an already-resolved `task_id`.
+    pub fn premise_change_since(&self, task_id: i64) -> Result<crate::view::PremiseChange> {
+        crate::query::premise_change_since(self.engine.conn(), task_id)
+    }
+
     /// Resolve a `task` reference (`AMB-T-n`, or the bare `T-n` / `#n` / `n`) to a single live task id. Served by indexed SQL
     /// ([`crate::query::resolve_task_ref`]), so the lookup a write does first is not an O(n) full scan.
     /// Numbers are **globally unique on this machine**, so no project context is needed.

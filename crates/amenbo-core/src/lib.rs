@@ -40,6 +40,7 @@ pub mod plugin_hooks;
 pub mod plugin_inject;
 pub mod plugin_manifest;
 pub mod plugin_payload;
+pub mod plugin_provenance;
 pub mod plugin_secret;
 pub mod plugin_trust;
 pub mod progress;

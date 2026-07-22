@@ -105,6 +105,13 @@ jobs:
       - name: Audit the Tauri host crate
         run: cargo audit --file app/src-tauri/Cargo.lock
 
+      # The verification harness is a third out-of-workspace cargo workspace with its own lockfile
+      # (same reason the license gate audits it separately). It is publish=false and never shipped,
+      # but a dependency's advisory could otherwise land here unwatched — Dependabot bumps are
+      # auto-merged — so this is what keeps the single audit gate covering every tree.
+      - name: Audit the verification harness
+        run: cargo audit --file verification/Cargo.lock
+
       # The other half of an ignore: taking it off again. An ignore that no longer matches
       # anything is green either way, so nothing here would ever notice that upstream unpinned the
       # crate and the waiver is now suppressing an advisory the tree does not have. This asks the

@@ -1,8 +1,8 @@
 # The pre-distribution verification subsystem is its own cargo workspace, deliberately
 # OUTSIDE the main workspace: it drives shipped/installed binaries as a black box, so it
 # must not be built or tested as part of `make test`, which exercises the build-time
-# artifacts. `core` holds the scenario schema + validating loader; the `cli` and `gui`
-# driver crates (later tasks) will join as members and depend on it. See verification/README.md.
+# artifacts. `core` holds the scenario schema + validating loader; `cli` and `gui` are the
+# driver crates that read the same scenarios and depend on it. See verification/README.md.
 [workspace]
 resolver = "2"
-members = ["core", "cli"]
+members = ["core", "cli", "gui"]

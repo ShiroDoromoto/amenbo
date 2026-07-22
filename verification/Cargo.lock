@@ -20,6 +20,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "amenbo-verify-gui"
+version = "0.1.0"
+dependencies = [
+ "amenbo-scenario",
+ "serde_json",
+ "serde_yaml",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

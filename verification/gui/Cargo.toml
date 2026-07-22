@@ -1,0 +1,22 @@
+[package]
+name = "amenbo-verify-gui"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+description = "mac GUI harness: reads a verification scenario as a screen checklist, drives uiauto, captures per-step screencapture evidence."
+# The bin is declared explicitly (dashed name over the src/bin/ underscore default).
+autobins = false
+
+[lib]
+name = "amenbo_verify_gui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "verify-gui"
+path = "src/main.rs"
+
+[dependencies]
+amenbo-scenario = { path = "../core" }
+serde_json = "1"
+serde_yaml = "0.9"

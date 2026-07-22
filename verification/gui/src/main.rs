@@ -1,0 +1,177 @@
+//! `verify-gui` — drive one verification scenario as a mac GUI checklist (decision `AMB-D-345`).
+//!
+//! It reads the same scenario the CLI driver black-box-drives, renders each step into a screen
+//! instruction (no command line, no pixel — `AMB-D-297`), locates the running GUI's window
+//! through `app/scripts/uiauto/uiauto.swift`, and captures one `screencapture -l <winid>` per
+//! step into an evidence directory, alongside a `manifest.json`. Judging what a shot shows is the
+//! sibling task (`AMB-T-1961`); this leaves the ordered evidence that pass reads.
+//!
+//! Usage: `verify-gui <scenario.yaml> (--pid <pid> | --winid <id>) [--app <name>]
+//!                    [--evidence <dir>] [--uiauto <path>] [--json]`
+//!   `--pid`      pid of the running GUI app; its window is resolved via uiauto (gives bounds too)
+//!   `--winid`    a window id to shoot directly, skipping uiauto (bounds unknown)
+//!   `--app`      bring this app to the front before shooting (e.g. `amenbo (dev)`)
+//!   `--evidence` where the shots + manifest land (default: a fresh dir under the temp tree)
+//!   `--uiauto`   path to uiauto.swift (default: app/scripts/uiauto/uiauto.swift in the repo)
+//!   `--json`     emit the manifest path and step count as JSON instead of the human summary
+//!
+//! Exit code is the machine signal: 0 when every step was captured, non-zero on any load or
+//! capture failure. It does NOT assert screen content — that is `AMB-T-1961`.
+
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use amenbo_verify_gui::{activate, resolve_window, walk, write_manifest, Window};
+
+fn main() -> ExitCode {
+    let opts = match Opts::parse(std::env::args().skip(1)) {
+        Ok(o) => o,
+        Err(msg) => {
+            eprintln!("verify-gui: {msg}");
+            eprintln!("usage: verify-gui <scenario.yaml> (--pid <pid> | --winid <id>) [--app <name>] [--evidence <dir>] [--uiauto <path>] [--json]");
+            return ExitCode::from(2);
+        }
+    };
+
+    match run(&opts) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(msg) => {
+            eprintln!("verify-gui: {msg}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run(opts: &Opts) -> Result<(), String> {
+    let scenario = amenbo_scenario::lint_file(&opts.scenario)
+        .map_err(|errs| format!("scenario does not load/validate:\n  {}", errs.join("\n  ")))?;
+
+    // Front the app first so its window counts as on-screen (uiauto skips one behind a Space).
+    if let Some(app) = &opts.app {
+        activate(app)?;
+    }
+
+    let window = match (&opts.winid, opts.pid) {
+        (Some(id), _) => Window { id: id.clone(), x: 0.0, y: 0.0, w: 0.0, h: 0.0 },
+        (None, Some(pid)) => resolve_window(pid, &opts.uiauto)?,
+        (None, None) => return Err("need one of --pid or --winid to know which window to shoot".into()),
+    };
+
+    let evidence = opts
+        .evidence
+        .clone()
+        .unwrap_or_else(|| default_evidence_dir(&scenario.id));
+
+    let capture_bin =
+        std::env::var_os("AMENBO_GUI_CAPTURE_BIN").unwrap_or_else(|| "screencapture".into());
+    let winid = window.id.clone();
+    let records = walk(&scenario, &evidence, |path| {
+        // `screencapture -x -l <winid> <path>`: -x is silent, -l shoots one window, path is last.
+        let status = Command::new(&capture_bin)
+            .arg("-x")
+            .arg("-l")
+            .arg(&winid)
+            .arg(path)
+            .status()
+            .map_err(|e| format!("could not run `{}`: {e}", capture_bin.to_string_lossy()))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("screencapture exited with {status}"))
+        }
+    })?;
+
+    let manifest = write_manifest(&evidence, &scenario, &window, &records)?;
+
+    if opts.json {
+        println!(
+            "{{\"scenario\":{},\"evidence\":{},\"manifest\":{},\"steps\":{}}}",
+            amenbo_verify_gui::js_out(&scenario.id),
+            amenbo_verify_gui::js_out(&evidence.to_string_lossy()),
+            amenbo_verify_gui::js_out(&manifest.to_string_lossy()),
+            records.len()
+        );
+    } else {
+        println!("scenario: {} — {}", scenario.id, scenario.title);
+        println!("window:   {} ({}x{})", window.id, window.w, window.h);
+        println!("evidence: {}", evidence.display());
+        for r in &records {
+            println!("  {:02} [{}] {}", r.index + 1, r.kind, r.instruction);
+            println!("        → {}", r.screenshot);
+        }
+        println!("manifest: {}", manifest.display());
+    }
+    Ok(())
+}
+
+/// A fresh evidence dir under the temp tree, named for the scenario and the wall clock so two
+/// runs never share one (the manifest and shots of one run must not land on another's).
+fn default_evidence_dir(id: &str) -> PathBuf {
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    std::env::temp_dir()
+        .join("amenbo-verify-gui")
+        .join(format!("{id}-{nanos:x}"))
+}
+
+/// Parsed command line.
+struct Opts {
+    scenario: PathBuf,
+    pid: Option<i64>,
+    winid: Option<String>,
+    app: Option<String>,
+    evidence: Option<PathBuf>,
+    uiauto: PathBuf,
+    json: bool,
+}
+
+impl Opts {
+    fn parse(args: impl Iterator<Item = String>) -> Result<Opts, String> {
+        let mut scenario = None;
+        let mut pid = None;
+        let mut winid = None;
+        let mut app = None;
+        let mut evidence = None;
+        let mut uiauto = None;
+        let mut json = false;
+        let mut it = args.peekable();
+        while let Some(a) = it.next() {
+            match a.as_str() {
+                "--json" => json = true,
+                "--pid" => {
+                    let v = it.next().ok_or("--pid needs a number")?;
+                    pid = Some(v.parse::<i64>().map_err(|_| format!("--pid `{v}` is not a number"))?);
+                }
+                "--winid" => winid = Some(it.next().ok_or("--winid needs an id")?),
+                "--app" => app = Some(it.next().ok_or("--app needs a name")?),
+                "--evidence" => evidence = Some(PathBuf::from(it.next().ok_or("--evidence needs a path")?)),
+                "--uiauto" => uiauto = Some(PathBuf::from(it.next().ok_or("--uiauto needs a path")?)),
+                s if s.starts_with("--") => return Err(format!("unknown flag `{s}`")),
+                _ => {
+                    if scenario.replace(PathBuf::from(a)).is_some() {
+                        return Err("more than one scenario given".into());
+                    }
+                }
+            }
+        }
+        Ok(Opts {
+            scenario: scenario.ok_or("no scenario file given")?,
+            pid,
+            winid,
+            app,
+            evidence,
+            uiauto: uiauto.unwrap_or_else(default_uiauto),
+            json,
+        })
+    }
+}
+
+/// uiauto.swift's place in the repo, resolved from this crate so it is found whatever the CWD:
+/// `verification/gui` → `app/scripts/uiauto/uiauto.swift`.
+fn default_uiauto() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent() // verification/
+        .and_then(|p| p.parent()) // repo root
+        .map(|p| p.join("app/scripts/uiauto/uiauto.swift"))
+        .unwrap_or_else(|| PathBuf::from("app/scripts/uiauto/uiauto.swift"))
+}

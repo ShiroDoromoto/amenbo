@@ -13,7 +13,7 @@ verification/
   scenarios/   the single source of truth (YAML). Every driver reads these.
   core/        the scenario schema + validating loader (crate `amenbo-scenario`, `lint` bin)
   cli/         CLI driver + runner — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
-  gui/         mac harness — scenario → screen instructions + screencapture (later task)
+  gui/         mac harness — scenario → screen checklist + screencapture evidence (crate `amenbo-verify-gui`)
 ```
 
 `core/` and `cli/` are members of this cargo workspace, outside the main workspace, so they
@@ -60,6 +60,31 @@ cargo run -p amenbo-verify-cli --bin verify-all -- scenarios/one.yaml scenarios/
 The exit code is the roll-up — `0` when every scenario is green, non-zero when any is red or
 errored — so a release gate reads it directly. The `--json` aggregate carries `total` / `passed`
 / `failed` / `green` plus each scenario's own report (or its error).
+
+## GUI harness (mac)
+
+`verify-gui` reads the same scenario as a **screen checklist**. It bakes in no command line and
+no pixel (`AMB-D-297`): each step becomes a plain-language instruction of what to do or confirm on
+screen, the running GUI's window is located through `app/scripts/uiauto/uiauto.swift`, and every
+step is captured with `screencapture -l <winid>` into an evidence directory (plus a
+`manifest.json` pairing each instruction with its shot). Judging what a shot *shows* — OCR or a
+human eye — is the sibling task; this lays the rail those verdicts run on.
+
+```sh
+cd verification
+# front the dev GUI, resolve its window via uiauto (by pid), and shoot one shot per step:
+cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/task-appears-on-board.yaml \
+  --app 'amenbo (dev)' --pid "$(pgrep -x 'amenbo (dev)')"
+```
+
+uiauto is the input primitive, called here, never moved: `window <pid>` yields the id
+`screencapture -l` needs and the window bounds (in the manifest) an operator uses to turn a shot's
+pixel into a click point, and its `click` / `type` / `key` carry out the action steps the
+checklist names. Bring the app to the front first (`--app`, or by hand) — uiauto skips a window
+behind another Space. `--winid <id>` shoots a window directly, skipping uiauto; `--evidence <dir>`
+chooses where the shots and manifest land (default: a fresh dir under the temp tree). Exit is 0
+when every step was captured, non-zero on a load or capture failure — it does not yet assert
+screen content.
 
 ## Scenario format
 

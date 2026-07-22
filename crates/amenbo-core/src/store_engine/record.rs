@@ -138,6 +138,7 @@ pub fn task(t: &Task) -> Record {
                 ("subtype", tv(t.subtype.as_str())),
                 ("completed_at", tsov(&t.completed_at)),
                 ("status", tv(t.status.as_str())),
+                ("status_changed_at", tsov(&t.status_changed_at)),
                 ("created_by_kind", kov(&t.created_by_kind)),
                 ("assignee_kind", kov(&t.assignee_kind)),
                 ("start_on", dov(&t.start_on)),

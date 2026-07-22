@@ -109,6 +109,8 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
         subtype: Subtype::Default,
         completed_at: None,
         status: TaskStatus::Todo,
+        // The task's first status (`todo`) begins now, so its status clock starts here.
+        status_changed_at: Some(now),
         created_by_kind: input.created_by_kind,
         assignee_kind: None,
         start_on: input.start_on,
@@ -287,9 +289,15 @@ pub fn set_status(tx: &WriteTx<'_>, id: i64, status: TaskStatus) -> Result<Task>
         }
     }
     let before = live_before(tx, id)?;
+    // Stamp the status clock **only on a real transition** — an idempotent re-set to the same status must
+    // not move it, or the reservation instant it holds while `in_progress` would drift on every no-op write
+    // (`AMB-D-366`). `updated_at` still moves unconditionally; that is exactly the difference the two carry.
+    let status_changed_at =
+        if status == before.status { before.status_changed_at } else { Some(now) };
     let after = Task {
         status,
         completed_at: (status == TaskStatus::Done).then_some(now),
+        status_changed_at,
         updated_at: now,
         ..before.clone()
     };
@@ -439,6 +447,26 @@ mod tests {
             assert_eq!(set_status(tx, tid, TaskStatus::Todo).unwrap().status, TaskStatus::Todo);
             // done → todo drops completed_at.
             assert!(read::task(tx.conn(), tid).unwrap().unwrap().completed_at.is_none());
+        });
+    }
+
+    #[test]
+    fn status_changed_at_stamps_transitions_only() {
+        with_task(|tx, tid| {
+            // Created `todo` — the status clock starts at creation.
+            let born = read::task(tx.conn(), tid).unwrap().unwrap().status_changed_at;
+            assert!(born.is_some(), "a fresh task carries its status_changed_at");
+
+            // A real transition re-stamps it.
+            let reserved = set_status(tx, tid, TaskStatus::InProgress).unwrap().status_changed_at;
+            assert!(reserved.is_some(), "reserving stamps the status clock");
+
+            // An idempotent re-set to the *same* status must not move it — the reservation instant is held
+            // steady while in_progress (`AMB-D-366`). done → done exercises the no-op path (in_progress →
+            // in_progress is refused by the CAS).
+            let done = set_status(tx, tid, TaskStatus::Done).unwrap().status_changed_at;
+            let done_again = set_status(tx, tid, TaskStatus::Done).unwrap().status_changed_at;
+            assert_eq!(done, done_again, "re-setting the same status leaves status_changed_at unmoved");
         });
     }
 

@@ -1,5 +1,10 @@
 # amenbo
 
+[![License: Apache-2.0](https://img.shields.io/github/license/ShiroDoromoto/amenbo?color=blue)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/ShiroDoromoto/amenbo/ci.yml?branch=main&label=CI)](https://github.com/ShiroDoromoto/amenbo/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ShiroDoromoto/amenbo?label=release)](https://github.com/ShiroDoromoto/amenbo/releases)
+![OS: macOS | Windows | Linux](https://img.shields.io/badge/OS-macOS%20%7C%20Windows%20%7C%20Linux-informational)
+
 **[amenbo.work](https://amenbo.work/)** — downloads, and what this is for.
 
 A **local, single-store** task & project manager where an AI and a human

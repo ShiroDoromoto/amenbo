@@ -43,9 +43,20 @@ pub const HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 /// dies; whether to wait that moment out is the caller's call, not the runner's.
 #[must_use = "drop the handles to forget the hooks, or join them before a short-lived process exits"]
 pub fn fire(plugins: Vec<PluginInvocation>) -> Vec<JoinHandle<()>> {
+    fire_with_timeout(plugins, HOOK_TIMEOUT)
+}
+
+/// [`fire`] under a caller-named per-hook bound instead of the [`HOOK_TIMEOUT`] policy default.
+///
+/// The default is what the write path wants; this is the seam for a caller that must name its own bound —
+/// notably a test running against real child processes on a saturated machine, where a hook the policy
+/// bound would comfortably clear can still overrun it under load. Widening the bound there keeps the test
+/// pinned on the fire-and-forget behaviour, not on how fast a loaded kernel happens to schedule a `touch`.
+#[must_use = "drop the handles to forget the hooks, or join them before a short-lived process exits"]
+pub fn fire_with_timeout(plugins: Vec<PluginInvocation>, timeout: Duration) -> Vec<JoinHandle<()>> {
     plugins
         .into_iter()
-        .map(|plugin| std::thread::spawn(move || run_one(&plugin, HOOK_TIMEOUT)))
+        .map(move |plugin| std::thread::spawn(move || run_one(&plugin, timeout)))
         .collect()
 }
 

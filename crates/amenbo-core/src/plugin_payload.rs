@@ -146,6 +146,24 @@ impl Payload {
     pub fn comment_added(id: i64, actor: ActorKind, at: Timestamp) -> Self {
         Self::base(name::COMMENT_ADDED, id, actor, at)
     }
+
+    /// Rebuild the payload a fired event carries from its stored outbox row (`AMB-D-367`). The store
+    /// classifies nothing — an [`OutboxRow`](crate::store_engine::OutboxRow) holds the wire fields as
+    /// opaque strings — so this is the mapping half that turns one back into the typed payload the
+    /// dispatcher serializes and hands a plugin (`AMB-D-348`: the thin mapping layer sits with the payload
+    /// type). The `event` string is pinned to its `'static` catalog name so the wire form is byte-identical
+    /// to a payload built by the named constructors, and `new` is carried through verbatim — the row
+    /// already holds the new state the emit side composed.
+    ///
+    /// Returns `None` for a row this amenbo does not recognise — an `event` outside [`V1_EVENTS`], or an
+    /// `actor` / `at` that does not parse — so the dispatcher can warn and skip rather than fire a payload
+    /// it cannot faithfully build.
+    pub fn from_outbox_row(row: &crate::store_engine::OutboxRow) -> Option<Self> {
+        let event = V1_EVENTS.iter().copied().find(|name| *name == row.event)?;
+        let actor = ActorKind::parse(&row.actor)?;
+        let at = Timestamp::parse_rfc3339(&row.at)?;
+        Some(Self { v: VERSION, event, id: row.record_id, actor, at, new: row.new_state.clone() })
+    }
 }
 
 #[cfg(test)]
@@ -219,6 +237,51 @@ mod tests {
         let json = serde_json::to_value(Payload::task_moved(7, ActorKind::Human, at(), "amenbo")).unwrap();
         assert_eq!(json["event"], "task.moved");
         assert_eq!(json["new"], "amenbo");
+    }
+
+    #[test]
+    fn from_outbox_row_rebuilds_the_wire_payload() {
+        use crate::store_engine::OutboxRow;
+        // A status change round-trips through the outbox row into the same wire bytes a named constructor
+        // would produce.
+        let row = OutboxRow {
+            id: 9,
+            event: "task.status_changed".to_string(),
+            record_id: 42,
+            actor: "ai".to_string(),
+            at: "2026-07-22T09:00:00Z".to_string(),
+            new_state: Some("in_progress".to_string()),
+        };
+        let rebuilt = Payload::from_outbox_row(&row).unwrap();
+        assert_eq!(
+            serde_json::to_string(&rebuilt).unwrap(),
+            serde_json::to_string(&Payload::task_status_changed(
+                42,
+                ActorKind::Ai,
+                at(),
+                TaskStatus::InProgress,
+            ))
+            .unwrap(),
+            "the row rebuilds byte-for-byte what the named constructor emits",
+        );
+    }
+
+    #[test]
+    fn from_outbox_row_rejects_a_row_it_cannot_faithfully_build() {
+        use crate::store_engine::OutboxRow;
+        let ok = OutboxRow {
+            id: 1,
+            event: "task.created".to_string(),
+            record_id: 7,
+            actor: "human".to_string(),
+            at: "2026-07-22T09:00:00Z".to_string(),
+            new_state: None,
+        };
+        assert!(Payload::from_outbox_row(&ok).is_some());
+        // An event outside the v1 catalog, an unparseable actor, and a bad timestamp each yield None.
+        assert!(Payload::from_outbox_row(&OutboxRow { event: "task.exploded".to_string(), ..ok.clone() }).is_none());
+        assert!(Payload::from_outbox_row(&OutboxRow { actor: "robot".to_string(), ..ok.clone() }).is_none());
+        assert!(Payload::from_outbox_row(&OutboxRow { at: "not-a-time".to_string(), ..ok.clone() }).is_none());
     }
 
     #[test]

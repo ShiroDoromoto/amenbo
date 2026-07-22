@@ -116,6 +116,10 @@ export function Markdown({ children }: { children: string }) {
         if (src !== null) return <Mermaid source={src} />;
         return <pre>{children}</pre>;
       },
+      // A wide table would blow up the fixed-width pane, so it scrolls sideways in its own wrapper.
+      table({ children }) {
+        return <div className="markdown__tablewrap"><table>{children}</table></div>;
+      },
       a({ href, children }) {
         if (href?.startsWith(REF_SCHEME)) {
           const raw = href.slice(REF_SCHEME.length);

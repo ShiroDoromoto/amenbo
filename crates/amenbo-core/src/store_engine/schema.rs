@@ -692,6 +692,29 @@ plain_tables! {
         op: text,
     }
 
+    /// The **plugin observation outbox**: one row per semantic lifecycle event a committed operation
+    /// fired (`task.created`, `task.status_changed`, `comment.added`, …). It is a *sibling* of
+    /// `change_feed`, not a layer on it (`AMB-D-367`): the feed carries DB-row *instructions* for the
+    /// GUI's cache and cannot say which of the six an `update` split into, nor who drove it — the outbox
+    /// carries the **semantic event** for a plugin instead, with the two things the feed structurally
+    /// lacks (`actor`, and the `new_state` an `update` disambiguates). The ops write point *composes* the
+    /// event from what it alone knows (the operation kind, the actor, the new state) and `WriteTx` just
+    /// appends the row it is handed — the store interprets none of these strings. Written **inside the
+    /// operation's own transaction** (`WriteTx::emit_event`), so a committed change always
+    /// has its event row; unlike the feed, it is *not* drained from `update_hook`, so the two write paths
+    /// stay separate. `id` is the reader's cursor — monotonic and gap-free (AUTOINCREMENT), the same
+    /// "everything after N" contract the feed offers, but each consumer (the dispatcher) keeps its **own**
+    /// cursor. Retention is a separate policy from the feed's window-trim: an event must survive until it
+    /// is delivered, so nothing here is trimmed on the "consumed or not" basis the feed uses.
+    plugin_outbox {
+        id: integer("PRIMARY KEY AUTOINCREMENT"),
+        event: text,
+        record_id: bigint,
+        actor: text,
+        at: text,
+        new_state: text_opt,
+    }
+
     /// The device-local **folder bindings** — the project's main dir, one row per project
     /// ([`crate::binding::Registry`] resolves by it). The key is the project's `INTEGER` id, as a
     /// *natural* key: the record shape would force a surrogate `id`. No `REFERENCES project(id)`: a

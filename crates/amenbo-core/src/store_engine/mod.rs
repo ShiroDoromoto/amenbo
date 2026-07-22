@@ -13,6 +13,7 @@
 mod engine;
 pub mod hydrate;
 pub mod migrate;
+pub mod outbox;
 pub mod read;
 pub mod record;
 pub mod schema;
@@ -28,6 +29,7 @@ pub use engine::{
     StoreEngine, StoreEngineError, CHANGE_FEED_RETAIN,
 };
 pub use hydrate::hydrate_database;
+pub use outbox::{events_since, outbox_head, EventRow, OutboxRow, OutboxSlice};
 pub use read::{
     decision_page, hydrate_task_cards, list_task_ids,
     project_name, project_overview, status_bucket_ids,

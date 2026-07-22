@@ -109,9 +109,17 @@ pub struct Manifest {
     pub category: String,
     /// Where the plugin asset is fetched from on install.
     pub url: String,
-    /// The asset's integrity digest, verified on download against what `url` served (`AMB-D-351`); a
-    /// third-party plugin additionally requires a minisign signature at that point.
+    /// The asset's integrity digest (`sha256:<hex>`), verified on download against what `url` served and
+    /// re-checked cheaply on every use of the on-disk asset (`AMB-D-351`). See [`crate::plugin_provenance`].
     pub checksum: String,
+    /// The asset's minisign signature (the full `.minisig` text), produced by the catalog CI with the
+    /// amenbo **catalog key** when the manifest is aggregated (`AMB-D-371`). Verified once on download
+    /// against amenbo's embedded catalog public key ([`crate::plugin_provenance`]) — the origin half of
+    /// provenance, next to `checksum`'s integrity half. Absent means unsigned: a third-party asset with no
+    /// signature cannot be installed or enabled (`AMB-D-351`). An official plugin is signed too; its extra
+    /// GitHub build-provenance attestation is a separate check, not this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
     /// The official badge: the author is the amenbo team. Catalog-authoritative (`AMB-D-347`), never
     /// self-declared — absent means `false`.
     #[serde(default)]

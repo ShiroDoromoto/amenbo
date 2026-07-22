@@ -34,6 +34,16 @@ fs2 = "0.4"
 # digest. The bytes never enter the truth source; the hash is the fingerprint of the content that
 # drives dedup and tamper detection.
 blake3 = "1"
+# Plugin provenance — the integrity half: a plugin manifest's `checksum` is SHA-256 over the downloaded
+# asset, re-checked cheaply on every use to catch a post-install swap. Distinct from blake3 (the blob
+# content-address): the checksum format is pinned to sha256 so a manifest cannot downgrade to a weaker
+# digest. Verify-only — nothing here hashes a secret.
+sha2 = "0.10"
+# Plugin provenance — the origin half: a minisign signature over a plugin asset is verified against
+# amenbo's embedded catalog public key. Verify-only crate — the catalog private key lives solely in the
+# catalog CI, never in a shipped binary; every amenbo carries only the public key, which can check but
+# never sign. Same minisign format the updater already trusts.
+minisign-verify = "0.2"
 # The SQLite truth source: each field write UPSERTs straight into an indexed read-model table.
 # `bundled-sqlcipher-vendored-openssl` compiles SQLCipher with FTS5 enabled, vendoring OpenSSL so no
 # system crypto lib is required for cross-OS builds. Nothing keys a store — SQLCipher stays linked

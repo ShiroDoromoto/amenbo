@@ -140,6 +140,7 @@ mod tests {
             category: String::new(),
             url: String::new(),
             checksum: String::new(),
+            signature: None,
             official: false,
             payload_v: 1,
             min_amenbo: None,

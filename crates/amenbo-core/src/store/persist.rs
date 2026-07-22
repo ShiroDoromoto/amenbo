@@ -209,6 +209,21 @@ impl Store {
         self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::commit::remove(tx, id, sha))
     }
 
+    /// Set (`Some`) or clear (`None`) the per-project override of a plugin text field (one operation = one
+    /// transaction). Returns whether anything changed. The value is validated at the config write boundary
+    /// ([`crate::plugin_config::set`]) before it reaches here; reach is guarded by `WriteTarget::Project`.
+    pub fn set_plugin_config_override(
+        &mut self,
+        project_id: i64,
+        plugin: &str,
+        field_key: &str,
+        value: Option<&str>,
+    ) -> Result<bool> {
+        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+            crate::ops::plugin_config::set(tx, project_id, plugin, field_key, value)
+        })
+    }
+
     /// Create a project (one operation = one transaction). The ordering sibling's `order_key` is read
     /// inside this transaction.
     pub fn project_add(

@@ -3377,6 +3377,47 @@ pub fn task_commits(conn: &Connection, task_id: i64) -> Result<Vec<crate::model:
     Ok(rows)
 }
 
+/// The live `plugin_config` override row id for `(project_id, plugin, field_key)`, or `None` — what makes
+/// the config write boundary an upsert (find-then-update) and a clear a lookup. The `plugin_config_triple`
+/// UNIQUE index guarantees at most one row.
+pub fn plugin_config_override_id(
+    conn: &Connection,
+    project_id: i64,
+    plugin: &str,
+    field_key: &str,
+) -> Result<Option<i64>> {
+    const C: col::plugin_config::Cols = col::plugin_config::ALL;
+    first_id(
+        conn,
+        C.id,
+        &Pred::eq(C.project_id, project_id)
+            .and(Pred::eq(C.plugin, plugin))
+            .and(Pred::eq(C.field_key, field_key)),
+    )
+}
+
+/// The `plugin_config` override with this id.
+pub fn plugin_config_override(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::PluginConfigOverride>> {
+    super::hydrate::row_by_id(conn, "plugin_config", id, super::hydrate::plugin_config_row)
+}
+
+/// The per-project override value of one plugin text field, or `None` when the project has none (the
+/// machine default then stands). The upper of the two text tiers (`AMB-D-356`).
+pub fn plugin_config_value(
+    conn: &Connection,
+    project_id: i64,
+    plugin: &str,
+    field_key: &str,
+) -> Result<Option<String>> {
+    match plugin_config_override_id(conn, project_id, plugin, field_key)? {
+        Some(id) => Ok(plugin_config_override(conn, id)?.map(|r| r.value)),
+        None => Ok(None),
+    }
+}
+
 /// Both directions of one decision's edges, as the read surfaces render them. Forward (`supersedes` /
 /// `amends` / `builds_on`) is what this decision drew, and the target is resolved for **any** liveness —
 /// a title of `None` means the edge dangles, which the caller renders as the unknown-name placeholder.

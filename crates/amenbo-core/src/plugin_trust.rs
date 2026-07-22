@@ -23,10 +23,10 @@ use crate::plugin_manifest::ConfigField;
 /// The `required` fields of `fields` that have no value per the caller's `has_value` probe — the reason an
 /// [`enable`] would be refused. An empty result means every required field is satisfied. Presence is all
 /// amenbo checks (`AMB-D-351`); the author validates meaning at run time (`AMB-D-356`).
-pub fn missing_required<'a>(
-    fields: &'a [ConfigField],
+pub fn missing_required(
+    fields: &[ConfigField],
     has_value: impl Fn(&ConfigField) -> bool,
-) -> Vec<&'a str> {
+) -> Vec<&str> {
     fields
         .iter()
         .filter(|f| f.required && !has_value(f))

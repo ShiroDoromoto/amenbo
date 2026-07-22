@@ -1,12 +1,11 @@
-//! `verify-gui` — drive one verification scenario as a mac GUI checklist (decisions `AMB-D-345`,
-//! `AMB-D-355`).
+//! `verify-gui` — drive one verification scenario as a mac GUI checklist.
 //!
 //! It reads the same scenario the CLI driver black-box-drives, renders each step into a screen
-//! instruction (no command line, no pixel — `AMB-D-297`), locates the running GUI's window
-//! through `app/scripts/uiauto/uiauto.swift`, and captures one `screencapture -l <winid>` per step
-//! into an evidence directory. Each assert OCR can judge is decided from its shot with macOS
-//! Vision (`ocr.swift`, `AMB-D-355`); an assert it cannot judge is left as a `Review` for a human
-//! eye, and its shot is kept.
+//! instruction (no command line, no pixel), locates the running GUI's window through
+//! `app/scripts/uiauto/uiauto.swift`, and captures one `screencapture -l <winid>` per step into an
+//! evidence directory. Each assert OCR can judge is decided from its shot with macOS Vision
+//! (`ocr.swift`); an assert it cannot judge is left as a `Review` for a human eye, and its shot is
+//! kept.
 //!
 //! Usage: `verify-gui <scenario.yaml> (--pid <pid> | --winid <id>) [--app <name>]
 //!                    [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--json]`

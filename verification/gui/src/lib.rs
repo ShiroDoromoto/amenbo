@@ -1,17 +1,16 @@
-//! amenbo-verify-gui — the mac GUI harness for pre-distribution verification (decisions
-//! `AMB-D-345`, `AMB-D-355`).
+//! amenbo-verify-gui — the mac GUI harness for pre-distribution verification.
 //!
 //! The same scenario the CLI driver black-box-drives, this harness reads as a **screen
-//! checklist**. It bakes in no command line and no pixel (`AMB-D-297`): each step becomes a
-//! plain-language instruction of what to do or confirm on screen, the running GUI's window is
-//! located through `app/scripts/uiauto/uiauto.swift`, and every step is captured with
-//! `screencapture -l <winid>` into an evidence directory.
+//! checklist**. It bakes in no command line and no pixel: each step becomes a plain-language
+//! instruction of what to do or confirm on screen, the running GUI's window is located through
+//! `app/scripts/uiauto/uiauto.swift`, and every step is captured with `screencapture -l <winid>`
+//! into an evidence directory.
 //!
-//! An assert step is judged from that shot with macOS's own **Vision** OCR (`ocr.swift`,
-//! `AMB-D-355`): the harness derives the text the step expects on screen and reads the shot back,
-//! passing when that text is present (or absent, for a `present: false` assert). An assert OCR
-//! cannot mechanically judge — a structured field value — is left as a `Review`: its shot is kept
-//! for an AI/human eye, the run is not failed by it. tesseract stays the Linux container path
+//! An assert step is judged from that shot with macOS's own **Vision** OCR (`ocr.swift`): the
+//! harness derives the text the step expects on screen and reads the shot back, passing when that
+//! text is present (or absent, for a `present: false` assert). An assert OCR cannot mechanically
+//! judge — a structured field value — is left as a `Review`: its shot is kept for an AI/human eye,
+//! the run is not failed by it. tesseract stays the Linux container path
 //! (`scripts/docker/gui-e2e.sh`); each driver maps the one scenario source to its own world.
 //!
 //! uiauto is the input primitive, called here, never moved: `window` resolves the id
@@ -100,8 +99,8 @@ pub fn activate(app: &str) -> Result<(), String> {
     }
 }
 
-/// Read the text off a screenshot with `ocr.swift` (macOS Vision, `AMB-D-355`). Returns the
-/// recognized text as one string (Vision's per-region lines joined by newlines), which the caller
+/// Read the text off a screenshot with `ocr.swift` (macOS Vision). Returns the recognized text as
+/// one string (Vision's per-region lines joined by newlines), which the caller
 /// judges an expected string against by substring. An error is an execution failure, not a miss:
 /// a shot Vision read but found no text in comes back as `Ok("")`.
 pub fn ocr(image: &Path, ocr_swift: &Path) -> Result<String, String> {

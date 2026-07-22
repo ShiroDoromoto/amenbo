@@ -1,5 +1,5 @@
 // Read the text off a screenshot with macOS's own Vision framework — the mac OCR primitive for
-// the GUI verification harness (decision `AMB-D-355`). Vision ships with the OS (no brew install)
+// the GUI verification harness. Vision ships with the OS (no brew install)
 // and reads Retina webview screenshots more accurately than tesseract, which stays the Linux
 // container path (scripts/docker/gui-e2e.sh). Like uiauto.swift, a mac-specific primitive kept in
 // Swift and run directly (`swift ocr.swift <image>`), never a compiled dependency.

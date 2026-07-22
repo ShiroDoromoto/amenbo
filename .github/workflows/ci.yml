@@ -83,6 +83,7 @@ jobs:
       pull-requests: read
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
+      verification: ${{ steps.filter.outputs.verification }}
       gui: ${{ steps.filter.outputs.gui }}
       go: ${{ steps.filter.outputs.go }}
       shell: ${{ steps.filter.outputs.shell }}
@@ -107,6 +108,12 @@ jobs:
               # The harness the app-rust job's network-FS step runs (it stands up the real NFS/SMB/9P
               # mounts): change it and nothing else, and the step that uses it would not re-run.
               - 'scripts/verify-network-watch.sh'
+            # The pre-distribution verification harness is a third out-of-workspace cargo workspace,
+            # so the `rust` job (default manifest = main workspace) never builds or tests it. This
+            # gates its own clippy+test job below — the ONLY thing that compiles core/cli/gui in CI.
+            verification:
+              - 'verification/**'
+              - '.github/workflows/ci.yml'
             gui:
               - 'app/**'
               - '.nvmrc'
@@ -216,6 +223,42 @@ jobs:
       # private too) = all that fails here is a broken link.
       - name: Doc links
         run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+
+  # The pre-distribution verification harness (verification/) is its own cargo workspace, OUTSIDE
+  # the main one, so the `rust` job above — which drives the default (main) manifest — never
+  # compiles or tests it. Without this job its three crates (scenario schema + loader, the CLI
+  # driver, the mac GUI harness) would ride into the tree clippy- and test-free. It is cheap: pure
+  # Rust on ubuntu, gated to changes under verification/. The mac-only run (Vision OCR +
+  # screencapture) is NOT gated here — that is the release-time real-artifact check, not a
+  # build-time gate (`AMB-D-345`, `AMB-D-358`).
+  verification:
+    name: verification harness (clippy + test)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.verification == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show toolchain
+        run: rustc --version && cargo clippy --version
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: verification
+
+      # -D warnings holds the harness to the same bar as the rest of the tree, but
+      # -A clippy::disallowed_methods is deliberate: this workspace black-box-drives the
+      # shipped/installed binary, so it reads process env raw (AMENBO_BIN, AMENBO_GUI_CAPTURE_BIN)
+      # — it is outside the facet env funnel amenbo_core::env enforces, and has no dep on it. The
+      # gui crate builds here too: its swift/screencapture/osascript calls are runtime shell-outs,
+      # so the code compiles and its unit tests (capture + OCR injected) pass with no macOS. See
+      # `AMB-D-358`.
+      - name: Clippy (all targets)
+        run: cargo clippy --manifest-path verification/Cargo.toml --all-targets -- -D warnings -A clippy::disallowed_methods
+
+      - name: Test
+        run: cargo test --manifest-path verification/Cargo.toml
 
   gui-web:
     name: GUI typecheck + build

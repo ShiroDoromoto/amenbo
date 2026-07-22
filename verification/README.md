@@ -12,7 +12,7 @@ Every driver reads the same scenario and maps it to its own world.
 verification/
   scenarios/   the single source of truth (YAML). Every driver reads these.
   core/        the scenario schema + validating loader (crate `amenbo-scenario`, `lint` bin)
-  cli/         CLI driver — drives the shipped binary, asserts via --json   (crate `amenbo-verify-cli`)
+  cli/         CLI driver + runner — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
   gui/         mac harness — scenario → screen instructions + screencapture (later task)
 ```
 
@@ -36,11 +36,30 @@ cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-appears-on-boa
 The run is isolated by `AMENBO_HOME` pointed at a throwaway store plus a `.amenbo`-free CWD
 (`AMB-D-336`); the real app-data is never touched, and `AMENBO_UPDATE_CHECK=0` keeps it off the
 network. Exit code is the machine signal — `0` when every assert passes, non-zero on any failed
-assert or execution error — so a multi-scenario runner (a later task) reads it directly. `--keep`
-leaves the throwaway store in place for inspection.
+assert or execution error — so the runner reads it directly. `--keep` leaves the throwaway store
+in place for inspection.
 
-Each op the driver maps is a `(domain, op)` arm in `cli/src/main.rs`; an op that is in the
+Each op the driver maps is a `(domain, op)` arm in `cli/src/lib.rs`; an op that is in the
 scenario registry but not yet mapped fails loudly rather than passing silently.
+
+## Runner
+
+`verify-all` drives a whole set of scenarios through that same driver, one after another, and
+rolls their verdicts into one: green only when every scenario is green. Each scenario runs in its
+own throwaway store, and a scenario that fails to load or whose binary errors is recorded as a red
+entry — the run carries on, so one broken scenario never hides the rest.
+
+```sh
+cd verification
+# every scenario under scenarios/ (the default), against a specific binary:
+cargo run -p amenbo-verify-cli --bin verify-all -- --bin /path/to/amenbo
+# a chosen subset (files and/or directories), with a machine-readable aggregate:
+cargo run -p amenbo-verify-cli --bin verify-all -- scenarios/one.yaml scenarios/two.yaml --json
+```
+
+The exit code is the roll-up — `0` when every scenario is green, non-zero when any is red or
+errored — so a release gate reads it directly. The `--json` aggregate carries `total` / `passed`
+/ `failed` / `green` plus each scenario's own report (or its error).
 
 ## Scenario format
 

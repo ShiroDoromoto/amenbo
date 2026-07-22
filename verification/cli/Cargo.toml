@@ -5,10 +5,20 @@ edition = "2021"
 license = "Apache-2.0"
 publish = false
 description = "CLI driver: maps a verification scenario to shipped-binary invocations and asserts via --json."
+# The bins are declared explicitly (dashed names over the src/bin/ underscore defaults).
+autobins = false
+
+[lib]
+name = "amenbo_verify_cli"
+path = "src/lib.rs"
 
 [[bin]]
 name = "verify-cli"
 path = "src/main.rs"
+
+[[bin]]
+name = "verify-all"
+path = "src/bin/verify_all.rs"
 
 [dependencies]
 amenbo-scenario = { path = "../core" }

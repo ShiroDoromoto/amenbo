@@ -11,6 +11,7 @@
 //! | machine-default settings | `config.json` | [`Config::forget_plugin_config`](crate::config::Config::forget_plugin_config) |
 //! | secrets | the user-area secret file | [`Secrets::forget_plugin`](crate::plugin_secret::Secrets::forget_plugin) + save (**always**, `AMB-D-357`) |
 //! | per-project settings, every project | the store's `plugin_config` rows | [`Store::forget_plugin_config`](crate::store::Store::forget_plugin_config) |
+//! | per-project gate answers, every project | the store's `plugin_enable` rows | [`Store::forget_plugin_enable`](crate::store::Store::forget_plugin_enable) |
 //! | the binary and its home | `<base>/plugins/<name>/` | the directory is removed |
 //!
 //! **A re-install is therefore clean**, deliberately: the settings of the copy that was removed do not
@@ -43,8 +44,10 @@ pub struct Removed {
     pub machine_defaults: bool,
     /// Secrets existed in the secret file and have been purged.
     pub secrets: bool,
-    /// How many per-project override rows were deleted, across every project.
+    /// How many per-project setting rows were deleted, across every project.
     pub project_overrides: usize,
+    /// How many per-project gate answers were deleted, across every project (`AMB-D-350`'s upper tier).
+    pub project_gates: usize,
     /// The plugin's home under `plugins/` existed and has been removed.
     pub directory: bool,
 }
@@ -57,6 +60,7 @@ impl Removed {
             || self.machine_defaults
             || self.secrets
             || self.project_overrides > 0
+            || self.project_gates > 0
             || self.directory
     }
 }
@@ -94,8 +98,11 @@ pub fn uninstall(store: &mut Store, plugin: &str) -> Result<Removed> {
         removed.secrets = true;
     }
 
-    // 3. Every project's settings, in one pass over the single device-wide store.
+    // 3. Every project's settings and gate answers, in one pass each over the single device-wide store.
+    //    The gates go with them: a row left behind would be a project still saying "on here" when the
+    //    plugin comes back under the same name, which is exactly the inheritance a re-install must not get.
     removed.project_overrides = store.forget_plugin_config(plugin)?;
+    removed.project_gates = store.forget_plugin_enable(plugin)?;
 
     // 4. The binary and its home last: what is left if anything above failed is an inert directory.
     let home = store.paths.plugin_dir(plugin);
@@ -151,6 +158,8 @@ mod tests {
             .unwrap();
         crate::plugin_trust::enable(&mut store.config, plugin, &[], |_| true).unwrap();
         store.save_config().unwrap();
+        // ...and a project that vetoes the machine gate, the upper tier's residue (`AMB-D-350`).
+        crate::plugin_trust::disable_for_project(store, plugin, project).unwrap();
         project
     }
 
@@ -164,6 +173,7 @@ mod tests {
         assert!(removed.was_enabled && removed.consent && removed.machine_defaults);
         assert!(removed.secrets && removed.directory);
         assert_eq!(removed.project_overrides, 1);
+        assert_eq!(removed.project_gates, 1);
 
         assert!(!store.config.plugin_enabled("slack"), "the gate is gone");
         assert!(!store.config.plugin_consented("slack"), "the consent is gone");
@@ -172,6 +182,11 @@ mod tests {
             store.plugin_config_override(project, "slack", "events").unwrap(),
             None,
             "the project override is gone",
+        );
+        assert_eq!(
+            store.plugin_enable_override(project, "slack").unwrap(),
+            None,
+            "the project's gate answer is gone",
         );
         assert_eq!(
             plugin_config::get(&store, &field("token", true), "slack", Scope::MachineDefault)
@@ -236,8 +251,9 @@ mod tests {
         assert!(store.config.plugin_enabled("worktree"), "the neighbour keeps its gate");
         assert_eq!(store.config.plugin_text_default("worktree", "events"), Some("push"));
         assert!(dir.join("plugins").join("worktree").exists(), "the neighbour keeps its home");
-        // ...including its own project override, which shares the store with the erased one.
+        // ...including its own project override and gate answer, which share the store with the erased ones.
         assert!(store.plugin_config_override(project, "slack", "events").unwrap().is_none());
+        assert!(store.plugin_enable_override(project, "slack").unwrap().is_none());
     }
 
     /// The registry cache is not a plugin, so it cannot be uninstalled — the directory that holds the

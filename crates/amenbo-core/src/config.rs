@@ -394,6 +394,17 @@ impl Config {
         self.plugin_trust.insert(plugin.to_string(), PluginTrust { enabled: true });
     }
 
+    /// Record consent to run this plugin's code **without opening the machine-global gate** (`AMB-D-351`).
+    /// A no-op for a plugin that is already consented, so an enabled plugin never loses its gate to this.
+    ///
+    /// This is what a **project-scoped** enable needs (`AMB-D-350`): the user has said yes to running the
+    /// code on this device — the answer that is asked once — while the gate they opened is one project's,
+    /// which lives in the store, not here. Does not persist; prefer the boundary
+    /// [`crate::plugin_trust::enable_for_project`], which is fail-closed on required settings.
+    pub fn consent_plugin(&mut self, plugin: &str) {
+        self.plugin_trust.entry(plugin.to_string()).or_insert(PluginTrust { enabled: false });
+    }
+
     /// Close the gate, keeping the consent record (`disable ≠ uninstall`, `AMB-D-357`). A no-op for a plugin
     /// with no trust record. Does not persist.
     pub fn disable_plugin(&mut self, plugin: &str) {

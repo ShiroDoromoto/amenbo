@@ -204,43 +204,25 @@ impl Store {
     //
     // The ops write points appended semantic events to the outbox inside their transactions (`AMB-D-367`);
     // these are the caller `AMB-D-367` hands the cursor to — the single dispatcher's mount. The cursor is
-    // owned here, not by `plugin_dispatch::deliver`, and the two faces differ only in where it lives (see
-    // `crate::plugin_drive`).
+    // owned here, not by `plugin_dispatch::deliver`, and both faces share the one persisted cursor
+    // (`AMB-D-380`; see `crate::plugin_drive`).
 
-    /// Drive the plugin observation dispatcher once from the **persisted** cursor — the short-lived (CLI)
-    /// face (`AMB-T-2033`). Reads the stored cursor, fires the subscribers of everything committed since,
-    /// and persists where it advanced to so the next process continues past it. The returned
-    /// [`Delivered`](crate::plugin_dispatch::Delivered) carries the hooks to **join** before the process
-    /// exits and whether a retention gap was hit. The cursor is already stored on return. Every run, and a
-    /// gap, land in this machine's execution log (`AMB-D-361`) — the store knows where that file is, so no
-    /// face has to name it.
+    /// Drive the plugin observation dispatcher once from the **persisted** cursor — the mount both faces
+    /// use (`AMB-D-380`). Reads the stored cursor, fires the subscribers of everything committed since, and
+    /// persists where it advanced to so the next drive, in either face, continues past it. `face` is
+    /// recorded beside the cursor for diagnosis and selects nothing. The returned
+    /// [`Delivered`](crate::plugin_dispatch::Delivered) carries the launched hooks — the short-lived face
+    /// **joins** them before the process exits, the long-lived one drops them — and whether a retention gap
+    /// was hit. The cursor is already stored on return. Every run, and a gap, land in this machine's
+    /// execution log (`AMB-D-361`) — the store knows where that file is, so no face has to name it.
     pub fn drive_plugins_persisted(
         &self,
+        face: crate::plugin_drive::Face,
         subs: &dyn crate::plugin_dispatch::Subscribers,
     ) -> Result<crate::plugin_dispatch::Delivered> {
-        crate::plugin_drive::drive_persisted(&self.engine, subs, Some(&self.paths.plugin_log_file()))
-    }
-
-    /// The outbox's head — the id of the newest event committed so far. The long-lived (GUI) face starts
-    /// a session here so it observes what fires *next*, not the backlog from before it launched
-    /// (`AMB-D-367`); the short-lived face has no use for it, its cursor being the persisted one.
-    pub fn plugin_outbox_head(&self) -> Result<i64> {
-        Ok(crate::store_engine::outbox_head(self.engine.conn())?)
-    }
-
-    /// Drive the dispatcher from an **in-memory** cursor — the long-lived (GUI) face (`AMB-T-2033`).
-    /// Delivers what committed since `cursor` without persisting; the caller keeps
-    /// [`Delivered::cursor`](crate::plugin_dispatch::Delivered::cursor) in memory for the next drive and
-    /// drops the hooks (fire-and-forget, its process outliving them). Runs and gaps are recorded in the
-    /// execution log, as they are on the persisted face (`AMB-D-361`).
-    pub fn deliver_plugins(
-        &self,
-        cursor: i64,
-        subs: &dyn crate::plugin_dispatch::Subscribers,
-    ) -> Result<crate::plugin_dispatch::Delivered> {
-        crate::plugin_dispatch::deliver(
-            self.engine.conn(),
-            cursor,
+        crate::plugin_drive::drive_persisted(
+            &self.engine,
+            face,
             subs,
             Some(&self.paths.plugin_log_file()),
         )

@@ -264,6 +264,57 @@ fn reopening_a_decision_under_a_reserved_task_warns_the_changer() {
     assert!(!e2.contains('⚠'), "an idempotent reopen must not warn: {e2}");
 }
 
+/// The other act that unsettles a premise: superseding leaves the old decision accepted but no longer
+/// current, which reads the same way `ready` does — so the changer hears about the reservations standing
+/// on it, exactly as with a reopen (`AMB-D-373`).
+#[test]
+fn superseding_a_decision_under_a_reserved_task_warns_the_changer() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "差替警告PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    // A premise plus the task standing on it, accepted and linked — the shape both halves need. A
+    // superseded decision cannot be put back (accepting it again settles nothing, the edge stands), so
+    // the held and the unheld case each get their own pair rather than reusing one.
+    let premise_and_task = |title: &str| {
+        let d = cli.json(&["decision", "add", "--title", title, "--body", "x", "--project", &pid, "--json"]);
+        let did = id_str(&d["decision"]["id"]);
+        let t = cli.json(&["task", "add", "--title", title, "--project", &pid, "--json"]);
+        let tid = id_str(&t["task"]["id"]);
+        cli.json(&["decision", "accept", &did, "--json"]);
+        cli.json(&["decision", "link", &did, &tid, "--json"]);
+        let d_ref = d["decision"]["ref"].as_str().unwrap().to_string();
+        let t_ref = t["task"]["ref"].as_str().unwrap().to_string();
+        (did, d_ref, tid, t_ref)
+    };
+    let successor = |title: &str| {
+        let d = cli.json(&["decision", "add", "--title", title, "--body", "y", "--project", &pid, "--json"]);
+        id_str(&d["decision"]["id"])
+    };
+
+    // Nobody holds the task yet: superseding takes no ground out from under anyone.
+    let (unheld, _, _, _) = premise_and_task("誰も予約していない根拠");
+    let (_o0, e0, c0) =
+        cli.run_both(&["decision", "supersede", &successor("新根拠1"), "--replaces", &unheld, "--json"]);
+    assert_eq!(c0, 0);
+    assert!(!e0.contains('⚠'), "a todo linked task must not warn: {e0}");
+
+    // Now the other pair, with the task reserved: superseding pulls the settled ground out from under it.
+    let (held, held_ref, tid, t_ref) = premise_and_task("予約中の作業が立つ根拠");
+    cli.json(&["task", "status", &tid, "in_progress", "--json"]);
+    let new_id = successor("新根拠2");
+    let (o1, e1, c1) = cli.run_both(&["decision", "supersede", &new_id, "--replaces", &held, "--json"]);
+    assert_eq!(c1, 0, "the warn does not fail the command: {e1}");
+    assert!(o1.contains("\"action\""), "stdout still carries the JSON envelope: {o1}");
+    assert!(e1.contains('⚠') && e1.contains(&t_ref), "the warn names the reserved task {t_ref}: {e1}");
+    assert!(e1.contains(&held_ref), "the warn names the superseded decision {held_ref}: {e1}");
+
+    // Drawing the same edge again changes nothing, so it unsettles nothing anew — no second warn.
+    let (_o2, e2, c2) = cli.run_both(&["decision", "supersede", &new_id, "--replaces", &held, "--json"]);
+    assert_eq!(c2, 0);
+    assert!(!e2.contains('⚠'), "an idempotent supersede must not warn: {e2}");
+}
+
 #[test]
 fn task_dependencies_drive_ready_and_unblock() {
     let cli = Cli::new();

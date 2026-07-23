@@ -407,6 +407,24 @@ pub enum PluginCmd {
         args: Vec<String>,
     },
 
+    /// Read the plugin execution log — the last runs of each plugin, and what each one said
+    /// (`AMB-D-361`). The face for *why did nothing happen*: a hook is fire-and-forget, so a plugin that
+    /// failed, timed out or never launched said so nowhere a caller was listening (`AMB-D-352`).
+    ///
+    /// One line per run — when, which plugin, on which event, how it ended, its exit code and how long it
+    /// took. A run that did not end cleanly is followed by what the plugin wrote to **stderr**, which is
+    /// where its author put the diagnosis (`AMB-D-353`); `--json` carries that text for every run,
+    /// successful ones included. A `gap` line is not a run at all: it marks events the dispatcher could
+    /// never deliver because retention had passed its cursor.
+    ///
+    /// Reads one machine-local file and nothing else — no store rows, no network. The log is bounded by
+    /// construction (the last runs of each installed plugin), so there is no window to ask for and no
+    /// deep history to page: a longer one is a logging plugin's business.
+    Runs {
+        /// narrow to one plugin's runs; omit for every plugin's, newest first
+        name: Option<String>,
+    },
+
     /// Report which installed plugins the catalog holds a different build of (`AMB-D-359`).
     ///
     /// Detection is the catalog amenbo already fetches whole laid beside the manifest sitting next to

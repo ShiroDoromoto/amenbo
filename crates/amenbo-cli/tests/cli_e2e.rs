@@ -4089,6 +4089,64 @@ fn a_mutating_command_fires_the_enabled_plugin_that_subscribes_to_it() {
     assert_ne!(second["id"], payload["id"], "the second run fired for the second task");
 }
 
+/// The execution log, read back (`AMB-D-361`). A hook is fire-and-forget — nobody waits on it and nothing
+/// fails when it fails (`AMB-D-352`) — so a plugin that died said so to nobody. This is where that answer
+/// lives, and the answer is the plugin's own stderr (`AMB-D-353`), which is why the human face carries it.
+#[cfg(unix)]
+#[test]
+fn plugin_runs_says_why_a_hook_did_nothing() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    // Nothing has fired on this machine yet: an absent log is an empty log, not a failure.
+    let empty = cli.json(&["plugin", "runs", "--json"]);
+    assert_eq!(empty["count"], 0);
+    let (nothing, code) = cli.run(&["plugin", "runs"]);
+    assert_eq!(code, 0, "an empty log is an answer, not an error");
+    assert!(nothing.contains("No plugin runs recorded"), "{nothing}");
+
+    // A plugin that fails the way a real one does: a diagnosis on stderr, and a non-zero exit.
+    install_subscribing_plugin(&cli, "logger", &["task.created"]);
+    let program = cli.home.join("plugins").join("logger").join("logger");
+    std::fs::write(&program, "#!/bin/sh\necho 'the webhook refused the delivery' >&2\nexit 3\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    cli.json(&["plugin", "enable", "logger", "--json"]);
+
+    let pid = cli.bound_project();
+    cli.json(&["task", "add", "--title", "発火の確認", "--project", &pid, "--json"]);
+
+    let runs = cli.json(&["plugin", "runs", "--json"]);
+    assert_eq!(runs["count"], 1, "one hook fired, so one run is on file");
+    let run = &runs["runs"][0];
+    assert_eq!(run["plugin"], "logger");
+    assert_eq!(run["event"], "task.created");
+    assert_eq!(run["outcome"], "failed");
+    assert_eq!(run["code"], 3);
+    assert!(
+        run["stderr"].as_str().unwrap().contains("the webhook refused"),
+        "the author's diagnosis is what was kept: {run}"
+    );
+
+    // The human face puts that diagnosis under the run. A reader who has to reach for --json to learn
+    // why has not been answered.
+    let (out, code) = cli.run(&["plugin", "runs"]);
+    assert_eq!(code, 0, "reading the log is not a verdict on what it holds");
+    assert!(out.contains("logger") && out.contains("task.created"), "{out}");
+    assert!(out.contains("failed") && out.contains("exit 3"), "{out}");
+    assert!(out.contains("the webhook refused the delivery"), "the stderr follows the run: {out}");
+
+    // A name narrows it; one with nothing on file is an empty log rather than an error, because a run
+    // outlives the install that made it.
+    let named = cli.json(&["plugin", "runs", "logger", "--json"]);
+    assert_eq!(named["count"], 1);
+    assert_eq!(named["plugin"], "logger");
+    let (other, code) = cli.run(&["plugin", "runs", "quiet"]);
+    assert_eq!(code, 0);
+    assert!(other.contains("No runs recorded for plugin 'quiet'"), "{other}");
+}
+
 /// Plant an installed plugin that subscribes to `events` — [`install_plugin`] with the manifest field the
 /// dispatch resolver reads. The executable it lays down does nothing; a caller that wants the plugin to
 /// *do* something overwrites it.

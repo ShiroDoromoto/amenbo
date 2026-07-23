@@ -342,6 +342,13 @@ const JA_PHRASEBOOK: &[(&str, &str)] = &[
     ("Validate a plugin manifest against the catalog rules before submitting it (an author's self-check)", "提出前にプラグインの manifest を目録の規約に照らして検証する（作者の自己チェック）"),
     ("Validates a plugin manifest file against the catalog rules — a well-formed id, checksum, https url, repo, non-empty OS set and config schema — reporting every problem it finds so an author can self-check before opening a catalog PR. It reads the same rules amenbo enforces at the install/intake door, so the two never disagree. The path may be .yaml (the form authored in the catalog repo) or .json (the aggregated catalog.json form); the format is taken from the extension, defaulting to YAML. A manifest that does not even parse is reported too — a missing required field is the shape half of the fail-closed door. It opens no store and needs no binding, so it runs anywhere (a plugin checkout, CI). The exit code is the verdict: 0 valid, 1 invalid (or the file could not be read).", "プラグインの manifest ファイルを目録の規約——整った id・checksum・https の url・repo・空でない対応OS集合・config スキーマ——に照らして検証し、見つかった問題をすべて報告します。作者は目録へ PR を出す前に自己チェックできます。amenbo が install/取り込みの入口で強制するのと同じ規約を読むため、両者が食い違うことはありません。パスは .yaml（目録リポで作者が書く形式）でも .json（集約後の catalog.json 形式）でもよく、形式は拡張子で判定し、既定は YAML です。そもそもパースできない manifest も報告します——必須フィールドの欠落は fail-closed の入口の「形」のチェックで弾かれます。ストアを開かず binding も不要なので、どこでも（プラグインのチェックアウトや CI）走ります。終了コードが判定です: 0 は有効、1 は無効（またはファイルを読めなかった）。"),
     ("path to the manifest file (.yaml or .json)", "manifest ファイルのパス（.yaml または .json）"),
+    // plugin list / enable / disable (this machine's installed plugins and their gates)
+    ("See this machine's installed plugins and open or close each one's gate (install ≠ enable)", "このマシンにインストール済みのプラグインを見て、それぞれのゲートを開閉する（install ≠ enable）"),
+    ("Lists the plugins installed on this machine — name, description and the official badge — beside whose gate is open. The two facts sit together because installing a plugin never runs it: an installed plugin that fires nothing is the ordinary state, not a fault. Reads only the app-data plugins/ directory and this machine's enable state — no network, no catalog fetch — so it answers the same offline. A directory it cannot read as an install is skipped rather than allowed to hide the rest. --json adds each plugin's subscribed events and the path of the executable amenbo would run.", "このマシンにインストール済みのプラグインを——名前・説明・公式バッジ——ゲートが開いているかと並べて一覧します。2つの事実を並べるのは、インストールしただけではプラグインは決して実行されないからです：インストール済みで何も発火しないのは通常の状態であって、異常ではありません。読むのは app-data の plugins/ ディレクトリとこのマシンの有効化状態だけ——ネットワークも目録の取得も使わない——ので、オフラインでも同じ答えを返します。インストールとして読めないディレクトリは、残りを覆い隠さないよう読み飛ばします。--json では各プラグインの購読イベントと、amenbo が実行する実行ファイルのパスも返します。"),
+    ("Enables an installed plugin: records the one-time consent to run its code, and opens the gate it fires through. Installing puts a plugin on disk and nothing more — this is the step that lets it run, and it is asked once: a later disable keeps the consent, so re-enabling never asks again. Fail-closed on the settings the plugin's author marked required — while one is empty the enable is refused and the empty fields are named; fill them with `plugin config set` and enable again. amenbo checks only that a value is present, at the machine-default tier the gate itself lives at (a per-project override cannot satisfy a machine-global enable); whether the value is *meaningful* is the plugin author's to judge at run time.", "インストール済みのプラグインを有効化します：そのコードを実行することへの一度きりの同意を記録し、発火するゲートを開きます。インストールはプラグインをディスクに置くだけで、実行を許すのはこの手順です。同意を尋ねるのは一度だけ——後で disable しても同意は残るので、再度の enable で尋ね直しません。作者が required と印した設定に対しては fail-closed です——1つでも空なら enable は拒否され、空のフィールド名が示されます。`plugin config set` で埋めてから enable し直してください。amenbo が見るのは値が入っているかどうかだけで、見る層はゲート自身が在るマシン既定の層です（プロジェクト単位の上書きではマシングローバルな有効化を満たせません）。値が意味として妥当かどうかは、実行時に作者が判断することです。"),
+    ("the installed plugin's name", "インストール済みプラグインの名前"),
+    ("Closes an enabled plugin's gate: it stops firing, while staying installed and staying consented — so enabling it again later asks for nothing. Deliberately does not require the plugin to still read as installed: this is how a plugin is stopped, and a half-broken install is exactly when stopping it matters most. Disabling one that is already off changes nothing and says so.", "有効なプラグインのゲートを閉じます：発火は止まりますが、インストール済みのまま・同意も保持したままです——後で有効化し直すときに何も尋ねられません。プラグインがインストール済みとして読めることを、あえて要求しません：これはプラグインを止める手段であり、壊れかけたインストールこそ止めたい場面だからです。すでに無効なものを disable しても何も変わらず、その旨を伝えます。"),
+    ("the plugin's name", "プラグインの名前"),
 ];
 
 /// The overlay applied just before display: it swaps only the prose fields of the English spec for
@@ -664,6 +671,10 @@ fn capabilities() -> Value {
         cap(
             "Validate a plugin manifest against the catalog rules before submitting it (an author's self-check)",
             &["plugin validate"],
+        ),
+        cap(
+            "See this machine's installed plugins and open or close each one's gate (install ≠ enable)",
+            &["plugin list", "plugin enable", "plugin disable"],
         ),
     ];
     Value::Array(caps)
@@ -1131,6 +1142,17 @@ fn all_commands() -> Value {
             "args": [{ "name": "path", "required": true, "help": "path to the manifest file (.yaml or .json)" }],
             "flags": [{ "name": "--json", "help": "machine-readable output" }],
             "examples": ["amenbo plugin validate plugins/worktree.yaml", "amenbo plugin validate ./manifest.json --json"] }),
+        json!({ "name": "plugin list", "summary": "Lists the plugins installed on this machine — name, description and the official badge — beside whose gate is open. The two facts sit together because installing a plugin never runs it: an installed plugin that fires nothing is the ordinary state, not a fault. Reads only the app-data plugins/ directory and this machine's enable state — no network, no catalog fetch — so it answers the same offline. A directory it cannot read as an install is skipped rather than allowed to hide the rest. --json adds each plugin's subscribed events and the path of the executable amenbo would run.",
+            "flags": [{ "name": "--json", "help": "machine-readable output" }],
+            "examples": ["amenbo plugin list", "amenbo plugin list --json"] }),
+        json!({ "name": "plugin enable", "summary": "Enables an installed plugin: records the one-time consent to run its code, and opens the gate it fires through. Installing puts a plugin on disk and nothing more — this is the step that lets it run, and it is asked once: a later disable keeps the consent, so re-enabling never asks again. Fail-closed on the settings the plugin's author marked required — while one is empty the enable is refused and the empty fields are named; fill them with `plugin config set` and enable again. amenbo checks only that a value is present, at the machine-default tier the gate itself lives at (a per-project override cannot satisfy a machine-global enable); whether the value is *meaningful* is the plugin author's to judge at run time.",
+            "args": [{ "name": "name", "required": true, "help": "the installed plugin's name" }],
+            "flags": [{ "name": "--json", "help": "machine-readable output" }],
+            "examples": ["amenbo plugin enable worktree"] }),
+        json!({ "name": "plugin disable", "summary": "Closes an enabled plugin's gate: it stops firing, while staying installed and staying consented — so enabling it again later asks for nothing. Deliberately does not require the plugin to still read as installed: this is how a plugin is stopped, and a half-broken install is exactly when stopping it matters most. Disabling one that is already off changes nothing and says so.",
+            "args": [{ "name": "name", "required": true, "help": "the plugin's name" }],
+            "flags": [{ "name": "--json", "help": "machine-readable output" }],
+            "examples": ["amenbo plugin disable worktree"] }),
     ])
 }
 

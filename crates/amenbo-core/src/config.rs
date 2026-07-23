@@ -162,9 +162,10 @@ impl Paths {
         self.base_dir.join(Self::PLUGINS_DIR_NAME)
     }
 
-    /// One plugin's home, `<base>/plugins/<name>/`, holding its executable and files. `name` is the
-    /// plugin's manifest name; [`REGISTRY_DIR_NAME`](Self::REGISTRY_DIR_NAME) is reserved and cannot be
-    /// one — the manifest validator rejects it up front, but do not hand this an unvalidated name.
+    /// One plugin's home, `<base>/plugins/<name>/`, holding its executable and files — what lives in it
+    /// is [`plugin_installed`](crate::plugin_installed)'s. `name` is the plugin's manifest name;
+    /// [`REGISTRY_DIR_NAME`](Self::REGISTRY_DIR_NAME) is reserved and cannot be one — the manifest
+    /// validator rejects it up front, but do not hand this an unvalidated name.
     pub fn plugin_dir(&self, name: &str) -> PathBuf {
         self.plugins_dir().join(name)
     }

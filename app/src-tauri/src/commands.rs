@@ -43,10 +43,20 @@ fn open_store_read() -> Result<Store, CmdError> {
 /// per operation).
 /// **Projection (build_snapshot) is done separately, after the lock is released** — it reopens the
 /// same store, so projecting in here would collide re-entrantly with our own lock.
+///
+/// This is also the GUI's dispatch seam (`AMB-D-367`): every mutating command comes through here, so the
+/// observation dispatcher is driven here — once, after the mutation committed, on the store that is still
+/// open ([`crate::plugin_dispatch`]). Priming first means the session's cursor is the head from *before*
+/// this write, so a write that lands before the launch-time prime got there still fires. A command that
+/// errored rolled its mutation back and has nothing to dispatch.
 fn with_store_mut<T>(f: impl FnOnce(&mut Store) -> Result<T, CmdError>) -> Result<T, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("store.write");
     let mut store = open_store()?;
+    crate::plugin_dispatch::prime(&store);
     let out = f(&mut store);
+    if out.is_ok() {
+        crate::plugin_dispatch::drive(&store);
+    }
     drop(store);
     out
 }

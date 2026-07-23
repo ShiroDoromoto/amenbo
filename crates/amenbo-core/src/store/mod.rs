@@ -221,6 +221,13 @@ impl Store {
         crate::plugin_drive::drive_persisted(&self.engine, subs, Some(&self.paths.plugin_log_file()))
     }
 
+    /// The outbox's head — the id of the newest event committed so far. The long-lived (GUI) face starts
+    /// a session here so it observes what fires *next*, not the backlog from before it launched
+    /// (`AMB-D-367`); the short-lived face has no use for it, its cursor being the persisted one.
+    pub fn plugin_outbox_head(&self) -> Result<i64> {
+        Ok(crate::store_engine::outbox_head(self.engine.conn())?)
+    }
+
     /// Drive the dispatcher from an **in-memory** cursor — the long-lived (GUI) face (`AMB-T-2033`).
     /// Delivers what committed since `cursor` without persisting; the caller keeps
     /// [`Delivered::cursor`](crate::plugin_dispatch::Delivered::cursor) in memory for the next drive and

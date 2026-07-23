@@ -4320,8 +4320,12 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             if changed {
                 warn_if_unsettled_under_reserved(d.id, &detail, "reopening it");
+                write_envelope(flags, "decision.reopen", "decision", serde_json::to_value(&detail).unwrap(), Some(vec!["status".to_string()]), false, format!("✓ Reopened decision: {}", decision_label(d.id)));
+            } else {
+                // Already proposed: reopening changes nothing, so say so plainly instead of a bare "✓"
+                // that reads as "just now reopened" — the same two-branch shape as accept/reject.
+                write_envelope(flags, "decision.reopen", "decision", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("• Decision {} is already proposed — no change.", decision_label(d.id)));
             }
-            write_envelope(flags, "decision.reopen", "decision", serde_json::to_value(&detail).unwrap(), Some(vec!["status".to_string()]), false, format!("✓ Reopened decision: {}", decision_label(d.id)));
         }
         DecisionCmd::Delete { id } => {
             let did = resolve_decision(store, &id).map_err(CliError::from)?;

@@ -255,13 +255,24 @@ fn reopening_a_decision_under_a_reserved_task_warns_the_changer() {
     let (o1, e1, c1) = cli.run_both(&["decision", "reopen", &did, "--json"]);
     assert_eq!(c1, 0, "the warn does not fail the command: {e1}");
     assert!(o1.contains("\"action\""), "stdout still carries the JSON envelope: {o1}");
+    // A real reopen is not a no-op — the envelope says so, matching accept/reject.
+    let v1: Value = serde_json::from_str(&o1).unwrap();
+    assert_eq!(v1["noop"], Value::Bool(false), "a real reopen is not a no-op: {o1}");
     assert!(e1.contains('⚠') && e1.contains(&t_ref), "the warn names the reserved task {t_ref}: {e1}");
     assert!(e1.contains(&d_ref), "the warn names the decision {d_ref}: {e1}");
 
-    // Reopening what is already proposed settles nothing anew — no second warn.
-    let (_o2, e2, c2) = cli.run_both(&["decision", "reopen", &did, "--json"]);
+    // Reopening what is already proposed settles nothing anew — no second warn, and the envelope
+    // flags it as a no-op instead of reporting "✓ Reopened" as if it just changed.
+    let (o2, e2, c2) = cli.run_both(&["decision", "reopen", &did, "--json"]);
     assert_eq!(c2, 0);
     assert!(!e2.contains('⚠'), "an idempotent reopen must not warn: {e2}");
+    let v2: Value = serde_json::from_str(&o2).unwrap();
+    assert_eq!(v2["noop"], Value::Bool(true), "an idempotent reopen is a no-op: {o2}");
+
+    // The human line says so too, distinct from the "✓ Reopened" of a real change.
+    let (h, _he, hc) = cli.run_both(&["decision", "reopen", &did]);
+    assert_eq!(hc, 0);
+    assert!(h.contains("already proposed") && h.contains("no change"), "idempotent reopen reports no change: {h}");
 }
 
 /// The other act that unsettles a premise: superseding leaves the old decision accepted but no longer

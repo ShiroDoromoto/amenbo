@@ -111,6 +111,21 @@ pub const STEPS: &[Step] = &[
              UPDATE decision SET status_changed_at = COALESCE(NULLIF(decided_at, ''), NULLIF(created_at, ''));",
         ),
     },
+    Step {
+        to: 6,
+        name: "give task.status_changed_at to a store that never got it",
+        // The task-side twin of v5, arriving late: the column was declared in the registry (`AMB-D-366`'s
+        // data floor) without a step to carry it, so a store any earlier build wrote has never had it and
+        // would fail at the first read of a task with `no such column`. This is that step.
+        //
+        // **Unseeded, on purpose.** There is no honest instant to put in it. A task's creation is not when
+        // its current status began, and dating every old task there would say "reserved at creation" — so
+        // every premise the backlog has gathered since would read as *added after the reservation* and warn,
+        // on the whole backlog at once. `NULL` is what the column already means for a row that predates it
+        // (`Task::status_changed_at`), and the judgement skips a task that carries it rather than guessing.
+        // The clock starts for real at that task's next status change.
+        apply: Apply::Custom(add_task_status_clock),
+    },
 ];
 
 /// v4: the lint-hook question stopped being one per project and became one for the device
@@ -179,6 +194,36 @@ fn write_config_hook_consent(base_dir: &Path, answer: &str) {
     if let Ok(text) = serde_json::to_string_pretty(&doc) {
         let _ = crate::store::write_atomic(&path, text.as_bytes());
     }
+}
+
+/// v6: add `task.status_changed_at` — **only where it is missing**, which is the one thing this step
+/// cannot say in plain SQL (`ALTER TABLE … ADD COLUMN` on a column that is already there is an error, and
+/// it would take the whole migration down with it).
+///
+/// Both shapes are out there, and neither is a mistake in the store. The column was declared in the
+/// registry two versions before it had a step, so for that window every *new* store was born with it (a
+/// fresh store is created from the registry) while every *existing* one stayed without — the version a
+/// store carries does not tell the two apart. Asking the table is the only way to know.
+///
+/// This is not the presence-guarded diff the chain exists to replace (`AMB-D-231`): that was a pile of
+/// `IF EXISTS` operations replayed on every open, standing in for a history. This is one numbered step,
+/// run once at one version, repairing a window that is closed and dated. What it must never become is a
+/// habit — a column and the step that carries it belong in the same change.
+fn add_task_status_clock(ctx: &Ctx<'_>) -> Result<()> {
+    let held: i64 = ctx.tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('task') WHERE name = 'status_changed_at'",
+        [],
+        |r| r.get(0),
+    )?;
+    if held == 0 {
+        // Frozen text, like every step's: the `CHECK` is the instant form the column admitted when this
+        // was written, whatever the registry calls it later.
+        ctx.tx.execute_batch(
+            "ALTER TABLE task ADD COLUMN status_changed_at TEXT \
+                 CHECK(status_changed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
+        )?;
+    }
+    Ok(())
 }
 
 /// The version a store ends at once the chain has run — the last step's, or the baseline if there is
@@ -294,6 +339,11 @@ mod tests {
         dir
     }
 
+    /// The columns a step adds, and the version whose step adds them — so a store made here can be put
+    /// back to the shape its version claims. Append a row when a step adds a column.
+    const COLUMNS_ADDED_BY_A_STEP: &[(i64, &str, &str)] =
+        &[(5, "decision", "status_changed_at"), (6, "task", "status_changed_at")];
+
     /// A store stamped at `version` — the shape an older build left behind, which is what the chain
     /// exists to move.
     ///
@@ -311,8 +361,13 @@ mod tests {
                 rusqlite::params![META_FORMAT_VERSION, version.to_string()],
             )
             .unwrap();
-        if version < 5 {
-            engine.conn().execute_batch("ALTER TABLE decision DROP COLUMN status_changed_at;").unwrap();
+        for (added_at, table, column) in COLUMNS_ADDED_BY_A_STEP {
+            if version < *added_at {
+                engine
+                    .conn()
+                    .execute_batch(&format!("ALTER TABLE {table} DROP COLUMN {column};"))
+                    .unwrap();
+            }
         }
         assert_eq!(engine.format_version().unwrap(), version);
         engine
@@ -375,6 +430,10 @@ mod tests {
             .conn()
             .query_row("SELECT COUNT(status_changed_at) FROM decision", [], |r| r.get::<_, i64>(0))
             .expect("v5 put the decision status clock back");
+        engine
+            .conn()
+            .query_row("SELECT COUNT(status_changed_at) FROM task", [], |r| r.get::<_, i64>(0))
+            .expect("v6 put the task status clock back");
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -499,6 +558,59 @@ mod tests {
             ],
             "settled rows seed from decided_at, unsettled ones from their creation, and `''` is no instant"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v6 on the store every earlier build wrote: `task` without the status clock. The column has to be
+    /// there afterwards — a read of any task names it — and every existing row has to come out `NULL`,
+    /// which is the column's own word for "this task predates it" and what keeps the whole backlog from
+    /// warning at once on a date that was never true.
+    #[test]
+    fn the_task_status_clock_lands_on_a_store_that_never_had_it() {
+        let dir = scratch("task-status-clock");
+        let engine = store_at(&dir, 5);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO task (id, title, status, created_at, updated_at)
+                 VALUES (1, 'reserved long ago', 'in_progress', '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let clock: Option<String> = engine
+            .conn()
+            .query_row("SELECT status_changed_at FROM task WHERE id = 1", [], |r| r.get(0))
+            .expect("v6 put the column there");
+        assert_eq!(clock, None, "a task that predates the column is left saying so, not dated by a guess");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The same step on the *other* shape of v5 store: one born with the column, from the window where the
+    /// registry declared it before any step carried it. Both are real stores at the same version, and the
+    /// step has to pass over this one rather than take the migration down with a duplicate column.
+    #[test]
+    fn the_task_status_clock_step_passes_over_a_store_that_already_has_it() {
+        let dir = scratch("task-status-clock-born-with");
+        let engine = store_at(&dir, 5);
+        engine
+            .conn()
+            .execute_batch(
+                "ALTER TABLE task ADD COLUMN status_changed_at TEXT;
+                 INSERT INTO task (id, title, status, status_changed_at, created_at, updated_at)
+                 VALUES (1, 'reserved', 'in_progress', '2026-07-01T00:00:00Z', '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION, "the run got all the way through");
+        let clock: Option<String> = engine
+            .conn()
+            .query_row("SELECT status_changed_at FROM task WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(clock.as_deref(), Some("2026-07-01T00:00:00Z"), "and left what the store already held");
         std::fs::remove_dir_all(&dir).ok();
     }
 

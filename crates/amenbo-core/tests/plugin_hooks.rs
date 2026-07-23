@@ -48,7 +48,7 @@ fn a_clean_hook_runs_to_completion() {
     let done = marker("clean.marker");
     let hook = script("clean.sh", &format!("#!/bin/sh\ntouch '{}'\n", done.display()));
 
-    for handle in fire_with_timeout(vec![hook_for("clean", &hook)], GENEROUS) {
+    for handle in fire_with_timeout(vec![hook_for("clean", &hook)], GENEROUS, None) {
         handle.join().unwrap();
     }
     assert!(done.exists(), "the clean hook's side effect landed");
@@ -63,7 +63,7 @@ fn fire_launches_every_plugin_independently() {
     let hook_a = script("indep-a.sh", &format!("#!/bin/sh\ntouch '{}'\n", a.display()));
     let hook_b = script("indep-b.sh", &format!("#!/bin/sh\ntouch '{}'\n", b.display()));
 
-    for handle in fire_with_timeout(vec![hook_for("a", &hook_a), hook_for("b", &hook_b)], GENEROUS) {
+    for handle in fire_with_timeout(vec![hook_for("a", &hook_a), hook_for("b", &hook_b)], GENEROUS, None) {
         handle.join().unwrap();
     }
     assert!(a.exists() && b.exists(), "both hooks ran");
@@ -82,7 +82,7 @@ fn fire_returns_before_a_hook_finishes() {
     let hook = script("slow.sh", &format!("#!/bin/sh\nsleep 3\ntouch '{}'\n", done.display()));
 
     let start = Instant::now();
-    let handles = fire_with_timeout(vec![hook_for("slow", &hook)], GENEROUS);
+    let handles = fire_with_timeout(vec![hook_for("slow", &hook)], GENEROUS, None);
     let launched = start.elapsed();
     assert!(launched < Duration::from_secs(1), "fire returned promptly, not after the hook: {launched:?}");
     assert!(!done.exists(), "the slow hook has not finished yet when fire returns");
@@ -91,4 +91,89 @@ fn fire_returns_before_a_hook_finishes() {
         handle.join().unwrap();
     }
     assert!(done.exists(), "the hook did finish once we waited it out");
+}
+
+/// The runner records what it ran (`AMB-D-361`): a clean hook and a failing one both land in the
+/// execution log, the failure carrying the exit code and the stderr its author wrote — which is the whole
+/// point, since a hook can never report a failure any other way.
+#[test]
+fn every_run_lands_in_the_execution_log_with_its_diagnosis() {
+    use amenbo_core::plugin_log::{self, Outcome};
+
+    let log = amenbo_scratch::scratch("plugin-hooks-log").join(plugin_log::FILE_NAME);
+    let _ = std::fs::remove_file(&log);
+
+    let good = script("logged-ok.sh", "#!/bin/sh\nexit 0\n");
+    let bad = script("logged-bad.sh", "#!/bin/sh\necho 'no such channel' >&2\nexit 3\n");
+    let hooks = vec![hook_for("good", &good), hook_for("bad", &bad)];
+
+    for handle in fire_with_timeout(hooks, GENEROUS, Some(&log)) {
+        handle.join().unwrap();
+    }
+
+    let lines = plugin_log::read(&log);
+    assert_eq!(lines.len(), 2, "both runs are recorded, the clean one included");
+    let ok = lines.iter().find(|l| l.plugin == "good").expect("the clean run");
+    assert_eq!(ok.outcome, Outcome::Ok);
+    assert_eq!(ok.code, Some(0));
+    assert_eq!(ok.event, "task.created", "the event that fired it is on the line");
+
+    let failed = lines.iter().find(|l| l.plugin == "bad").expect("the failing run");
+    assert_eq!(failed.outcome, Outcome::Failed);
+    assert_eq!(failed.code, Some(3));
+    assert!(failed.stderr.contains("no such channel"), "the author's diagnosis: {}", failed.stderr);
+
+    let _ = std::fs::remove_file(&log);
+}
+
+/// A hook whose program is not there never launches — and that, too, is recorded: "it was never run" is a
+/// different answer from "it ran and did nothing", and the log has to tell them apart.
+#[test]
+fn a_hook_that_cannot_launch_is_recorded_as_such() {
+    use amenbo_core::plugin_log::{self, Outcome};
+
+    let log = amenbo_scratch::scratch("plugin-hooks-log").join("not-launched.jsonl");
+    let _ = std::fs::remove_file(&log);
+
+    let missing = PathBuf::from("/nonexistent/amenbo-hook-that-is-not-there");
+    for handle in fire_with_timeout(vec![hook_for("ghost", &missing)], GENEROUS, Some(&log)) {
+        handle.join().unwrap();
+    }
+
+    let lines = plugin_log::read(&log);
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].outcome, Outcome::NotLaunched);
+    assert_eq!(lines[0].code, None, "there was no child to have an exit code");
+    assert!(!lines[0].stderr.is_empty(), "why it could not be launched is on the line");
+
+    let _ = std::fs::remove_file(&log);
+}
+
+/// A secret injected into a plugin's environment cannot reach the log: the runner is handed the
+/// invocation, and hands the log only the outcome, the code, the duration and stderr. Proven end to end,
+/// against the file's own bytes — a plugin that *echoes its own secret to stderr* has published it itself,
+/// so the hook here keeps it to itself, which is the case the exclusion has to hold for.
+#[test]
+fn an_injected_secret_never_reaches_the_log() {
+    use amenbo_core::plugin_log::FILE_NAME;
+
+    let log = amenbo_scratch::scratch("plugin-hooks-secret").join(FILE_NAME);
+    let _ = std::fs::remove_file(&log);
+
+    let hook = script("secret.sh", "#!/bin/sh\necho 'ran' >&2\nexit 1\n");
+    let invocation = PluginInvocation::new(&hook).env("AMENBO_CONFIG_TOKEN", "T0P-53CR3T");
+
+    for handle in fire_with_timeout(
+        vec![Hook::new("secretive", "task.created", invocation)],
+        GENEROUS,
+        Some(&log),
+    ) {
+        handle.join().unwrap();
+    }
+
+    let raw = std::fs::read_to_string(&log).unwrap();
+    assert!(raw.contains("ran"), "the run itself was recorded: {raw}");
+    assert!(!raw.contains("T0P-53CR3T"), "the injected secret is not in the log: {raw}");
+
+    let _ = std::fs::remove_file(&log);
 }

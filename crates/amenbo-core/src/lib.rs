@@ -43,6 +43,7 @@ pub mod plugin_exec;
 pub mod plugin_hooks;
 pub mod plugin_inject;
 pub mod plugin_installed;
+pub mod plugin_log;
 pub mod plugin_manifest;
 pub mod plugin_payload;
 pub mod plugin_provenance;

@@ -291,6 +291,75 @@ fn retain_and_place(paths: &Paths, update: &Update, program: &[u8]) -> Result<Re
     })
 }
 
+/// What one rollback restored — the receipt a caller reports from.
+#[derive(Clone, Debug)]
+pub struct RolledBack {
+    /// The plugin's name.
+    pub name: String,
+    /// The manifest now on disk again: the build that was retained.
+    pub restored: Manifest,
+    /// The executable the restore wrote.
+    pub program: PathBuf,
+}
+
+/// Undo the last [`apply`] for one plugin, restoring the build retained beside it (`AMB-D-359`).
+///
+/// The mirror of an apply, and offline: an update kept the previous executable and the manifest that
+/// described it as a `.bak` pair ([`backup_path`]/[`backup_manifest_path`]), and this puts both back —
+/// the pair, never one without the other, so the installed manifest never disagrees with the bytes beside
+/// it. Nothing is fetched and nothing is verified: the retained build already passed the door on its way
+/// in, and a rollback is a deliberate return to it (the same posture self-update's `--rollback` takes,
+/// `AMB-D-341`).
+///
+/// The restore reuses [`plugin_install::place`], so the install order holds here too — the executable
+/// first, `manifest.json` last — and an interrupted rollback reads as not-finished rather than as a home
+/// half in each build. On success the retained copies are consumed: an update retains exactly one prior
+/// build, so once it is the running one there is nothing further back to go, and a stale `.bak` must not
+/// masquerade as a fresh one.
+///
+/// Refuses, changing nothing, when the plugin is not installed (there is nothing to roll back), or when
+/// no retained build exists — either it was never updated, or a prior rollback already consumed the one
+/// `.bak` there is. The enable gate, the settings and the secrets are keyed elsewhere and left untouched,
+/// exactly as an update leaves them.
+pub fn rollback(paths: &Paths, name: &str) -> Result<RolledBack> {
+    // Anchor on a real install: a rollback restores an executable *beside* a live plugin, so a name that
+    // is not installed is `not_found`, not a bare "no backup".
+    plugin_installed::read(paths, name)?;
+
+    let backup_program = backup_path(paths, name);
+    let backup_manifest = backup_manifest_path(paths, name);
+    if !backup_program.exists() {
+        return Err(Error::not_found(
+            format!("plugin '{name}' has no retained build to roll back to — it was not updated, or a rollback already used it"),
+            format!("プラグイン '{name}' に戻せる版がありません——更新していないか、既にロールバック済みです"),
+        ));
+    }
+
+    // Read both retained files before writing either: a rollback that put the old binary back under the
+    // new manifest would describe the old build with the wrong checksum, config schema and floor.
+    let program = std::fs::read(&backup_program)?;
+    let raw = std::fs::read_to_string(&backup_manifest).map_err(|e| {
+        Error::invalid(
+            format!("plugin '{name}' has a retained binary but no manifest beside it ({e}) — the pair a rollback needs is incomplete"),
+            format!("プラグイン '{name}' に退避バイナリはありますが manifest がありません（{e}）——ロールバックに必要な対が欠けています"),
+        )
+    })?;
+    let manifest: Manifest = serde_json::from_str(&raw).map_err(|e| {
+        Error::invalid(
+            format!("plugin '{name}' has a retained manifest that will not parse: {e}"),
+            format!("プラグイン '{name}' の退避 manifest を読めません：{e}"),
+        )
+    })?;
+
+    let placed = plugin_install::place(paths, &manifest, &program)?;
+    // The retained pair is now the running build — there is nothing further back to go. Clear both so a
+    // stale `.bak` cannot later masquerade as a fresh one (same close-out as self-update, `AMB-D-341`).
+    let _ = std::fs::remove_file(&backup_program);
+    let _ = std::fs::remove_file(&backup_manifest);
+
+    Ok(RolledBack { name: name.to_string(), restored: placed.manifest, program: placed.program })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -585,5 +654,70 @@ mod tests {
     fn updating_something_not_installed_is_not_found() {
         let paths = paths_at("absent");
         assert_eq!(apply(&paths, "worktree").unwrap_err().code(), "not_found");
+    }
+
+    // ---- rolling one back ----
+
+    /// The round trip: install, apply an update through the disk seam, then roll back — and the binary,
+    /// the manifest, and the reader's verdict are all the pre-update build again.
+    #[test]
+    fn rolling_back_restores_the_build_the_update_replaced() {
+        let paths = paths_at("rollback");
+        let before = manifest("worktree", "aa");
+        install_on_disk(&paths, &before, b"#!/bin/sh\nold\n");
+        let after = manifest("worktree", "bb");
+        retain_and_place(&paths, &update_of(before.clone(), after), b"#!/bin/sh\nnew\n").unwrap();
+
+        let rolled = rollback(&paths, "worktree").unwrap();
+        assert_eq!(rolled.restored, before);
+        assert_eq!(std::fs::read(&rolled.program).unwrap(), b"#!/bin/sh\nold\n");
+        assert_eq!(plugin_installed::read(&paths, "worktree").unwrap().manifest, before);
+    }
+
+    /// One `.bak`, one step back: the retained pair is consumed, so a second rollback has nothing to
+    /// restore (`AMB-D-341` — a rollback goes back exactly one build).
+    #[test]
+    fn a_rollback_consumes_the_retained_build() {
+        let paths = paths_at("rollback-once");
+        let before = manifest("worktree", "aa");
+        install_on_disk(&paths, &before, b"old");
+        retain_and_place(&paths, &update_of(before, manifest("worktree", "bb")), b"new").unwrap();
+
+        rollback(&paths, "worktree").unwrap();
+        assert!(!backup_path(&paths, "worktree").exists(), "the retained binary is gone");
+        assert!(!backup_manifest_path(&paths, "worktree").exists(), "and its manifest with it");
+        assert_eq!(rollback(&paths, "worktree").unwrap_err().code(), "not_found");
+    }
+
+    /// A plugin that was never updated has no retained build: the rollback says so and changes nothing.
+    #[test]
+    fn rolling_back_a_plugin_that_was_never_updated_is_not_found() {
+        let paths = paths_at("rollback-fresh");
+        install_on_disk(&paths, &manifest("worktree", "aa"), b"only");
+
+        assert_eq!(rollback(&paths, "worktree").unwrap_err().code(), "not_found");
+        assert_eq!(std::fs::read(plugin_installed::program_path(&paths, "worktree")).unwrap(), b"only");
+    }
+
+    /// Rolling back what is not installed anchors on the missing install, not on a missing backup.
+    #[test]
+    fn rolling_back_something_not_installed_is_not_found() {
+        let paths = paths_at("rollback-absent");
+        assert_eq!(rollback(&paths, "worktree").unwrap_err().code(), "not_found");
+    }
+
+    /// The gate, the settings and the secrets are keyed elsewhere: a rollback restores the two files it
+    /// retained and leaves the rest of the home alone, exactly as an update does.
+    #[test]
+    fn rolling_back_touches_nothing_but_the_binary_and_its_manifest() {
+        let paths = paths_at("rollback-preserve");
+        let before = manifest("worktree", "aa");
+        install_on_disk(&paths, &before, b"old");
+        retain_and_place(&paths, &update_of(before, manifest("worktree", "bb")), b"new").unwrap();
+        let stray = paths.plugin_dir("worktree").join("state.json");
+        std::fs::write(&stray, b"kept across the round trip").unwrap();
+
+        rollback(&paths, "worktree").unwrap();
+        assert_eq!(std::fs::read(&stray).unwrap(), b"kept across the round trip");
     }
 }

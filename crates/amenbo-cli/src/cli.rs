@@ -456,6 +456,22 @@ pub enum PluginCmd {
         all: bool,
     },
 
+    /// Undo the last `plugin update` for one plugin, restoring the build it retained (`AMB-D-359`).
+    ///
+    /// An update kept the previous executable and its manifest as a `.bak` pair beside the new ones; this
+    /// puts both back — the same shape self-update's `update --rollback` uses (`AMB-D-341`). Offline and
+    /// instant: nothing is fetched and nothing is re-verified, because the retained build already passed
+    /// the door on its way in and a rollback is a deliberate return to it. It leaves the gate, the
+    /// settings and the secrets alone, exactly as the update did.
+    ///
+    /// Goes back **one** build, and only one: the retained copy is consumed, so a second rollback has
+    /// nothing to restore and says so. Refused, changing nothing, when the plugin is not installed or was
+    /// never updated (there is no retained build to return to).
+    Rollback {
+        /// the installed plugin to roll back
+        name: String,
+    },
+
     /// Fill in an installed plugin's settings — the keys its author declared in the manifest
     /// (`AMB-D-356`). Where a value is kept is the author's `secret` flag's to decide, not yours:
     /// a secret goes to the user-area secret file (off the store, off every backup), the rest to the

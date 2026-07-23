@@ -681,6 +681,7 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         PluginCmd::Update { name, check, all } => {
             plugin_update_cmd(store, flags, name.as_deref(), check, all)
         }
+        PluginCmd::Rollback { name } => plugin_rollback_cmd(store, flags, &name),
         PluginCmd::Config { sub } => match sub {
             PluginConfigCmd::Set { name, key, value, scope } => {
                 plugin_config_set_cmd(store, flags, &name, &key, value, &scope)
@@ -1209,6 +1210,26 @@ fn plugin_update_all_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> 
         }));
     }
     Ok(if failed == 0 { 0 } else { 1 })
+}
+
+/// `plugin rollback <name>` — restore the build the last update replaced (`AMB-D-359`).
+///
+/// Says what a reader most needs to know afterwards: which build is running again, and that the gate and
+/// settings did not move with it. The refusals — not installed, or nothing retained — come up from the
+/// core with their own wording, so nothing here has to guess which case it is.
+fn plugin_rollback_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
+    let rolled = amenbo_core::plugin_update::rollback(&store.paths, name).map_err(CliError::from)?;
+
+    human(flags, format!("Rolled back plugin: {name} — {}", rolled.restored.desc));
+    human(flags, "Its gate, settings and secrets are unchanged.");
+    if flags.json {
+        print_json(&json!({
+            "ok": true, "action": "plugin.rollback", "plugin": name,
+            "desc": rolled.restored.desc,
+            "program": rolled.program.display().to_string(),
+        }));
+    }
+    Ok(0)
 }
 
 /// Which of the author's settings currently hold a value, probed at the tier the enable is for

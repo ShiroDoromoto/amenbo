@@ -435,6 +435,28 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// The genesis DDL runs at open, and the chain runs on the engine that open returns — so the DDL
+    /// necessarily meets an un-migrated store first. It must therefore name only what the **baseline**
+    /// store already has: an index over a column a step adds would fail on exactly the store that step
+    /// exists for, and it would fail at open, before the chain could rescue it. Re-running the whole
+    /// batch over a baseline-shaped store is that check (`IF NOT EXISTS` makes the re-run a no-op where
+    /// the object is already there, so what is left is whether every column it names resolves).
+    ///
+    /// If this goes red, the fix is not to move the DDL: put the index in the step that adds its column,
+    /// beside the `ALTER TABLE`.
+    #[test]
+    fn the_genesis_ddl_applies_to_a_baseline_store() {
+        let dir = scratch("genesis-ddl");
+        let engine = baseline_store(&dir);
+
+        engine
+            .conn()
+            .execute_batch(&crate::store_engine::schema::schema_sql())
+            .expect("the genesis DDL names a column the baseline store does not have");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// The shipped chain, run on the oldest store this build opens: it lands, and it carries the store to
     /// the version this build says it can open.
     #[test]

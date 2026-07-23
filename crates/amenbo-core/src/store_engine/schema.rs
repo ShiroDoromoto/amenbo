@@ -144,7 +144,7 @@ const KEY_REF: &str = "BIGINT NOT NULL DEFAULT 0";
 const ORDER_KEY: &str = "TEXT NOT NULL DEFAULT ''";
 const ORDER_KEY_OPT: &str = "TEXT"; // an unplaced (inbox) task carries no order key
 /// A project's human-readable identifier. Unique across the store, but the uniqueness is a
-/// `CREATE UNIQUE INDEX` in [`read_index_sql`], not a `UNIQUE` in this decl: SQLite refuses
+/// `CREATE UNIQUE INDEX` in `EXTRA_SQL`, not a `UNIQUE` in this decl: SQLite refuses
 /// `ALTER TABLE … ADD COLUMN … UNIQUE`, and a migration step adds a column to an existing store that
 /// way, so a decl an old store cannot take is a decl the fresh schema must not have either
 /// (the two paths have to land on the same table). Nullable, so a row mid-create holds no value that
@@ -825,6 +825,13 @@ plain_tables! {
 
 /// Extra DDL not derived from any declaration: the journal mode and the read-model indexes the query
 /// layer needs.
+///
+/// **Every index here must be creatable on the oldest store this build still opens** ([`super::migrate`]'s
+/// baseline), because this batch runs at open, *before* the version chain has carried that store forward
+/// — an index over a column a chain step adds would fail on exactly the store that step exists for. So an
+/// index over a column a step adds belongs **in that step**, next to the `ALTER TABLE` that adds it, the
+/// same division the tables already follow: this DDL is genesis, and the chain owns evolution
+/// (`AMB-D-231`). A test holds the rule (`the_genesis_ddl_applies_to_a_baseline_store`).
 const EXTRA_SQL: &str = r#"
 PRAGMA journal_mode = WAL;
 
@@ -832,9 +839,7 @@ PRAGMA journal_mode = WAL;
 -- (`read::list_task_ids`: the project placement EXISTS + the `order` sort's per-row placement
 -- lookup and the ready/blocked dependency EXISTS). Without them every such subquery table-scans the
 -- whole child table once per task — O(tasks × child), i.e. O(N²) on an unfiltered board page, which
--- is seconds rather than milliseconds on a board of ten thousand tasks. These reference base registry
--- columns (always present), so they live here rather than in read_index_sql (whose ordering caveat is
--- only about migrated task columns).
+-- is seconds rather than milliseconds on a board of ten thousand tasks.
 CREATE INDEX IF NOT EXISTS task_dependency_by_task   ON task_dependency(task_id);
 CREATE INDEX IF NOT EXISTS task_dependency_by_blocker ON task_dependency(blocked_by_id);
 -- `text:` full-text spans comment bodies: `read::push_filter` adds an EXISTS over `task_comment` per
@@ -870,18 +875,9 @@ CREATE INDEX IF NOT EXISTS task_commit_by_task ON task_commit(task_id);
 -- constraint (the column decls carry no UNIQUE), and its leading columns also serve the reads that seek a
 -- project's overrides — by `project_id`, or by `(project_id, plugin)` for one plugin's whole config.
 CREATE UNIQUE INDEX IF NOT EXISTS plugin_config_triple ON plugin_config(project_id, plugin, field_key);
-"#;
-
-/// Read-model secondary indexes that reference columns an older store may not carry yet — a
-/// `CREATE INDEX` over a column that is not there errors, which is why they are kept apart from
-/// [`schema_sql`]. The separation is only a marker now: both are issued by `super::engine::init`, back to
-/// back and *before* the version chain ([`super::migrate`]) has had a chance to add anything. An index put
-/// here over a column a chain step adds would still fail on exactly the store that step exists for; none
-/// of the three below is.
-const READ_INDEX_SQL: &str = r#"
+-- The read layer's own two seeks over the task table: `status` narrows a mailbox query, and
+-- `project_id` — placement is folded onto the task — scopes every list to one project.
 CREATE INDEX IF NOT EXISTS task_by_status    ON task(status);
--- Placement is folded onto the task: the read layer scopes and filters by `project_id`, a migrated
--- task column — hence here rather than in schema_sql's EXTRA_SQL.
 CREATE INDEX IF NOT EXISTS task_by_project   ON task(project_id);
 -- The project slug's uniqueness. This index *is* the constraint — the column decl cannot carry
 -- `UNIQUE` (see `SLUG`). NULLs are distinct in SQLite, so rows without a slug coexist.
@@ -934,8 +930,8 @@ const RECORD_ID: &str = "INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL";
 /// Build the base DDL for the truth-source: every read-model table (from the registry) plus the
 /// engine and its indexes, and the [`PLAIN_TABLES`] beside them — the folder bindings and the
 /// device-local task-keyed sets, none of which carries the record shape ([`crate::overview`] is the
-/// read/write path onto those). Secondary indexes over task columns live in [`read_index_sql`] and are
-/// applied after column migration. Every record table is born [`RECORD_ID`]-keyed; a store whose rows
+/// read/write path onto those). The read model's secondary indexes ride along in `EXTRA_SQL`, under the
+/// rule stated there. Every record table is born [`RECORD_ID`]-keyed; a store whose rows
 /// are still ULID-keyed ([`is_legacy_keyed`]) is one `store::open` refuses rather than writing
 /// integer-keyed tables beside its ULID-keyed ones.
 pub fn schema_sql() -> String {
@@ -1010,12 +1006,6 @@ pub fn table_content_is_empty(conn: &rusqlite::Connection) -> rusqlite::Result<b
         }
     }
     Ok(true)
-}
-
-/// Secondary indexes over registry task columns, applied **after** column migration so they never
-/// reference a column an older store has yet to be backfilled with.
-pub fn read_index_sql() -> &'static str {
-    READ_INDEX_SQL
 }
 
 #[cfg(test)]

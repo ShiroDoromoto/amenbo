@@ -676,6 +676,7 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         PluginCmd::Disable { name } => plugin_disable_cmd(store, flags, &name),
         PluginCmd::Uninstall { name } => plugin_uninstall_cmd(store, flags, &name),
         PluginCmd::Run { name, args } => plugin_run_cmd(store, flags, &name, &args),
+        PluginCmd::Update { check: _ } => plugin_update_check_cmd(store, flags),
         PluginCmd::Config { sub } => match sub {
             PluginConfigCmd::Set { name, key, value, scope } => {
                 plugin_config_set_cmd(store, flags, &name, &key, value, &scope)
@@ -931,6 +932,44 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
             };
             let badge = if p.manifest.official { " [official]" } else { "" };
             human(flags, format!("{}  {gate}{badge}  {}", p.name, p.manifest.desc));
+        }
+    }
+    Ok(0)
+}
+
+/// `plugin update --check` — which installed plugins the catalog holds a different build of
+/// (`AMB-D-359`).
+///
+/// Reports and stops there. Applying is a separate, explicit act, and keeping the two apart is what lets
+/// this be offered freely: nothing here downloads, verifies or replaces anything, so the worst a check
+/// costs is one fetch of the whole index — and none at all inside the freshness window, or with nothing
+/// installed.
+///
+/// A plugin the catalog does not list is not reported: installed by hand, or delisted since, and neither
+/// is something an update could answer.
+fn plugin_update_check_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
+    let updates =
+        amenbo_core::plugin_update::available(&store.paths).map_err(CliError::from)?;
+
+    if flags.json {
+        let rows: Vec<_> = updates
+            .iter()
+            .map(|u| {
+                json!({
+                    "name": u.name,
+                    "desc": u.available.desc,
+                    "installed_checksum": u.installed.checksum,
+                    "available_checksum": u.available.checksum,
+                    "url": u.available.url,
+                })
+            })
+            .collect();
+        print_json(&json!({ "count": rows.len(), "updates": rows }));
+    } else if updates.is_empty() {
+        human(flags, "Everything installed matches what the catalog publishes.".to_string());
+    } else {
+        for u in &updates {
+            human(flags, format!("{}  update available  {}", u.name, u.available.desc));
         }
     }
     Ok(0)

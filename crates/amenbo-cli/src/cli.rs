@@ -407,6 +407,23 @@ pub enum PluginCmd {
         args: Vec<String>,
     },
 
+    /// Report which installed plugins the catalog holds a different build of (`AMB-D-359`).
+    ///
+    /// Detection is the catalog amenbo already fetches whole laid beside the manifest sitting next to
+    /// each installed binary — no central server, and no per-plugin request. A manifest carries no
+    /// version number, so what is compared is the asset's checksum: the digest of the exact bytes, and
+    /// therefore the build's identity. It reports *different*, not *newer* — the catalog is the authority
+    /// on what is published, including a rollback.
+    ///
+    /// Cheap on purpose: with nothing installed no catalog is read at all, and otherwise a cached
+    /// catalog younger than an hour answers with no request. Applying an update is a separate act, which
+    /// is why `--check` is required here.
+    Update {
+        /// report what has an update without applying anything (the only form available today)
+        #[arg(long, required = true)]
+        check: bool,
+    },
+
     /// Fill in an installed plugin's settings — the keys its author declared in the manifest
     /// (`AMB-D-356`). Where a value is kept is the author's `secret` flag's to decide, not yours:
     /// a secret goes to the user-area secret file (off the store, off every backup), the rest to the

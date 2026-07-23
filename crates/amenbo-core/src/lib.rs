@@ -53,6 +53,7 @@ pub mod plugin_secret;
 pub mod plugin_subscribe;
 pub mod plugin_trust;
 pub mod plugin_uninstall;
+pub mod plugin_update;
 pub mod plugin_validate;
 pub mod progress;
 pub mod project_teardown;

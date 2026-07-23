@@ -55,6 +55,16 @@ pub const OFFICIAL_CACHE_FILE_NAME: &str = "official.json";
 /// How long a catalog fetch may take before it is treated as a failure (and the cache answers instead).
 const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// How long the cached catalog answers before a read goes back to the network (`AMB-D-359`).
+///
+/// This is the boundary that lets a check ride along with something a user did anyway — opening a view,
+/// listing what is installed — instead of needing a resident timer to poll: a trigger arriving inside the
+/// window is answered from disk, and only one outside it costs a fetch. The value is deliberately the
+/// same hour amenbo's own update check settles on (`AMB-D-362`), for the same reason: a fix that is
+/// published is worth reaching within the day, and an hour is short enough for that without turning
+/// discovery into traffic.
+pub const FRESH_FOR: Duration = Duration::from_secs(60 * 60);
+
 /// The wire envelope, exactly as the catalog CI writes it.
 #[derive(Debug, Deserialize)]
 struct Envelope {
@@ -218,6 +228,28 @@ fn load_from(paths: &Paths, url: &str) -> Result<Catalog> {
         Ok(catalog) => Ok(catalog),
         Err(fetch_error) => cached(paths).ok_or(fetch_error),
     }
+}
+
+/// The catalog for a read that is *incidental* — a check hanging off something the user did anyway
+/// (`AMB-D-359`), rather than the explicit "get me the current index" [`load`] an install makes.
+///
+/// A cache younger than [`FRESH_FOR`] answers as it stands, with no request at all; past that boundary
+/// this is exactly [`load`], so the network is asked once and a failure still falls back to the cache.
+/// The distinction is the point: an install wants the newest index it can get, while a check wants to be
+/// cheap enough that it can be offered often.
+pub fn fresh(paths: &Paths) -> Result<Catalog> {
+    if cache_age(paths).is_some_and(|age| age < FRESH_FOR) {
+        if let Some(catalog) = cached(paths) {
+            return Ok(catalog);
+        }
+    }
+    load(paths)
+}
+
+/// How long ago the cache was last written, or `None` when there is no cache — or when the clock says it
+/// was written in the future, which is no evidence of freshness and falls through to a fetch.
+fn cache_age(paths: &Paths) -> Option<Duration> {
+    std::fs::metadata(cache_file(paths)).ok()?.modified().ok()?.elapsed().ok()
 }
 
 /// Fetch the catalog document, with a timeout. The only network I/O in this module.
@@ -424,5 +456,25 @@ mod tests {
         let catalog = refresh_from(&paths, OFFICIAL_CATALOG_URL).expect("the published catalog answers");
         assert!(catalog.dropped.is_empty(), "nothing published had to be dropped: {:?}", catalog.dropped);
         assert!(cached(&paths).is_some(), "and the fetch replaced the cache");
+    }
+
+    /// A cache younger than the freshness boundary answers on its own — no request is made, which is what
+    /// makes a check cheap enough to offer alongside a listing (`AMB-D-359`). The proof is that what comes
+    /// back is the copy on disk: a fetch would have replaced it with what the real catalog serves.
+    #[test]
+    fn a_cache_inside_the_freshness_boundary_answers_without_the_network() {
+        let paths = paths_at("fresh");
+        write_cache(&paths, &catalog_json(vec![entry_json("only-on-disk")])).unwrap();
+
+        let catalog = fresh(&paths).expect("the cache answers");
+        let names: Vec<_> = catalog.entries.iter().map(|e| e.manifest.name.as_str()).collect();
+        assert_eq!(names, vec!["only-on-disk"]);
+    }
+
+    /// With no cache at all there is no age to read, so the boundary cannot vouch for anything and the
+    /// read falls through to a fetch.
+    #[test]
+    fn no_cache_has_no_age() {
+        assert!(cache_age(&paths_at("ageless")).is_none());
     }
 }

@@ -395,6 +395,9 @@ to the last consistent state. Two complementary nets sit on top, with distinct r
   a mid-swap failure rolls back — so a bad restore can never leave you worse off. An archive
   from a *newer* amenbo is refused (update first), and so is one written before the store became a
   single database (restore it with the amenbo that wrote it). Both prompt and allow cancellation.
+  Restore replaces the database rather than reading it, so it is the one command that still runs
+  when this build cannot open the store at all — which is what makes the backup a real way back
+  when a *newer* amenbo has already carried your data past this one (there is no downgrade).
   Save the archive wherever your own backup regime keeps files — an external drive, an iCloud
   folder — so it survives a lost PC; recovery needs no key or passphrase on any machine.
 - **Older archives** — an archive written before the store consolidation (several stores plus a

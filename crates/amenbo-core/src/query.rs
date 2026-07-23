@@ -1467,15 +1467,17 @@ impl DecisionFilter {
     }
 
     /// `current` is not a column on the decision (it is derived from the edges), so the caller looks
-    /// it up and passes it in. Likewise the link set behind `task:`: the caller reads it once and
-    /// passes it in (`linked_to_task` = the ids of the live decisions linked to the task named by
-    /// `task:`, or `None` when `task:` was not given). Both arguments exist so that nothing is
-    /// re-queried per decision.
+    /// it up and passes it in. Likewise the two id sets read once and passed in so nothing is
+    /// re-queried per decision: `linked_to_task` = the live decisions linked to the task named by
+    /// `task:` (or `None` when `task:` was not given), and `comment_text_hits` = the decisions whose
+    /// comment body matched `text:` (or `None` when `text:` was not given) — the comment arm of the
+    /// text search, mirroring the task side's EXISTS over `task_comment`.
     fn matches(
         &self,
         d: &crate::model::Decision,
         current: bool,
         linked_to_task: Option<&[i64]>,
+        comment_text_hits: Option<&[i64]>,
     ) -> bool {
         if self.task.is_some() && !linked_to_task.is_some_and(|ids| ids.contains(&d.id)) {
             return false;
@@ -1492,7 +1494,13 @@ impl DecisionFilter {
         }
         if let Some(text) = &self.text {
             let needle = text.to_lowercase();
-            if !d.title.to_lowercase().contains(&needle) && !d.body.to_lowercase().contains(&needle) {
+            // Text matches the title, the body, or any live comment body — the comment arm resolved by
+            // the caller into `comment_text_hits` (a set membership, not a per-decision re-query).
+            let in_comment = comment_text_hits.is_some_and(|ids| ids.contains(&d.id));
+            if !in_comment
+                && !d.title.to_lowercase().contains(&needle)
+                && !d.body.to_lowercase().contains(&needle)
+            {
                 return false;
             }
         }
@@ -1597,6 +1605,13 @@ pub fn decision_list(
         None => None,
     };
 
+    // The comment arm of `text:` — the decisions whose comment body matches, read once (the title and
+    // body arms stay in the in-memory match below). None when no `text:` was given.
+    let comment_text_hits = match &filter.text {
+        Some(t) => Some(read::decisions_with_comment_text(conn, t).map_err(crate::error::engine_on(conn))?),
+        None => None,
+    };
+
     // Row → a partial `Decision` (only the fields filter/sort need) plus what the card needs on the
     // side (the project ref and `linked_task_count`).
     struct Entry {
@@ -1623,7 +1638,7 @@ pub fn decision_list(
             let project = r.project_name.map(|name| crate::view::ProjectRef { id: r.project_id, name });
             Entry { decision, project, linked_task_count: r.linked_task_count, current: r.current }
         })
-        .filter(|e| filter.matches(&e.decision, e.current, linked_to_task.as_deref()))
+        .filter(|e| filter.matches(&e.decision, e.current, linked_to_task.as_deref(), comment_text_hits.as_deref()))
         .collect();
 
     // `sort_decisions` sorts a `&mut [&Decision]`. To bring `entries` into the same order, sort the

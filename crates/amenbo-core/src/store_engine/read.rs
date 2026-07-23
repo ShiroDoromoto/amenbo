@@ -1354,6 +1354,29 @@ pub fn decision_comment_list(conn: &Connection, decision_id: i64) -> Result<Vec<
     Ok(rows)
 }
 
+/// The decision ids with at least one live comment whose body matches `needle` (a case-insensitive
+/// substring) — the comment arm of `decision list`'s `text:` filter, the counterpart of the task
+/// side's EXISTS over `task_comment` (see the `text:` note at the top of this module). The caller
+/// reads this set **once** and folds it into the in-memory text match, so the whole listing costs one
+/// extra query rather than a per-decision comment scan. Ids come back distinct and in id order.
+pub fn decisions_with_comment_text(conn: &Connection, needle: &str) -> Result<Vec<i64>> {
+    const C: col::decision_comment::Cols = col::decision_comment::ALL;
+    let mut sel = Select::new();
+    sel.distinct();
+    let decision_id = sel.col(C.decision_id);
+    let mut sql = Sql::from(&sel, C.table);
+    let like = format!("%{}%", escape_like(&needle.to_lowercase()));
+    sql.push_where(Some(&Pred::like(C.text.lower(), like)))
+        .order_by([Sort::by(C.decision_id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let ids = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| decision_id.get(r))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<i64>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(ids)
+}
+
 /// One decision linked to a task (the reverse of decision→tasks): its conversational number, title and
 /// status. Lets `task show` surface the "why" records inline so an agent reads them alongside notes and
 /// comments instead of running a separate `decision list` pass.

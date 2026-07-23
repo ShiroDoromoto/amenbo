@@ -933,6 +933,46 @@ mod tests {
     }
 
     #[test]
+    fn decision_list_text_reaches_comment_bodies() {
+        use crate::query::{decision_list, DecisionListParams};
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        // The term appears in neither title nor body — only in a comment. Before the comment arm this
+        // matched nothing; now it hits, mirroring the task side's `text:` over comment bodies.
+        let d = add(tx, NewDecision {
+            title: "RDB を真実源にする".to_string(),
+            body: "engine+HLC で同期".to_string(),
+            project_id: pid,
+        }).unwrap();
+        add_comment(tx, d.id, ActorKind::Ai, "計測してから設計する方針で合意").unwrap();
+        // A second decision with the term nowhere, to prove the filter still narrows.
+        add(tx, NewDecision {
+            title: "OSS は英語表記".to_string(),
+            body: "README とコミットは英語".to_string(),
+            project_id: pid,
+        }).unwrap();
+
+        let r = decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
+            project_id: Some(pid),
+            filter_expr: Some("text:計測".to_string()),
+            sort: "-created".to_string(),
+            ..Default::default()
+        }).unwrap();
+        assert_eq!(r.count, 1, "a comment-body match hits");
+        assert_eq!(r.decisions[0].id, d.id);
+
+        // Case-insensitive, same as the title/body arms.
+        let r = decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
+            project_id: Some(pid),
+            filter_expr: Some("text:合意".to_string()),
+            sort: "-created".to_string(),
+            ..Default::default()
+        }).unwrap();
+        assert_eq!(r.count, 1, "a later term in the same comment also hits");
+    }
+
+    #[test]
     fn decision_list_with_body_carries_body_only_when_requested() {
         use crate::query::{decision_list, DecisionListParams};
         let e = new_engine();

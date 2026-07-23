@@ -68,28 +68,41 @@ jobs:
         working-directory: app
         run: npm ci
 
-      # Load the stable, self-signed release code-signing identity into a throwaway
-      # keychain so the build can sign each .app with a leaf that is fixed across
-      # versions — which is what lets the end user's notification authorization
-      # survive an update. Apple-independent (self-signed codeSigning cert). No-op if
-      # the secret is absent, so a fork without the secret still builds (ad-hoc).
-      - name: Import the mac release signing identity
+      # Load the Apple Developer ID identities (Application, for the .app; Installer,
+      # for the .pkg) into a throwaway keychain. A Developer ID Designated Requirement
+      # pins to the TEAM ID rather than to one certificate's hash, so the end user's
+      # notification authorization survives both an update and a certificate renewal —
+      # which the self-signed identity this replaced could not do (its DR carried the
+      # leaf's own hash, so reissuing it reset every grant).
+      # MAC_SIGN_RELEASE is derived from the secret's presence rather than hardcoded,
+      # so a fork without secrets still builds (ad-hoc, unsigned container).
+      - name: Import the mac Developer ID signing identities
         env:
-          MAC_SIGN_P12_BASE64: ${{ secrets.MAC_SIGN_P12_BASE64 }}
-          MAC_SIGN_P12_PASSWORD: ${{ secrets.MAC_SIGN_P12_PASSWORD }}
+          MAC_SIGN_RELEASE: ${{ secrets.MAC_DEVELOPER_ID_P12_BASE64 != '' && '1' || '' }}
+          MAC_DEVELOPER_ID_P12_BASE64: ${{ secrets.MAC_DEVELOPER_ID_P12_BASE64 }}
+          MAC_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.MAC_DEVELOPER_ID_P12_PASSWORD }}
         run: scripts/import-signing-cert-mac.sh
 
-      # One unified .pkg per arch: GUI in /Applications + the sidecar CLI
-      # symlinked onto PATH. tauri's beforeBuildCommand builds the CLI sidecar for the
-      # target triple; the Intel build cross-compiles from Apple Silicon.
-      # MAC_SIGN_IDENTITY makes dist-gui-mac re-sign each .app with the imported
-      # identity before packaging (unset → tauri's ad-hoc signature is kept).
-      # TAURI_SIGNING_* present → dist-gui-mac also emits the updater artifact (.app.tar.gz + .sig,
-      # tar of the re-signed .app). Absent on a fork → the updater step self-skips, the .pkg still
-      # builds. The key is password-protected, so both secrets are required.
-      - name: Build the mac installers (.pkg, both archs)
+      # One unified .pkg per arch: GUI in ~/Applications + the sidecar CLI symlinked
+      # onto PATH. tauri's beforeBuildCommand builds the CLI sidecar for the target
+      # triple; the Intel build cross-compiles from Apple Silicon.
+      # MAC_SIGN_RELEASE makes dist-gui-mac sign the .app (Developer ID Application,
+      # hardened runtime + timestamp) and the .pkg (Developer ID Installer); the
+      # MAC_NOTARY_* App Store Connect API key then has each notarized and stapled, so
+      # Gatekeeper stops warning and validation also succeeds offline. Both are
+      # derived from secret presence, so a fork without them still builds unsigned.
+      # TAURI_SIGNING_* present → dist-gui-mac also emits the updater artifact
+      # (.app.tar.gz + .sig, tar of the signed and STAPLED .app). Absent on a fork → the
+      # updater step self-skips, the .pkg still builds. The key is password-protected,
+      # so both secrets are required.
+      # This is the longest step in the release: notarization is a round trip to Apple
+      # per artifact (4 here — .app and .pkg, twice over), each waited on.
+      - name: Build the mac installers (.pkg, both archs) — signed + notarized
         env:
-          MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+          MAC_SIGN_RELEASE: ${{ secrets.MAC_DEVELOPER_ID_P12_BASE64 != '' && '1' || '' }}
+          MAC_NOTARY_KEY_P8_BASE64: ${{ secrets.MAC_NOTARY_KEY_P8_BASE64 }}
+          MAC_NOTARY_KEY_ID: ${{ secrets.MAC_NOTARY_KEY_ID }}
+          MAC_NOTARY_ISSUER_ID: ${{ secrets.MAC_NOTARY_ISSUER_ID }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |

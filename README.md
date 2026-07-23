@@ -162,10 +162,10 @@ amenbo ships as a single per-OS installer that carries both the GUI and the CLI
 (macOS `.pkg`, Windows NSIS, Linux `.deb`/`.rpm`), published on this repository's
 [Releases](https://github.com/ShiroDoromoto/amenbo/releases). Download the one for
 your platform and run it — it installs the desktop app and puts the `amenbo` CLI on
-your PATH in one step. The installers are self-signed rather than notarized, so the
-first launch shows the operating system's unsigned-app prompt (on macOS,
-right-click → **Open**; on Windows, SmartScreen's **More info** → **Run anyway**);
-once approved it does not recur.
+your PATH in one step. The macOS `.pkg` is signed with an Apple Developer ID and
+notarized, so it installs and launches with no warning. The Windows installer is not
+yet signed, so its first run shows SmartScreen's **More info** → **Run anyway**; once
+approved it does not recur.
 
 On Linux the `.deb`/`.rpm` are the system-wide route — they install to `/usr/bin`
 and put both the GUI and the CLI on PATH. A Linux GUI **AppImage** is published

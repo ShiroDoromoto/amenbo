@@ -4,9 +4,12 @@
 //! API shows no permission dialog (the plugin's `request_permission` is a stub that always returns
 //! Granted), never registers the app under System Settings > Notifications, and has delivery from an
 //! unregistered app silently dropped: no toast ever appears. `UNUserNotificationCenter` is the
-//! supported API — it registers the app, raises the one-time permission prompt, and works from a
-//! self-signed .app bundle with no notarization. It does require the app's bundle ID for
-//! `currentNotificationCenter`, so we must be running as a `.app`.
+//! supported API — it registers the app and raises the one-time permission prompt, and it asks
+//! nothing of the signature beyond there being one (a locally signed dev build works). It does
+//! require the app's bundle ID for `currentNotificationCenter`, so we must be running as a `.app`.
+//! What the signature does decide is how long a granted permission LASTS: macOS keys the grant to
+//! the app's Designated Requirement, which is why the distributed build is signed with a Developer
+//! ID whose DR pins to the team rather than to one certificate — see `scripts/codesign-release-mac.sh`.
 
 #![cfg(target_os = "macos")]
 

@@ -1,33 +1,80 @@
 #!/usr/bin/env bash
 # codesign-release-mac.sh — replace the .app's build-time ad-hoc signature with the
-# STABLE self-signed release identity, so the code signature (and its Designated
-# Requirement) is fixed across versions. macOS keys a notification authorization to
-# the app's signature; a fixed leaf is what lets the "allow notifications" grant
-# survive an update. Run after `npm run tauri build`, before the .app is packed into
-# the .pkg (pkgbuild does not re-sign the payload, so the signature carries through).
+# Apple **Developer ID Application** identity, under the hardened runtime and with a
+# secure timestamp. Run after `npm run tauri build`, before the .app is notarized and
+# packed into the .pkg (pkgbuild does not re-sign the payload, so both the signature
+# and the stapled ticket carry through).
 #
-# The identity name comes from the environment (the release CI sets it from a secret):
-#   MAC_SIGN_IDENTITY — the signing identity's common name (e.g. amenbo-release-signing),
-#                       already imported into a keychain by import-signing-cert-mac.sh.
+# Two things ride on this signature:
+#   - Notarization. Apple's notary service REJECTS anything not signed with a
+#     Developer ID under `--options runtime` and `--timestamp`; those two flags are
+#     not hardening for its own sake, they are the price of admission.
+#   - The user's notification authorization. macOS keys the grant to the app's
+#     Designated Requirement, and a Developer ID DR pins to the TEAM ID rather than to
+#     one certificate's own hash — so renewing the certificate does not reset it,
+#     which the self-signed identity this replaced could not manage.
 #
-# MAC_SIGN_IDENTITY unset → clean no-op: the .app keeps tauri's ad-hoc self-signature,
+# The identity is resolved out of the keychain by its well-known prefix rather than
+# named in a secret, so the certificate holder's legal name lives in no config file.
+# import-signing-cert-mac.sh puts it there on CI.
+#
+# MAC_SIGN_RELEASE unset → clean no-op: the .app keeps tauri's ad-hoc self-signature,
 # so a local `make dist-gui-mac` builds without any signing setup.
 set -euo pipefail
+
+# shellcheck source=scripts/mac-signing-lib.sh
+. "$(dirname "$0")/mac-signing-lib.sh"
 
 APP="${1:?usage: codesign-release-mac.sh <app-bundle>}"
 
 [ "$(uname -s)" = "Darwin" ] || { echo "→ codesign-release-mac.sh is macOS-only; nothing to do."; exit 0; }
 
-if [ -z "${MAC_SIGN_IDENTITY:-}" ]; then
-  echo "→ MAC_SIGN_IDENTITY unset — leaving the ad-hoc self-signature on $APP."
+if ! mac_sign_release_on; then
+  echo "→ MAC_SIGN_RELEASE unset — leaving the ad-hoc self-signature on $APP."
   exit 0
 fi
 [ -d "$APP" ] || { echo "✗ app bundle not found: $APP"; exit 1; }
 
-echo "→ codesigning $APP with the stable release identity: $MAC_SIGN_IDENTITY"
-# --deep signs the nested code too (the GUI binary and the CLI sidecar); mirrors the
-# dev path in codesign-local.sh. Self-signed and un-notarized, so no timestamp.
-codesign --force --deep --sign "$MAC_SIGN_IDENTITY" "$APP"
+IDENTITY="$(mac_signing_identity_or_die "Developer ID Application")"
+
+echo "→ codesigning $APP with the Developer ID Application identity (hardened runtime + timestamp)"
+
+# Sign inside-out, not with --deep. Apple deprecated --deep for distribution: it
+# applies ONE set of options to everything it reaches, which is exactly wrong once
+# nested code needs the hardened runtime in its own right — and a bundle whose nested
+# code was sealed with the wrong options is rejected at notarization, long after the
+# build. So: every nested Mach-O first (the CLI sidecar `amenbo`, and whatever a
+# future bundle layout adds), then the bundle itself last, which seals the main
+# executable.
+nested=()
+while IFS= read -r -d '' f; do
+  case "$(file -b "$f")" in
+    Mach-O*) nested+=("$f") ;;
+  esac
+done < <(find "$APP/Contents" -type f -print0)
+
+for f in ${nested[@]+"${nested[@]}"}; do
+  echo "  · nested: ${f#"$APP/"}"
+  codesign --force --options runtime --timestamp --sign "$IDENTITY" "$f"
+done
+
+codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
+
 echo "→ signed. Authority / flags:"
-codesign -dv --verbose=4 "$APP" 2>&1 | grep -iE 'Authority|Signature|flags' || true
+codesign -dv --verbose=4 "$APP" 2>&1 | grep -iE 'Authority|Timestamp|Signature|flags' || true
+
+# A Team-ID-anchored Designated Requirement is the whole reason for moving off the
+# self-signed identity — it is what lets a certificate renewal happen without
+# resetting every user's notification grant. So assert it rather than trust it: the DR
+# must be anchored to Apple and pinned to a team OU, never to a bare leaf hash.
+echo "→ designated requirement:"
+dr="$(codesign -d -r- "$APP" 2>/dev/null | sed -n 's/^designated => //p')"
+echo "  $dr"
+case "$dr" in
+  *"anchor apple generic"*"subject.OU"*) ;;
+  *)
+    echo "✗ the designated requirement is not Team-ID-anchored — a certificate renewal would reset every user's notification authorization." >&2
+    exit 1
+    ;;
+esac

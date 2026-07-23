@@ -17,14 +17,16 @@
 # copy) keeps the CLI and GUI atomically in sync across updates. The postinstall
 # also adds ~/.local/bin to the user's login PATH (idempotent).
 #
-# Signing model: the .pkg is an unsigned *container*; the .app and its nested
-# binaries inside carry the signature codesign-release-mac.sh applied just before
-# this step — the stable self-signed release identity in CI, or tauri's build-time
-# ad-hoc signature for a local build. The release identity is a codeSigning cert,
-# which `productsign` cannot use to sign an installer anyway. Self-signed, not
-# notarized — Gatekeeper warns on first open (right-click → Open), the accepted
-# stance. What matters for updates keys on the .app/CLI cert leaf (macOS binds the
-# notification authorization to it), not on the installer package signature.
+# Signing model: the .app inside already carries the Developer ID Application
+# signature and the stapled notarization ticket that codesign-release-mac.sh and
+# notarize-mac.sh applied just before this step (pkgbuild does not re-sign or rewrite
+# the payload, so both carry through). This script then signs the *container* with the
+# **Developer ID Installer** identity — a separate certificate, because an installer
+# package is not code and a codeSigning cert cannot sign one. That signature is what
+# makes the .pkg tamper-evident on its way to a user; the caller notarizes and staples
+# the finished package afterwards. With MAC_SIGN_RELEASE unset the container stays
+# unsigned and the .app keeps tauri's ad-hoc signature, so a local build needs no
+# signing setup at all.
 #
 # Usage: build-pkg-mac.sh <app-path> <out-pkg> <version> [arch]
 #
@@ -32,6 +34,9 @@
 # arch of its own, so a stale bundle from an earlier build would ship under the other
 # arch's name and only fail on the user's Mac. Given, we check the slices we ship.
 set -euo pipefail
+
+# shellcheck source=scripts/mac-signing-lib.sh
+. "$(dirname "$0")/mac-signing-lib.sh"
 
 APP="${1:?usage: build-pkg-mac.sh <app-path> <out-pkg> <version> [arch]}"
 OUT="${2:?usage: build-pkg-mac.sh <app-path> <out-pkg> <version> [arch]}"
@@ -99,8 +104,8 @@ APP_LAUNCH_NAME="${APP_NAME%.app}"
 # instead of launching the new binary), pause for the quit to land, then open. The
 # relaunch/PATH block is best-effort — wrapped so no failure can abort postinstall
 # (which would fail the install), with `set -e` scoped to the CLI symlink that must
-# succeed. Self-signed/un-notarized, so the relaunched app may hit Gatekeeper on
-# first open — verified at release time.
+# succeed. The distributed .app is Developer ID signed and stapled, so this relaunch
+# meets no Gatekeeper prompt; a locally built, unsigned one still can.
 cat > "$SCRIPTS/postinstall" <<POSTINSTALL
 #!/bin/bash
 set -e
@@ -224,10 +229,27 @@ cat > "$DIST" <<DISTXML
 </installer-gui-script>
 DISTXML
 
+# Sign the product archive with the Developer ID Installer identity when the release
+# signing path is on. --sign is given to productbuild rather than run as a separate
+# productsign pass: one step, and no window in which an unsigned .pkg exists at the
+# release-declared path where a later failure could leave it to be picked up.
+sign_args=()
+if mac_sign_release_on; then
+  installer_identity="$(mac_signing_identity_or_die "Developer ID Installer")"
+  sign_args=(--sign "$installer_identity")
+fi
+
 productbuild \
   --distribution "$DIST" \
   --package-path "$(dirname "$COMPONENT")" \
+  ${sign_args[@]+"${sign_args[@]}"} \
   "$OUT"
 
 echo "→ built $OUT (per-user: installs $APP_NAME to ~/Applications, symlinks CLI to ~/.local/bin/amenbo)"
-echo "  unsigned container (self-signed .app inside); Gatekeeper warns on first open (right-click → Open)"
+if mac_sign_release_on; then
+  # Report what the signature actually says, not what we asked for. The chain must
+  # terminate at Apple's root; a self-signed container would still "have a signature".
+  pkgutil --check-signature "$OUT"
+else
+  echo "  unsigned container (ad-hoc .app inside); Gatekeeper warns on first open (right-click → Open)"
+fi

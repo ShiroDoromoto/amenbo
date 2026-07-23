@@ -159,12 +159,18 @@ dist-gui:
 
 ## Build the mac unified .pkg installer into dist/. Per-user: the GUI .app goes to
 ## ~/Applications and the bundled CLI (sidecar) is symlinked to ~/.local/bin/amenbo in postinstall
-## = GUI+CLI from one installer, no elevation. After the tauri build, codesign-release-mac.sh re-signs the .app with the stable
-## self-signed release identity when MAC_SIGN_IDENTITY is set (the release CI, after
-## import-signing-cert-mac.sh); with it unset (a local build) the .app keeps tauri's ad-hoc
-## signature. A fixed leaf across versions is what lets the end user's notification authorization
-## survive updates. The .pkg itself stays an unsigned container (a codeSigning cert cannot sign an
-## installer; the Gatekeeper first-run warning stays under self-signing regardless).
+## = GUI+CLI from one installer, no elevation.
+## Signing runs off ONE switch, MAC_SIGN_RELEASE (set by the release CI after
+## import-signing-cert-mac.sh has loaded the Developer ID identities; unset for a local build, which
+## then keeps tauri's ad-hoc signature and produces an unsigned container). With it on, the four
+## steps below are ordered, not merely sequential:
+##   1. codesign-release-mac.sh   — Developer ID Application, hardened runtime + timestamp
+##   2. notarize-mac.sh app       — notarize and STAPLE the .app
+##   3. build-pkg-mac.sh          — package the stapled .app, signed with Developer ID Installer
+##   4. notarize-mac.sh pkg       — notarize and staple the finished installer
+## The .app is stapled at step 2, BEFORE step 3 packages it and before the tar below — because the
+## tar is the GUI self-update artifact, and a ticket stapled after it was tarred would never reach an
+## updating user. Both the installed copy and the updated copy therefore validate offline.
 ## wharfy.yaml declares this .pkg as the mac BYO-bundle. The build runs on public CI (release.yml)
 ## on each OS's native runner.
 ## arch is MAC_GUI_ARCH (arm64 default / amd64 for the Intel build). The Intel build is a
@@ -174,10 +180,12 @@ dist-gui-mac:
 	@mkdir -p $(DIST_DIR)
 	cd app && npm run tauri build -- --target $(MAC_GUI_TRIPLE)
 	scripts/codesign-release-mac.sh "$(MAC_GUI_APP)"
+	scripts/notarize-mac.sh app "$(MAC_GUI_APP)"
 	scripts/build-pkg-mac.sh "$(MAC_GUI_APP)" "$(GUI_PKG_DIST)" "$(VERSION)" "$(MAC_GUI_ARCH)"
+	scripts/notarize-mac.sh pkg "$(GUI_PKG_DIST)"
 	@ls -1 "$(GUI_PKG_DIST)"
-	@# Updater artifact: tar the re-signed .app (AppleDouble-free) and minisign-sign it, only when
-	@# the signing key is present (release CI). Skipped silently for keyless dev/dist builds.
+	@# Updater artifact: tar the signed and STAPLED .app (AppleDouble-free) and minisign-sign it, only
+	@# when the signing key is present (release CI). Skipped silently for keyless dev/dist builds.
 	@if [ -n "$$TAURI_SIGNING_PRIVATE_KEY" ]; then \
 	  COPYFILE_DISABLE=1 tar czf "$(MAC_UPDATER_DIST)" -C "$(MAC_BUNDLE_DIR)/macos" amenbo.app; \
 	  ( cd app && npx tauri signer sign "$(CURDIR)/$(MAC_UPDATER_DIST)" ); \
@@ -486,8 +494,9 @@ gui-dev:
 	@echo "→ amenbo (dev).app (dev; work.amenbo.app.dev)"
 
 ## Applying the prod GUI locally is retired (it is distributed via the unified installer). Replacing
-## /Applications' prod amenbo.app locally clobbers the release-signed build with a self-signed one and
-## causes version skew and keychain re-prompts. Apply prod only via tag push → public CI → the promote
+## /Applications' prod amenbo.app locally clobbers the Developer ID signed, notarized build with a
+## self-signed one — which changes the Designated Requirement and so drops the notification
+## authorization — and causes version skew and keychain re-prompts. Apply prod only via tag push → public CI → the promote
 ## workflow → the unified installer.
 install-gui:
 	@echo "✗ the prod GUI's 'make install-gui' is retired (it is distributed via the unified installer)."

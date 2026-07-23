@@ -491,9 +491,9 @@ what makes single-machine multi-store isolation safe.
 ## Contributing
 
 Issues — bug reports, questions, feature ideas — are welcome. For pull requests,
-please open an issue to discuss first; see [CONTRIBUTING.md](CONTRIBUTING.md). To
-report a security vulnerability, don't use a public issue — follow
-[SECURITY.md](SECURITY.md).
+please open an issue to discuss first; see [CONTRIBUTING.md](CONTRIBUTING.md). Taking
+part means holding to the [Code of Conduct](CODE_OF_CONDUCT.md). To report a security
+vulnerability, don't use a public issue — follow [SECURITY.md](SECURITY.md).
 
 ## License
 

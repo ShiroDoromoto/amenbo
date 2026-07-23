@@ -13,6 +13,11 @@ because it doesn't fit where the project is going. Discussing first saves that.
 Open an issue. There are templates for a bug report and a feature request — filling
 one in gives the maintainer what they need to act without a round-trip.
 
+## Code of conduct
+
+Taking part here — an issue, a pull request, a discussion — means holding to the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Security
 
 Don't file a security problem as a public issue. See [SECURITY.md](SECURITY.md) for

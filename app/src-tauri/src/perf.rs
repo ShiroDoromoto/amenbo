@@ -29,12 +29,11 @@ const MAX_LOG_FILES: usize = 7;
 /// Reload handle for the running filter. `config_set_perf_log` switches the level through it.
 static RELOAD: OnceLock<reload::Handle<EnvFilter, Registry>> = OnceLock::new();
 
-/// Where perf logs are written: `logs/`, directly under the user-level app-data dir. Install carries on even if
-/// this fails to resolve — the writer is lazy, so unless perf logging is turned ON the path is never touched.
+/// Where perf logs are written: the shared [`crate::diag::logs_dir`], which is also the diagnostic log's.
+/// Install carries on even if that fails to resolve — the writer is lazy, so unless perf logging is turned
+/// ON the path is never touched.
 fn log_dir() -> PathBuf {
-    amenbo_core::config::Paths::resolve()
-        .map(|p| p.base_dir.join("logs"))
-        .unwrap_or_else(|_| PathBuf::from("logs"))
+    crate::diag::logs_dir().unwrap_or_else(|| PathBuf::from("logs"))
 }
 
 /// Lazy rolling writer: the rolling appender is built on the first write that actually happens. While OFF the
@@ -94,7 +93,7 @@ fn initial_filter(config: &Config) -> EnvFilter {
 
 /// Install the perf subscriber exactly once (called from `tauri` setup). The filter is held reloadable, so even
 /// when it starts OFF, `config_set_perf_log` can switch it ON while the app runs. It coexists with
-/// `tauri_plugin_log` (the `log` crate, registered in debug builds), which is a separate ecosystem — we take the
+/// `tauri_plugin_log` (the `log` crate, registered by [`crate::diag`]), which is a separate ecosystem — we take the
 /// global *tracing* subscriber but deliberately leave the `log` global logger alone, so `tauri_plugin_log` can own
 /// it. (`SubscriberInitExt::try_init` would instead install the `tracing-log` bridge and grab that logger, so the
 /// later `tauri_plugin_log` `set_logger` would panic on a double init.)

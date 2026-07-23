@@ -5,6 +5,7 @@
 
 mod blobproto;
 mod commands;
+mod diag;
 mod error;
 #[cfg(target_os = "macos")]
 mod macos_notify;
@@ -75,13 +76,10 @@ pub fn run() {
         .map(|p| amenbo_core::config::Config::load(&p.config_file))
         .unwrap_or_default();
       perf::install(&config);
-      if cfg!(debug_assertions) {
-        app.handle().plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
-      }
+      // The diagnostic log (`AMB-D-382`), in every build — see the `diag` module for what it may hold and why
+      // its size is bounded. A logger that cannot start is not a reason to refuse to start the app, so
+      // the error is dropped rather than raised: there is nowhere left to report it to anyway.
+      let _ = app.handle().plugin(diag::logger().build());
       // The folder picker ("open a folder" = bind to an existing store).
       app.handle().plugin(tauri_plugin_dialog::init())?;
       app.handle().plugin(tauri_plugin_notification::init())?;

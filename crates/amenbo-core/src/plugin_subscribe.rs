@@ -48,7 +48,7 @@ use std::path::PathBuf;
 use crate::plugin_dispatch::{Subscriber, Subscribers};
 use crate::plugin_exec::PluginInvocation;
 use crate::plugin_inject;
-use crate::plugin_manifest::Manifest;
+use crate::plugin_manifest::{Face, Manifest};
 use crate::plugin_trust;
 use crate::store::Store;
 
@@ -85,7 +85,7 @@ impl<'a> EnabledSubscribers<'a> {
 }
 
 impl Subscribers for EnabledSubscribers<'_> {
-    fn resolve(&self, event: &str, project: Option<i64>) -> Vec<Subscriber> {
+    fn resolve(&self, event: &str, project: Option<i64>, face: Face) -> Vec<Subscriber> {
         let mut subscribers = Vec::new();
         for plugin in self.installed {
             // Enabled (the one gate its author declared is open, `AMB-D-351`/`AMB-D-379`) and subscribed
@@ -108,9 +108,17 @@ impl Subscribers for EnabledSubscribers<'_> {
                     continue;
                 }
             }
-            if !plugin.manifest.events.iter().any(|e| e.event == event) {
+            // Subscribed to this event, and declaring the face driving this dispatch (`AMB-D-383`): a
+            // `faces:[cli]` hook stays silent on a GUI drive and vice versa. The matching subscription also
+            // carries `reply`, which rides down to `deliver` — it is what tells the CLI face to run this one
+            // synchronously and relay its stderr (and, since `reply:true` is pinned to `faces:[cli]`, a GUI
+            // drive never resolves a replying subscriber). A plugin subscribes to one event at most once, so
+            // the first match on (event, face) is the subscription.
+            let Some(subscription) =
+                plugin.manifest.events.iter().find(|e| e.event == event && e.faces.contains(&face))
+            else {
                 continue;
-            }
+            };
             // Compatible with this build (`AMB-D-359`). Checked here and not only at `enable`, because
             // amenbo updates underneath an install: a plugin enabled against the old payload contract is
             // dropped rather than fed one it cannot read — best-effort like a config that will not
@@ -153,6 +161,7 @@ impl Subscribers for EnabledSubscribers<'_> {
                 plugin: plugin.name.clone(),
                 invocation,
                 config: injection.text,
+                reply: subscription.reply,
             });
         }
         subscribers
@@ -252,7 +261,7 @@ mod tests {
         let plugins = [installed("slack", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        let subs = resolver.resolve("task.created", None);
+        let subs = resolver.resolve("task.created", None, Face::Cli);
         assert_eq!(subs.len(), 1);
         assert_eq!(subs[0].invocation.program, PathBuf::from("/plugins/slack"));
     }
@@ -267,7 +276,7 @@ mod tests {
         let plugins = [installed("slack", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        let subs = resolver.resolve("task.created", None);
+        let subs = resolver.resolve("task.created", None, Face::Cli);
         assert_eq!(subs[0].plugin, "slack");
     }
 
@@ -278,7 +287,7 @@ mod tests {
         let plugins = [installed("slack", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert!(resolver.resolve("task.created", None).is_empty(), "an unenabled plugin never fires");
+        assert!(resolver.resolve("task.created", None, Face::Cli).is_empty(), "an unenabled plugin never fires");
     }
 
     /// Enabled but not subscribed to this event: nothing fires.
@@ -289,7 +298,7 @@ mod tests {
         let plugins = [installed("slack", &["comment.added"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert!(resolver.resolve("task.created", None).is_empty(), "only the subscribed event fires it");
+        assert!(resolver.resolve("task.created", None, Face::Cli).is_empty(), "only the subscribed event fires it");
     }
 
     /// Enabled and subscribed, but incompatible with this build: it is dropped with a warning rather than
@@ -303,7 +312,7 @@ mod tests {
         let plugins = [plugin];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert!(resolver.resolve("task.created", None).is_empty(), "a floor this build cannot meet");
+        assert!(resolver.resolve("task.created", None, Face::Cli).is_empty(), "a floor this build cannot meet");
     }
 
     /// One incompatible plugin never silences the rest: delivery is best-effort (`AMB-D-352`).
@@ -318,7 +327,7 @@ mod tests {
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
         let fired: Vec<_> = resolver
-            .resolve("task.created", None)
+            .resolve("task.created", None, Face::Cli)
             .into_iter()
             .map(|s| s.invocation.program)
             .collect();
@@ -341,7 +350,7 @@ mod tests {
         )];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        let subs = resolver.resolve("task.created", None);
+        let subs = resolver.resolve("task.created", None, Face::Cli);
         assert_eq!(subs.len(), 1);
         // Secret → env, off the payload.
         assert_eq!(
@@ -368,7 +377,7 @@ mod tests {
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
         let fired: Vec<_> = resolver
-            .resolve("task.created", None)
+            .resolve("task.created", None, Face::Cli)
             .into_iter()
             .map(|s| s.invocation.program)
             .collect();
@@ -387,8 +396,8 @@ mod tests {
         let plugins = [project_scoped("slack", &["task.created"])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert_eq!(resolver.resolve("task.created", Some(a)).len(), 1, "on in a");
-        assert!(resolver.resolve("task.created", Some(b)).is_empty(), "off in b");
+        assert_eq!(resolver.resolve("task.created", Some(a), Face::Cli).len(), 1, "on in a");
+        assert!(resolver.resolve("task.created", Some(b), Face::Cli).is_empty(), "off in b");
     }
 
     /// An event whose project cannot be named fires no project-scoped plugin: without a project there is
@@ -401,7 +410,7 @@ mod tests {
         let plugins = [project_scoped("slack", &["task.created"])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert!(resolver.resolve("task.created", None).is_empty());
+        assert!(resolver.resolve("task.created", None, Face::Cli).is_empty());
     }
 
     /// A machine-scoped plugin is the device's answer wherever the event happened — the project it
@@ -414,7 +423,63 @@ mod tests {
         let plugins = [installed("slack", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert_eq!(resolver.resolve("task.created", Some(p)).len(), 1);
-        assert_eq!(resolver.resolve("task.created", None).len(), 1);
+        assert_eq!(resolver.resolve("task.created", Some(p), Face::Cli).len(), 1);
+        assert_eq!(resolver.resolve("task.created", None, Face::Cli).len(), 1);
+    }
+
+    // ───────────────────── the face a subscription fires on (`AMB-D-383`) ──────────────────────────
+
+    /// An enabled plugin whose subscription carries `subscription` — the seam for placing a face-narrowed or
+    /// replying subscription on an installed plugin.
+    fn installed_sub(name: &str, subscription: EventSubscription) -> InstalledPlugin {
+        let mut plugin = installed(name, &[], vec![]);
+        plugin.manifest.events = vec![subscription];
+        plugin
+    }
+
+    /// A subscription fires only on a face it declares: a `faces:[cli]` hook resolves on a CLI drive and
+    /// stays silent on a GUI one. This is the filter that keeps a reply off the GUI, where no caller waits.
+    #[test]
+    fn a_subscription_fires_only_on_a_declared_face() {
+        let (mut store, _dir) = store_at("face-filter");
+        enable_machine(&mut store, "worktree");
+        let sub = EventSubscription {
+            event: "task.status_changed".into(),
+            faces: vec![Face::Cli],
+            reply: false,
+        };
+        let plugins = [installed_sub("worktree", sub)];
+
+        let resolver = EnabledSubscribers::new(&plugins, &store);
+        assert_eq!(resolver.resolve("task.status_changed", None, Face::Cli).len(), 1, "fires on cli");
+        assert!(
+            resolver.resolve("task.status_changed", None, Face::Gui).is_empty(),
+            "the same hook stays silent on the face it did not declare"
+        );
+    }
+
+    /// The matching subscription's `reply` flag rides onto the resolved subscriber, so `deliver` knows to run
+    /// it synchronously and relay its stderr (`AMB-D-383`). A plain subscription resolves `reply:false`.
+    #[test]
+    fn a_replying_subscription_resolves_a_replying_subscriber() {
+        let (mut store, _dir) = store_at("reply-flag");
+        enable_machine(&mut store, "worktree");
+        enable_machine(&mut store, "slack");
+        let advice = EventSubscription {
+            event: "task.status_changed".into(),
+            faces: vec![Face::Cli],
+            reply: true,
+        };
+        let plugins = [
+            installed_sub("worktree", advice),
+            installed("slack", &["task.status_changed"], vec![]),
+        ];
+
+        let resolver = EnabledSubscribers::new(&plugins, &store);
+        let subs = resolver.resolve("task.status_changed", None, Face::Cli);
+        let worktree = subs.iter().find(|s| s.plugin == "worktree").expect("the advice hook fired");
+        assert!(worktree.reply, "the replying subscription resolves a replying subscriber");
+        let slack = subs.iter().find(|s| s.plugin == "slack").expect("the notification fired too");
+        assert!(!slack.reply, "a plain subscription resolves a non-replying subscriber");
     }
 }

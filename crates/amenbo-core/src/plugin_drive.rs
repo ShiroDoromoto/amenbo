@@ -75,7 +75,7 @@ pub fn drive_persisted(
     log: Option<&std::path::Path>,
 ) -> Result<Delivered> {
     let cursor = persisted_cursor(engine)?;
-    let delivered = deliver(engine.conn(), cursor, subs, log)?;
+    let delivered = deliver(engine.conn(), cursor, subs, face, log)?;
     if delivered.cursor != cursor {
         // Everything through the new cursor is now delivered (or, on a gap resync, jumped past and
         // accepted as lost — either way the dispatcher will never read it again), so the same call that
@@ -119,7 +119,7 @@ mod tests {
         invocation: PluginInvocation,
     }
     impl Subscribers for Fixed {
-        fn resolve(&self, event: &str, _project: Option<i64>) -> Vec<Subscriber> {
+        fn resolve(&self, event: &str, _project: Option<i64>, _face: Face) -> Vec<Subscriber> {
             if self.events.contains(&event) {
                 vec![Subscriber::new("fixed", self.invocation.clone())]
             } else {

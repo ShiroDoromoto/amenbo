@@ -2390,6 +2390,12 @@ fn with_dispatch(
     let subscribers = EnabledSubscribers::new(&installed, store);
     match store.drive_plugins_persisted(Face::Cli, &subscribers) {
         Ok(delivered) => {
+            // A `reply:true` hook (worktree advice, `AMB-D-383`) ran synchronously; relay its stderr to the
+            // caller — the AI reads it off this command's stderr and decides. Surface it before joining the
+            // fire-and-forget hooks so the advice lands promptly, named by the plugin that gave it.
+            for reply in &delivered.replies {
+                eprintln!("[{}] {}", reply.plugin, reply.stderr.trim_end());
+            }
             for hook in delivered.hooks {
                 let _ = hook.join();
             }

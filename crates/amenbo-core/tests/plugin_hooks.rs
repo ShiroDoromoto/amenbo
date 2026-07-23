@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use amenbo_core::plugin_exec::PluginInvocation;
-use amenbo_core::plugin_hooks::{fire_with_timeout, Hook};
+use amenbo_core::plugin_hooks::{fire_with_timeout, run_reply, Hook};
 
 /// A per-hook bound generous enough that even a fork-storm-saturated machine (the whole `make test`
 /// gate running in parallel) reaps a trivial hook well inside it — so these tests never invert on the
@@ -176,4 +176,47 @@ fn an_injected_secret_never_reaches_the_log() {
     assert!(!raw.contains("T0P-53CR3T"), "the injected secret is not in the log: {raw}");
 
     let _ = std::fs::remove_file(&log);
+}
+
+// ───────────────────── the synchronous reply path (`AMB-D-383`) ────────────────────────────────────
+
+/// `run_reply` runs its hook synchronously and hands back what it wrote to stderr — the advice a `reply:true`
+/// worktree hook produces, which the caller surfaces. The stderr is returned whatever the exit code, since
+/// stderr is the advice channel (`AMB-D-353`), and the run is also recorded in the execution log.
+#[test]
+fn run_reply_returns_the_hooks_stderr_and_logs_it() {
+    use amenbo_core::plugin_log::{self, Outcome};
+
+    let log = amenbo_scratch::scratch("plugin-hooks-reply").join(plugin_log::FILE_NAME);
+    let _ = std::fs::remove_file(&log);
+
+    let advice = script("advice.sh", "#!/bin/sh\necho 'run the worktree' >&2\nexit 0\n");
+    let reply = run_reply(&hook_for("worktree", &advice), GENEROUS, Some(&log));
+    assert_eq!(reply.as_deref().map(str::trim), Some("run the worktree"));
+
+    let lines = plugin_log::read(&log);
+    assert_eq!(lines.len(), 1, "the reply run is recorded too, not just relayed");
+    assert_eq!(lines[0].outcome, Outcome::Ok);
+
+    let _ = std::fs::remove_file(&log);
+}
+
+/// A reply hook that writes nothing to stderr yields no reply — an empty reply is not carried, so the caller
+/// has nothing to surface. It still ran and was logged.
+#[test]
+fn run_reply_carries_nothing_when_the_hook_is_silent() {
+    let quiet = script("quiet.sh", "#!/bin/sh\nexit 0\n");
+    assert!(run_reply(&hook_for("worktree", &quiet), GENEROUS, None).is_none());
+}
+
+/// A reply hook that overruns its bound is killed and yields no reply (`AMB-D-383`: overrun is dropped) —
+/// the caller is not made to wait on a wedged advice hook. The short bound and the long sleep are spread far
+/// apart so the drop is on the overrun, not on a slow spawn.
+#[test]
+fn run_reply_drops_an_overrunning_hook() {
+    let start = Instant::now();
+    let slow = script("slow-advice.sh", "#!/bin/sh\nsleep 3\necho 'too late' >&2\n");
+    let reply = run_reply(&hook_for("worktree", &slow), Duration::from_millis(300), None);
+    assert!(reply.is_none(), "an overrunning reply hook carries nothing back");
+    assert!(start.elapsed() < Duration::from_secs(3), "and it did not wait the hook out");
 }

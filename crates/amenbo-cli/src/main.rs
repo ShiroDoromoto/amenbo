@@ -966,7 +966,7 @@ fn plugin_update_check_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError
             .collect();
         print_json(&json!({ "count": rows.len(), "updates": rows }));
     } else if updates.is_empty() {
-        human(flags, "Everything installed matches what the catalog publishes.".to_string());
+        human(flags, "Everything installed matches what the catalog publishes.");
     } else {
         for u in &updates {
             human(flags, format!("{}  update available  {}", u.name, u.available.desc));

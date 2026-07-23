@@ -21,7 +21,8 @@ use serde_json::json;
 use amenbo_core::config::Paths;
 use amenbo_core::model::{ActorKind, Attachment, AttachmentTarget, Priority, TaskStatus, View};
 use amenbo_core::ops::Position;
-use amenbo_core::plugin_dispatch::NoSubscribers;
+use amenbo_core::plugin_installed;
+use amenbo_core::plugin_subscribe::EnabledSubscribers;
 use amenbo_core::reach::Reach;
 use amenbo_core::worktree;
 use amenbo_core::{activity_log, ops, query, time, Store};
@@ -1922,16 +1923,29 @@ fn parse_date_opt(s: &Option<String>) -> Result<Option<NaiveDate>, CliError> {
 /// exits so none is cut short (`AMB-D-367` / `AMB-D-352`). Only on success: if the command errored its
 /// mutation rolled back, so there is nothing new to dispatch.
 ///
-/// Until the install lifecycle enumerates what is installed (`AMB-T-1979`), [`NoSubscribers`] is the honest
-/// resolver — nothing is installed, so nothing fires; the cursor still walks and persists, so a plugin
-/// enabled later starts from what fires *next*, not the whole backlog. A dispatch failure is a warning,
-/// never the command's exit: the mutation is already committed.
+/// Who fires is [`EnabledSubscribers`]'s answer, over the plugins installed on this machine
+/// ([`plugin_installed::installed`]) read once per drive: the resolver is a pure function of the state it
+/// is handed, and this mount is what hands it (`AMB-T-2032`). With nothing installed it resolves nobody,
+/// and the cursor still walks and persists, so a plugin installed later starts from what fires *next*, not
+/// the whole backlog. A dispatch failure is a warning, never the command's exit: the mutation is already
+/// committed.
 fn with_dispatch(
     store: &mut Store,
     op: impl FnOnce(&mut Store) -> Result<i32, CliError>,
 ) -> Result<i32, CliError> {
     let code = op(store)?;
-    match store.drive_plugins_persisted(&NoSubscribers) {
+    // A directory that will not read is not "nothing is installed": drive nothing rather than walk the
+    // cursor past events no subscriber was ever offered. The events stay in the outbox, and the next run
+    // reads the directory again and delivers them.
+    let installed = match plugin_installed::installed(&store.paths) {
+        Ok(installed) => installed,
+        Err(e) => {
+            eprintln!("warning: could not read the installed plugins, so none was dispatched: {e}");
+            return Ok(code);
+        }
+    };
+    let subscribers = EnabledSubscribers::new(&installed, &store.config, store);
+    match store.drive_plugins_persisted(&subscribers) {
         Ok(delivered) => {
             for hook in delivered.hooks {
                 let _ = hook.join();

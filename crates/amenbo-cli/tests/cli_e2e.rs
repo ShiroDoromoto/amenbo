@@ -3898,3 +3898,62 @@ fn the_plugin_gate_has_a_project_tier_that_overrides_the_machine_one() {
     assert!(inherited["plugins"][0]["project_override"].is_null(), "no override left");
     assert_eq!(cli.json(&["plugin", "inherit", "slack", "--json"])["dropped"], false);
 }
+
+/// The mutating CLI drives the observation dispatcher over what is *installed and enabled*: a subscribed
+/// plugin is actually run, with the event payload on its stdin, before the command's process exits
+/// (`AMB-D-367`). Its neighbours are left alone — a plugin that subscribes to nothing never runs.
+#[cfg(unix)]
+#[test]
+fn a_mutating_command_fires_the_enabled_plugin_that_subscribes_to_it() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    // Two installs, one subscription between them: only `logger` asks for `task.created`.
+    let capture = cli.home.join("fired.json");
+    install_subscribing_plugin(&cli, "logger", &["task.created"]);
+    install_subscribing_plugin(&cli, "quiet", &[]);
+    std::fs::write(
+        cli.home.join("plugins").join("logger").join("logger"),
+        format!("#!/bin/sh\ncat > '{}'\n", capture.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(
+        cli.home.join("plugins").join("logger").join("logger"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    cli.json(&["plugin", "enable", "logger", "--json"]);
+    cli.json(&["plugin", "enable", "quiet", "--json"]);
+
+    // A task add commits, the dispatcher drains what it appended, and the CLI joins the fire before it
+    // exits — so the payload is already on disk when the command returns.
+    let pid = cli.bound_project();
+    let added = cli.json(&["task", "add", "--title", "発火の確認", "--project", &pid, "--json"]);
+    let id = id_str(&added["task"]["id"]);
+
+    let payload: Value =
+        serde_json::from_str(&std::fs::read_to_string(&capture).expect("the plugin was run")).unwrap();
+    assert_eq!(payload["event"], "task.created");
+    assert_eq!(id_str(&payload["id"]), id, "the payload names the task that was created");
+    assert_eq!(payload["actor"], "human");
+
+    // The cursor advanced with it: a second mutation delivers only its own event, never the first again.
+    cli.json(&["task", "add", "--title", "二件目", "--project", &pid, "--json"]);
+    let second: Value = serde_json::from_str(&std::fs::read_to_string(&capture).unwrap()).unwrap();
+    assert_ne!(second["id"], payload["id"], "the second run fired for the second task");
+}
+
+/// Plant an installed plugin that subscribes to `events` — [`install_plugin`] with the manifest field the
+/// dispatch resolver reads. The executable it lays down does nothing; a caller that wants the plugin to
+/// *do* something overwrites it.
+#[cfg(unix)]
+fn install_subscribing_plugin(cli: &Cli, name: &str, events: &[&str]) {
+    install_plugin(cli, name, serde_json::json!([]));
+    let manifest_file = cli.home.join("plugins").join(name).join("manifest.json");
+    let mut manifest: Value =
+        serde_json::from_str(&std::fs::read_to_string(&manifest_file).unwrap()).unwrap();
+    manifest["events"] = serde_json::json!(events);
+    std::fs::write(&manifest_file, serde_json::to_vec(&manifest).unwrap()).unwrap();
+}

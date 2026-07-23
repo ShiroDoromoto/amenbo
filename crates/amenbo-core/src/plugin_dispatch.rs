@@ -18,9 +18,9 @@
 //! composes each one's stdin — the event payload, with that plugin's non-secret config folded under
 //! `config` (`AMB-D-356`); it does not itself know what is installed or enabled. The real resolver is
 //! [`EnabledSubscribers`](crate::plugin_subscribe::EnabledSubscribers), which the install≠enable lifecycle
-//! supplies (`AMB-T-2032`): only an *enabled*, subscribed plugin fires (`AMB-D-351`). Where no resolver is
-//! mounted yet, [`NoSubscribers`] is the honest default — nothing is installed, so no event has an
-//! observer, and delivery is a no-op that still advances the cursor.
+//! supplies (`AMB-T-2032`) and each face mounts over the installed set: only an *enabled*, subscribed
+//! plugin fires (`AMB-D-351`). [`NoSubscribers`] is the empty stand-in for a face that mounts no resolver
+//! at all — delivery is then a no-op that still advances the cursor.
 //!
 //! **Delivery is best-effort** (`AMB-D-352`). Generation is leak-free (the event landed in the same
 //! transaction as its cause), but firing is after the fact: a hook that will not spawn, exits non-zero, or
@@ -83,9 +83,9 @@ pub trait Subscribers {
     fn resolve(&self, event: &str) -> Vec<Subscriber>;
 }
 
-/// The default resolver until the enable lifecycle supplies a real one (`AMB-T-1975`): nothing is
-/// installed or enabled, so no event has a subscriber. Delivery under it fires nothing but still walks the
-/// cursor, so a plugin enabled later observes what fires *next*, not the whole backlog.
+/// The empty resolver: no event has a subscriber. It is what a face with no mount drives, and what the
+/// dispatcher's own tests use to exercise the walk alone. Delivery under it fires nothing but still walks
+/// the cursor, so a plugin enabled later observes what fires *next*, not the whole backlog.
 pub struct NoSubscribers;
 
 impl Subscribers for NoSubscribers {

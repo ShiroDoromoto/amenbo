@@ -673,6 +673,170 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         PluginCmd::Enable { name } => plugin_enable_cmd(store, flags, &name),
         PluginCmd::Disable { name } => plugin_disable_cmd(store, flags, &name),
         PluginCmd::Uninstall { name } => plugin_uninstall_cmd(store, flags, &name),
+        PluginCmd::Config { sub } => match sub {
+            PluginConfigCmd::Set { name, key, value, scope } => {
+                plugin_config_set_cmd(store, flags, &name, &key, value, &scope)
+            }
+            PluginConfigCmd::Get { name, key, scope } => {
+                plugin_config_get_cmd(store, flags, &name, &key, &scope)
+            }
+        },
+    }
+}
+
+/// Which storage tier `--scope` names (`AMB-D-356`/`AMB-D-350`). `machine` is the default that applies
+/// everywhere; `project` is this project's override, and *which* project is never named here — it is the
+/// effective context ([`bound_project`]): the binding, or a human's `--project`. An AI cannot name one, so
+/// for it the binding is the only answer, which is exactly the reach the store enforces.
+fn plugin_config_scope(store: &Store, scope: &str) -> Result<amenbo_core::plugin_config::Scope, CliError> {
+    use amenbo_core::plugin_config::Scope;
+    match scope {
+        "machine" => Ok(Scope::MachineDefault),
+        "project" => bound_project(store).map(Scope::Project).ok_or_else(|| project_required(store)),
+        other => Err(CliError {
+            code: "invalid_value",
+            message: format!("unknown --scope '{other}'"),
+            hint: Some("Pass --scope machine (the default) or --scope project.".to_string()),
+            exit: 2,
+        }),
+    }
+}
+
+/// The declared field this key names, or a refusal that lists the keys the author *did* declare. The
+/// manifest is the only thing that says whether a value is a secret (`AMB-D-356`), so a key it does not
+/// declare has no storage rule and cannot be written — guessing one is precisely what amenbo must not do.
+fn plugin_config_field(
+    plugin: &amenbo_core::plugin_subscribe::InstalledPlugin,
+    key: &str,
+) -> Result<amenbo_core::plugin_manifest::ConfigField, CliError> {
+    if let Some(f) = plugin.manifest.config.iter().find(|f| f.key == key) {
+        return Ok(f.clone());
+    }
+    let declared: Vec<&str> = plugin.manifest.config.iter().map(|f| f.key.as_str()).collect();
+    let known = if declared.is_empty() { "none".to_string() } else { declared.join(", ") };
+    Err(CliError::from(amenbo_core::Error::invalid(
+        format!("plugin '{}' declares no setting '{key}' (it declares: {known})", plugin.name),
+        format!("プラグイン '{}' に設定 '{key}' はありません（宣言されているのは: {known}）", plugin.name),
+    )))
+}
+
+/// The value to store: as given, or read whole from stdin when it is `-`. The stdin route exists for
+/// secrets — a token on argv is visible in the process list and lands in shell history — so it drops the
+/// trailing newline a pipe adds, and nothing else: whitespace inside a value can be significant, and the
+/// write boundary stores what it is handed verbatim.
+fn plugin_config_value(value: String) -> Result<String, CliError> {
+    if value != "-" {
+        return Ok(value);
+    }
+    if std::io::stdin().is_terminal() {
+        return Err(CliError {
+            code: "invalid_value",
+            message: "`-` says the value comes in on stdin, but stdin is a terminal".to_string(),
+            hint: Some("Pipe the value in (`… | amenbo plugin config set … -`), or pass it directly.".to_string()),
+            exit: 2,
+        });
+    }
+    use std::io::Read;
+    let mut s = String::new();
+    std::io::stdin().read_to_string(&mut s).map_err(|e| CliError {
+        code: "io_error",
+        message: format!("Cannot read the value from stdin: {e}"),
+        hint: None,
+        exit: 1,
+    })?;
+    Ok(s.strip_suffix('\n').map(|t| t.strip_suffix('\r').unwrap_or(t)).unwrap_or(&s).to_string())
+}
+
+/// `plugin config set <name> <key> <value>` — the CLI face of the one config write boundary
+/// ([`amenbo_core::plugin_config::set`]), which is where the safe floor and the secret routing live
+/// (`AMB-D-356`). This side does two things and no more: read the installed manifest off disk to find the
+/// field the key names, and turn `--scope` into a tier. **The value is never echoed back**, secret or not —
+/// there is nothing to confirm that the caller did not just type.
+fn plugin_config_set_cmd(
+    store: &mut Store,
+    flags: &Flags,
+    name: &str,
+    key: &str,
+    value: String,
+    scope: &str,
+) -> Result<i32, CliError> {
+    let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
+    let field = plugin_config_field(&plugin, key)?;
+    let scope = plugin_config_scope(store, scope)?;
+    let value = plugin_config_value(value)?;
+    let cleared = value.is_empty();
+    amenbo_core::plugin_config::set(store, &field, name, &value, scope).map_err(CliError::from)?;
+
+    let where_ = plugin_config_tier(&field, scope);
+    human(
+        flags,
+        if cleared {
+            format!("Cleared {name}.{key} ({where_})")
+        } else {
+            format!("Set {name}.{key} ({where_})")
+        },
+    );
+    if flags.json {
+        print_json(&json!({
+            "ok": true, "action": "plugin.config.set", "plugin": name, "key": key,
+            "secret": field.secret, "scope": where_, "cleared": cleared,
+        }));
+    }
+    Ok(0)
+}
+
+/// `plugin config get <name> <key>` — read one setting back at the tier `--scope` names. A secret's value
+/// does not come out here: the face reports that one is set and stops, because a `get` that prints a token
+/// puts it in the terminal, the scrollback and the shell's history. Injection reads secrets whole, at run
+/// time, into the plugin's environment and nowhere else (`AMB-D-356`).
+fn plugin_config_get_cmd(
+    store: &mut Store,
+    flags: &Flags,
+    name: &str,
+    key: &str,
+    scope: &str,
+) -> Result<i32, CliError> {
+    let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
+    let field = plugin_config_field(&plugin, key)?;
+    let scope = plugin_config_scope(store, scope)?;
+    let value = amenbo_core::plugin_config::get(store, &field, name, scope).map_err(CliError::from)?;
+
+    let where_ = plugin_config_tier(&field, scope);
+    let set = value.is_some();
+    if field.secret {
+        human(flags, format!("{name}.{key} ({where_}): {}", if set { "set (not shown)" } else { "not set" }));
+    } else {
+        human(flags, format!("{name}.{key} ({where_}): {}", value.as_deref().unwrap_or("(not set)")));
+    }
+    if flags.json {
+        let mut out = json!({
+            "ok": true, "action": "plugin.config.get", "plugin": name, "key": key,
+            "secret": field.secret, "scope": where_, "set": set,
+        });
+        // A secret's value never leaves through this door, --json included: a machine reader wants to know
+        // whether the setting is filled, and injection is the only thing that needs the value itself.
+        if !field.secret {
+            out["value"] = json!(value);
+        }
+        print_json(&out);
+    }
+    Ok(0)
+}
+
+/// Where a value actually lands, for the caller to read back. It is not simply what `--scope` said: a
+/// secret ignores the tiers entirely and goes to the user-area secret file, and saying `machine` there
+/// would describe a place the value is not in.
+fn plugin_config_tier(
+    field: &amenbo_core::plugin_manifest::ConfigField,
+    scope: amenbo_core::plugin_config::Scope,
+) -> &'static str {
+    use amenbo_core::plugin_config::Scope;
+    if field.secret {
+        "secret file"
+    } else if matches!(scope, Scope::Project(_)) {
+        "project"
+    } else {
+        "machine"
     }
 }
 

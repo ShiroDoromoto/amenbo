@@ -3776,3 +3776,88 @@ fn a_body_option_reads_stdin_on_dash() {
     let plain = cli.json(&["comment", "add", &tid, "--text", "そのまま", "--json"]);
     assert_eq!(plain["comment"]["text"], "そのまま", "a non-dash value is still the text");
 }
+
+/// Plant an installed plugin under the test's app-data: the manifest (the install marker) plus the
+/// executable named after it, which is the whole on-disk shape `plugin_installed::read` looks for.
+fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {
+    let dir = cli.home.join("plugins").join(name);
+    std::fs::create_dir_all(&dir).unwrap();
+    let manifest = serde_json::json!({
+        "name": name,
+        "desc": "テスト用",
+        "author": "amenbo",
+        "repo": "ShiroDoromoto/amenbo-plugin-test",
+        "os": ["macos", "linux", "windows"],
+        "category": "workflow",
+        "url": "https://example.com/x.tar.gz",
+        "checksum": "sha256:deadbeef",
+        "config": config,
+    });
+    std::fs::write(dir.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    std::fs::write(dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX)), b"#!/bin/sh\n").unwrap();
+}
+
+/// `plugin config set/get`: the author's schema decides the keys, their `secret` flag decides where the
+/// value is kept, and `--scope` picks the text tier. A secret never comes back out of `get`.
+#[test]
+fn plugin_config_writes_by_the_authors_schema_and_never_echoes_a_secret() {
+    let cli = Cli::new();
+    // The project tier needs a bound folder: which project `--scope project` means is never named on the
+    // command line, it is the binding (an AI has no other route to one).
+    cli.run(&["init", "--name", "tester"]);
+    install_plugin(
+        &cli,
+        "slack",
+        serde_json::json!([
+            { "key": "events", "label": "イベント" },
+            { "key": "webhook_url", "label": "Webhook URL", "secret": true, "required": true },
+        ]),
+    );
+
+    // A text field lands in the machine default by default, and reads back at that tier.
+    let set = cli.json(&["plugin", "config", "set", "slack", "events", "push,merge", "--json"]);
+    assert_eq!(set["action"], "plugin.config.set");
+    assert_eq!(set["secret"], false);
+    assert_eq!(set["scope"], "machine");
+    let got = cli.json(&["plugin", "config", "get", "slack", "events", "--json"]);
+    assert_eq!(got["value"], "push,merge");
+    assert_eq!(got["set"], true);
+
+    // The project tier is a separate slot: writing it leaves the machine default alone.
+    cli.json(&["plugin", "config", "set", "slack", "events", "merge", "--scope", "project", "--json"]);
+    let proj = cli.json(&["plugin", "config", "get", "slack", "events", "--scope", "project", "--json"]);
+    assert_eq!(proj["value"], "merge");
+    assert_eq!(proj["scope"], "project");
+    let machine = cli.json(&["plugin", "config", "get", "slack", "events", "--json"]);
+    assert_eq!(machine["value"], "push,merge", "the project override did not touch the machine default");
+
+    // An empty value clears rather than storing a blank — the same door for set and unset.
+    cli.json(&["plugin", "config", "set", "slack", "events", "", "--scope", "project", "--json"]);
+    let cleared = cli.json(&["plugin", "config", "get", "slack", "events", "--scope", "project", "--json"]);
+    assert_eq!(cleared["set"], false);
+    assert!(cleared["value"].is_null());
+
+    // A secret goes to the user-area file, off the store, and `-` keeps it off argv.
+    let sec = cli.json_stdin(
+        &["plugin", "config", "set", "slack", "webhook_url", "-", "--json"],
+        "https://hooks.example.com/T0P-53CR3T\n",
+    );
+    assert_eq!(sec["secret"], true);
+    assert_eq!(sec["scope"], "secret file", "a secret ignores the text tiers");
+    let (out, err, code) = cli.run_both(&["plugin", "config", "get", "slack", "webhook_url", "--json"]);
+    assert_eq!(code, 0);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["set"], true, "the secret is stored");
+    assert!(v.get("value").is_none(), "a secret's value never leaves through get: {out}");
+    assert!(!out.contains("T0P-53CR3T") && !err.contains("T0P-53CR3T"), "the secret was echoed: {out}{err}");
+
+    // A key the manifest does not declare has no storage rule, so it is refused — with the vocabulary.
+    let (e, c) = cli.run_err(&["plugin", "config", "set", "slack", "typo", "x", "--json"]);
+    assert_ne!(c, 0);
+    assert!(e.contains("typo") && e.contains("events"), "the refusal names the declared keys: {e}");
+
+    // A plugin that is not installed has no schema to read, so there is nothing to write.
+    let (e2, c2) = cli.run_err(&["plugin", "config", "get", "nope", "events", "--json"]);
+    assert_ne!(c2, 0);
+    assert!(e2.contains("nope"), "{e2}");
+}

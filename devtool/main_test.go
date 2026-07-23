@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -209,5 +210,49 @@ func TestWorktreeConflictNamesTheAccident(t *testing.T) {
 		if !strings.Contains(mine, "devtool task finish 1578") {
 			t.Fatalf("status %q should point at teardown: %s", status, mine)
 		}
+	}
+}
+
+// TestParseAroundID pins that the id survives whichever side of the flags it is written
+// on — a leading flag must not swallow it, since reporting a missing id for an
+// invocation that carried one is the failure mode this guards.
+func TestParseAroundID(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		id   string
+		res  bool
+		base string
+	}{
+		{"bare id", []string{"2053"}, "2053", false, "main"},
+		{"flags after the id", []string{"2053", "-no-reserve"}, "2053", true, "main"},
+		{"flags before the id", []string{"-no-reserve", "2053"}, "2053", true, "main"},
+		{"id between flags", []string{"-base", "dev", "2053", "-no-reserve"}, "2053", true, "dev"},
+		{"flags only", []string{"-no-reserve"}, "", true, "main"},
+	}
+	for _, c := range cases {
+		fs := flag.NewFlagSet("task start", flag.ContinueOnError)
+		base := fs.String("base", "main", "")
+		noReserve := fs.Bool("no-reserve", false, "")
+		id, extra := parseAroundID(fs, c.args)
+		if id != c.id {
+			t.Fatalf("%s: id = %q, want %q", c.name, id, c.id)
+		}
+		if len(extra) != 0 {
+			t.Fatalf("%s: unexpected extra positionals %v", c.name, extra)
+		}
+		if *noReserve != c.res {
+			t.Fatalf("%s: -no-reserve = %v, want %v", c.name, *noReserve, c.res)
+		}
+		if *base != c.base {
+			t.Fatalf("%s: -base = %q, want %q", c.name, *base, c.base)
+		}
+	}
+
+	// A second id is a typo, not a batch: the worktree and branch are named after one.
+	fs := flag.NewFlagSet("task start", flag.ContinueOnError)
+	fs.Bool("no-reserve", false, "")
+	if id, extra := parseAroundID(fs, []string{"2053", "-no-reserve", "2054"}); id != "2053" || len(extra) != 1 || extra[0] != "2054" {
+		t.Fatalf("a second id is handed back for refusal: id=%q extra=%v", id, extra)
 	}
 }

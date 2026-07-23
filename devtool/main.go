@@ -74,8 +74,35 @@ agent size   print what this tree does to the 'amenbo agent --json' entry, by
              what grew is a spec or an argument.`)
 }
 
-// taskCmd dispatches the `task` subcommands, reading the id as the first positional
-// and the flags after it: `task start <id> --flag`.
+// parseAroundID parses `fs` over args in which the task id may sit on either side of
+// the flags, and returns the id it found ("" if there is none).
+//
+// Go's flag package stops at the first non-flag word, so one `fs.Parse` reads only the
+// flags that lead: in `task start <id> --no-reserve` the flag goes unread. Peeling the
+// leading word off as the id before parsing has the mirror failure — with a flag in
+// front there is nothing to peel, the id stays empty, `fs.Parse` swallows it as a
+// leftover nobody reads, and a command handed an id reports it missing. Looping takes
+// both: each leftover leading word is a positional, and the rest is parsed again.
+// Either order works, which is what every neighbouring tool (git, cargo, go itself)
+// does. An extra positional comes back too, for the caller to refuse: two ids would
+// silently start whichever came first.
+func parseAroundID(fs *flag.FlagSet, args []string) (id string, extra []string) {
+	for {
+		fs.Parse(args)
+		if fs.NArg() == 0 {
+			return id, extra
+		}
+		if id == "" {
+			id = fs.Arg(0)
+		} else {
+			extra = append(extra, fs.Arg(0))
+		}
+		args = fs.Args()[1:]
+	}
+}
+
+// taskCmd dispatches the `task` subcommands. The id is a positional and the flags may
+// come before or after it (see parseAroundID).
 func taskCmd(args []string) {
 	if len(args) == 0 {
 		usage()
@@ -83,9 +110,15 @@ func taskCmd(args []string) {
 	}
 	sub := args[0]
 	rest := args[1:]
-	var id string
-	if len(rest) > 0 && !strings.HasPrefix(rest[0], "-") {
-		id, rest = rest[0], rest[1:]
+
+	// One id per invocation: the worktree and branch are named after it, so a second
+	// one is a typo, not a batch.
+	refuseExtra := func(extra []string) {
+		if len(extra) > 0 {
+			logf("devtool: task %s takes one id, got extra argument(s): %s", sub, strings.Join(extra, " "))
+			usage()
+			os.Exit(2)
+		}
 	}
 
 	switch sub {
@@ -94,7 +127,8 @@ func taskCmd(args []string) {
 		base := fs.String("base", "main", "branch to base the worktree on")
 		noReserve := fs.Bool("no-reserve", false, "assume the task is already in_progress; only verify")
 		noDeps := fs.Bool("no-deps", false, "skip the best-effort `npm ci` for GUI app/ checkouts")
-		fs.Parse(rest)
+		id, extra := parseAroundID(fs, rest)
+		refuseExtra(extra)
 		id = mustID(id)
 		if err := taskStart(id, *base, *noReserve, *noDeps); err != nil {
 			logf("devtool: %v", err)
@@ -105,7 +139,8 @@ func taskCmd(args []string) {
 		base := fs.String("base", "main", "branch the task must be merged into")
 		force := fs.Bool("force", false, "tear down even if dirty or unmerged")
 		rel := fs.Bool("reset", false, "also return the task to todo (amenbo status)")
-		fs.Parse(rest)
+		id, extra := parseAroundID(fs, rest)
+		refuseExtra(extra)
 		id = mustID(id)
 		if err := taskFinish(id, *base, *force, *rel); err != nil {
 			logf("devtool: %v", err)

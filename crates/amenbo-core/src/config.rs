@@ -195,6 +195,14 @@ impl Paths {
     pub fn plugin_secrets_file(&self) -> PathBuf {
         self.base_dir.join(Self::PLUGIN_SECRETS_FILE_NAME)
     }
+
+    /// The **plugin execution log**, `<base>/plugin-runs.jsonl` ([`crate::plugin_log`], `AMB-D-361`): the
+    /// last runs of each installed plugin, with the stderr its author wrote. Machine-local like the
+    /// activity ledger and, like it, outside every backup and export — it is a debugging aid about *this*
+    /// machine's installs, bounded by construction rather than kept as history.
+    pub fn plugin_log_file(&self) -> PathBuf {
+        self.base_dir.join(crate::plugin_log::FILE_NAME)
+    }
 }
 
 /// Whether `name` is reserved by the plugin disk layout and so cannot name a plugin: the registry cache

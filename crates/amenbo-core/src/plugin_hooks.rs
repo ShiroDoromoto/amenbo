@@ -13,6 +13,10 @@
 //!   long — is a [`tracing::warn`] and nothing more. A hook's stdout carries no return value (that is the
 //!   business of the synchronous command face), so a broken result is ignored, never fatal — the same
 //!   non-fatal policy the activity ledger already follows.
+//! - **Recorded.** Warning into a log nobody reads is how "why did nothing happen" goes unanswered, so
+//!   every run — the clean one included — is also written to the execution log ([`crate::plugin_log`],
+//!   `AMB-D-361`) when the caller names one. What is written is the outcome, the code, the duration and
+//!   the plugin's stderr; the invocation, and with it every injected secret, never leaves this module.
 //! - **Independent.** Each plugin runs on its own thread, so one that hangs or dies takes none of the
 //!   others down with it.
 //!
@@ -21,10 +25,12 @@
 //! not decide *when* to fire either — the write path pumps the event layer and calls [`fire`] with the
 //! invocations for each event, after the commit.
 
+use std::path::Path;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crate::plugin_exec::PluginInvocation;
+use crate::plugin_log::{self, Outcome, Run};
 
 /// How long a single observation hook may run before it is killed. A hook is a fire-and-forget observer
 /// whose output nobody waits on, so the bound is not there to keep anyone quick — it only has to stop a
@@ -64,13 +70,17 @@ impl Hook {
 /// succeeded, and cannot be failed by one. Pass the [`Hook`]s the mapping layer built (one per listening
 /// plugin per fired event), after the write is committed.
 ///
+/// `log` is the execution log to record each run in (`AMB-D-361`) — a real caller passes
+/// [`Paths::plugin_log_file`](crate::config::Paths::plugin_log_file); `None` runs the hooks and records
+/// nothing, which is what a test exercising the runner itself wants.
+///
 /// The returned handles are the launched threads. **Dropping them forgets the hooks** — the true
 /// fire-and-forget a long-lived GUI wants. A short-lived process that is about to exit (a one-shot CLI
 /// invocation) can instead *join* them first, so the hooks it started are not cut short when the process
 /// dies; whether to wait that moment out is the caller's call, not the runner's.
 #[must_use = "drop the handles to forget the hooks, or join them before a short-lived process exits"]
-pub fn fire(hooks: Vec<Hook>) -> Vec<JoinHandle<()>> {
-    fire_with_timeout(hooks, HOOK_TIMEOUT)
+pub fn fire(hooks: Vec<Hook>, log: Option<&Path>) -> Vec<JoinHandle<()>> {
+    fire_with_timeout(hooks, HOOK_TIMEOUT, log)
 }
 
 /// [`fire`] under a caller-named per-hook bound instead of the [`HOOK_TIMEOUT`] policy default.
@@ -80,43 +90,81 @@ pub fn fire(hooks: Vec<Hook>) -> Vec<JoinHandle<()>> {
 /// bound would comfortably clear can still overrun it under load. Widening the bound there keeps the test
 /// pinned on the fire-and-forget behaviour, not on how fast a loaded kernel happens to schedule a `touch`.
 #[must_use = "drop the handles to forget the hooks, or join them before a short-lived process exits"]
-pub fn fire_with_timeout(hooks: Vec<Hook>, timeout: Duration) -> Vec<JoinHandle<()>> {
+pub fn fire_with_timeout(
+    hooks: Vec<Hook>,
+    timeout: Duration,
+    log: Option<&Path>,
+) -> Vec<JoinHandle<()>> {
+    let log = log.map(Path::to_path_buf);
     hooks
         .into_iter()
-        .map(move |hook| std::thread::spawn(move || run_one(&hook, timeout)))
+        .map(move |hook| {
+            let log = log.clone();
+            std::thread::spawn(move || run_one(&hook, timeout, log.as_deref()))
+        })
         .collect()
 }
 
-/// Run one hook under `timeout` and warn on anything but a clean exit. Never returns — the hook face has
-/// nowhere to return an error to, so a failure becomes a log line and stops there.
+/// Run one hook under `timeout`, warn on anything but a clean exit, and record the run in the execution
+/// log (`AMB-D-361`). Never returns — the hook face has nowhere to return an error to, so a failure becomes
+/// a log line and stops there.
 ///
 /// The four arms below are the four ways a hook ends — clean, non-zero, killed at the bound, never
-/// launched — and each names the plugin and the event it ran for.
-fn run_one(hook: &Hook, timeout: Duration) {
+/// launched — and each names the plugin and the event it ran for. The clean arm stays silent in `tracing`
+/// (a working plugin is not news) but is still recorded: "it ran and it was fine" is exactly what a reader
+/// asking why nothing happened needs to be able to rule out.
+fn run_one(hook: &Hook, timeout: Duration, log: Option<&Path>) {
     let program = hook.invocation.program.display().to_string();
-    match hook.invocation.spawn().and_then(|running| running.wait_timeout(timeout)) {
-        Ok(Some(output)) if output.succeeded() => {}
-        Ok(Some(output)) => tracing::warn!(
-            plugin = %hook.plugin,
-            event = %hook.event,
-            program = %program,
-            code = ?output.code,
-            elapsed_ms = output.elapsed.as_millis() as u64,
-            "plugin hook exited without success; ignored"
-        ),
-        Ok(None) => tracing::warn!(
-            plugin = %hook.plugin,
-            event = %hook.event,
-            program = %program,
-            timeout_ms = timeout.as_millis() as u64,
-            "plugin hook timed out and was killed; ignored"
-        ),
-        Err(error) => tracing::warn!(
-            plugin = %hook.plugin,
-            event = %hook.event,
-            program = %program,
-            error = %error,
-            "plugin hook could not be launched; ignored"
-        ),
+    let run = |outcome, code, elapsed, stderr: &str| Run {
+        plugin: hook.plugin.clone(),
+        event: hook.event,
+        outcome,
+        code,
+        elapsed,
+        stderr: stderr.to_string(),
+    };
+    // Only these fields ever reach the log: the invocation — whose env carries the plugin's injected
+    // secrets (`AMB-D-356`) — stays in this function.
+    let recorded = match hook.invocation.spawn().and_then(|running| running.wait_timeout(timeout)) {
+        Ok(Some(output)) if output.succeeded() => {
+            run(Outcome::Ok, output.code, output.elapsed, &output.stderr)
+        }
+        Ok(Some(output)) => {
+            tracing::warn!(
+                plugin = %hook.plugin,
+                event = %hook.event,
+                program = %program,
+                code = ?output.code,
+                elapsed_ms = output.elapsed.as_millis() as u64,
+                "plugin hook exited without success; ignored"
+            );
+            run(Outcome::Failed, output.code, output.elapsed, &output.stderr)
+        }
+        Ok(None) => {
+            tracing::warn!(
+                plugin = %hook.plugin,
+                event = %hook.event,
+                program = %program,
+                timeout_ms = timeout.as_millis() as u64,
+                "plugin hook timed out and was killed; ignored"
+            );
+            // A killed hook has no code and no stderr to hand back — the child was reaped, not read.
+            run(Outcome::TimedOut, None, timeout, "")
+        }
+        Err(error) => {
+            tracing::warn!(
+                plugin = %hook.plugin,
+                event = %hook.event,
+                program = %program,
+                error = %error,
+                "plugin hook could not be launched; ignored"
+            );
+            // The launch failure itself is the diagnosis here, and it is amenbo's message, not the
+            // plugin's — there was no child to write one.
+            run(Outcome::NotLaunched, None, Duration::ZERO, &error.to_string())
+        }
+    };
+    if let Some(path) = log {
+        plugin_log::record(path, &recorded);
     }
 }

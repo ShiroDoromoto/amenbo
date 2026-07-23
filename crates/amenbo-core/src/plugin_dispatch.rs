@@ -124,7 +124,16 @@ pub struct Delivered {
 /// amenbo does not recognise (an event outside the v1 catalog, an unparseable actor/time) is warned about
 /// and skipped, and the cursor still walks past it. On a retention gap the cursor is resynced to the head
 /// and nothing is fired for the lost span (see [`Delivered::gapped`]).
-pub fn deliver(conn: &Connection, cursor: i64, subs: &dyn Subscribers) -> Result<Delivered> {
+///
+/// `log` is the execution log (`AMB-D-361`): every run the launched hooks make is recorded there, and so
+/// is a gap — the one thing a reader cannot otherwise learn, since a gap fires nothing and therefore leaves
+/// no run to look at. `None` records nothing, which is what a test of the dispatcher itself wants.
+pub fn deliver(
+    conn: &Connection,
+    cursor: i64,
+    subs: &dyn Subscribers,
+    log: Option<&std::path::Path>,
+) -> Result<Delivered> {
     let mut cursor = cursor;
     let mut hooks: Vec<Hook> = Vec::new();
     loop {
@@ -133,6 +142,11 @@ pub fn deliver(conn: &Connection, cursor: i64, subs: &dyn Subscribers) -> Result
                 // Retention passed the cursor; the lost events cannot be replayed. Resync to the head and
                 // fire nothing for the gap — delivery is best-effort (`AMB-D-352`). A gap can only surface
                 // on the first page (the cursor only ever moves forward), so nothing has been built yet.
+                // It is recorded here rather than left to the caller: this is where the fact is known, and
+                // a silently dropped span is precisely what the log exists to make visible (`AMB-D-361`).
+                if let Some(path) = log {
+                    crate::plugin_log::record_gap(path);
+                }
                 return Ok(Delivered { cursor: outbox_head(conn)?, hooks: Vec::new(), gapped: true });
             }
             OutboxSlice::Events { rows, more } => {
@@ -169,7 +183,7 @@ pub fn deliver(conn: &Connection, cursor: i64, subs: &dyn Subscribers) -> Result
             }
         }
     }
-    let hooks = crate::plugin_hooks::fire(hooks);
+    let hooks = crate::plugin_hooks::fire(hooks, log);
     Ok(Delivered { cursor, hooks, gapped: false })
 }
 
@@ -230,7 +244,7 @@ mod tests {
         emit(&e, "task.created", 1, None);
         emit(&e, "task.status_changed", 2, Some("in_progress"));
 
-        let d = deliver(e.conn(), 0, &NoSubscribers).unwrap();
+        let d = deliver(e.conn(), 0, &NoSubscribers, None).unwrap();
         assert_eq!(d.cursor, 2, "the cursor walks to the head even with nobody listening");
         assert!(d.hooks.is_empty(), "no subscriber, no fire");
         assert!(!d.gapped);
@@ -245,7 +259,7 @@ mod tests {
         emit(&e, "task.status_changed", 3, Some("blocked"));
 
         let subs = Fixed { events: vec!["task.status_changed"], invocation: bogus() };
-        let d = deliver(e.conn(), 0, &subs).unwrap();
+        let d = deliver(e.conn(), 0, &subs, None).unwrap();
         assert_eq!(d.cursor, 3);
         assert_eq!(d.hooks.len(), 2, "two status_changed events fire, the creation does not");
         for h in d.hooks {
@@ -260,13 +274,13 @@ mod tests {
         emit(&e, "task.status_changed", 1, Some("in_progress"));
         let subs = Fixed { events: vec!["task.status_changed"], invocation: bogus() };
 
-        let first = deliver(e.conn(), 0, &subs).unwrap();
+        let first = deliver(e.conn(), 0, &subs, None).unwrap();
         assert_eq!(first.hooks.len(), 1);
         for h in first.hooks {
             h.join().unwrap();
         }
 
-        let second = deliver(e.conn(), first.cursor, &subs).unwrap();
+        let second = deliver(e.conn(), first.cursor, &subs, None).unwrap();
         assert_eq!(second.cursor, first.cursor, "nothing new, so the cursor holds");
         assert!(second.hooks.is_empty(), "the event already fired once");
     }
@@ -280,7 +294,7 @@ mod tests {
         emit(&e, "task.exploded", 2, None); // not a v1 event
 
         let subs = Fixed { events: vec!["task.created", "task.exploded"], invocation: bogus() };
-        let d = deliver(e.conn(), 0, &subs).unwrap();
+        let d = deliver(e.conn(), 0, &subs, None).unwrap();
         assert_eq!(d.cursor, 2, "the cursor walks past the unrecognised row");
         assert_eq!(d.hooks.len(), 1, "only the recognised event resolved a subscriber");
         for h in d.hooks {
@@ -301,10 +315,34 @@ mod tests {
         tx.commit().unwrap();
 
         let subs = Fixed { events: vec!["task.created"], invocation: bogus() };
-        let d = deliver(e.conn(), 0, &subs).unwrap();
+        let d = deliver(e.conn(), 0, &subs, None).unwrap();
         assert!(d.gapped, "a cursor behind the watermark is a gap");
         assert_eq!(d.cursor, 2, "the cursor resyncs to the head");
         assert!(d.hooks.is_empty(), "the lost span is not replayed");
+    }
+
+    /// A gap fires nothing, so it leaves no run to look at: the one line it does leave in the execution log
+    /// is the only trace a reader can find that events went undelivered (`AMB-D-361`).
+    #[test]
+    fn a_retention_gap_is_recorded_in_the_execution_log() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, "task.created", 1, None);
+        let tx = e.write().unwrap();
+        tx.set_meta(crate::store_engine::outbox::META_OUTBOX_TRUNCATED_THROUGH, Some("1")).unwrap();
+        tx.commit().unwrap();
+
+        let dir = amenbo_scratch::scratch("dispatch-gap-log");
+        let log = dir.join(crate::plugin_log::FILE_NAME);
+        let subs = Fixed { events: vec!["task.created"], invocation: bogus() };
+        let d = deliver(e.conn(), 0, &subs, Some(&log)).unwrap();
+        assert!(d.gapped);
+
+        let lines = crate::plugin_log::read(&log);
+        assert_eq!(lines.len(), 1, "the gap is one line");
+        assert_eq!(lines[0].outcome, crate::plugin_log::Outcome::Gap);
+        assert_eq!(lines[0].plugin, "", "no plugin ran, so none is named");
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// `with_config` folds a plugin's text config under `config`, and adds no key when the config is empty
@@ -363,7 +401,7 @@ mod tests {
         let e = StoreEngine::open_in_memory().unwrap();
         emit(&e, "task.status_changed", 42, Some("in_progress"));
 
-        let d = deliver(e.conn(), 0, &subs).unwrap();
+        let d = deliver(e.conn(), 0, &subs, None).unwrap();
         assert_eq!(d.hooks.len(), 1);
         for h in d.hooks {
             h.join().unwrap();
@@ -396,7 +434,7 @@ mod tests {
         let e = StoreEngine::open_in_memory().unwrap();
         emit(&e, "task.status_changed", 42, Some("in_progress"));
 
-        let d = deliver(e.conn(), 0, &subs).unwrap();
+        let d = deliver(e.conn(), 0, &subs, None).unwrap();
         assert_eq!(d.hooks.len(), 1);
         for h in d.hooks {
             h.join().unwrap();

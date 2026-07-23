@@ -211,24 +211,32 @@ impl Store {
     /// face (`AMB-T-2033`). Reads the stored cursor, fires the subscribers of everything committed since,
     /// and persists where it advanced to so the next process continues past it. The returned
     /// [`Delivered`](crate::plugin_dispatch::Delivered) carries the hooks to **join** before the process
-    /// exits and whether a retention gap was hit. The cursor is already stored on return.
+    /// exits and whether a retention gap was hit. The cursor is already stored on return. Every run, and a
+    /// gap, land in this machine's execution log (`AMB-D-361`) — the store knows where that file is, so no
+    /// face has to name it.
     pub fn drive_plugins_persisted(
         &self,
         subs: &dyn crate::plugin_dispatch::Subscribers,
     ) -> Result<crate::plugin_dispatch::Delivered> {
-        crate::plugin_drive::drive_persisted(&self.engine, subs)
+        crate::plugin_drive::drive_persisted(&self.engine, subs, Some(&self.paths.plugin_log_file()))
     }
 
     /// Drive the dispatcher from an **in-memory** cursor — the long-lived (GUI) face (`AMB-T-2033`).
     /// Delivers what committed since `cursor` without persisting; the caller keeps
     /// [`Delivered::cursor`](crate::plugin_dispatch::Delivered::cursor) in memory for the next drive and
-    /// drops the hooks (fire-and-forget, its process outliving them).
+    /// drops the hooks (fire-and-forget, its process outliving them). Runs and gaps are recorded in the
+    /// execution log, as they are on the persisted face (`AMB-D-361`).
     pub fn deliver_plugins(
         &self,
         cursor: i64,
         subs: &dyn crate::plugin_dispatch::Subscribers,
     ) -> Result<crate::plugin_dispatch::Delivered> {
-        crate::plugin_dispatch::deliver(self.engine.conn(), cursor, subs)
+        crate::plugin_dispatch::deliver(
+            self.engine.conn(),
+            cursor,
+            subs,
+            Some(&self.paths.plugin_log_file()),
+        )
     }
 
     /// The inbox items archived (dismissed) on this machine, as task_ids.

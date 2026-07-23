@@ -47,11 +47,16 @@ pub fn persisted_cursor(engine: &StoreEngine) -> Result<i64> {
 /// (CLI) face** (`AMB-D-367`). Reads the stored cursor, fires the subscribers of everything committed since,
 /// and writes the advanced cursor back so the next process continues past it (the persist is skipped when
 /// the cursor did not move). The returned [`Delivered`] carries the launched hooks for the caller to **join**
-/// before it exits, and whether a retention gap was hit (`AMB-D-361` log). The cursor is already stored on
+/// before it exits, and whether a retention gap was hit. `log` is the execution log every run and every
+/// gap is recorded in (`AMB-D-361`), passed straight down to [`deliver`]. The cursor is already stored on
 /// return.
-pub fn drive_persisted(engine: &StoreEngine, subs: &dyn Subscribers) -> Result<Delivered> {
+pub fn drive_persisted(
+    engine: &StoreEngine,
+    subs: &dyn Subscribers,
+    log: Option<&std::path::Path>,
+) -> Result<Delivered> {
     let cursor = persisted_cursor(engine)?;
-    let delivered = deliver(engine.conn(), cursor, subs)?;
+    let delivered = deliver(engine.conn(), cursor, subs, log)?;
     if delivered.cursor != cursor {
         engine.set_meta(CURSOR_META, Some(&delivered.cursor.to_string()))?;
         // Everything through the new cursor is now delivered (or, on a gap resync, jumped past and
@@ -118,7 +123,7 @@ mod tests {
         let subs = Fixed { events: vec!["task.created"], invocation: bogus() };
 
         // First run: both events fire, and the cursor is persisted at the head.
-        let first = drive_persisted(&e, &subs).unwrap();
+        let first = drive_persisted(&e, &subs, None).unwrap();
         assert_eq!(first.hooks.len(), 2, "both committed events fire on the first run");
         for h in first.hooks {
             h.join().unwrap();
@@ -128,7 +133,7 @@ mod tests {
         // A fresh event, then a second short-lived run: only the new event fires — the first two are behind
         // the persisted cursor.
         emit(&e, "task.created", 3);
-        let second = drive_persisted(&e, &subs).unwrap();
+        let second = drive_persisted(&e, &subs, None).unwrap();
         assert_eq!(second.hooks.len(), 1, "only what committed since the stored cursor fires");
         for h in second.hooks {
             h.join().unwrap();
@@ -144,7 +149,7 @@ mod tests {
         emit(&e, "task.created", 1);
         emit(&e, "task.status_changed", 2);
 
-        let d = drive_persisted(&e, &NoSubscribers).unwrap();
+        let d = drive_persisted(&e, &NoSubscribers, None).unwrap();
         assert!(d.hooks.is_empty(), "nobody is installed, so nothing fires");
         assert!(!d.gapped);
         assert_eq!(persisted_cursor(&e).unwrap(), 2, "the cursor still walks to the head and is stored");
@@ -156,11 +161,11 @@ mod tests {
     fn a_no_op_drive_does_not_rewrite_the_cursor() {
         let e = StoreEngine::open_in_memory().unwrap();
         emit(&e, "task.created", 1);
-        let _ = drive_persisted(&e, &NoSubscribers).unwrap();
+        let _ = drive_persisted(&e, &NoSubscribers, None).unwrap();
         assert_eq!(persisted_cursor(&e).unwrap(), 1);
 
         // Nothing committed since: the cursor holds, and the drive is a pure read.
-        let d = drive_persisted(&e, &NoSubscribers).unwrap();
+        let d = drive_persisted(&e, &NoSubscribers, None).unwrap();
         assert!(d.hooks.is_empty());
         assert_eq!(persisted_cursor(&e).unwrap(), 1, "an empty drive does not move the cursor");
     }
@@ -175,7 +180,7 @@ mod tests {
         emit(&e, "task.created", 1);
         emit(&e, "task.created", 2);
 
-        let d = drive_persisted(&e, &NoSubscribers).unwrap();
+        let d = drive_persisted(&e, &NoSubscribers, None).unwrap();
         assert_eq!(persisted_cursor(&e).unwrap(), 2, "the cursor walked to the head");
         assert!(!d.gapped);
 
@@ -200,7 +205,7 @@ mod tests {
         tx.set_meta(crate::store_engine::outbox::META_OUTBOX_TRUNCATED_THROUGH, Some("1")).unwrap();
         tx.commit().unwrap();
 
-        let d = drive_persisted(&e, &NoSubscribers).unwrap();
+        let d = drive_persisted(&e, &NoSubscribers, None).unwrap();
         assert!(d.gapped, "a cursor behind the watermark is a gap");
         assert_eq!(persisted_cursor(&e).unwrap(), 2, "the cursor resyncs to the head and is persisted");
     }

@@ -88,6 +88,29 @@ pub const STEPS: &[Step] = &[
         name: "fold the per-project hook consent into one device answer, keeping each refusal as an opt-out",
         apply: Apply::Custom(fold_hook_consent_to_device),
     },
+    Step {
+        to: 5,
+        name: "add decision.status_changed_at, seeded from when each decision was last settled",
+        // The column the reopen axis compares against (`AMB-D-373`): when a decision's status last changed.
+        // Existing rows have no such instant recorded, so they are seeded once — `decided_at` for one that
+        // was settled, its creation for one still under discussion. A seed taken from a record column is
+        // sound precisely because it is taken *once*: from here on the intent column is what moves, and what
+        // `created_at` does afterwards no longer reaches the judgement (`AMB-D-372`).
+        //
+        // What the seed cannot recover: a reopen that happened before this ran left no dated trace (the
+        // activity log is not a system of record), so such a decision is seeded at its creation and reads as
+        // "unchanged since", i.e. no warn. Erring quiet on history we cannot date is the safe side.
+        //
+        // `NULLIF` guards the `''` a half-written row's required-text column carries: the column's `CHECK`
+        // admits an instant or NULL, and `''` is neither. The declaration is spelled out here in frozen
+        // text, as every step's is — the registry may rename or reshape the column tomorrow; what this step
+        // added must keep meaning what it meant.
+        apply: Apply::Sql(
+            "ALTER TABLE decision ADD COLUMN status_changed_at TEXT \
+                 CHECK(status_changed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');
+             UPDATE decision SET status_changed_at = COALESCE(NULLIF(decided_at, ''), NULLIF(created_at, ''));",
+        ),
+    },
 ];
 
 /// v4: the lint-hook question stopped being one per project and became one for the device
@@ -273,6 +296,11 @@ mod tests {
 
     /// A store stamped at `version` — the shape an older build left behind, which is what the chain
     /// exists to move.
+    ///
+    /// Stamping the version is not enough to *be* that store: every store here is created by this build,
+    /// so its `CREATE TABLE` already carries the columns later steps add, and an `ADD COLUMN` step run on
+    /// one would fail on a column that is already there. So the columns those steps add are dropped back
+    /// off, and the store really does have the shape its version claims.
     fn store_at(dir: &Path, version: i64) -> StoreEngine {
         let engine = StoreEngine::open(&dir.join("store.sqlite")).unwrap();
         engine
@@ -283,6 +311,9 @@ mod tests {
                 rusqlite::params![META_FORMAT_VERSION, version.to_string()],
             )
             .unwrap();
+        if version < 5 {
+            engine.conn().execute_batch("ALTER TABLE decision DROP COLUMN status_changed_at;").unwrap();
+        }
         assert_eq!(engine.format_version().unwrap(), version);
         engine
     }
@@ -340,6 +371,10 @@ mod tests {
         assert!(run.migrated());
         assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
         assert_eq!(engine.get_meta("owner_account").unwrap(), None, "the orphan row is gone");
+        engine
+            .conn()
+            .query_row("SELECT COUNT(status_changed_at) FROM decision", [], |r| r.get::<_, i64>(0))
+            .expect("v5 put the decision status clock back");
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -422,6 +457,48 @@ mod tests {
 
         assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
         assert_eq!(crate::config::Config::load(&dir.join("config.json")).hook_consent, None, "nothing to carry");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v5 in full, on the store shape v4 left behind: a `decision` table with no status clock. Every
+    /// existing row must come out of it seeded — a settled decision at the instant it was settled, one
+    /// still under discussion at its creation — because the reopen axis (`AMB-D-373`) compares against this
+    /// column and a NULL is a decision it would never judge. A row still mid-create carries `''` rather
+    /// than an instant, and `''` is not one: it seeds to NULL rather than to a value the column's own
+    /// `CHECK` would refuse.
+    #[test]
+    fn the_decision_status_clock_is_seeded_from_when_each_decision_was_settled() {
+        let dir = scratch("decision-status-clock");
+        let engine = store_at(&dir, 4);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO decision (id, project_id, title, body, status, decided_at, created_at, updated_at) VALUES
+                     (1, 1, 'settled',  '', 'accepted', '2026-01-02T03:04:05Z', '2025-12-01T00:00:00Z', '2026-01-02T03:04:05Z'),
+                     (2, 1, 'proposed', '', 'proposed', NULL,                   '2025-11-01T00:00:00Z', '2025-11-01T00:00:00Z'),
+                     (3, 1, '',         '', '',         NULL,                   '',                     '');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let seeded: Vec<(i64, Option<String>)> = {
+            let conn = engine.conn();
+            let mut stmt =
+                conn.prepare("SELECT id, status_changed_at FROM decision ORDER BY id").unwrap();
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        assert_eq!(
+            seeded,
+            vec![
+                (1, Some("2026-01-02T03:04:05Z".to_string())),
+                (2, Some("2025-11-01T00:00:00Z".to_string())),
+                (3, None),
+            ],
+            "settled rows seed from decided_at, unsettled ones from their creation, and `''` is no instant"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

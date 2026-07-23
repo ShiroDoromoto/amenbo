@@ -212,6 +212,7 @@ pub fn decision(d: &Decision) -> Record {
                 ("title", tv(&d.title)),
                 ("body", tv(&d.body)),
                 ("status", tv(d.status.as_str())),
+                ("status_changed_at", tsov(&d.status_changed_at)),
                 ("decided_at", tsov(&d.decided_at)),
                 ("decided_by", ov(&d.decided_by)),
             ],

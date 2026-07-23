@@ -112,6 +112,8 @@ pub fn add(tx: &WriteTx<'_>, input: NewDecision) -> Result<Decision> {
         title: input.title,
         body: input.body,
         status: DecisionStatus::Proposed,
+        // Proposing *is* the first status transition, so the status clock starts here (`AMB-D-373`).
+        status_changed_at: Some(now),
         decided_at: None,
         decided_by: None,
         created_at: now,
@@ -180,8 +182,11 @@ pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<(
             ))
         }
     }
+    // Every arm above either returned or left `Proposed`, so reaching here *is* the transition — the
+    // idempotent re-accept never gets this far, and so never moves the clock.
     let after = Decision {
         status: DecisionStatus::Accepted,
+        status_changed_at: Some(now),
         decided_at: Some(now),
         decided_by,
         updated_at: now,
@@ -208,9 +213,11 @@ pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
             ))
         }
     }
+    let now = Timestamp::now();
     let after = Decision {
         status: DecisionStatus::Rejected,
-        updated_at: Timestamp::now(),
+        status_changed_at: Some(now),
+        updated_at: now,
         ..before.clone()
     };
     emit_update(tx, record::decision(&before), record::decision(&after))?;
@@ -239,11 +246,16 @@ pub fn reopen(tx: &WriteTx<'_>, id: i64) -> Result<Decision> {
             ))
         }
     }
+    let now = Timestamp::now();
     let after = Decision {
         status: DecisionStatus::Proposed,
+        // The one stamp the reopen axis is built on: a decision that re-opened *after* a task was reserved
+        // is a premise that moved under it (`AMB-D-373`). `decided_at` is cleared on this very route, which
+        // is why the axis cannot be read off it.
+        status_changed_at: Some(now),
         decided_at: None,
         decided_by: None,
-        updated_at: Timestamp::now(),
+        updated_at: now,
         ..before.clone()
     };
     emit_update(tx, record::decision(&before), record::decision(&after))?;
@@ -289,6 +301,9 @@ pub fn supersede(
     if new_before.status == DecisionStatus::Proposed {
         let new_after = Decision {
             status: DecisionStatus::Accepted,
+            // The promotion is a status transition like any other; the old side's row is not rewritten
+            // here, and being superseded is an edge rather than a status, so its clock stays where it is.
+            status_changed_at: Some(now),
             decided_at: Some(now),
             decided_by,
             updated_at: now,
@@ -1065,6 +1080,58 @@ mod tests {
         assert!(changed, "accepting again after a reopen is a real transition");
         assert_eq!(reaccepted.status, DecisionStatus::Accepted);
         assert!(reaccepted.decided_at.is_some());
+    }
+
+    /// The status clock moves on a status transition and on nothing else. Instants are recorded to the
+    /// second, so a fresh stamp cannot be told apart from the one it replaced by comparing the two — plant
+    /// a distinctly old instant instead, and watch which operations displace it.
+    #[test]
+    fn status_changed_at_moves_on_transitions_only() {
+        use rusqlite::types::Value;
+        const PLANTED: &str = "2020-01-01T00:00:00Z";
+
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let clock =
+            |id: i64| read::decision(tx.conn(), id).unwrap().expect("live decision").status_changed_at;
+        let plant = |id: i64| {
+            tx.set_field("decision", id, "status_changed_at", Value::Text(PLANTED.to_string())).unwrap();
+        };
+        let planted = Timestamp::parse_rfc3339(PLANTED);
+        assert!(planted.is_some(), "the planted instant is one the column admits");
+
+        let d = new_decision(tx, pid, "決定");
+        assert!(clock(d.id).is_some(), "proposing is the first transition, so it starts the clock");
+
+        // An edit is not a status change: `update` moves the body and `updated_at`, and leaves this alone.
+        plant(d.id);
+        update(tx, d.id, DecisionPatch { body: Some("直した根拠".to_string()), ..Default::default() })
+            .unwrap();
+        assert_eq!(clock(d.id), planted, "editing the body leaves the status clock where it was");
+
+        accept(tx, d.id, None).unwrap();
+        assert_ne!(clock(d.id), planted, "accepting stamps the clock");
+
+        // The idempotent re-accept never reaches the write, so it cannot re-stamp.
+        plant(d.id);
+        accept(tx, d.id, Some("user-2".to_string())).unwrap();
+        assert_eq!(clock(d.id), planted, "re-accepting an accepted decision leaves the clock alone");
+
+        // Reopen is the transition the whole axis is built on (`AMB-D-373`).
+        reopen(tx, d.id).unwrap();
+        assert_ne!(clock(d.id), planted, "reopening stamps the clock");
+
+        // Superseding promotes the *new* side (a transition) and never rewrites the old row — being
+        // superseded is an edge, not a status, so the old side's clock stands.
+        let old = new_decision(tx, pid, "旧: 置き換えられる");
+        accept(tx, old.id, None).unwrap();
+        let newer = new_decision(tx, pid, "新: 置き換える");
+        plant(old.id);
+        plant(newer.id);
+        supersede(tx, newer.id, old.id, None).unwrap();
+        assert_ne!(clock(newer.id), planted, "the promotion a supersede performs stamps the new side");
+        assert_eq!(clock(old.id), planted, "the superseded side's status did not change, nor its clock");
     }
 
     #[test]

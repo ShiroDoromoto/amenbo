@@ -108,7 +108,7 @@ impl Subscribers for EnabledSubscribers<'_> {
                     continue;
                 }
             }
-            if !plugin.manifest.events.iter().any(|e| e == event) {
+            if !plugin.manifest.events.iter().any(|e| e.event == event) {
                 continue;
             }
             // Compatible with this build (`AMB-D-359`). Checked here and not only at `enable`, because
@@ -164,7 +164,7 @@ mod tests {
     use super::*;
     use crate::config::Paths;
     use crate::plugin_config::{self, Scope};
-    use crate::plugin_manifest::{ConfigField, Manifest, Os};
+    use crate::plugin_manifest::{ConfigField, EventSubscription, Manifest, Os};
 
     fn store_at(tag: &str) -> (Store, std::path::PathBuf) {
         let dir = amenbo_scratch::scratch(&format!("plugin-subscribe-{tag}"));
@@ -225,7 +225,7 @@ mod tests {
             payload_v: crate::plugin_payload::VERSION,
             min_amenbo: None,
             config,
-            events: events.iter().map(|e| e.to_string()).collect(),
+            events: events.iter().map(|e| EventSubscription::new(*e)).collect(),
         }
     }
 

@@ -28,7 +28,7 @@ use serde::{Serialize, Serializer};
 use crate::config::is_reserved_plugin_name;
 use crate::error::Msg;
 use crate::plugin_config::MAX_CONFIG_IDENT_BYTES;
-use crate::plugin_manifest::Manifest;
+use crate::plugin_manifest::{Face, Manifest};
 
 /// The shortest a plugin id (`name`) may be (`AMB-D-360`).
 pub const NAME_MIN_LEN: usize = 2;
@@ -106,6 +106,11 @@ pub enum ProblemCode {
     /// The per-OS `assets` map and the declared `os` set do not answer for the same platforms
     /// (`AMB-D-381`).
     AssetMismatch,
+    /// A subscription declares an empty `faces` set — a hook that fires on no face at all (`AMB-D-383`).
+    EmptyFaces,
+    /// A subscription asks for `reply: true` without `faces: [cli]` — output relayed to a caller no other
+    /// face has (`AMB-D-383`).
+    ReplyNeedsCli,
 }
 
 impl ProblemCode {
@@ -130,6 +135,8 @@ impl ProblemCode {
         Self::BadKey,
         Self::BadVersion,
         Self::AssetMismatch,
+        Self::EmptyFaces,
+        Self::ReplyNeedsCli,
     ];
 
     /// The one place a code string is written; `Serialize` goes through here too.
@@ -154,6 +161,8 @@ impl ProblemCode {
             Self::BadKey => "bad_key",
             Self::BadVersion => "bad_version",
             Self::AssetMismatch => "asset_mismatch",
+            Self::EmptyFaces => "empty_faces",
+            Self::ReplyNeedsCli => "reply_needs_cli",
         }
     }
 }
@@ -197,6 +206,7 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
     check_min_amenbo(&mut problems, m.min_amenbo.as_deref());
     check_os(&mut problems, m);
     check_config(&mut problems, m);
+    check_events(&mut problems, m);
 
     problems
 }
@@ -526,10 +536,44 @@ fn check_config_key(problems: &mut Vec<Problem>, i: usize, key: &str) {
     }
 }
 
+/// Check each event subscription's `faces` / `reply` shape (`AMB-D-383`). The face *tokens* are already the
+/// vocabulary — an unknown one fails to parse (`AMB-D-354`), so a parsed [`Manifest`] holds only `cli`/`gui`
+/// and this need not re-check the value domain. Two rules remain, and they are the two the type cannot carry
+/// on its own:
+///
+/// - **`faces` is non-empty** — a hook that fires on no face is a subscription that does nothing, which is
+///   a mistake worth naming rather than silently dropping.
+/// - **`reply: true` requires `faces: [cli]`** — the reply is relayed to the caller, and only the CLI face
+///   has one (the GUI has no caller to hand a reply to). Declaring a reply on any other face set is asking
+///   for something amenbo cannot deliver.
+///
+/// That each event *name* is a real v1 event is a different rule and a different boundary (`AMB-T-1988`);
+/// this function judges the fire shape only.
+fn check_events(problems: &mut Vec<Problem>, m: &Manifest) {
+    for (i, sub) in m.events.iter().enumerate() {
+        if sub.faces.is_empty() {
+            problems.push(Problem::new(
+                format!("events[{i}].faces"),
+                ProblemCode::EmptyFaces,
+                "a subscription's faces must not be empty",
+                "購読の faces は空にできません",
+            ));
+        }
+        if sub.reply && sub.faces != [Face::Cli] {
+            problems.push(Problem::new(
+                format!("events[{i}].reply"),
+                ProblemCode::ReplyNeedsCli,
+                "reply: true is only allowed when faces is exactly [cli]",
+                "reply: true は faces がちょうど [cli] のときだけ許されます",
+            ));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin_manifest::{Asset, ConfigField, Manifest, Os};
+    use crate::plugin_manifest::{Asset, ConfigField, EventSubscription, Face, Manifest, Os};
 
     /// A well-formed distributable — the shape rules are what these tests are about, not the values.
     fn asset() -> Asset {
@@ -756,6 +800,44 @@ mod tests {
         assert!(cs.contains(&ProblemCode::BadChars));
         assert!(cs.contains(&ProblemCode::EmptyOs));
         assert!(cs.contains(&ProblemCode::BadChecksum));
+    }
+
+    // ---- events: faces / reply (`AMB-D-383`) ----
+
+    #[test]
+    fn a_bare_subscription_is_valid() {
+        let mut m = valid();
+        m.events = vec![EventSubscription::new("task.created"), EventSubscription::new("task.done")];
+        assert!(validate_manifest(&m).is_empty(), "the notification default fires on both faces, no reply");
+    }
+
+    #[test]
+    fn a_reply_hook_on_cli_alone_is_valid() {
+        let mut m = valid();
+        m.events =
+            vec![EventSubscription { event: "task.status_changed".into(), faces: vec![Face::Cli], reply: true }];
+        assert!(validate_manifest(&m).is_empty(), "the worktree advice shape passes");
+    }
+
+    #[test]
+    fn an_empty_faces_set_is_refused() {
+        let mut m = valid();
+        m.events = vec![EventSubscription { event: "task.done".into(), faces: vec![], reply: false }];
+        let problems = validate_manifest(&m);
+        assert!(codes(&problems).contains(&ProblemCode::EmptyFaces));
+        assert!(problems.iter().any(|p| p.location == "events[0].faces"), "names which subscription");
+    }
+
+    #[test]
+    fn a_reply_hook_that_is_not_cli_only_is_refused() {
+        // reply relays to the caller, and only the CLI face has one — so both-faces and gui-only are wrong.
+        for faces in [vec![Face::Cli, Face::Gui], vec![Face::Gui]] {
+            let mut m = valid();
+            m.events = vec![EventSubscription { event: "task.done".into(), faces, reply: true }];
+            let problems = validate_manifest(&m);
+            assert!(codes(&problems).contains(&ProblemCode::ReplyNeedsCli), "{:?}", codes(&problems));
+            assert!(problems.iter().any(|p| p.location == "events[0].reply"));
+        }
     }
 
     // ---- min_amenbo ----

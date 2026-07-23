@@ -27,10 +27,12 @@
 //! the dispatcher above it. The mount point (`AMB-T-2033`) assembles the list and constructs this resolver
 //! once per drive.
 //!
-//! **Config reads at the machine-default tier.** A fired observation event carries no single project (the
-//! outbox spans them), so [`resolve`](EnabledSubscribers::resolve) reads each plugin's text config at its
-//! machine default — the `project` a two-tier override would need is not one an event has. The
-//! project-scoped tier is the command face's, where an invocation runs inside one project (`AMB-D-356`).
+//! **Both tiered reads are at the machine tier here.** A fired observation event carries no single project
+//! (the outbox spans them), so [`resolve`](EnabledSubscribers::resolve) reads each plugin's text config at
+//! its machine default and its gate at the machine-global answer — the `project` a two-tier override would
+//! need is not one an event has. The project-scoped tiers are the command face's, where an invocation runs
+//! inside one project (`AMB-D-356` for a value, `AMB-D-350` for the gate). Resolving an event back to the
+//! project of the record it names, so a per-project gate can decide an observation too, is its own work.
 //!
 //! **A config read that errors drops that one plugin, not the event.** Delivery is best-effort
 //! (`AMB-D-352`): if a plugin's config cannot be read, the resolver warns and omits it, and the event still

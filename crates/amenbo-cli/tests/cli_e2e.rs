@@ -3861,3 +3861,40 @@ fn plugin_config_writes_by_the_authors_schema_and_never_echoes_a_secret() {
     assert_ne!(c2, 0);
     assert!(e2.contains("nope"), "{e2}");
 }
+
+/// `plugin enable/disable --scope project` and `plugin inherit`: the gate has two tiers (`AMB-D-350`), and
+/// the project's answer stands over the machine's — in both directions, with `inherit` as the way back to
+/// following the machine.
+#[test]
+fn the_plugin_gate_has_a_project_tier_that_overrides_the_machine_one() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    install_plugin(&cli, "slack", serde_json::json!([{ "key": "events", "label": "イベント" }]));
+
+    // Enabling for this project alone: consent is recorded, this project fires, the machine gate is not
+    // opened — so `plugin list` reports the effective answer and says which tier decided it.
+    let on = cli.json(&["plugin", "enable", "slack", "--scope", "project", "--json"]);
+    assert_eq!(on["scope"], "project");
+    let listed = cli.json(&["plugin", "list", "--json"]);
+    assert_eq!(listed["plugins"][0]["enabled"], true, "effective here");
+    assert_eq!(listed["plugins"][0]["machine_enabled"], false, "the machine gate stayed shut");
+    assert_eq!(listed["plugins"][0]["project_override"], true);
+    assert_eq!(listed["plugins"][0]["consented"], true, "consent is the device's, either tier");
+
+    // The other direction: a machine-wide enable, vetoed for this project.
+    cli.json(&["plugin", "enable", "slack", "--json"]);
+    cli.json(&["plugin", "disable", "slack", "--scope", "project", "--json"]);
+    let vetoed = cli.json(&["plugin", "list", "--json"]);
+    assert_eq!(vetoed["plugins"][0]["enabled"], false, "off here");
+    assert_eq!(vetoed["plugins"][0]["machine_enabled"], true, "on everywhere else");
+    assert_eq!(vetoed["plugins"][0]["project_override"], false);
+
+    // `inherit` drops the override, so the machine answer decides here again — and a second run finds
+    // nothing to drop.
+    let dropped = cli.json(&["plugin", "inherit", "slack", "--json"]);
+    assert_eq!(dropped["dropped"], true);
+    let inherited = cli.json(&["plugin", "list", "--json"]);
+    assert_eq!(inherited["plugins"][0]["enabled"], true, "the machine gate answers again");
+    assert!(inherited["plugins"][0]["project_override"].is_null(), "no override left");
+    assert_eq!(cli.json(&["plugin", "inherit", "slack", "--json"])["dropped"], false);
+}

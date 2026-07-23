@@ -448,6 +448,29 @@ impl Store {
         self.write_one(&[], |tx| crate::ops::plugin_config::forget_plugin(tx, plugin))
     }
 
+    /// Set (`Some`) or clear (`None`) this project's answer for a plugin's enable gate (one operation =
+    /// one transaction). Returns whether anything changed. Written through the trust boundary
+    /// ([`crate::plugin_trust`]), which is where the consent and the fail-closed `required` check live;
+    /// reach is guarded by `WriteTarget::Project`.
+    pub fn set_plugin_enable_override(
+        &mut self,
+        project_id: i64,
+        plugin: &str,
+        enabled: Option<bool>,
+    ) -> Result<bool> {
+        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+            crate::ops::plugin_enable::set(tx, project_id, plugin, enabled)
+        })
+    }
+
+    /// Erase every per-project gate answer of one plugin, device-wide (one operation = one transaction) —
+    /// the store half of `plugin uninstall` beside [`Self::forget_plugin_config`] (`AMB-D-357`). Returns
+    /// how many rows went. **Deliberately unguarded by project reach**, for the reason its config twin is:
+    /// what it deletes is one plugin's residue, not any project's content.
+    pub fn forget_plugin_enable(&mut self, plugin: &str) -> Result<usize> {
+        self.write_one(&[], |tx| crate::ops::plugin_enable::forget_plugin(tx, plugin))
+    }
+
     /// Create a project (one operation = one transaction). The ordering sibling's `order_key` is read
     /// inside this transaction.
     pub fn project_add(

@@ -3561,6 +3561,50 @@ pub fn plugin_config_value(
     }
 }
 
+/// The live `plugin_enable` override row id for `(project_id, plugin)`, or `None` — what makes the trust
+/// boundary's project tier an upsert (find-then-update) and a clear a lookup. The `plugin_enable_pair`
+/// UNIQUE index guarantees at most one row.
+pub fn plugin_enable_override_id(
+    conn: &Connection,
+    project_id: i64,
+    plugin: &str,
+) -> Result<Option<i64>> {
+    const C: col::plugin_enable::Cols = col::plugin_enable::ALL;
+    first_id(
+        conn,
+        C.id,
+        &Pred::eq(C.project_id, project_id).and(Pred::eq(C.plugin, plugin)),
+    )
+}
+
+/// Every live `plugin_enable` override row belonging to one plugin, **across every project** — what an
+/// `uninstall` erases in one pass (`AMB-D-357`), the gate twin of [`plugin_config_override_ids`].
+pub fn plugin_enable_override_ids(conn: &Connection, plugin: &str) -> Result<Vec<i64>> {
+    const C: col::plugin_enable::Cols = col::plugin_enable::ALL;
+    select_ids(conn, C.id, Some(&Pred::eq(C.plugin, plugin)))
+}
+
+/// The `plugin_enable` override with this id.
+pub fn plugin_enable_override(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::PluginEnableOverride>> {
+    super::hydrate::row_by_id(conn, "plugin_enable", id, super::hydrate::plugin_enable_row)
+}
+
+/// This project's answer for one plugin's gate, or `None` when it declares none (the machine-global gate
+/// then stands). The upper of the two gate tiers (`AMB-D-350`).
+pub fn plugin_enable_value(
+    conn: &Connection,
+    project_id: i64,
+    plugin: &str,
+) -> Result<Option<bool>> {
+    match plugin_enable_override_id(conn, project_id, plugin)? {
+        Some(id) => Ok(plugin_enable_override(conn, id)?.map(|r| r.enabled)),
+        None => Ok(None),
+    }
+}
+
 /// Both directions of one decision's edges, as the read surfaces render them. Forward (`supersedes` /
 /// `amends` / `builds_on`) is what this decision drew, and the target is resolved for **any** liveness —
 /// a title of `None` means the edge dangles, which the caller renders as the unknown-name placeholder.

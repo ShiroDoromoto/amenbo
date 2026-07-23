@@ -697,6 +697,25 @@ datasets! {
         field_key: col(REQ),
         value: col(REQ),
     }
+
+    // Per-project override of a plugin's **enable gate** (`AMB-D-350`, the upper tier). The machine-global
+    // gate is a `config.json` field (`config.plugin_trust`); a row here answers for one project instead —
+    // the same two-tier shape the sibling `plugin_config` uses, and a record table for the same reason:
+    // it is carried by `export`/`backup`, so a restore cannot silently reopen a gate the user closed in
+    // one project. What it is *not* is `hook_optout`'s set-shape: the row is tri-state by absence
+    // (no row = inherit the machine answer) and carries `enabled` for the two answers, because this tier
+    // must be able to say "on here" as well as "off here".
+    //
+    // It overrides the gate, never the **consent** — that stays machine-local and is the resolver's
+    // second condition (`crate::plugin_trust::effective_enabled`), so a row restored onto a device that
+    // never consented opens nothing. `plugin` is the manifest name (plugins live on disk, not in the
+    // store, so there is no FK for it); the `(project_id, plugin)` pair is unique
+    // (`plugin_enable_pair` below). CASCADE: the override is *about* the project.
+    plugin_enable => plugin_enable {
+        project_id: fk("project", "CASCADE"),
+        plugin: col(REQ),
+        enabled: bool_col,
+    }
 }
 
 /// The dataset a **record table** belongs to, or `None` when the table is not one of them — the
@@ -875,6 +894,10 @@ CREATE INDEX IF NOT EXISTS task_commit_by_task ON task_commit(task_id);
 -- constraint (the column decls carry no UNIQUE), and its leading columns also serve the reads that seek a
 -- project's overrides — by `project_id`, or by `(project_id, plugin)` for one plugin's whole config.
 CREATE UNIQUE INDEX IF NOT EXISTS plugin_config_triple ON plugin_config(project_id, plugin, field_key);
+-- One enable override per (project, plugin): the pair is the natural key, so the trust boundary upserts the
+-- gate by finding this row rather than appending a second answer. The unique index *is* that constraint,
+-- and its leading column also serves a read that seeks one project's overrides.
+CREATE UNIQUE INDEX IF NOT EXISTS plugin_enable_pair ON plugin_enable(project_id, plugin);
 -- The read layer's own two seeks over the task table: `status` narrows a mailbox query, and
 -- `project_id` — placement is folded onto the task — scopes every list to one project.
 CREATE INDEX IF NOT EXISTS task_by_status    ON task(status);

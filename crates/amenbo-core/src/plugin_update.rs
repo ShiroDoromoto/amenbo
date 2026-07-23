@@ -120,6 +120,25 @@ pub fn available(paths: &Paths) -> Result<Vec<Update>> {
     Ok(compare(&installed, &plugin_catalog::fresh(paths)?, os))
 }
 
+/// The updates a **cached** catalog already knows of — the surface a listing shows without reaching for
+/// the network (`AMB-D-359`).
+///
+/// Where [`available`] may spend one fetch past the freshness window, this never does: `plugin list`
+/// answers the same offline (`no network, no catalog fetch`), so it reads only what the last catalog fetch
+/// left beside the installs and leaves the refetch to the explicit `plugin update --check`. No cache, an
+/// unreadable one, or nothing installed is simply no updates — never an error, because a listing does not
+/// fail on a catalog it has not got.
+#[must_use]
+pub fn available_cached(paths: &Paths) -> Vec<Update> {
+    let Ok(installed) = plugin_installed::installed(paths) else {
+        return Vec::new();
+    };
+    let (Some(os), Some(catalog)) = (Os::here(), plugin_catalog::cached(paths)) else {
+        return Vec::new();
+    };
+    compare(&installed, &catalog, os)
+}
+
 /// The same comparison as [`available`], against the **current** index rather than a fresh-enough one.
 ///
 /// [`plugin_catalog::fresh`] is right for a check that hangs off something the user did anyway; applying

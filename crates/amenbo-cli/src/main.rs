@@ -891,6 +891,12 @@ fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, C
 /// verdict beside it (`AMB-D-359`). The dispatch resolver warns and drops a plugin this build cannot speak
 /// to — and amenbo updates underneath an install, so a plugin enabled while it was compatible can stop
 /// firing without anyone touching it. Left to "enabled" alone, that state is readable only in the log.
+///
+/// It also carries the "update available" mark (`AMB-D-359`): the last-fetched catalog holds a different
+/// build of an installed plugin. Read from the **cache** (`plugin_update::available_cached`), never a
+/// fetch — the listing stays network-free and answers the same offline. Refreshing the catalog and
+/// applying the update are the explicit `plugin update --check` / `plugin update <name>`; the listing only
+/// surfaces the fact, quietly.
 fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     use amenbo_core::plugin_compat;
     use amenbo_core::plugin_manifest::Scope;
@@ -898,6 +904,13 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 
     let installed =
         amenbo_core::plugin_installed::installed(&store.paths).map_err(CliError::from)?;
+    // Which installs the cached catalog offers a different build of — best-effort, no network: an absent
+    // or unreadable cache is simply no marks, and `plugin update --check` is the surface that refreshes it.
+    let updatable: std::collections::HashSet<String> =
+        amenbo_core::plugin_update::available_cached(&store.paths)
+            .into_iter()
+            .map(|u| u.name)
+            .collect();
     let here = bound_project(store);
     // `None` = this plugin's switch cannot be answered from where we stand (a project-scoped plugin, and
     // no project in context).
@@ -921,6 +934,7 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
                 "enabled": gate_of(p.manifest.scope, &p.name)?,
                 "compatible": why.is_none(),
                 "incompatible_reason": why.map(|why| why.to_string()),
+                "update_available": updatable.contains(&p.name),
                 "consented": store.config.plugin_consented(&p.name),
                 "events": p.manifest.events,
                 "program": p.program.display().to_string(),
@@ -946,7 +960,10 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
                 None => "per project — open a project to see".to_string(),
             };
             let badge = if p.manifest.official { " [official]" } else { "" };
-            human(flags, format!("{}  {gate}{badge}  {}", p.name, p.manifest.desc));
+            // A quiet badge, not a nag (`AMB-D-359`): the fact sits on the line, and applying it is the
+            // explicit `plugin update <name>`.
+            let update = if updatable.contains(&p.name) { " [update available]" } else { "" };
+            human(flags, format!("{}  {gate}{badge}{update}  {}", p.name, p.manifest.desc));
             if let Err(why) = plugin_compat::check(&p.manifest) {
                 // The consequence, not just the verdict: an open gate reads as "this one is working"
                 // until the line says otherwise, and that gap is the whole point of showing this here.

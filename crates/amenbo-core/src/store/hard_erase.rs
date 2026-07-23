@@ -17,6 +17,10 @@
 //! safety; this method does the surgery — DELETE the read-model row / overwrite the field in place,
 //! plus the out-of-band bytes an erased comment's attachments held — and the VACUUM that
 //! returns the freed pages to the OS.
+//!
+//! A comment is named by its table, never by its id alone: task comments and decision comments number
+//! independently (`AMB-D-377`), so the same number is a live row in both and an erase that guessed which
+//! one was meant would destroy the wrong one.
 
 use rusqlite::types::Value;
 use serde::Serialize;
@@ -30,10 +34,18 @@ use crate::store_engine::sql::{Pred, Select, Sql, Table};
 use super::Store;
 
 /// One unit of content to physically erase.
+///
+/// The two comment tables are named apart for the same reason their refs are (`AMB-D-377`): they number
+/// independently, so the id alone cannot say which row an erase means — and guessing would destroy the
+/// wrong one.
 #[derive(Debug, Clone)]
 pub enum HardEraseTarget {
     /// Remove a task comment in full — its read-model row.
-    Comment { id: i64 },
+    TaskComment { id: i64 },
+    /// Remove a decision comment in full — its read-model row. A comment's number is not a
+    /// conversational one and nothing cites it, so unlike a decision's body (which is redacted in place,
+    /// keeping the decision) the row simply goes.
+    DecisionComment { id: i64 },
     /// Redact a surviving decision's body: overwrite it with `new_body` in place (the section is
     /// gone; the decision, its number and other fields stay).
     DecisionBody { id: i64, new_body: String },
@@ -44,7 +56,8 @@ pub enum HardEraseTarget {
 /// comment let go of.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct HardEraseReport {
-    pub comments_erased: Vec<i64>,
+    pub task_comments_erased: Vec<i64>,
+    pub decision_comments_erased: Vec<i64>,
     pub decisions_redacted: Vec<i64>,
     pub rows_removed: usize,
     /// Blob files deleted because the erased comments were their last reference.
@@ -74,7 +87,12 @@ impl Store {
             // the row a target names cannot leave between the check and the erase.
             for t in targets {
                 let (dataset, id, noun_en, noun_ja) = match t {
-                    HardEraseTarget::Comment { id } => ("task_comment", id, "comment", "コメント"),
+                    HardEraseTarget::TaskComment { id } => {
+                        ("task_comment", id, "task comment", "タスクコメント")
+                    }
+                    HardEraseTarget::DecisionComment { id } => {
+                        ("decision_comment", id, "decision comment", "決定記録コメント")
+                    }
                     HardEraseTarget::DecisionBody { id, .. } => ("decision", id, "decision", "決定"),
                 };
                 if !crate::store_engine::read::record_exists(tx.conn(), dataset, *id)? {
@@ -96,10 +114,15 @@ impl Store {
                     // comment carried survives, bytes and all, would betray the very promise this
                     // capability exists for. The bytes are out-of-band, so the sweep only hands back the
                     // hashes it let go of — they are reclaimed after the commit, below.
-                    HardEraseTarget::Comment { id } => {
+                    HardEraseTarget::TaskComment { id } => {
                         orphaned.extend(crate::ops::sweep_polymorphic(&tx, "task_comment", *id)?);
                         tx.delete_record("task_comment", *id)?;
-                        report.comments_erased.push(*id);
+                        report.task_comments_erased.push(*id);
+                    }
+                    HardEraseTarget::DecisionComment { id } => {
+                        orphaned.extend(crate::ops::sweep_polymorphic(&tx, "decision_comment", *id)?);
+                        tx.delete_record("decision_comment", *id)?;
+                        report.decision_comments_erased.push(*id);
                     }
                     // Overwrite the field in place: a field write UPSERTs straight into the read-model
                     // column, so the prior value is replaced — no history is left behind to leak it. This
@@ -145,12 +168,14 @@ impl Store {
 #[cfg(any(test, debug_assertions))]
 impl Store {
     /// Test probe: how many read-model rows carry `needle` in a text column that hard-erase targets
-    /// (`task_comment.text` / `decision.body`). Used by the hard-erase tests to assert content is
-    /// *physically* gone from the file.
+    /// (`task_comment.text` / `decision_comment.text` / `decision.body`). Used by the hard-erase tests to
+    /// assert content is *physically* gone from the file.
     pub fn debug_content_containing(&self, needle: &str) -> i64 {
         let like = format!("%{needle}%");
-        let (c, d) = (col::task_comment::ALL, col::decision::ALL);
+        let (c, dc, d) =
+            (col::task_comment::ALL, col::decision_comment::ALL, col::decision::ALL);
         self.count_where(c.table, Pred::like(c.text, like.clone()))
+            + self.count_where(dc.table, Pred::like(dc.text, like.clone()))
             + self.count_where(d.table, Pred::like(d.body, like))
     }
 

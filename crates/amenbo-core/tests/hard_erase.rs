@@ -12,6 +12,7 @@ use amenbo_core::Store;
 
 const SECRET_COMMENT: &str = "OUT_OF_DESIGN_COMMENT_MARKER";
 const SECRET_SECTION: &str = "OUT_OF_DESIGN_SECTION_MARKER";
+const SECRET_DECISION_COMMENT: &str = "OUT_OF_DESIGN_DECISION_COMMENT_MARKER";
 
 fn temp_paths() -> Paths {
     let base = amenbo_scratch::scratch("harderase");
@@ -89,9 +90,9 @@ fn hard_erase_comment_removes_it_physically() {
     assert!(rows_for(&store, "task_comment", comment) > 0);
 
     let report: HardEraseReport = store
-        .hard_erase(&[HardEraseTarget::Comment { id: comment }])
+        .hard_erase(&[HardEraseTarget::TaskComment { id: comment }])
         .unwrap();
-    assert_eq!(report.comments_erased, vec![comment]);
+    assert_eq!(report.task_comments_erased, vec![comment]);
     assert!(report.rows_removed > 0);
 
     // Read-model row gone and the secret text nowhere in the read model. (The store's in-memory `db` is
@@ -160,7 +161,7 @@ fn hard_erase_comment_takes_its_attachments_and_their_bytes() {
         .unwrap();
     assert_eq!(store.attachments_for_target(AttachmentTarget::TaskComment, comment).unwrap().len(), 3);
 
-    let report = store.hard_erase(&[HardEraseTarget::Comment { id: comment }]).unwrap();
+    let report = store.hard_erase(&[HardEraseTarget::TaskComment { id: comment }]).unwrap();
 
     // The rows the comment carried are gone (no orphans left pointing at a comment that no longer exists,
     // ready to be re-parented onto whichever row is minted that id next).
@@ -179,13 +180,69 @@ fn hard_erase_comment_takes_its_attachments_and_their_bytes() {
     assert_eq!(store.attachments_for_target(AttachmentTarget::Task, task).unwrap().len(), 1);
 }
 
+/// The other comment table gets the same surgery — and only it. The two number independently, so the
+/// task comment and the decision comment here carry the *same* id: erasing one must leave the other
+/// standing, which is the whole reason the target names its table (`AMB-D-377`).
+#[test]
+fn hard_erase_decision_comment_removes_it_and_leaves_the_task_comment_of_that_id() {
+    let (mut store, _task, task_comment, decision) = build();
+    let decision_comment = store
+        .add_decision_comment(
+            decision,
+            ActorKind::Ai,
+            &format!("keep this — but {SECRET_DECISION_COMMENT} — is out of design"),
+        )
+        .unwrap()
+        .id;
+    assert_eq!(decision_comment, task_comment, "the two tables number apart, from the same start");
+
+    // The files it carried go with it, exactly as on the task side.
+    let only_this_comments =
+        store.blobs().ingest_bytes(b"the file that should never have been posted here").unwrap().hash;
+    store
+        .attach_blob(
+            AttachmentTarget::DecisionComment,
+            decision_comment,
+            &only_this_comments,
+            "f.bin",
+            None,
+            0,
+            ActorKind::Ai,
+        )
+        .unwrap();
+    assert!(content_containing(&store, SECRET_DECISION_COMMENT) > 0, "precondition");
+
+    let report = store
+        .hard_erase(&[HardEraseTarget::DecisionComment { id: decision_comment }])
+        .unwrap();
+    assert_eq!(report.decision_comments_erased, vec![decision_comment]);
+    assert!(report.task_comments_erased.is_empty(), "nothing was erased on the task side");
+
+    assert_eq!(rows_for(&store, "decision_comment", decision_comment), 0);
+    assert_eq!(content_containing(&store, SECRET_DECISION_COMMENT), 0, "the text is physically gone");
+    assert!(!store.blobs().has(&only_this_comments), "its attached bytes go too");
+    assert_eq!(report.blobs_reclaimed, 1);
+
+    // The neighbours of that id — the task comment, and the decision itself — are untouched.
+    assert!(rows_for(&store, "task_comment", task_comment) > 0, "the task comment of the same id stays");
+    assert!(content_containing(&store, SECRET_COMMENT) > 0);
+    assert!(rows_for(&store, "decision", decision) > 0, "a comment's erase is not its decision's");
+
+    // And it stays erased across a reopen.
+    let paths = store.paths.clone();
+    drop(store);
+    let reopened = Store::open_at(paths).unwrap();
+    assert_eq!(rows_for(&reopened, "decision_comment", decision_comment), 0);
+    assert_eq!(content_containing(&reopened, SECRET_DECISION_COMMENT), 0);
+}
+
 #[test]
 fn hard_erase_is_all_or_nothing_on_unknown_target() {
     let (mut store, _task, comment, _decision) = build();
     // A batch with one good and one unknown target must erase nothing.
     let err = store.hard_erase(&[
-        HardEraseTarget::Comment { id: comment },
-        HardEraseTarget::Comment { id: 999_999 },
+        HardEraseTarget::TaskComment { id: comment },
+        HardEraseTarget::TaskComment { id: 999_999 },
     ]);
     assert!(err.is_err(), "an unknown target fails the whole call");
     assert!(content_containing(&store, SECRET_COMMENT) > 0, "the good target must be untouched");

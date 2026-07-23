@@ -4927,7 +4927,7 @@ struct HardEraseJson<'a> {
 }
 
 /// `hard-erase`: physically erase content from the truth source (plaintext SQLite) — a comment in full (its
-/// attachments' bytes with it), or one accepted decision's body. An ordinary delete leaves the freed
+/// attachments' bytes with it), from either comment table, or one accepted decision's body. An ordinary delete leaves the freed
 /// pages readable in the file, and editing a body in place does too, so this is the deliberate, gated exception
 /// (see the `HardErase` command doc + `store::hard_erase`). Destructive: resolve targets, confirm (unless
 /// `--yes`), take a safety backup, then erase + VACUUM. The safety backup still holds the erased content, so
@@ -4943,10 +4943,24 @@ fn hard_erase(store: &mut Store, flags: &Flags, sub: HardEraseCmd) -> Result<i32
         HardEraseCmd::Comment { ids } => {
             let mut targets = Vec::with_capacity(ids.len());
             for id in &ids {
-                targets.push(HardEraseTarget::Comment { id: resolve_comment(store, id)? });
+                targets
+                    .push(HardEraseTarget::TaskComment { id: resolve_live_task_comment(store, id)? });
             }
             let what = format!(
-                "physically erase {} comment(s) — and any files attached to them — from the store",
+                "physically erase {} task comment(s) — and any files attached to them — from the store",
+                targets.len()
+            );
+            (targets, what)
+        }
+        HardEraseCmd::DecisionComment { ids } => {
+            let mut targets = Vec::with_capacity(ids.len());
+            for id in &ids {
+                targets.push(HardEraseTarget::DecisionComment {
+                    id: resolve_live_decision_comment(store, id)?,
+                });
+            }
+            let what = format!(
+                "physically erase {} decision comment(s) — and any files attached to them — from the store",
                 targets.len()
             );
             (targets, what)
@@ -5001,8 +5015,9 @@ fn hard_erase(store: &mut Store, flags: &Flags, sub: HardEraseCmd) -> Result<i32
         print_json(&HardEraseJson { erase: &report, safety: &safety });
     } else {
         human(flags, format!(
-            "✓ Hard-erased {} comment(s) + {} decision body(ies); {} row(s) removed and VACUUMed",
-            report.comments_erased.len(), report.decisions_redacted.len(), report.rows_removed
+            "✓ Hard-erased {} task comment(s) + {} decision comment(s) + {} decision body(ies); {} row(s) removed and VACUUMed",
+            report.task_comments_erased.len(), report.decision_comments_erased.len(),
+            report.decisions_redacted.len(), report.rows_removed
         ));
         if report.blobs_reclaimed > 0 {
             human(flags, format!(
@@ -5013,24 +5028,6 @@ fn hard_erase(store: &mut Store, flags: &Flags, sub: HardEraseCmd) -> Result<i32
         human(flags, "  Verify the content is gone, then delete the safety backup next to the store.");
     }
     Ok(0)
-}
-
-/// Resolve a comment id argument to a task-comment id — an exact key match. A comment carries no
-/// conversational number, so its id (from `comment list --json`) **is** its whole handle: there is no
-/// shortened form left to expand, and prefix-matching a decimal would be actively wrong (`12` leads
-/// `120`). An unknown id is refused rather than guessed.
-fn resolve_comment(store: &Store, id: &str) -> Result<i64, CliError> {
-    store
-        .resolve_task_comment(id)
-        .map_err(CliError::from)?
-        .first()
-        .copied()
-        .ok_or_else(|| CliError {
-            code: "not_found",
-            message: format!("No comment matches id '{id}'"),
-            hint: Some("List comment ids with `amenbo comment list <task> --json`.".to_string()),
-            exit: 2,
-        })
 }
 
 /// A body-carrying argument, where the value `-` means "the body arrives on stdin" instead.

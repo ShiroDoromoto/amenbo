@@ -212,7 +212,7 @@ fn a_hard_erase_names_the_row_it_destroyed() {
     let comment = store.add_task_comment(task, ActorKind::Ai, "消される秘密").unwrap().id;
 
     let head = read::change_feed_head(store.read_model().conn()).unwrap();
-    store.hard_erase(&[HardEraseTarget::Comment { id: comment }]).unwrap();
+    store.hard_erase(&[HardEraseTarget::TaskComment { id: comment }]).unwrap();
 
     let rows = feed(&store, head);
     assert!(

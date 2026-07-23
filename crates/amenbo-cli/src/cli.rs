@@ -462,6 +462,15 @@ pub enum HardEraseCmd {
         #[arg(required = true)]
         ids: Vec<String>,
     },
+    /// Remove a decision comment in full — the same surgery as `hard-erase comment`, on the other comment
+    /// table. It is its own subcommand because the two tables number apart: a bare id says nothing about
+    /// which one it belongs to, so the command is what says it. Find ids with
+    /// `decision comment list <decision> --json`.
+    DecisionComment {
+        /// decision comment ref(s) to erase, AMB-DC-n
+        #[arg(required = true)]
+        ids: Vec<String>,
+    },
     /// Redact an accepted decision's body: overwrite it in place with the given text and scrub the prior
     /// bytes from the file (which `decision edit` alone does not). The decision — its number, links and other fields — stays.
     Decision {

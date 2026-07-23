@@ -46,25 +46,11 @@ pub const CURSOR_FACE_META: &str = "plugin_dispatch_cursor_face";
 
 /// Which face drove the dispatcher — recorded beside the cursor it advanced (`AMB-D-380`).
 ///
-/// Both faces share one cursor, so this is not a selector: it names the driver for a later reader, and
-/// nothing more.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Face {
-    /// The short-lived CLI: joins its hooks before the process exits.
-    Cli,
-    /// The long-lived GUI: drops its hooks and keeps running.
-    Gui,
-}
-
-impl Face {
-    /// How the face is spelled in [`CURSOR_FACE_META`].
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Face::Cli => "cli",
-            Face::Gui => "gui",
-        }
-    }
-}
+/// The same [`Face`] a subscription declares it fires on (`AMB-D-383`): one
+/// vocabulary, defined with the manifest shape and re-exported here. Recorded beside [`CURSOR_FACE_META`],
+/// both faces share one cursor, so as a stamp this is not a selector — it names the driver for a later
+/// reader, and nothing more.
+pub use crate::plugin_manifest::Face;
 
 /// Read the persisted dispatch cursor — the id of the last event a previous run delivered, or `0` when none
 /// was ever stored (a fresh dispatcher, starting from the bottom of the outbox). A value that does not parse

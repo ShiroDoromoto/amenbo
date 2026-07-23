@@ -56,7 +56,8 @@
 
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// An operating system a plugin runs on, in wharfy's vocabulary — the same tokens
 /// [`update_check`](crate::update_check) uses (`std::env::consts::OS`), so a plugin's OS set and the
@@ -131,6 +132,121 @@ impl Scope {
             Scope::Project => "project",
             Scope::Machine => "machine",
         }
+    }
+}
+
+/// **Which face fires a hook** (`AMB-D-383`) — the short-lived CLI a person or their AI drives, or the
+/// long-lived GUI.
+///
+/// A subscription declares the faces it fires on ([`EventSubscription::faces`]); the dispatcher also stamps
+/// the face that drove it beside the shared cursor ([`plugin_drive`](crate::plugin_drive), `AMB-D-380`).
+/// The two are one vocabulary, so the type lives here with the rest of the manifest shape and
+/// `plugin_drive` re-exports it rather than declaring a second enum of the same values.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Face {
+    /// The command face — the CLI a person or their AI runs, and the one face a `reply` hook may fire on,
+    /// since it is the only one with a caller waiting to read the reply (`AMB-D-383`).
+    Cli,
+    /// The long-lived GUI.
+    Gui,
+}
+
+impl Face {
+    /// The wire token, matching how the face is spelled in a manifest and beside the dispatch cursor.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Face::Cli => "cli",
+            Face::Gui => "gui",
+        }
+    }
+}
+
+/// The faces a subscription fires on when it declares none: **both** (`AMB-D-383`). A bare event-name
+/// string and an object that omits `faces` mean the same thing — a notification-style hook that fires
+/// wherever the event happens.
+fn default_faces() -> Vec<Face> {
+    vec![Face::Cli, Face::Gui]
+}
+
+/// **One event a plugin subscribes to, and how its hook is fired** (`AMB-D-383`).
+///
+/// A subscription carries three things: the `event` name, the [`faces`](EventSubscription::faces) it fires
+/// on, and whether its output is a [`reply`](EventSubscription::reply) the caller consumes. The last two
+/// have defaults that make the common case a bare string — `"task.done"` is a notification that fires on
+/// both faces and replies to no one, equal to `{ event: "task.done", faces: [cli, gui], reply: false }`.
+/// An author writes the object form only to narrow the faces or ask for a reply; the worktree advice hook
+/// is `{ event: "task.status_changed", faces: [cli], reply: true }`.
+///
+/// **Shape only, like the rest of this module.** That `reply: true` is allowed only with `faces: [cli]`,
+/// and that `faces` is non-empty, are rules the validator enforces (`AMB-D-354`/`AMB-D-383`); serde already
+/// refuses a face token outside the vocabulary, the same way an unknown `scope` fails to parse. The
+/// dispatcher reads `faces` to decide whether the driving face fires this hook and `reply` to decide
+/// whether to relay its output — neither is this type's to act on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventSubscription {
+    /// The event name this fires for — one of
+    /// [`plugin_payload::V1_EVENTS`](crate::plugin_payload::V1_EVENTS). That it names a real event is the
+    /// validator's to enforce; an unrecognised name is inert here, since only catalog events are ever fired.
+    pub event: String,
+    /// The faces this hook fires on. Default — an omitted key, or the bare-string form — is both.
+    pub faces: Vec<Face>,
+    /// Whether the hook's output is relayed to the caller (`AMB-D-383`). `true` is only meaningful — and
+    /// only valid — with `faces: [cli]`, the one face with a caller to relay to. Default is `false`: a
+    /// notification no one waits on.
+    pub reply: bool,
+}
+
+impl EventSubscription {
+    /// A subscription to `event` with the defaults — both faces, no reply. This is the meaning of the
+    /// bare-string form, and the shape a re-emitted string subscription round-trips through.
+    pub fn new(event: impl Into<String>) -> Self {
+        Self { event: event.into(), faces: default_faces(), reply: false }
+    }
+
+    /// Whether this is the plain notification default — both faces, no reply — which is exactly what the
+    /// bare-string form means. The serializer emits a bare string for it, so an author's `"task.done"`
+    /// round-trips verbatim (the same absent-equals-empty spirit the rest of the manifest keeps).
+    fn is_bare(&self) -> bool {
+        !self.reply && self.faces == default_faces()
+    }
+}
+
+impl Serialize for EventSubscription {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        if self.is_bare() {
+            return s.serialize_str(&self.event);
+        }
+        let mut st = s.serialize_struct("EventSubscription", 3)?;
+        st.serialize_field("event", &self.event)?;
+        st.serialize_field("faces", &self.faces)?;
+        st.serialize_field("reply", &self.reply)?;
+        st.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for EventSubscription {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        // Two written forms (`AMB-D-383`): a bare event name, or an object that may narrow `faces` and ask
+        // for `reply`. `untagged` tries the string first, then the object; an object missing `event`, or
+        // carrying a face token outside the vocabulary, matches neither and is refused — the shape door the
+        // rest of the manifest passes through.
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Name(String),
+            Full {
+                event: String,
+                #[serde(default = "default_faces")]
+                faces: Vec<Face>,
+                #[serde(default)]
+                reply: bool,
+            },
+        }
+        Ok(match Repr::deserialize(d)? {
+            Repr::Name(event) => EventSubscription::new(event),
+            Repr::Full { event, faces, reply } => EventSubscription { event, faces, reply },
+        })
     }
 }
 
@@ -249,19 +365,23 @@ pub struct Manifest {
     /// empty forms stay the same document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub config: Vec<ConfigField>,
-    /// The observation events this plugin subscribes to — the v1 event names
-    /// ([`plugin_payload::V1_EVENTS`](crate::plugin_payload::V1_EVENTS)) it wants to be fired for. The
+    /// The observation events this plugin subscribes to — each an [`EventSubscription`] naming a v1 event
+    /// ([`plugin_payload::V1_EVENTS`](crate::plugin_payload::V1_EVENTS)) and how its hook fires. The
     /// subscription resolver (`AMB-D-367`, `AMB-T-2032`) fires an enabled plugin only for an event whose
     /// name appears here, so a plugin with no `events` observes nothing — a command-only plugin declares an
-    /// empty list.
+    /// empty list. A subscription may be a bare event-name string (the notification default: both faces, no
+    /// reply) or an object narrowing `faces` / asking for `reply` (`AMB-D-383`) — the two forms round-trip,
+    /// a bare string re-emitting as a bare string.
     ///
-    /// **This module only carries the strings**; that each names a real v1 event is the validator's to
-    /// enforce (`AMB-D-354` / `AMB-T-1988`) — the one home for the rules — and an unrecognised name is
-    /// simply inert here, since only catalog events are ever fired. Absent means no subscription, and an
-    /// empty list does not serialize, so a re-emitted manifest for a command-only plugin is byte-for-byte
-    /// what an author who omitted `events` wrote (the same absent-equals-empty rule as `config`).
+    /// **This module only carries the subscriptions**; that each names a real v1 event, and that a `reply`
+    /// hook declares `faces: [cli]` with a non-empty face set, are the validator's to enforce
+    /// (`AMB-D-354` / `AMB-D-383` / `AMB-T-1988`) — the one home for the rules — and an unrecognised event
+    /// name is simply inert here, since only catalog events are ever fired. Absent means no subscription,
+    /// and an empty list does not serialize, so a re-emitted manifest for a command-only plugin is
+    /// byte-for-byte what an author who omitted `events` wrote (the same absent-equals-empty rule as
+    /// `config`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub events: Vec<String>,
+    pub events: Vec<EventSubscription>,
 }
 
 impl Manifest {
@@ -538,15 +658,92 @@ mod tests {
         // An empty list does not re-serialize, mirroring `config` (absent equals empty).
         assert!(serde_json::to_value(&m).unwrap().get("events").is_none());
 
-        // A declared subscription round-trips verbatim.
+        // A bare-string subscription round-trips verbatim, and means the notification default.
         let mut v = full_json();
         v["events"] = serde_json::json!(["task.created", "comment.added"]);
         let m: Manifest = serde_json::from_value(v).unwrap();
-        assert_eq!(m.events, vec!["task.created".to_string(), "comment.added".to_string()]);
+        assert_eq!(
+            m.events,
+            vec![EventSubscription::new("task.created"), EventSubscription::new("comment.added")]
+        );
+        assert_eq!(m.events[0].faces, vec![Face::Cli, Face::Gui], "a bare string fires on both faces");
+        assert!(!m.events[0].reply, "a bare string replies to no one");
         assert_eq!(
             serde_json::to_value(&m).unwrap()["events"],
-            serde_json::json!(["task.created", "comment.added"])
+            serde_json::json!(["task.created", "comment.added"]),
+            "a bare string re-emits as a bare string, not an object"
         );
+    }
+
+    /// The object form (`AMB-D-383`): an author narrows the faces or asks for a reply, and it round-trips as
+    /// the object it is — while a bare string beside it stays bare.
+    #[test]
+    fn a_subscription_object_declares_faces_and_reply_and_round_trips() {
+        let mut v = full_json();
+        v["events"] = serde_json::json!([
+            "task.done",
+            { "event": "task.status_changed", "faces": ["cli"], "reply": true },
+        ]);
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        assert_eq!(m.events.len(), 2);
+        // The bare string keeps the notification default.
+        assert_eq!(m.events[0], EventSubscription::new("task.done"));
+        // The object carries exactly what it declared.
+        assert_eq!(m.events[1].event, "task.status_changed");
+        assert_eq!(m.events[1].faces, vec![Face::Cli]);
+        assert!(m.events[1].reply, "the worktree advice hook asks for a reply");
+        // Re-serializing: the bare one stays bare, the object stays an object.
+        assert_eq!(
+            serde_json::to_value(&m).unwrap()["events"],
+            serde_json::json!([
+                "task.done",
+                { "event": "task.status_changed", "faces": ["cli"], "reply": true },
+            ])
+        );
+    }
+
+    /// An object that omits `faces` / `reply` is the notification default — the same meaning as the bare
+    /// string, so it re-emits as a bare string.
+    #[test]
+    fn a_subscription_object_with_no_overrides_equals_the_bare_string() {
+        let mut v = full_json();
+        v["events"] = serde_json::json!([{ "event": "task.created" }]);
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        assert_eq!(m.events, vec![EventSubscription::new("task.created")]);
+        assert_eq!(
+            serde_json::to_value(&m).unwrap()["events"],
+            serde_json::json!(["task.created"]),
+            "an object with no overrides collapses back to the bare string it equals"
+        );
+    }
+
+    /// A face token outside the vocabulary is refused at the shape, the same way an unknown `scope` or `os`
+    /// is — the validator never sees it.
+    #[test]
+    fn a_face_outside_the_vocabulary_does_not_parse() {
+        let mut v = full_json();
+        v["events"] = serde_json::json!([{ "event": "task.done", "faces": ["server"] }]);
+        assert!(
+            serde_json::from_value::<Manifest>(v).is_err(),
+            "a face outside {{cli, gui}} must not parse"
+        );
+    }
+
+    /// A subscription object missing its `event` is refused: it matches neither the string form nor an
+    /// object with an event.
+    #[test]
+    fn a_subscription_object_missing_event_does_not_parse() {
+        let mut v = full_json();
+        v["events"] = serde_json::json!([{ "faces": ["cli"], "reply": true }]);
+        assert!(serde_json::from_value::<Manifest>(v).is_err(), "a subscription needs an event name");
+    }
+
+    #[test]
+    fn face_tokens_are_lowercase_and_stable() {
+        assert_eq!(Face::Cli.as_str(), "cli");
+        assert_eq!(Face::Gui.as_str(), "gui");
+        assert_eq!(serde_json::to_value(Face::Cli).unwrap(), serde_json::json!("cli"));
+        assert_eq!(serde_json::from_value::<Face>(serde_json::json!("gui")).unwrap(), Face::Gui);
     }
 
     #[test]

@@ -2,8 +2,9 @@
 //!
 //! A manifest is untrusted third-party input ([`crate::plugin_manifest`] is the *shape*; serde rejects one
 //! missing a required field). The *rules* on top of that shape — a name that fits the id grammar, a
-//! well-formed checksum, a non-empty OS set, a config schema within the safe floor — are here, so the one
-//! truth about them lives in one function. Two callers share it (`AMB-D-354`):
+//! well-formed checksum, a non-empty OS set, an amenbo floor that reads as a version, a config schema
+//! within the safe floor — are here, so the one truth about them lives in one function. Two callers
+//! share it (`AMB-D-354`):
 //!
 //! - **the door** (install / catalog intake, `AMB-T-1979`, future): fail-closed — a manifest with any
 //!   problem is refused, never listed or installed.
@@ -99,6 +100,9 @@ pub enum ProblemCode {
     SchemaTooLarge,
     /// A config field's key is not a valid identifier (`[a-z][a-z0-9_]*`).
     BadKey,
+    /// A version field does not read as a version, so nothing can be compared against it
+    /// (`min_amenbo`).
+    BadVersion,
 }
 
 impl ProblemCode {
@@ -121,6 +125,7 @@ impl ProblemCode {
         Self::TooManyFields,
         Self::SchemaTooLarge,
         Self::BadKey,
+        Self::BadVersion,
     ];
 
     /// The one place a code string is written; `Serialize` goes through here too.
@@ -143,6 +148,7 @@ impl ProblemCode {
             Self::TooManyFields => "too_many_fields",
             Self::SchemaTooLarge => "schema_too_large",
             Self::BadKey => "bad_key",
+            Self::BadVersion => "bad_version",
         }
     }
 }
@@ -184,6 +190,7 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
     check_repo(&mut problems, &m.repo);
     check_url(&mut problems, &m.url);
     check_checksum(&mut problems, &m.checksum);
+    check_min_amenbo(&mut problems, m.min_amenbo.as_deref());
     check_os(&mut problems, m);
     check_config(&mut problems, m);
 
@@ -345,6 +352,29 @@ fn check_checksum(problems: &mut Vec<Problem>, checksum: &str) {
             ProblemCode::BadChecksum,
             "checksum must be 'sha256:' followed by 64 lowercase hex digits",
             "checksum は 'sha256:' に続けて小文字16進64桁である必要があります",
+        ));
+    }
+}
+
+/// Check the amenbo floor a manifest declares: absent is fine (no floor), but a floor that is present
+/// must be a version something can be compared against.
+///
+/// The rule is exactly what the comparison later does — [`crate::store::parse_version`], the one parser
+/// — rather than a stricter grammar written out again here, so the door and the compatibility gate can
+/// never disagree about what reads as a version. It is loose on purpose: `1`, `1.8`, `1.8.0-rc.1` and
+/// `1.8.0+build` all compare fine; `latest` does not, and that is what this refuses.
+///
+/// [`crate::plugin_compat`] still treats an unreadable floor as "not met" — the door is where a bad
+/// manifest is caught, not the only place it is survived, since a manifest can be replaced by an update
+/// after it is already installed.
+fn check_min_amenbo(problems: &mut Vec<Problem>, min_amenbo: Option<&str>) {
+    let Some(min) = min_amenbo else { return };
+    if crate::store::parse_version(min).is_none() {
+        problems.push(Problem::new(
+            "min_amenbo",
+            ProblemCode::BadVersion,
+            format!("min_amenbo must be a version like '1.8.0', not '{min}'"),
+            format!("min_amenbo は '1.8.0' のようなバージョンである必要があります（'{min}' は不可）"),
         ));
     }
 }
@@ -607,6 +637,38 @@ mod tests {
         assert!(cs.contains(&ProblemCode::BadChars));
         assert!(cs.contains(&ProblemCode::EmptyOs));
         assert!(cs.contains(&ProblemCode::BadChecksum));
+    }
+
+    // ---- min_amenbo ----
+
+    #[test]
+    fn no_floor_declared_is_fine() {
+        let mut m = valid();
+        m.min_amenbo = None;
+        assert!(validate_manifest(&m).is_empty(), "a manifest may simply not declare a floor");
+    }
+
+    #[test]
+    fn a_floor_that_is_not_a_version_is_refused_at_the_door() {
+        // Without this rule each of these reaches the compatibility gate instead, where the plugin
+        // installs fine and then silently never fires.
+        for min in ["latest", "", "v1.8.0", "1.x", "one.eight.zero"] {
+            let mut m = valid();
+            m.min_amenbo = Some(min.into());
+            let cs = codes(&validate_manifest(&m));
+            assert!(cs.contains(&ProblemCode::BadVersion), "'{min}' must be refused, got {cs:?}");
+        }
+    }
+
+    #[test]
+    fn a_floor_reads_exactly_as_loosely_as_the_comparison_does() {
+        // The door must not be stricter than the parser that later compares against it, or a manifest
+        // amenbo could honour would be rejected for a shape the comparison accepts.
+        for min in ["1", "1.8", "1.8.0", "1.8.0-rc.1", "1.8.0+build.5"] {
+            let mut m = valid();
+            m.min_amenbo = Some(min.into());
+            assert!(validate_manifest(&m).is_empty(), "'{min}' compares fine, so it passes");
+        }
     }
 
     #[test]

@@ -24,11 +24,13 @@
 //! the two sides do not share: an amenbo whose `v` has outgrown the plugin would feed it a payload whose
 //! meaning moved, and a plugin declaring a `v` above ours reads a contract this build cannot produce.
 //!
-//! **A floor amenbo cannot read is not a floor it can claim to meet.** `min_amenbo` is free text as far
-//! as the intake door is concerned ([`plugin_validate`](crate::plugin_validate) checks the manifest's
-//! shape, not this string), so a typo can reach here. Version comparison is loose but not limitless
-//! (`major.minor.patch`, pre-release metadata ignored); when the floor does not parse at all, this gate
-//! reports it rather than waving the plugin through on the strength of a string nobody could compare.
+//! **A floor amenbo cannot read is not a floor it can claim to meet.** The intake door refuses a
+//! `min_amenbo` that does not read as a version ([`plugin_validate`](crate::plugin_validate), by the
+//! same parser this module compares with), so one should not get this far. It is still checked here:
+//! a plugin's manifest is replaced by an update long after it was installed, and this gate is what runs
+//! at enable and at run time. Version comparison is loose but not limitless (`major.minor.patch`,
+//! pre-release metadata ignored); when the floor does not parse at all, this gate reports it rather than
+//! waving the plugin through on the strength of a string nobody could compare.
 
 use std::fmt;
 

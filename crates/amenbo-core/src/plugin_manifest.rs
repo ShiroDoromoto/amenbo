@@ -137,6 +137,8 @@ pub struct Manifest {
     /// version requirement. Stored opaquely, like `checksum` — this module neither parses nor compares
     /// it; reading it is [`crate::plugin_compat`]'s, so the one truth about version ordering lives with
     /// the gate that acts on it (a string it cannot parse is a floor amenbo will not claim to meet).
+    /// A value that reads as no version at all is refused earlier, at the manifest door
+    /// ([`crate::plugin_validate`]), so it does not reach that gate through a fresh install.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min_amenbo: Option<String>,
     /// The plugin's configuration schema: a flat list of fields the author declares so amenbo can

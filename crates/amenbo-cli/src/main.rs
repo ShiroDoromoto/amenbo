@@ -21,6 +21,7 @@ use serde_json::json;
 use amenbo_core::config::Paths;
 use amenbo_core::model::{ActorKind, Attachment, AttachmentTarget, Priority, TaskStatus, View};
 use amenbo_core::ops::Position;
+use amenbo_core::plugin_drive::Face;
 use amenbo_core::plugin_installed;
 use amenbo_core::plugin_subscribe::EnabledSubscribers;
 use amenbo_core::reach::Reach;
@@ -2076,7 +2077,7 @@ fn with_dispatch(
         }
     };
     let subscribers = EnabledSubscribers::new(&installed, store);
-    match store.drive_plugins_persisted(&subscribers) {
+    match store.drive_plugins_persisted(Face::Cli, &subscribers) {
         Ok(delivered) => {
             for hook in delivered.hooks {
                 let _ = hook.join();

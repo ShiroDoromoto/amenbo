@@ -18,8 +18,8 @@ mod menu;
 /// screen, while `migrate::gate()` blocks every path that would open the store.
 mod migrate;
 mod perf;
-/// The long-lived mount of the plugin observation dispatcher: the session's in-memory cursor, and the
-/// drive the write seam runs after each mutating command.
+/// The long-lived mount of the plugin observation dispatcher: the drive the write seam runs after each
+/// mutating command, over the store's own cursor (`AMB-D-380`).
 mod plugin_dispatch;
 /// OS-specific file watching — the half that wakes `commands::watch_store`. It does not depend on
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three
@@ -45,8 +45,7 @@ const CHECK_UPDATES_EVENT: &str = "menu://check-updates";
 /// there are exactly two callers: startup (no migration needed, or migration succeeded) and a
 /// successful `migration_retry`. Garbage-collecting device state (read receipts, inbox archive)
 /// scans, so it goes to a thread of its own rather than hold up launch; a failure there is not fatal
-/// and is only logged. Starting the plugin dispatcher's session cursor reads the store too, so it
-/// takes the same route.
+/// and is only logged.
 fn start_store_threads(app: tauri::AppHandle) {
   std::thread::spawn(move || commands::watch_store(app));
   std::thread::spawn(|| {
@@ -54,7 +53,6 @@ fn start_store_threads(app: tauri::AppHandle) {
       log::warn!("gc_device_state failed: {e}");
     }
   });
-  std::thread::spawn(plugin_dispatch::prime_at_startup);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -10,9 +10,9 @@
 //!
 //! **Stateless, cursor owned by the caller** (`AMB-D-367`). Like [`events_since`], this holds no cursor of
 //! its own: [`deliver`] takes the caller's cursor and returns the one to store next. The single dispatcher
-//! keeps *one* cursor — a short-lived CLI persists it in the store between runs, a long-lived GUI holds it
-//! in memory — and that mounting, together with the persistence, is the caller's (`AMB-T-1975`). Keeping
-//! the delivery function pure is what lets both faces drive it the same way.
+//! keeps *one* cursor, persisted in the store and shared by both faces (`AMB-D-380`); that mounting, and
+//! the persistence with it, is the caller's ([`crate::plugin_drive`]). Keeping the delivery function pure
+//! is what lets both faces drive it the same way.
 //!
 //! **Who subscribes is a seam.** [`deliver`] asks a [`Subscribers`] which plugins observe an event and
 //! composes each one's stdin — the event payload, with that plugin's non-secret config folded under

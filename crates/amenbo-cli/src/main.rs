@@ -4942,6 +4942,10 @@ fn run_restore(
         });
     };
     let archive = std::path::Path::new(&path);
+    // Ask the release-stamp gate up front (`AMB-D-378`). Core refuses this restore anyway — the gate lives
+    // with the code that migrates — but asking here keeps its message intact: it names the three ways
+    // through, and reaching it through the wrapper below would bury them under the too-new-archive hint.
+    amenbo_core::build_stamp::ensure_may_migrate().map_err(CliError::from)?;
     // Read the manifest before the destructive prompt: it is cheap (no extraction) and it is where an
     // archive this build cannot read is refused, so the user is not asked to consent to a restore that
     // was never going to run.

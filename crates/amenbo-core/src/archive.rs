@@ -1040,13 +1040,32 @@ fn place_blobs(
 /// see [`place_blobs`]. On an unreadable layout, a too-new generation (pre-flight or authoritative gate),
 /// or a staging verification failure, the live tree is left untouched; on an I/O failure mid-swap the aside
 /// goes back. `progress` observes the phases (and each blob) and may cancel at those boundaries.
+///
+/// **An unreleased build is refused here** ([`ensure_may_restore_over`], `AMB-D-378`): this is the other
+/// path that runs the version chain, and the one a startup gate never sees — a live store already at this
+/// build's format leaves nothing pending, and the restore then carries the archive forward regardless.
 pub fn restore_into(
     archive: &Path,
     stamp: &str,
     dest: &Path,
     progress: &mut impl FnMut(&Progress) -> ControlFlow<()>,
 ) -> Result<RestoreReport> {
+    ensure_may_restore_over(dest)?;
     restore_staging(archive, stamp, dest, Staging::Migrate(chain::STEPS), progress)
+}
+
+/// The release-stamp gate, asked only when the restore targets **this device's live store**
+/// ([`restore_dest`] — what the CLI and the GUI pass, and the only store a user's `amenbo restore`
+/// replaces). A restore into a directory a caller named is not the irreversible act the gate is about: the
+/// chain runs over a copy in a staging directory either way, and what it lands on is that caller's file.
+///
+/// The gate itself is [`crate::build_stamp::ensure_may_migrate`], unchanged and unduplicated — the rule for
+/// "may this build carry data forward" has one home, and both migration paths ask it.
+fn ensure_may_restore_over(dest: &Path) -> Result<()> {
+    if dest != restore_dest() {
+        return Ok(());
+    }
+    crate::build_stamp::ensure_may_migrate()
 }
 
 /// Restore an archive **as it was taken** — the rollback half of the same envelope, for a migration that
@@ -2035,6 +2054,36 @@ mod tests {
             !live.join("store.incoming-roll.sqlite").exists(),
             "and the file the swap was going to rename in is gone"
         );
+    }
+
+    /// The release-stamp gate stands at the front of a restore over this device's live store
+    /// (`AMB-D-378`): a test binary carries no release stamp, so the refusal is what comes back — and it
+    /// comes back *before* the archive is even read, which is why naming one that does not exist is safe
+    /// here. Nothing in the live tree is touched either way.
+    ///
+    /// Skipped when the run is isolated by `AMENBO_HOME`, which is a deliberate arm of the gate (an
+    /// isolated store is nobody's production data) rather than a case this test could assert.
+    #[test]
+    fn an_unstamped_build_cannot_restore_over_this_devices_store() {
+        if crate::env::home().is_some() {
+            return;
+        }
+        let missing = scratch("restore-gate").join(format!("nothing.{ARCHIVE_EXT}"));
+        let err = restore_into(&missing, "S", &restore_dest(), &mut crate::progress::ignore)
+            .expect_err("an unstamped build must not carry the live store forward");
+        assert!(
+            format!("{err:?}").contains("AMENBO_ALLOW_UNSTAMPED_MIGRATE"),
+            "the gate refused, not the missing archive: {err:?}"
+        );
+    }
+
+    /// A restore into a file the caller named is not gated — the archive is carried forward over *their*
+    /// file, not over the device's store. This is also what keeps the suites above running: they restore
+    /// into scratch directories from an unstamped test binary.
+    #[test]
+    fn a_restore_into_a_named_file_is_not_gated() {
+        let dest = scratch("restore-ungated").join(crate::config::STORE_FILE_NAME);
+        assert!(ensure_may_restore_over(&dest).is_ok());
     }
 
     /// SQLite names no file in `file is not a database` — so every failure that opened a file by path has

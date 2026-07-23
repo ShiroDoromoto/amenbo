@@ -479,6 +479,9 @@ verify:
 ## Prod GUI (local build). Stable distribution signing is retired = this does not use a distribution
 ## identity; it signs with the local stable self-signature (codesign-local) only to stop the dev
 ## box's rebuild re-prompt. Prod distribution is make release.
+## This bundle points at the PRODUCTION app-data (that is what "prod" means here), but it carries no
+## release stamp, so launching it cannot migrate that store forward. The stamp (`AMENBO_BUILD`) is
+## set in release.yml only = never add it here.
 gui:
 	cd app && npm run tauri build
 	@scripts/codesign-local.sh sign "$(GUI_APP)"

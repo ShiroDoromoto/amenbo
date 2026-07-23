@@ -15,6 +15,7 @@ pub mod agents;
 pub mod archive;
 pub mod binding;
 pub mod blob;
+pub mod build_stamp;
 pub mod config;
 pub mod doctor;
 pub mod env;

@@ -233,11 +233,12 @@ pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
 /// cannot be reopened — reject has no inverse. A superseded decision *can* be, because being
 /// superseded is not a status but a projection of the edges: drop the edge behind an erroneous
 /// supersede and the target is current again. Reopen is non-destructive and reversible, so it is open
-/// to AI actors too.
-pub fn reopen(tx: &WriteTx<'_>, id: i64) -> Result<Decision> {
+/// to AI actors too. Returns `(decision, changed)` like its sibling verdicts, so a caller can tell the
+/// noop from a premise it has just un-settled.
+pub fn reopen(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
     let before = live_before(tx, id)?;
     match before.status {
-        DecisionStatus::Proposed => return Ok(before), // idempotent (already editable)
+        DecisionStatus::Proposed => return Ok((before, false)), // idempotent (already editable)
         DecisionStatus::Accepted => {}
         other => {
             return Err(Error::invalid(
@@ -259,7 +260,7 @@ pub fn reopen(tx: &WriteTx<'_>, id: i64) -> Result<Decision> {
         ..before.clone()
     };
     emit_update(tx, record::decision(&before), record::decision(&after))?;
-    Ok(after)
+    Ok((after, true))
 }
 
 /// Replace decision `old_id` with decision `new_id` (the supersession chain — the heart of
@@ -1074,7 +1075,8 @@ mod tests {
         accept(tx, d.id, Some("user-1".to_string())).unwrap();
         // reopen un-settles it back to discussion, clearing decided_* — this is its whole job now
         // (editing does not need it: an accepted decision edits in place, see the update test).
-        let re = reopen(tx, d.id).unwrap();
+        let (re, changed) = reopen(tx, d.id).unwrap();
+        assert!(changed, "an accepted decision really reopens");
         assert_eq!(re.status, DecisionStatus::Proposed);
         assert!(re.decided_at.is_none(), "decided_at is cleared");
         assert!(re.decided_by.is_none(), "decided_by is cleared");
@@ -1144,7 +1146,9 @@ mod tests {
         let pid = mk_project(tx, "amenbo 開発");
         // Proposed is idempotent: it is already un-settled.
         let d = new_decision(tx, pid, "議論中の決定");
-        assert_eq!(reopen(tx, d.id).unwrap().status, DecisionStatus::Proposed);
+        let (again, changed) = reopen(tx, d.id).unwrap();
+        assert_eq!(again.status, DecisionStatus::Proposed);
+        assert!(!changed, "reopening a proposed decision changes nothing");
         // Rejected cannot be reopened: reject has no inverse.
         let r = new_decision(tx, pid, "却下した決定");
         reject(tx, r.id).unwrap();
@@ -1154,7 +1158,7 @@ mod tests {
         accept(tx, old.id, None).unwrap();
         let newer = new_decision(tx, pid, "新: 置き換える");
         supersede(tx, newer.id, old.id, None).unwrap();
-        assert_eq!(reopen(tx, old.id).unwrap().status, DecisionStatus::Proposed);
+        assert_eq!(reopen(tx, old.id).unwrap().0.status, DecisionStatus::Proposed);
     }
 
     #[test]

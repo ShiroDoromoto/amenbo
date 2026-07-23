@@ -37,6 +37,12 @@ use crate::plugin_log::{self, Outcome, Run};
 /// runaway from leaking a process for good.
 pub const HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// How long a `reply:true` hook may run before its reply is given up on (`AMB-D-383`). Shorter than
+/// [`HOOK_TIMEOUT`] because a reply is run **synchronously** — the caller (the AI at a CLI command) is
+/// waiting on it — so the bound is what keeps a slow or wedged advice hook from stalling the command it
+/// rode in on. Overrun means no reply, not a stalled command: the run is still logged, the drain moves on.
+pub const REPLY_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// One hook to launch: **which plugin**, **for which event**, and the invocation carrying the payload.
 ///
 /// The invocation alone would run just as well — but it names only a program path, and by the time the
@@ -105,15 +111,42 @@ pub fn fire_with_timeout(
         .collect()
 }
 
-/// Run one hook under `timeout`, warn on anything but a clean exit, and record the run in the execution
-/// log (`AMB-D-361`). Never returns — the hook face has nowhere to return an error to, so a failure becomes
-/// a log line and stops there.
-///
-/// The four arms below are the four ways a hook ends — clean, non-zero, killed at the bound, never
-/// launched — and each names the plugin and the event it ran for. The clean arm stays silent in `tracing`
-/// (a working plugin is not news) but is still recorded: "it ran and it was fine" is exactly what a reader
-/// asking why nothing happened needs to be able to rule out.
+/// Run one fire-and-forget hook under `timeout` and record it in the execution log (`AMB-D-361`). Never
+/// returns anything — the fire-and-forget face has nowhere to hand an error or an output to, so a run
+/// becomes a log line and stops there. The running itself, and the warning on anything but a clean exit,
+/// are [`execute`]'s; this only decides the result's fate: log it and drop it.
 fn run_one(hook: &Hook, timeout: Duration, log: Option<&Path>) {
+    let recorded = execute(hook, timeout);
+    if let Some(path) = log {
+        plugin_log::record(path, &recorded);
+    }
+}
+
+/// Run one `reply:true` hook synchronously and hand its **advice** back to the caller (`AMB-D-383`).
+///
+/// This is the consumed-reply path [`deliver`](crate::plugin_dispatch::deliver) takes on the CLI face: the
+/// hook is run inline (not on a background thread), recorded in the execution log exactly as
+/// [`run_one`] records a fire-and-forget one, and its stderr is returned for the caller to surface. A reply
+/// is carried only when the hook actually **ran** and wrote something — a clean or non-zero exit with
+/// non-empty stderr; the exit code is not the gate, since stderr is the advice channel (`AMB-D-353`), not
+/// stdout. A timeout (`AMB-D-383`: overrun is dropped) or a failure to launch produces no reply — nothing
+/// useful was said — while the log still carries the warning [`execute`] emitted.
+pub fn run_reply(hook: &Hook, timeout: Duration, log: Option<&Path>) -> Option<String> {
+    let recorded = execute(hook, timeout);
+    if let Some(path) = log {
+        plugin_log::record(path, &recorded);
+    }
+    match recorded.outcome {
+        Outcome::Ok | Outcome::Failed if !recorded.stderr.is_empty() => Some(recorded.stderr),
+        _ => None,
+    }
+}
+
+/// Run one hook under `timeout`, warn on anything but a clean exit, and build the [`Run`] to record. Shared
+/// by the fire-and-forget path ([`run_one`]) and the synchronous reply path ([`run_reply`]): the only
+/// difference between them is what becomes of the result — logged and dropped, or logged and returned — so
+/// the running, the four end-arms, and the warnings all live here, once.
+fn execute(hook: &Hook, timeout: Duration) -> Run {
     let program = hook.invocation.program.display().to_string();
     let run = |outcome, code, elapsed, stderr: &str| Run {
         plugin: hook.plugin.clone(),
@@ -164,7 +197,5 @@ fn run_one(hook: &Hook, timeout: Duration, log: Option<&Path>) {
             run(Outcome::NotLaunched, None, Duration::ZERO, &error.to_string())
         }
     };
-    if let Some(path) = log {
-        plugin_log::record(path, &recorded);
-    }
+    recorded
 }

@@ -22,6 +22,13 @@
 //! plugin fires (`AMB-D-351`). [`NoSubscribers`] is the empty stand-in for a face that mounts no resolver
 //! at all — delivery is then a no-op that still advances the cursor.
 //!
+//! **Most hooks are fired and forgotten; a reply is not** (`AMB-D-383`). Delivery carries the driving
+//! [`Face`], and a subscription fires only on a face it declares. A `reply:true` hook — the worktree advice,
+//! only ever resolved on the CLI face — is the one exception to fire-and-forget: [`deliver`] runs it
+//! **synchronously** under a short bound and carries its stderr back on [`Delivered::replies`] for the
+//! caller to surface, since that output is the whole point of the hook. Every other hook stays fire-and-
+//! forget, its output landing only in the execution log.
+//!
 //! **Delivery is best-effort** (`AMB-D-352`). Generation is leak-free (the event landed in the same
 //! transaction as its cause), but firing is after the fact: a hook that will not spawn, exits non-zero, or
 //! overruns its timeout is a warning and nothing more. And if retention (`AMB-T-2021`) has trimmed past the
@@ -34,7 +41,8 @@ use rusqlite::Connection;
 
 use crate::error::Result;
 use crate::plugin_exec::PluginInvocation;
-use crate::plugin_hooks::Hook;
+use crate::plugin_hooks::{Hook, REPLY_TIMEOUT};
+use crate::plugin_manifest::Face;
 use crate::plugin_payload::Payload;
 use crate::store_engine::{events_since, outbox_head, OutboxSlice};
 
@@ -61,14 +69,34 @@ pub struct Subscriber {
     /// The plugin's non-secret config, placed under the payload's `config` key on stdin. Empty when the
     /// plugin has no text settings — [`deliver`] then adds no `config` key at all.
     pub config: serde_json::Map<String, serde_json::Value>,
+    /// Whether this subscription's output is relayed to the caller (`AMB-D-383`). `true` is the worktree
+    /// advice case: [`deliver`] runs it **synchronously** under a short bound and carries its stderr back on
+    /// [`Delivered::replies`], rather than launching it fire-and-forget. Only ever `true` on the CLI face —
+    /// the resolver already filtered on the driving face, and the validator pins `reply:true` to
+    /// `faces:[cli]`, so a GUI drive never resolves a replying subscriber.
+    pub reply: bool,
 }
 
 impl Subscriber {
-    /// A named subscriber with no text config — an invocation whose stdin is entirely [`deliver`]'s
-    /// payload.
+    /// A named subscriber with no text config and no reply — an invocation whose stdin is entirely
+    /// [`deliver`]'s payload, fired and forgotten.
     pub fn new(plugin: impl Into<String>, invocation: PluginInvocation) -> Self {
-        Self { plugin: plugin.into(), invocation, config: serde_json::Map::new() }
+        Self { plugin: plugin.into(), invocation, config: serde_json::Map::new(), reply: false }
     }
+}
+
+/// A hook's output relayed back to the caller (`AMB-D-383`). A `reply:true` subscription fired on the CLI
+/// face is run synchronously by [`deliver`]; whatever it wrote to stderr — its advice — is carried here for
+/// the caller to surface, beside its provenance (which plugin, which event). This is separate from the
+/// execution log the run is also recorded in (`AMB-D-361`): the log is for later diagnosis, this is the
+/// reply the caller is waiting on right now.
+pub struct Reply {
+    /// The plugin whose hook produced the reply, as the installed registry knows it.
+    pub plugin: String,
+    /// The event that fired the hook.
+    pub event: &'static str,
+    /// What the hook wrote to stderr — the advice to relay. Never empty (an empty reply is not carried).
+    pub stderr: String,
 }
 
 /// Resolves which plugins observe an event — the seam the enable lifecycle fills (`AMB-T-1975`).
@@ -84,9 +112,15 @@ impl Subscriber {
 /// resolves it from the row it drained ([`project_of_event`]). `None` means the event's record no longer
 /// says which project it belonged to — a deleted task is the ordinary case — and a resolver that needs a
 /// project must then fire nothing rather than guess one.
+///
+/// `face` is the face driving this dispatch (`AMB-D-383`): a subscription fires only when its declared
+/// `faces` include it, so a `faces:[cli]` hook stays silent on a GUI drive and vice versa. It is also what
+/// keeps a reply off the wrong face — `reply:true` is valid only with `faces:[cli]`, so a GUI drive never
+/// resolves a replying subscriber.
 pub trait Subscribers {
-    /// The subscribers to fire for `event`, in `project`, before the payload is composed onto stdin.
-    fn resolve(&self, event: &str, project: Option<i64>) -> Vec<Subscriber>;
+    /// The subscribers to fire for `event`, in `project`, on `face`, before the payload is composed onto
+    /// stdin.
+    fn resolve(&self, event: &str, project: Option<i64>, face: Face) -> Vec<Subscriber>;
 }
 
 /// The empty resolver: no event has a subscriber. It is what a face with no mount drives, and what the
@@ -95,7 +129,7 @@ pub trait Subscribers {
 pub struct NoSubscribers;
 
 impl Subscribers for NoSubscribers {
-    fn resolve(&self, _event: &str, _project: Option<i64>) -> Vec<Subscriber> {
+    fn resolve(&self, _event: &str, _project: Option<i64>, _face: Face) -> Vec<Subscriber> {
         Vec::new()
     }
 }
@@ -107,14 +141,19 @@ impl Subscribers for NoSubscribers {
 /// it started are not cut short), or **drop them to forget** (the true fire-and-forget a long-lived GUI
 /// wants). That choice is the caller's, exactly as [`plugin_hooks::fire`](crate::plugin_hooks::fire)
 /// hands it over.
-#[must_use = "advance the stored cursor to `cursor`, and join or drop `hooks`"]
+#[must_use = "advance the stored cursor to `cursor`, join or drop `hooks`, and surface `replies`"]
 pub struct Delivered {
     /// The cursor to store for the next pass — the id of the last event drained, or the outbox head when a
     /// gap forced a resync. Never moves backwards.
     pub cursor: i64,
-    /// The launched hook threads (one per fired invocation). Join before exiting a short-lived process;
-    /// drop to forget.
+    /// The launched hook threads (one per fired **fire-and-forget** invocation). Join before exiting a
+    /// short-lived process; drop to forget. A `reply:true` hook is not here — it ran synchronously and its
+    /// output is in [`replies`](Delivered::replies).
     pub hooks: Vec<JoinHandle<()>>,
+    /// The replies gathered from `reply:true` hooks, in drain order (`AMB-D-383`). Each ran synchronously
+    /// under [`REPLY_TIMEOUT`], and carries the stderr the caller should surface. Empty on the GUI face,
+    /// which never resolves a replying subscriber, and empty whenever no fired hook asked to reply.
+    pub replies: Vec<Reply>,
     /// Retention had trimmed past the caller's cursor: the span between it and the head is lost and was
     /// not fired. The cursor is resynced to the head. A caller may log this (`AMB-D-361`); delivery being
     /// best-effort, it is not an error (`AMB-D-352`).
@@ -131,17 +170,25 @@ pub struct Delivered {
 /// and skipped, and the cursor still walks past it. On a retention gap the cursor is resynced to the head
 /// and nothing is fired for the lost span (see [`Delivered::gapped`]).
 ///
-/// `log` is the execution log (`AMB-D-361`): every run the launched hooks make is recorded there, and so
-/// is a gap — the one thing a reader cannot otherwise learn, since a gap fires nothing and therefore leaves
-/// no run to look at. `None` records nothing, which is what a test of the dispatcher itself wants.
+/// `face` is the face driving this pass (`AMB-D-383`): it is handed to [`Subscribers::resolve`] so only the
+/// subscriptions declaring this face fire, and it is what makes a reply possible — a `reply:true` hook (only
+/// ever resolved on the CLI face) is run synchronously here, under [`REPLY_TIMEOUT`], and its stderr is
+/// carried back on [`Delivered::replies`] instead of being launched fire-and-forget.
+///
+/// `log` is the execution log (`AMB-D-361`): every run — the fire-and-forget hooks *and* the synchronous
+/// replies — is recorded there, and so is a gap — the one thing a reader cannot otherwise learn, since a gap
+/// fires nothing and therefore leaves no run to look at. `None` records nothing, which is what a test of the
+/// dispatcher itself wants.
 pub fn deliver(
     conn: &Connection,
     cursor: i64,
     subs: &dyn Subscribers,
+    face: Face,
     log: Option<&std::path::Path>,
 ) -> Result<Delivered> {
     let mut cursor = cursor;
     let mut hooks: Vec<Hook> = Vec::new();
+    let mut replies: Vec<Reply> = Vec::new();
     loop {
         match events_since(conn, cursor, DELIVER_PAGE)? {
             OutboxSlice::Gap => {
@@ -153,7 +200,12 @@ pub fn deliver(
                 if let Some(path) = log {
                     crate::plugin_log::record_gap(path);
                 }
-                return Ok(Delivered { cursor: outbox_head(conn)?, hooks: Vec::new(), gapped: true });
+                return Ok(Delivered {
+                    cursor: outbox_head(conn)?,
+                    hooks: Vec::new(),
+                    replies: Vec::new(),
+                    gapped: true,
+                });
             }
             OutboxSlice::Events { rows, more } => {
                 for row in &rows {
@@ -185,16 +237,27 @@ pub fn deliver(
                         );
                         None
                     });
-                    for sub in subs.resolve(payload.event, project) {
+                    for sub in subs.resolve(payload.event, project, face) {
                         let json = serde_json::to_string(&with_config(base.clone(), sub.config))?;
                         // The event is kept beside the plugin's name here, where both are still known:
                         // a page of events folds into one list of hooks, and the runner below has no
                         // other way back to which row fired which plugin.
-                        hooks.push(Hook::new(
-                            sub.plugin,
-                            payload.event,
-                            sub.invocation.stdin_json(json),
-                        ));
+                        let hook =
+                            Hook::new(sub.plugin, payload.event, sub.invocation.stdin_json(json));
+                        if sub.reply {
+                            // A replying hook (CLI-only, `AMB-D-383`) is run **now**, synchronously under a
+                            // short bound: its stderr is the advice the caller is waiting on, so it cannot
+                            // be launched fire-and-forget like the rest. Overrun or a failure to launch
+                            // yields no reply and never stalls the drain (the run is still logged inside
+                            // `run_reply`). The event is `&'static str`, so it outlives the borrow of `hook`.
+                            let event = hook.event;
+                            if let Some(stderr) = crate::plugin_hooks::run_reply(&hook, REPLY_TIMEOUT, log)
+                            {
+                                replies.push(Reply { plugin: hook.plugin, event, stderr });
+                            }
+                        } else {
+                            hooks.push(hook);
+                        }
                     }
                 }
                 if !more {
@@ -204,7 +267,7 @@ pub fn deliver(
         }
     }
     let hooks = crate::plugin_hooks::fire(hooks, log);
-    Ok(Delivered { cursor, hooks, gapped: false })
+    Ok(Delivered { cursor, hooks, replies, gapped: false })
 }
 
 /// The project one drained event happened in, or `None` when nothing says so any more.
@@ -266,7 +329,7 @@ mod tests {
     }
 
     impl Subscribers for Fixed {
-        fn resolve(&self, event: &str, _project: Option<i64>) -> Vec<Subscriber> {
+        fn resolve(&self, event: &str, _project: Option<i64>, _face: Face) -> Vec<Subscriber> {
             if self.events.contains(&event) {
                 vec![Subscriber::new("fixed", self.invocation.clone())]
             } else {
@@ -296,7 +359,7 @@ mod tests {
         emit(&e, "task.created", 1, None);
         emit(&e, "task.status_changed", 2, Some("in_progress"));
 
-        let d = deliver(e.conn(), 0, &NoSubscribers, None).unwrap();
+        let d = deliver(e.conn(), 0, &NoSubscribers, Face::Cli, None).unwrap();
         assert_eq!(d.cursor, 2, "the cursor walks to the head even with nobody listening");
         assert!(d.hooks.is_empty(), "no subscriber, no fire");
         assert!(!d.gapped);
@@ -311,7 +374,7 @@ mod tests {
         emit(&e, "task.status_changed", 3, Some("blocked"));
 
         let subs = Fixed { events: vec!["task.status_changed"], invocation: bogus() };
-        let d = deliver(e.conn(), 0, &subs, None).unwrap();
+        let d = deliver(e.conn(), 0, &subs, Face::Cli, None).unwrap();
         assert_eq!(d.cursor, 3);
         assert_eq!(d.hooks.len(), 2, "two status_changed events fire, the creation does not");
         for h in d.hooks {
@@ -326,13 +389,13 @@ mod tests {
         emit(&e, "task.status_changed", 1, Some("in_progress"));
         let subs = Fixed { events: vec!["task.status_changed"], invocation: bogus() };
 
-        let first = deliver(e.conn(), 0, &subs, None).unwrap();
+        let first = deliver(e.conn(), 0, &subs, Face::Cli, None).unwrap();
         assert_eq!(first.hooks.len(), 1);
         for h in first.hooks {
             h.join().unwrap();
         }
 
-        let second = deliver(e.conn(), first.cursor, &subs, None).unwrap();
+        let second = deliver(e.conn(), first.cursor, &subs, Face::Cli, None).unwrap();
         assert_eq!(second.cursor, first.cursor, "nothing new, so the cursor holds");
         assert!(second.hooks.is_empty(), "the event already fired once");
     }
@@ -346,7 +409,7 @@ mod tests {
         emit(&e, "task.exploded", 2, None); // not a v1 event
 
         let subs = Fixed { events: vec!["task.created", "task.exploded"], invocation: bogus() };
-        let d = deliver(e.conn(), 0, &subs, None).unwrap();
+        let d = deliver(e.conn(), 0, &subs, Face::Cli, None).unwrap();
         assert_eq!(d.cursor, 2, "the cursor walks past the unrecognised row");
         assert_eq!(d.hooks.len(), 1, "only the recognised event resolved a subscriber");
         for h in d.hooks {
@@ -367,7 +430,7 @@ mod tests {
         tx.commit().unwrap();
 
         let subs = Fixed { events: vec!["task.created"], invocation: bogus() };
-        let d = deliver(e.conn(), 0, &subs, None).unwrap();
+        let d = deliver(e.conn(), 0, &subs, Face::Cli, None).unwrap();
         assert!(d.gapped, "a cursor behind the watermark is a gap");
         assert_eq!(d.cursor, 2, "the cursor resyncs to the head");
         assert!(d.hooks.is_empty(), "the lost span is not replayed");
@@ -386,7 +449,7 @@ mod tests {
         let dir = amenbo_scratch::scratch("dispatch-gap-log");
         let log = dir.join(crate::plugin_log::FILE_NAME);
         let subs = Fixed { events: vec!["task.created"], invocation: bogus() };
-        let d = deliver(e.conn(), 0, &subs, Some(&log)).unwrap();
+        let d = deliver(e.conn(), 0, &subs, Face::Cli, Some(&log)).unwrap();
         assert!(d.gapped);
 
         let lines = crate::plugin_log::read(&log);
@@ -429,9 +492,9 @@ mod tests {
             config: serde_json::Map<String, serde_json::Value>,
         }
         impl Subscribers for WithConfig {
-            fn resolve(&self, event: &str, _project: Option<i64>) -> Vec<Subscriber> {
+            fn resolve(&self, event: &str, _project: Option<i64>, _face: Face) -> Vec<Subscriber> {
                 if event == self.event {
-                    vec![Subscriber { plugin: "configured".into(), invocation: self.invocation.clone(), config: self.config.clone() }]
+                    vec![Subscriber { plugin: "configured".into(), invocation: self.invocation.clone(), config: self.config.clone(), reply: false }]
                 } else {
                     Vec::new()
                 }
@@ -453,7 +516,7 @@ mod tests {
         let e = StoreEngine::open_in_memory().unwrap();
         emit(&e, "task.status_changed", 42, Some("in_progress"));
 
-        let d = deliver(e.conn(), 0, &subs, None).unwrap();
+        let d = deliver(e.conn(), 0, &subs, Face::Cli, None).unwrap();
         assert_eq!(d.hooks.len(), 1);
         for h in d.hooks {
             h.join().unwrap();
@@ -486,7 +549,7 @@ mod tests {
         let e = StoreEngine::open_in_memory().unwrap();
         emit(&e, "task.status_changed", 42, Some("in_progress"));
 
-        let d = deliver(e.conn(), 0, &subs, None).unwrap();
+        let d = deliver(e.conn(), 0, &subs, Face::Cli, None).unwrap();
         assert_eq!(d.hooks.len(), 1);
         for h in d.hooks {
             h.join().unwrap();
@@ -558,5 +621,86 @@ mod tests {
         assert_eq!(project_of_event(conn, ev::COMMENT_ADDED, 999_999).unwrap(), None);
         // An event outside the v1 catalog names no record kind at all.
         assert_eq!(project_of_event(conn, "something.else", task).unwrap(), None);
+    }
+
+    // ───────────────────── the reply path (`AMB-D-383`) ────────────────────────────────────────────
+
+    /// A resolver that fires one subscriber running `invocation` for the named event, with `reply` set as
+    /// given — the seam for exercising the synchronous reply path against a real subprocess.
+    struct Replying {
+        event: &'static str,
+        invocation: PluginInvocation,
+        reply: bool,
+    }
+    impl Subscribers for Replying {
+        fn resolve(&self, event: &str, _project: Option<i64>, _face: Face) -> Vec<Subscriber> {
+            if event == self.event {
+                vec![Subscriber {
+                    plugin: "advisor".into(),
+                    invocation: self.invocation.clone(),
+                    config: serde_json::Map::new(),
+                    reply: self.reply,
+                }]
+            } else {
+                Vec::new()
+            }
+        }
+    }
+
+    /// A `reply:true` hook runs **synchronously** and its stderr comes back on [`Delivered::replies`], named
+    /// by the plugin and the event — not launched fire-and-forget, so it is absent from `hooks`. A real
+    /// subprocess needs a shell, so this is unix-only (the same gate the stdin round-trip tests use).
+    #[cfg(unix)]
+    #[test]
+    fn a_reply_hook_runs_synchronously_and_its_stderr_is_relayed() {
+        let invocation =
+            PluginInvocation::new("/bin/sh").arg("-c").arg("echo 'run the worktree' >&2");
+        let subs = Replying { event: "task.status_changed", invocation, reply: true };
+
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, "task.status_changed", 7, Some("in_progress"));
+
+        let d = deliver(e.conn(), 0, &subs, Face::Cli, None).unwrap();
+        assert!(d.hooks.is_empty(), "a replying hook ran inline, not as a fire-and-forget thread");
+        assert_eq!(d.replies.len(), 1, "its reply is carried back");
+        assert_eq!(d.replies[0].plugin, "advisor");
+        assert_eq!(d.replies[0].event, "task.status_changed");
+        assert_eq!(d.replies[0].stderr.trim(), "run the worktree");
+    }
+
+    /// A `reply:true` hook that writes nothing to stderr yields no reply — an empty reply is not carried, so
+    /// the caller has nothing to surface. It still ran (and was logged); it simply had nothing to say.
+    #[cfg(unix)]
+    #[test]
+    fn a_reply_hook_that_says_nothing_carries_no_reply() {
+        let invocation = PluginInvocation::new("/bin/sh").arg("-c").arg("true");
+        let subs = Replying { event: "task.status_changed", invocation, reply: true };
+
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, "task.status_changed", 7, Some("in_progress"));
+
+        let d = deliver(e.conn(), 0, &subs, Face::Cli, None).unwrap();
+        assert!(d.replies.is_empty(), "a silent reply hook carries nothing back");
+        assert!(d.hooks.is_empty(), "and it was not launched fire-and-forget either");
+    }
+
+    /// The same hook without `reply` is a fire-and-forget one: it lands in `hooks`, and nothing is relayed —
+    /// its stderr goes only to the execution log, as every notification hook's does.
+    #[cfg(unix)]
+    #[test]
+    fn a_non_reply_hook_is_fired_and_forgotten_not_relayed() {
+        let invocation =
+            PluginInvocation::new("/bin/sh").arg("-c").arg("echo 'not advice' >&2");
+        let subs = Replying { event: "task.status_changed", invocation, reply: false };
+
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, "task.status_changed", 7, Some("in_progress"));
+
+        let d = deliver(e.conn(), 0, &subs, Face::Cli, None).unwrap();
+        assert!(d.replies.is_empty(), "a hook that did not ask to reply relays nothing");
+        assert_eq!(d.hooks.len(), 1, "it was launched fire-and-forget");
+        for h in d.hooks {
+            h.join().unwrap();
+        }
     }
 }

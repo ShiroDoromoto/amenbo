@@ -74,6 +74,40 @@ impl Os {
     }
 }
 
+/// **What one switch turns this plugin on** (`AMB-D-379`) — declared by the author, because only the
+/// author knows which one is meaningful for their plugin.
+///
+/// A user is never shown two enable switches for the same plugin. A notifier is answered per project ("do
+/// I want this here"), while a plugin that watches the whole device has nothing a project could usefully
+/// say about it — so amenbo asks for one answer, at the level this field names, and refuses the other. The
+/// per-project *differences* a plugin needs beyond on/off are its **settings**, which have their own tiers
+/// (`AMB-D-356`): "notify at all" is one switch, "to which channel" is a value a project may override.
+///
+/// Not to be confused with [`plugin_config::Scope`](crate::plugin_config::Scope), which names the tier one
+/// config *value* is written at. This names what the *gate* is per.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Scope {
+    /// Enabled per project — the default, and what most plugins want. A project that has not enabled it
+    /// does not run it, and there is no device-wide answer to inherit.
+    #[default]
+    Project,
+    /// Enabled once for the device. A project cannot override it: for a plugin whose work is not a
+    /// project's (it watches the machine, or the store as a whole), a per-project answer would be a switch
+    /// that looks like it does something and does not.
+    Machine,
+}
+
+impl Scope {
+    /// The wire token.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Scope::Project => "project",
+            Scope::Machine => "machine",
+        }
+    }
+}
+
 /// The payload contract version a manifest targets when it declares none: the v1 baseline (`AMB-D-349`).
 /// A fixed literal, deliberately *not* [`crate::plugin_payload::VERSION`] — an omitted `payload_v` means
 /// the plugin was written against the original contract, so it must not drift upward as amenbo bumps its
@@ -124,6 +158,15 @@ pub struct Manifest {
     /// self-declared — absent means `false`.
     #[serde(default)]
     pub official: bool,
+    /// Which switch enables this plugin — per project, or once for the device ([`Scope`], `AMB-D-379`).
+    /// Absent means [`Scope::Project`], the answer that fits most plugins and the safe one: a project that
+    /// has said nothing runs nothing. Declaring `machine` is the author saying a per-project answer would
+    /// be meaningless for their plugin, and the faces then offer only the device-wide switch.
+    ///
+    /// A value outside the two is refused where every other shape error is (`AMB-D-354`): the manifest does
+    /// not parse, so it never reaches the rules or the catalog.
+    #[serde(default)]
+    pub scope: Scope,
     /// The event-payload contract version this plugin reads (`AMB-D-349` — a single integer `v` for the
     /// whole contract, evolving additively). It lets amenbo notice when its own `v` has moved past what a
     /// plugin understands and warn or refuse rather than silently feed it a payload it cannot parse
@@ -214,6 +257,7 @@ mod tests {
             "url": "https://example.com/worktree-v1.tar.gz",
             "checksum": "sha256:deadbeef",
             "official": true,
+            "scope": "project",
             "payload_v": 1,
             "min_amenbo": "1.8.0"
         })
@@ -239,6 +283,34 @@ mod tests {
         assert_eq!(serde_json::to_value(Os::Macos).unwrap(), serde_json::json!("macos"));
         assert_eq!(Os::parse("linux"), Some(Os::Linux));
         assert_eq!(Os::parse("bsd"), None);
+    }
+
+    /// The enable scope is the author's declaration (`AMB-D-379`): absent means per project — the safe
+    /// answer, since a project that has said nothing then runs nothing — and a value outside the two is a
+    /// manifest that does not parse, which is where every other shape error is caught.
+    #[test]
+    fn the_enable_scope_defaults_to_project_and_rejects_anything_else() {
+        let mut v = full_json();
+        v.as_object_mut().unwrap().remove("scope");
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        assert_eq!(m.scope, Scope::Project, "an undeclared scope is per project");
+
+        let mut machine = full_json();
+        machine["scope"] = serde_json::json!("machine");
+        let m: Manifest = serde_json::from_value(machine).unwrap();
+        assert_eq!(m.scope, Scope::Machine);
+        assert_eq!(serde_json::to_value(&m).unwrap()["scope"], serde_json::json!("machine"));
+
+        for bad in ["global", "workspace", "Project", ""] {
+            let mut v = full_json();
+            v["scope"] = serde_json::json!(bad);
+            assert!(
+                serde_json::from_value::<Manifest>(v).is_err(),
+                "a scope outside the vocabulary must not parse: {bad}"
+            );
+        }
+        assert_eq!(Scope::Project.as_str(), "project");
+        assert_eq!(Scope::Machine.as_str(), "machine");
     }
 
     #[test]

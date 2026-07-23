@@ -163,6 +163,7 @@ mod tests {
             checksum: String::new(),
             signature: None,
             official: false,
+            scope: crate::plugin_manifest::Scope::Project,
             // The contract this build speaks: the compatibility gate reads this one, so it tracks
             // `VERSION` rather than sitting on a literal that a bump would turn into a false failure.
             payload_v: crate::plugin_payload::VERSION,

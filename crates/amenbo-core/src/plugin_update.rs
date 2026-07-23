@@ -20,11 +20,19 @@
 //! plugin comes back enabled, configured, and consented. Wiping those is `uninstall`'s job and only
 //! `uninstall`'s (`AMB-D-357`).
 //!
-//! **It fails safe at every step.** The compatibility gate, the download, the verification and the backup
-//! all run before a single byte of the install is overwritten, so a failure in any of them leaves the
-//! working plugin exactly as it was. Past that point the previous build is retained beside the new one
-//! ([`backup_path`]) — the `.bak` a rollback restores from, in the shape self-update already uses
-//! (`AMB-D-341`).
+//! **It fails safe at every step.** The compatibility gate, the caller's `approve` gate, the download, the
+//! verification and the backup all run before a single byte of the install is overwritten, so a failure in
+//! any of them leaves the working plugin exactly as it was. Past that point the previous build is retained
+//! beside the new one ([`backup_path`]) — the `.bak` a rollback restores from, in the shape self-update
+//! already uses (`AMB-D-341`).
+//!
+//! **The caller's gate on the new schema.** [`apply`] and [`apply_all`] hand the new manifest to an
+//! `approve` closure before writing, and honour a refusal by keeping the working build (`AMB-D-359`). That
+//! is where the config re-check lives: a build whose new schema declares a `required` setting an *enabled*
+//! plugin has no value for is held back — the same fail-before-write posture as compatibility, aligned with
+//! the enable gate that already refuses this at install time (`AMB-D-351`/`AMB-D-356`). This module owns
+//! the timing (after "is it a different build", before the network); the caller resolves the values and the
+//! enabled state, exactly as [`plugin_trust::enable`](crate::plugin_trust::enable) takes its `has_value`.
 //!
 //! **What "a different build" means here.** A manifest carries no version number, so there is nothing to
 //! compare as one. What it does carry is the `checksum` of the exact bytes the asset serves, which is the
@@ -205,8 +213,18 @@ pub fn backup_manifest_path(paths: &Paths, name: &str) -> PathBuf {
 ///
 /// Refuses, leaving the install untouched, when the plugin is not installed (that is `plugin install`'s
 /// door), when the catalog does not list it (installed by hand, or delisted since — there is no build to
-/// move to), when the offered build cannot run on this amenbo, or when its asset does not verify.
-pub fn apply(paths: &Paths, name: &str) -> Result<Option<Replaced>> {
+/// move to), when the offered build cannot run on this amenbo, when the caller's `approve` gate holds it
+/// back (a new `required` setting an enabled plugin has no value for — `AMB-D-359`), or when its asset does
+/// not verify.
+///
+/// `approve` is handed the new manifest after this confirms it is a different build and before anything is
+/// fetched or written; returning `Err` keeps the working build in place. A caller with no gate to add
+/// passes `|_| Ok(())`.
+pub fn apply(
+    paths: &Paths,
+    name: &str,
+    approve: impl FnOnce(&Manifest) -> Result<()>,
+) -> Result<Option<Replaced>> {
     let installed = plugin_installed::read(paths, name)?;
     // Unreachable on a platform amenbo ships for, and a refusal rather than "nothing to do" if it ever is
     // reached: a caller who named a plugin is owed the reason, not a silent no-op.
@@ -226,6 +244,9 @@ pub fn apply(paths: &Paths, name: &str) -> Result<Option<Replaced>> {
     if !differs(&installed.manifest, &entry.manifest, os) {
         return Ok(None);
     }
+    // The caller's gate on the new schema, before the network (see the module docs): a refusal keeps the
+    // working build exactly as it was.
+    approve(&entry.manifest)?;
     replace(
         paths,
         &Update {
@@ -243,10 +264,17 @@ pub fn apply(paths: &Paths, name: &str) -> Result<Option<Replaced>> {
 /// single-plugin path uses, so a plugin that fails is left exactly as it was and the next one is still
 /// attempted (`AMB-D-352`'s posture — one plugin's problem is not the others'). Plugins already on the
 /// catalog's build are not in the result at all; there was nothing to do for them.
-pub fn apply_all(paths: &Paths) -> Result<Vec<Outcome>> {
+///
+/// `approve` gates each plugin's new manifest the same way [`apply`] does, per plugin: one held back for an
+/// unsatisfied `required` (`AMB-D-359`) is a [`Outcome::Failed`] carrying that reason, and the rest are
+/// still applied. A caller with no gate passes `|_| Ok(())`.
+pub fn apply_all(
+    paths: &Paths,
+    approve: impl Fn(&Manifest) -> Result<()>,
+) -> Result<Vec<Outcome>> {
     Ok(pending(paths)?
         .into_iter()
-        .map(|update| match replace(paths, &update) {
+        .map(|update| match approve(&update.available).and_then(|()| replace(paths, &update)) {
             Ok(replaced) => Outcome::Replaced(Box::new(replaced)),
             Err(error) => Outcome::Failed { name: update.name, error },
         })
@@ -653,7 +681,7 @@ mod tests {
     #[test]
     fn updating_something_not_installed_is_not_found() {
         let paths = paths_at("absent");
-        assert_eq!(apply(&paths, "worktree").unwrap_err().code(), "not_found");
+        assert_eq!(apply(&paths, "worktree", |_| Ok(())).unwrap_err().code(), "not_found");
     }
 
     // ---- rolling one back ----

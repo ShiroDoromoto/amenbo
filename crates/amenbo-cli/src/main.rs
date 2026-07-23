@@ -1135,8 +1135,10 @@ fn plugin_update_check_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError
 /// nothing. What is said afterwards is what a reader most needs to know they did *not* just lose — the
 /// gate and the settings are still there — and where the build that was replaced went.
 fn plugin_update_apply_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
-    let applied =
-        amenbo_core::plugin_update::apply(&store.paths, name).map_err(CliError::from)?;
+    let applied = amenbo_core::plugin_update::apply(&store.paths, name, |available| {
+        refuse_update_leaving_required_unset(store, available)
+    })
+    .map_err(CliError::from)?;
 
     match applied {
         None => {
@@ -1173,7 +1175,10 @@ fn plugin_update_apply_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i
 fn plugin_update_all_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     use amenbo_core::plugin_update::Outcome;
 
-    let outcomes = amenbo_core::plugin_update::apply_all(&store.paths).map_err(CliError::from)?;
+    let outcomes = amenbo_core::plugin_update::apply_all(&store.paths, |available| {
+        refuse_update_leaving_required_unset(store, available)
+    })
+    .map_err(CliError::from)?;
     let failed = outcomes.iter().filter(|o| matches!(o, Outcome::Failed { .. })).count();
 
     if outcomes.is_empty() {
@@ -1241,18 +1246,14 @@ fn satisfied_settings(
     name: &str,
     fields: &[amenbo_core::plugin_manifest::ConfigField],
     scope: amenbo_core::plugin_config::Scope,
-) -> Result<Vec<String>, CliError> {
+) -> amenbo_core::error::Result<Vec<String>> {
     use amenbo_core::plugin_config::{self, Scope};
     let mut satisfied = Vec::new();
     for field in fields {
-        let held = plugin_config::get(store, field, name, Scope::MachineDefault)
-            .map_err(CliError::from)?
-            .is_some()
+        let held = plugin_config::get(store, field, name, Scope::MachineDefault)?.is_some()
             || match scope {
                 Scope::MachineDefault => false,
-                Scope::Project(_) => {
-                    plugin_config::get(store, field, name, scope).map_err(CliError::from)?.is_some()
-                }
+                Scope::Project(_) => plugin_config::get(store, field, name, scope)?.is_some(),
             };
         if held {
             satisfied.push(field.key.clone());
@@ -1289,6 +1290,61 @@ fn plugin_value_tier(gate: amenbo_core::plugin_trust::Gate) -> amenbo_core::plug
     }
 }
 
+/// The config re-check an update runs before it replaces a build (`AMB-D-359`), handed to
+/// [`amenbo_core::plugin_update::apply`] / `apply_all` as their `approve` gate. It re-judges the **new**
+/// manifest's `required` settings the same way `plugin enable` does (`AMB-D-351`/`AMB-D-356`): if the
+/// plugin is enabled at the gate this command can see, and the new schema declares a `required` field this
+/// machine holds no value for, the update is held back and the working build stays — the reason names the
+/// fields to set first. Aligned with the apply side's fail-before-write posture: the safe reading is to
+/// refuse the replacement, not to leave an enabled plugin missing a value its own author marked required.
+///
+/// It lets the update through, unchanged, in every case where there is nothing to break: a plugin not
+/// installed (nothing enabled), a build this amenbo cannot run anyway (the write path refuses it with its
+/// own wording), a project-scoped plugin with no project in context, and — the common case — a disabled plugin,
+/// which fires nothing and whose own enable gate will catch an empty `required` when it is next turned on.
+fn refuse_update_leaving_required_unset(
+    store: &Store,
+    available: &amenbo_core::plugin_manifest::Manifest,
+) -> amenbo_core::error::Result<()> {
+    let name = available.name.as_str();
+    // An incompatible new build is refused by the write path itself; there is no point re-checking config
+    // for a build that will not run, and its own wording is the one to show.
+    if amenbo_core::plugin_compat::check(available).is_err() {
+        return Ok(());
+    }
+    // Where the plugin is enabled now is keyed by the *installed* scope; the new schema is what we re-judge
+    // against. Unreadable install, or a project-scoped plugin with no project here, is not enabled anywhere
+    // this command can see — nothing to hold back.
+    let Ok(installed) = amenbo_core::plugin_installed::read(&store.paths, name) else {
+        return Ok(());
+    };
+    let Ok(gate) = amenbo_core::plugin_trust::gate_for(installed.manifest.scope, bound_project(store))
+    else {
+        return Ok(());
+    };
+    if !amenbo_core::plugin_trust::effective_enabled_in(store, name, gate)? {
+        return Ok(());
+    }
+
+    let satisfied = satisfied_settings(store, name, &available.config, plugin_value_tier(gate))?;
+    let missing = amenbo_core::plugin_trust::missing_required(&available.config, |f| {
+        satisfied.iter().any(|k| k == &f.key)
+    });
+    if missing.is_empty() {
+        return Ok(());
+    }
+    Err(amenbo_core::error::Error::invalid(
+        format!(
+            "the new build of '{name}' needs setting(s) not provided: {}. Set them first, then update — the build in place is unchanged: `amenbo plugin config set {name} <key> <value>`",
+            missing.join(", ")
+        ),
+        format!(
+            "'{name}' の新しい版は未入力の必須設定を要求します（{}）。先に設定してから更新してください——今の版はそのまま変わりません：`amenbo plugin config set {name} <key> <value>`",
+            missing.join("、")
+        ),
+    ))
+}
+
 /// `plugin enable <name>` — record consent and open **the** gate, through the one boundary that moves that
 /// state ([`amenbo_core::plugin_trust`]). There is no `--scope`: the plugin's author declared which switch
 /// it has (`AMB-D-379`), so this command always means one thing, and the message says which level it moved.
@@ -1301,7 +1357,8 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
         .map_err(|incompatible| CliError::from(incompatible.into_error(name)))?;
     let gate = plugin_gate(store, plugin.manifest.scope)?;
     let fields = plugin.manifest.config.clone();
-    let satisfied = satisfied_settings(store, name, &fields, plugin_value_tier(gate))?;
+    let satisfied =
+        satisfied_settings(store, name, &fields, plugin_value_tier(gate)).map_err(CliError::from)?;
     let has_value = |f: &amenbo_core::plugin_manifest::ConfigField| {
         satisfied.iter().any(|k| k == &f.key)
     };
@@ -5613,6 +5670,82 @@ mod tests {
         };
         attach_premise_change(&mut v, &pc);
         assert_eq!(v["premise_change"]["added_blockers"][0]["id"], 7);
+    }
+
+    /// The update config re-check (`AMB-D-359`): before a build is replaced, the new manifest's `required`
+    /// settings are re-judged the way `enable` judges them (`AMB-D-351`/`AMB-D-356`). An enabled plugin
+    /// whose new schema declares a `required` field this machine has no value for holds the update back;
+    /// everything with nothing to break lets it through.
+    #[test]
+    fn an_update_that_would_leave_a_required_setting_unset_is_held_back_only_for_an_enabled_plugin() {
+        use amenbo_core::plugin_manifest::{ConfigField, Manifest};
+        use amenbo_core::plugin_trust::{self, Gate};
+
+        fn manifest(config: serde_json::Value) -> Manifest {
+            serde_json::from_value(serde_json::json!({
+                "name": "watcher", "desc": "t", "author": "amenbo",
+                "repo": "ShiroDoromoto/amenbo", "os": ["macos", "linux", "windows"],
+                "category": "workflow", "url": "https://example.invalid/x.tar.gz",
+                "checksum": "sha256:dead", "scope": "machine", "config": config,
+            }))
+            .unwrap()
+        }
+        fn field(key: &str, required: bool) -> ConfigField {
+            ConfigField { key: key.to_string(), label: key.to_string(), secret: false, required }
+        }
+
+        let dir = amenbo_scratch::scratch("update-config-recheck");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut store = Store::open_at(amenbo_core::config::Paths::at(dir)).unwrap();
+
+        // Plant a machine-scoped install carrying one required setting, and give that setting a value.
+        let installed = manifest(serde_json::json!([{ "key": "token", "label": "T", "required": true }]));
+        let home = store.paths.plugin_dir("watcher");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(
+            amenbo_core::plugin_installed::manifest_path(&store.paths, "watcher"),
+            serde_json::to_vec(&installed).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            amenbo_core::plugin_installed::program_path(&store.paths, "watcher"),
+            b"#!/bin/sh\n",
+        )
+        .unwrap();
+        let token = field("token", true);
+        amenbo_core::plugin_config::set(
+            &mut store,
+            &token,
+            "watcher",
+            "abc",
+            amenbo_core::plugin_config::Scope::MachineDefault,
+        )
+        .unwrap();
+
+        // A build whose new schema keeps the same required set is satisfied — nothing to fill.
+        let same = manifest(serde_json::json!([{ "key": "token", "label": "T", "required": true }]));
+        // A build whose new schema adds a *new* required field this machine has no value for.
+        let grew = manifest(serde_json::json!([
+            { "key": "token", "label": "T", "required": true },
+            { "key": "channel", "label": "C", "required": true },
+        ]));
+
+        // Disabled: nothing fires, so nothing is held back — even the build that grew a required field.
+        assert!(refuse_update_leaving_required_unset(&store, &grew).is_ok());
+
+        // Enable it, then the two builds diverge: the satisfied one passes, the one that grew a required
+        // field is held back and names it.
+        plugin_trust::enable(&mut store, "watcher", Gate::Machine, &installed.config, |_| true).unwrap();
+        assert!(refuse_update_leaving_required_unset(&store, &same).is_ok());
+        let held = refuse_update_leaving_required_unset(&store, &grew).unwrap_err();
+        assert_eq!(held.code(), "invalid_value");
+        assert!(format!("{held:?}").contains("channel"), "the field to set is named: {held:?}");
+
+        // A name that is not installed is enabled nowhere, so its update is never held back here.
+        let absent = manifest(serde_json::json!([{ "key": "x", "label": "X", "required": true }]));
+        let mut absent = absent;
+        absent.name = "ghost".to_string();
+        assert!(refuse_update_leaving_required_unset(&store, &absent).is_ok());
     }
 
     /// `attach open` hands its temp copy to another application and returns, so it can never delete what

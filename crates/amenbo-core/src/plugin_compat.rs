@@ -164,6 +164,7 @@ mod tests {
             checksum: String::new(),
             signature: None,
             official: false,
+            scope: crate::plugin_manifest::Scope::Project,
             payload_v,
             min_amenbo: min_amenbo.map(str::to_string),
             config: Vec::new(),

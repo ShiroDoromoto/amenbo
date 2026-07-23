@@ -81,8 +81,15 @@ pub fn run(invocation: &PluginInvocation) -> std::io::Result<CommandOutcome> {
 mod tests {
     use super::*;
 
+    /// A finished run, as this layer reads one. `elapsed` is zero throughout: how long the plugin took is
+    /// the execution log's material, and none of the rules here look at it.
     fn out(code: Option<i32>, stdout: &str, stderr: &str) -> PluginOutput {
-        PluginOutput { code, stdout: stdout.to_string(), stderr: stderr.to_string() }
+        PluginOutput {
+            code,
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+            elapsed: std::time::Duration::ZERO,
+        }
     }
 
     #[test]

@@ -124,7 +124,11 @@ impl Subscribers for EnabledSubscribers<'_> {
             for (name, value) in injection.env {
                 invocation = invocation.env(name, value);
             }
-            subscribers.push(Subscriber { invocation, config: injection.text });
+            subscribers.push(Subscriber {
+                plugin: plugin.name.clone(),
+                invocation,
+                config: injection.text,
+            });
         }
         subscribers
     }
@@ -193,6 +197,21 @@ mod tests {
         let subs = resolver.resolve("task.created");
         assert_eq!(subs.len(), 1);
         assert_eq!(subs[0].invocation.program, PathBuf::from("/plugins/slack"));
+    }
+
+    /// A resolved subscriber carries the plugin's **name**, not just the program to run: it is the only
+    /// place the name is still known, and everything downstream — the hook runner's warnings, the
+    /// execution log — reports on plugins, not on paths.
+    #[test]
+    fn a_resolved_subscriber_carries_the_plugins_name() {
+        let (store, _dir) = store_at("named");
+        let mut config = Config::default();
+        config.enable_plugin("slack");
+        let plugins = [installed("slack", &["task.created"], vec![])];
+
+        let resolver = EnabledSubscribers::new(&plugins, &config, &store);
+        let subs = resolver.resolve("task.created");
+        assert_eq!(subs[0].plugin, "slack");
     }
 
     /// Installed but not enabled: nothing fires — `install ≠ enable` (`AMB-D-351`).

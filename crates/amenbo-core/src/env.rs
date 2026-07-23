@@ -62,6 +62,13 @@ pub fn update_json_url() -> Option<String> {
     var("AMENBO_UPDATE_JSON_URL")
 }
 
+/// `AMENBO_PLUGIN_CATALOG_URL` — override the plugin catalog amenbo fetches
+/// ([`crate::plugin_catalog::OFFICIAL_CATALOG_URL`]), so development and manual testing can point at a
+/// staging catalog without touching the published one.
+pub fn plugin_catalog_url() -> Option<String> {
+    var("AMENBO_PLUGIN_CATALOG_URL")
+}
+
 /// `AMENBO_ALLOW_UNSTAMPED_MIGRATE` — the escape hatch out of the release-stamp gate
 /// ([`crate::build_stamp`], `AMB-D-378`): it lets a locally built binary carry the production store
 /// forward for **this one run**. It exists for the case the gate cannot help with — a released build

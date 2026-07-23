@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use amenbo_core::plugin_exec::PluginInvocation;
-use amenbo_core::plugin_hooks::fire_with_timeout;
+use amenbo_core::plugin_hooks::{fire_with_timeout, Hook};
 
 /// A per-hook bound generous enough that even a fork-storm-saturated machine (the whole `make test`
 /// gate running in parallel) reaps a trivial hook well inside it — so these tests never invert on the
@@ -35,6 +35,12 @@ fn marker(name: &str) -> PathBuf {
     path
 }
 
+/// The hook the runner is handed: a plugin name, the event that fired it, and the script to run. These
+/// tests pin the runner's behaviour, not what it logs, so the event is simply a real one.
+fn hook_for(plugin: &str, program: &PathBuf) -> Hook {
+    Hook::new(plugin, "task.created", PluginInvocation::new(program))
+}
+
 /// A hook that exits cleanly runs to completion — its side effect (a marker file) is there once the
 /// launched thread joins.
 #[test]
@@ -42,7 +48,7 @@ fn a_clean_hook_runs_to_completion() {
     let done = marker("clean.marker");
     let hook = script("clean.sh", &format!("#!/bin/sh\ntouch '{}'\n", done.display()));
 
-    for handle in fire_with_timeout(vec![PluginInvocation::new(&hook)], GENEROUS) {
+    for handle in fire_with_timeout(vec![hook_for("clean", &hook)], GENEROUS) {
         handle.join().unwrap();
     }
     assert!(done.exists(), "the clean hook's side effect landed");
@@ -57,7 +63,7 @@ fn fire_launches_every_plugin_independently() {
     let hook_a = script("indep-a.sh", &format!("#!/bin/sh\ntouch '{}'\n", a.display()));
     let hook_b = script("indep-b.sh", &format!("#!/bin/sh\ntouch '{}'\n", b.display()));
 
-    for handle in fire_with_timeout(vec![PluginInvocation::new(&hook_a), PluginInvocation::new(&hook_b)], GENEROUS) {
+    for handle in fire_with_timeout(vec![hook_for("a", &hook_a), hook_for("b", &hook_b)], GENEROUS) {
         handle.join().unwrap();
     }
     assert!(a.exists() && b.exists(), "both hooks ran");
@@ -76,7 +82,7 @@ fn fire_returns_before_a_hook_finishes() {
     let hook = script("slow.sh", &format!("#!/bin/sh\nsleep 3\ntouch '{}'\n", done.display()));
 
     let start = Instant::now();
-    let handles = fire_with_timeout(vec![PluginInvocation::new(&hook)], GENEROUS);
+    let handles = fire_with_timeout(vec![hook_for("slow", &hook)], GENEROUS);
     let launched = start.elapsed();
     assert!(launched < Duration::from_secs(1), "fire returned promptly, not after the hook: {launched:?}");
     assert!(!done.exists(), "the slow hook has not finished yet when fire returns");

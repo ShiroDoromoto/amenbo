@@ -84,7 +84,7 @@ mod tests {
     impl Subscribers for Fixed {
         fn resolve(&self, event: &str) -> Vec<Subscriber> {
             if self.events.contains(&event) {
-                vec![Subscriber::new(self.invocation.clone())]
+                vec![Subscriber::new("fixed", self.invocation.clone())]
             } else {
                 Vec::new()
             }

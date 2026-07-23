@@ -34,6 +34,7 @@ use rusqlite::Connection;
 
 use crate::error::Result;
 use crate::plugin_exec::PluginInvocation;
+use crate::plugin_hooks::Hook;
 use crate::plugin_payload::Payload;
 use crate::store_engine::{events_since, outbox_head, OutboxSlice};
 
@@ -51,6 +52,10 @@ const DELIVER_PAGE: i64 = 256;
 /// resolver does **not** set the payload event fields; [`deliver`] composes the whole stdin document, so
 /// the payload channel stays the dispatcher's.
 pub struct Subscriber {
+    /// The plugin's name, as the installed registry knows it. Carried alongside the invocation because a
+    /// program path is not a name: it is what [`deliver`] puts on the [`Hook`] so a warning or an
+    /// execution log can say which plugin ran.
+    pub plugin: String,
     /// The plugin to run, with its program and secret env already set. Its stdin is left for [`deliver`].
     pub invocation: PluginInvocation,
     /// The plugin's non-secret config, placed under the payload's `config` key on stdin. Empty when the
@@ -59,9 +64,10 @@ pub struct Subscriber {
 }
 
 impl Subscriber {
-    /// A subscriber with no text config — an invocation whose stdin is entirely [`deliver`]'s payload.
-    pub fn new(invocation: PluginInvocation) -> Self {
-        Self { invocation, config: serde_json::Map::new() }
+    /// A named subscriber with no text config — an invocation whose stdin is entirely [`deliver`]'s
+    /// payload.
+    pub fn new(plugin: impl Into<String>, invocation: PluginInvocation) -> Self {
+        Self { plugin: plugin.into(), invocation, config: serde_json::Map::new() }
     }
 }
 
@@ -120,7 +126,7 @@ pub struct Delivered {
 /// and nothing is fired for the lost span (see [`Delivered::gapped`]).
 pub fn deliver(conn: &Connection, cursor: i64, subs: &dyn Subscribers) -> Result<Delivered> {
     let mut cursor = cursor;
-    let mut invocations: Vec<PluginInvocation> = Vec::new();
+    let mut hooks: Vec<Hook> = Vec::new();
     loop {
         match events_since(conn, cursor, DELIVER_PAGE)? {
             OutboxSlice::Gap => {
@@ -147,7 +153,14 @@ pub fn deliver(conn: &Connection, cursor: i64, subs: &dyn Subscribers) -> Result
                     let base = serde_json::to_value(&payload)?;
                     for sub in subs.resolve(payload.event) {
                         let json = serde_json::to_string(&with_config(base.clone(), sub.config))?;
-                        invocations.push(sub.invocation.stdin_json(json));
+                        // The event is kept beside the plugin's name here, where both are still known:
+                        // a page of events folds into one list of hooks, and the runner below has no
+                        // other way back to which row fired which plugin.
+                        hooks.push(Hook::new(
+                            sub.plugin,
+                            payload.event,
+                            sub.invocation.stdin_json(json),
+                        ));
                     }
                 }
                 if !more {
@@ -156,7 +169,7 @@ pub fn deliver(conn: &Connection, cursor: i64, subs: &dyn Subscribers) -> Result
             }
         }
     }
-    let hooks = crate::plugin_hooks::fire(invocations);
+    let hooks = crate::plugin_hooks::fire(hooks);
     Ok(Delivered { cursor, hooks, gapped: false })
 }
 
@@ -189,7 +202,7 @@ mod tests {
     impl Subscribers for Fixed {
         fn resolve(&self, event: &str) -> Vec<Subscriber> {
             if self.events.contains(&event) {
-                vec![Subscriber::new(self.invocation.clone())]
+                vec![Subscriber::new("fixed", self.invocation.clone())]
             } else {
                 Vec::new()
             }
@@ -328,7 +341,7 @@ mod tests {
         impl Subscribers for WithConfig {
             fn resolve(&self, event: &str) -> Vec<Subscriber> {
                 if event == self.event {
-                    vec![Subscriber { invocation: self.invocation.clone(), config: self.config.clone() }]
+                    vec![Subscriber { plugin: "configured".into(), invocation: self.invocation.clone(), config: self.config.clone() }]
                 } else {
                     Vec::new()
                 }

@@ -88,6 +88,17 @@ mod unix {
         let out = out.expect("finished on its own, not timed out");
         assert!(out.succeeded());
         assert_eq!(out.stdout, "hello");
+        assert!(out.elapsed < Duration::from_secs(60), "and it reports how long it ran: {:?}", out.elapsed);
+    }
+
+    /// How long the plugin ran is measured from the spawn, so a child that sleeps is reported as having
+    /// taken at least that long — the number an execution log records beside the exit code.
+    #[test]
+    fn the_run_reports_how_long_the_plugin_took() {
+        let slow = script("elapsed.sh", "#!/bin/sh\nsleep 1\n");
+        let out = PluginInvocation::new(&slow).run().unwrap();
+        assert!(out.succeeded());
+        assert!(out.elapsed >= Duration::from_secs(1), "at least the sleep: {:?}", out.elapsed);
     }
 
     /// A child that overruns the bound is killed: the wait returns `None` well before the child would have

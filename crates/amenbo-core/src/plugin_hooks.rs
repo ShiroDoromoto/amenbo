@@ -31,19 +31,46 @@ use crate::plugin_exec::PluginInvocation;
 /// runaway from leaking a process for good.
 pub const HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// One hook to launch: **which plugin**, **for which event**, and the invocation carrying the payload.
+///
+/// The invocation alone would run just as well — but it names only a program path, and by the time the
+/// dispatcher has folded a page of events into a list of invocations, which plugin and which event each
+/// came from is gone. Carrying the two names down to the runner is what lets a warning (and, later, an
+/// execution log) say *slack failed on task.created* rather than *a program at this path failed*.
+///
+/// The event is `&'static str` because it always is one — the dispatcher only ever fires the contract's
+/// own names ([`V1_EVENTS`](crate::plugin_payload::V1_EVENTS)) — which also makes a hook trivially
+/// movable onto its own thread.
+#[derive(Debug, Clone)]
+pub struct Hook {
+    /// The plugin's name, as the installed registry knows it.
+    pub plugin: String,
+    /// The event that fired this hook.
+    pub event: &'static str,
+    /// The plugin to run, its payload already on stdin.
+    pub invocation: PluginInvocation,
+}
+
+impl Hook {
+    /// A hook for `plugin`, fired by `event`, running `invocation`.
+    pub fn new(plugin: impl Into<String>, event: &'static str, invocation: PluginInvocation) -> Self {
+        Self { plugin: plugin.into(), event, invocation }
+    }
+}
+
 /// Launch every invocation as an observation hook, each on its own thread, and return at once.
 ///
 /// This is the fire-and-forget seam: the caller does not wait, does not learn whether any plugin
-/// succeeded, and cannot be failed by one. Pass the invocations the mapping layer built for a single fired
-/// event (one per listening plugin); call it once per event, after the write is committed.
+/// succeeded, and cannot be failed by one. Pass the [`Hook`]s the mapping layer built (one per listening
+/// plugin per fired event), after the write is committed.
 ///
 /// The returned handles are the launched threads. **Dropping them forgets the hooks** — the true
 /// fire-and-forget a long-lived GUI wants. A short-lived process that is about to exit (a one-shot CLI
 /// invocation) can instead *join* them first, so the hooks it started are not cut short when the process
 /// dies; whether to wait that moment out is the caller's call, not the runner's.
 #[must_use = "drop the handles to forget the hooks, or join them before a short-lived process exits"]
-pub fn fire(plugins: Vec<PluginInvocation>) -> Vec<JoinHandle<()>> {
-    fire_with_timeout(plugins, HOOK_TIMEOUT)
+pub fn fire(hooks: Vec<Hook>) -> Vec<JoinHandle<()>> {
+    fire_with_timeout(hooks, HOOK_TIMEOUT)
 }
 
 /// [`fire`] under a caller-named per-hook bound instead of the [`HOOK_TIMEOUT`] policy default.
@@ -53,31 +80,41 @@ pub fn fire(plugins: Vec<PluginInvocation>) -> Vec<JoinHandle<()>> {
 /// bound would comfortably clear can still overrun it under load. Widening the bound there keeps the test
 /// pinned on the fire-and-forget behaviour, not on how fast a loaded kernel happens to schedule a `touch`.
 #[must_use = "drop the handles to forget the hooks, or join them before a short-lived process exits"]
-pub fn fire_with_timeout(plugins: Vec<PluginInvocation>, timeout: Duration) -> Vec<JoinHandle<()>> {
-    plugins
+pub fn fire_with_timeout(hooks: Vec<Hook>, timeout: Duration) -> Vec<JoinHandle<()>> {
+    hooks
         .into_iter()
-        .map(move |plugin| std::thread::spawn(move || run_one(&plugin, timeout)))
+        .map(move |hook| std::thread::spawn(move || run_one(&hook, timeout)))
         .collect()
 }
 
 /// Run one hook under `timeout` and warn on anything but a clean exit. Never returns — the hook face has
 /// nowhere to return an error to, so a failure becomes a log line and stops there.
-fn run_one(plugin: &PluginInvocation, timeout: Duration) {
-    let program = plugin.program.display().to_string();
-    match plugin.spawn().and_then(|running| running.wait_timeout(timeout)) {
+///
+/// The four arms below are the four ways a hook ends — clean, non-zero, killed at the bound, never
+/// launched — and each names the plugin and the event it ran for.
+fn run_one(hook: &Hook, timeout: Duration) {
+    let program = hook.invocation.program.display().to_string();
+    match hook.invocation.spawn().and_then(|running| running.wait_timeout(timeout)) {
         Ok(Some(output)) if output.succeeded() => {}
         Ok(Some(output)) => tracing::warn!(
-            plugin = %program,
+            plugin = %hook.plugin,
+            event = %hook.event,
+            program = %program,
             code = ?output.code,
+            elapsed_ms = output.elapsed.as_millis() as u64,
             "plugin hook exited without success; ignored"
         ),
         Ok(None) => tracing::warn!(
-            plugin = %program,
+            plugin = %hook.plugin,
+            event = %hook.event,
+            program = %program,
             timeout_ms = timeout.as_millis() as u64,
             "plugin hook timed out and was killed; ignored"
         ),
         Err(error) => tracing::warn!(
-            plugin = %program,
+            plugin = %hook.plugin,
+            event = %hook.event,
+            program = %program,
             error = %error,
             "plugin hook could not be launched; ignored"
         ),

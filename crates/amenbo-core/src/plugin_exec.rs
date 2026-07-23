@@ -118,7 +118,7 @@ impl PluginInvocation {
             buf
         });
 
-        Ok(RunningPlugin { child, writer, stdout, stderr })
+        Ok(RunningPlugin { child, writer, stdout, stderr, started: Instant::now() })
     }
 }
 
@@ -131,6 +131,10 @@ pub struct RunningPlugin {
     writer: JoinHandle<()>,
     stdout: JoinHandle<Vec<u8>>,
     stderr: JoinHandle<Vec<u8>>,
+    /// When the child was spawned, so a finished run can report how long it took
+    /// ([`PluginOutput::elapsed`]). Measured from the spawn rather than from the caller's wait: the two
+    /// waits start at different moments, and what an observer wants to know is how long the plugin ran.
+    started: Instant,
 }
 
 /// How often the bounded wait re-checks a still-running child. Small enough that a hook's kill is prompt,
@@ -140,9 +144,9 @@ const POLL: Duration = Duration::from_millis(20);
 impl RunningPlugin {
     /// Wait for the child to exit however long it takes, then collect its output.
     pub fn wait(self) -> std::io::Result<PluginOutput> {
-        let RunningPlugin { mut child, writer, stdout, stderr } = self;
+        let RunningPlugin { mut child, writer, stdout, stderr, started } = self;
         let status = child.wait()?;
-        Ok(finish(writer, stdout, stderr, status.code()))
+        Ok(finish(writer, stdout, stderr, status.code(), started.elapsed()))
     }
 
     /// Wait up to `timeout` for the child to exit; if it overruns, **kill it** and report the timeout.
@@ -152,14 +156,16 @@ impl RunningPlugin {
     /// so its half-written output is dropped rather than returned. A kill needs the child handle, which is
     /// why the bounded wait lives here and not on top of `run()`: `run()` has already given the child away
     /// to its own `wait`.
+    ///
+    /// The bound is measured from the **spawn**, not from the moment this is called — the same clock
+    /// [`PluginOutput::elapsed`] reports, so "it ran for N ms" and "it overran the bound" cannot disagree.
     pub fn wait_timeout(self, timeout: Duration) -> std::io::Result<Option<PluginOutput>> {
-        let RunningPlugin { mut child, writer, stdout, stderr } = self;
-        let start = Instant::now();
+        let RunningPlugin { mut child, writer, stdout, stderr, started } = self;
         loop {
             if let Some(status) = child.try_wait()? {
-                return Ok(Some(finish(writer, stdout, stderr, status.code())));
+                return Ok(Some(finish(writer, stdout, stderr, status.code(), started.elapsed())));
             }
-            if start.elapsed() >= timeout {
+            if started.elapsed() >= timeout {
                 let _ = child.kill();
                 let _ = child.wait();
                 // Return the moment the child is reaped — do **not** join the drain threads here. A
@@ -183,6 +189,7 @@ fn finish(
     stdout: JoinHandle<Vec<u8>>,
     stderr: JoinHandle<Vec<u8>>,
     code: Option<i32>,
+    elapsed: Duration,
 ) -> PluginOutput {
     let _ = writer.join();
     let stdout = stdout.join().unwrap_or_default();
@@ -191,6 +198,7 @@ fn finish(
         code,
         stdout: String::from_utf8_lossy(&stdout).into_owned(),
         stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        elapsed,
     }
 }
 
@@ -205,6 +213,10 @@ pub struct PluginOutput {
     pub stdout: String,
     /// Everything the child wrote to stderr.
     pub stderr: String,
+    /// How long the plugin ran, measured from the spawn to the moment it was reaped. Captured here
+    /// because this is the only layer that knows both ends: a caller above it sees the invocation and the
+    /// result, never the child's lifetime.
+    pub elapsed: Duration,
 }
 
 impl PluginOutput {

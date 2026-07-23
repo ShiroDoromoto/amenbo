@@ -4043,6 +4043,57 @@ fn a_plugin_this_build_cannot_speak_to_is_named_in_the_listing() {
     );
 }
 
+/// The listing marks a plugin the catalog holds a different build of (`AMB-D-359`). The check reads the
+/// freshness-bounded catalog, so a cache inside the window answers with no request — here a cache seeded
+/// fresh. A plugin the catalog does not list is passed over, not marked. Applying stays the explicit
+/// `plugin update <name>`; the listing only carries the fact, quietly.
+#[test]
+fn the_listing_marks_a_plugin_the_catalog_has_a_different_build_of() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    install_plugin(&cli, "worktree", serde_json::json!([]));
+    // Installed, but the catalog below never lists it — a hand-installed or delisted plugin, which the
+    // check passes over rather than marking.
+    install_plugin(&cli, "watcher", serde_json::json!([]));
+
+    // A catalog offering a *different* build of `worktree` — a moved checksum against the installed
+    // `sha256:deadbeef`. Seeded straight into the registry cache and freshly written, so the
+    // freshness-bounded check answers from it without ever reaching the (refused) catalog URL.
+    let registry = cli.home.join("plugins").join("registry");
+    std::fs::create_dir_all(&registry).unwrap();
+    let catalog = serde_json::json!({
+        "catalog_v": 1,
+        "generated_at": "2026-07-23T04:57:10Z",
+        "plugins": [{
+            "name": "worktree", "desc": "a plugin", "author": "amenbo",
+            "repo": "ShiroDoromoto/amenbo", "os": ["macos", "linux", "windows"],
+            "category": "workflow", "url": "https://example.invalid/x.tar.gz",
+            "checksum": format!("sha256:{}", "b".repeat(64)),
+        }],
+    });
+    std::fs::write(registry.join("official.json"), serde_json::to_vec(&catalog).unwrap()).unwrap();
+
+    let listed = cli.json(&["plugin", "list", "--json"]);
+    let rows = listed["plugins"].as_array().unwrap();
+    let worktree = rows.iter().find(|p| p["name"] == "worktree").unwrap();
+    assert_eq!(worktree["update_available"], true, "the catalog holds a different build");
+    let watcher = rows.iter().find(|p| p["name"] == "watcher").unwrap();
+    assert_eq!(watcher["update_available"], false, "not listed in the catalog — passed over, not marked");
+
+    let (out, code) = cli.run(&["plugin", "list"]);
+    assert_eq!(code, 0);
+    assert!(out.contains("[update available]"), "the human listing carries the badge: {out}");
+    assert_eq!(
+        out.lines().filter(|l| l.contains("[update available]")).count(),
+        1,
+        "only the install the catalog moved past gets the badge: {out}"
+    );
+    assert!(
+        out.lines().find(|l| l.contains("worktree")).unwrap().contains("[update available]"),
+        "the badge is on worktree's line: {out}"
+    );
+}
+
 /// The mutating CLI drives the observation dispatcher over what is *installed and enabled*: a subscribed
 /// plugin is actually run, with the event payload on its stdin, before the command's process exits
 /// (`AMB-D-367`). Its neighbours are left alone — a plugin that subscribes to nothing never runs.

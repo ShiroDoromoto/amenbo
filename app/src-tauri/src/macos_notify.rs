@@ -173,9 +173,24 @@ pub fn send(title: &str, body: &str) {
     content.setSound(Some(&UNNotificationSound::defaultSound()));
 
     let n = SEQ.fetch_add(1, Ordering::Relaxed);
-    let ident = NSString::from_str(&format!("amenbo-arrival-{n}"));
-    let request =
-        UNNotificationRequest::requestWithIdentifier_content_trigger(&ident, &content, None);
+    let ident = format!("amenbo-arrival-{n}");
+    let request = UNNotificationRequest::requestWithIdentifier_content_trigger(
+        &NSString::from_str(&ident),
+        &content,
+        None,
+    );
 
-    center.addNotificationRequest_withCompletionHandler(&request, None);
+    // Scheduling is asynchronous and this is the only channel it answers on: the call returns before
+    // the OS has decided anything, so a request it then refuses — permission revoked since `init`
+    // asked, a content the OS rejects, a delivery quota — leaves no trace unless the handler takes it.
+    // Passing `None` here made "the toast never appeared" indistinguishable from "we never asked".
+    // The identifier goes in the line so one silent arrival can be told from another.
+    let handler = RcBlock::new(move |err: *mut NSError| {
+        if !err.is_null() {
+            // The NSError is owned by the autorelease pool; we only borrow it.
+            let msg = unsafe { &*err }.localizedDescription();
+            log::warn!("os notification {ident} was not scheduled: {msg}");
+        }
+    });
+    center.addNotificationRequest_withCompletionHandler(&request, Some(&handler));
 }

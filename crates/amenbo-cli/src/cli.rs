@@ -311,9 +311,10 @@ pub enum Command {
     /// Manage this machine's plugins, and self-check a manifest you are authoring.
     ///
     /// A plugin is distributed as a manifest in the public catalog repository (`AMB-D-347`) and installed
-    /// under the app-data `plugins/` directory (`AMB-D-350`). `list` / `enable` / `disable` are the
-    /// machine-local face of that: what is installed, and whose gate is open (`AMB-D-351` — installing a
-    /// plugin never runs it). `validate` is the author's side — it runs the same rules amenbo enforces at
+    /// under the app-data `plugins/` directory (`AMB-D-350`). `install` is the door those bytes come
+    /// through; `list` / `enable` / `disable` are the machine-local face of what came through it: what is
+    /// installed, and whose gate is open (`AMB-D-351` — installing a plugin never runs it). `validate` is
+    /// the author's side — it runs the same rules amenbo enforces at
     /// the door (a well-formed id, checksum, OS set and config schema — `AMB-D-354`/`AMB-D-360`/`AMB-D-356`)
     /// over a manifest file you point it at, so you can self-check before opening a catalog PR, and it
     /// alone reads no store and needs no binding.
@@ -339,6 +340,16 @@ pub enum PluginCmd {
     /// state — no network, no catalog. In a bound folder the gate shown is the effective one: this
     /// project's override where it declares one, the machine answer otherwise.
     List,
+
+    /// Install a plugin from the catalog: resolve the name, fetch its asset, verify its provenance
+    /// fail-closed (the catalog signature, then the checksum — `AMB-D-371`/`AMB-D-351`), and lay it down
+    /// under the app-data `plugins/` directory. **Installing never enables**: the plugin lands inert and
+    /// `plugin enable` is the separate act. A name already installed is refused rather than overwritten
+    /// (`AMB-D-360`).
+    Install {
+        /// the plugin's name, as the catalog lists it
+        name: String,
+    },
 
     /// Open an installed plugin's gate: record the one-time consent to run its code and let it fire
     /// (`AMB-D-351` — `install ≠ enable`, so nothing runs until this). Refused while a setting the author

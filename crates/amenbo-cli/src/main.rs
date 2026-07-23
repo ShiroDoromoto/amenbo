@@ -671,6 +671,7 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
     match sub {
         PluginCmd::Validate { .. } => unreachable!("handled before open"),
         PluginCmd::List => plugin_list_cmd(store, flags),
+        PluginCmd::Install { name } => plugin_install_cmd(store, flags, &name),
         PluginCmd::Enable { name, scope } => plugin_enable_cmd(store, flags, &name, &scope),
         PluginCmd::Disable { name, scope } => plugin_disable_cmd(store, flags, &name, &scope),
         PluginCmd::Inherit { name } => plugin_inherit_cmd(store, flags, &name),
@@ -841,6 +842,34 @@ fn plugin_config_tier(
     } else {
         "machine"
     }
+}
+
+/// `plugin install <name>` — resolve the name in the catalog, fetch its asset, verify its provenance,
+/// and lay it down under the app-data `plugins/` directory ([`amenbo_core::plugin_install`]). The one
+/// command in this group that touches the network.
+///
+/// The closing line is not decoration: `install ≠ enable` (`AMB-D-351`), so a caller who stops here has a
+/// plugin that will never fire, and the next step is named rather than assumed.
+fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
+    let installed =
+        amenbo_core::plugin_install::install(&store.paths, name).map_err(CliError::from)?;
+
+    human(flags, format!("Installed plugin: {name} — {}", installed.manifest.desc));
+    human(flags, format!("It is not enabled yet: `amenbo plugin enable {name}` opens its gate."));
+    if flags.json {
+        print_json(&json!({
+            "ok": true, "action": "plugin.install", "plugin": name,
+            "desc": installed.manifest.desc,
+            "author": installed.manifest.author,
+            "official": installed.manifest.official,
+            "events": installed.manifest.events,
+            "home": installed.home.display().to_string(),
+            "program": installed.program.display().to_string(),
+            "program_bytes": installed.program_bytes,
+            "enabled": false,
+        }));
+    }
+    Ok(0)
 }
 
 /// `plugin list` — what is installed under the app-data `plugins/` directory, and whose gate is open.

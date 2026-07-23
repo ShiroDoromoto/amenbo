@@ -635,6 +635,11 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The restart gate for a store that has been overtaken (RestartGate). */
 .restart__error { margin-bottom: var(--s-3); padding: var(--s-3); border: 1px solid var(--c-blocked); border-radius: var(--r-md); color: var(--c-blocked); font-size: var(--fs-xs); }
 .restart__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+/* The way out when restarting is not the answer: secondary to the button, but always present. */
+.restart__stuck { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--c-border); font-size: var(--fs-xs); }
+.restart__stuck h3 { margin: 0 0 var(--s-2); font-size: var(--fs-sm); }
+.restart__stuck p { margin: 0 0 var(--s-2); }
+.restart__detail { margin: 0 0 var(--s-2); padding: var(--s-2); border-radius: var(--r-md); background: var(--c-surface-sunken); font-family: var(--font-mono); font-size: var(--fs-2xs); overflow-x: auto; }
 
 /* The migration screen shown at startup (MigrationScreen). */
 .migrate__body { display: flex; flex-direction: column; gap: var(--s-3); }

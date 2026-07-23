@@ -166,12 +166,13 @@ impl StoreEngine {
         // this timeout keeps a contended write from failing needlessly. Set before any migration write.
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
         // Create what is missing, and nothing else. `schema_sql` only ever issues
-        // `CREATE TABLE IF NOT EXISTS`, so this is genesis on a new file and a no-op on a store this
+        // `CREATE … IF NOT EXISTS`, so this is genesis on a new file and a no-op on a store this
         // build already wrote. It does **not** evolve a store an older build left behind: bringing an
         // old store forward is the migration's job, and the migration is a numbered chain of steps
-        // applied from the version the store carries — not a diff replayed on every open.
+        // applied from the version the store carries — not a diff replayed on every open. The chain runs
+        // on the engine this returns, so everything here necessarily runs *before* it: what this batch
+        // names must already exist in the oldest store the chain still opens (see `schema::EXTRA_SQL`).
         conn.execute_batch(&schema::schema_sql())?;
-        conn.execute_batch(schema::read_index_sql())?;
         // Enforce the registry's `REFERENCES` for every write from here on.
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         // Keep the feed inside its bound even for a CLI-only store, where no process lives long enough

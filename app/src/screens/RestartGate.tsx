@@ -3,10 +3,16 @@
 // A store newer than this build leaves nothing this build can do, so the screen takes the whole window rather
 // than letting a half-working app show through behind it.
 //
-// The only button is restart. The executable on disk is already the new version (the GUI and the CLI ship
-// together), so starting again is enough to come back on it. Nothing is fetched: this is not a self-update.
+// Restart is the first thing to try: usually the executable on disk is already the new version (the GUI and
+// the CLI ship together), so starting again comes back on it. Nothing is fetched: this is not a self-update.
+//
+// When it is not — the store was carried forward by a build that is not installed here — restarting returns to
+// this same screen, so the way out is spelled out beside the button: there is no downgrade, and the way back is
+// a restore from the pre-migration backup. The refusal core wrote is shown verbatim there, because it names
+// the version that wrote the store and nothing on this screen can ask the store anything.
 import { useEffect, useState } from "react";
 import { invoke } from "../core/ipc";
+import { formatAheadDetail } from "../core/formatAhead";
 import { currentLang, normalizeLang, t } from "../core/i18n";
 import { inTauri } from "../core/snapshot";
 
@@ -18,6 +24,8 @@ import { inTauri } from "../core/snapshot";
 export function RestartGate() {
   const [lang, setLang] = useState(currentLang);
   const [failed, setFailed] = useState(false);
+  // Read once: the flag never lowers, so neither does what raised it.
+  const [detail] = useState(formatAheadDetail);
 
   useEffect(() => {
     if (!inTauri()) return;
@@ -62,6 +70,19 @@ export function RestartGate() {
           <button className="btn btn--primary" onClick={() => void restart()}>
             {t("restart.button", lang)}
           </button>
+        </div>
+
+        <div className="restart__stuck">
+          <h3>{t("restart.stuck.title", lang)}</h3>
+          <p className="muted">{t("restart.stuck.intro", lang)}</p>
+          {detail && (
+            <pre className="restart__detail" style={{ whiteSpace: "pre-wrap" }}>
+              {lang === "ja" ? detail.ja : detail.en}
+            </pre>
+          )}
+          <p className="muted">{t("restart.stuck.how", lang)}</p>
+          <pre className="restart__detail" style={{ whiteSpace: "pre-wrap" }}>{t("restart.stuck.command", lang)}</pre>
+          <p className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("restart.stuck.where", lang)}</p>
         </div>
       </div>
     </div>

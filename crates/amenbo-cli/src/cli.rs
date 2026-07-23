@@ -341,7 +341,9 @@ pub enum PluginCmd {
 
     /// Open an installed plugin's gate: record the one-time consent to run its code and let it fire
     /// (`AMB-D-351` — `install ≠ enable`, so nothing runs until this). Refused while a setting the author
-    /// marked `required` is still empty; fill it with `plugin config set` first.
+    /// marked `required` is still empty; fill it with `plugin config set` first. Refused too when the
+    /// plugin is not compatible with this build — a different payload contract, or a floor above the
+    /// running version (`AMB-D-359`).
     Enable {
         /// the installed plugin's name
         name: String,

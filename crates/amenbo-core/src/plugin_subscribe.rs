@@ -5,11 +5,13 @@
 //! empty stand-in; this is the resolver that reads the actual install≠enable state (`AMB-D-351`) and the
 //! manifests' subscription lists (`AMB-T-2032`) to answer it for real.
 //!
-//! **Three inputs, joined at the seam.** A plugin fires for an event only when all three hold:
+//! **Four inputs, joined at the seam.** A plugin fires for an event only when all four hold:
 //!
 //! - it is **enabled** — its machine-global gate is open ([`Config::plugin_enabled`], `AMB-D-351`;
 //!   `install ≠ enable`, so an installed-but-not-enabled plugin never fires);
 //! - it **subscribes** — the event's name is in its manifest [`events`](crate::plugin_manifest::Manifest::events);
+//! - it is **compatible** — this amenbo speaks the payload contract it reads and clears the version floor
+//!   it declares ([`plugin_compat::check`](crate::plugin_compat::check), `AMB-D-359`);
 //! - it resolves — its config reads cleanly ([`plugin_inject::resolve`],
 //!   `AMB-D-356`), splitting the plugin's own settings into secret env vars and text stdin config.
 //!
@@ -86,6 +88,19 @@ impl Subscribers for EnabledSubscribers<'_> {
             if !plugin.manifest.events.iter().any(|e| e == event) {
                 continue;
             }
+            // Compatible with this build (`AMB-D-359`). Checked here and not only at `enable`, because
+            // amenbo updates underneath an install: a plugin enabled against the old payload contract is
+            // dropped rather than fed one it cannot read — best-effort like a config that will not
+            // resolve, so the event still fires for everyone else (`AMB-D-352`).
+            if let Err(incompatible) = crate::plugin_compat::check(&plugin.manifest) {
+                tracing::warn!(
+                    plugin = %plugin.name,
+                    event = %event,
+                    reason = %incompatible,
+                    "skipping an incompatible plugin"
+                );
+                continue;
+            }
             // Resolve this plugin's own config: secret → env, text → the payload's `config` key. A read
             // that errors drops this plugin only — the event still fires for the rest (`AMB-D-352`).
             let injection = match plugin_inject::resolve(
@@ -142,7 +157,9 @@ mod tests {
             checksum: String::new(),
             signature: None,
             official: false,
-            payload_v: 1,
+            // The contract this build speaks: the compatibility gate reads this one, so it tracks
+            // `VERSION` rather than sitting on a literal that a bump would turn into a false failure.
+            payload_v: crate::plugin_payload::VERSION,
             min_amenbo: None,
             config,
             events: events.iter().map(|e| e.to_string()).collect(),
@@ -199,6 +216,41 @@ mod tests {
 
         let resolver = EnabledSubscribers::new(&plugins, &config, &store);
         assert!(resolver.resolve("task.created").is_empty(), "only the subscribed event fires it");
+    }
+
+    /// Enabled and subscribed, but incompatible with this build: it is dropped with a warning rather than
+    /// fired (`AMB-D-359`) — enable-time is not the only door, since amenbo can update underneath it.
+    #[test]
+    fn an_incompatible_plugin_does_not_fire() {
+        let (store, _dir) = store_at("incompatible");
+        let mut config = Config::default();
+        config.enable_plugin("slack");
+        let mut plugin = installed("slack", &["task.created"], vec![]);
+        plugin.manifest.min_amenbo = Some("999.0.0".into());
+        let plugins = [plugin];
+
+        let resolver = EnabledSubscribers::new(&plugins, &config, &store);
+        assert!(resolver.resolve("task.created").is_empty(), "a floor this build cannot meet");
+    }
+
+    /// One incompatible plugin never silences the rest: delivery is best-effort (`AMB-D-352`).
+    #[test]
+    fn an_incompatible_plugin_does_not_silence_the_others() {
+        let (store, _dir) = store_at("incompatible-many");
+        let mut config = Config::default();
+        config.enable_plugin("slack");
+        config.enable_plugin("email");
+        let mut stale = installed("slack", &["task.created"], vec![]);
+        stale.manifest.payload_v = crate::plugin_payload::VERSION + 1;
+        let plugins = [stale, installed("email", &["task.created"], vec![])];
+
+        let resolver = EnabledSubscribers::new(&plugins, &config, &store);
+        let fired: Vec<_> = resolver
+            .resolve("task.created")
+            .into_iter()
+            .map(|s| s.invocation.program)
+            .collect();
+        assert_eq!(fired, vec![PathBuf::from("/plugins/email")]);
     }
 
     /// The plugin's config is injected: a secret rides env, a text field rides the `config` map — split by

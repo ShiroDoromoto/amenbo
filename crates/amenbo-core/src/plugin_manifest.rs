@@ -129,14 +129,14 @@ pub struct Manifest {
     /// plugin understands and warn or refuse rather than silently feed it a payload it cannot parse
     /// (`AMB-D-359`). Absent means the v1 baseline — a manifest written before this field targets the
     /// original contract, not whatever version the reading amenbo happens to be at. This module only
-    /// *carries* the number; the enable/run-time comparison is the update feature's, not the type's.
+    /// *carries* the number; the enable/run-time comparison is [`crate::plugin_compat`]'s, not the type's.
     #[serde(default = "default_payload_v")]
     pub payload_v: u32,
     /// The minimum amenbo version this plugin needs, as a semver string — below it, amenbo warns or
     /// refuses to enable/run the plugin (`AMB-D-359`). Absent means no floor: the plugin declares no
     /// version requirement. Stored opaquely, like `checksum` — this module neither parses nor compares
-    /// it; that is the validator's and the update feature's job, so the one truth about version ordering
-    /// lives with them.
+    /// it; reading it is [`crate::plugin_compat`]'s, so the one truth about version ordering lives with
+    /// the gate that acts on it (a string it cannot parse is a floor amenbo will not claim to meet).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min_amenbo: Option<String>,
     /// The plugin's configuration schema: a flat list of fields the author declares so amenbo can

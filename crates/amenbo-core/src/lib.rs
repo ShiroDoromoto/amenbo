@@ -33,6 +33,7 @@ pub mod order;
 pub mod overview;
 pub mod perf;
 pub mod plugin_command;
+pub mod plugin_compat;
 pub mod plugin_config;
 pub mod plugin_dispatch;
 pub mod plugin_drive;

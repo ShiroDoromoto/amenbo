@@ -716,13 +716,17 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 }
 
 /// `plugin enable <name>` — record consent and open the gate, through the one boundary that moves that
-/// state ([`amenbo_core::plugin_trust`]). Fail-closed on the author's `required` settings: their presence
-/// is probed at the **machine-default tier**, the same tier the gate itself lives at (a per-project
-/// override cannot satisfy a machine-global enable).
+/// state ([`amenbo_core::plugin_trust`]). Fail-closed twice over: on the plugin's compatibility
+/// declarations ([`amenbo_core::plugin_compat`], `AMB-D-359` — a plugin this amenbo cannot speak to is
+/// refused before any consent is recorded), and on the author's `required` settings, whose presence is
+/// probed at the **machine-default tier**, the same tier the gate itself lives at (a per-project override
+/// cannot satisfy a machine-global enable).
 fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
     use amenbo_core::plugin_config::{self, Scope};
 
     let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
+    amenbo_core::plugin_compat::check(&plugin.manifest)
+        .map_err(|incompatible| CliError::from(incompatible.into_error(name)))?;
     let fields = plugin.manifest.config.clone();
     // Probe first, then hand the answers in: the probe reads the store while `enable` writes the config
     // inside it, so the two cannot borrow it at once.

@@ -677,6 +677,7 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         PluginCmd::Disable { name } => plugin_disable_cmd(store, flags, &name),
         PluginCmd::Uninstall { name } => plugin_uninstall_cmd(store, flags, &name),
         PluginCmd::Run { name, args } => plugin_run_cmd(store, flags, &name, &args),
+        PluginCmd::Runs { name } => plugin_runs_cmd(store, flags, name.as_deref()),
         PluginCmd::Update { check: _ } => plugin_update_check_cmd(store, flags),
         PluginCmd::Config { sub } => match sub {
             PluginConfigCmd::Set { name, key, value, scope } => {
@@ -951,6 +952,91 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
                     _ => "cannot run against this amenbo",
                 };
                 human(flags, format!("    {effect}: {why}"));
+            }
+        }
+    }
+    Ok(0)
+}
+
+/// `plugin runs` — the execution log, read back (`AMB-D-361`).
+///
+/// The write side has been landing runs since the dispatcher started firing; this is the first thing that
+/// reads them. It exists because a hook is fire-and-forget (`AMB-D-352`): nobody waits on it and nothing
+/// fails when it fails, so "my plugin did nothing" has no answer anywhere else. What answers it is the
+/// plugin's own stderr (`AMB-D-353`), so a run that did not end cleanly carries that text under its line
+/// rather than only into `--json`.
+///
+/// No paging, no window flags: the log is bounded by construction (the last runs of each installed
+/// plugin), so the whole file *is* the recent window.
+fn plugin_runs_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i32, CliError> {
+    use amenbo_core::plugin_log::{self, Outcome};
+
+    let path = store.paths.plugin_log_file();
+    // Newest first either way — the run a reader is looking for is nearly always the last one.
+    let lines = match name {
+        Some(name) => plugin_log::recent(&path, name),
+        None => {
+            let mut all = plugin_log::read(&path);
+            all.reverse();
+            all
+        }
+    };
+
+    if flags.json {
+        let rows: Vec<_> = lines
+            .iter()
+            .map(|l| {
+                json!({
+                    "at": l.at.to_rfc3339_z(),
+                    "plugin": l.plugin,
+                    "event": l.event,
+                    "outcome": l.outcome.as_str(),
+                    "code": l.code,
+                    "elapsed_ms": l.elapsed_ms,
+                    "stderr": l.stderr,
+                })
+            })
+            .collect();
+        print_json(&json!({
+            "count": rows.len(),
+            "log": path.display().to_string(),
+            "plugin": name,
+            "runs": rows,
+        }));
+    } else if lines.is_empty() {
+        match name {
+            Some(name) => human(flags, format!("No runs recorded for plugin '{name}'.")),
+            None => human(flags, format!("No plugin runs recorded ({}).", path.display())),
+        }
+    } else {
+        for l in &lines {
+            let at = l.at.to_rfc3339_z();
+            if l.outcome == Outcome::Gap {
+                // Not a run: it names no plugin and no event, so a row of dashes would be six columns of
+                // nothing. What was lost cannot be named — the fact and its instant are the whole content.
+                human(flags, format!("{at}  gap — events fired that reached nobody (they aged out before the dispatcher read them)"));
+                continue;
+            }
+            let code = match l.code {
+                Some(code) => format!("exit {code}"),
+                None => "no exit code".to_string(),
+            };
+            human(
+                flags,
+                format!(
+                    "{at}  {}  {}  {}  {code}  {}ms",
+                    l.plugin,
+                    l.event,
+                    l.outcome.as_str(),
+                    l.elapsed_ms
+                ),
+            );
+            // The diagnosis, where the author put it. Held back for a clean run so a listing stays
+            // scannable — `--json` carries it either way, for a reader that wants all of it.
+            if l.outcome != Outcome::Ok {
+                for text in l.stderr.lines() {
+                    human(flags, format!("    {text}"));
+                }
             }
         }
     }

@@ -877,6 +877,23 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             .collect();
         return Err(CliError::no_pointer(&candidates));
     }
+    // Restore sits after the exec guard (it needs to know where this device's store is) and ahead of the
+    // migration and the open, because it is the one command that replaces the truth source **wholesale** and
+    // therefore never has to read the one it replaces. Both of the steps below would be wrong here:
+    //
+    // - The **open** refuses a store this build cannot read — including the too-new one
+    //   (`store::open::ensure_format_supported`). There is no downgrade, so restoring the pre-migration
+    //   backup is the *only* way back from a store a newer build carried past this one — refusing it here
+    //   would deny the recovery on precisely the store the recovery exists for.
+    // - The **migration** would carry a store forward that this command is about to throw away, and, worse,
+    //   the pre-migration backup it takes on the way sweeps the older ones (one rewind point per kind) —
+    //   possibly the very archive being restored.
+    //
+    // What the restore replaces is guarded where the replacing happens: the swap holds the store's swap lock,
+    // and the archive's own gates (layout, generation) still refuse what this build cannot carry.
+    if let Some(Command::Restore { path }) = &cli.command {
+        return run_restore(flags, path.clone());
+    }
     // Migration runs here — before the store is opened, before the command matters. There is no saying
     // whether the CLI or the GUI comes up first on this device, so both enter through the same door
     // (`migrate::at_startup`), and whichever arrives second waits there while the other runs. A store already
@@ -1243,7 +1260,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::Export { out } => return export(&store, flags, out),
         Command::Backup { path } => return run_backup(&store, flags, path),
         Command::HardErase { sub } => return hard_erase(&mut store, flags, sub),
-        Command::Restore { path } => return run_restore(&store, flags, path),
+        Command::Restore { .. } => {
+            unreachable!("handled before open")
+        }
         Command::Hooks { sub } => return hooks_cmd(&mut store, flags, sub),
     }
     Ok(0)
@@ -1683,6 +1702,23 @@ fn warn_if_premise_added_to_reserved(store: &Store, id: i64, what: &str) {
         ),
         Ok(_) => {}
         Err(e) => eprintln!("warning: could not check whether {} is reserved: {e}", task_label(id)),
+    }
+}
+
+/// Warn the changer when reopening a decision takes the ground out from under a task that is already
+/// reserved (`in_progress`). It is the other direction of the same silence
+/// [`warn_if_premise_added_to_reserved`] breaks: there a premise is newly placed on a running task, here a
+/// premise the task already rests on stops being settled (`AMB-D-373`, the changer side). Either way the
+/// task drops to `ready:no` without losing its reservation and its holder gets no interrupt. Reopening is
+/// not forbidden, only made audible; an idempotent reopen (already proposed) settles nothing anew and so
+/// says nothing. The linked tasks are read off the card the caller already holds, so this costs no query.
+fn warn_if_reopened_under_reserved(did: i64, detail: &amenbo_core::view::DecisionDetail) {
+    for t in detail.linked_tasks.iter().filter(|t| t.status == TaskStatus::InProgress) {
+        eprintln!(
+            "⚠ {task} is reserved (in progress) and rests on {decision} — reopening it leaves that premise unsettled. Its holder is not notified now; they will see it on their next amenbo command.",
+            task = task_label(t.id),
+            decision = decision_label(did),
+        );
     }
 }
 
@@ -3528,8 +3564,11 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
         }
         DecisionCmd::Reopen { id } => {
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
-            let d = store.reopen_decision(did).map_err(CliError::from)?;
+            let (d, changed) = store.reopen_decision(did).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
+            if changed {
+                warn_if_reopened_under_reserved(d.id, &detail);
+            }
             write_envelope(flags, "decision.reopen", "decision", serde_json::to_value(&detail).unwrap(), Some(vec!["status".to_string()]), false, format!("✓ Reopened decision: {}", decision_label(d.id)));
         }
         DecisionCmd::Delete { id } => {
@@ -4722,8 +4761,10 @@ fn read_body_input(body: Option<String>, body_file: Option<String>) -> Result<St
 /// carries, via core [`amenbo_core::archive::restore_into`] — all-or-nothing stage-and-swap, the archive's
 /// store carried up the version chain in staging when it was taken by an older build, and the replaced truth
 /// source set aside as `store.pre-restore-<stamp>.sqlite`. Destructive — confirms unless `--yes`.
+///
+/// Takes no [`Store`]: it writes the on-disk layout rather than the opened store, and it runs **ahead of**
+/// the open so it still works on the store the open refuses — see the dispatch in [`run`].
 fn run_restore(
-    store: &Store,
     flags: &Flags,
     path: Option<String>,
 ) -> Result<i32, CliError> {
@@ -4755,7 +4796,6 @@ fn run_restore(
     )? {
         return Ok(1);
     }
-    let _ = store; // restore writes the on-disk layout, not the opened store; open is the exec guard.
     let stamp = time::Timestamp::now().0.format("%Y%m%dT%H%M%SZ").to_string();
     let mut progress = progress_fn(flags);
     let report = archive::restore_into(archive, &stamp, &archive::restore_dest(), &mut progress)

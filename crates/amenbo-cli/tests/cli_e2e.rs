@@ -228,6 +228,43 @@ fn adding_a_premise_to_a_reserved_task_warns_the_changer() {
 }
 
 #[test]
+fn reopening_a_decision_under_a_reserved_task_warns_the_changer() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "再開警告PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    let d = cli.json(&["decision", "add", "--title", "根拠", "--body", "x", "--project", &pid, "--json"]);
+    let did = id_str(&d["decision"]["id"]);
+    let d_ref = d["decision"]["ref"].as_str().unwrap().to_string();
+    let t = cli.json(&["task", "add", "--title", "根拠に立つ作業", "--project", &pid, "--json"]);
+    let tid = id_str(&t["task"]["id"]);
+    let t_ref = t["task"]["ref"].as_str().unwrap().to_string();
+
+    // A premise must be accepted before the task it holds can be reserved, so accept, then link.
+    cli.json(&["decision", "accept", &did, "--json"]);
+    cli.json(&["decision", "link", &did, &tid, "--json"]);
+
+    // Nobody holds the task yet: reopening takes no ground out from under anyone.
+    let (_o0, e0, c0) = cli.run_both(&["decision", "reopen", &did, "--json"]);
+    assert_eq!(c0, 0);
+    assert!(!e0.contains('⚠'), "a todo linked task must not warn: {e0}");
+
+    cli.json(&["decision", "accept", &did, "--json"]);
+    cli.json(&["task", "status", &tid, "in_progress", "--json"]);
+
+    // Reopening pulls the settled ground out from under the reservation: the changer is told.
+    let (o1, e1, c1) = cli.run_both(&["decision", "reopen", &did, "--json"]);
+    assert_eq!(c1, 0, "the warn does not fail the command: {e1}");
+    assert!(o1.contains("\"action\""), "stdout still carries the JSON envelope: {o1}");
+    assert!(e1.contains('⚠') && e1.contains(&t_ref), "the warn names the reserved task {t_ref}: {e1}");
+    assert!(e1.contains(&d_ref), "the warn names the decision {d_ref}: {e1}");
+
+    // Reopening what is already proposed settles nothing anew — no second warn.
+    let (_o2, e2, c2) = cli.run_both(&["decision", "reopen", &did, "--json"]);
+    assert_eq!(c2, 0);
+    assert!(!e2.contains('⚠'), "an idempotent reopen must not warn: {e2}");
+}
+
+#[test]
 fn task_dependencies_drive_ready_and_unblock() {
     let cli = Cli::new();
     let p = cli.json(&["project", "add", "--name", "依存PJ", "--json"]);
@@ -408,6 +445,47 @@ fn whole_device_backup_restore_round_trips() {
         .map(|t| t["title"].as_str().unwrap()).collect();
     assert!(["下書き", "推敲", "清書"].iter().all(|t| titles.contains(t)));
     assert!(!titles.contains(&"消えるタスク"), "the post-archive task is gone");
+}
+
+/// The recovery has to work on the store it exists for. There is no downgrade, so the only way back from a
+/// store a newer amenbo carried past this build is the pre-migration backup — which means `restore` has to
+/// run on exactly the store every other command refuses (`format_ahead`). It replaces the truth source
+/// wholesale, so it never reads the one it replaces, and it therefore sits ahead of the open.
+#[test]
+fn restore_replaces_a_store_this_build_cannot_open() {
+    use amenbo_core::store_engine::{StoreEngine, META_FORMAT_VERSION, META_FORMAT_VERSION_SET_BY};
+
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "退避", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    for title in ["移行前A", "移行前B"] {
+        cli.json(&["task", "add", "--title", title, "--project", &pid, "--json"]);
+    }
+    let archive = cli.home.join("pre-migrate.amenbo-backup");
+    cli.json(&["backup", archive.to_str().unwrap(), "--json"]);
+
+    // Put the live store one generation past what this build opens — what a newer amenbo's migration
+    // leaves behind on a device whose other copy is still the old one.
+    {
+        let engine = StoreEngine::open(&cli.home.join("store.sqlite")).unwrap();
+        let ahead = (amenbo_core::model::FORMAT_VERSION + 1).to_string();
+        engine.set_meta(META_FORMAT_VERSION, Some(&ahead)).unwrap();
+        engine.set_meta(META_FORMAT_VERSION_SET_BY, Some("99.0.0")).unwrap();
+    }
+
+    // The gate is real: an ordinary command is refused, and it names the version to use.
+    let (err, code) = cli.run_err(&["task", "list", "--json"]);
+    assert_ne!(code, 0, "a too-new store is not opened: {err}");
+    assert!(err.contains("99.0.0"), "the refusal names the version that wrote the store: {err}");
+
+    // Restore goes through anyway — and the store it hands back is openable.
+    let restored = cli.json(&["restore", archive.to_str().unwrap(), "--yes", "--json"]);
+    assert!(
+        restored["previous_saved_to"].as_str().is_some(),
+        "the store that could not be opened is still set aside, not discarded: {restored}"
+    );
+    let all = cli.json(&["task", "list", "--json"]);
+    assert_eq!(all["count"], 2, "the archive's store is back and readable");
 }
 
 /// Whole-device backup needs an explicit destination path (the archive is a self-placed

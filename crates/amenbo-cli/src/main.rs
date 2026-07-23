@@ -1958,7 +1958,7 @@ fn with_dispatch(
             return Ok(code);
         }
     };
-    let subscribers = EnabledSubscribers::new(&installed, &store.config, store);
+    let subscribers = EnabledSubscribers::new(&installed, store);
     match store.drive_plugins_persisted(&subscribers) {
         Ok(delivered) => {
             for hook in delivered.hooks {

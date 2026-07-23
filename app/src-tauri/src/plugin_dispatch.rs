@@ -87,7 +87,7 @@ fn drive_in(cursor: &Mutex<Option<i64>>, store: &Store) {
             return;
         }
     };
-    let subscribers = EnabledSubscribers::new(&installed, &store.config, store);
+    let subscribers = EnabledSubscribers::new(&installed, store);
     match store.deliver_plugins(from, &subscribers) {
         // `delivered` is dropped here, and with it the hooks' handles: fire-and-forget (`AMB-D-352`).
         Ok(delivered) => *cursor = Some(delivered.cursor),

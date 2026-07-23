@@ -73,14 +73,20 @@ impl Subscriber {
 
 /// Resolves which plugins observe an event — the seam the enable lifecycle fills (`AMB-T-1975`).
 ///
-/// Given an event name (one of [`crate::plugin_payload::V1_EVENTS`]), return one [`Subscriber`] per
-/// enabled, subscribed plugin: its program, whatever the resolver injects alongside (secret config as env
-/// vars, `AMB-T-2016`), and its non-secret config for the payload's `config` key. The resolver does **not**
-/// set the payload event fields — [`deliver`] composes the stdin document, so the payload channel stays the
-/// dispatcher's. Return an empty vector for an event nobody observes.
+/// Given an event name (one of [`crate::plugin_payload::V1_EVENTS`]) and the project it happened in,
+/// return one [`Subscriber`] per enabled, subscribed plugin: its program, whatever the resolver injects
+/// alongside (secret config as env vars, `AMB-T-2016`), and its non-secret config for the payload's
+/// `config` key. The resolver does **not** set the payload event fields — [`deliver`] composes the stdin
+/// document, so the payload channel stays the dispatcher's. Return an empty vector for an event nobody
+/// observes.
+///
+/// `project` is what makes a project-scoped plugin's switch answerable here (`AMB-D-379`): the dispatcher
+/// resolves it from the row it drained ([`project_of_event`]). `None` means the event's record no longer
+/// says which project it belonged to — a deleted task is the ordinary case — and a resolver that needs a
+/// project must then fire nothing rather than guess one.
 pub trait Subscribers {
-    /// The subscribers to fire for `event`, before the event payload is composed onto stdin.
-    fn resolve(&self, event: &str) -> Vec<Subscriber>;
+    /// The subscribers to fire for `event`, in `project`, before the payload is composed onto stdin.
+    fn resolve(&self, event: &str, project: Option<i64>) -> Vec<Subscriber>;
 }
 
 /// The empty resolver: no event has a subscriber. It is what a face with no mount drives, and what the
@@ -89,7 +95,7 @@ pub trait Subscribers {
 pub struct NoSubscribers;
 
 impl Subscribers for NoSubscribers {
-    fn resolve(&self, _event: &str) -> Vec<Subscriber> {
+    fn resolve(&self, _event: &str, _project: Option<i64>) -> Vec<Subscriber> {
         Vec::new()
     }
 }
@@ -165,7 +171,21 @@ pub fn deliver(
                     // key). The base payload is a JSON object (`Payload` serializes to a map), so the merge
                     // is a key insertion, not a re-parse.
                     let base = serde_json::to_value(&payload)?;
-                    for sub in subs.resolve(payload.event) {
+                    // Which project the event happened in, read from the record it names — the outbox row
+                    // does not carry it (`AMB-D-379` needs it for a project-scoped plugin's gate). A read
+                    // that fails is treated as "unknown", the same as a record that has gone: this walk is
+                    // best-effort (`AMB-D-352`) and a resolver that needs a project fires nothing without
+                    // one.
+                    let project = project_of_event(conn, payload.event, payload.id).unwrap_or_else(|e| {
+                        tracing::warn!(
+                            event = %payload.event,
+                            id = payload.id,
+                            error = %e,
+                            "could not read the event's project"
+                        );
+                        None
+                    });
+                    for sub in subs.resolve(payload.event, project) {
                         let json = serde_json::to_string(&with_config(base.clone(), sub.config))?;
                         // The event is kept beside the plugin's name here, where both are still known:
                         // a page of events folds into one list of hooks, and the runner below has no
@@ -185,6 +205,38 @@ pub fn deliver(
     }
     let hooks = crate::plugin_hooks::fire(hooks, log);
     Ok(Delivered { cursor, hooks, gapped: false })
+}
+
+/// The project one drained event happened in, or `None` when nothing says so any more.
+///
+/// The outbox row carries the event's name and the record's id, never a project (`AMB-D-367` — it is a
+/// change feed, not a routing table), so the project is read back from the record the event names: a
+/// task's own, a decision's own, and for a comment the project of the task it hangs on. This is what lets
+/// the resolver answer a **project-scoped** plugin's switch (`AMB-D-379`).
+///
+/// `None` is a real answer, not a failure: a task that has been deleted takes its project with it, and a
+/// task that belongs to no project never had one. A caller that needs a project must fire nothing in that
+/// case — guessing a project would open a gate the user never opened there.
+pub fn project_of_event(conn: &Connection, event: &str, record_id: i64) -> Result<Option<i64>> {
+    use crate::plugin_payload::name as ev;
+    use crate::store_engine::read;
+    match event {
+        ev::TASK_CREATED
+        | ev::TASK_STATUS_CHANGED
+        | ev::TASK_DONE
+        | ev::TASK_ASSIGNED
+        | ev::TASK_MOVED
+        | ev::TASK_DELETED => Ok(read::task(conn, record_id)?.and_then(|t| t.project_id)),
+        ev::DECISION_ACCEPTED | ev::DECISION_REJECTED => {
+            Ok(read::decision(conn, record_id)?.map(|d| d.project_id))
+        }
+        // A comment's project is its task's — the comment table holds no project of its own.
+        ev::COMMENT_ADDED => match read::task_comment(conn, record_id)? {
+            Some(comment) => Ok(read::task(conn, comment.task_id)?.and_then(|t| t.project_id)),
+            None => Ok(None),
+        },
+        _ => Ok(None),
+    }
 }
 
 /// Fold a subscriber's non-secret config into the event payload under `config` (`AMB-D-356`). An empty
@@ -214,7 +266,7 @@ mod tests {
     }
 
     impl Subscribers for Fixed {
-        fn resolve(&self, event: &str) -> Vec<Subscriber> {
+        fn resolve(&self, event: &str, _project: Option<i64>) -> Vec<Subscriber> {
             if self.events.contains(&event) {
                 vec![Subscriber::new("fixed", self.invocation.clone())]
             } else {
@@ -377,7 +429,7 @@ mod tests {
             config: serde_json::Map<String, serde_json::Value>,
         }
         impl Subscribers for WithConfig {
-            fn resolve(&self, event: &str) -> Vec<Subscriber> {
+            fn resolve(&self, event: &str, _project: Option<i64>) -> Vec<Subscriber> {
                 if event == self.event {
                     vec![Subscriber { plugin: "configured".into(), invocation: self.invocation.clone(), config: self.config.clone() }]
                 } else {
@@ -448,5 +500,63 @@ mod tests {
         assert_eq!(got["actor"], "ai");
         assert_eq!(got["at"], "2026-07-22T09:00:00Z");
         assert_eq!(got["new"], "in_progress");
+    }
+
+    // ───────────────────── where an event happened (`AMB-D-379`) ──────────────────────────────────
+
+    /// Every v1 event's project, read back from the record it names: a task's own, a comment's task's,
+    /// a decision's own. This is the only thing that can answer a project-scoped plugin's switch, since
+    /// the outbox row itself carries no project.
+    #[test]
+    fn an_events_project_is_read_from_the_record_it_names() {
+        use crate::plugin_payload::name as ev;
+
+        let dir = amenbo_scratch::scratch("dispatch-event-project");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut store = crate::Store::open_at(crate::config::Paths::at(dir)).unwrap();
+        let project = store
+            .project_add(crate::ops::project::NewProject {
+                name: "p".into(),
+                view: crate::model::View::List,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap()
+            .id;
+        let task = store
+            .add_task(crate::ops::task::NewTask {
+                title: "t".into(),
+                project_id: Some(project),
+                due_on: None,
+                start_on: None,
+                priority: None,
+                notes: String::new(),
+                created_by_kind: Some(crate::model::ActorKind::Ai),
+            })
+            .unwrap()
+            .id;
+        let comment =
+            store.add_task_comment(task, crate::model::ActorKind::Ai, "c").unwrap().id;
+        let decision = store
+            .add_decision(crate::ops::decision::NewDecision {
+                title: "d".into(),
+                body: "b".into(),
+                project_id: project,
+            })
+            .unwrap()
+            .id;
+
+        let conn = store.engine.conn();
+        assert_eq!(project_of_event(conn, ev::TASK_CREATED, task).unwrap(), Some(project));
+        assert_eq!(project_of_event(conn, ev::TASK_DONE, task).unwrap(), Some(project));
+        assert_eq!(project_of_event(conn, ev::COMMENT_ADDED, comment).unwrap(), Some(project));
+        assert_eq!(project_of_event(conn, ev::DECISION_ACCEPTED, decision).unwrap(), Some(project));
+
+        // A record that is gone says nothing — the `task.deleted` case, and the reason `None` is an
+        // answer rather than an error.
+        assert_eq!(project_of_event(conn, ev::TASK_DELETED, 999_999).unwrap(), None);
+        assert_eq!(project_of_event(conn, ev::COMMENT_ADDED, 999_999).unwrap(), None);
+        // An event outside the v1 catalog names no record kind at all.
+        assert_eq!(project_of_event(conn, "something.else", task).unwrap(), None);
     }
 }

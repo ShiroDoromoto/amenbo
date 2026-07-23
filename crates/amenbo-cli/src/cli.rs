@@ -353,6 +353,14 @@ pub enum PluginCmd {
         /// the plugin's name
         name: String,
     },
+
+    /// Remove a plugin and everything it left behind (`AMB-D-357`): the binary, its settings in every
+    /// project, its secrets, and the consent. Disables it first, so an interrupted removal never leaves
+    /// a plugin still firing. **A re-install starts clean** — nothing here comes back.
+    Uninstall {
+        /// the plugin's name
+        name: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]

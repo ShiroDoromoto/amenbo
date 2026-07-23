@@ -152,8 +152,9 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
         // `validate` reads a manifest file the author names and touches no store at all; the rest of the
-        // group moves this machine's plugin state (config.json), which is a local setting like `config` —
-        // it leaves no activity to stamp a facet onto.
+        // group moves this machine's plugin state — `config.json`, the secret file, and (for `uninstall`)
+        // the plugin's own `plugin_config` rows. Those are local settings like `config`, carrying no
+        // author and leaving no activity to stamp a facet onto.
         | Command::Plugin { .. }
         | Command::Hooks { .. }
         | Command::Config { .. } // settings live in the user layer and leave no activity behind
@@ -671,6 +672,7 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         PluginCmd::List => plugin_list_cmd(store, flags),
         PluginCmd::Enable { name } => plugin_enable_cmd(store, flags, &name),
         PluginCmd::Disable { name } => plugin_disable_cmd(store, flags, &name),
+        PluginCmd::Uninstall { name } => plugin_uninstall_cmd(store, flags, &name),
     }
 }
 
@@ -766,6 +768,42 @@ fn plugin_disable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i3
         print_json(&json!({
             "ok": true, "action": "plugin.disable", "plugin": name,
             "enabled": false, "noop": !was_enabled,
+        }));
+    }
+    Ok(0)
+}
+
+/// `plugin uninstall <name>` — remove the plugin and every trace of it (`AMB-D-357`). The confirmation
+/// names what goes beyond the binary, because settings and secrets are the part a user does not picture:
+/// they are gone device-wide, in every project, and a re-install does not bring them back.
+fn plugin_uninstall_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
+    if !confirm(
+        flags,
+        &format!(
+            "uninstall plugin '{name}' (its settings in every project and its secrets go too; a re-install starts clean)"
+        ),
+    )? {
+        return Ok(1);
+    }
+    let removed = amenbo_core::plugin_uninstall::uninstall(store, name).map_err(CliError::from)?;
+
+    if removed.anything() {
+        human(flags, format!("Uninstalled plugin: {name}"));
+    } else {
+        human(flags, format!("Nothing to uninstall: {name} is not on this machine."));
+    }
+    if flags.json {
+        print_json(&json!({
+            "ok": true, "action": "plugin.uninstall", "plugin": name,
+            "removed_anything": removed.anything(),
+            "removed": {
+                "was_enabled": removed.was_enabled,
+                "consent": removed.consent,
+                "machine_defaults": removed.machine_defaults,
+                "secrets": removed.secrets,
+                "project_overrides": removed.project_overrides,
+                "directory": removed.directory,
+            },
         }));
     }
     Ok(0)

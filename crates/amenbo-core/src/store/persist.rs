@@ -437,6 +437,17 @@ impl Store {
         })
     }
 
+    /// Erase every per-project override of one plugin, device-wide (one operation = one transaction) —
+    /// the store half of `plugin uninstall` (`AMB-D-357`). Returns how many rows went.
+    ///
+    /// **Deliberately unguarded by project reach**, the only write here that is: what it deletes is one
+    /// plugin's residue, not any project's content, and an uninstall that stopped at the bound project
+    /// would leave exactly the leftovers the decision forbids. The blast radius is fixed by the plugin
+    /// name alone — no caller can aim this at a project's tasks, decisions or comments.
+    pub fn forget_plugin_config(&mut self, plugin: &str) -> Result<usize> {
+        self.write_one(&[], |tx| crate::ops::plugin_config::forget_plugin(tx, plugin))
+    }
+
     /// Create a project (one operation = one transaction). The ordering sibling's `order_key` is read
     /// inside this transaction.
     pub fn project_add(

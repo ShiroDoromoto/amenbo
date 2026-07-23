@@ -79,6 +79,14 @@ impl Secrets {
         }
     }
 
+    /// Drop every secret this plugin holds — the purge `uninstall` performs unconditionally
+    /// (`AMB-D-357`: a secret is the one thing that must never survive a removal). Returns whether
+    /// anything was there. Does **not** persist — the caller [`save`](Self::save)s, which is what makes
+    /// the bytes leave the file.
+    pub fn forget_plugin(&mut self, plugin: &str) -> bool {
+        self.0.remove(plugin).is_some()
+    }
+
     /// Write the secret file back, owner-only (0600 on unix), creating the base dir as needed. Atomic:
     /// the content is written to a sibling temp created with the restrictive mode from the start, then
     /// renamed into place, so a reader never sees a torn file and a secret is never briefly world-readable.

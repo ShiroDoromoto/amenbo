@@ -402,6 +402,14 @@ impl Config {
         self.plugin_trust.remove(plugin);
     }
 
+    /// Drop every machine default this plugin holds — the `config.json` half of `uninstall`
+    /// (`AMB-D-357`), beside [`forget_plugin_trust`](Self::forget_plugin_trust)'s consent half, so a
+    /// re-install starts clean rather than inheriting the settings of the copy that was removed. Returns
+    /// whether anything was there. Does not persist.
+    pub fn forget_plugin_config(&mut self, plugin: &str) -> bool {
+        self.plugin_config.remove(plugin).is_some()
+    }
+
     /// Set (`Some`) or clear (`None`) the machine default of one plugin text field. Clearing removes the
     /// key, and the plugin's map with it once empty, so an unset field leaves no `{}` residue. Does **not**
     /// persist — the caller saves the config (through the write boundary).

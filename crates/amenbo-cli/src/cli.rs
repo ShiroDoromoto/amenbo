@@ -425,7 +425,8 @@ pub enum PluginCmd {
         name: Option<String>,
     },
 
-    /// Report which installed plugins the catalog holds a different build of (`AMB-D-359`).
+    /// Bring an installed plugin onto the build the catalog publishes — or, with `--check`, only report
+    /// which installs it has moved past (`AMB-D-359`).
     ///
     /// Detection is the catalog amenbo already fetches whole laid beside the manifest sitting next to
     /// each installed binary — no central server, and no per-plugin request. A manifest carries no
@@ -433,13 +434,26 @@ pub enum PluginCmd {
     /// digest of the exact bytes that would run here, and therefore the build's identity. It reports *different*, not *newer* — the catalog is the authority
     /// on what is published, including a rollback.
     ///
-    /// Cheap on purpose: with nothing installed no catalog is read at all, and otherwise a cached
-    /// catalog younger than an hour answers with no request. Applying an update is a separate act, which
-    /// is why `--check` is required here.
+    /// **Nothing is ever applied on amenbo's own account**: naming a plugin, or `--all`, is the whole
+    /// consent. Applying re-walks the install door over the new asset — the catalog signature, then this
+    /// OS's checksum (`AMB-D-351`) — and retains the build it replaced beside the new one, so there is
+    /// something to go back to. It **keeps** the plugin's gate, its settings and its secrets: an update is
+    /// not a re-install, and wiping those is `uninstall`'s job (`AMB-D-357`). Any step that refuses —
+    /// a build this amenbo cannot speak to, an asset that will not verify — leaves the working plugin
+    /// exactly as it was.
+    ///
+    /// `--check` is cheap on purpose: with nothing installed no catalog is read at all, and otherwise a
+    /// cached catalog younger than an hour answers with no request. Applying always asks for the current
+    /// index, since replacing a binary on an hour-old answer is not the same bargain.
     Update {
-        /// report what has an update without applying anything (the only form available today)
-        #[arg(long, required = true)]
+        /// the installed plugin to update; omit it with --all or --check
+        name: Option<String>,
+        /// report what has an update without applying anything
+        #[arg(long)]
         check: bool,
+        /// apply every update the catalog holds, one plugin at a time
+        #[arg(long)]
+        all: bool,
     },
 
     /// Fill in an installed plugin's settings — the keys its author declared in the manifest

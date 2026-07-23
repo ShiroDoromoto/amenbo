@@ -678,7 +678,9 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         PluginCmd::Uninstall { name } => plugin_uninstall_cmd(store, flags, &name),
         PluginCmd::Run { name, args } => plugin_run_cmd(store, flags, &name, &args),
         PluginCmd::Runs { name } => plugin_runs_cmd(store, flags, name.as_deref()),
-        PluginCmd::Update { check: _ } => plugin_update_check_cmd(store, flags),
+        PluginCmd::Update { name, check, all } => {
+            plugin_update_cmd(store, flags, name.as_deref(), check, all)
+        }
         PluginCmd::Config { sub } => match sub {
             PluginConfigCmd::Set { name, key, value, scope } => {
                 plugin_config_set_cmd(store, flags, &name, &key, value, &scope)
@@ -1043,6 +1045,45 @@ fn plugin_runs_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i
     Ok(0)
 }
 
+/// `plugin update` — the one command, and which of its three jobs this invocation asked for
+/// (`AMB-D-359`).
+///
+/// Reporting and applying are the same subject and deliberately not the same act, so the form has to say
+/// which: `--check` reports, a name applies one, `--all` applies every one. Nothing is the fourth case and
+/// it is refused rather than guessed at — defaulting a bare `plugin update` to either side would make the
+/// safe reading and the replacing one a typo apart.
+fn plugin_update_cmd(
+    store: &Store,
+    flags: &Flags,
+    name: Option<&str>,
+    check: bool,
+    all: bool,
+) -> Result<i32, CliError> {
+    let misuse = |message: String, hint: &str| CliError {
+        code: "invalid_value",
+        message,
+        hint: Some(hint.to_string()),
+        exit: 2,
+    };
+    match (check, all, name) {
+        (true, false, None) => plugin_update_check_cmd(store, flags),
+        (true, _, _) => Err(misuse(
+            "--check reports every install and applies nothing".to_string(),
+            "Pass --check on its own, or drop it to apply: `amenbo plugin update <name>` / `--all`.",
+        )),
+        (false, true, Some(name)) => Err(misuse(
+            format!("--all is every installed plugin, so it cannot also name '{name}'"),
+            "Pass one or the other: `amenbo plugin update <name>`, or `amenbo plugin update --all`.",
+        )),
+        (false, true, None) => plugin_update_all_cmd(store, flags),
+        (false, false, Some(name)) => plugin_update_apply_cmd(store, flags, name),
+        (false, false, None) => Err(misuse(
+            "say what to update".to_string(),
+            "`amenbo plugin update --check` to see what there is, `<name>` or `--all` to apply it.",
+        )),
+    }
+}
+
 /// `plugin update --check` — which installed plugins the catalog holds a different build of
 /// (`AMB-D-359`).
 ///
@@ -1084,6 +1125,90 @@ fn plugin_update_check_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError
         }
     }
     Ok(0)
+}
+
+/// `plugin update <name>` — put the catalog's build of one plugin in place (`AMB-D-359`).
+///
+/// A plugin already on that build is reported as such and is not a failure: the command's promise is
+/// "this plugin is now what the catalog publishes", and there is a way of meeting it that fetches
+/// nothing. What is said afterwards is what a reader most needs to know they did *not* just lose — the
+/// gate and the settings are still there — and where the build that was replaced went.
+fn plugin_update_apply_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
+    let applied =
+        amenbo_core::plugin_update::apply(&store.paths, name).map_err(CliError::from)?;
+
+    match applied {
+        None => {
+            human(flags, format!("Plugin '{name}' is already the build the catalog publishes."));
+            if flags.json {
+                print_json(&json!({
+                    "ok": true, "action": "plugin.update", "plugin": name, "applied": false,
+                }));
+            }
+        }
+        Some(r) => {
+            human(flags, format!("Updated plugin: {name} — {}", r.to.desc));
+            human(flags, "Its gate, settings and secrets are unchanged.");
+            human(flags, format!("The build it replaced is kept at {}.", r.backup.display()));
+            if flags.json {
+                print_json(&json!({
+                    "ok": true, "action": "plugin.update", "plugin": name, "applied": true,
+                    "desc": r.to.desc,
+                    "program": r.program.display().to_string(),
+                    "program_bytes": r.program_bytes,
+                    "backup": r.backup.display().to_string(),
+                }));
+            }
+        }
+    }
+    Ok(0)
+}
+
+/// `plugin update --all` — every update the catalog holds, applied one plugin at a time (`AMB-D-359`).
+///
+/// Best-effort across plugins: one whose asset will not verify is reported and the rest are still
+/// applied, because a single bad entry holding back every other update is the worse failure. It still
+/// exits non-zero when anything failed — the run is not a success just because most of it worked.
+fn plugin_update_all_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
+    use amenbo_core::plugin_update::Outcome;
+
+    let outcomes = amenbo_core::plugin_update::apply_all(&store.paths).map_err(CliError::from)?;
+    let failed = outcomes.iter().filter(|o| matches!(o, Outcome::Failed { .. })).count();
+
+    if outcomes.is_empty() {
+        human(flags, "Everything installed matches what the catalog publishes.");
+    }
+    for outcome in &outcomes {
+        match outcome {
+            Outcome::Replaced(r) => {
+                human(flags, format!("{}  updated  {}", r.name, r.to.desc));
+            }
+            Outcome::Failed { name, error } => {
+                human(flags, format!("{name}  not updated  {} (it is as it was)", error.message_en()));
+            }
+        }
+    }
+    if flags.json {
+        let rows: Vec<_> = outcomes
+            .iter()
+            .map(|o| match o {
+                Outcome::Replaced(r) => json!({
+                    "name": r.name, "applied": true, "desc": r.to.desc,
+                    "program_bytes": r.program_bytes,
+                    "backup": r.backup.display().to_string(),
+                }),
+                Outcome::Failed { name, error } => json!({
+                    "name": name, "applied": false,
+                    "error": error.code(), "message": error.message_en(),
+                }),
+            })
+            .collect();
+        print_json(&json!({
+            "ok": failed == 0, "action": "plugin.update",
+            "count": rows.len(), "failed": failed, "updates": rows,
+        }));
+    }
+    Ok(if failed == 0 { 0 } else { 1 })
 }
 
 /// Which of the author's settings currently hold a value, probed at the tier the enable is for

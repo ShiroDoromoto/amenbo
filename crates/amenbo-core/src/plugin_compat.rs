@@ -103,6 +103,24 @@ impl Incompatibility {
             format!("プラグイン '{plugin}' はこの amenbo と互換がありません：{}", self.ja()),
         )
     }
+
+    /// Turn the verdict into the refusal an **update** returns (`plugin update`). The difference from
+    /// [`into_error`](Self::into_error) is what the reader has to know afterwards: the verdict is about
+    /// the build the catalog is offering, and refusing it changes nothing — the installed plugin keeps
+    /// running as it was (`AMB-D-359`, failing safe). Rendered separately rather than as a suffix,
+    /// because the wording differs in both languages.
+    pub fn into_update_error(self, plugin: &str) -> Error {
+        Error::invalid(
+            format!(
+                "the build of '{plugin}' the catalog publishes does not run on this amenbo ({}) — nothing was replaced, and the installed build is untouched",
+                self.en()
+            ),
+            format!(
+                "目録が配布している '{plugin}' の版はこの amenbo では動きません（{}）——何も差し替えていないので、インストール済みの版はそのままです",
+                self.ja()
+            ),
+        )
+    }
 }
 
 impl fmt::Display for Incompatibility {

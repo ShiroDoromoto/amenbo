@@ -85,19 +85,29 @@ pub fn install(paths: &Paths, name: &str) -> Result<Installed> {
     let entry = resolve(&catalog, name)?;
     let manifest = entry.manifest.clone();
     refuse_an_overwrite(paths, &manifest.name)?;
-    let here = refuse_another_platform(&manifest)?;
+    let program = fetch_verified_program(&manifest)?;
+    place(paths, &manifest, &program)
+}
 
+/// The plugin's executable, off the network and through the trust gates — the *only* way bytes named by a
+/// manifest become bytes amenbo will write.
+///
+/// Platform, provenance and packaging in one call, because taking them apart is how a caller ends up
+/// with a partial chain: [`crate::plugin_update`] replaces an installed binary through exactly this
+/// function (`AMB-D-359` — an update re-verifies), and there is deliberately no entry point beside it
+/// that fetches without verifying. The key is never a parameter (see the module docs).
+pub(crate) fn fetch_verified_program(manifest: &Manifest) -> Result<Vec<u8>> {
     // What is fetched, what it must hash to and who signed it are all this platform's (`AMB-D-381`) —
     // one lookup, so provenance can never be checked against another OS's bytes.
-    let published = published_for(&manifest, here)?;
+    let here = refuse_another_platform(manifest)?;
+    let published = published_for(manifest, here)?;
     let asset = download(&published.url)?;
     plugin_provenance::verify_catalog_asset(
         &asset,
         published.signature.as_deref(),
         &published.checksum,
     )?;
-    let program = unpack_program(&asset, &manifest.name)?;
-    place(paths, &manifest, &program)
+    unpack_program(&asset, &manifest.name)
 }
 
 /// The catalog entry this name resolves to. A name the catalog does not carry is `not_found` — unless
@@ -280,7 +290,10 @@ fn from_tar_gz(asset: &[u8], name: &str) -> Result<Vec<u8>> {
 /// Lay the plugin down in the layout [`plugin_installed`] reads: the executable (marked runnable on
 /// unix, since nothing else will), and **then** `manifest.json`, the install marker. The order is the
 /// whole failure story — stop before the last write and the directory reads as not installed.
-fn place(paths: &Paths, manifest: &Manifest, program: &[u8]) -> Result<Installed> {
+///
+/// An update writes through here too ([`crate::plugin_update`]), so the same order holds when the home
+/// already exists: the new binary lands first and the manifest describing it last.
+pub(crate) fn place(paths: &Paths, manifest: &Manifest, program: &[u8]) -> Result<Installed> {
     let name = &manifest.name;
     // The registry cache lives beside the plugins, so a name that resolved to it would install *over*
     // the catalog. The catalog's own intake refuses this name and so does the validator; this is the

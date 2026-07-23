@@ -1,10 +1,30 @@
-//! **Which installed plugins the catalog has moved past** — the detection half of an update
-//! (`AMB-D-359`).
+//! **Which installed plugins the catalog has moved past, and putting the new build in place** —
+//! detection and application, the two halves of an update (`AMB-D-359`).
 //!
 //! There is no central server to ask, and there is no per-plugin request: the catalog amenbo already
 //! fetches whole ([`plugin_catalog`], `AMB-D-347`) is the current index, and the manifest beside each
 //! installed binary ([`plugin_installed`]) is what this machine has. Detection is those two lists laid
-//! side by side, and nothing more — applying an update is a separate, explicit act.
+//! side by side, and nothing more — applying an update is a separate, explicit act, and it is the second
+//! half of this module ([`apply`]). Nothing here is automatic: amenbo never applies an update on its own
+//! account (`AMB-D-359` — the same explicit-consent posture as `install ≠ enable`).
+//!
+//! **Applying re-walks the install door, it does not shortcut it.** The bytes go through
+//! [`plugin_install::fetch_verified_program`], so the catalog signature and this OS's checksum are checked
+//! over the new asset exactly as they were the first time (`AMB-D-351`); there is no entry point here that
+//! fetches without verifying. What is written goes through [`plugin_install::place`], so the install order
+//! holds — the executable first, `manifest.json` last.
+//!
+//! **What an update leaves alone is as much the contract as what it moves.** The enable gate, the config
+//! values and the secrets are all keyed by the plugin's name, in stores this module never opens: it
+//! replaces one binary and one manifest inside the plugin's home and touches nothing else, so an updated
+//! plugin comes back enabled, configured, and consented. Wiping those is `uninstall`'s job and only
+//! `uninstall`'s (`AMB-D-357`).
+//!
+//! **It fails safe at every step.** The compatibility gate, the download, the verification and the backup
+//! all run before a single byte of the install is overwritten, so a failure in any of them leaves the
+//! working plugin exactly as it was. Past that point the previous build is retained beside the new one
+//! ([`backup_path`]) — the `.bak` a rollback restores from, in the shape self-update already uses
+//! (`AMB-D-341`).
 //!
 //! **What "a different build" means here.** A manifest carries no version number, so there is nothing to
 //! compare as one. What it does carry is the `checksum` of the exact bytes the asset serves, which is the
@@ -22,12 +42,14 @@
 //! answered from the cache. That is the whole reason a check is cheap enough to hang off a listing
 //! (`AMB-D-359`).
 
+use std::path::PathBuf;
+
 use crate::config::Paths;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::plugin_catalog::{self, Catalog};
-use crate::plugin_installed;
 use crate::plugin_manifest::{Manifest, Os};
 use crate::plugin_subscribe::InstalledPlugin;
+use crate::{plugin_compat, plugin_install, plugin_installed};
 
 /// One installed plugin the catalog holds a different build of.
 ///
@@ -96,6 +118,177 @@ pub fn available(paths: &Paths) -> Result<Vec<Update>> {
         return Ok(Vec::new());
     }
     Ok(compare(&installed, &plugin_catalog::fresh(paths)?, os))
+}
+
+/// The same comparison as [`available`], against the **current** index rather than a fresh-enough one.
+///
+/// [`plugin_catalog::fresh`] is right for a check that hangs off something the user did anyway; applying
+/// is the explicit act, so it asks the network the way an install does ([`plugin_catalog::load`]) and only
+/// falls back to the cache when there is no answer. Applying what a cache said an hour ago would be
+/// replacing a binary on stale evidence.
+fn pending(paths: &Paths) -> Result<Vec<Update>> {
+    let (installed, Some(os)) = (plugin_installed::installed(paths)?, Os::here()) else {
+        return Ok(Vec::new());
+    };
+    if installed.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(compare(&installed, &plugin_catalog::load(paths)?, os))
+}
+
+/// What one applied update replaced — the receipt a caller reports from.
+#[derive(Clone, Debug)]
+pub struct Replaced {
+    /// The plugin's name.
+    pub name: String,
+    /// The manifest that was installed before this ran — what the retained `.bak` is a copy of.
+    pub from: Manifest,
+    /// The manifest now on disk: the catalog's entry, written last.
+    pub to: Manifest,
+    /// The executable that was replaced.
+    pub program: PathBuf,
+    /// Where the previous build is retained ([`backup_path`]).
+    pub backup: PathBuf,
+    /// How large the new executable is, in bytes.
+    pub program_bytes: usize,
+}
+
+/// How one plugin fared in an [`apply_all`] — a failure is a value, not the end of the run, because one
+/// plugin whose asset will not verify must not leave the rest un-updated.
+#[derive(Debug)]
+pub enum Outcome {
+    /// The new build is in place. Boxed because a receipt carries two whole manifests and a refusal
+    /// carries a sentence — sized inline, every element of the list would pay for the larger one.
+    Replaced(Box<Replaced>),
+    /// Nothing was replaced, and the plugin is as it was.
+    Failed {
+        /// The plugin that could not be updated.
+        name: String,
+        /// Why — the refusal the single-plugin path would have returned.
+        error: Error,
+    },
+}
+
+/// Where the previous build is retained inside the plugin's home: `<name>` → `<name>.bak` (and
+/// `<name>.exe` → `<name>.bak` on Windows), the shape self-update already uses (`AMB-D-341`).
+///
+/// **One**, not a history: each update overwrites it, so a rollback goes back exactly one build. A sibling
+/// in the same directory, so retaining it is a plain copy — and `uninstall` removes the whole home, which
+/// takes the retained build with it.
+///
+/// It is invisible to everything that reads an install: [`plugin_installed`] knows only `manifest.json`
+/// and the executable's own name, so a `.bak` beside them is not a second plugin and not a broken one.
+#[must_use]
+pub fn backup_path(paths: &Paths, name: &str) -> PathBuf {
+    plugin_installed::program_path(paths, name).with_extension("bak")
+}
+
+/// The manifest retained beside the previous build, so a rollback restores a *pair* that agrees.
+///
+/// Without it a rollback would put the old binary back under the new manifest — the wrong checksum, the
+/// wrong config schema, the wrong compatibility floor — which is a broken install described as a working
+/// one. Same role as self-update's version sidecar (`AMB-D-341`), one file up in fidelity because a
+/// plugin's manifest carries more than a label.
+#[must_use]
+pub fn backup_manifest_path(paths: &Paths, name: &str) -> PathBuf {
+    let mut p = plugin_installed::manifest_path(paths, name).into_os_string();
+    p.push(".bak");
+    PathBuf::from(p)
+}
+
+/// Apply the update for one installed plugin: fetch the catalog's build, verify it, retain the current
+/// one, and put the new one in place.
+///
+/// `Ok(None)` means there was nothing to apply — the catalog publishes the build already installed — and
+/// nothing was fetched or written. That is a result, not a failure: `plugin update <name>` on a current
+/// plugin is a no-op a caller can report plainly.
+///
+/// Refuses, leaving the install untouched, when the plugin is not installed (that is `plugin install`'s
+/// door), when the catalog does not list it (installed by hand, or delisted since — there is no build to
+/// move to), when the offered build cannot run on this amenbo, or when its asset does not verify.
+pub fn apply(paths: &Paths, name: &str) -> Result<Option<Replaced>> {
+    let installed = plugin_installed::read(paths, name)?;
+    // Unreachable on a platform amenbo ships for, and a refusal rather than "nothing to do" if it ever is
+    // reached: a caller who named a plugin is owed the reason, not a silent no-op.
+    let os = Os::here().ok_or_else(|| {
+        Error::invalid(
+            format!("plugin manifests cannot name {}, so '{name}' cannot be updated here", std::env::consts::OS),
+            format!("プラグインの manifest は {} を名指せないので、ここでは '{name}' を更新できません", std::env::consts::OS),
+        )
+    })?;
+    let catalog = plugin_catalog::load(paths)?;
+    let entry = catalog.find(name).ok_or_else(|| {
+        Error::not_found(
+            format!("the catalog lists no plugin named '{name}', so there is no build to update to"),
+            format!("目録にプラグイン '{name}' は無いので、更新先の版がありません"),
+        )
+    })?;
+    if !differs(&installed.manifest, &entry.manifest, os) {
+        return Ok(None);
+    }
+    replace(
+        paths,
+        &Update {
+            name: name.to_string(),
+            installed: installed.manifest,
+            available: entry.manifest.clone(),
+        },
+    )
+    .map(Some)
+}
+
+/// Apply every update the catalog holds, one plugin at a time.
+///
+/// Best-effort across plugins, exact within one: each is applied through the same [`replace`] the
+/// single-plugin path uses, so a plugin that fails is left exactly as it was and the next one is still
+/// attempted (`AMB-D-352`'s posture — one plugin's problem is not the others'). Plugins already on the
+/// catalog's build are not in the result at all; there was nothing to do for them.
+pub fn apply_all(paths: &Paths) -> Result<Vec<Outcome>> {
+    Ok(pending(paths)?
+        .into_iter()
+        .map(|update| match replace(paths, &update) {
+            Ok(replaced) => Outcome::Replaced(Box::new(replaced)),
+            Err(error) => Outcome::Failed { name: update.name, error },
+        })
+        .collect())
+}
+
+/// Put one resolved update in place — the whole write path, and the only one.
+///
+/// The order is the safety story (see the module docs): the two gates that can refuse run before the
+/// network, and the network runs before anything on disk is touched, so a plugin that fails any of them
+/// is left exactly as it was.
+fn replace(paths: &Paths, update: &Update) -> Result<Replaced> {
+    // A build this amenbo cannot speak to is not an improvement. Refusing here keeps a working plugin
+    // working — the alternative is replacing it with one that will be dropped at dispatch.
+    if let Err(why) = plugin_compat::check(&update.available) {
+        return Err(why.into_update_error(&update.name));
+    }
+    // Off the network and through the trust gates (`AMB-D-351`) — the same door the first install used.
+    let program = plugin_install::fetch_verified_program(&update.available)?;
+    retain_and_place(paths, update, &program)
+}
+
+/// The disk half of [`replace`], with the verified bytes handed in — the seam a test drives, since
+/// everything above it needs a network.
+///
+/// Retain first, overwrite second: the previous executable **and** the manifest describing it are copied
+/// aside before [`plugin_install::place`] writes over either, so the pair a rollback needs is complete
+/// from the first byte of the replacement onward.
+fn retain_and_place(paths: &Paths, update: &Update, program: &[u8]) -> Result<Replaced> {
+    let name = &update.name;
+    std::fs::copy(plugin_installed::program_path(paths, name), backup_path(paths, name))?;
+    std::fs::copy(plugin_installed::manifest_path(paths, name), backup_manifest_path(paths, name))?;
+
+    let placed = plugin_install::place(paths, &update.available, program)?;
+    Ok(Replaced {
+        name: name.clone(),
+        from: update.installed.clone(),
+        to: placed.manifest,
+        program: placed.program,
+        backup: backup_path(paths, name),
+        program_bytes: placed.program_bytes,
+    })
 }
 
 #[cfg(test)]
@@ -260,5 +453,137 @@ mod tests {
         let paths = Paths::at(dir);
 
         assert!(available(&paths).unwrap().is_empty());
+    }
+
+    // ---- applying one ----
+
+    fn paths_at(tag: &str) -> Paths {
+        let dir = amenbo_scratch::scratch(&format!("plugin-update-{tag}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        Paths::at(dir)
+    }
+
+    /// An installed plugin on disk: the executable holding `program`, and the manifest beside it.
+    fn install_on_disk(paths: &Paths, manifest: &Manifest, program: &[u8]) {
+        let home = paths.plugin_dir(&manifest.name);
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(plugin_installed::program_path(paths, &manifest.name), program).unwrap();
+        std::fs::write(
+            plugin_installed::manifest_path(paths, &manifest.name),
+            serde_json::to_string(manifest).unwrap(),
+        )
+        .unwrap();
+    }
+
+    fn update_of(installed: Manifest, available: Manifest) -> Update {
+        Update { name: installed.name.clone(), installed, available }
+    }
+
+    /// The shape of the retained pair — a sibling of the executable, and of the manifest.
+    #[test]
+    fn the_previous_build_is_retained_beside_the_new_one() {
+        let paths = paths_at("backup-paths");
+        let home = paths.plugin_dir("worktree");
+
+        assert_eq!(backup_path(&paths, "worktree"), home.join("worktree.bak"));
+        assert_eq!(backup_manifest_path(&paths, "worktree"), home.join("manifest.json.bak"));
+    }
+
+    /// The heart of an apply: the new executable is in place, the previous one **and** the manifest that
+    /// described it are retained, and the install reads back as the catalog's build.
+    #[test]
+    fn applying_replaces_the_build_and_retains_the_previous_pair() {
+        let paths = paths_at("apply");
+        let before = manifest("worktree", "aa");
+        install_on_disk(&paths, &before, b"#!/bin/sh\nold\n");
+        let mut after = manifest("worktree", "bb");
+        after.desc = "the newer build".to_string();
+
+        let replaced =
+            retain_and_place(&paths, &update_of(before.clone(), after.clone()), b"#!/bin/sh\nnew\n")
+                .unwrap();
+
+        assert_eq!(std::fs::read(&replaced.program).unwrap(), b"#!/bin/sh\nnew\n");
+        assert_eq!(replaced.program_bytes, b"#!/bin/sh\nnew\n".len());
+        assert_eq!(replaced.from.checksum, "sha256:aa");
+        assert_eq!(replaced.to.checksum, "sha256:bb");
+
+        // The retained pair: the previous binary, and the manifest that goes with it. A rollback that
+        // restored one without the other would describe the old build with the new manifest.
+        assert_eq!(std::fs::read(&replaced.backup).unwrap(), b"#!/bin/sh\nold\n");
+        let retained: Manifest = serde_json::from_slice(
+            &std::fs::read(backup_manifest_path(&paths, "worktree")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(retained, before);
+
+        // And what is installed now is the catalog's build, read back through the ordinary reader.
+        let read = plugin_installed::read(&paths, "worktree").unwrap();
+        assert_eq!(read.manifest, after);
+        assert!(compare(&[read], &catalog(vec![after]), Os::Macos).is_empty(), "and it is current");
+    }
+
+    /// A second update overwrites the retained build rather than accumulating: a rollback goes back one
+    /// step, and only one (`AMB-D-359` — one `.bak`).
+    #[test]
+    fn a_second_update_retains_only_the_build_it_replaced() {
+        let paths = paths_at("one-backup");
+        let first = manifest("worktree", "aa");
+        install_on_disk(&paths, &first, b"one");
+        let second = manifest("worktree", "bb");
+        let third = manifest("worktree", "cc");
+
+        retain_and_place(&paths, &update_of(first, second.clone()), b"two").unwrap();
+        retain_and_place(&paths, &update_of(second.clone(), third), b"three").unwrap();
+
+        assert_eq!(std::fs::read(backup_path(&paths, "worktree")).unwrap(), b"two");
+        let retained: Manifest = serde_json::from_slice(
+            &std::fs::read(backup_manifest_path(&paths, "worktree")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(retained, second, "the retained manifest moved with the retained binary");
+    }
+
+    /// What an update leaves alone: the enable gate, the settings and the secrets are keyed by name in
+    /// stores this module never opens, so an updated plugin comes back exactly as consented. The
+    /// stand-in here is the home itself — nothing beside the two replaced files is touched.
+    #[test]
+    fn applying_touches_nothing_but_the_binary_and_its_manifest() {
+        let paths = paths_at("preserve");
+        let before = manifest("worktree", "aa");
+        install_on_disk(&paths, &before, b"old");
+        let stray = paths.plugin_dir("worktree").join("state.json");
+        std::fs::write(&stray, b"whatever the plugin keeps").unwrap();
+
+        retain_and_place(&paths, &update_of(before, manifest("worktree", "bb")), b"new").unwrap();
+
+        assert_eq!(std::fs::read(&stray).unwrap(), b"whatever the plugin keeps");
+    }
+
+    /// A build this amenbo cannot speak to is refused before the network is reached, and the working
+    /// install is left exactly as it was (`AMB-D-359` — failing safe).
+    #[test]
+    fn an_incompatible_new_build_is_refused_with_the_install_untouched() {
+        let paths = paths_at("incompatible");
+        let before = manifest("worktree", "aa");
+        install_on_disk(&paths, &before, b"old");
+        let mut after = manifest("worktree", "bb");
+        after.min_amenbo = Some("99.0.0".to_string());
+
+        let err = replace(&paths, &update_of(before.clone(), after)).unwrap_err();
+        assert_eq!(err.code(), "invalid_value");
+        assert!(format!("{err:?}").contains("99.0.0"), "the floor is named: {err:?}");
+
+        assert_eq!(std::fs::read(plugin_installed::program_path(&paths, "worktree")).unwrap(), b"old");
+        assert_eq!(plugin_installed::read(&paths, "worktree").unwrap().manifest, before);
+        assert!(!backup_path(&paths, "worktree").exists(), "and nothing was retained");
+    }
+
+    /// Updating what is not installed is `plugin install`'s door, not this one — and it is answered
+    /// before a catalog is ever fetched.
+    #[test]
+    fn updating_something_not_installed_is_not_found() {
+        let paths = paths_at("absent");
+        assert_eq!(apply(&paths, "worktree").unwrap_err().code(), "not_found");
     }
 }

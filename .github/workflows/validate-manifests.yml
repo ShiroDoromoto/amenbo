@@ -1,0 +1,103 @@
+name: Validate plugin manifests
+
+# The catalog repository's PR gate, defined HERE rather than there.
+#
+# A plugin is listed by opening a PR against the public catalog repo that adds one
+# `plugins/<name>.yaml`. A malformed manifest merged there reaches every user through
+# `catalog.json`, so the intake is fail-closed — and the rules it is closed against are amenbo's, in
+# `amenbo_core::plugin_validate`, the same ones enforced at the install door. `amenbo plugin validate`
+# is that validator's author-facing face, built for exactly this (it opens no store and needs no
+# binding, so it runs in any checkout).
+#
+# Why the workflow lives in this repo and not in the catalog repo: two repos, one truth. The catalog
+# repo holds a five-line caller —
+#
+#     jobs:
+#       validate:
+#         uses: ShiroDoromoto/amenbo/.github/workflows/validate-manifests.yml@main
+#
+# — and everything about *how* a manifest is judged stays here, beside the rules themselves. A rule
+# added to the validator reaches the catalog's door on the next PR, with nothing to publish, install
+# or copy over. The same `workflow_call` shape `rot-gates.yml` already uses, pointed across a repo
+# boundary instead of within one (this repo is public, so a public caller may reference it).
+#
+# The CLI is built from source at the caller's chosen ref rather than downloaded from a release, and
+# that is the whole point: a released binary would freeze the catalog's door at the last version
+# amenbo shipped, which is the skew this arrangement exists to remove. The build is cached, so only
+# the first run on a given amenbo revision pays for it.
+
+on:
+  workflow_call:
+    inputs:
+      amenbo_ref:
+        description: the amenbo revision to build the validator from (a branch, tag or SHA)
+        type: string
+        default: main
+      manifest_glob:
+        description: which files in the calling repository are manifests
+        type: string
+        default: plugins/*.yaml
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      # The default checkout is the CALLING repository (the catalog), which is what holds the
+      # manifests under review. amenbo itself is a second checkout, off to one side.
+      - name: Check out the calling repository
+        uses: actions/checkout@v7
+
+      - name: Check out amenbo
+        uses: actions/checkout@v7
+        with:
+          repository: ShiroDoromoto/amenbo
+          ref: ${{ inputs.amenbo_ref }}
+          path: .amenbo-src
+
+      # rust-toolchain.toml in the amenbo checkout pins the channel; rustup installs it on the first
+      # cargo invocation from that directory.
+      - name: Show toolchain
+        working-directory: .amenbo-src
+        run: rustc --version && cargo --version
+
+      # Keyed on the rustc version + Cargo.lock, so the validator is rebuilt only when amenbo's
+      # dependencies actually move — not on every catalog PR.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .amenbo-src
+
+      # Only the CLI, and only the crates it needs: the GUI and its Tauri dependencies are not built.
+      - name: Build the validator
+        working-directory: .amenbo-src
+        run: cargo build --release -p amenbo-cli
+
+      # Every manifest, every run — not just the ones this PR touched. A rule tightened in the
+      # validator should surface on the next PR for the entries already listed too, and the whole
+      # catalog is small enough that checking it costs nothing next to the build above.
+      #
+      # `plugin validate` exits non-zero for an invalid manifest and reports every problem it finds
+      # rather than the first, so one run names everything the submitter has to fix. The loop keeps
+      # going after a failure for the same reason, and fails the job at the end.
+      - name: Validate every manifest
+        env:
+          GLOB: ${{ inputs.manifest_glob }}
+        run: |
+          shopt -s nullglob
+          validator="$PWD/.amenbo-src/target/release/amenbo"
+          # shellcheck disable=SC2206  # the glob is a pattern to expand, not a literal path
+          manifests=($GLOB)
+          if [ ${#manifests[@]} -eq 0 ]; then
+            echo "No manifests matched '$GLOB' — nothing to validate."
+            exit 0
+          fi
+          failed=0
+          for manifest in "${manifests[@]}"; do
+            echo "── $manifest"
+            "$validator" plugin validate "$manifest" || failed=1
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::One or more manifests are invalid. See the problems reported above."
+            exit 1
+          fi
+          echo "All ${#manifests[@]} manifest(s) are valid."

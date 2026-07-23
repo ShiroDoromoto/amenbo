@@ -345,8 +345,8 @@ pub enum PluginCmd {
     List,
 
     /// Install a plugin from the catalog: resolve the name, fetch its asset, verify its provenance
-    /// fail-closed (the catalog signature, then the checksum — `AMB-D-371`/`AMB-D-351`), and lay it down
-    /// under the app-data `plugins/` directory. **Installing never enables**: the plugin lands inert and
+    /// fail-closed (the catalog signature, then the checksum of the distributable published for this OS —
+    /// `AMB-D-371`/`AMB-D-351`/`AMB-D-381`), and lay it down under the app-data `plugins/` directory. **Installing never enables**: the plugin lands inert and
     /// `plugin enable` is the separate act. A name already installed is refused rather than overwritten
     /// (`AMB-D-360`).
     Install {
@@ -429,8 +429,8 @@ pub enum PluginCmd {
     ///
     /// Detection is the catalog amenbo already fetches whole laid beside the manifest sitting next to
     /// each installed binary — no central server, and no per-plugin request. A manifest carries no
-    /// version number, so what is compared is the asset's checksum: the digest of the exact bytes, and
-    /// therefore the build's identity. It reports *different*, not *newer* — the catalog is the authority
+    /// version number, so what is compared is the checksum of this machine's asset (`AMB-D-381`): the
+    /// digest of the exact bytes that would run here, and therefore the build's identity. It reports *different*, not *newer* — the catalog is the authority
     /// on what is published, including a rollback.
     ///
     /// Cheap on purpose: with nothing installed no catalog is read at all, and otherwise a cached

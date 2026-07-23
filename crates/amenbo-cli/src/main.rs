@@ -1055,17 +1055,22 @@ fn plugin_runs_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i
 fn plugin_update_check_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     let updates =
         amenbo_core::plugin_update::available(&store.paths).map_err(CliError::from)?;
+    let here = amenbo_core::plugin_manifest::Os::here();
 
     if flags.json {
         let rows: Vec<_> = updates
             .iter()
             .map(|u| {
+                // This machine's distributable on both sides (`AMB-D-381`) — the digests the detection
+                // actually compared, not another platform's.
+                let installed = here.and_then(|os| u.installed.asset_for(os));
+                let available = here.and_then(|os| u.available.asset_for(os));
                 json!({
                     "name": u.name,
                     "desc": u.available.desc,
-                    "installed_checksum": u.installed.checksum,
-                    "available_checksum": u.available.checksum,
-                    "url": u.available.url,
+                    "installed_checksum": installed.map(|a| a.checksum),
+                    "available_checksum": available.as_ref().map(|a| a.checksum.clone()),
+                    "url": available.map(|a| a.url),
                 })
             })
             .collect();

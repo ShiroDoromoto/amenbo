@@ -349,8 +349,11 @@ mod tests {
     #[test]
     fn a_broken_entry_is_dropped_and_the_rest_survives() {
         // The delivery path is not trusted: one entry missing a required field must not cost the catalog.
+        // `repo` and not `checksum`: a manifest may legitimately carry no top-level checksum now that it
+        // can publish one per OS (`AMB-D-381`), so a missing one is a rule the validator breaks it on
+        // (dropped as Invalid), not a shape serde cannot read.
         let mut broken = entry_json("broken");
-        broken.as_object_mut().unwrap().remove("checksum");
+        broken.as_object_mut().unwrap().remove("repo");
         let json = catalog_json(vec![entry_json("first"), broken, entry_json("last")]);
         let catalog = parse(&json).unwrap();
         assert_eq!(catalog.entries.len(), 2, "the readable entries are kept");

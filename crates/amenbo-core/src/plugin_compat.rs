@@ -163,6 +163,7 @@ mod tests {
             url: String::new(),
             checksum: String::new(),
             signature: None,
+            assets: Default::default(),
             official: false,
             scope: crate::plugin_manifest::Scope::Project,
             payload_v,

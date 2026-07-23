@@ -10,9 +10,11 @@
 //! compare as one. What it does carry is the `checksum` of the exact bytes the asset serves, which is the
 //! build's identity: two manifests with the same digest point at the same executable, whatever else moved
 //! around them, and a digest that differs is a different executable. So the comparison is the checksum —
-//! content, not a claim about it. The corollary is that this reports *different*, not *newer*: a catalog
-//! that rolls an entry back offers that older build as an update, which is right, because the catalog is
-//! the authority on what is published.
+//! content, not a claim about it. **This machine's** checksum, at that: a manifest publishes one
+//! distributable per OS (`AMB-D-381`), so the digest compared is the one for the OS running the check, and
+//! a release that rebuilt only Windows is not an update for a Mac. The corollary is that this reports
+//! *different*, not *newer*: a catalog that rolls an entry back offers that older build as an update,
+//! which is right, because the catalog is the authority on what is published.
 //!
 //! **It never reaches for the network on its own account.** With nothing installed there is nothing to
 //! compare and the catalog is not touched at all; otherwise the read goes through
@@ -24,7 +26,7 @@ use crate::config::Paths;
 use crate::error::Result;
 use crate::plugin_catalog::{self, Catalog};
 use crate::plugin_installed;
-use crate::plugin_manifest::Manifest;
+use crate::plugin_manifest::{Manifest, Os};
 use crate::plugin_subscribe::InstalledPlugin;
 
 /// One installed plugin the catalog holds a different build of.
@@ -42,10 +44,16 @@ pub struct Update {
     pub available: Manifest,
 }
 
-/// Whether the catalog's entry is a different build from the installed one (see the module docs: the
-/// asset's checksum is the build's identity, so it is the whole comparison).
-pub fn differs(installed: &Manifest, available: &Manifest) -> bool {
-    installed.checksum != available.checksum
+/// Whether the catalog's entry is a different build from the installed one, **for one OS** (see the module
+/// docs: that OS's asset checksum is the build's identity, so it is the whole comparison).
+///
+/// An entry that publishes nothing for this OS compares as unchanged. It is not an update anyone could
+/// apply — there are no bytes to fetch — and reporting one would offer a fix that cannot run.
+pub fn differs(installed: &Manifest, available: &Manifest, os: Os) -> bool {
+    match (installed.asset_for(os), available.asset_for(os)) {
+        (Some(installed), Some(available)) => installed.checksum != available.checksum,
+        _ => false,
+    }
 }
 
 /// The updates in one catalog for one set of installed plugins — the pure half, so the rule is testable
@@ -54,12 +62,12 @@ pub fn differs(installed: &Manifest, available: &Manifest) -> bool {
 /// Name-sorted, because [`plugin_installed::installed`] is: a listing and a check see the same order. A
 /// plugin the catalog does not list is not an update and is passed over — it may have been installed by
 /// hand or delisted since, and neither is something this layer can offer to fix.
-pub fn compare(installed: &[InstalledPlugin], catalog: &Catalog) -> Vec<Update> {
+pub fn compare(installed: &[InstalledPlugin], catalog: &Catalog, os: Os) -> Vec<Update> {
     installed
         .iter()
         .filter_map(|plugin| {
             let entry = catalog.find(&plugin.name)?;
-            differs(&plugin.manifest, &entry.manifest).then(|| Update {
+            differs(&plugin.manifest, &entry.manifest, os).then(|| Update {
                 name: plugin.name.clone(),
                 installed: plugin.manifest.clone(),
                 available: entry.manifest.clone(),
@@ -79,18 +87,22 @@ pub fn compare(installed: &[InstalledPlugin], catalog: &Catalog) -> Vec<Update> 
 /// offline with a cached copy is not a failure: the answer is then as fresh as the cache, which is the
 /// deal a static index buys (`AMB-D-347`).
 pub fn available(paths: &Paths) -> Result<Vec<Update>> {
-    let installed = plugin_installed::installed(paths)?;
+    // A platform amenbo's manifests cannot name publishes nothing here, so there is nothing to compare —
+    // and no reason to spend a fetch establishing that.
+    let (installed, Some(os)) = (plugin_installed::installed(paths)?, Os::here()) else {
+        return Ok(Vec::new());
+    };
     if installed.is_empty() {
         return Ok(Vec::new());
     }
-    Ok(compare(&installed, &plugin_catalog::fresh(paths)?))
+    Ok(compare(&installed, &plugin_catalog::fresh(paths)?, os))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::plugin_catalog::Entry;
-    use crate::plugin_manifest::Os;
+    use crate::plugin_manifest::Asset;
 
     fn manifest(name: &str, checksum: &str) -> Manifest {
         Manifest {
@@ -103,12 +115,21 @@ mod tests {
             url: "https://example.invalid/x.tar.gz".to_string(),
             checksum: format!("sha256:{checksum}"),
             signature: None,
+            assets: Default::default(),
             official: false,
             scope: crate::plugin_manifest::Scope::Project,
             payload_v: 1,
             min_amenbo: None,
             config: Vec::new(),
             events: Vec::new(),
+        }
+    }
+
+    fn asset(checksum: &str) -> Asset {
+        Asset {
+            url: "https://example.invalid/x.tar.gz".to_string(),
+            checksum: format!("sha256:{checksum}"),
+            signature: None,
         }
     }
 
@@ -132,7 +153,7 @@ mod tests {
     #[test]
     fn a_changed_checksum_is_an_update() {
         let installed = vec![installed_plugin("worktree", "aa")];
-        let updates = compare(&installed, &catalog(vec![manifest("worktree", "bb")]));
+        let updates = compare(&installed, &catalog(vec![manifest("worktree", "bb")]), Os::Macos);
 
         assert_eq!(updates.len(), 1);
         assert_eq!(updates[0].name, "worktree");
@@ -149,14 +170,14 @@ mod tests {
         entry.desc = "a much better description".to_string();
         entry.official = true;
 
-        assert!(compare(&installed, &catalog(vec![entry])).is_empty());
+        assert!(compare(&installed, &catalog(vec![entry]), Os::Macos).is_empty());
     }
 
     /// A plugin the catalog does not list has no build to be moved past — installed by hand, or delisted.
     #[test]
     fn a_plugin_the_catalog_does_not_list_is_passed_over() {
         let installed = vec![installed_plugin("homemade", "aa")];
-        assert!(compare(&installed, &catalog(vec![manifest("worktree", "bb")])).is_empty());
+        assert!(compare(&installed, &catalog(vec![manifest("worktree", "bb")]), Os::Macos).is_empty());
     }
 
     /// Several installs are answered in the order they came in — the name-sorted one.
@@ -173,8 +194,61 @@ mod tests {
             manifest("beta", "bb"),
         ]);
 
-        let names: Vec<_> = compare(&installed, &catalog).into_iter().map(|u| u.name).collect();
+        let names: Vec<_> = compare(&installed, &catalog, Os::Macos).into_iter().map(|u| u.name).collect();
         assert_eq!(names, vec!["alpha", "gamma"], "beta is current, and the rest stay sorted");
+    }
+
+    /// A per-OS entry is compared **per OS** (`AMB-D-381`): the machine running the check sees only its own
+    /// asset move. A release that rebuilt one platform is not an update for the others.
+    #[test]
+    fn a_per_os_entry_is_compared_against_this_machines_asset() {
+        let mut installed_manifest = manifest("worktree", "unused");
+        installed_manifest.url = String::new();
+        installed_manifest.checksum = String::new();
+        installed_manifest.assets = [
+            (Os::Macos, asset("mac-1")),
+            (Os::Linux, asset("linux-1")),
+        ]
+        .into_iter()
+        .collect();
+        let installed = vec![InstalledPlugin {
+            name: "worktree".to_string(),
+            program: std::path::PathBuf::from("/dev/null"),
+            manifest: installed_manifest.clone(),
+        }];
+
+        // Only Linux was rebuilt.
+        let mut entry = installed_manifest.clone();
+        entry.assets.insert(Os::Linux, asset("linux-2"));
+
+        assert!(
+            compare(&installed, &catalog(vec![entry.clone()]), Os::Macos).is_empty(),
+            "the mac asset is the one it was"
+        );
+        let on_linux = compare(&installed, &catalog(vec![entry]), Os::Linux);
+        assert_eq!(on_linux.len(), 1, "the linux asset moved");
+        assert_eq!(
+            on_linux[0].available.asset_for(Os::Linux).unwrap().checksum,
+            "sha256:linux-2"
+        );
+    }
+
+    /// An entry that publishes nothing for this OS offers no update: there would be no bytes to apply.
+    #[test]
+    fn an_entry_with_no_asset_here_is_not_an_update() {
+        let mut installed_manifest = manifest("worktree", "unused");
+        installed_manifest.url = String::new();
+        installed_manifest.checksum = String::new();
+        installed_manifest.assets = [(Os::Linux, asset("linux-1"))].into_iter().collect();
+        let installed = vec![InstalledPlugin {
+            name: "worktree".to_string(),
+            program: std::path::PathBuf::from("/dev/null"),
+            manifest: installed_manifest.clone(),
+        }];
+        let mut entry = installed_manifest.clone();
+        entry.assets.insert(Os::Linux, asset("linux-2"));
+
+        assert!(compare(&installed, &catalog(vec![entry]), Os::Macos).is_empty());
     }
 
     /// Nothing installed is answered without a catalog at all — including when there is no cache to read

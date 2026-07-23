@@ -167,6 +167,7 @@ mod tests {
             url: "https://example.invalid/x.tar.gz".to_string(),
             checksum: "sha256:00".to_string(),
             signature: None,
+            assets: Default::default(),
             official: false,
             scope: crate::plugin_manifest::Scope::Project,
             payload_v: 1,

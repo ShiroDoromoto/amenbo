@@ -11,11 +11,12 @@
 //!    (`plugin uninstall`, or the update path of `AMB-D-359`), never a silent replacement. A half-written
 //!    home — no manifest, so [`plugin_installed::read`] reads it as absent —
 //!    is not an install and is written over, which is what makes a failed install retryable.
-//! 3. **Refuse a platform the manifest does not claim.** The asset is fetched from one `url` for every
-//!    OS the entry lists, so an OS outside that list is a binary that was never built to run here.
+//! 3. **Refuse a platform the manifest does not claim**, and resolve this one's distributable
+//!    (`AMB-D-381`): a per-OS `assets` entry, or the single `url` of an entry that is one file everywhere.
+//!    An OS outside the declared set is a binary that was never built to run here.
 //! 4. **Verify provenance fail-closed** ([`crate::plugin_provenance::verify_catalog_asset`], `AMB-D-371`):
-//!    the minisign signature against the key amenbo ships, then the manifest's checksum, both over the
-//!    exact bytes the URL served. Unsigned, signed by another key, or a digest that does not match, and
+//!    the minisign signature against the key amenbo ships, then that distributable's checksum, both over
+//!    the exact bytes the URL served. Unsigned, signed by another key, or a digest that does not match, and
 //!    nothing is written. The key is never a parameter here — a caller cannot install against another
 //!    trust root.
 //!
@@ -41,7 +42,7 @@ use crate::config::{is_reserved_plugin_name, Paths};
 use crate::error::{Error, Result};
 use crate::plugin_catalog::{self, Catalog, Dropped, Entry};
 use crate::plugin_installed;
-use crate::plugin_manifest::Manifest;
+use crate::plugin_manifest::{Manifest, Os};
 use crate::plugin_provenance;
 
 /// Cap on the asset download, and on what is read out of an archive entry — the second is what keeps a
@@ -84,13 +85,16 @@ pub fn install(paths: &Paths, name: &str) -> Result<Installed> {
     let entry = resolve(&catalog, name)?;
     let manifest = entry.manifest.clone();
     refuse_an_overwrite(paths, &manifest.name)?;
-    refuse_another_platform(&manifest)?;
+    let here = refuse_another_platform(&manifest)?;
 
-    let asset = download(&manifest.url)?;
+    // What is fetched, what it must hash to and who signed it are all this platform's (`AMB-D-381`) —
+    // one lookup, so provenance can never be checked against another OS's bytes.
+    let published = published_for(&manifest, here)?;
+    let asset = download(&published.url)?;
     plugin_provenance::verify_catalog_asset(
         &asset,
-        manifest.signature.as_deref(),
-        &manifest.checksum,
+        published.signature.as_deref(),
+        &published.checksum,
     )?;
     let program = unpack_program(&asset, &manifest.name)?;
     place(paths, &manifest, &program)
@@ -153,12 +157,13 @@ fn refuse_an_overwrite(paths: &Paths, name: &str) -> Result<()> {
     }
 }
 
-/// Refuse an OS the manifest does not list. One `url` serves every OS the entry claims, so a platform
-/// outside that list has no asset built for it — installing would put a binary here that cannot run.
-fn refuse_another_platform(manifest: &Manifest) -> Result<()> {
+/// Refuse an OS the manifest does not list, and hand back the one it does — the platform every later step
+/// resolves against. A plugin that never claimed this platform has nothing built to run here, whichever
+/// form its distributables take.
+fn refuse_another_platform(manifest: &Manifest) -> Result<Os> {
     let here = std::env::consts::OS;
-    if manifest.os.iter().any(|os| os.as_str() == here) {
-        return Ok(());
+    if let Some(os) = Os::here().filter(|os| manifest.os.contains(os)) {
+        return Ok(os);
     }
     let supported: Vec<&str> = manifest.os.iter().map(|os| os.as_str()).collect();
     let supported = supported.join(", ");
@@ -169,6 +174,27 @@ fn refuse_another_platform(manifest: &Manifest) -> Result<()> {
             manifest.name
         ),
     ))
+}
+
+/// This platform's distributable, or the refusal that the entry claims the platform and publishes nothing
+/// for it (`AMB-D-381`). The catalog door keeps `os` and `assets` in step, so reaching this refusal means
+/// a manifest that did not come through it — a hand-placed one, most likely — and the honest answer is to
+/// stop rather than reach for another platform's bytes.
+fn published_for(manifest: &Manifest, os: Os) -> Result<crate::plugin_manifest::Asset> {
+    manifest.asset_for(os).ok_or_else(|| {
+        Error::invalid(
+            format!(
+                "plugin '{}' lists {} but publishes no asset for it",
+                manifest.name,
+                os.as_str()
+            ),
+            format!(
+                "プラグイン '{}' は {} を挙げていますが、その配布物がありません",
+                manifest.name,
+                os.as_str()
+            ),
+        )
+    })
 }
 
 /// Fetch the asset, with the same short-lived agent the rest of amenbo's downloads use and a
@@ -315,6 +341,7 @@ mod tests {
             url: "https://example.invalid/x.tar.gz".to_string(),
             checksum: format!("sha256:{}", "a".repeat(64)),
             signature: Some("sig".to_string()),
+            assets: Default::default(),
             official: false,
             scope: crate::plugin_manifest::Scope::Project,
             payload_v: 1,
@@ -450,6 +477,52 @@ mod tests {
             format!("{err:?}").contains(std::env::consts::OS),
             "the platform that has no asset is named: {err:?}",
         );
+    }
+
+    /// What gets fetched and what it is checked against are this platform's (`AMB-D-381`) — never
+    /// another's, and never the single fields once a map is declared.
+    #[test]
+    fn the_distributable_fetched_is_the_one_published_for_this_platform() {
+        use crate::plugin_manifest::Asset;
+
+        let here = Os::here().expect("amenbo runs on an OS its manifests can name");
+        let other = [Os::Macos, Os::Windows, Os::Linux].into_iter().find(|os| *os != here).unwrap();
+
+        let mut m = manifest("worktree");
+        m.os = vec![here, other];
+        m.url = String::new();
+        m.checksum = String::new();
+        m.assets = [
+            (
+                here,
+                Asset {
+                    url: "https://example.invalid/here.tar.gz".into(),
+                    checksum: "sha256:here".into(),
+                    signature: Some("sig-here".into()),
+                },
+            ),
+            (
+                other,
+                Asset {
+                    url: "https://example.invalid/other.tar.gz".into(),
+                    checksum: "sha256:other".into(),
+                    signature: Some("sig-other".into()),
+                },
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        let picked = published_for(&m, refuse_another_platform(&m).unwrap()).unwrap();
+        assert_eq!(picked.url, "https://example.invalid/here.tar.gz");
+        assert_eq!(picked.checksum, "sha256:here", "provenance is checked against these bytes");
+        assert_eq!(picked.signature.as_deref(), Some("sig-here"));
+
+        // An entry claiming this platform and publishing nothing for it stops, rather than reaching for
+        // the other one's binary. Only a manifest that skipped the door can be in this state.
+        m.assets.remove(&here);
+        let err = published_for(&m, here).unwrap_err();
+        assert!(format!("{err:?}").contains(here.as_str()), "{err:?}");
     }
 
     // ---- what the asset may be ----

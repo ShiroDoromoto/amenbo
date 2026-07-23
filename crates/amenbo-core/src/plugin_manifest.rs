@@ -17,9 +17,22 @@
 //! }
 //! ```
 //!
+//! A plugin built per platform declares one distributable per OS instead of the single `url`/`checksum`
+//! (`AMB-D-381`), which is the same entry with an `assets` map in their place:
+//!
+//! ```json
+//! {
+//!   "os": ["macos", "linux"],
+//!   "assets": {
+//!     "macos": { "url": "https://github.com/.../worktree-v1-macos.tar.gz", "checksum": "sha256:…" },
+//!     "linux": { "url": "https://github.com/.../worktree-v1-linux.tar.gz", "checksum": "sha256:…" }
+//!   }
+//! }
+//! ```
+//!
 //! **Lightweight by design** (`AMB-D-347`): an entry carries only what a browse view needs to list and
 //! filter — name, description, author, source repo, supported OSes, category, and the official badge —
-//! plus the `url`/`checksum` an install needs. Heavy numbers (stars, download counts) are deliberately
+//! plus the distributable an install needs. Heavy numbers (stars, download counts) are deliberately
 //! *not* here: they are fetched lazily for the one plugin a user opens, never for the whole catalog.
 //!
 //! **`official` is catalog-authoritative, not self-declared** (`AMB-D-347`): the badge means the author is
@@ -33,19 +46,25 @@
 //! backs `plugin validate` for authors. This module is the type only: it enforces the *shape* (serde
 //! rejects a manifest missing a required field), while the *rules* — a well-formed checksum, a name that
 //! is not the reserved `registry` ([`config::is_reserved_plugin_name`](crate::config::is_reserved_plugin_name)),
-//! a non-empty OS set — are the validator's, so the one truth about them lives in one place.
+//! a non-empty OS set, and which of the two distributable forms an entry owes — are the validator's, so the
+//! one truth about them lives in one place.
 //!
 //! Unknown keys are ignored rather than rejected: forward compatibility is handled by the version-compat
 //! declaration a manifest will carry (`AMB-D-359` — target payload `v` and min amenbo version), which
 //! gates a plugin gracefully instead of failing to parse a manifest a newer amenbo wrote. Denying unknown
 //! fields would preempt that path (the same reasoning as the stored-blob schema in [`blob`](crate::blob)).
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 /// An operating system a plugin runs on, in wharfy's vocabulary — the same tokens
 /// [`update_check`](crate::update_check) uses (`std::env::consts::OS`), so a plugin's OS set and the
 /// running platform compare directly.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// Ordered so it can key the [`Manifest::assets`] map: the order is the declaration order above and
+/// carries no meaning beyond giving a re-emitted manifest a stable one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Os {
     Macos,
@@ -54,6 +73,13 @@ pub enum Os {
 }
 
 impl Os {
+    /// The OS this build is running on, as a manifest spells it. `None` on a platform amenbo's
+    /// vocabulary cannot name — nothing amenbo ships runs there, so nothing declares an asset for it
+    /// either, and every caller's answer is the same: this platform has no distributable.
+    pub fn here() -> Option<Os> {
+        Os::parse(std::env::consts::OS)
+    }
+
     /// The wire token, matching `std::env::consts::OS`.
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -141,10 +167,19 @@ pub struct Manifest {
     /// The plugin's category, for filtering the catalog (e.g. `workflow`). A free label, not a closed
     /// set — the catalog curates the vocabulary.
     pub category: String,
-    /// Where the plugin asset is fetched from on install.
+    /// Where the plugin asset is fetched from on install — the **one distributable that serves every OS
+    /// the entry lists**, for a plugin that is one file everywhere (a script). A plugin built per platform
+    /// declares [`assets`](Manifest::assets) instead and leaves this empty (`AMB-D-381`).
+    ///
+    /// Empty is therefore a legitimate document, not a parse error: which of the two forms a manifest owes
+    /// is a rule, and rules live at the door ([`crate::plugin_validate`]) where every problem is collected
+    /// at once. An empty one does not serialize, so a per-OS manifest re-emits without a hollow field.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub url: String,
-    /// The asset's integrity digest (`sha256:<hex>`), verified on download against what `url` served and
-    /// re-checked cheaply on every use of the on-disk asset (`AMB-D-351`). See [`crate::plugin_provenance`].
+    /// The single asset's integrity digest (`sha256:<hex>`), verified on download against what `url`
+    /// served and re-checked cheaply on every use of the on-disk asset (`AMB-D-351`). See
+    /// [`crate::plugin_provenance`]. Empty alongside an empty `url`, for the same reason.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub checksum: String,
     /// The asset's minisign signature (the full `.minisig` text), produced by the catalog CI with the
     /// amenbo **catalog key** when the manifest is aggregated (`AMB-D-371`). Verified once on download
@@ -154,6 +189,21 @@ pub struct Manifest {
     /// GitHub build-provenance attestation is a separate check, not this field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
+    /// **One distributable per operating system** (`AMB-D-381`), keyed by the same tokens `os` uses.
+    ///
+    /// `os` can name three platforms while a single `url` can point at only one set of bytes, which is
+    /// fine for a plugin that is one file everywhere and impossible for one built per platform: a native
+    /// plugin is three different binaries, and the name is the identity, so it cannot be split into three
+    /// entries either (`AMB-D-360`). This map is the join — the OS an entry claims and the bytes actually
+    /// served there, one to one. Signature and checksum sit inside each [`Asset`] because both are claims
+    /// about *the bytes that will run*, so their grain is the bytes', not the entry's.
+    ///
+    /// **Absent means the single-`url` form**, which stays valid: the two are alternatives, and where both
+    /// are written this one answers. That the keys match the declared `os` set is the door's to enforce
+    /// ([`crate::plugin_validate`]) — this type only carries the map, and an OS token it does not know
+    /// fails to parse the same way an unknown `scope` does.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub assets: BTreeMap<Os, Asset>,
     /// The official badge: the author is the amenbo team. Catalog-authoritative (`AMB-D-347`), never
     /// self-declared — absent means `false`.
     #[serde(default)]
@@ -212,6 +262,49 @@ pub struct Manifest {
     /// what an author who omitted `events` wrote (the same absent-equals-empty rule as `config`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub events: Vec<String>,
+}
+
+impl Manifest {
+    /// **The distributable this manifest offers for one OS** (`AMB-D-381`) — the [`assets`](Manifest::assets)
+    /// entry when the manifest is the per-OS kind, the single `url`/`checksum`/`signature` when it is the
+    /// one-file kind. Every layer that fetches, verifies or compares an asset goes through here, so the
+    /// two forms are resolved in exactly one place.
+    ///
+    /// `None` means this manifest publishes nothing for that OS. A declared `assets` map is taken at its
+    /// word and never falls back to the single fields: the fallback would hand out bytes built for another
+    /// platform, which is a worse answer than none. The door keeps the map and the `os` set in step
+    /// ([`crate::plugin_validate`]), so `None` here is a manifest that never went through it — a
+    /// hand-placed one, or an entry whose `os` and `assets` disagree.
+    pub fn asset_for(&self, os: Os) -> Option<Asset> {
+        if !self.assets.is_empty() {
+            return self.assets.get(&os).cloned();
+        }
+        (!self.url.is_empty()).then(|| Asset {
+            url: self.url.clone(),
+            checksum: self.checksum.clone(),
+            signature: self.signature.clone(),
+        })
+    }
+}
+
+/// **One operating system's distributable** (`AMB-D-381`): where the bytes are, what they must hash to,
+/// and who signed them.
+///
+/// The three travel together because all three are about one set of bytes. A native plugin ships a
+/// different binary per platform, so a checksum or a signature covering "the plugin" would cover nothing
+/// in particular — provenance is only meaningful over the exact file that will run here (`AMB-D-371`).
+/// The same three fields appear flat on [`Manifest`] for the one-file form; [`Manifest::asset_for`] is
+/// where the two forms become one answer.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Asset {
+    /// Where this OS's asset is fetched from on install.
+    pub url: String,
+    /// This asset's integrity digest (`sha256:<hex>`), verified against the exact bytes the url served.
+    pub checksum: String,
+    /// This asset's minisign signature, produced by the catalog CI over these bytes (`AMB-D-371`).
+    /// Absent means unsigned, which the install door refuses (`AMB-D-351`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
 }
 
 /// One field of a plugin's configuration schema (`AMB-D-356`). The author declares a flat list of these
@@ -324,7 +417,9 @@ mod tests {
     #[test]
     fn a_missing_required_field_does_not_parse() {
         // The shape half of the fail-closed door: drop a required field and it fails to deserialize.
-        for field in ["name", "desc", "author", "repo", "os", "category", "url", "checksum"] {
+        // `url` and `checksum` are not among them — a manifest may publish per OS instead (`AMB-D-381`),
+        // so which of the two forms it owes is a rule, and rules are the validator's.
+        for field in ["name", "desc", "author", "repo", "os", "category"] {
             let mut v = full_json();
             v.as_object_mut().unwrap().remove(field);
             assert!(
@@ -332,6 +427,60 @@ mod tests {
                 "a manifest missing `{field}` must not parse"
             );
         }
+    }
+
+    /// The two forms a manifest may take (`AMB-D-381`), and the one place they become one answer.
+    #[test]
+    fn the_asset_for_an_os_comes_from_the_map_when_there_is_one() {
+        // One file for every OS: the single fields answer for whichever platform asks.
+        let m: Manifest = serde_json::from_value(full_json()).unwrap();
+        let single = m.asset_for(Os::Macos).unwrap();
+        assert_eq!(single.url, m.url);
+        assert_eq!(single.checksum, m.checksum);
+        assert_eq!(m.asset_for(Os::Linux).unwrap().url, m.url, "one url is every OS's");
+
+        // Per OS: each platform gets its own bytes, and one this manifest does not publish for gets
+        // nothing rather than another platform's build.
+        let mut v = full_json();
+        v.as_object_mut().unwrap().remove("url");
+        v.as_object_mut().unwrap().remove("checksum");
+        v["assets"] = serde_json::json!({
+            "macos": { "url": "https://example.com/x-macos.tar.gz", "checksum": "sha256:mac", "signature": "sig-mac" },
+            "linux": { "url": "https://example.com/x-linux.tar.gz", "checksum": "sha256:linux" },
+        });
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        assert_eq!(m.asset_for(Os::Macos).unwrap().checksum, "sha256:mac");
+        assert_eq!(m.asset_for(Os::Macos).unwrap().signature.as_deref(), Some("sig-mac"));
+        assert!(m.asset_for(Os::Linux).unwrap().signature.is_none(), "unsigned is a shape, not an error");
+        assert!(m.asset_for(Os::Windows).is_none(), "nothing published here is nothing, not a fallback");
+
+        // And a map never falls back to the single fields, which would hand out another OS's binary.
+        let mut v = full_json();
+        v["assets"] = serde_json::json!({
+            "macos": { "url": "https://example.com/x-macos.tar.gz", "checksum": "sha256:mac" },
+        });
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        assert!(!m.url.is_empty(), "the single url is still in the document");
+        assert!(m.asset_for(Os::Windows).is_none(), "and the map is still the only answer");
+    }
+
+    /// An unknown OS key is refused where every other unknown token is — at the shape.
+    #[test]
+    fn an_asset_for_an_os_outside_the_vocabulary_does_not_parse() {
+        let mut v = full_json();
+        v["assets"] = serde_json::json!({
+            "haiku": { "url": "https://example.com/x.tar.gz", "checksum": "sha256:x" },
+        });
+        assert!(serde_json::from_value::<Manifest>(v).is_err());
+    }
+
+    /// An empty map does not serialize, so a one-file manifest re-emits as its author wrote it — the same
+    /// absent-equals-empty rule `config` and `events` follow.
+    #[test]
+    fn no_assets_map_does_not_serialize() {
+        let m: Manifest = serde_json::from_value(full_json()).unwrap();
+        assert!(m.assets.is_empty());
+        assert!(serde_json::to_value(&m).unwrap().get("assets").is_none());
     }
 
     #[test]

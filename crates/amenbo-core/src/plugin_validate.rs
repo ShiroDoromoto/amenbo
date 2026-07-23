@@ -103,6 +103,9 @@ pub enum ProblemCode {
     /// A version field does not read as a version, so nothing can be compared against it
     /// (`min_amenbo`).
     BadVersion,
+    /// The per-OS `assets` map and the declared `os` set do not answer for the same platforms
+    /// (`AMB-D-381`).
+    AssetMismatch,
 }
 
 impl ProblemCode {
@@ -126,6 +129,7 @@ impl ProblemCode {
         Self::SchemaTooLarge,
         Self::BadKey,
         Self::BadVersion,
+        Self::AssetMismatch,
     ];
 
     /// The one place a code string is written; `Serialize` goes through here too.
@@ -149,6 +153,7 @@ impl ProblemCode {
             Self::SchemaTooLarge => "schema_too_large",
             Self::BadKey => "bad_key",
             Self::BadVersion => "bad_version",
+            Self::AssetMismatch => "asset_mismatch",
         }
     }
 }
@@ -188,8 +193,7 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
     check_line(&mut problems, "author", &m.author, MAX_AUTHOR_LEN);
     check_line(&mut problems, "category", &m.category, MAX_CATEGORY_LEN);
     check_repo(&mut problems, &m.repo);
-    check_url(&mut problems, &m.url);
-    check_checksum(&mut problems, &m.checksum);
+    check_assets(&mut problems, m);
     check_min_amenbo(&mut problems, m.min_amenbo.as_deref());
     check_os(&mut problems, m);
     check_config(&mut problems, m);
@@ -326,13 +330,65 @@ fn is_repo_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-'
 }
 
+/// Check the entry actually publishes something, in one of the two forms a manifest may take
+/// (`AMB-D-381`): one `url`/`checksum` serving every OS it lists, or one
+/// [`Asset`](crate::plugin_manifest::Asset) per OS in `assets`.
+///
+/// Which form is in play is decided by `assets` alone, and the two rules that follow are what make the
+/// per-OS form worth having: **every declared OS has an asset**, so an entry cannot claim a platform it
+/// publishes nothing for, and **no asset names an OS the entry does not declare**, so bytes cannot be
+/// published for a platform the plugin never said it runs on. Without the pair, `os` would go back to
+/// being a claim nothing checks — which is the gap the decision exists to close.
+///
+/// The single fields are *not* refused beside a map: `asset_for` prefers the map, and a leftover pair is
+/// a document that says one thing twice, not one that says something wrong. Their shape is still checked
+/// wherever they are non-empty, because an install can still be handed them by a manifest placed by hand.
+fn check_assets(problems: &mut Vec<Problem>, m: &Manifest) {
+    if m.assets.is_empty() {
+        // The one-file form: the single pair *is* the distributable, so it is required, not optional.
+        check_url(problems, "url", &m.url);
+        check_checksum(problems, "checksum", &m.checksum);
+        return;
+    }
+
+    for os in &m.os {
+        if !m.assets.contains_key(os) {
+            problems.push(Problem::new(
+                "assets",
+                ProblemCode::AssetMismatch,
+                format!("os lists {} but assets has no distributable for it", os.as_str()),
+                format!("os が {} を挙げていますが、assets にその配布物がありません", os.as_str()),
+            ));
+        }
+    }
+    for (os, asset) in &m.assets {
+        let at = format!("assets.{}", os.as_str());
+        if !m.os.contains(os) {
+            problems.push(Problem::new(
+                at.clone(),
+                ProblemCode::AssetMismatch,
+                format!("assets publishes for {} but os does not list it", os.as_str()),
+                format!("assets が {} 向けに配布していますが、os がそれを挙げていません", os.as_str()),
+            ));
+        }
+        check_url(problems, &format!("{at}.url"), &asset.url);
+        check_checksum(problems, &format!("{at}.checksum"), &asset.checksum);
+    }
+    if !m.url.is_empty() {
+        check_url(problems, "url", &m.url);
+    }
+    if !m.checksum.is_empty() {
+        check_checksum(problems, "checksum", &m.checksum);
+    }
+}
+
 /// Check `url` is an `https://` URL. Shape only (fail-closed on scheme): `http`/`file`/anything else is
 /// refused so an install never fetches over a plaintext or local scheme — whether it *resolves* is the
 /// download's concern (`AMB-T-1976`), not the manifest's.
-fn check_url(problems: &mut Vec<Problem>, url: &str) {
+fn check_url(problems: &mut Vec<Problem>, location: &str, url: &str) {
     if !url.starts_with("https://") || url.len() <= "https://".len() {
         problems.push(Problem::new(
-            "url",
+            location,
             ProblemCode::BadUrl,
             "url must be an https:// URL",
             "url は https:// の URL である必要があります",
@@ -342,13 +398,13 @@ fn check_url(problems: &mut Vec<Problem>, url: &str) {
 
 /// Check `checksum` is `sha256:<64 lowercase hex>` — the shape `AMB-T-1976` verifies against the download.
 /// Only sha256 is accepted in v1: one algorithm keeps the digest a fixed, checkable string.
-fn check_checksum(problems: &mut Vec<Problem>, checksum: &str) {
+fn check_checksum(problems: &mut Vec<Problem>, location: &str, checksum: &str) {
     let ok = checksum
         .strip_prefix("sha256:")
         .is_some_and(|hex| hex.len() == 64 && hex.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
     if !ok {
         problems.push(Problem::new(
-            "checksum",
+            location,
             ProblemCode::BadChecksum,
             "checksum must be 'sha256:' followed by 64 lowercase hex digits",
             "checksum は 'sha256:' に続けて小文字16進64桁である必要があります",
@@ -473,7 +529,16 @@ fn check_config_key(problems: &mut Vec<Problem>, i: usize, key: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin_manifest::{ConfigField, Manifest, Os};
+    use crate::plugin_manifest::{Asset, ConfigField, Manifest, Os};
+
+    /// A well-formed distributable — the shape rules are what these tests are about, not the values.
+    fn asset() -> Asset {
+        Asset {
+            url: "https://example.com/worktree-v1.tar.gz".into(),
+            checksum: format!("sha256:{}", "a".repeat(64)),
+            signature: None,
+        }
+    }
 
     fn valid() -> Manifest {
         Manifest {
@@ -488,6 +553,8 @@ mod tests {
             // signature (provenance) and events (subscription) are other boundaries' to validate — the
             // manifest-shape validator here neither reads nor checks them.
             signature: None,
+            // The one-file form: this manifest's single url serves both the OSes it lists.
+            assets: Default::default(),
             events: Vec::new(),
             official: true,
             scope: crate::plugin_manifest::Scope::Project,
@@ -514,6 +581,57 @@ mod tests {
         let mut m = valid();
         m.config.clear();
         assert!(validate_manifest(&m).is_empty(), "no config schema is a plugin with no settings, not a problem");
+    }
+
+    /// The per-OS form (`AMB-D-381`): the map answers for exactly the platforms `os` claims, and each
+    /// distributable's url and digest are checked where they are — under `assets.<os>`, so an author is
+    /// told which one is wrong.
+    #[test]
+    fn a_per_os_manifest_is_valid_when_the_map_matches_the_declared_os_set() {
+        let mut m = valid();
+        m.url = String::new();
+        m.checksum = String::new();
+        m.assets = [(Os::Macos, asset()), (Os::Linux, asset())].into_iter().collect();
+        assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
+
+        // A platform claimed and not published: the entry offers an install that could never be served.
+        let mut short = m.clone();
+        short.assets.remove(&Os::Linux);
+        assert!(codes(&validate_manifest(&short)).contains(&ProblemCode::AssetMismatch));
+
+        // And the other way — bytes published for a platform the plugin never said it runs on.
+        let mut extra = m.clone();
+        extra.assets.insert(Os::Windows, asset());
+        let problems = validate_manifest(&extra);
+        assert!(codes(&problems).contains(&ProblemCode::AssetMismatch));
+        assert!(
+            problems.iter().any(|p| p.location == "assets.windows"),
+            "the problem names which asset: {problems:?}"
+        );
+
+        // Each asset carries its own url and digest, so each is checked at its own location.
+        let mut bad = m.clone();
+        bad.assets.insert(
+            Os::Linux,
+            Asset { url: "http://example.com/x".into(), checksum: "nope".into(), signature: None },
+        );
+        let problems = validate_manifest(&bad);
+        assert!(problems.iter().any(|p| p.location == "assets.linux.url" && p.code == ProblemCode::BadUrl));
+        assert!(problems
+            .iter()
+            .any(|p| p.location == "assets.linux.checksum" && p.code == ProblemCode::BadChecksum));
+    }
+
+    /// The one-file form still owes a url and a digest: with no map, they *are* the distributable, so an
+    /// entry that publishes neither publishes nothing.
+    #[test]
+    fn a_manifest_with_neither_form_publishes_nothing() {
+        let mut m = valid();
+        m.url = String::new();
+        m.checksum = String::new();
+        let problems = codes(&validate_manifest(&m));
+        assert!(problems.contains(&ProblemCode::BadUrl));
+        assert!(problems.contains(&ProblemCode::BadChecksum));
     }
 
     #[test]

@@ -217,6 +217,7 @@ mod tests {
             url: String::new(),
             checksum: String::new(),
             signature: None,
+            assets: Default::default(),
             official: false,
             scope: crate::plugin_manifest::Scope::Machine,
             // The contract this build speaks: the compatibility gate reads this one, so it tracks

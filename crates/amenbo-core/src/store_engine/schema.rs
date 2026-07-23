@@ -32,8 +32,9 @@
 //! Two rules keep the constraints compatible with the seams around them:
 //!
 //! 1. **A `CHECK` must admit its column's own `DEFAULT`.** The `''` a required text column defaults to
-//!    is the *not-yet-written* sentinel that lets `ALTER TABLE ADD COLUMN` (`super::engine::migrate_columns`)
-//!    add a `NOT NULL` column to an existing store, and that lets a record be created field-by-field
+//!    is the *not-yet-written* sentinel that lets a migration step's `ALTER TABLE ADD COLUMN`
+//!    ([`super::migrate`]) add a `NOT NULL` column to an existing store, and that lets a record be
+//!    created field-by-field
 //!    (`INSERT INTO <table>(id)` then one `UPDATE` per field). A `CHECK` that rejected `''` would
 //!    reject both. So `''` is admitted, and every *other* wrong value is rejected.
 //! 2. **A `REFERENCES` is `DEFERRABLE INITIALLY DEFERRED`.** Same reason from the other side: mid-way
@@ -90,8 +91,8 @@ pub struct Dataset {
 impl Dataset {
     /// Every column written through the log: the type-specific columns plus the universal audit
     /// columns. Excludes `id` (the row key — never written as a field) and
-    /// the implicit PRIMARY KEY. This is the registry's truth for both the writable-column whitelist and the
-    /// startup column-migration ([`super::engine`]).
+    /// the implicit PRIMARY KEY. This is the registry's truth for the writable-column whitelist, for what
+    /// [`crate::export`] dumps, and for the shape a snapshot is verified against ([`crate::archive`]).
     pub fn all_columns(&self) -> impl Iterator<Item = &'static Column> {
         self.columns.iter().chain(AUDIT)
     }
@@ -144,8 +145,8 @@ const ORDER_KEY: &str = "TEXT NOT NULL DEFAULT ''";
 const ORDER_KEY_OPT: &str = "TEXT"; // an unplaced (inbox) task carries no order key
 /// A project's human-readable identifier. Unique across the store, but the uniqueness is a
 /// `CREATE UNIQUE INDEX` in [`read_index_sql`], not a `UNIQUE` in this decl: SQLite refuses
-/// `ALTER TABLE … ADD COLUMN … UNIQUE`, and `super::engine::migrate_columns` adds every registry
-/// column that way, so a decl an old store cannot take is a decl the fresh schema must not have either
+/// `ALTER TABLE … ADD COLUMN … UNIQUE`, and a migration step adds a column to an existing store that
+/// way, so a decl an old store cannot take is a decl the fresh schema must not have either
 /// (the two paths have to land on the same table). Nullable, so a row mid-create holds no value that
 /// could collide with another's.
 const SLUG: &str = "TEXT";
@@ -491,9 +492,13 @@ const AUDIT: &[Column] = &[ts!(created_at), ts!(updated_at)];
 datasets! {
     /// The record types and their read-model columns (faithful subsets of [`crate::model`]).
     /// **Superset invariant:** this registry is the upper bound of every read-model table — a live
-    /// table holds a *subset* of the columns declared here, never more. Startup column migration
-    /// (`super::engine::migrate_columns`) restores the equality on open, so adding a column is just
-    /// adding it here. Two corollaries the registry alone cannot enforce, kept honest by tests
+    /// table holds a *subset* of the columns declared here, never more. Declaring a column here is what a
+    /// **new** store is born with; what restores the equality on a store an older build left behind is a
+    /// numbered step in the version chain ([`super::migrate`]) that adds it — nothing runs on open. So
+    /// adding a column is two things, and a column added here alone is one an existing store never grows
+    /// (it fails at the first read with `no such column`).
+    ///
+    /// Two corollaries the registry alone cannot enforce, kept honest by tests
     /// instead: (a) the projection ([`super::record`]) must *write* every column declared here (a
     /// column that exists but is never populated is a silent gap); (b) round-trip tests must build
     /// their oracle independently of the code under test and seed non-empty values, or an
@@ -539,6 +544,12 @@ datasets! {
         // `superseded` is not a state — it is the far end of a `supersedes` edge. Currency is derived
         // (`current` = no live `supersedes` edge names this decision), never stored.
         status: enum_col("proposed", "accepted", "rejected"),
+        // When `status` last changed — stamped on a status transition only (`ops::decision`), the mirror of
+        // `task.status_changed_at`. `decided_at` cannot stand in for it: a reopen clears that one, and a
+        // reopened decision is exactly what the comparison has to date (`AMB-D-373`). Nullable in the decl
+        // because `ALTER TABLE ADD COLUMN` starts every existing row at NULL; the step that adds it
+        // backfills them all in the same transaction, so no live row is left holding NULL.
+        status_changed_at: ts_opt,
         decided_at: ts_opt,
         decided_by: col(OPT),
     }
@@ -848,10 +859,12 @@ CREATE INDEX IF NOT EXISTS task_commit_by_task ON task_commit(task_id);
 CREATE UNIQUE INDEX IF NOT EXISTS plugin_config_triple ON plugin_config(project_id, plugin, field_key);
 "#;
 
-/// Read-model secondary indexes that reference **migrated columns**. Kept separate from
-/// [`schema_sql`] because it must run **after** `super::engine::migrate_columns` backfills any
-/// columns an older store predates — a `CREATE INDEX` over a not-yet-added column would otherwise
-/// error before the migration adds it.
+/// Read-model secondary indexes that reference columns an older store may not carry yet — a
+/// `CREATE INDEX` over a column that is not there errors, which is why they are kept apart from
+/// [`schema_sql`]. The separation is only a marker now: both are issued by `super::engine::init`, back to
+/// back and *before* the version chain ([`super::migrate`]) has had a chance to add anything. An index put
+/// here over a column a chain step adds would still fail on exactly the store that step exists for; none
+/// of the three below is.
 const READ_INDEX_SQL: &str = r#"
 CREATE INDEX IF NOT EXISTS task_by_status    ON task(status);
 -- Placement is folded onto the task: the read layer scopes and filters by `project_id`, a migrated

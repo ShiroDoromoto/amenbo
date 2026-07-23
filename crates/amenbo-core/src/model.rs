@@ -352,6 +352,17 @@ pub struct Decision {
     /// Lifecycle state.
     #[serde(default)]
     pub status: DecisionStatus,
+    /// When the current `status` began — updated **only** on a status transition (propose / accept / reject
+    /// / reopen, and the promotion `supersede` performs), never on an ordinary edit: a body rewritten in
+    /// place moves `updated_at` and leaves this still answering "when did this decision last change what it
+    /// is". The symmetric twin of [`Task::status_changed_at`], and the far side of the comparison that says
+    /// a premise re-opened *after* a task was reserved (`AMB-D-373`).
+    ///
+    /// Not `decided_at`: that one is the moment of *settling* and is cleared by a reopen, so it cannot
+    /// answer for a decision that is back under discussion — which is the one state the reopen axis judges.
+    /// `None` only for a decision no migration reached (every existing row was backfilled).
+    #[serde(default)]
+    pub status_changed_at: Option<Timestamp>,
     /// When it was accepted (set on `Accepted`).
     #[serde(default)]
     pub decided_at: Option<Timestamp>,

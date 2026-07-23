@@ -308,12 +308,15 @@ pub enum Command {
         sub: HardEraseCmd,
     },
 
-    /// Author-facing tools for building a plugin.
+    /// Manage this machine's plugins, and self-check a manifest you are authoring.
     ///
-    /// A plugin is distributed as a manifest in the public catalog repository (`AMB-D-347`). `validate`
-    /// runs the same rules amenbo enforces at the door — a well-formed id, checksum, OS set and config
-    /// schema (`AMB-D-354`/`AMB-D-360`/`AMB-D-356`) — over a manifest file you point it at, so you can
-    /// self-check before opening a catalog PR. It reads no store and needs no binding.
+    /// A plugin is distributed as a manifest in the public catalog repository (`AMB-D-347`) and installed
+    /// under the app-data `plugins/` directory (`AMB-D-350`). `list` / `enable` / `disable` are the
+    /// machine-local face of that: what is installed, and whose gate is open (`AMB-D-351` — installing a
+    /// plugin never runs it). `validate` is the author's side — it runs the same rules amenbo enforces at
+    /// the door (a well-formed id, checksum, OS set and config schema — `AMB-D-354`/`AMB-D-360`/`AMB-D-356`)
+    /// over a manifest file you point it at, so you can self-check before opening a catalog PR, and it
+    /// alone reads no store and needs no binding.
     Plugin {
         #[command(subcommand)]
         sub: PluginCmd,
@@ -329,6 +332,26 @@ pub enum PluginCmd {
     Validate {
         /// path to the manifest file (`plugins/<name>.yaml` or a `.json` manifest)
         path: String,
+    },
+
+    /// List the plugins installed on this machine, and whether each one is enabled (`AMB-D-350`/`AMB-D-351`).
+    /// Reads only what is on disk under the app-data `plugins/` directory plus this machine's enable
+    /// state — no network, no catalog.
+    List,
+
+    /// Open an installed plugin's gate: record the one-time consent to run its code and let it fire
+    /// (`AMB-D-351` — `install ≠ enable`, so nothing runs until this). Refused while a setting the author
+    /// marked `required` is still empty; fill it with `plugin config set` first.
+    Enable {
+        /// the installed plugin's name
+        name: String,
+    },
+
+    /// Close an enabled plugin's gate. The plugin stays installed and stays consented, so a later
+    /// `enable` does not ask again (`disable ≠ uninstall`, `AMB-D-357`).
+    Disable {
+        /// the plugin's name
+        name: String,
     },
 }
 

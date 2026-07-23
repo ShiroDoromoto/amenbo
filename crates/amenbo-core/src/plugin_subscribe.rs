@@ -20,10 +20,10 @@
 //!
 //! **What is installed is given, not discovered here.** The resolver is handed the set of
 //! [`InstalledPlugin`]s — each a name, an executable, and a manifest — rather than scanning the plugins
-//! directory itself: how an install lands a binary and its manifest on disk is the install lifecycle's
-//! (`AMB-T-1979`), and keeping that out of here leaves the resolver a pure function of state it is given, as
-//! testable as the dispatcher above it. The mount point (`AMB-T-2033`) assembles the list and constructs
-//! this resolver once per drive.
+//! directory itself: the on-disk shape of an install is [`plugin_installed`](crate::plugin_installed)'s,
+//! and keeping that out of here leaves the resolver a pure function of state it is given, as testable as
+//! the dispatcher above it. The mount point (`AMB-T-2033`) assembles the list and constructs this resolver
+//! once per drive.
 //!
 //! **Config reads at the machine-default tier.** A fired observation event carries no single project (the
 //! outbox spans them), so [`resolve`](EnabledSubscribers::resolve) reads each plugin's text config at its
@@ -44,9 +44,9 @@ use crate::plugin_manifest::Manifest;
 use crate::store::Store;
 
 /// One installed plugin, as the resolver reads it: its catalog name, the executable to run, and its
-/// manifest (the subscription list and config schema). Assembled by the install lifecycle (`AMB-T-1979`)
-/// and handed to [`EnabledSubscribers`]; this crate does not discover it on disk here (see the module
-/// docs).
+/// manifest (the subscription list and config schema). Read off disk by
+/// [`plugin_installed`](crate::plugin_installed) and handed to [`EnabledSubscribers`]; nothing is
+/// discovered here (see the module docs).
 #[derive(Debug, Clone)]
 pub struct InstalledPlugin {
     /// The plugin's name — its identity in [`Config::plugin_enabled`] and its config storage key.

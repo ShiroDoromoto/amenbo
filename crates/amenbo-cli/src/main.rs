@@ -151,7 +151,10 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         | Command::Lint { .. } // reads the text it is handed; no store, so nothing to stamp a facet onto
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
-        | Command::Plugin { sub: PluginCmd::Validate { .. } } // reads a manifest file the author names; no store
+        // `validate` reads a manifest file the author names and touches no store at all; the rest of the
+        // group moves this machine's plugin state (config.json), which is a local setting like `config` —
+        // it leaves no activity to stamp a facet onto.
+        | Command::Plugin { .. }
         | Command::Hooks { .. }
         | Command::Config { .. } // settings live in the user layer and leave no activity behind
         | Command::Bind { .. } => false, // only writes the `.amenbo` pointer (no facet recorded)
@@ -659,6 +662,115 @@ fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
     Ok(if problems.is_empty() { 0 } else { 1 })
 }
 
+/// The store-opening half of the `plugin` group: this machine's installed plugins and their gates
+/// (`AMB-D-350`/`AMB-D-351`). `validate` is not here — it opens no store and is answered before the store
+/// is ever opened.
+fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, CliError> {
+    match sub {
+        PluginCmd::Validate { .. } => unreachable!("handled before open"),
+        PluginCmd::List => plugin_list_cmd(store, flags),
+        PluginCmd::Enable { name } => plugin_enable_cmd(store, flags, &name),
+        PluginCmd::Disable { name } => plugin_disable_cmd(store, flags, &name),
+    }
+}
+
+/// `plugin list` — what is installed under the app-data `plugins/` directory, and whose gate is open.
+/// The two facts side by side, because `install ≠ enable` (`AMB-D-351`) is the thing a reader most often
+/// gets wrong: an installed plugin that never fires is the *normal* state, not a fault.
+fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
+    let installed =
+        amenbo_core::plugin_installed::installed(&store.paths).map_err(CliError::from)?;
+    if flags.json {
+        let rows: Vec<_> = installed
+            .iter()
+            .map(|p| {
+                json!({
+                    "name": p.name,
+                    "desc": p.manifest.desc,
+                    "author": p.manifest.author,
+                    "official": p.manifest.official,
+                    "enabled": store.config.plugin_enabled(&p.name),
+                    "consented": store.config.plugin_consented(&p.name),
+                    "events": p.manifest.events,
+                    "program": p.program.display().to_string(),
+                })
+            })
+            .collect();
+        print_json(&json!({
+            "count": rows.len(),
+            "plugins_dir": store.paths.plugins_dir().display().to_string(),
+            "plugins": rows,
+        }));
+    } else if installed.is_empty() {
+        human(flags, format!("No plugins installed ({}).", store.paths.plugins_dir().display()));
+    } else {
+        for p in &installed {
+            let gate = if store.config.plugin_enabled(&p.name) { "enabled" } else { "disabled" };
+            let badge = if p.manifest.official { " [official]" } else { "" };
+            human(flags, format!("{}  {gate}{badge}  {}", p.name, p.manifest.desc));
+        }
+    }
+    Ok(0)
+}
+
+/// `plugin enable <name>` — record consent and open the gate, through the one boundary that moves that
+/// state ([`amenbo_core::plugin_trust`]). Fail-closed on the author's `required` settings: their presence
+/// is probed at the **machine-default tier**, the same tier the gate itself lives at (a per-project
+/// override cannot satisfy a machine-global enable).
+fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
+    use amenbo_core::plugin_config::{self, Scope};
+
+    let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
+    let fields = plugin.manifest.config.clone();
+    // Probe first, then hand the answers in: the probe reads the store while `enable` writes the config
+    // inside it, so the two cannot borrow it at once.
+    let mut satisfied: Vec<String> = Vec::new();
+    for field in &fields {
+        if plugin_config::get(store, field, name, Scope::MachineDefault)
+            .map_err(CliError::from)?
+            .is_some()
+        {
+            satisfied.push(field.key.clone());
+        }
+    }
+    amenbo_core::plugin_trust::enable(&mut store.config, name, &fields, |f| {
+        satisfied.iter().any(|k| k == &f.key)
+    })
+    .map_err(CliError::from)?;
+    store.save_config().map_err(CliError::from)?;
+
+    human(flags, format!("Enabled plugin: {name}"));
+    if flags.json {
+        print_json(&json!({ "ok": true, "action": "plugin.enable", "plugin": name, "enabled": true }));
+    }
+    Ok(0)
+}
+
+/// `plugin disable <name>` — close the gate, keeping the consent (`disable ≠ uninstall`, `AMB-D-357`).
+/// Deliberately does **not** require the plugin to still read as installed: this is the way to stop a
+/// plugin firing, and a broken install is exactly when that is most needed.
+fn plugin_disable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
+    let was_enabled = store.config.plugin_enabled(name);
+    amenbo_core::plugin_trust::disable(&mut store.config, name);
+    store.save_config().map_err(CliError::from)?;
+
+    human(
+        flags,
+        if was_enabled {
+            format!("Disabled plugin: {name}")
+        } else {
+            format!("Plugin already disabled: {name}")
+        },
+    );
+    if flags.json {
+        print_json(&json!({
+            "ok": true, "action": "plugin.disable", "plugin": name,
+            "enabled": false, "noop": !was_enabled,
+        }));
+    }
+    Ok(0)
+}
+
 fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // Whether this checkout is a place to use amenbo at all is asked before any dispatch: `init` raises a
     // project in the real store and returns below without ever reaching the guards further down, so a
@@ -956,9 +1068,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::GithookPreCommit | Command::GithookCommitMsg { .. } => {
             unreachable!("handled before open")
         }
-        Command::Plugin { .. } => {
-            unreachable!("handled before open")
-        }
+        Command::Plugin { sub } => return plugin_cmd(&mut store, flags, sub),
         Command::Config { sub } => return config(&mut store, flags, sub),
         Command::Status { scope } => {
             let result = store.status(&scope).map_err(CliError::from)?;

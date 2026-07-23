@@ -690,7 +690,106 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
                 plugin_config_get_cmd(store, flags, &name, &key, &scope)
             }
         },
+        PluginCmd::Catalog { sub } => match sub {
+            PluginCatalogCmd::List => plugin_catalog_list_cmd(store, flags),
+            PluginCatalogCmd::Add { url } => plugin_catalog_add_cmd(store, flags, &url),
+            PluginCatalogCmd::Remove { url } => plugin_catalog_remove_cmd(store, flags, &url),
+        },
     }
+}
+
+/// `plugin catalog list` — the catalogs that make up the browsing view (`AMB-T-1980`): the official
+/// catalog first, then each registered third-party one in registration order, with how many plugins each
+/// offers and whether it answered. Reads caches the incidental way (`plugin_catalog::discover`) — a
+/// catalog fresh on disk answers with no request — so a listing is cheap and works offline.
+fn plugin_catalog_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
+    let discovery = amenbo_core::plugin_catalog::discover(&store.paths);
+    if flags.json {
+        let sources: Vec<_> = discovery
+            .sources
+            .iter()
+            .map(|s| {
+                json!({
+                    "url": s.url,
+                    "official": s.official,
+                    "reachable": s.reachable,
+                    "offered": s.offered,
+                })
+            })
+            .collect();
+        print_json(&json!({
+            "ok": true,
+            "action": "plugin.catalog.list",
+            "plugins_total": discovery.entries.len(),
+            "dropped": discovery.dropped.len(),
+            "sources": sources,
+        }));
+    } else {
+        human(flags, format!("Catalogs — {} plugins after merge:", discovery.entries.len()));
+        for s in &discovery.sources {
+            let tag = if s.official { "official" } else { "third-party" };
+            let state =
+                if s.reachable { format!("{} plugins", s.offered) } else { "unreachable".to_string() };
+            human(flags, format!("  [{tag}] {} — {state}", s.url));
+        }
+    }
+    Ok(0)
+}
+
+/// `plugin catalog add <url>` — register a third-party catalog and warm its cache so the first browse is
+/// ready (`AMB-T-1980`). Registering only widens what discovery *shows*, never what `install` accepts
+/// (`AMB-D-371`). An already-registered URL is a no-op; an unreachable one still registers and is retried
+/// on the next browse.
+fn plugin_catalog_add_cmd(store: &Store, flags: &Flags, url: &str) -> Result<i32, CliError> {
+    let added = amenbo_core::plugin_catalog::add_source(&store.paths, url).map_err(CliError::from)?;
+    if !added {
+        human(flags, format!("Already registered: {url}"));
+        if flags.json {
+            print_json(&json!({
+                "ok": true, "action": "plugin.catalog.add", "url": url, "added": false,
+            }));
+        }
+        return Ok(0);
+    }
+    // Warm the cache and report what it holds — discovery fetches each source once, so the source we just
+    // added is fetched here. Unreachable is not a failure: it stays registered.
+    let discovery = amenbo_core::plugin_catalog::discover(&store.paths);
+    let (reachable, offered) = discovery
+        .sources
+        .iter()
+        .find(|s| s.url == url)
+        .map(|s| (s.reachable, s.offered))
+        .unwrap_or((false, 0));
+    human(flags, format!("Registered catalog: {url}"));
+    if reachable {
+        human(flags, format!("  {offered} plugins available to browse."));
+    } else {
+        human(flags, "  Not reachable yet — it will be retried on the next browse.");
+    }
+    if flags.json {
+        print_json(&json!({
+            "ok": true, "action": "plugin.catalog.add", "url": url, "added": true,
+            "reachable": reachable, "offered": offered,
+        }));
+    }
+    Ok(0)
+}
+
+/// `plugin catalog remove <url>` — unregister a third-party catalog and drop its cached copy
+/// (`AMB-T-1980`). An unregistered URL is a no-op.
+fn plugin_catalog_remove_cmd(store: &Store, flags: &Flags, url: &str) -> Result<i32, CliError> {
+    let removed =
+        amenbo_core::plugin_catalog::remove_source(&store.paths, url).map_err(CliError::from)?;
+    human(
+        flags,
+        if removed { format!("Unregistered catalog: {url}") } else { format!("Not registered: {url}") },
+    );
+    if flags.json {
+        print_json(&json!({
+            "ok": true, "action": "plugin.catalog.remove", "url": url, "removed": removed,
+        }));
+    }
+    Ok(0)
 }
 
 /// Which tier `--scope` names (`AMB-D-356`/`AMB-D-350`) — the same two for a config value and for the

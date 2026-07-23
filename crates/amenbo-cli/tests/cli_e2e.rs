@@ -4105,6 +4105,61 @@ fn the_listing_marks_a_plugin_the_catalog_has_a_different_build_of() {
     );
 }
 
+/// `plugin catalog add/list/remove` registers third-party catalogs for the browsing view (`AMB-T-1980`):
+/// the merged listing is the official catalog plus each registered source, and registration is idempotent
+/// and reversible. A dead loopback URL registers, is marked unreachable, and does not cost the official
+/// catalog its place — the official cache is seeded fresh so the merge reads it without the network.
+#[test]
+fn plugin_catalog_registers_lists_and_removes_a_third_party_source() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    // Seed the official cache so the merge answers from disk (fresh) and never reaches the real URL.
+    let registry = cli.home.join("plugins").join("registry");
+    std::fs::create_dir_all(&registry).unwrap();
+    let official = serde_json::json!({
+        "catalog_v": 1,
+        "generated_at": "2026-07-23T04:57:10Z",
+        "plugins": [{
+            "name": "worktree", "desc": "a plugin", "author": "amenbo",
+            "repo": "ShiroDoromoto/amenbo", "os": ["macos", "linux", "windows"],
+            "category": "workflow", "url": "https://example.invalid/x.tar.gz",
+            "checksum": format!("sha256:{}", "b".repeat(64)),
+        }],
+    });
+    std::fs::write(registry.join("official.json"), serde_json::to_vec(&official).unwrap()).unwrap();
+
+    // A loopback address nothing answers on — refuses fast, so registration does not wait on a timeout.
+    let url = "http://127.0.0.1:1/third/catalog.json";
+    let added = cli.json(&["plugin", "catalog", "add", url, "--json"]);
+    assert_eq!(added["added"], true, "a new URL registers");
+    assert_eq!(added["reachable"], false, "unreachable, but still registered");
+    let again = cli.json(&["plugin", "catalog", "add", url, "--json"]);
+    assert_eq!(again["added"], false, "registering the same URL again is a no-op");
+
+    // The official catalog's own URL cannot be registered as a third-party source.
+    let (_out, code) = cli.run(&[
+        "plugin",
+        "catalog",
+        "add",
+        "https://shirodoromoto.github.io/amenbo-plugins/catalog.json",
+    ]);
+    assert_ne!(code, 0, "the official catalog is not a third-party source");
+
+    let listed = cli.json(&["plugin", "catalog", "list", "--json"]);
+    assert_eq!(listed["plugins_total"], 1, "the official 'worktree' is in the merged view");
+    let sources = listed["sources"].as_array().unwrap();
+    assert_eq!(sources.len(), 2, "official plus the one registered source");
+    assert_eq!(sources[0]["official"], true, "official is first");
+    let third = sources.iter().find(|s| s["url"] == url).expect("the source is listed");
+    assert_eq!(third["reachable"], false, "and marked unreachable");
+
+    let removed = cli.json(&["plugin", "catalog", "remove", url, "--json"]);
+    assert_eq!(removed["removed"], true, "it was registered, so it is removed");
+    let after = cli.json(&["plugin", "catalog", "list", "--json"]);
+    assert_eq!(after["sources"].as_array().unwrap().len(), 1, "back to the official catalog alone");
+}
+
 /// The mutating CLI drives the observation dispatcher over what is *installed and enabled*: a subscribed
 /// plugin is actually run, with the event payload on its stdin, before the command's process exits
 /// (`AMB-D-367`). Its neighbours are left alone — a plugin that subscribes to nothing never runs.

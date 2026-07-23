@@ -480,6 +480,42 @@ pub enum PluginCmd {
         #[command(subcommand)]
         sub: PluginConfigCmd,
     },
+
+    /// Register the third-party catalogs to browse alongside the official one, and list what is registered
+    /// (`AMB-D-347`, the "free" tier). The unit is the **catalog**, not the plugin: what grows is the
+    /// number of indexes (few), never per-plugin requests. Registering a catalog only widens what
+    /// `discover` (and, later, the GUI browser) *shows* — it does **not** widen what `install` accepts. An
+    /// asset is trusted only by amenbo's catalog key (`AMB-D-371`), so a third-party plugin still cannot be
+    /// installed; this is discovery, not a second install root.
+    Catalog {
+        #[command(subcommand)]
+        sub: PluginCatalogCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PluginCatalogCmd {
+    /// List the catalogs that make up the browsing view: the official one, then each registered
+    /// third-party catalog in the order it was added, with how many plugins each currently offers and
+    /// whether it could be reached (from the network, or its cache). Reads caches the incidental way — a
+    /// catalog fresh on disk answers without a request.
+    List,
+
+    /// Register a third-party catalog by the URL of its `catalog.json`. Idempotent: registering the same
+    /// URL twice is a no-op. Refuses a non-`http(s)` URL and the official catalog's own URL. The catalog is
+    /// fetched once here so the first browse is warm; an unreachable URL still registers (it will be
+    /// retried on the next browse).
+    Add {
+        /// the URL of the third-party catalog's `catalog.json`
+        url: String,
+    },
+
+    /// Unregister a third-party catalog by its URL, and drop its cached copy. Idempotent: removing a URL
+    /// that is not registered is a no-op.
+    Remove {
+        /// the URL that was registered with `plugin catalog add`
+        url: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]

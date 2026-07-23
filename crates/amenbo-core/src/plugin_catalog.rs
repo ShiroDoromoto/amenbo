@@ -26,9 +26,11 @@
 //! Offline is the normal case, not an error: [`load`] serves the cached copy when the fetch fails, and a
 //! failed fetch never overwrites what is cached — the cache is replaced only by a catalog that parsed.
 //!
-//! Scope: the official catalog, one URL. Registering third-party catalogs and merging several is
-//! `AMB-T-1980`, which is why the cache is a **named file** in the registry directory rather than the
-//! directory itself.
+//! Scope of install/update: the official catalog, one URL. **Third-party catalogs** register beside it and
+//! merge into a browsing view ([`discover`], `AMB-T-1980`) — which is why the cache is a **named file** in
+//! the registry directory, not the directory itself — but they never enter the install path: an asset is
+//! trusted only by amenbo's catalog key (`AMB-D-371`), so install and update read the official catalog
+//! alone.
 
 use crate::config::Paths;
 use crate::error::{Error, Result};
@@ -192,8 +194,7 @@ pub fn cache_file(paths: &Paths) -> PathBuf {
 /// envelope this one refuses. `None` is "we have no local copy", never an error to show: the caller's
 /// answer to it is to fetch.
 pub fn cached(paths: &Paths) -> Option<Catalog> {
-    let json = std::fs::read_to_string(cache_file(paths)).ok()?;
-    parse(&json).ok()
+    cached_at(&cache_file(paths))
 }
 
 /// Fetch the catalog and replace the cache with it — the explicit "get the current index" path.
@@ -202,16 +203,7 @@ pub fn cached(paths: &Paths) -> Option<Catalog> {
 /// existing cache intact. Individual entries the intake dropped are still cached: they are what the
 /// catalog actually served, and re-parsing the cache reproduces the same drops.
 pub fn refresh(paths: &Paths) -> Result<Catalog> {
-    refresh_from(paths, &catalog_url())
-}
-
-/// [`refresh`] against a named URL — the seam a test drives, and where a registered third-party catalog
-/// will enter (`AMB-T-1980`).
-fn refresh_from(paths: &Paths, url: &str) -> Result<Catalog> {
-    let json = fetch(url)?;
-    let catalog = parse(&json)?;
-    write_cache(paths, &json)?;
-    Ok(catalog)
+    refresh_to(&catalog_url(), &cache_file(paths))
 }
 
 /// The catalog to work from: the current one when the network answers, the cached one when it does not
@@ -219,15 +211,7 @@ fn refresh_from(paths: &Paths, url: &str) -> Result<Catalog> {
 ///
 /// Fails only when both are unavailable: nothing fetched, and nothing cached.
 pub fn load(paths: &Paths) -> Result<Catalog> {
-    load_from(paths, &catalog_url())
-}
-
-/// [`load`] against a named URL — see [`refresh_from`].
-fn load_from(paths: &Paths, url: &str) -> Result<Catalog> {
-    match refresh_from(paths, url) {
-        Ok(catalog) => Ok(catalog),
-        Err(fetch_error) => cached(paths).ok_or(fetch_error),
-    }
+    load_to(&catalog_url(), &cache_file(paths))
 }
 
 /// The catalog for a read that is *incidental* — a check hanging off something the user did anyway
@@ -238,18 +222,53 @@ fn load_from(paths: &Paths, url: &str) -> Result<Catalog> {
 /// The distinction is the point: an install wants the newest index it can get, while a check wants to be
 /// cheap enough that it can be offered often.
 pub fn fresh(paths: &Paths) -> Result<Catalog> {
-    if cache_age(paths).is_some_and(|age| age < FRESH_FOR) {
-        if let Some(catalog) = cached(paths) {
+    fresh_to(&catalog_url(), &cache_file(paths))
+}
+
+// ---- the catalog fetch/cache mechanism, keyed on a named cache file ----
+//
+// The official catalog is one URL cached in one file; a registered third-party catalog is another URL
+// cached in its own file beside it (`AMB-T-1980`). The mechanism is the same for both, so the functions
+// that fetch, cache and fall back take the cache file as an argument — the `paths`-shaped functions above
+// are the official-catalog spellings of these, and `discover` drives the third-party ones.
+
+/// [`cached`] against a named cache file.
+fn cached_at(cache_file: &std::path::Path) -> Option<Catalog> {
+    let json = std::fs::read_to_string(cache_file).ok()?;
+    parse(&json).ok()
+}
+
+/// [`refresh`] against a named URL and cache file — the seam a test drives, and where a registered
+/// third-party catalog enters (`AMB-T-1980`).
+fn refresh_to(url: &str, cache_file: &std::path::Path) -> Result<Catalog> {
+    let json = fetch(url)?;
+    let catalog = parse(&json)?;
+    write_cache_at(cache_file, &json)?;
+    Ok(catalog)
+}
+
+/// [`load`] against a named URL and cache file — see [`refresh_to`].
+fn load_to(url: &str, cache_file: &std::path::Path) -> Result<Catalog> {
+    match refresh_to(url, cache_file) {
+        Ok(catalog) => Ok(catalog),
+        Err(fetch_error) => cached_at(cache_file).ok_or(fetch_error),
+    }
+}
+
+/// [`fresh`] against a named URL and cache file.
+fn fresh_to(url: &str, cache_file: &std::path::Path) -> Result<Catalog> {
+    if cache_age_at(cache_file).is_some_and(|age| age < FRESH_FOR) {
+        if let Some(catalog) = cached_at(cache_file) {
             return Ok(catalog);
         }
     }
-    load(paths)
+    load_to(url, cache_file)
 }
 
 /// How long ago the cache was last written, or `None` when there is no cache — or when the clock says it
 /// was written in the future, which is no evidence of freshness and falls through to a fetch.
-fn cache_age(paths: &Paths) -> Option<Duration> {
-    std::fs::metadata(cache_file(paths)).ok()?.modified().ok()?.elapsed().ok()
+fn cache_age_at(cache_file: &std::path::Path) -> Option<Duration> {
+    std::fs::metadata(cache_file).ok()?.modified().ok()?.elapsed().ok()
 }
 
 /// Fetch the catalog document, with a timeout. The only network I/O in this module.
@@ -264,17 +283,196 @@ fn fetch(url: &str) -> Result<String> {
     })
 }
 
-/// Replace the cached catalog with `json`, atomically: written to a temporary file beside the target and
+/// Replace a cached catalog with `json`, atomically: written to a temporary file beside the target and
 /// renamed over it, so a crash mid-write cannot leave a half-catalog behind.
-fn write_cache(paths: &Paths, json: &str) -> Result<()> {
-    let dest = cache_file(paths);
+fn write_cache_at(cache_file: &std::path::Path, json: &str) -> Result<()> {
+    if let Some(parent) = cache_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = cache_file.with_extension("json.tmp");
+    std::fs::write(&tmp, json)?;
+    std::fs::rename(&tmp, cache_file)?;
+    Ok(())
+}
+
+// ---- registered third-party catalogs, and the merged view (`AMB-T-1980`) ----
+//
+// A third-party catalog is a second index the same shape as the official one, at the author's own URL
+// (`AMB-D-347`, the "free" tier). The unit registered is the **catalog**, never the plugin: what grows is
+// the number of indexes (few), not per-plugin requests (many). The list of registered URLs is a small
+// file in the registry directory; each catalog is fetched and cached in its own named file beside the
+// official one, and `discover` merges them for browsing.
+//
+// **Discovery only.** A merged catalog is what a user browses (`AMB-T-1982`); it is *not* what an install
+// resolves against. Install and update keep reading the official catalog alone (`load`/`fresh`),
+// because an asset is trusted only by amenbo's catalog key (`AMB-D-371`): a third-party asset does not
+// verify and so cannot be installed regardless, and letting a third-party name shadow an official one in
+// the install path buys an attacker nothing but confusion. So the merge lives here, apart from the
+// install path, and official entries always win a name clash.
+
+/// The name, under [`Paths::registry_dir`], of the list of registered third-party catalog URLs.
+pub const SOURCES_FILE_NAME: &str = "sources.json";
+
+/// The registered-sources file, `<base>/plugins/registry/sources.json`.
+fn sources_file(paths: &Paths) -> PathBuf {
+    paths.registry_dir().join(SOURCES_FILE_NAME)
+}
+
+/// The on-disk shape of the sources list — an envelope so a field can be added later without an older
+/// build misreading it, the same discipline as the catalog envelope.
+#[derive(Debug, Default, serde::Serialize, Deserialize)]
+struct SourcesFile {
+    #[serde(default)]
+    sources: Vec<String>,
+}
+
+/// The registered third-party catalog URLs, in the order they were added — an unreadable or absent file
+/// reads as none, never an error, the same way a missing cache does.
+pub fn sources(paths: &Paths) -> Vec<String> {
+    std::fs::read_to_string(sources_file(paths))
+        .ok()
+        .and_then(|json| serde_json::from_str::<SourcesFile>(&json).ok())
+        .map(|f| f.sources)
+        .unwrap_or_default()
+}
+
+/// The named cache file for a third-party catalog, derived from its URL so the same URL always maps to the
+/// same file. Prefixed to sit beside — and never collide with — the official cache and the sources list.
+fn source_cache_file(paths: &Paths, url: &str) -> PathBuf {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(url.as_bytes());
+    let short: String = digest.iter().take(8).map(|b| format!("{b:02x}")).collect();
+    paths.registry_dir().join(format!("source-{short}.json"))
+}
+
+/// Register a third-party catalog URL. Returns `true` if it was added, `false` if it was already
+/// registered (idempotent). Refuses a URL that is not `http(s)://…`, and the official catalog's own URL —
+/// the official catalog is not a third-party source and is always merged first anyway.
+pub fn add_source(paths: &Paths, url: &str) -> Result<bool> {
+    let url = url.trim();
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err(Error::invalid(
+            format!("a catalog URL must start with http:// or https://: {url}"),
+            format!("目録の URL は http:// か https:// で始まる必要があります：{url}"),
+        ));
+    }
+    if url == catalog_url() {
+        return Err(Error::invalid(
+            "that is the official catalog's URL — it is always included and cannot be registered as a third-party source".to_string(),
+            "それは公式目録の URL です——常に含まれるため、サードパーティ目録として登録できません。".to_string(),
+        ));
+    }
+    let mut list = sources(paths);
+    if list.iter().any(|u| u == url) {
+        return Ok(false);
+    }
+    list.push(url.to_string());
+    write_sources(paths, &list)?;
+    Ok(true)
+}
+
+/// Unregister a third-party catalog URL, and remove its cached copy. Returns `true` if it was registered,
+/// `false` if it was not (idempotent).
+pub fn remove_source(paths: &Paths, url: &str) -> Result<bool> {
+    let url = url.trim();
+    let mut list = sources(paths);
+    let before = list.len();
+    list.retain(|u| u != url);
+    if list.len() == before {
+        return Ok(false);
+    }
+    write_sources(paths, &list)?;
+    // Best-effort: a leftover cache is harmless (nothing merges it once unregistered), so a failed
+    // removal is not worth failing the command over.
+    let _ = std::fs::remove_file(source_cache_file(paths, url));
+    Ok(true)
+}
+
+/// Write the sources list atomically.
+fn write_sources(paths: &Paths, sources: &[String]) -> Result<()> {
+    let dest = sources_file(paths);
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
+    let json = serde_json::to_string_pretty(&SourcesFile { sources: sources.to_vec() })
+        .map_err(|e| Error::Io(std::io::Error::other(e)))?;
     let tmp = dest.with_extension("json.tmp");
     std::fs::write(&tmp, json)?;
     std::fs::rename(&tmp, &dest)?;
     Ok(())
+}
+
+/// One catalog's contribution to a [`Discovery`] — what a `plugin catalog list` reports per index.
+#[derive(Clone, Debug)]
+pub struct DiscoveredSource {
+    /// The catalog's URL, or [`OFFICIAL_CATALOG_URL`] for the official one.
+    pub url: String,
+    /// Whether this is the official catalog (always merged first, always wins a name clash).
+    pub official: bool,
+    /// Whether the catalog answered at all — from the network or, failing that, its cache. `false` is a
+    /// registered source that has never been reached and holds no cache: it contributes nothing, but it
+    /// stays registered.
+    pub reachable: bool,
+    /// How many entries this catalog offered (before cross-catalog de-duplication) — `0` when it was not
+    /// reachable.
+    pub offered: usize,
+}
+
+/// The merged catalog a user browses: the official catalog plus every registered third-party one, folded
+/// into a single de-duplicated list (`AMB-T-1980`). This is the discovery view only — see the module note
+/// on why install and update do not use it.
+#[derive(Clone, Debug)]
+pub struct Discovery {
+    /// Every entry across the merged catalogs, official first then each source in registration order, with
+    /// a name that already appeared dropped in favour of the earlier one.
+    pub entries: Vec<Entry>,
+    /// Each catalog that went into the merge, and what it contributed.
+    pub sources: Vec<DiscoveredSource>,
+    /// Entries dropped during the merge: each catalog's own intake drops ([`Dropped`]), plus a
+    /// [`Dropped::Duplicate`] for a name a later catalog repeated.
+    pub dropped: Vec<Dropped>,
+}
+
+/// Merge the official catalog with every registered third-party catalog for browsing (`AMB-T-1980`).
+///
+/// Each catalog is read the incidental way ([`fresh`]-style): a cache inside the freshness window answers
+/// without a request, so listing many sources does not mean many fetches. A source that cannot be reached
+/// and has no cache contributes nothing and is marked unreachable — one dead URL does not cost the view.
+/// The official catalog is merged first and wins every name clash, so a third-party catalog cannot shadow
+/// an official plugin in what the user sees.
+pub fn discover(paths: &Paths) -> Discovery {
+    let mut entries: Vec<Entry> = Vec::new();
+    let mut sources_meta: Vec<DiscoveredSource> = Vec::new();
+    let mut dropped: Vec<Dropped> = Vec::new();
+
+    let official_url = catalog_url();
+    let mut fold = |url: String, official: bool, catalog: Result<Catalog>| {
+        match catalog {
+            Ok(catalog) => {
+                let offered = catalog.entries.len();
+                dropped.extend(catalog.dropped);
+                for entry in catalog.entries {
+                    if entries.iter().any(|e| e.manifest.name == entry.manifest.name) {
+                        dropped.push(Dropped::Duplicate { name: entry.manifest.name });
+                    } else {
+                        entries.push(entry);
+                    }
+                }
+                sources_meta.push(DiscoveredSource { url, official, reachable: true, offered });
+            }
+            Err(_) => {
+                sources_meta.push(DiscoveredSource { url, official, reachable: false, offered: 0 });
+            }
+        }
+    };
+
+    fold(official_url.clone(), true, fresh_to(&official_url, &cache_file(paths)));
+    for url in sources(paths) {
+        let catalog = fresh_to(&url, &source_cache_file(paths, &url));
+        fold(url, false, catalog);
+    }
+
+    Discovery { entries, sources: sources_meta, dropped }
 }
 
 #[cfg(test)]
@@ -405,7 +603,7 @@ mod tests {
     fn the_cache_round_trips_through_the_registry_dir() {
         let paths = paths_at("round-trip");
         assert!(cached(&paths).is_none(), "nothing cached yet");
-        write_cache(&paths, &catalog_json(vec![entry_json("worktree")])).unwrap();
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
         assert_eq!(cache_file(&paths), paths.registry_dir().join("official.json"));
         let catalog = cached(&paths).expect("the cache reads back");
         assert!(catalog.find("worktree").is_some());
@@ -414,14 +612,14 @@ mod tests {
     #[test]
     fn a_corrupt_cache_reads_as_no_cache() {
         let paths = paths_at("corrupt");
-        write_cache(&paths, "half a file").unwrap();
+        write_cache_at(&cache_file(&paths), "half a file").unwrap();
         assert!(cached(&paths).is_none(), "unreadable is 'fetch again', not an error to show");
     }
 
     #[test]
     fn writing_the_cache_leaves_no_temporary_behind() {
         let paths = paths_at("no-temp");
-        write_cache(&paths, &catalog_json(vec![])).unwrap();
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![])).unwrap();
         let leftovers: Vec<_> = std::fs::read_dir(paths.registry_dir())
             .unwrap()
             .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().to_string()))
@@ -436,17 +634,20 @@ mod tests {
     #[test]
     fn load_falls_back_to_the_cache_when_the_fetch_fails() {
         let paths = paths_at("offline");
-        write_cache(&paths, &catalog_json(vec![entry_json("worktree")])).unwrap();
-        let catalog = load_from(&paths, UNREACHABLE).expect("the cache answers");
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
+        let catalog = load_to(UNREACHABLE, &cache_file(&paths)).expect("the cache answers");
         assert!(catalog.find("worktree").is_some());
-        assert!(refresh_from(&paths, UNREACHABLE).is_err(), "a refresh still reports the failure");
+        assert!(
+            refresh_to(UNREACHABLE, &cache_file(&paths)).is_err(),
+            "a refresh still reports the failure"
+        );
         assert!(cached(&paths).is_some(), "and a failed fetch never clears the cache");
     }
 
     #[test]
     fn load_fails_only_when_there_is_neither_network_nor_cache() {
         let paths = paths_at("nothing");
-        assert!(load_from(&paths, UNREACHABLE).is_err());
+        assert!(load_to(UNREACHABLE, &cache_file(&paths)).is_err());
     }
 
     #[test]
@@ -456,7 +657,8 @@ mod tests {
         // intake. Run it by hand (`cargo nextest run -p amenbo-core plugin_catalog -- --ignored`) when
         // the catalog's producer changes.
         let paths = paths_at("live");
-        let catalog = refresh_from(&paths, OFFICIAL_CATALOG_URL).expect("the published catalog answers");
+        let catalog =
+            refresh_to(OFFICIAL_CATALOG_URL, &cache_file(&paths)).expect("the published catalog answers");
         assert!(catalog.dropped.is_empty(), "nothing published had to be dropped: {:?}", catalog.dropped);
         assert!(cached(&paths).is_some(), "and the fetch replaced the cache");
     }
@@ -467,7 +669,7 @@ mod tests {
     #[test]
     fn a_cache_inside_the_freshness_boundary_answers_without_the_network() {
         let paths = paths_at("fresh");
-        write_cache(&paths, &catalog_json(vec![entry_json("only-on-disk")])).unwrap();
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("only-on-disk")])).unwrap();
 
         let catalog = fresh(&paths).expect("the cache answers");
         let names: Vec<_> = catalog.entries.iter().map(|e| e.manifest.name.as_str()).collect();
@@ -478,6 +680,117 @@ mod tests {
     /// read falls through to a fetch.
     #[test]
     fn no_cache_has_no_age() {
-        assert!(cache_age(&paths_at("ageless")).is_none());
+        assert!(cache_age_at(&cache_file(&paths_at("ageless"))).is_none());
+    }
+
+    // ---- registered third-party catalogs, and the merged discovery view (`AMB-T-1980`) ----
+
+    #[test]
+    fn sources_round_trip_and_are_idempotent() {
+        let paths = paths_at("sources-round-trip");
+        assert!(sources(&paths).is_empty(), "none registered yet");
+
+        assert!(add_source(&paths, "https://example.invalid/a/catalog.json").unwrap(), "added");
+        assert!(add_source(&paths, "https://example.invalid/b/catalog.json").unwrap(), "added");
+        assert!(
+            !add_source(&paths, "https://example.invalid/a/catalog.json").unwrap(),
+            "a second add of the same URL is a no-op"
+        );
+        assert_eq!(
+            sources(&paths),
+            vec![
+                "https://example.invalid/a/catalog.json".to_string(),
+                "https://example.invalid/b/catalog.json".to_string(),
+            ],
+            "kept in registration order"
+        );
+
+        assert!(remove_source(&paths, "https://example.invalid/a/catalog.json").unwrap(), "removed");
+        assert!(
+            !remove_source(&paths, "https://example.invalid/a/catalog.json").unwrap(),
+            "removing what is not registered is a no-op"
+        );
+        assert_eq!(sources(&paths), vec!["https://example.invalid/b/catalog.json".to_string()]);
+    }
+
+    #[test]
+    fn add_source_refuses_a_non_http_url_and_the_official_catalog() {
+        let paths = paths_at("sources-refuse");
+        assert!(add_source(&paths, "ftp://example.invalid/catalog.json").is_err(), "not http(s)");
+        assert!(add_source(&paths, "just-a-name").is_err(), "not a URL");
+        assert!(add_source(&paths, OFFICIAL_CATALOG_URL).is_err(), "the official catalog is not a source");
+        assert!(sources(&paths).is_empty(), "nothing refused was registered");
+    }
+
+    #[test]
+    fn removing_a_source_drops_its_cached_copy() {
+        let paths = paths_at("sources-drop-cache");
+        let url = "https://example.invalid/x/catalog.json";
+        add_source(&paths, url).unwrap();
+        write_cache_at(&source_cache_file(&paths, url), &catalog_json(vec![entry_json("x")])).unwrap();
+        assert!(source_cache_file(&paths, url).exists());
+        remove_source(&paths, url).unwrap();
+        assert!(!source_cache_file(&paths, url).exists(), "the cache goes with the registration");
+    }
+
+    /// A source's cache file is derived from its URL, so the same URL always maps to the same file and two
+    /// different URLs do not collide — nor with the official cache or the sources list.
+    #[test]
+    fn a_source_cache_file_is_stable_per_url_and_distinct() {
+        let paths = paths_at("sources-cache-name");
+        let a = source_cache_file(&paths, "https://example.invalid/a/catalog.json");
+        let b = source_cache_file(&paths, "https://example.invalid/b/catalog.json");
+        assert_eq!(a, source_cache_file(&paths, "https://example.invalid/a/catalog.json"), "stable");
+        assert_ne!(a, b, "different URLs, different files");
+        assert_ne!(a, cache_file(&paths), "never the official cache");
+        assert_ne!(a, sources_file(&paths), "never the sources list");
+    }
+
+    /// `discover` merges the official catalog with every registered source, official first, and an official
+    /// name wins a clash with a third-party one — a third-party catalog cannot shadow an official plugin.
+    #[test]
+    fn discover_merges_with_the_official_catalog_winning_a_name_clash() {
+        let paths = paths_at("discover-merge");
+        // Fresh caches so the merge reads from disk and never touches the network.
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
+        let src = "https://example.invalid/third/catalog.json";
+        add_source(&paths, src).unwrap();
+        let mut impostor = entry_json("worktree");
+        impostor["desc"] = serde_json::json!("a third-party impostor");
+        write_cache_at(
+            &source_cache_file(&paths, src),
+            &catalog_json(vec![impostor, entry_json("extra")]),
+        )
+        .unwrap();
+
+        let discovery = discover(&paths);
+        let names: Vec<_> = discovery.entries.iter().map(|e| e.manifest.name.as_str()).collect();
+        assert_eq!(names, vec!["worktree", "extra"], "official first, then the source's fresh entry");
+        assert_eq!(
+            discovery.entries[0].manifest.desc, "a plugin",
+            "the official 'worktree' held; the impostor did not displace it"
+        );
+        assert!(
+            matches!(discovery.dropped.as_slice(), [Dropped::Duplicate { name }] if name == "worktree"),
+            "the shadowed third-party entry is recorded as a drop: {:?}",
+            discovery.dropped
+        );
+        assert_eq!(discovery.sources.len(), 2, "official plus the one source");
+        assert!(discovery.sources[0].official && discovery.sources[0].reachable);
+        assert_eq!(discovery.sources[1].offered, 2, "the source offered two before de-duplication");
+    }
+
+    /// A registered source that cannot be reached and holds no cache contributes nothing and is marked
+    /// unreachable — one dead URL does not cost the view. (`UNREACHABLE` refuses fast, no timeout wait.)
+    #[test]
+    fn discover_marks_an_unreachable_source_without_losing_the_rest() {
+        let paths = paths_at("discover-unreachable");
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
+        add_source(&paths, UNREACHABLE).unwrap();
+
+        let discovery = discover(&paths);
+        assert_eq!(discovery.entries.len(), 1, "the official catalog still answers");
+        let dead = discovery.sources.iter().find(|s| s.url == UNREACHABLE).expect("listed");
+        assert!(!dead.reachable && dead.offered == 0, "the dead source contributes nothing");
     }
 }

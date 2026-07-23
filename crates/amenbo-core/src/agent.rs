@@ -378,6 +378,12 @@ const JA_PHRASEBOOK: &[(&str, &str)] = &[
     ("which tier to write (default machine)", "書き込む層（既定は machine）"),
     ("Reads one of an installed plugin's settings back at the tier --scope names — the machine default or this project's override exactly as stored, not the effective value precedence would pick at run time. A secret's value never comes out this door, --json included: it reports only whether one is set, because a get that prints a token puts it in the terminal, the scrollback and the shell's history. Injection reads secrets whole, into the plugin's environment and nowhere else. A key the manifest does not declare is refused with the keys it does declare, so a typo answers with the vocabulary rather than a silent 'not set'.", "インストール済みプラグインの設定を1つ、--scope が名指す層で読み戻します——マシン既定かこのプロジェクトの上書きを、保存されたそのままの形で。実行時に優先順位が選ぶ実効値ではありません。秘密の値がこの入口から出ることは、--json でもありません：設定されているかどうかだけを報告します。get がトークンを印字すれば、それは端末・スクロールバック・シェル履歴に残るからです。秘密を丸ごと読むのは注入だけで、行き先はプラグインのプロセス環境だけです。manifest が宣言していないキーは、宣言されているキーの一覧を添えて拒否します——打ち間違いには、黙った「未設定」ではなく語彙が返ります。"),
     ("which tier to read (default machine)", "読み取る層（既定は machine）"),
+    ("Register third-party catalogs to browse alongside the official one, and list what is registered (discovery only — not a second install root)", "公式目録と並べて閲覧するサードパーティ目録を登録し、登録済みを一覧します（発見だけ——2つ目の install の根ではありません）。"),
+    ("Lists the catalogs that make up the browsing view: the official catalog first, then each registered third-party catalog in the order it was added, with how many plugins each currently offers and whether it could be reached (from the network, or its cache). The unit is the catalog, not the plugin — what grows is the number of indexes, never per-plugin requests. Reads caches the incidental way: a catalog fresh on disk answers with no request, so listing many sources is not many fetches, and one dead URL is marked unreachable rather than costing the view. This is the discovery view (the merged official + third-party catalogs), not the install view: registering a catalog widens what is shown, never what `plugin install` accepts — an asset is trusted only by amenbo's catalog key, so a third-party plugin still cannot be installed. --json carries plugins_total (after cross-catalog de-duplication, official winning a name clash) and per-source url/official/reachable/offered.", "閲覧ビューを構成する目録を一覧します：まず公式目録、続いて登録済みのサードパーティ目録を追加順に、それぞれが今提示しているプラグイン数と、到達できたか（ネットワークから、あるいはキャッシュから）を添えて示します。単位はプラグインではなく目録です——増えるのは目録の数であって、プラグインごとの問い合わせではありません。キャッシュはついで読みします：ディスク上で新鮮な目録は問い合わせ無しで答えるので、多くの目録を並べても多くの取得にはならず、死んだ URL 1つはビューを損なわず「到達不能」と印されます。これは発見ビュー（公式＋サードパーティ目録をマージしたもの）であって install ビューではありません：目録の登録は「見える範囲」を広げるだけで、`plugin install` が受け入れる範囲は広げません——アセットは amenbo の目録鍵でしか信頼されないので、サードパーティのプラグインは依然として install できません。--json は plugins_total（目録横断の重複排除後・名前衝突は公式が勝つ）と、目録ごとの url/official/reachable/offered を返します。"),
+    ("Registers a third-party catalog by the URL of its catalog.json, to browse alongside the official one (the 'free' tier). Idempotent: registering the same URL twice is a no-op. Refuses a non-http(s) URL, and the official catalog's own URL (it is always included and is not a third-party source). The catalog is fetched once here so the first browse is warm, and how many plugins it offers is reported; an unreachable URL still registers and is retried on the next browse. Registering only widens discovery, never install: an asset is trusted only by amenbo's catalog key, so this is not a second install root.", "サードパーティ目録を、その catalog.json の URL で登録し、公式目録と並べて閲覧できるようにします（「自由」層）。冪等です：同じ URL を二度登録しても no-op です。http(s) でない URL と、公式目録自身の URL は拒否します（公式は常に含まれ、サードパーティ目録ではありません）。最初の閲覧を温めるため、ここで目録を一度取得し、提示するプラグイン数を報告します。到達できない URL も登録は残り、次の閲覧で再試行されます。登録が広げるのは発見だけで install ではありません：アセットは amenbo の目録鍵でしか信頼されないので、これは2つ目の install の根ではありません。"),
+    ("Unregisters a third-party catalog by its URL and drops its cached copy. Idempotent: removing a URL that is not registered is a no-op. The official catalog cannot be removed — it is not a registered source.", "サードパーティ目録を URL で登録解除し、そのキャッシュも捨てます。冪等です：登録されていない URL の削除は no-op です。公式目録は削除できません——登録されたソースではないからです。"),
+    ("the URL of the third-party catalog's catalog.json", "サードパーティ目録の catalog.json の URL"),
+    ("the URL that was registered with `plugin catalog add`", "`plugin catalog add` で登録した URL"),
 ];
 
 /// The overlay applied just before display: it swaps only the prose fields of the English spec for
@@ -724,6 +730,10 @@ fn capabilities() -> Value {
         cap(
             "Fill in and read back an installed plugin's settings (the keys its author declared)",
             &["plugin config set", "plugin config get"],
+        ),
+        cap(
+            "Register third-party catalogs to browse alongside the official one, and list what is registered (discovery only — not a second install root)",
+            &["plugin catalog list", "plugin catalog add", "plugin catalog remove"],
         ),
     ];
     Value::Array(caps)
@@ -1238,6 +1248,17 @@ fn all_commands() -> Value {
             "args": [{ "name": "name", "required": true, "help": "the installed plugin's name" }, { "name": "key", "required": true, "help": "the setting's key, as the manifest declares it" }],
             "flags": [{ "name": "--scope <machine|project>", "help": "which tier to read (default machine)" }, { "name": "--json", "help": "machine-readable output" }],
             "examples": ["amenbo plugin config get slack events", "amenbo plugin config get slack events --scope project --json"] }),
+        json!({ "name": "plugin catalog list", "summary": "Lists the catalogs that make up the browsing view: the official catalog first, then each registered third-party catalog in the order it was added, with how many plugins each currently offers and whether it could be reached (from the network, or its cache). The unit is the catalog, not the plugin — what grows is the number of indexes, never per-plugin requests. Reads caches the incidental way: a catalog fresh on disk answers with no request, so listing many sources is not many fetches, and one dead URL is marked unreachable rather than costing the view. This is the discovery view (the merged official + third-party catalogs), not the install view: registering a catalog widens what is shown, never what `plugin install` accepts — an asset is trusted only by amenbo's catalog key, so a third-party plugin still cannot be installed. --json carries plugins_total (after cross-catalog de-duplication, official winning a name clash) and per-source url/official/reachable/offered.",
+            "args": [], "flags": [{ "name": "--json", "help": "machine-readable output" }],
+            "examples": ["amenbo plugin catalog list", "amenbo plugin catalog list --json"] }),
+        json!({ "name": "plugin catalog add", "summary": "Registers a third-party catalog by the URL of its catalog.json, to browse alongside the official one (the 'free' tier). Idempotent: registering the same URL twice is a no-op. Refuses a non-http(s) URL, and the official catalog's own URL (it is always included and is not a third-party source). The catalog is fetched once here so the first browse is warm, and how many plugins it offers is reported; an unreachable URL still registers and is retried on the next browse. Registering only widens discovery, never install: an asset is trusted only by amenbo's catalog key, so this is not a second install root.",
+            "args": [{ "name": "url", "required": true, "help": "the URL of the third-party catalog's catalog.json" }],
+            "flags": [{ "name": "--json", "help": "machine-readable output" }],
+            "examples": ["amenbo plugin catalog add https://example.com/plugins/catalog.json"] }),
+        json!({ "name": "plugin catalog remove", "summary": "Unregisters a third-party catalog by its URL and drops its cached copy. Idempotent: removing a URL that is not registered is a no-op. The official catalog cannot be removed — it is not a registered source.",
+            "args": [{ "name": "url", "required": true, "help": "the URL that was registered with `plugin catalog add`" }],
+            "flags": [{ "name": "--json", "help": "machine-readable output" }],
+            "examples": ["amenbo plugin catalog remove https://example.com/plugins/catalog.json"] }),
     ])
 }
 

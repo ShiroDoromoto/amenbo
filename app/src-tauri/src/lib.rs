@@ -110,6 +110,7 @@ pub fn run() {
       commands::version_status,
       commands::check_updates_fresh,
       commands::store_locations,
+      commands::open_logs_dir,
       commands::activity_page,
       commands::changes_since,
       commands::change_cursor,

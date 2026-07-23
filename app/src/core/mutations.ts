@@ -960,6 +960,17 @@ export async function fetchStoreLocations(): Promise<StoreLocationsDto | null> {
   return invoke<StoreLocationsDto>("store_locations");
 }
 
+/**
+ * Open the folder holding this machine's logs, beside the location line in Settings > Data: the one
+ * step between "please attach your logs" and a file the user can drag onto an issue. Core rejects the
+ * call when there is no folder yet, and the caller shows what it said. A no-op outside Tauri, where
+ * there is neither a folder nor a file manager to open it with.
+ */
+export async function openLogsDir(): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("open_logs_dir");
+}
+
 /** Set or edit the notes (Markdown); the empty string clears them. */
 export async function setNotes(id: number, notes: string): Promise<void> {
   if (inTauri()) return invokeAck("task_set_notes", { id, notes });

@@ -757,8 +757,9 @@ impl Store {
         })
     }
 
-    /// Return an accepted decision to discussion (one operation = one transaction).
-    pub fn reopen_decision(&mut self, id: i64) -> Result<crate::model::Decision> {
+    /// Return an accepted decision to discussion (one operation = one transaction). Returns
+    /// `(decision, changed)`; `changed` is `false` on the idempotent noop (already proposed).
+    pub fn reopen_decision(&mut self, id: i64) -> Result<(crate::model::Decision, bool)> {
         self.write_one(&[WriteTarget::Decision(id)], |tx| crate::ops::decision::reopen(tx, id))
     }
 

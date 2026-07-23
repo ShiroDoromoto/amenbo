@@ -1682,6 +1682,23 @@ fn warn_if_premise_added_to_reserved(store: &Store, id: i64, what: &str) {
     }
 }
 
+/// Warn the changer when reopening a decision takes the ground out from under a task that is already
+/// reserved (`in_progress`). It is the other direction of the same silence
+/// [`warn_if_premise_added_to_reserved`] breaks: there a premise is newly placed on a running task, here a
+/// premise the task already rests on stops being settled (`AMB-D-373`, the changer side). Either way the
+/// task drops to `ready:no` without losing its reservation and its holder gets no interrupt. Reopening is
+/// not forbidden, only made audible; an idempotent reopen (already proposed) settles nothing anew and so
+/// says nothing. The linked tasks are read off the card the caller already holds, so this costs no query.
+fn warn_if_reopened_under_reserved(did: i64, detail: &amenbo_core::view::DecisionDetail) {
+    for t in detail.linked_tasks.iter().filter(|t| t.status == TaskStatus::InProgress) {
+        eprintln!(
+            "⚠ {task} is reserved (in progress) and rests on {decision} — reopening it leaves that premise unsettled. Its holder is not notified now; they will see it on their next amenbo command.",
+            task = task_label(t.id),
+            decision = decision_label(did),
+        );
+    }
+}
+
 // ───────────────────────── E guardrails (local execution policy) ─────────────────────────
 // These prevent accidents on this device. They assume an honest actor — the facet is self-declared and can
 // be spoofed — so they are not a security boundary. actor=human is unconstrained.
@@ -3524,8 +3541,11 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
         }
         DecisionCmd::Reopen { id } => {
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
-            let d = store.reopen_decision(did).map_err(CliError::from)?;
+            let (d, changed) = store.reopen_decision(did).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
+            if changed {
+                warn_if_reopened_under_reserved(d.id, &detail);
+            }
             write_envelope(flags, "decision.reopen", "decision", serde_json::to_value(&detail).unwrap(), Some(vec!["status".to_string()]), false, format!("✓ Reopened decision: {}", decision_label(d.id)));
         }
         DecisionCmd::Delete { id } => {

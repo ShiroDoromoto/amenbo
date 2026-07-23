@@ -190,9 +190,8 @@ mod tests {
             None,
             "the project override is gone",
         );
-        assert_eq!(
-            store.plugin_enabled_in_project(project, "slack").unwrap(),
-            false,
+        assert!(
+            !store.plugin_enabled_in_project(project, "slack").unwrap(),
             "the project's gate row is gone",
         );
         assert_eq!(

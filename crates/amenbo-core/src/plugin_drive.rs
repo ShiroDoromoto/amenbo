@@ -87,7 +87,7 @@ mod tests {
         invocation: PluginInvocation,
     }
     impl Subscribers for Fixed {
-        fn resolve(&self, event: &str) -> Vec<Subscriber> {
+        fn resolve(&self, event: &str, _project: Option<i64>) -> Vec<Subscriber> {
             if self.events.contains(&event) {
                 vec![Subscriber::new("fixed", self.invocation.clone())]
             } else {

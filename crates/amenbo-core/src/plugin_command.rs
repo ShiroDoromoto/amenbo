@@ -34,8 +34,11 @@ use crate::plugin_exec::{PluginInvocation, PluginOutput};
 pub enum CommandOutcome {
     /// The plugin exited cleanly. `value` is its stdout — the machine return value amenbo hands back to
     /// the caller as the result of the invoking command, verbatim (any trailing newline included; the
-    /// consumer, e.g. a shell `eval`, strips what it does not want).
-    Returned { value: String },
+    /// consumer, e.g. a shell `eval`, strips what it does not want). `diagnostic` is its stderr, which a
+    /// clean exit carries just as a failed one does: the summary a plugin writes beside its return value is
+    /// the human half of the same run (`devtool task start` prints one), and a face that dropped it would
+    /// hand the caller a bare directory where the plugin wrote a paragraph.
+    Returned { value: String, diagnostic: String },
     /// The plugin failed: a non-zero exit, or a signal (`code` is `None`). The return value is unusable
     /// and is not handed back. `diagnostic` is the plugin's stderr — the human-facing account of why.
     Failed { code: Option<i32>, diagnostic: String },
@@ -46,7 +49,7 @@ impl CommandOutcome {
     /// wants the value and treats any failure the same way.
     pub fn value(&self) -> Option<&str> {
         match self {
-            CommandOutcome::Returned { value } => Some(value),
+            CommandOutcome::Returned { value, .. } => Some(value),
             CommandOutcome::Failed { .. } => None,
         }
     }
@@ -55,13 +58,14 @@ impl CommandOutcome {
 /// Read a finished plugin's captured output as a command outcome.
 ///
 /// The gate is the exit code: cleanly exited (code 0) yields [`CommandOutcome::Returned`] carrying
-/// stdout; anything else yields [`CommandOutcome::Failed`] carrying the exit code and stderr. On failure
-/// stdout is discarded — a command's broken return value is never consumed (`AMB-D-354`). This is the one
+/// stdout; anything else yields [`CommandOutcome::Failed`] carrying the exit code. Both arms carry stderr
+/// — it is the run's diagnostics either way, and only the *return value* is conditional. On failure stdout
+/// is discarded — a command's broken return value is never consumed (`AMB-D-354`). This is the one
 /// place the command face decides what output means; the validation layer (`AMB-T-1988`) tightens the
 /// success arm when a structured return is added.
 pub fn interpret(out: PluginOutput) -> CommandOutcome {
     if out.succeeded() {
-        CommandOutcome::Returned { value: out.stdout }
+        CommandOutcome::Returned { value: out.stdout, diagnostic: out.stderr }
     } else {
         CommandOutcome::Failed { code: out.code, diagnostic: out.stderr }
     }
@@ -95,14 +99,23 @@ mod tests {
     #[test]
     fn a_clean_exit_relays_stdout_as_the_return_value() {
         let outcome = interpret(out(Some(0), "cd /tmp/wt\n", "task 7 ready"));
-        assert_eq!(outcome, CommandOutcome::Returned { value: "cd /tmp/wt\n".to_string() });
+        assert_eq!(
+            outcome,
+            CommandOutcome::Returned {
+                value: "cd /tmp/wt\n".to_string(),
+                diagnostic: "task 7 ready".to_string(),
+            }
+        );
         assert_eq!(outcome.value(), Some("cd /tmp/wt\n"), "the caller relays the value verbatim");
     }
 
     #[test]
     fn an_empty_stdout_on_a_clean_exit_is_a_valid_empty_return() {
         // A command with no return value succeeds with an empty value — not a failure.
-        assert_eq!(interpret(out(Some(0), "", "done")), CommandOutcome::Returned { value: String::new() });
+        assert_eq!(
+            interpret(out(Some(0), "", "done")),
+            CommandOutcome::Returned { value: String::new(), diagnostic: "done".to_string() }
+        );
     }
 
     #[test]
@@ -130,7 +143,13 @@ mod tests {
         let inv = PluginInvocation::new("/bin/sh")
             .arg("-c")
             .arg("printf 'cd /w'; printf 'note\\n' 1>&2");
-        assert_eq!(run(&inv).unwrap(), CommandOutcome::Returned { value: "cd /w".to_string() });
+        assert_eq!(
+            run(&inv).unwrap(),
+            CommandOutcome::Returned {
+                value: "cd /w".to_string(),
+                diagnostic: "note\n".to_string(),
+            }
+        );
 
         // A plugin that exits non-zero fails, and its stderr is the diagnostic.
         let bad = PluginInvocation::new("/bin/sh").arg("-c").arg("printf 'oops\\n' 1>&2; exit 3");

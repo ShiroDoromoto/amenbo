@@ -314,7 +314,9 @@ pub enum Command {
     /// under the app-data `plugins/` directory (`AMB-D-350`). `install` is the door those bytes come
     /// through; `list` / `enable` / `disable` are the machine-local face of what came through it: what is
     /// installed, and whose gate is open (`AMB-D-351` — installing a plugin never runs it; and each plugin
-    /// has exactly one gate, at the level its author declared — `AMB-D-379`). `validate` is
+    /// has exactly one gate, at the level its author declared — `AMB-D-379`). `run` is the one command that
+    /// actually *calls* a plugin on purpose: its command face, whose return value comes back to you
+    /// (`AMB-D-353`). `validate` is
     /// the author's side — it runs the same rules amenbo enforces at
     /// the door (a well-formed id, checksum, OS set and config schema — `AMB-D-354`/`AMB-D-360`/`AMB-D-356`)
     /// over a manifest file you point it at, so you can self-check before opening a catalog PR, and it
@@ -380,6 +382,29 @@ pub enum PluginCmd {
     Uninstall {
         /// the plugin's name
         name: String,
+    },
+
+    /// Invoke an installed plugin's command face and hand its return value back to you (`AMB-D-353`).
+    ///
+    /// The other face runs itself: an observation hook fires on an event, asynchronously, and nobody waits
+    /// for it. This one you call, and you get an answer — **the plugin's stdout is this command's stdout,
+    /// verbatim**, so a plugin that returns a directory to enter drops straight into a shell:
+    /// `eval "$(amenbo plugin run worktree start 123)"`. Its stderr — the human-facing diagnostics — is
+    /// relayed to stderr, and a plugin that exits non-zero is a failed call whose return value is
+    /// discarded rather than handed on (`AMB-D-354`).
+    ///
+    /// Everything after the name is the plugin's, passed through untouched — dashes and all: amenbo
+    /// neither parses nor rewrites it, because what the words mean is the plugin's business (`AMB-D-346`).
+    /// The corollary is that amenbo's own flags have to come *before* the plugin's name
+    /// (`amenbo plugin run --json worktree …`), since after it every word is the plugin's. Refused when the
+    /// plugin is not installed, not enabled (`install ≠ enable`, `AMB-D-351`), or not compatible with this
+    /// build (`AMB-D-359`) — a caller waiting on a return value is told why there is none.
+    Run {
+        /// the installed plugin's name
+        name: String,
+        /// arguments handed to the plugin verbatim, dashes included
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
     },
 
     /// Fill in an installed plugin's settings — the keys its author declared in the manifest

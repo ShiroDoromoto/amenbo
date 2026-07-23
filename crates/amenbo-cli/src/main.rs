@@ -675,6 +675,7 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         PluginCmd::Enable { name } => plugin_enable_cmd(store, flags, &name),
         PluginCmd::Disable { name } => plugin_disable_cmd(store, flags, &name),
         PluginCmd::Uninstall { name } => plugin_uninstall_cmd(store, flags, &name),
+        PluginCmd::Run { name, args } => plugin_run_cmd(store, flags, &name, &args),
         PluginCmd::Config { sub } => match sub {
             PluginConfigCmd::Set { name, key, value, scope } => {
                 plugin_config_set_cmd(store, flags, &name, &key, value, &scope)
@@ -1110,6 +1111,64 @@ fn plugin_uninstall_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<
         }));
     }
     Ok(0)
+}
+
+/// `plugin run <name> [args...]` — call a plugin's command face and relay what it returned
+/// (`AMB-D-353`).
+///
+/// **This command's stdout belongs to the plugin.** No courtesy line of amenbo's is printed there: the
+/// return value is meant to be consumed (`eval "$(…)"`), and anything mixed in would corrupt it. amenbo's
+/// own voice goes to stderr, where the plugin's diagnostics are relayed too — first, so they read as
+/// context ahead of the value rather than commentary after it. Under `--json` stdout is the document, as
+/// everywhere else, and the return value rides inside it.
+///
+/// A plugin that exits non-zero is a failed call: its return value is discarded (`AMB-D-354`) and this
+/// exits 1 — amenbo's own "something went wrong" code, not the plugin's number. Relaying that number
+/// instead would collide with the exit codes amenbo itself contracts (2 is bad arguments, whatever the
+/// plugin meant by it), so it is reported in the message and in `--json` instead of impersonated.
+fn plugin_run_cmd(
+    store: &Store,
+    flags: &Flags,
+    name: &str,
+    args: &[String],
+) -> Result<i32, CliError> {
+    use amenbo_core::plugin_command::CommandOutcome;
+
+    let outcome = amenbo_core::plugin_invoke::call(store, name, args, bound_project(store))
+        .map_err(CliError::from)?;
+
+    match outcome {
+        CommandOutcome::Returned { value, diagnostic } => {
+            eprint!("{diagnostic}");
+            if flags.json {
+                print_json(&json!({
+                    "ok": true, "action": "plugin.run", "plugin": name,
+                    "args": args, "value": value, "diagnostic": diagnostic, "code": 0,
+                }));
+            } else {
+                print!("{value}");
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+            }
+            Ok(0)
+        }
+        CommandOutcome::Failed { code, diagnostic } => {
+            eprint!("{diagnostic}");
+            let how = match code {
+                Some(code) => format!("exited {code}"),
+                None => "was killed by a signal".to_string(),
+            };
+            Err(CliError::from(amenbo_core::Error::invalid(
+                format!("plugin '{name}' {how} — its return value was discarded"),
+                format!(
+                    "プラグイン '{name}' は{}——戻り値は使いませんでした",
+                    match code {
+                        Some(code) => format!("終了コード {code} で終わりました"),
+                        None => "シグナルで終了しました".to_string(),
+                    }
+                ),
+            )))
+        }
+    }
 }
 
 fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {

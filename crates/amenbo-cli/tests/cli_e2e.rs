@@ -410,6 +410,47 @@ fn whole_device_backup_restore_round_trips() {
     assert!(!titles.contains(&"消えるタスク"), "the post-archive task is gone");
 }
 
+/// The recovery has to work on the store it exists for. There is no downgrade, so the only way back from a
+/// store a newer amenbo carried past this build is the pre-migration backup — which means `restore` has to
+/// run on exactly the store every other command refuses (`format_ahead`). It replaces the truth source
+/// wholesale, so it never reads the one it replaces, and it therefore sits ahead of the open.
+#[test]
+fn restore_replaces_a_store_this_build_cannot_open() {
+    use amenbo_core::store_engine::{StoreEngine, META_FORMAT_VERSION, META_FORMAT_VERSION_SET_BY};
+
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "退避", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    for title in ["移行前A", "移行前B"] {
+        cli.json(&["task", "add", "--title", title, "--project", &pid, "--json"]);
+    }
+    let archive = cli.home.join("pre-migrate.amenbo-backup");
+    cli.json(&["backup", archive.to_str().unwrap(), "--json"]);
+
+    // Put the live store one generation past what this build opens — what a newer amenbo's migration
+    // leaves behind on a device whose other copy is still the old one.
+    {
+        let engine = StoreEngine::open(&cli.home.join("store.sqlite")).unwrap();
+        let ahead = (amenbo_core::model::FORMAT_VERSION + 1).to_string();
+        engine.set_meta(META_FORMAT_VERSION, Some(&ahead)).unwrap();
+        engine.set_meta(META_FORMAT_VERSION_SET_BY, Some("99.0.0")).unwrap();
+    }
+
+    // The gate is real: an ordinary command is refused, and it names the version to use.
+    let (err, code) = cli.run_err(&["task", "list", "--json"]);
+    assert_ne!(code, 0, "a too-new store is not opened: {err}");
+    assert!(err.contains("99.0.0"), "the refusal names the version that wrote the store: {err}");
+
+    // Restore goes through anyway — and the store it hands back is openable.
+    let restored = cli.json(&["restore", archive.to_str().unwrap(), "--yes", "--json"]);
+    assert!(
+        restored["previous_saved_to"].as_str().is_some(),
+        "the store that could not be opened is still set aside, not discarded: {restored}"
+    );
+    let all = cli.json(&["task", "list", "--json"]);
+    assert_eq!(all["count"], 2, "the archive's store is back and readable");
+}
+
 /// Whole-device backup needs an explicit destination path (the archive is a self-placed
 /// disaster-recovery file, not a managed rotation). With no path and no `--store`, it fails loudly
 /// (exit 2) rather than guessing a location.

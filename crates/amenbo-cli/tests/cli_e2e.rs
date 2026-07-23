@@ -3999,6 +3999,50 @@ fn a_plugins_declaration_decides_which_gate_the_faces_move() {
     assert_eq!(watcher["enabled"], true, "the device-wide plugin is untouched");
 }
 
+/// An open gate is not the same as a plugin that fires (`AMB-D-359`). amenbo updates underneath an
+/// install, so a plugin enabled while it was compatible is later dropped at dispatch — and with only
+/// "enabled" on screen, that silence is readable nowhere but the log. The listing carries the verdict.
+#[test]
+fn a_plugin_this_build_cannot_speak_to_is_named_in_the_listing() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    install_plugin(&cli, "slack", serde_json::json!([]));
+    install_plugin(&cli, "watcher", serde_json::json!([]));
+    cli.json(&["plugin", "enable", "slack", "--json"]);
+
+    // The floor rises out of reach the way an update's manifest would raise it — after the enable, which
+    // is precisely the state the gate column alone could not tell anyone about.
+    let manifest_file = cli.home.join("plugins").join("slack").join("manifest.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&manifest_file).unwrap()).unwrap();
+    manifest["min_amenbo"] = serde_json::json!("99.0.0");
+    std::fs::write(&manifest_file, serde_json::to_vec(&manifest).unwrap()).unwrap();
+
+    let listed = cli.json(&["plugin", "list", "--json"]);
+    let rows = listed["plugins"].as_array().unwrap();
+    let slack = rows.iter().find(|p| p["name"] == "slack").unwrap();
+    assert_eq!(slack["enabled"], true, "the gate is still open — that is the whole trap");
+    assert_eq!(slack["compatible"], false);
+    let why = slack["incompatible_reason"].as_str().unwrap();
+    assert!(why.contains("99.0.0"), "the mismatch is named, not just flagged: {why}");
+
+    // The plugin next to it is untouched: the two fields answer the other way, and one incompatible
+    // install does not colour the rest.
+    let watcher = rows.iter().find(|p| p["name"] == "watcher").unwrap();
+    assert_eq!(watcher["compatible"], true);
+    assert!(watcher["incompatible_reason"].is_null());
+
+    let (out, code) = cli.run(&["plugin", "list"]);
+    assert_eq!(code, 0, "a listing reports; it is not a verdict on the run");
+    assert!(out.contains("enabled, but nothing fires"), "the consequence, not the verdict: {out}");
+    assert!(out.contains("99.0.0"), "{out}");
+    assert_eq!(
+        out.lines().filter(|l| l.trim_start().starts_with("enabled, but nothing fires")).count(),
+        1,
+        "only the install that cannot run gets the second line: {out}"
+    );
+}
+
 /// The mutating CLI drives the observation dispatcher over what is *installed and enabled*: a subscribed
 /// plugin is actually run, with the event payload on its stdin, before the command's process exits
 /// (`AMB-D-367`). Its neighbours are left alone — a plugin that subscribes to nothing never runs.

@@ -881,7 +881,13 @@ fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, C
 /// **which** level answered as well as what it answered — "on here" and "on for this device" are different
 /// facts, and a reader who cannot tell them apart cannot tell where to go and change one. A project-scoped
 /// plugin read from outside any project has no answer at all rather than a made-up one.
+///
+/// **An open gate is not the same as a plugin that fires**, so the listing carries the compatibility
+/// verdict beside it (`AMB-D-359`). The dispatch resolver warns and drops a plugin this build cannot speak
+/// to — and amenbo updates underneath an install, so a plugin enabled while it was compatible can stop
+/// firing without anyone touching it. Left to "enabled" alone, that state is readable only in the log.
 fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
+    use amenbo_core::plugin_compat;
     use amenbo_core::plugin_manifest::Scope;
     use amenbo_core::plugin_trust::{effective_enabled_in, gate_for};
 
@@ -900,6 +906,7 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     if flags.json {
         let mut rows = Vec::with_capacity(installed.len());
         for p in &installed {
+            let why = plugin_compat::check(&p.manifest).err();
             rows.push(json!({
                 "name": p.name,
                 "desc": p.manifest.desc,
@@ -907,6 +914,8 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
                 "official": p.manifest.official,
                 "scope": p.manifest.scope.as_str(),
                 "enabled": gate_of(p.manifest.scope, &p.name)?,
+                "compatible": why.is_none(),
+                "incompatible_reason": why.map(|why| why.to_string()),
                 "consented": store.config.plugin_consented(&p.name),
                 "events": p.manifest.events,
                 "program": p.program.display().to_string(),
@@ -925,13 +934,23 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
                 Scope::Machine => "this device",
                 Scope::Project => "this project",
             };
-            let gate = match gate_of(p.manifest.scope, &p.name)? {
+            let open = gate_of(p.manifest.scope, &p.name)?;
+            let gate = match open {
                 Some(true) => format!("enabled ({where_})"),
                 Some(false) => format!("disabled ({where_})"),
                 None => "per project — open a project to see".to_string(),
             };
             let badge = if p.manifest.official { " [official]" } else { "" };
             human(flags, format!("{}  {gate}{badge}  {}", p.name, p.manifest.desc));
+            if let Err(why) = plugin_compat::check(&p.manifest) {
+                // The consequence, not just the verdict: an open gate reads as "this one is working"
+                // until the line says otherwise, and that gap is the whole point of showing this here.
+                let effect = match open {
+                    Some(true) => "enabled, but nothing fires",
+                    _ => "cannot run against this amenbo",
+                };
+                human(flags, format!("    {effect}: {why}"));
+            }
         }
     }
     Ok(0)

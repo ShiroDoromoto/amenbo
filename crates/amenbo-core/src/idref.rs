@@ -23,8 +23,11 @@ pub enum RefKind {
     Task,
     Decision,
     Project,
-    /// A comment on a task or a decision — one number space, so one code.
-    Comment,
+    /// A comment on a task. Its own table, its own `AUTOINCREMENT`, so its own code (`AMB-D-377`):
+    /// [`RefKind::DecisionComment`] numbers independently, and the two collide at the same id.
+    TaskComment,
+    /// A comment on a decision — the other comment space (see [`RefKind::TaskComment`]).
+    DecisionComment,
     Dimension,
     DimensionValue,
     Attachment,
@@ -38,7 +41,8 @@ impl RefKind {
         RefKind::Task,
         RefKind::Decision,
         RefKind::Project,
-        RefKind::Comment,
+        RefKind::TaskComment,
+        RefKind::DecisionComment,
         RefKind::Dimension,
         RefKind::DimensionValue,
         RefKind::Attachment,
@@ -50,7 +54,8 @@ impl RefKind {
             RefKind::Task => "T",
             RefKind::Decision => "D",
             RefKind::Project => "P",
-            RefKind::Comment => "C",
+            RefKind::TaskComment => "TC",
+            RefKind::DecisionComment => "DC",
             RefKind::Dimension => "DIM",
             RefKind::DimensionValue => "DIMV",
             RefKind::Attachment => "ATT",
@@ -78,9 +83,14 @@ pub fn project(id: i64) -> String {
     render(RefKind::Project, id)
 }
 
-/// A comment's ref: `AMB-C-<n>`.
-pub fn comment(id: i64) -> String {
-    render(RefKind::Comment, id)
+/// A task comment's ref: `AMB-TC-<n>`.
+pub fn task_comment(id: i64) -> String {
+    render(RefKind::TaskComment, id)
+}
+
+/// A decision comment's ref: `AMB-DC-<n>`.
+pub fn decision_comment(id: i64) -> String {
+    render(RefKind::DecisionComment, id)
 }
 
 /// Drop a leading `AMB-` (case-insensitive), leaving whatever followed it. Input without one comes back
@@ -118,7 +128,8 @@ mod tests {
         assert_eq!(task(12), "AMB-T-12");
         assert_eq!(decision(12), "AMB-D-12");
         assert_eq!(project(12), "AMB-P-12");
-        assert_eq!(comment(12), "AMB-C-12");
+        assert_eq!(task_comment(12), "AMB-TC-12");
+        assert_eq!(decision_comment(12), "AMB-DC-12");
         assert_eq!(render(RefKind::Dimension, 3), "AMB-DIM-3");
         assert_eq!(render(RefKind::DimensionValue, 3), "AMB-DIMV-3");
         assert_eq!(render(RefKind::Attachment, 3), "AMB-ATT-3");
@@ -134,7 +145,8 @@ mod tests {
                 RefKind::Task
                 | RefKind::Decision
                 | RefKind::Project
-                | RefKind::Comment
+                | RefKind::TaskComment
+                | RefKind::DecisionComment
                 | RefKind::Dimension
                 | RefKind::DimensionValue
                 | RefKind::Attachment => {}
@@ -151,7 +163,7 @@ mod tests {
     /// The point of the namespace: a foreign tracker's `T-123` never looks like ours, whatever its number.
     #[test]
     fn a_rendered_ref_is_self_declaring() {
-        for kind in [RefKind::Task, RefKind::Decision, RefKind::Project, RefKind::Comment] {
+        for kind in [RefKind::Task, RefKind::Decision, RefKind::Project, RefKind::TaskComment] {
             let rendered = render(kind, 123);
             assert!(rendered.starts_with("AMB-"), "{rendered} does not declare itself");
             assert!(!rendered.contains('#'), "{rendered} still carries a bare number");
@@ -161,7 +173,7 @@ mod tests {
     /// What we render is what we read back — the round-trip the namespace would otherwise break.
     #[test]
     fn strip_undoes_render() {
-        for kind in [RefKind::Task, RefKind::Decision, RefKind::Project, RefKind::Comment] {
+        for kind in [RefKind::Task, RefKind::Decision, RefKind::Project, RefKind::TaskComment] {
             assert_eq!(strip(kind, &render(kind, 123)), "123");
         }
         assert_eq!(strip(RefKind::Task, "amb-t-7"), "7", "the prefix folds case");
@@ -180,5 +192,10 @@ mod tests {
         assert_eq!(strip(RefKind::Project, "AMB-T-5"), "AMB-T-5");
         assert_eq!(strip(RefKind::Task, "AMB-D-5"), "AMB-D-5");
         assert_eq!(strip(RefKind::Dimension, "AMB-DIMV-5"), "AMB-DIMV-5");
+        // The two comment spaces are the reason the code was split (`AMB-D-377`): the same id names a row
+        // in each table, so neither ref may be read as the other's — nor as the decision's it prefixes.
+        assert_eq!(strip(RefKind::TaskComment, "AMB-DC-5"), "AMB-DC-5");
+        assert_eq!(strip(RefKind::DecisionComment, "AMB-TC-5"), "AMB-TC-5");
+        assert_eq!(strip(RefKind::Decision, "AMB-DC-5"), "AMB-DC-5");
     }
 }

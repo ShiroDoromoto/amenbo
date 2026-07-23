@@ -3653,7 +3653,7 @@ fn comment(store: &mut Store, flags: &Flags, sub: CommentCmd) -> Result<i32, Cli
             } else {
                 human(flags, format!("{} — {}", count_header(result.count, result.total_matched, "comment"), result.task.name));
                 for c in &result.comments {
-                    human(flags, comment_line(c));
+                    human(flags, comment_line(amenbo_core::idref::RefKind::TaskComment, c));
                 }
             }
         }
@@ -3663,14 +3663,14 @@ fn comment(store: &mut Store, flags: &Flags, sub: CommentCmd) -> Result<i32, Cli
                 return Ok(0);
             }
             let changed = store.remove_task_comment(cid).map_err(CliError::from)?;
-            write_envelope(flags, "comment.rm", "comment", json!({ "id": cid, "deleted": true }), None, !changed, format!("✓ Deleted comment: {}", comment_label(cid)));
+            write_envelope(flags, "comment.rm", "comment", json!({ "id": cid, "deleted": true }), None, !changed, format!("✓ Deleted comment: {}", task_comment_label(cid)));
         }
         CommentCmd::Edit { comment, text } => {
             let text = body_arg(text)?;
             let cid = resolve_live_task_comment(store, &comment)?;
             let c = store.edit_task_comment(cid, &text).map_err(CliError::from)?;
             warn_body(&text); // non-blocking readability hint on write (stderr)
-            write_envelope(flags, "comment.edit", "comment", serde_json::to_value(&c).unwrap(), Some(vec!["text".to_string()]), false, format!("✓ Edited comment: {}", comment_label(cid)));
+            write_envelope(flags, "comment.edit", "comment", serde_json::to_value(&c).unwrap(), Some(vec!["text".to_string()]), false, format!("✓ Edited comment: {}", task_comment_label(cid)));
         }
         CommentCmd::Attach { comment, source, url, name } => {
             // Look only in the task-comment table (as `comment rm` / `comment edit` do) — which table an id
@@ -3710,10 +3710,16 @@ fn task_label(id: i64) -> String {
     amenbo_core::idref::task(id)
 }
 
-/// What a comment is called (`AMB-C-<n>`). A comment carries no conversational number of its own, so this ref
-/// is the only handle `comment rm` / `comment attach` can be given.
-fn comment_label(id: i64) -> String {
-    amenbo_core::idref::comment(id)
+/// What a task comment is called (`AMB-TC-<n>`), and what a decision comment is called (`AMB-DC-<n>`). A
+/// comment carries no conversational number of its own, so this ref is the only handle `comment rm` /
+/// `comment attach` can be given — and the two tables number independently, so which spelling a caller
+/// reaches for is decided by the table it just wrote, never by the id (`AMB-D-377`).
+fn task_comment_label(id: i64) -> String {
+    amenbo_core::idref::task_comment(id)
+}
+
+fn decision_comment_label(id: i64) -> String {
+    amenbo_core::idref::decision_comment(id)
 }
 
 /// What a dimension is called (`AMB-DIM-<n>`), and one of its values (`AMB-DIMV-<n>`). Both resolve by name
@@ -4051,7 +4057,7 @@ fn decision_comment(store: &mut Store, flags: &Flags, sub: DecisionCommentCmd) -
             } else {
                 human(flags, format!("{} — {}", count_header(result.count, result.total_matched, "comment"), decision_ref_name(&result.decision.name)));
                 for c in &result.comments {
-                    human(flags, comment_line(c));
+                    human(flags, comment_line(amenbo_core::idref::RefKind::DecisionComment, c));
                 }
             }
         }
@@ -4061,14 +4067,14 @@ fn decision_comment(store: &mut Store, flags: &Flags, sub: DecisionCommentCmd) -
                 return Ok(0);
             }
             let changed = store.remove_decision_comment(cid).map_err(CliError::from)?;
-            write_envelope(flags, "decision.comment.rm", "comment", json!({ "id": cid, "deleted": true }), None, !changed, format!("✓ Deleted comment: {}", comment_label(cid)));
+            write_envelope(flags, "decision.comment.rm", "comment", json!({ "id": cid, "deleted": true }), None, !changed, format!("✓ Deleted comment: {}", decision_comment_label(cid)));
         }
         DecisionCommentCmd::Edit { comment, text } => {
             let text = body_arg(text)?;
             let cid = resolve_live_decision_comment(store, &comment)?;
             let c = store.edit_decision_comment(cid, &text).map_err(CliError::from)?;
             warn_body(&text);
-            write_envelope(flags, "decision.comment.edit", "comment", serde_json::to_value(&c).unwrap(), Some(vec!["text".to_string()]), false, format!("✓ Edited comment: {}", comment_label(cid)));
+            write_envelope(flags, "decision.comment.edit", "comment", serde_json::to_value(&c).unwrap(), Some(vec!["text".to_string()]), false, format!("✓ Edited comment: {}", decision_comment_label(cid)));
         }
         DecisionCommentCmd::Attach { comment, source, url, name } => {
             // Look only in the decision-comment table (symmetric with the task side of `comment attach`).
@@ -4079,17 +4085,18 @@ fn decision_comment(store: &mut Store, flags: &Flags, sub: DecisionCommentCmd) -
     Ok(0)
 }
 
-/// One comment as a human-readable line, shared by `comment list` and `decision comment list`. It leads with
-/// the comment's ref: a comment carries no conversational number, so this id is the only handle that can be
-/// passed to `comment rm` / `comment attach`, and a comment left out of the listing is not addressable at
-/// all. It is namespaced like every other exposed ref and pastes straight back — resolution reads
-/// `AMB-C-<n>` and the bare `<n>` alike. A comment that was edited shows the edit time next to the post time —
-/// no revision history is kept, so this is the reader's only clue that the text is not what they read a
-/// moment ago. An unedited comment adds nothing.
-fn comment_line(c: &amenbo_core::query::CommentItem) -> String {
+/// One comment as a human-readable line, shared by `comment list` and `decision comment list` — which is
+/// why the ref's kind is passed in: the two listings read different tables, and the same id names a row in
+/// each (`AMB-D-377`). It leads with the comment's ref: a comment carries no conversational number, so this
+/// id is the only handle that can be passed to `comment rm` / `comment attach`, and a comment left out of
+/// the listing is not addressable at all. It is namespaced like every other exposed ref and pastes straight
+/// back — resolution reads `AMB-TC-<n>` / `AMB-DC-<n>` and the bare `<n>` alike. A comment that was edited
+/// shows the edit time next to the post time — no revision history is kept, so this is the reader's only
+/// clue that the text is not what they read a moment ago. An unedited comment adds nothing.
+fn comment_line(kind: amenbo_core::idref::RefKind, c: &amenbo_core::query::CommentItem) -> String {
     let at = c.created_at.to_rfc3339_z();
     let edited = c.edited_at.map(|t| format!(" · edited {}", t.to_rfc3339_z())).unwrap_or_default();
-    format!("  {}  [{at}{edited}] {}: {}", amenbo_core::idref::comment(c.id), c.author.name, c.text)
+    format!("  {}  [{at}{edited}] {}: {}", amenbo_core::idref::render(kind, c.id), c.author.name, c.text)
 }
 
 /// Resolve a live task-comment id (for `comment rm`).

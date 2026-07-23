@@ -2749,6 +2749,44 @@ fn a_comment_id_in_both_tables_is_disjoined_by_the_command() {
     assert_eq!(code, 1, "a nonexistent comment is not_found");
 }
 
+/// The two comment tables number apart, so their refs are spelled apart (`AMB-D-377`): a task comment is
+/// `AMB-TC-<n>`, a decision comment `AMB-DC-<n>`. The same id names a row in each, which is exactly why
+/// neither door may accept the other's spelling — the ref has to say which table it came from.
+#[test]
+fn task_and_decision_comment_refs_are_spelled_apart() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "コメント綴りPJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    let t = cli.json(&["task", "add", "--title", "作業", "--project", &pid, "--json"]);
+    let tid = id_str(&t["task"]["id"]);
+    let d = cli.json(&["decision", "add", "--project", &pid, "--title", "UTC で保存する", "--json"]);
+    let did = id_str(&d["decision"]["id"]);
+
+    let tc = cli.json(&["comment", "add", &tid, "--text", "タスク側", "--json"]);
+    let tcid = id_str(&tc["comment"]["id"]);
+    let dc = cli.json(&["decision", "comment", "add", &did, "--text", "決定側", "--json"]);
+    let dcid = id_str(&dc["comment"]["id"]);
+
+    // The listings are where a person reads a ref off the screen, so that is where the spelling has to be
+    // right (`--json` carries the id, the human line carries the ref).
+    let (task_list, _, _) = cli.run_both(&["comment", "list", &tid]);
+    assert!(task_list.contains(&format!("AMB-TC-{tcid}")), "a task comment reads as AMB-TC: {task_list}");
+    let (decision_list, _, _) = cli.run_both(&["decision", "comment", "list", &did]);
+    assert!(decision_list.contains(&format!("AMB-DC-{dcid}")), "a decision comment reads as AMB-DC: {decision_list}");
+
+    // Each door takes its own spelling…
+    cli.json(&["comment", "edit", &format!("AMB-TC-{tcid}"), "--text", "タスク側（改）", "--json"]);
+    cli.json(&["decision", "comment", "edit", &format!("AMB-DC-{dcid}"), "--text", "決定側（改）", "--json"]);
+    // …and not the other's, whatever number it carries.
+    let (_, wrong_task) = cli.run(&["comment", "edit", &format!("AMB-DC-{dcid}"), "--text", "x", "--json"]);
+    assert_eq!(wrong_task, 1, "a decision comment's ref is not a task comment's");
+    let (_, wrong_decision) = cli.run(&["decision", "comment", "edit", &format!("AMB-TC-{tcid}"), "--text", "x", "--json"]);
+    assert_eq!(wrong_decision, 1, "a task comment's ref is not a decision comment's");
+    // The retired spelling is not a third accepted form.
+    let (_, retired) = cli.run(&["comment", "edit", &format!("AMB-C-{tcid}"), "--text", "x", "--json"]);
+    assert_eq!(retired, 1, "AMB-C- is not accepted");
+}
+
 /// A misposted comment is taken back with `comment rm` — a hard delete, attachments and all. Decision comments mirror it.
 #[test]
 fn comment_rm_deletes_the_comment_and_its_attachment() {

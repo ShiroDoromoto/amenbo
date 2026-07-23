@@ -71,10 +71,10 @@ fn check(conn: &Connection, reach: Reach, bound: i64, target: WriteTarget) -> Re
         WriteTarget::Decision(id) => reach.check(&crate::idref::decision(id), owner::decision(conn, id)?),
         WriteTarget::Project(id) => reach.check(&crate::idref::project(id), Some(id)),
         WriteTarget::TaskComment(id) => {
-            reach.check(&crate::idref::comment(id), owner::task_comment(conn, id)?)
+            reach.check(&crate::idref::task_comment(id), owner::task_comment(conn, id)?)
         }
         WriteTarget::DecisionComment(id) => {
-            reach.check(&crate::idref::comment(id), owner::decision_comment(conn, id)?)
+            reach.check(&crate::idref::decision_comment(id), owner::decision_comment(conn, id)?)
         }
         WriteTarget::Dimension(id) => {
             reach.check(&crate::idref::render(crate::idref::RefKind::Dimension, id), owner::dimension(conn, id)?)

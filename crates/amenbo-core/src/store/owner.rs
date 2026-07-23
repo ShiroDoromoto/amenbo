@@ -79,8 +79,7 @@ pub(super) fn attach_target_ref(kind: AttachmentTarget, id: i64) -> String {
     match kind {
         AttachmentTarget::Task => crate::idref::task(id),
         AttachmentTarget::Decision => crate::idref::decision(id),
-        AttachmentTarget::TaskComment | AttachmentTarget::DecisionComment => {
-            crate::idref::comment(id)
-        }
+        AttachmentTarget::TaskComment => crate::idref::task_comment(id),
+        AttachmentTarget::DecisionComment => crate::idref::decision_comment(id),
     }
 }

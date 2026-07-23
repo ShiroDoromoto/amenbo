@@ -458,7 +458,7 @@ pub enum HardEraseCmd {
     /// Remove a task comment in full — its row, and the freed pages with it. Identify comments by
     /// id; find them with `comment list <task> --json`.
     Comment {
-        /// comment ref(s) to erase, AMB-C-n
+        /// task comment ref(s) to erase, AMB-TC-n
         #[arg(required = true)]
         ids: Vec<String>,
     },
@@ -884,13 +884,13 @@ pub enum CommentCmd {
     /// Delete a comment posted by mistake — permanently, with its attachments.
     /// The id comes from `comment list`
     Rm {
-        /// target comment ref, AMB-C-n (from `comment list`)
+        /// target task comment ref, AMB-TC-n (from `comment list`)
         comment: String,
     },
     /// Rewrite a comment's body in place — the id, its place on the timeline, and its
     /// attachments all stay. The id comes from `comment list`
     Edit {
-        /// target comment ref, AMB-C-n (from `comment list`)
+        /// target task comment ref, AMB-TC-n (from `comment list`)
         comment: String,
         /// the new body, as Markdown — it replaces the old one outright. Pass `-` to read it from stdin
         /// (a shell eats code spans out of a quoted argument).
@@ -900,7 +900,7 @@ pub enum CommentCmd {
     /// Attach a file (blob, ingested) or external link (--url) to a single task comment — kept
     /// separate from the parent task's own attachments (manage via `attach`)
     Attach {
-        /// target comment ref, AMB-C-n (from `comment list`)
+        /// target task comment ref, AMB-TC-n (from `comment list`)
         comment: String,
         /// file path to ingest as a blob, or the external URL with --url
         source: String,
@@ -1032,7 +1032,7 @@ pub enum DecisionCmd {
     },
     /// Promote a task comment into a decision (the comment text becomes the body; links to the task)
     Promote {
-        /// the comment ref to promote, AMB-C-n
+        /// the task comment ref to promote, AMB-TC-n
         comment: String,
         #[arg(long)]
         title: String,
@@ -1089,13 +1089,13 @@ pub enum DecisionCommentCmd {
     /// Delete a comment posted by mistake — permanently, with its attachments.
     /// The id comes from `decision comment list`
     Rm {
-        /// target comment ref, AMB-C-n (from `decision comment list`)
+        /// target decision comment ref, AMB-DC-n (from `decision comment list`)
         comment: String,
     },
     /// Rewrite a comment's body in place — the id, its place on the timeline, and its
     /// attachments all stay. The id comes from `decision comment list`
     Edit {
-        /// target comment ref, AMB-C-n (from `decision comment list`)
+        /// target decision comment ref, AMB-DC-n (from `decision comment list`)
         comment: String,
         /// the new body, as Markdown — it replaces the old one outright. Pass `-` to read it from stdin
         /// (a shell eats code spans out of a quoted argument).
@@ -1105,7 +1105,7 @@ pub enum DecisionCommentCmd {
     /// Attach a file (blob, ingested) or external link (--url) to a single decision comment — kept
     /// separate from the parent decision's own attachments (manage via `attach`)
     Attach {
-        /// target comment ref, AMB-C-n (from `decision comment list`)
+        /// target decision comment ref, AMB-DC-n (from `decision comment list`)
         comment: String,
         /// file path to ingest as a blob, or the external URL with --url
         source: String,

@@ -828,7 +828,7 @@ pub fn task_ids_by_number(conn: &Connection, number: u32) -> Result<Vec<i64>> {
 /// key **is** its whole handle — the reference is the decimal key, exactly. Returns a `Vec` (0 or 1) so
 /// the caller collapses it with the same `pick_id` every other resolver uses.
 pub fn resolve_task_comment(conn: &Connection, reference: &str) -> Result<Vec<i64>> {
-    resolve_by_key(conn, crate::idref::RefKind::Comment, col::task_comment::ALL.id, reference)
+    resolve_by_key(conn, crate::idref::RefKind::TaskComment, col::task_comment::ALL.id, reference)
 }
 
 /// The attachment id `reference` names — behind the CLI's `attach show` / `open` / `rm`, which address
@@ -841,7 +841,7 @@ pub fn resolve_attachment(conn: &Connection, reference: &str) -> Result<Vec<i64>
 /// [`resolve_task_comment`]. The two comment tables number independently, so a caller may query both
 /// and treat any hit as unambiguous within its own table.
 pub fn resolve_decision_comment(conn: &Connection, reference: &str) -> Result<Vec<i64>> {
-    resolve_by_key(conn, crate::idref::RefKind::Comment, col::decision_comment::ALL.id, reference)
+    resolve_by_key(conn, crate::idref::RefKind::DecisionComment, col::decision_comment::ALL.id, reference)
 }
 
 /// Resolve a reference that is nothing but a key, against the table `id` belongs to. A reference that

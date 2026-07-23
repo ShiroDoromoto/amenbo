@@ -327,7 +327,7 @@ mod tests {
 
     #[test]
     fn case_is_folded_and_a_line_can_hold_several() {
-        assert_eq!(refs_in_line("amb-t-1 and AMB-D-2 and Amb-C-3"), vec!["amb-t-1", "AMB-D-2", "Amb-C-3"]);
+        assert_eq!(refs_in_line("amb-t-1 and AMB-D-2 and Amb-TC-3"), vec!["amb-t-1", "AMB-D-2", "Amb-TC-3"]);
     }
 
     /// A longer kind code is not read as a shorter one with junk after it.
@@ -335,6 +335,9 @@ mod tests {
     fn kind_codes_do_not_shadow_each_other() {
         assert_eq!(refs_in_line("AMB-DIMV-3"), vec!["AMB-DIMV-3"]);
         assert_eq!(refs_in_line("AMB-DIM-3"), vec!["AMB-DIM-3"]);
+        // The comment codes prefix onto the decision's and the task's (`AMB-D-377`).
+        assert_eq!(refs_in_line("AMB-DC-3"), vec!["AMB-DC-3"]);
+        assert_eq!(refs_in_line("AMB-TC-3"), vec!["AMB-TC-3"]);
     }
 
     #[test]

@@ -3,7 +3,7 @@ import { currentLang, doctorText, errText, t, tf, type Lang } from "../core/i18n
 import { getSnapshot, subscribe } from "../core/snapshot";
 import {
   bindFolder, cancelDataOp, fetchDoctorReport, fetchStoreLocations, fileToAvatarDataUrl, listenDataProgress,
-  pickBackupPath, pickExportPath, pickRestoreArchive, resyncManagedBlocks, runBackup, runDoctorFix,
+  openLogsDir, pickBackupPath, pickExportPath, pickRestoreArchive, resyncManagedBlocks, runBackup, runDoctorFix,
   runExport, runRestore, setFacetNames, setLanguage, setFacetAvatar, setPerfLog, setUpdateCheck,
 } from "../core/mutations";
 import { doctorRepair, type DoctorRepair } from "../core/doctorKinds";
@@ -51,6 +51,7 @@ export function SettingsScreen() {
 
       <Category title={t("settings.data")}>
         <DataLocationSetting />
+        <LogsSetting />
         <ExportImportSetting />
         <BackupSetting />
       </Category>
@@ -555,6 +556,32 @@ function DataLocationSetting() {
     <div className="settings__row">
       <span className="settings__k">{t("settings.dataPath")}</span>
       <code style={{ fontSize: "var(--fs-xs)", wordBreak: "break-all" }}>{loc ? loc.root : "…"}</code>
+    </div>
+  );
+}
+
+/** The logs, one click from the path they sit under (`AMB-D-382`). Reporting a bug means attaching them,
+ *  and "open your data folder, then find logs/" is where that ask stops being followed. It opens the
+ *  folder rather than a file because `amenbo.log` and `perf.log` are both wanted. Core answers when
+ *  there is nothing there yet, and that answer is shown as it came. */
+function LogsSetting() {
+  const [error, setError] = useState<string | null>(null);
+  const open = async () => {
+    setError(null);
+    try {
+      await openLogsDir();
+    } catch (e) {
+      setError(errText(e));
+    }
+  };
+  return (
+    <div className="settings__row">
+      <span className="settings__k">{t("settings.logs")}</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div><button className="btn" onClick={() => void open()}>{t("settings.logsOpen")}</button></div>
+        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.logsNote")}</span>
+        {error && <span className="faint" style={{ color: "var(--c-blocked)" }}>⚠ {error}</span>}
+      </div>
     </div>
   );
 }

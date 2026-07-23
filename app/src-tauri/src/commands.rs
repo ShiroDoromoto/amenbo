@@ -1267,6 +1267,28 @@ pub fn store_locations() -> StoreLocationsDto {
     }
 }
 
+/// Open the folder holding this machine's logs in the OS file manager — the one step between "please
+/// attach your logs" and a file the user can drag onto an issue (`AMB-D-382`).
+///
+/// The **folder**, not a file: `amenbo.log` and `perf.log` live side by side and a report usually wants
+/// both, so opening either one alone hands over half the answer. That is also why the log was put here
+/// rather than in the platform's own log directory — one folder to ask for.
+///
+/// A folder that is not there yet is reported rather than created. The diagnostic log is on by default
+/// and written from startup (`AMB-D-382`), so in practice it exists by the time anyone opens Settings;
+/// creating an empty one to make the button always succeed would answer "here are your logs" with a
+/// folder that holds none.
+#[tauri::command]
+pub fn open_logs_dir() -> Result<(), CmdError> {
+    let dir = crate::diag::logs_dir()
+        .ok_or_else(|| CmdError::from("ログの保存先を特定できません".to_string()))?;
+    if !dir.is_dir() {
+        return Err(format!("ログはまだありません（{}）", dir.display()).into());
+    }
+    os_open(&dir.to_string_lossy())
+        .map_err(|e| format!("'{}' を開けません: {e}", dir.display()).into())
+}
+
 /// The paged read behind history mode. Skips `offset` items newest-first and returns the next
 /// `limit`. The default `snapshot` stays light by carrying only the latest 100; when the GUI's
 /// virtual scroller reaches back past those, it calls this for its scroll window and nothing more.

@@ -106,7 +106,10 @@ impl VersionStatus {
 /// Loosely parse a version string into `(major, minor, patch)`. Pre-release / build metadata (anything
 /// after `-` or `+`) is ignored. Unparsable input yields `None` — incomparable, so callers can fall back
 /// to the safe answer ("not newer").
-fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
+///
+/// Shared with [`crate::plugin_compat`], which must tell *"the floor is below us"* from *"the floor is not
+/// a version at all"* — a distinction [`version_is_newer`] deliberately collapses.
+pub(crate) fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
     let core = v.split(['-', '+']).next().unwrap_or(v);
     let mut it = core.split('.');
     let major = it.next()?.trim().parse().ok()?;

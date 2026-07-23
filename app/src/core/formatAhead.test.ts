@@ -1,7 +1,7 @@
 // Detecting that the store has moved ahead of us. Without this flag, a long-running GUI keeps showing stale data and
 // quietly stops taking updates.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { isFormatAhead, noteInvokeFailure, resetFormatAheadForTest, subscribeFormatAhead } from "./formatAhead";
+import { formatAheadDetail, isFormatAhead, noteInvokeFailure, resetFormatAheadForTest, subscribeFormatAhead } from "./formatAhead";
 
 /** Stands in for the reason a Tauri command rejects (the structured `CmdError`). */
 const cmdError = (code: string) => ({ code, message: "…", message_en: "…" });
@@ -42,6 +42,17 @@ describe("formatAhead", () => {
     const fn = vi.fn();
     subscribeFormatAhead(fn);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the refusal's own words — the only place the version that wrote the store is named", () => {
+    noteInvokeFailure({ code: "format_ahead", message: "新しい amenbo です", message_en: "written by a newer amenbo" });
+    expect(formatAheadDetail()).toEqual({ ja: "新しい amenbo です", en: "written by a newer amenbo" });
+  });
+
+  it("has no words to show when the rejection carried none (the screen still stands)", () => {
+    noteInvokeFailure({ code: "format_ahead" });
+    expect(isFormatAhead()).toBe(true);
+    expect(formatAheadDetail()).toBeNull();
   });
 
   it("does not wake an unsubscribed subscriber", () => {

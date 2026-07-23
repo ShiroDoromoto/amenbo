@@ -67,6 +67,22 @@ pub fn set(
     }
 }
 
+/// Delete **every** override this plugin holds, in every project, inside the caller's transaction —
+/// the store half of `uninstall` (`AMB-D-357`: nothing is left behind, and a re-install starts clean).
+/// Returns how many rows went.
+///
+/// It crosses projects on purpose, and does so in one pass rather than a walk: a plugin is installed
+/// machine-wide (`AMB-D-350`), so its settings are one plugin's residue and not one project's content,
+/// and the store is a single device-wide database. A reach-limited erase would be the very thing the
+/// decision forbids — an uninstall that leaves other projects' rows behind.
+pub fn forget_plugin(tx: &WriteTx<'_>, plugin: &str) -> Result<usize> {
+    let ids = read::plugin_config_override_ids(tx.conn(), plugin)?;
+    for id in &ids {
+        tx.delete_record("plugin_config", *id)?;
+    }
+    Ok(ids.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,6 +160,38 @@ mod tests {
                 None,
                 "one project's override does not leak into another",
             );
+        });
+    }
+
+    /// `forget_plugin` takes every project's rows for that plugin in one pass, and only that plugin's.
+    #[test]
+    fn forgetting_a_plugin_erases_every_project_and_only_that_plugin() {
+        with_tx(|tx| {
+            let a = mk_project(tx, "a");
+            let b = mk_project(tx, "b");
+            set(tx, a, "slack", "events", Some("for-a")).unwrap();
+            set(tx, a, "slack", "channel", Some("#a")).unwrap();
+            set(tx, b, "slack", "events", Some("for-b")).unwrap();
+            set(tx, b, "worktree", "base", Some("main")).unwrap();
+
+            assert_eq!(forget_plugin(tx, "slack").unwrap(), 3);
+            assert_eq!(read::plugin_config_value(tx.conn(), a, "slack", "events").unwrap(), None);
+            assert_eq!(read::plugin_config_value(tx.conn(), a, "slack", "channel").unwrap(), None);
+            assert_eq!(read::plugin_config_value(tx.conn(), b, "slack", "events").unwrap(), None);
+            assert_eq!(
+                read::plugin_config_value(tx.conn(), b, "worktree", "base").unwrap().as_deref(),
+                Some("main"),
+                "another plugin's rows are untouched",
+            );
+        });
+    }
+
+    /// Forgetting a plugin that has no rows is a no-op — an uninstall does not need a settings row to
+    /// exist before it can clean up.
+    #[test]
+    fn forgetting_a_plugin_with_no_rows_is_a_no_op() {
+        with_tx(|tx| {
+            assert_eq!(forget_plugin(tx, "never-configured").unwrap(), 0);
         });
     }
 

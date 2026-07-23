@@ -3483,6 +3483,14 @@ pub fn plugin_config_override_id(
     )
 }
 
+/// Every live `plugin_config` override row belonging to one plugin, **across every project** — what an
+/// `uninstall` erases in one pass (`AMB-D-357`). The store is a single device-wide database, so a plugin's
+/// per-project settings are one predicate away rather than a walk over projects.
+pub fn plugin_config_override_ids(conn: &Connection, plugin: &str) -> Result<Vec<i64>> {
+    const C: col::plugin_config::Cols = col::plugin_config::ALL;
+    select_ids(conn, C.id, Some(&Pred::eq(C.plugin, plugin)))
+}
+
 /// The `plugin_config` override with this id.
 pub fn plugin_config_override(
     conn: &Connection,

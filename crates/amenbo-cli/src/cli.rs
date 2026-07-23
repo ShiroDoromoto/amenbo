@@ -313,7 +313,8 @@ pub enum Command {
     /// A plugin is distributed as a manifest in the public catalog repository (`AMB-D-347`) and installed
     /// under the app-data `plugins/` directory (`AMB-D-350`). `install` is the door those bytes come
     /// through; `list` / `enable` / `disable` are the machine-local face of what came through it: what is
-    /// installed, and whose gate is open (`AMB-D-351` — installing a plugin never runs it). `validate` is
+    /// installed, and whose gate is open (`AMB-D-351` — installing a plugin never runs it; and each plugin
+    /// has exactly one gate, at the level its author declared — `AMB-D-379`). `validate` is
     /// the author's side — it runs the same rules amenbo enforces at
     /// the door (a well-formed id, checksum, OS set and config schema — `AMB-D-354`/`AMB-D-360`/`AMB-D-356`)
     /// over a manifest file you point it at, so you can self-check before opening a catalog PR, and it
@@ -352,35 +353,23 @@ pub enum PluginCmd {
     },
 
     /// Open an installed plugin's gate: record the one-time consent to run its code and let it fire
-    /// (`AMB-D-351` — `install ≠ enable`, so nothing runs until this). Refused while a setting the author
-    /// marked `required` is still empty; fill it with `plugin config set` first. Refused too when the
-    /// plugin is not compatible with this build — a different payload contract, or a floor above the
+    /// (`AMB-D-351` — `install ≠ enable`, so nothing runs until this). **Which** switch this is was
+    /// declared by the plugin's author (`AMB-D-379`): a project-scoped plugin turns on for the project you
+    /// are in (so it needs a bound folder), a machine-scoped one for the device. There is no `--scope` —
+    /// a plugin has one switch, and the message says which level it moved. Refused while a setting the
+    /// author marked `required` is still empty; fill it with `plugin config set` first. Refused too when
+    /// the plugin is not compatible with this build — a different payload contract, or a floor above the
     /// running version (`AMB-D-359`).
     Enable {
         /// the installed plugin's name
         name: String,
-        /// which gate to open: `machine` (the default — everywhere) or `project` (this project only,
-        /// leaving the machine gate as it is). Consent is recorded either way — it is the device's
-        /// answer to running the code at all, never a project's
-        #[arg(long, default_value = "machine")]
-        scope: String,
     },
 
-    /// Close an enabled plugin's gate. The plugin stays installed and stays consented, so a later
-    /// `enable` does not ask again (`disable ≠ uninstall`, `AMB-D-357`).
+    /// Close an enabled plugin's gate — the same one switch `enable` opens (`AMB-D-379`). The plugin stays
+    /// installed and stays consented, so a later `enable` does not ask again (`disable ≠ uninstall`,
+    /// `AMB-D-357`). A plugin whose manifest cannot be read has no declaration left to follow, so every
+    /// gate the name could hold is closed.
     Disable {
-        /// the plugin's name
-        name: String,
-        /// which gate to close: `machine` (the default) or `project` (a veto for this project alone,
-        /// which stands even while the machine gate is open)
-        #[arg(long, default_value = "machine")]
-        scope: String,
-    },
-
-    /// Drop this project's gate override, so the machine-global answer decides here again (`AMB-D-350`).
-    /// The third state: "whatever the machine says" is not the same as `disable --scope project`, which
-    /// keeps the plugin off here however the machine gate moves.
-    Inherit {
         /// the plugin's name
         name: String,
     },

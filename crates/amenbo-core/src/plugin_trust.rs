@@ -1,24 +1,28 @@
 //! The **enable/disable boundary** — `install ≠ enable` (`AMB-D-351`).
 //!
-//! Installing a plugin puts its binary on disk; it does not run it. Enabling does two things at once, both
-//! recorded in [`Config::plugin_trust`]: it writes the **one-time consent** to run the plugin's arbitrary
-//! code (`AMB-D-351`, asked once and never again), and it opens the **gate** so the plugin fires
-//! (`AMB-D-350`, the machine-global tier the dispatch resolver reads, `AMB-T-2032`). This module is the one
-//! door that moves that state, exactly as [`crate::plugin_config`] is the one door for a config *value* —
-//! so the fail-closed rule below lives in a single place.
+//! Installing a plugin puts its binary on disk; it does not run it. Enabling does two things at once: it
+//! writes the **one-time consent** to run the plugin's arbitrary code (`AMB-D-351`, asked once and never
+//! again, always machine-local in [`Config::plugin_trust`](crate::config::Config::plugin_trust)), and it opens the **gate** the plugin fires
+//! through. This module is the one door that moves that state, exactly as [`crate::plugin_config`] is the
+//! one door for a config *value* — so the fail-closed rule below lives in a single place.
 //!
-//! **Two tiers, one gate** (`AMB-D-350`). The machine-global answer above is the lower tier; a project may
-//! override it with a row in the store's `plugin_enable` table ([`crate::ops::plugin_enable`]), and
-//! [`effective_enabled`] is the resolution — the project's answer if it declares one, the machine's
-//! otherwise. The tiers are the same two a text config value lives in, so they are named by the same
-//! [`Scope`].
+//! **One switch, and the author says which** (`AMB-D-379`). A manifest declares its
+//! [`Scope`], and that decides where the gate lives:
 //!
-//! **The project tier moves the gate, never the consent.** Consent is the device's answer to running this
-//! code at all, so it stays machine-local whichever tier is being written: a project-scoped enable records
-//! it ([`Config::consent_plugin`]) and opens *that project's* gate, leaving the machine gate as it found
-//! it. Reading it back the same way is what makes the override safe to carry: the row rides `export` and
-//! `backup` (a restore must not reopen a gate the user closed), and on a device that never consented it
-//! resolves to `false` rather than firing.
+//! | declared | the gate | where it is kept |
+//! |---|---|---|
+//! | `project` (the default) | this project's, and no other's | a row in the store's `plugin_enable` |
+//! | `machine` | the device's, once | the machine field in `config.json` |
+//!
+//! There is no second tier under either, and so no inheriting and no vetoing: a user is never shown two
+//! switches for one plugin, or asked which of them is currently answering. [`gate_for`] is where a
+//! declaration plus the caller's context becomes the one gate to move, and it is the only place that
+//! judges it.
+//!
+//! **The consent is the device's, whichever gate is moved.** Enabling a project-scoped plugin records
+//! consent on this device and opens *that project's* gate. Reading it back the same way is what makes the
+//! rows safe to carry: they ride `export` and `backup` (a restore must not silently switch a project's
+//! plugins off), and on a device that never consented they resolve to `false` rather than firing.
 //!
 //! **Fail-closed on `required`** (`AMB-D-351`). A plugin whose manifest marks a setting `required` cannot be
 //! enabled until that setting holds a value: [`enable`] refuses, naming the empty fields. amenbo checks
@@ -29,11 +33,38 @@
 //! **Not the CLI, not the GUI.** Those faces (`AMB-T-1979` / `AMB-T-1985`) call in here after they have the
 //! manifest and the resolved values; the state model and its gate are here so both drive them the same way.
 
-use crate::config::Config;
 use crate::error::{Error, Result};
-use crate::plugin_config::Scope;
-use crate::plugin_manifest::ConfigField;
+use crate::plugin_manifest::{ConfigField, Scope};
 use crate::store::Store;
+
+/// The one gate a plugin has, resolved from what its manifest declared and where the caller is standing
+/// ([`gate_for`]). It is deliberately not [`plugin_config::Scope`](crate::plugin_config::Scope), which
+/// names the tier a config *value* is written at: a value has two tiers by design, a gate has one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Gate {
+    /// The device's single switch, for a plugin whose manifest declares `scope: machine`.
+    Machine,
+    /// One project's switch, for a plugin whose manifest declares `scope: project`.
+    Project(i64),
+}
+
+/// The gate to move for a plugin declaring `declared`, from a context that is in `project` (or in none).
+///
+/// A `machine` plugin ignores the project entirely — that is what its author declared, and offering a
+/// per-project answer would be a switch that looks like it does something and does not. A `project`
+/// plugin without a project to name is refused rather than silently answered device-wide: there is no
+/// device-wide answer for it to fall back to.
+pub fn gate_for(declared: Scope, project: Option<i64>) -> Result<Gate> {
+    match declared {
+        Scope::Machine => Ok(Gate::Machine),
+        Scope::Project => project.map(Gate::Project).ok_or_else(|| {
+            Error::invalid(
+                "this plugin is enabled per project, and no project is in context — run it in a bound folder",
+                "このプラグインはプロジェクト単位で有効化します。プロジェクトの文脈がありません——バインド済みフォルダで実行してください",
+            )
+        }),
+    }
+}
 
 /// The `required` fields of `fields` that have no value per the caller's `has_value` probe — the reason an
 /// [`enable`] would be refused. An empty result means every required field is satisfied. Presence is all
@@ -49,95 +80,69 @@ pub fn missing_required(
         .collect()
 }
 
-/// Enable a plugin: fail-closed on unsatisfied `required` settings (`AMB-D-351`), then record consent and
-/// open the gate ([`Config::enable_plugin`]). `has_value` reports whether one field currently holds a value
-/// — the caller resolves that across the config tiers and the secret file; this boundary does not touch
-/// storage. Does **not** persist: the caller saves the config through the write boundary.
+/// Enable a plugin at the gate its manifest declared ([`gate_for`]): fail-closed on unsatisfied `required`
+/// settings (`AMB-D-351`), then record the device's consent and open that one gate. `has_value` reports
+/// whether one field currently holds a value — the caller resolves that across the config tiers and the
+/// secret file; this boundary does not touch storage for it.
 ///
-/// Idempotent for an already-enabled plugin. Re-enabling a *disabled* plugin keeps its earlier consent, so
-/// the user is never asked twice (`AMB-D-351`).
+/// Idempotent: a plugin already on at that gate ends where it started. Re-enabling a *disabled* plugin
+/// keeps its earlier consent, so the user is never asked twice (`AMB-D-351`).
+///
+/// Both halves persist here, consent first: an interrupted enable may leave a consent with no gate
+/// (harmless — nothing fires), never a gate with no consent (which [`effective_enabled_in`] would refuse
+/// anyway, but the file on disk should not claim it either).
 pub fn enable(
-    config: &mut Config,
-    plugin: &str,
-    fields: &[ConfigField],
-    has_value: impl Fn(&ConfigField) -> bool,
-) -> Result<()> {
-    refuse_missing_required(plugin, fields, has_value)?;
-    config.enable_plugin(plugin);
-    Ok(())
-}
-
-/// Disable a plugin, keeping its consent record (`disable ≠ uninstall`, `AMB-D-357`): the gate closes but
-/// the plugin stays installed and consented, so a later [`enable`] runs no gate on consent again. A no-op
-/// for a plugin with no trust record. Does not persist.
-pub fn disable(config: &mut Config, plugin: &str) {
-    config.disable_plugin(plugin);
-}
-
-/// Enable a plugin **for one project** (`AMB-D-350`, the upper tier): fail-closed on unsatisfied `required`
-/// settings exactly as [`enable`] is, then record the device's consent and open this project's gate — the
-/// machine-global gate is left as it was, so the plugin fires here and nowhere else. `has_value` reports
-/// whether one field currently holds a value; the caller resolves that across the tiers it means to count
-/// (for a project-scoped enable, the project's override on top of the machine default).
-///
-/// Persists both halves: the consent through the config write boundary, the gate as its own transaction.
-/// Idempotent — a project already enabled ends where it started.
-pub fn enable_for_project(
     store: &mut Store,
     plugin: &str,
-    project_id: i64,
+    gate: Gate,
     fields: &[ConfigField],
     has_value: impl Fn(&ConfigField) -> bool,
 ) -> Result<()> {
     refuse_missing_required(plugin, fields, has_value)?;
-    // Consent first, and saved before the gate opens: an interrupted enable may leave a consent with no
-    // gate (harmless — nothing fires), never a gate with no consent (which `effective_enabled` would
-    // refuse anyway, but the file on disk should not claim it either).
-    store.config.consent_plugin(plugin);
-    store.save_config()?;
-    store.set_plugin_enable_override(project_id, plugin, Some(true))?;
-    Ok(())
-}
-
-/// Close one project's gate (`AMB-D-350`), keeping the consent: the override says `false` here, which
-/// stands even while the machine-global gate is open. Idempotent. To go back to following the machine
-/// answer, clear the override instead ([`inherit_in_project`]) — "off here" and "whatever the machine
-/// says" are different states.
-pub fn disable_for_project(store: &mut Store, plugin: &str, project_id: i64) -> Result<()> {
-    store.set_plugin_enable_override(project_id, plugin, Some(false))?;
-    Ok(())
-}
-
-/// Drop this project's override so the machine-global gate answers for it again (`AMB-D-350`). Returns
-/// whether there was one to drop.
-pub fn inherit_in_project(store: &mut Store, plugin: &str, project_id: i64) -> Result<bool> {
-    store.set_plugin_enable_override(project_id, plugin, None)
-}
-
-/// Whether the plugin fires, given the project's answer (`AMB-D-350`): the project's override if it
-/// declares one, the machine-global gate otherwise. `project_override` is `None` both for a project that
-/// declares nothing and for a context that has no project at all.
-///
-/// **An override cannot grant consent.** A `true` override only fires on a device that has consented to
-/// this plugin (`AMB-D-351`), which is what keeps an exported override from opening a gate on a machine
-/// that never answered the question. The machine tier needs no such guard — an `enabled` trust record
-/// cannot exist without the consent that wrote it.
-pub fn effective_enabled(config: &Config, plugin: &str, project_override: Option<bool>) -> bool {
-    match project_override {
-        Some(on) => on && config.plugin_consented(plugin),
-        None => config.plugin_enabled(plugin),
+    match gate {
+        Gate::Machine => {
+            store.config.enable_plugin(plugin);
+            store.save_config()?;
+        }
+        Gate::Project(project_id) => {
+            store.config.consent_plugin(plugin);
+            store.save_config()?;
+            store.set_plugin_enabled_in_project(project_id, plugin, true)?;
+        }
     }
+    Ok(())
 }
 
-/// [`effective_enabled`] over a store: reads the project's override for itself, at the tier `scope` names.
-/// `Scope::MachineDefault` asks for the machine answer alone (no project is consulted), which is what a
-/// context with no project — the dispatch resolver's drained event — has to use.
-pub fn effective_enabled_in(store: &Store, plugin: &str, scope: Scope) -> Result<bool> {
-    let project_override = match scope {
-        Scope::MachineDefault => None,
-        Scope::Project(project_id) => store.plugin_enable_override(project_id, plugin)?,
-    };
-    Ok(effective_enabled(&store.config, plugin, project_override))
+/// Close the gate `gate` names, keeping the consent (`disable ≠ uninstall`, `AMB-D-357`): the plugin stays
+/// installed and stays consented, so a later [`enable`] asks for nothing again. Idempotent, and it does not
+/// ask whether the plugin still reads as installed — stopping a half-broken install is exactly when this
+/// matters most.
+pub fn disable(store: &mut Store, plugin: &str, gate: Gate) -> Result<()> {
+    match gate {
+        Gate::Machine => {
+            store.config.disable_plugin(plugin);
+            store.save_config()?;
+        }
+        Gate::Project(project_id) => {
+            store.set_plugin_enabled_in_project(project_id, plugin, false)?;
+        }
+    }
+    Ok(())
+}
+
+/// Whether the plugin fires at the gate `gate` names.
+///
+/// For a project gate that is **the row and the consent together** (`AMB-D-379`/`AMB-D-351`): a row
+/// carried onto a device that never answered the consent question opens nothing. The machine gate needs no
+/// such guard — an enabled trust record cannot exist without the consent that wrote it.
+pub fn effective_enabled_in(store: &Store, plugin: &str, gate: Gate) -> Result<bool> {
+    Ok(match gate {
+        Gate::Machine => store.config.plugin_enabled(plugin),
+        Gate::Project(project_id) => {
+            store.plugin_enabled_in_project(project_id, plugin)?
+                && store.config.plugin_consented(plugin)
+        }
+    })
 }
 
 /// The fail-closed `required` check both enable doors run (`AMB-D-351`), as the refusal they share.
@@ -170,132 +175,7 @@ mod tests {
         ConfigField { key: key.to_string(), label: key.to_string(), secret: false, required }
     }
 
-    /// A fresh config knows nothing of a plugin: not consented, not enabled — `install ≠ enable`.
-    #[test]
-    fn an_installed_but_never_enabled_plugin_is_absent() {
-        let config = Config::default();
-        assert!(!config.plugin_consented("slack"));
-        assert!(!config.plugin_enabled("slack"));
-    }
-
-    /// Enabling with no required fields records consent and opens the gate.
-    #[test]
-    fn enable_records_consent_and_opens_the_gate() {
-        let mut config = Config::default();
-        enable(&mut config, "slack", &[], |_| true).unwrap();
-        assert!(config.plugin_consented("slack"));
-        assert!(config.plugin_enabled("slack"));
-    }
-
-    /// A required field with no value is fail-closed: enable is refused and nothing is recorded (no consent
-    /// leaks from a refused enable).
-    #[test]
-    fn a_missing_required_field_refuses_enable() {
-        let mut config = Config::default();
-        let fields = [field("webhook_url", true)];
-        let err = enable(&mut config, "slack", &fields, |_| false).unwrap_err();
-        assert!(format!("{err:?}").contains("webhook_url"), "the empty field is named");
-        assert!(!config.plugin_consented("slack"), "a refused enable records no consent");
-        assert!(!config.plugin_enabled("slack"));
-    }
-
-    /// The same required field, now holding a value, no longer blocks enable.
-    #[test]
-    fn a_satisfied_required_field_allows_enable() {
-        let mut config = Config::default();
-        let fields = [field("webhook_url", true)];
-        enable(&mut config, "slack", &fields, |f| f.key == "webhook_url").unwrap();
-        assert!(config.plugin_enabled("slack"));
-    }
-
-    /// `missing_required` reports only the empty required fields — optional ones and satisfied ones are not
-    /// blockers.
-    #[test]
-    fn missing_required_lists_only_the_empty_required_fields() {
-        let fields = [field("a", true), field("b", false), field("c", true)];
-        // Only `a` has a value; `b` is optional; `c` is required and empty.
-        let missing = missing_required(&fields, |f| f.key == "a");
-        assert_eq!(missing, vec!["c"]);
-    }
-
-    /// Disable closes the gate but keeps the consent: a re-enable does not re-run the consent path, and here
-    /// re-enable needs no required check because none is declared.
-    #[test]
-    fn disable_keeps_consent_and_re_enable_needs_no_reconsent() {
-        let mut config = Config::default();
-        enable(&mut config, "slack", &[], |_| true).unwrap();
-        disable(&mut config, "slack");
-        assert!(!config.plugin_enabled("slack"), "the gate is closed");
-        assert!(config.plugin_consented("slack"), "consent survives a disable (disable ≠ uninstall)");
-
-        enable(&mut config, "slack", &[], |_| true).unwrap();
-        assert!(config.plugin_enabled("slack"), "re-enable reopens the gate");
-    }
-
-    /// Uninstall's after-clean erases the consent record entirely (`AMB-D-357`).
-    #[test]
-    fn forgetting_trust_erases_consent() {
-        let mut config = Config::default();
-        enable(&mut config, "slack", &[], |_| true).unwrap();
-        config.forget_plugin_trust("slack");
-        assert!(!config.plugin_consented("slack"));
-        assert!(!config.plugin_enabled("slack"));
-    }
-
-    // ───────────────────────── the project tier (`AMB-D-350`) ─────────────────────────
-
-    /// With no project override, the effective answer *is* the machine gate — the tier is inert until a
-    /// project declares something.
-    #[test]
-    fn with_no_override_the_machine_gate_answers() {
-        let mut config = Config::default();
-        assert!(!effective_enabled(&config, "slack", None));
-        enable(&mut config, "slack", &[], |_| true).unwrap();
-        assert!(effective_enabled(&config, "slack", None));
-    }
-
-    /// Either answer overrides the machine gate, in either direction.
-    #[test]
-    fn an_override_answers_over_the_machine_gate() {
-        let mut config = Config::default();
-        enable(&mut config, "slack", &[], |_| true).unwrap();
-        assert!(!effective_enabled(&config, "slack", Some(false)), "off here, over an open gate");
-
-        disable(&mut config, "slack");
-        assert!(effective_enabled(&config, "slack", Some(true)), "on here, over a closed gate");
-    }
-
-    /// The guard that makes the override safe to export: a `true` row on a device that never consented
-    /// fires nothing (`AMB-D-351` — consent is the device's, and no row can grant it).
-    #[test]
-    fn an_override_cannot_fire_without_consent() {
-        let config = Config::default(); // never consented on this device
-        assert!(!effective_enabled(&config, "slack", Some(true)));
-    }
-
-    /// A disabled-but-consented plugin keeps its consent, so a project override may reopen it there —
-    /// the state a `disable` then a project-scoped `enable` leaves.
-    #[test]
-    fn a_disabled_plugin_keeps_the_consent_an_override_needs() {
-        let mut config = Config::default();
-        enable(&mut config, "slack", &[], |_| true).unwrap();
-        disable(&mut config, "slack");
-        assert!(config.plugin_consented("slack"));
-        assert!(effective_enabled(&config, "slack", Some(true)));
-    }
-
-    /// Recording consent on its own never opens the machine gate — that is what a project-scoped enable
-    /// leaves behind, and the difference is the whole point of the two tiers.
-    #[test]
-    fn consent_alone_opens_no_gate() {
-        let mut config = Config::default();
-        config.consent_plugin("slack");
-        assert!(config.plugin_consented("slack"));
-        assert!(!config.plugin_enabled("slack"), "consent is not a gate");
-        assert!(!effective_enabled(&config, "slack", None));
-    }
-
-    /// A real store on a scratch base, so the config file and the override rows both land somewhere.
+    /// A real store on a scratch base, so the config file and the enable rows both land somewhere.
     fn store_at(tag: &str) -> Store {
         let dir = amenbo_scratch::scratch(&format!("plugin-trust-{tag}"));
         std::fs::create_dir_all(&dir).unwrap();
@@ -314,52 +194,157 @@ mod tests {
             .id
     }
 
-    /// The project tier end to end: consent is recorded, this project fires, the machine gate stays shut
-    /// — so every other project (and every context with no project) is unchanged.
+    // ───────────────────────── which gate the declaration names (`AMB-D-379`) ─────────────────────
+
     #[test]
-    fn a_project_scoped_enable_opens_only_that_project() {
+    fn the_declaration_picks_the_gate() {
+        assert_eq!(gate_for(Scope::Machine, None).unwrap(), Gate::Machine);
+        assert_eq!(gate_for(Scope::Machine, Some(7)).unwrap(), Gate::Machine, "a project says nothing here");
+        assert_eq!(gate_for(Scope::Project, Some(7)).unwrap(), Gate::Project(7));
+    }
+
+    /// A project-scoped plugin outside any project is refused, not answered device-wide: there is no
+    /// device-wide answer for it to fall back to.
+    #[test]
+    fn a_project_scoped_plugin_needs_a_project() {
+        let err = gate_for(Scope::Project, None).unwrap_err();
+        assert!(format!("{err:?}").contains("per project"), "the reason is named: {err:?}");
+    }
+
+    // ───────────────────────── the machine gate ───────────────────────────────────────────────────
+
+    /// A fresh store knows nothing of a plugin: not consented, not enabled — `install ≠ enable`.
+    #[test]
+    fn an_installed_but_never_enabled_plugin_is_absent() {
+        let store = store_at("absent");
+        assert!(!store.config.plugin_consented("slack"));
+        assert!(!effective_enabled_in(&store, "slack", Gate::Machine).unwrap());
+    }
+
+    #[test]
+    fn enable_records_consent_and_opens_the_gate() {
+        let mut store = store_at("machine-enable");
+        enable(&mut store, "slack", Gate::Machine, &[], |_| true).unwrap();
+        assert!(store.config.plugin_consented("slack"));
+        assert!(effective_enabled_in(&store, "slack", Gate::Machine).unwrap());
+    }
+
+    /// Disable closes the gate but keeps the consent, so a re-enable never re-asks.
+    #[test]
+    fn disable_keeps_consent_and_re_enable_needs_no_reconsent() {
+        let mut store = store_at("machine-disable");
+        enable(&mut store, "slack", Gate::Machine, &[], |_| true).unwrap();
+        disable(&mut store, "slack", Gate::Machine).unwrap();
+        assert!(!effective_enabled_in(&store, "slack", Gate::Machine).unwrap(), "the gate is closed");
+        assert!(store.config.plugin_consented("slack"), "consent survives (disable ≠ uninstall)");
+
+        enable(&mut store, "slack", Gate::Machine, &[], |_| true).unwrap();
+        assert!(effective_enabled_in(&store, "slack", Gate::Machine).unwrap());
+    }
+
+    /// Uninstall's after-clean erases the consent record entirely (`AMB-D-357`).
+    #[test]
+    fn forgetting_trust_erases_consent() {
+        let mut store = store_at("forget");
+        enable(&mut store, "slack", Gate::Machine, &[], |_| true).unwrap();
+        store.config.forget_plugin_trust("slack");
+        assert!(!store.config.plugin_consented("slack"));
+        assert!(!effective_enabled_in(&store, "slack", Gate::Machine).unwrap());
+    }
+
+    // ───────────────────────── fail-closed on `required` (`AMB-D-351`) ────────────────────────────
+
+    /// A required field with no value is fail-closed at either gate, and nothing is recorded — no consent
+    /// leaks from a refused enable.
+    #[test]
+    fn a_missing_required_field_refuses_enable_at_either_gate() {
+        let fields = [field("webhook_url", true)];
+        let mut store = store_at("required");
+        let p = mk_project(&mut store, "p");
+
+        let err = enable(&mut store, "slack", Gate::Machine, &fields, |_| false).unwrap_err();
+        assert!(format!("{err:?}").contains("webhook_url"), "the empty field is named");
+        let err = enable(&mut store, "slack", Gate::Project(p), &fields, |_| false).unwrap_err();
+        assert!(format!("{err:?}").contains("webhook_url"));
+
+        assert!(!store.config.plugin_consented("slack"), "a refused enable records no consent");
+        assert!(!effective_enabled_in(&store, "slack", Gate::Project(p)).unwrap());
+    }
+
+    /// The same required field, now holding a value, no longer blocks enable.
+    #[test]
+    fn a_satisfied_required_field_allows_enable() {
+        let mut store = store_at("satisfied");
+        let fields = [field("webhook_url", true)];
+        enable(&mut store, "slack", Gate::Machine, &fields, |f| f.key == "webhook_url").unwrap();
+        assert!(effective_enabled_in(&store, "slack", Gate::Machine).unwrap());
+    }
+
+    /// `missing_required` reports only the empty required fields — optional and satisfied ones are not
+    /// blockers.
+    #[test]
+    fn missing_required_lists_only_the_empty_required_fields() {
+        let fields = [field("a", true), field("b", false), field("c", true)];
+        let missing = missing_required(&fields, |f| f.key == "a");
+        assert_eq!(missing, vec!["c"]);
+    }
+
+    // ───────────────────────── the project gate (`AMB-D-379`) ─────────────────────────────────────
+
+    /// The project gate end to end: consent is recorded, this project fires, and no other project — and no
+    /// machine answer — is touched.
+    #[test]
+    fn a_project_enable_opens_only_that_project() {
         let mut store = store_at("project-enable");
         let a = mk_project(&mut store, "a");
         let b = mk_project(&mut store, "b");
 
-        enable_for_project(&mut store, "slack", a, &[], |_| true).unwrap();
+        enable(&mut store, "slack", Gate::Project(a), &[], |_| true).unwrap();
 
         assert!(store.config.plugin_consented("slack"), "the device has consented");
-        assert!(!store.config.plugin_enabled("slack"), "the machine gate is untouched");
-        assert!(effective_enabled_in(&store, "slack", Scope::Project(a)).unwrap());
-        assert!(!effective_enabled_in(&store, "slack", Scope::Project(b)).unwrap());
-        assert!(!effective_enabled_in(&store, "slack", Scope::MachineDefault).unwrap());
+        assert!(!store.config.plugin_enabled("slack"), "no machine gate was opened");
+        assert!(effective_enabled_in(&store, "slack", Gate::Project(a)).unwrap());
+        assert!(!effective_enabled_in(&store, "slack", Gate::Project(b)).unwrap());
     }
 
-    /// The project tier is fail-closed on `required` exactly as the machine tier is — and a refused
-    /// enable records nothing at all, consent included.
+    /// Turning it off in one project leaves the others alone, and turning it back on asks nothing.
     #[test]
-    fn a_project_scoped_enable_is_fail_closed_on_required() {
-        let mut store = store_at("project-required");
-        let p = mk_project(&mut store, "p");
-        let fields = [field("webhook_url", true)];
+    fn a_project_disable_is_that_project_alone() {
+        let mut store = store_at("project-disable");
+        let a = mk_project(&mut store, "a");
+        let b = mk_project(&mut store, "b");
+        enable(&mut store, "slack", Gate::Project(a), &[], |_| true).unwrap();
+        enable(&mut store, "slack", Gate::Project(b), &[], |_| true).unwrap();
 
-        let err = enable_for_project(&mut store, "slack", p, &fields, |_| false).unwrap_err();
-        assert!(format!("{err:?}").contains("webhook_url"), "the empty field is named");
-        assert!(!store.config.plugin_consented("slack"), "a refused enable records no consent");
-        assert!(!effective_enabled_in(&store, "slack", Scope::Project(p)).unwrap());
+        disable(&mut store, "slack", Gate::Project(a)).unwrap();
+        assert!(!effective_enabled_in(&store, "slack", Gate::Project(a)).unwrap());
+        assert!(effective_enabled_in(&store, "slack", Gate::Project(b)).unwrap(), "b is untouched");
+        assert!(store.config.plugin_consented("slack"), "the consent is the device's, and stays");
     }
 
-    /// One project can veto a machine-wide enable, and `inherit` puts it back under the machine answer —
-    /// the third state a stored `false` is not.
+    /// The guard that makes the rows safe to carry: a row on a device that never consented fires nothing
+    /// (`AMB-D-351` — consent is the device's, and no row can grant it).
     #[test]
-    fn a_project_veto_survives_a_machine_enable_until_it_is_inherited() {
-        let mut store = store_at("project-veto");
+    fn a_carried_row_cannot_fire_without_consent() {
+        let mut store = store_at("no-consent");
         let p = mk_project(&mut store, "p");
-        enable(&mut store.config, "slack", &[], |_| true).unwrap();
-        store.save_config().unwrap();
+        // The row as a restore would leave it: written straight to the store, with no consent beside it.
+        store.set_plugin_enabled_in_project(p, "slack", true).unwrap();
+        assert!(store.plugin_enabled_in_project(p, "slack").unwrap(), "the row is there");
+        assert!(!effective_enabled_in(&store, "slack", Gate::Project(p)).unwrap(), "and it fires nothing");
+    }
 
-        disable_for_project(&mut store, "slack", p).unwrap();
-        assert!(!effective_enabled_in(&store, "slack", Scope::Project(p)).unwrap(), "off here");
-        assert!(effective_enabled_in(&store, "slack", Scope::MachineDefault).unwrap(), "on elsewhere");
+    /// The two gates do not answer for each other: a machine-wide enable does not open a project-scoped
+    /// plugin's gate anywhere, and a project's row is not a device-wide answer.
+    #[test]
+    fn neither_gate_answers_for_the_other() {
+        let mut store = store_at("no-crossover");
+        let p = mk_project(&mut store, "p");
 
-        assert!(inherit_in_project(&mut store, "slack", p).unwrap(), "there was an override to drop");
-        assert!(effective_enabled_in(&store, "slack", Scope::Project(p)).unwrap());
-        assert!(!inherit_in_project(&mut store, "slack", p).unwrap(), "dropping nothing is a no-op");
+        enable(&mut store, "slack", Gate::Machine, &[], |_| true).unwrap();
+        assert!(!effective_enabled_in(&store, "slack", Gate::Project(p)).unwrap());
+
+        enable(&mut store, "worktree", Gate::Project(p), &[], |_| true).unwrap();
+        assert!(!effective_enabled_in(&store, "worktree", Gate::Machine).unwrap());
     }
 }

@@ -3561,10 +3561,10 @@ pub fn plugin_config_value(
     }
 }
 
-/// The live `plugin_enable` override row id for `(project_id, plugin)`, or `None` — what makes the trust
-/// boundary's project tier an upsert (find-then-update) and a clear a lookup. The `plugin_enable_pair`
+/// The live `plugin_enable` row id for `(project_id, plugin)`, or `None` — the lookup behind both writes,
+/// since enabling is "ensure the row" and disabling is "delete it" (`AMB-D-379`). The `plugin_enable_pair`
 /// UNIQUE index guarantees at most one row.
-pub fn plugin_enable_override_id(
+pub fn plugin_enable_row_id(
     conn: &Connection,
     project_id: i64,
     plugin: &str,
@@ -3577,32 +3577,30 @@ pub fn plugin_enable_override_id(
     )
 }
 
-/// Every live `plugin_enable` override row belonging to one plugin, **across every project** — what an
+/// Every live `plugin_enable` row belonging to one plugin, **across every project** — what an
 /// `uninstall` erases in one pass (`AMB-D-357`), the gate twin of [`plugin_config_override_ids`].
-pub fn plugin_enable_override_ids(conn: &Connection, plugin: &str) -> Result<Vec<i64>> {
+pub fn plugin_enable_row_ids(conn: &Connection, plugin: &str) -> Result<Vec<i64>> {
     const C: col::plugin_enable::Cols = col::plugin_enable::ALL;
     select_ids(conn, C.id, Some(&Pred::eq(C.plugin, plugin)))
 }
 
-/// The `plugin_enable` override with this id.
-pub fn plugin_enable_override(
+/// The `plugin_enable` row with this id.
+pub fn plugin_enable_row_by_id(
     conn: &Connection,
     id: i64,
-) -> Result<Option<crate::model::PluginEnableOverride>> {
+) -> Result<Option<crate::model::PluginEnabledProject>> {
     super::hydrate::row_by_id(conn, "plugin_enable", id, super::hydrate::plugin_enable_row)
 }
 
-/// This project's answer for one plugin's gate, or `None` when it declares none (the machine-global gate
-/// then stands). The upper of the two gate tiers (`AMB-D-350`).
-pub fn plugin_enable_value(
+/// Whether this project holds the gate open for one plugin — the row's presence, and nothing else
+/// (`AMB-D-379`). The consent that has to sit beside it is machine-local, and lives in the config
+/// ([`crate::plugin_trust::effective_enabled_in`] is the resolution that reads both).
+pub fn plugin_enabled_in_project(
     conn: &Connection,
     project_id: i64,
     plugin: &str,
-) -> Result<Option<bool>> {
-    match plugin_enable_override_id(conn, project_id, plugin)? {
-        Some(id) => Ok(plugin_enable_override(conn, id)?.map(|r| r.enabled)),
-        None => Ok(None),
-    }
+) -> Result<bool> {
+    Ok(plugin_enable_row_id(conn, project_id, plugin)?.is_some())
 }
 
 /// Both directions of one decision's edges, as the read surfaces render them. Forward (`supersedes` /

@@ -7,8 +7,12 @@
 //!
 //! **Four inputs, joined at the seam.** A plugin fires for an event only when all four hold:
 //!
-//! - it is **enabled** — its machine-global gate is open ([`Config::plugin_enabled`], `AMB-D-351`;
-//!   `install ≠ enable`, so an installed-but-not-enabled plugin never fires);
+//! - it is **enabled** — its gate is open (`AMB-D-351`; `install ≠ enable`, so an installed-but-not-enabled
+//!   plugin never fires). The gate this path can read is the **device's** ([`Config::plugin_enabled`]), so
+//!   only a plugin declaring `scope: machine` is answerable here: a project-scoped plugin's switch is a
+//!   project's (`AMB-D-379`) and a drained event does not yet carry the project it happened in, so such a
+//!   plugin does not fire through observation at all until it does (`AMB-T-2079`). Not firing is the
+//!   fail-safe side of that gap — the alternative would be judging a plugin by a switch it does not have;
 //! - it **subscribes** — the event's name is in its manifest [`events`](crate::plugin_manifest::Manifest::events);
 //! - it is **compatible** — this amenbo speaks the payload contract it reads and clears the version floor
 //!   it declares ([`plugin_compat::check`](crate::plugin_compat::check), `AMB-D-359`);
@@ -83,7 +87,12 @@ impl Subscribers for EnabledSubscribers<'_> {
     fn resolve(&self, event: &str) -> Vec<Subscriber> {
         let mut subscribers = Vec::new();
         for plugin in self.installed {
-            // Enabled (the gate is open, `AMB-D-351`) and subscribed (the event is in its manifest).
+            // Enabled (the gate is open, `AMB-D-351`) and subscribed (the event is in its manifest). A
+            // project-scoped plugin has no device-wide switch to read here, so it is skipped rather than
+            // measured against one — see the module docs and `AMB-T-2079`.
+            if plugin.manifest.scope != crate::plugin_manifest::Scope::Machine {
+                continue;
+            }
             if !self.config.plugin_enabled(&plugin.name) {
                 continue;
             }
@@ -150,7 +159,8 @@ mod tests {
     }
 
     /// A minimal manifest carrying a subscription list and a config schema — the two fields this resolver
-    /// reads; the rest are filler the resolver never touches.
+    /// reads, plus the `scope` that says its switch is the device's (the only one this path can read —
+    /// `AMB-D-379`); the rest is filler the resolver never touches.
     fn manifest(events: &[&str], config: Vec<ConfigField>) -> Manifest {
         Manifest {
             name: "unused".into(),
@@ -163,7 +173,7 @@ mod tests {
             checksum: String::new(),
             signature: None,
             official: false,
-            scope: crate::plugin_manifest::Scope::Project,
+            scope: crate::plugin_manifest::Scope::Machine,
             // The contract this build speaks: the compatibility gate reads this one, so it tracks
             // `VERSION` rather than sitting on a literal that a bump would turn into a false failure.
             payload_v: crate::plugin_payload::VERSION,

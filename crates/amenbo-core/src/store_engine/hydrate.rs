@@ -30,7 +30,7 @@ use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Database,
     Decision, DecisionComment, DecisionEdge, DecisionEdgeKind, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionCardinality,
-    DimensionRole, DimensionValue, PluginConfigOverride, PluginEnableOverride, Priority, Project,
+    DimensionRole, DimensionValue, PluginConfigOverride, PluginEnabledProject, Priority, Project,
     Subtype, Task, TaskComment, TaskCommit, TaskDependency,
     TaskDimensionValue, TaskStatus, View,
 };
@@ -202,14 +202,13 @@ pub(super) fn plugin_config_row(r: &Row) -> rusqlite::Result<PluginConfigOverrid
     })
 }
 
-pub(super) fn plugin_enable_row(r: &Row) -> rusqlite::Result<PluginEnableOverride> {
+pub(super) fn plugin_enable_row(r: &Row) -> rusqlite::Result<PluginEnabledProject> {
     const C: col::plugin_enable::Cols = col::plugin_enable::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
-    Ok(PluginEnableOverride {
+    Ok(PluginEnabledProject {
         id: get(r, C.id)?,
         project_id: get(r, C.project_id)?,
         plugin: get(r, C.plugin)?,
-        enabled: get(r, C.enabled)?,
         created_at,
         updated_at,
     })

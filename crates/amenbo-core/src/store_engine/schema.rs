@@ -698,23 +698,21 @@ datasets! {
         value: col(REQ),
     }
 
-    // Per-project override of a plugin's **enable gate** (`AMB-D-350`, the upper tier). The machine-global
-    // gate is a `config.json` field (`config.plugin_trust`); a row here answers for one project instead —
-    // the same two-tier shape the sibling `plugin_config` uses, and a record table for the same reason:
-    // it is carried by `export`/`backup`, so a restore cannot silently reopen a gate the user closed in
-    // one project. What it is *not* is `hook_optout`'s set-shape: the row is tri-state by absence
-    // (no row = inherit the machine answer) and carries `enabled` for the two answers, because this tier
-    // must be able to say "on here" as well as "off here".
+    // The projects a `scope: project` plugin is **enabled in** (`AMB-D-379`). A set, not a two-answer
+    // override: the author declares which single switch their plugin has, so a project-scoped one has no
+    // machine tier under it to inherit or veto — a row means "on here" and no row means off. (That is
+    // `hook_optout`'s shape after all; the `enabled` column the two-tier version carried is gone with the
+    // tier it existed for.) A record table, so it is carried by `export`/`backup`: a restore that dropped
+    // it would silently switch a project's plugins off.
     //
-    // It overrides the gate, never the **consent** — that stays machine-local and is the resolver's
-    // second condition (`crate::plugin_trust::effective_enabled`), so a row restored onto a device that
-    // never consented opens nothing. `plugin` is the manifest name (plugins live on disk, not in the
-    // store, so there is no FK for it); the `(project_id, plugin)` pair is unique
-    // (`plugin_enable_pair` below). CASCADE: the override is *about* the project.
+    // It carries the gate, never the **consent** — that stays machine-local and is the resolver's second
+    // condition (`crate::plugin_trust::effective_enabled_in`), so a row restored onto a device that never
+    // consented opens nothing. `plugin` is the manifest name (plugins live on disk, not in the store, so
+    // there is no FK for it); the `(project_id, plugin)` pair is unique (`plugin_enable_pair` below).
+    // CASCADE: the row is *about* the project.
     plugin_enable => plugin_enable {
         project_id: fk("project", "CASCADE"),
         plugin: col(REQ),
-        enabled: bool_col,
     }
 }
 

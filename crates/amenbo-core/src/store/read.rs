@@ -293,11 +293,15 @@ impl Store {
         )?)
     }
 
-    /// This project's answer for a plugin's enable gate, or `None` when it declares none (the
-    /// machine-global gate then stands). The upper of the two gate tiers (`AMB-D-350`); the resolution
-    /// that reads both, with the consent, is [`crate::plugin_trust::effective_enabled`].
-    pub fn plugin_enable_override(&self, project_id: i64, plugin: &str) -> Result<Option<bool>> {
-        Ok(crate::store_engine::read::plugin_enable_value(self.engine.conn(), project_id, plugin)?)
+    /// Whether this project holds a plugin's gate open (`AMB-D-379`) — the row's presence. The consent
+    /// that must sit beside it is the device's, so the resolution that reads both is
+    /// [`crate::plugin_trust::effective_enabled_in`].
+    pub fn plugin_enabled_in_project(&self, project_id: i64, plugin: &str) -> Result<bool> {
+        Ok(crate::store_engine::read::plugin_enabled_in_project(
+            self.engine.conn(),
+            project_id,
+            plugin,
+        )?)
     }
 
     /// A single task comment; `None` if there is none (a row exists ⇒ it is live). The id is a comment id, which

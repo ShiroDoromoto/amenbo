@@ -341,26 +341,23 @@ pub struct PluginConfigOverride {
 }
 
 /// A **per-project override of a plugin's enable gate** (`AMB-D-350`, the upper tier). One row per
-/// `(project, plugin)`: this answer stands, for this project, over the machine-global gate in
-/// `config.json` ([`crate::config::Config::plugin_enabled`]). Absence is the third state — no row means
-/// the project inherits the machine answer — so the two stored answers are `enabled: true` ("on here even
-/// though the machine gate is closed") and `enabled: false` ("off here even though it is open").
+/// `(project, plugin)`: this project has the plugin **on** (`AMB-D-379`). The row is the whole answer —
+/// there is no machine tier under a project-scoped plugin to inherit from or veto, so absence is simply
+/// off, and turning it off deletes the row rather than storing a `false`.
 ///
-/// It overrides the **gate only, never the consent**: consent to run a plugin's code is machine-local
+/// It carries the **gate only, never the consent**: consent to run a plugin's code is machine-local
 /// (`AMB-D-351`) and is the other half of what
-/// [`plugin_trust::effective_enabled`](crate::plugin_trust::effective_enabled) reads, so a row carried onto
-/// a device that never consented fires nothing. Like [`PluginConfigOverride`] and unlike `hook_optout` this
-/// is a real record, carried by `export`/`backup` — a restore that dropped it would reopen a gate the user
-/// closed.
+/// [`plugin_trust::effective_enabled_in`](crate::plugin_trust::effective_enabled_in) reads, so a row
+/// carried onto a device that never consented fires nothing. Like [`PluginConfigOverride`] this is a real
+/// record, carried by `export`/`backup` — a restore that dropped it would silently switch a project's
+/// plugins off.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct PluginEnableOverride {
+pub struct PluginEnabledProject {
     pub id: i64,
-    /// The project this override applies to.
+    /// The project the plugin is enabled in.
     pub project_id: i64,
     /// The plugin's manifest name.
     pub plugin: String,
-    /// The answer for this project: whether the plugin fires here.
-    pub enabled: bool,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

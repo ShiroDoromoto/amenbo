@@ -156,10 +156,17 @@ mod tests {
             .unwrap();
         plugin_config::set(store, &field("token", true), plugin, "s3cret", Scope::MachineDefault)
             .unwrap();
-        crate::plugin_trust::enable(&mut store.config, plugin, &[], |_| true).unwrap();
-        store.save_config().unwrap();
-        // ...and a project that vetoes the machine gate, the upper tier's residue (`AMB-D-350`).
-        crate::plugin_trust::disable_for_project(store, plugin, project).unwrap();
+        crate::plugin_trust::enable(store, plugin, crate::plugin_trust::Gate::Machine, &[], |_| true)
+            .unwrap();
+        // ...and a project that has the plugin on, the project tier's residue (`AMB-D-379`).
+        crate::plugin_trust::enable(
+            store,
+            plugin,
+            crate::plugin_trust::Gate::Project(project),
+            &[],
+            |_| true,
+        )
+        .unwrap();
         project
     }
 
@@ -184,9 +191,9 @@ mod tests {
             "the project override is gone",
         );
         assert_eq!(
-            store.plugin_enable_override(project, "slack").unwrap(),
-            None,
-            "the project's gate answer is gone",
+            store.plugin_enabled_in_project(project, "slack").unwrap(),
+            false,
+            "the project's gate row is gone",
         );
         assert_eq!(
             plugin_config::get(&store, &field("token", true), "slack", Scope::MachineDefault)
@@ -253,7 +260,7 @@ mod tests {
         assert!(dir.join("plugins").join("worktree").exists(), "the neighbour keeps its home");
         // ...including its own project override and gate answer, which share the store with the erased ones.
         assert!(store.plugin_config_override(project, "slack", "events").unwrap().is_none());
-        assert!(store.plugin_enable_override(project, "slack").unwrap().is_none());
+        assert!(!store.plugin_enabled_in_project(project, "slack").unwrap());
     }
 
     /// The registry cache is not a plugin, so it cannot be uninstalled — the directory that holds the

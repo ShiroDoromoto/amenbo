@@ -3868,7 +3868,8 @@ fn a_body_option_reads_stdin_on_dash() {
 
 /// Plant an installed plugin under the test's app-data: the manifest (the install marker) plus the
 /// executable named after it, which is the whole on-disk shape `plugin_installed::read` looks for.
-fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {
+/// `scope` is the switch its author declares (`AMB-D-379`) — which gate the faces will move.
+fn install_scoped_plugin(cli: &Cli, name: &str, scope: &str, config: serde_json::Value) {
     let dir = cli.home.join("plugins").join(name);
     std::fs::create_dir_all(&dir).unwrap();
     let manifest = serde_json::json!({
@@ -3880,10 +3881,16 @@ fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {
         "category": "workflow",
         "url": "https://example.com/x.tar.gz",
         "checksum": "sha256:deadbeef",
+        "scope": scope,
         "config": config,
     });
     std::fs::write(dir.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
     std::fs::write(dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX)), b"#!/bin/sh\n").unwrap();
+}
+
+/// The everyday case: a plugin declaring the default `scope: project`.
+fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {
+    install_scoped_plugin(cli, name, "project", config)
 }
 
 /// `plugin config set/get`: the author's schema decides the keys, their `secret` flag decides where the
@@ -3951,41 +3958,45 @@ fn plugin_config_writes_by_the_authors_schema_and_never_echoes_a_secret() {
     assert!(e2.contains("nope"), "{e2}");
 }
 
-/// `plugin enable/disable --scope project` and `plugin inherit`: the gate has two tiers (`AMB-D-350`), and
-/// the project's answer stands over the machine's — in both directions, with `inherit` as the way back to
-/// following the machine.
+/// One plugin, one switch, at the level its author declared (`AMB-D-379`): a project-scoped plugin turns
+/// on for the project you are in and nowhere else, a machine-scoped one for the device — and the faces
+/// never ask which, because there is nothing to ask.
 #[test]
-fn the_plugin_gate_has_a_project_tier_that_overrides_the_machine_one() {
+fn a_plugins_declaration_decides_which_gate_the_faces_move() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
-    install_plugin(&cli, "slack", serde_json::json!([{ "key": "events", "label": "イベント" }]));
+    install_scoped_plugin(&cli, "slack", "project", serde_json::json!([]));
+    install_scoped_plugin(&cli, "watcher", "machine", serde_json::json!([]));
 
-    // Enabling for this project alone: consent is recorded, this project fires, the machine gate is not
-    // opened — so `plugin list` reports the effective answer and says which tier decided it.
-    let on = cli.json(&["plugin", "enable", "slack", "--scope", "project", "--json"]);
+    // The project-scoped one: on here, and the consent is the device's either way.
+    let on = cli.json(&["plugin", "enable", "slack", "--json"]);
     assert_eq!(on["scope"], "project");
+    assert_eq!(on["level"], "this project");
     let listed = cli.json(&["plugin", "list", "--json"]);
-    assert_eq!(listed["plugins"][0]["enabled"], true, "effective here");
-    assert_eq!(listed["plugins"][0]["machine_enabled"], false, "the machine gate stayed shut");
-    assert_eq!(listed["plugins"][0]["project_override"], true);
-    assert_eq!(listed["plugins"][0]["consented"], true, "consent is the device's, either tier");
+    let slack = listed["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "slack").unwrap();
+    assert_eq!(slack["enabled"], true, "on in this project");
+    assert_eq!(slack["scope"], "project");
+    assert_eq!(slack["consented"], true, "consent is the device's, whichever gate moved");
 
-    // The other direction: a machine-wide enable, vetoed for this project.
-    cli.json(&["plugin", "enable", "slack", "--json"]);
-    cli.json(&["plugin", "disable", "slack", "--scope", "project", "--json"]);
-    let vetoed = cli.json(&["plugin", "list", "--json"]);
-    assert_eq!(vetoed["plugins"][0]["enabled"], false, "off here");
-    assert_eq!(vetoed["plugins"][0]["machine_enabled"], true, "on everywhere else");
-    assert_eq!(vetoed["plugins"][0]["project_override"], false);
+    // The machine-scoped one: the same command, the other level — no flag distinguishes them.
+    let device = cli.json(&["plugin", "enable", "watcher", "--json"]);
+    assert_eq!(device["scope"], "machine");
+    assert_eq!(device["level"], "this device");
 
-    // `inherit` drops the override, so the machine answer decides here again — and a second run finds
-    // nothing to drop.
-    let dropped = cli.json(&["plugin", "inherit", "slack", "--json"]);
-    assert_eq!(dropped["dropped"], true);
-    let inherited = cli.json(&["plugin", "list", "--json"]);
-    assert_eq!(inherited["plugins"][0]["enabled"], true, "the machine gate answers again");
-    assert!(inherited["plugins"][0]["project_override"].is_null(), "no override left");
-    assert_eq!(cli.json(&["plugin", "inherit", "slack", "--json"])["dropped"], false);
+    // There is no second switch to reach for.
+    let (_, no_scope_flag) = cli.run(&["plugin", "enable", "slack", "--scope", "project", "--json"]);
+    assert_eq!(no_scope_flag, 2, "--scope is gone");
+    let (_, no_inherit) = cli.run(&["plugin", "inherit", "slack", "--json"]);
+    assert_eq!(no_inherit, 2, "so is inherit — there is no tier to inherit from");
+
+    // Disabling is the same one switch, and it leaves the neighbour alone.
+    cli.json(&["plugin", "disable", "slack", "--json"]);
+    let after = cli.json(&["plugin", "list", "--json"]);
+    let slack = after["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "slack").unwrap();
+    let watcher = after["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "watcher").unwrap();
+    assert_eq!(slack["enabled"], false);
+    assert_eq!(slack["consented"], true, "disable ≠ uninstall: the consent stays");
+    assert_eq!(watcher["enabled"], true, "the device-wide plugin is untouched");
 }
 
 /// The mutating CLI drives the observation dispatcher over what is *installed and enabled*: a subscribed
@@ -4039,7 +4050,9 @@ fn a_mutating_command_fires_the_enabled_plugin_that_subscribes_to_it() {
 /// *do* something overwrites it.
 #[cfg(unix)]
 fn install_subscribing_plugin(cli: &Cli, name: &str, events: &[&str]) {
-    install_plugin(cli, name, serde_json::json!([]));
+    // Declared machine-scoped: the observation path reads the device's gate, and a project-scoped
+    // plugin's switch is a project's — which a drained event cannot name yet (`AMB-D-379`).
+    install_scoped_plugin(cli, name, "machine", serde_json::json!([]));
     let manifest_file = cli.home.join("plugins").join(name).join("manifest.json");
     let mut manifest: Value =
         serde_json::from_str(&std::fs::read_to_string(&manifest_file).unwrap()).unwrap();

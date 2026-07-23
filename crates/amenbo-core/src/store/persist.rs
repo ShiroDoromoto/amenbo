@@ -448,18 +448,19 @@ impl Store {
         self.write_one(&[], |tx| crate::ops::plugin_config::forget_plugin(tx, plugin))
     }
 
-    /// Set (`Some`) or clear (`None`) this project's answer for a plugin's enable gate (one operation =
-    /// one transaction). Returns whether anything changed. Written through the trust boundary
-    /// ([`crate::plugin_trust`]), which is where the consent and the fail-closed `required` check live;
-    /// reach is guarded by `WriteTarget::Project`.
-    pub fn set_plugin_enable_override(
+    /// Put a plugin's gate in this project into `on` (one operation = one transaction): `true` writes the
+    /// row that says "enabled here", `false` deletes it (`AMB-D-379` — the row *is* the answer). Returns
+    /// whether anything changed. Written through the trust boundary ([`crate::plugin_trust`]), which is
+    /// where the consent and the fail-closed `required` check live; reach is guarded by
+    /// `WriteTarget::Project`.
+    pub fn set_plugin_enabled_in_project(
         &mut self,
         project_id: i64,
         plugin: &str,
-        enabled: Option<bool>,
+        on: bool,
     ) -> Result<bool> {
         self.write_one(&[WriteTarget::Project(project_id)], |tx| {
-            crate::ops::plugin_enable::set(tx, project_id, plugin, enabled)
+            crate::ops::plugin_enable::set(tx, project_id, plugin, on)
         })
     }
 

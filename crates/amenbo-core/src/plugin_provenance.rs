@@ -10,19 +10,19 @@
 //!   key** (`AMB-D-371`, the catalog-key trust model). This is the **origin** half, and it is heavier, so
 //!   it runs **once** at download: the asset was blessed by the amenbo catalog CI, the sole trust root.
 //!
-//! [`verify_asset`] runs both — the door an install (`AMB-T-1979`) and an update (`AMB-D-359`) call before
-//! an asset is ever written enabled. A third-party asset with no signature, or one signed by any other
-//! key, does not verify, and so cannot be installed or enabled (`AMB-D-351`).
+//! [`verify_catalog_asset`] runs both against the key amenbo ships — the door an install (`AMB-T-2050`)
+//! and an update (`AMB-D-359`) call before an asset is ever written enabled. A third-party asset with no
+//! signature, or one signed by any other key, does not verify, and so cannot be installed or enabled
+//! (`AMB-D-351`). [`verify_asset`] is the same door with the key as an argument, for a test that must
+//! sign its own fixtures.
 //!
 //! **Why the public key ships to every device is safe.** The catalog **private** key lives only in the
-//! catalog CI; every amenbo carries only the **public** key, which can verify but never sign — the same
-//! shape as the updater public key in `tauri.conf.json`, and every TLS / OS-code-signing trust store. So
-//! this module takes the public key as an argument: it verifies, it does not decide *which* key ships.
-//! The production catalog key is generated with the catalog CI (`AMB-T-1978`); embedding it at the call
-//! site is that task's, not this module's — here lives only the verification, testable against any key.
+//! catalog CI; every amenbo carries only the **public** key ([`CATALOG_PUBLIC_KEY`]), which can verify
+//! but never sign — the same shape as the updater public key in `tauri.conf.json`, and every TLS /
+//! OS-code-signing trust store.
 //!
 //! This module is verification only: it does not fetch, download, or store. The caller supplies the bytes
-//! (from the network at install, or from disk at run), the manifest fields, and the trusted public key.
+//! (from the network at install, or from disk at run) and the manifest fields.
 
 use crate::error::{Error, Result};
 use minisign_verify::{PublicKey, Signature};
@@ -31,6 +31,20 @@ use sha2::{Digest, Sha256};
 /// The one checksum algorithm amenbo understands in a manifest. Pinned to SHA-256 so a manifest cannot
 /// name a weaker digest and quietly downgrade the integrity check.
 const CHECKSUM_PREFIX: &str = "sha256:";
+
+/// amenbo's **catalog public key** — the single trust root for plugin assets (`AMB-D-371`). Key id
+/// `6272CBB782CB57A0`, deliberately not the updater's key (`2F151276522ADC1D`, in `tauri.conf.json`):
+/// a plugin and a release are blessed by separate roots, so one compromised root does not carry the other.
+///
+/// This is the public half, which verifies and cannot sign. The private half exists only as a secret of
+/// the catalog CI (`AMB-T-2054`), which signs each published asset and then re-verifies that signature
+/// against its own copy of this key before writing `catalog.json` — so "the key amenbo ships" and "the key
+/// that signed" are proven to be one key on every catalog run. The catalog repository holds the identical
+/// value in `catalog-key.pub`.
+///
+/// Rotating it takes a new amenbo release: an asset signed by a key no installed amenbo carries verifies
+/// nowhere. That is the fail-closed direction — a key amenbo does not know can never bless anything.
+pub const CATALOG_PUBLIC_KEY: &str = "RWSgV8uCt8tyYg74JbwBblWoE+g7bxSGvK8blkKW7gUo3EuBXaqy5oMR";
 
 /// Verify `bytes` hash to the digest the manifest recorded in `checksum` — the `sha256:<hex>` integrity
 /// half of provenance (`AMB-D-351`). Cheap enough to re-run on every use of the on-disk asset, which is
@@ -130,6 +144,16 @@ pub fn verify_asset(
     verify_signature(bytes, signature, public_key)?;
     verify_checksum(bytes, checksum)?;
     Ok(())
+}
+
+/// Verify a freshly downloaded asset against the catalog key amenbo ships ([`CATALOG_PUBLIC_KEY`]) — the
+/// door an install (`AMB-T-2050`) or an update (`AMB-D-359`) actually calls (`AMB-D-371`).
+///
+/// This is [`verify_asset`] with the trust root supplied rather than passed in: a caller cannot install
+/// against the wrong key, because it never names one. Reach for [`verify_asset`] only where the key is
+/// genuinely a parameter — a test signing its own fixtures.
+pub fn verify_catalog_asset(bytes: &[u8], signature: Option<&str>, checksum: &str) -> Result<()> {
+    verify_asset(bytes, signature, checksum, CATALOG_PUBLIC_KEY)
 }
 
 #[cfg(test)]
@@ -262,5 +286,42 @@ yO4MZq6nO8TD4ypgwfYImIKz9E1tM3szwA/S9CRXLrH30HP+gQHXcL12wngoJy9uCBgHuaIsrnRo17T3
     fn a_good_checksum_but_bad_signature_is_refused() {
         // Origin is checked before integrity: a wrong-origin asset is rejected even with a correct digest.
         assert!(verify_asset(ASSET, Some(OTHER_SIG), ASSET_SHA256, TEST_PUBKEY).is_err());
+    }
+
+    // ---- the embedded catalog key ----
+
+    #[test]
+    fn the_embedded_catalog_key_is_a_usable_minisign_key() {
+        // A typo in the constant would otherwise surface only at the first real install, on a user's
+        // machine, as "invalid catalog public key".
+        PublicKey::from_base64(CATALOG_PUBLIC_KEY).expect("the embedded key parses");
+    }
+
+    #[test]
+    fn the_embedded_catalog_key_is_the_catalog_key_and_not_the_updater_key() {
+        // A minisign public key is `Ed` + an 8-byte little-endian key id + the 32-byte key. Reading the id
+        // back pins *which* key is embedded, so swapping in the updater key (2F151276522ADC1D) — the one
+        // other minisign key in this repository — fails here rather than silently moving the trust root.
+        use base64::Engine as _;
+        let raw = base64::engine::general_purpose::STANDARD
+            .decode(CATALOG_PUBLIC_KEY)
+            .expect("the key is base64");
+        assert_eq!(&raw[0..2], b"Ed", "a minisign Ed25519 key");
+        let key_id: String = raw[2..10].iter().rev().map(|b| format!("{b:02X}")).collect();
+        assert_eq!(key_id, "6272CBB782CB57A0", "the catalog key from `catalog-key.pub`");
+    }
+
+    #[test]
+    fn the_catalog_door_refuses_an_asset_signed_by_any_other_key() {
+        // The test key is a real minisign key with a real signature over these exact bytes — everything
+        // but the one root amenbo trusts. This is the whole point of embedding a key.
+        let err = verify_catalog_asset(ASSET, Some(ASSET_SIG), ASSET_SHA256).unwrap_err();
+        assert!(format!("{err:?}").contains("does not verify"), "refused on origin");
+    }
+
+    #[test]
+    fn the_catalog_door_refuses_an_unsigned_asset() {
+        let err = verify_catalog_asset(ASSET, None, ASSET_SHA256).unwrap_err();
+        assert!(format!("{err:?}").contains("unsigned"), "the missing signature is the reason");
     }
 }

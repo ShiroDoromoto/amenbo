@@ -572,6 +572,14 @@ datasets! {
     decision_task_link => decision_task_link {
         decision_id: fk("decision", "CASCADE"),
         task_id: fk("task", "CASCADE"),
+        // When the link was drawn — the intent column the premise-change judgement dates a link by
+        // (`AMB-D-372`). `created_at` is a record column and stays out of that judgement even though this
+        // row is append-only: the threat is an out-of-band batch or restore rewriting record columns, which
+        // "the app has no UPDATE path" does not defend against. Fixed at insert (`ops::decision::link`) and
+        // never rewritten. Nullable for the reason `decision.status_changed_at` is: `ALTER TABLE ADD COLUMN`
+        // starts every existing row at NULL, and the step that adds it backfills them in the same
+        // transaction, so no live row is left holding one.
+        linked_at: ts_opt,
     }
 
     // Permanent task comments. A comment is always task-scoped and always carries a body.
@@ -600,6 +608,11 @@ datasets! {
         task_id: fk("task", "CASCADE"),
         blocked_by_id: fk("task", "CASCADE"),
         created_by_kind: actor_kind,
+        // When the edge was established — the twin of `decision_task_link.linked_at`, and for the same
+        // reason (`AMB-D-372`): the premise-change judgement dates an edge by this column, never by
+        // `created_at`. Fixed at insert (`ops::dependency::add`), nullable only so the migration that adds
+        // it can backfill.
+        established_at: ts_opt,
     }
 
     // A git commit SHA a task carries (1 task : many commits). amenbo stores the SHA as an opaque

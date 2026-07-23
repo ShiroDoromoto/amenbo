@@ -1770,9 +1770,15 @@ fn open_blockers(conn: &Connection, task_id: i64) -> Result<Vec<(i64, String)>> 
 /// moved `ready`). The same `status <> 'done'` and [`unsettled_premise`] predicates the `ready:` filter and
 /// [`task_detail`] apply are reused here, so the detection cannot drift from what actually blocks.
 ///
-/// Only *additions* are seen: an edge or link carries a `created_at` to compare, whereas detaching one is a
-/// hard delete ([`crate::ops::dependency::remove`], [`crate::ops::decision::unlink`]) that leaves no row —
-/// and a removal lifts `ready`, never drops it, so it falls outside the scope above regardless.
+/// Only *additions* are seen: an edge or link carries the instant it was drawn to compare, whereas detaching
+/// one is a hard delete ([`crate::ops::dependency::remove`], [`crate::ops::decision::unlink`]) that leaves no
+/// row — and a removal lifts `ready`, never drops it, so it falls outside the scope above regardless.
+///
+/// **What dates a premise is an intent column, never a record one** (`AMB-D-372`): the edge's
+/// [`established_at`](crate::model::TaskDependency::established_at) and the link's
+/// [`linked_at`](crate::model::DecisionTaskLink::linked_at), each fixed when the row was written. Their
+/// `created_at` holds the same instant, but a record column is one an out-of-band batch, migration or
+/// restore may rewrite — and the moment it moved, this judgement would misfire on rows nobody touched.
 pub struct PremiseChangeRow {
     /// Not-done blockers whose edge was added after the status began (blocker id + title), in edge-`id`
     /// order.
@@ -1792,6 +1798,11 @@ impl PremiseChangeRow {
 /// Detect premises acquired after a task's current status began (`AMB-D-366`). `None` when the task does
 /// not exist; an empty [`PremiseChangeRow`] when it does but was never stamped (a store predating the
 /// `status_changed_at` column — nothing to compare against). Read-only: the reaction is the caller's.
+///
+/// A premise whose own intent column is unset is quiet for the same reason, from the other side: `NULL > ?`
+/// is not true, so an edge or link that no write and no backfill ever dated reads as predating the clock.
+/// Erring quiet on an undatable premise is the safe side — the loud side would warn on every row of a store
+/// restored from a snapshot old enough to lack the column.
 pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<PremiseChangeRow>> {
     let started = std::time::Instant::now();
     let Some(t) = task(conn, task_id)? else {
@@ -1812,7 +1823,7 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
         let (bid, btitle) = (sel.col(B.id), sel.col(B.title));
         let pred = Pred::eq(D.task_id, task_id)
             .and(Pred::ne(B.status, "done"))
-            .and(Pred::cmp(D.created_at, ">", since.clone()));
+            .and(Pred::cmp(D.established_at, ">", since.clone()));
         let mut sql = Sql::from(&sel, D.table);
         sql.join(B.table, same(B.id, D.blocked_by_id)).push_where(Some(&pred)).order_by([Sort::by(D.id)]);
         let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
@@ -1832,7 +1843,7 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
         let (did, dtitle) = (sel.col(DC.id), sel.col(DC.title));
         let pred = Pred::eq(L.task_id, task_id)
             .and(unsettled_premise(DC))
-            .and(Pred::cmp(L.created_at, ">", since));
+            .and(Pred::cmp(L.linked_at, ">", since));
         let mut sql = Sql::from(&sel, L.table);
         sql.join(DC.table, same(DC.id, L.decision_id)).push_where(Some(&pred)).order_by([Sort::by(L.id)]);
         let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;

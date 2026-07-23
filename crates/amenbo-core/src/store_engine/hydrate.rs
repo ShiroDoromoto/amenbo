@@ -169,6 +169,7 @@ pub(super) fn task_dependency_row(r: &Row) -> rusqlite::Result<TaskDependency> {
         task_id: get(r, C.task_id)?,
         blocked_by_id: get(r, C.blocked_by_id)?,
         created_by_kind: enum_opt(r, C.created_by_kind, ActorKind::parse)?,
+        established_at: ts_opt(r, C.established_at)?,
         created_at,
         updated_at,
     })
@@ -238,6 +239,7 @@ pub(super) fn decision_task_link_row(r: &Row) -> rusqlite::Result<DecisionTaskLi
         id: get(r, C.id)?,
         decision_id: get(r, C.decision_id)?,
         task_id: get(r, C.task_id)?,
+        linked_at: ts_opt(r, C.linked_at)?,
         created_at,
         updated_at,
     })
@@ -467,6 +469,7 @@ mod tests {
                 task_id: 42,
                 blocked_by_id: 42,
                 created_by_kind: Some(ActorKind::Ai),
+                established_at: Some(now),
                 created_at: now,
                 updated_at: now,
             }],
@@ -505,6 +508,7 @@ mod tests {
                 id: 1,
                 decision_id: 43,
                 task_id: 42,
+                linked_at: Some(now),
                 created_at: now,
                 updated_at: now,
             }],

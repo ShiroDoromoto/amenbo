@@ -162,6 +162,7 @@ pub fn dependency(d: &TaskDependency) -> Record {
                 ("task_id", kv(d.task_id)),
                 ("blocked_by_id", kv(d.blocked_by_id)),
                 ("created_by_kind", kov(&d.created_by_kind)),
+                ("established_at", tsov(&d.established_at)),
             ],
             &d.created_at,
             &d.updated_at,
@@ -243,7 +244,11 @@ pub fn decision_task_link(l: &DecisionTaskLink) -> Record {
         "decision_task_link",
         l.id,
         with_audit(
-            vec![("decision_id", kv(l.decision_id)), ("task_id", kv(l.task_id))],
+            vec![
+                ("decision_id", kv(l.decision_id)),
+                ("task_id", kv(l.task_id)),
+                ("linked_at", tsov(&l.linked_at)),
+            ],
             &l.created_at,
             &l.updated_at,
         ),

@@ -64,6 +64,9 @@ pub fn add(
         task_id,
         blocked_by_id,
         created_by_kind,
+        // The instant the edge was established — the intent column the premise-change judgement reads
+        // (`AMB-D-372`). Stamped here, once, and never rewritten.
+        established_at: Some(now),
         created_at: now,
         updated_at: now,
     };

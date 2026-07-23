@@ -111,6 +111,27 @@ pub const STEPS: &[Step] = &[
              UPDATE decision SET status_changed_at = COALESCE(NULLIF(decided_at, ''), NULLIF(created_at, ''));",
         ),
     },
+    Step {
+        to: 6,
+        name: "add the premise edges' intent columns, seeded from when each row was written",
+        // `AMB-D-372`: the premise-change judgement dates a blocker edge and a decision link by an intent
+        // column, not by `created_at`. Both columns are new, so every existing row is seeded once — from
+        // `created_at`, which on these rows *is* the instant the edge was drawn (both tables are
+        // insert-and-hard-delete only, with no UPDATE path to have moved it since). Taking a record column
+        // as a seed is sound precisely because it is taken once: from here on the intent column is what the
+        // judgement reads, and what `created_at` does afterwards no longer reaches it.
+        //
+        // `NULLIF` guards the `''` a row caught mid-create carries: the column's `CHECK` admits an instant
+        // or NULL, and `''` is neither. Spelled in frozen text, as every step's is.
+        apply: Apply::Sql(
+            "ALTER TABLE task_dependency ADD COLUMN established_at TEXT \
+                 CHECK(established_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');
+             ALTER TABLE decision_task_link ADD COLUMN linked_at TEXT \
+                 CHECK(linked_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');
+             UPDATE task_dependency SET established_at = NULLIF(created_at, '');
+             UPDATE decision_task_link SET linked_at = NULLIF(created_at, '');",
+        ),
+    },
 ];
 
 /// v4: the lint-hook question stopped being one per project and became one for the device
@@ -314,6 +335,15 @@ mod tests {
         if version < 5 {
             engine.conn().execute_batch("ALTER TABLE decision DROP COLUMN status_changed_at;").unwrap();
         }
+        if version < 6 {
+            engine
+                .conn()
+                .execute_batch(
+                    "ALTER TABLE task_dependency DROP COLUMN established_at;
+                     ALTER TABLE decision_task_link DROP COLUMN linked_at;",
+                )
+                .unwrap();
+        }
         assert_eq!(engine.format_version().unwrap(), version);
         engine
     }
@@ -375,6 +405,14 @@ mod tests {
             .conn()
             .query_row("SELECT COUNT(status_changed_at) FROM decision", [], |r| r.get::<_, i64>(0))
             .expect("v5 put the decision status clock back");
+        engine
+            .conn()
+            .query_row("SELECT COUNT(established_at) FROM task_dependency", [], |r| r.get::<_, i64>(0))
+            .expect("v6 put the edge's intent column back");
+        engine
+            .conn()
+            .query_row("SELECT COUNT(linked_at) FROM decision_task_link", [], |r| r.get::<_, i64>(0))
+            .expect("v6 put the link's intent column back");
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -498,6 +536,54 @@ mod tests {
                 (3, None),
             ],
             "settled rows seed from decided_at, unsettled ones from their creation, and `''` is no instant"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v6 in full, on the store shape v5 left behind: premise edges with no intent column. Every existing
+    /// row must come out of it seeded from `created_at` — the instant it was in fact drawn, these tables
+    /// having no UPDATE path — because the premise-change judgement (`AMB-D-372`) now reads only the intent
+    /// column, and a NULL there is a premise it would never flag. A row caught mid-create carries `''`
+    /// rather than an instant, and `''` is not one: it seeds to NULL rather than to a value the column's own
+    /// `CHECK` would refuse.
+    #[test]
+    fn the_premise_edges_are_seeded_from_when_each_row_was_written() {
+        let dir = scratch("premise-intent-columns");
+        let engine = store_at(&dir, 5);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, project_id, title, created_at, updated_at) VALUES
+                     (1, 1, 'held', '2025-10-01T00:00:00Z', '2025-10-01T00:00:00Z'),
+                     (2, 1, 'blocker', '2025-10-01T00:00:00Z', '2025-10-01T00:00:00Z');
+                 INSERT INTO decision (id, project_id, title, body, status, created_at, updated_at) VALUES
+                     (1, 1, 'd', '', 'proposed', '2025-10-01T00:00:00Z', '2025-10-01T00:00:00Z');
+                 INSERT INTO task_dependency (id, task_id, blocked_by_id, created_at, updated_at) VALUES
+                     (1, 1, 2, '2026-02-03T04:05:06Z', '2026-02-03T04:05:06Z'),
+                     (2, 2, 1, '',                     '');
+                 INSERT INTO decision_task_link (id, decision_id, task_id, created_at, updated_at) VALUES
+                     (1, 1, 1, '2026-03-04T05:06:07Z', '2026-03-04T05:06:07Z');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let seeded = |table: &str, column: &str| -> Vec<(i64, Option<String>)> {
+            let conn = engine.conn();
+            let mut stmt = conn.prepare(&format!("SELECT id, {column} FROM {table} ORDER BY id")).unwrap();
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        assert_eq!(
+            seeded("task_dependency", "established_at"),
+            vec![(1, Some("2026-02-03T04:05:06Z".to_string())), (2, None)],
+            "an edge is seeded at the instant it was drawn, and `''` is no instant"
+        );
+        assert_eq!(
+            seeded("decision_task_link", "linked_at"),
+            vec![(1, Some("2026-03-04T05:06:07Z".to_string()))],
+            "a link is seeded at the instant it was drawn"
         );
         std::fs::remove_dir_all(&dir).ok();
     }

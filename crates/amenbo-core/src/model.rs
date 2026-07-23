@@ -288,6 +288,12 @@ pub struct TaskDependency {
     /// The creator's facet.
     #[serde(default)]
     pub created_by_kind: Option<ActorKind>,
+    /// When this edge was established — what the premise-change judgement dates it by (`AMB-D-372`).
+    /// Stamped once when the edge is drawn and never rewritten; `created_at` records the same instant but
+    /// is a record column, so it takes no part in the judgement. `None` only on a row that predates the
+    /// column and was never backfilled — read as "not after the status clock", i.e. no premise change.
+    #[serde(default)]
+    pub established_at: Option<Timestamp>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -440,6 +446,10 @@ pub struct DecisionTaskLink {
     pub id: i64,
     pub decision_id: i64,
     pub task_id: i64,
+    /// When the link was drawn — the twin of [`TaskDependency::established_at`], and what dates a linked
+    /// decision for the premise-change judgement (`AMB-D-372`).
+    #[serde(default)]
+    pub linked_at: Option<Timestamp>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

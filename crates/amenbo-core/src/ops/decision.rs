@@ -492,6 +492,9 @@ pub fn link(
         id: read::next_id(tx.conn(), "decision_task_link")?,
         decision_id,
         task_id,
+        // The instant the link was drawn — the intent column the premise-change judgement reads
+        // (`AMB-D-372`). Stamped here, once, and never rewritten.
+        linked_at: Some(now),
         created_at: now,
         updated_at: now,
     };

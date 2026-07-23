@@ -2829,9 +2829,16 @@ fn note_revisit(flags: &Flags, target: i64, standing: &[amenbo_core::view::Decis
 /// holder is at risk, so callers gate on `status == in_progress`. A read error yields "nothing changed" —
 /// this is additive context, never a reason to fail the command.
 fn premise_change(store: &Store, tid: i64) -> amenbo_core::view::PremiseChange {
-    store
-        .premise_change_since(tid)
-        .unwrap_or_else(|_| amenbo_core::view::PremiseChange { added_blockers: Vec::new(), added_decisions: Vec::new() })
+    store.premise_change_since(tid).unwrap_or_else(|_| no_premise_change())
+}
+
+/// The empty change — what a site reports when it did not look, or could not.
+fn no_premise_change() -> amenbo_core::view::PremiseChange {
+    amenbo_core::view::PremiseChange {
+        added_blockers: Vec::new(),
+        added_decisions: Vec::new(),
+        reopened_decisions: Vec::new(),
+    }
 }
 
 /// `premise_change` when `applies`, an empty change otherwise — so a safety-net site reads the premises only
@@ -2840,7 +2847,7 @@ fn premise_change_when(store: &Store, tid: i64, applies: bool) -> amenbo_core::v
     if applies {
         premise_change(store, tid)
     } else {
-        amenbo_core::view::PremiseChange { added_blockers: Vec::new(), added_decisions: Vec::new() }
+        no_premise_change()
     }
 }
 
@@ -2852,6 +2859,10 @@ fn premise_change_lines(pc: &amenbo_core::view::PremiseChange) -> Vec<String> {
     }
     for d in &pc.added_decisions {
         out.push(format!("  decision {} {} (not settled)", decision_label(d.id), decision_ref_name(&d.name)));
+    }
+    // The reopen axis (`AMB-D-373`): the link is not new, the decision's settlement is what went away.
+    for d in &pc.reopened_decisions {
+        out.push(format!("  decision {} {} (no longer settled)", decision_label(d.id), decision_ref_name(&d.name)));
     }
     out
 }
@@ -4859,13 +4870,13 @@ mod tests {
 
         // Empty change: the key is absent.
         let mut v = json!({ "id": 1 });
-        attach_premise_change(&mut v, &PremiseChange { added_blockers: Vec::new(), added_decisions: Vec::new() });
+        attach_premise_change(&mut v, &no_premise_change());
         assert!(v.get("premise_change").is_none());
 
         // A pinned-on blocker: the key carries it.
         let pc = PremiseChange {
             added_blockers: vec![TaskRef { id: 7, name: "後付け".to_string() }],
-            added_decisions: Vec::new(),
+            ..no_premise_change()
         };
         attach_premise_change(&mut v, &pc);
         assert_eq!(v["premise_change"]["added_blockers"][0]["id"], 7);

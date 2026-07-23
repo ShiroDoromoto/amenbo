@@ -194,9 +194,10 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
 }
 
 /**
- * The holder-side surface of `AMB-D-366`: a chip on the row of a task whose premises shifted **after it was
- * reserved** — a blocker or an unsettled decision pinned on since it went `in_progress`, silently withdrawing
- * readiness. 🔔 = "something changed under your reservation"; the tooltip names what. It sits beside
+ * The holder-side surface of `AMB-D-366` and `AMB-D-373`: a chip on the row of a task whose premises shifted
+ * **after it was reserved** — a blocker or an unsettled decision pinned on since it went `in_progress`, or a
+ * decision that was already linked and has stopped being settled — each silently withdrawing readiness.
+ * 🔔 = "something changed under your reservation"; the tooltip names what. It sits beside
  * {@link BlockedChips} but reads a different axis — not "why it cannot start" (a live derivation for anyone)
  * but "what changed since *you* took it" (only the holder is at risk) — so it speaks in its own glyph. Core
  * only ever fills `premiseChange` for an `in_progress` task that actually acquired one, so the chip draws
@@ -206,10 +207,10 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
 export function PremiseChangedChip({ task, compact = false }: { task: TaskCard; compact?: boolean }) {
   const pc = task.premiseChange;
   if (!pc) return null;
+  const named = (ds: typeof pc.addedDecisions) => ds.map((d) => `${d.ref ?? ""} ${d.name ?? ""}`.trim()).join(", ");
   const blockers = pc.addedBlockers.map((b) => `${taskRef(b.id)} ${b.name}`).join(", ");
-  const decisions = pc.addedDecisions.map((d) => `${d.ref ?? ""} ${d.name ?? ""}`.trim()).join(", ");
-  const detail = [blockers, decisions].filter(Boolean).join(" / ");
-  const count = pc.addedBlockers.length + pc.addedDecisions.length;
+  const detail = [blockers, named(pc.addedDecisions), named(pc.reopenedDecisions)].filter(Boolean).join(" / ");
+  const count = pc.addedBlockers.length + pc.addedDecisions.length + pc.reopenedDecisions.length;
   const cls = compact ? "chip--blockglyph" : "chip chip--premise";
   return (
     <span className={cls} role="img" title={tf("premise.changed", { detail })} aria-label={tf("premise.changed", { detail })}>

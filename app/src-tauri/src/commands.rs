@@ -394,10 +394,11 @@ pub struct PlacementDto {
     project: ProjectRefDto,
 }
 
-/// Premises pinned on a task **after it was reserved** (`AMB-D-366`) — the holder-side surface. Each list
-/// is the premises added since the task went `in_progress` that still bear on readiness: a not-done
-/// blocker, a decision linked but not yet settled. Carried on the card only when there is a change to show
-/// (see [`TaskCardDto::premise_change`]), so the screen draws the note exactly when it matters.
+/// Premises that moved under a task **after it was reserved** (`AMB-D-366`, `AMB-D-373`) — the holder-side
+/// surface. Each list is a way readiness was withdrawn since the task went `in_progress`: a not-done blocker
+/// pinned on, a decision linked but not yet settled, or a decision that was already linked and has stopped
+/// being settled. Carried on the card only when there is a change to show (see
+/// [`TaskCardDto::premise_change`]), so the screen draws the note exactly when it matters.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -406,6 +407,8 @@ pub struct PremiseChangeDto {
     added_blockers: Vec<TaskRefDto>,
     /// Unsettled decisions linked after the reservation, in link order.
     added_decisions: Vec<DecisionRefDto>,
+    /// Decisions already linked that stopped being settled after the reservation, in link order.
+    reopened_decisions: Vec<DecisionRefDto>,
 }
 
 #[derive(Serialize, TS)]
@@ -863,21 +866,23 @@ fn premise_change_dto(store: &Store, task_id: i64, status: TaskStatus) -> Option
     if !change.any() {
         return None;
     }
+    let decisions = |refs: Vec<amenbo_core::view::DecisionRef>| -> Vec<DecisionRefDto> {
+        refs.into_iter()
+            .map(|d| DecisionRefDto {
+                r#ref: Some(amenbo_core::idref::decision(d.id)),
+                id: d.id,
+                name: d.name,
+            })
+            .collect()
+    };
     Some(PremiseChangeDto {
         added_blockers: change
             .added_blockers
             .into_iter()
             .map(|b| TaskRefDto { id: b.id, name: b.name })
             .collect(),
-        added_decisions: change
-            .added_decisions
-            .into_iter()
-            .map(|d| DecisionRefDto {
-                r#ref: Some(amenbo_core::idref::decision(d.id)),
-                id: d.id,
-                name: d.name,
-            })
-            .collect(),
+        added_decisions: decisions(change.added_decisions),
+        reopened_decisions: decisions(change.reopened_decisions),
     })
 }
 

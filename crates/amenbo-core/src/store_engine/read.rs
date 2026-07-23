@@ -1763,16 +1763,19 @@ fn open_blockers(conn: &Connection, task_id: i64) -> Result<Vec<(i64, String)>> 
 }
 
 /// What premises a task acquired **after its current status began** — the read behind `AMB-D-366`'s
-/// "surface". Each field lists the premises that were added since [`crate::model::Task::status_changed_at`]
+/// "surface". Each field lists the premises that moved since [`crate::model::Task::status_changed_at`]
 /// *and* still bear on readiness: blockers that are not yet done, and linked decisions that are unsettled.
 /// That conjunction is deliberate — `D-366` scopes a "premise change" to exactly what **silently drops
 /// `ready`**, so an edge onto an already-done task, or a link onto a settled decision, is not one (it never
 /// moved `ready`). The same `status <> 'done'` and [`unsettled_premise`] predicates the `ready:` filter and
 /// [`task_detail`] apply are reused here, so the detection cannot drift from what actually blocks.
 ///
-/// Only *additions* are seen: an edge or link carries the instant it was drawn to compare, whereas detaching
-/// one is a hard delete ([`crate::ops::dependency::remove`], [`crate::ops::decision::unlink`]) that leaves no
-/// row — and a removal lifts `ready`, never drops it, so it falls outside the scope above regardless.
+/// **Two ways a premise moves**, and both are read (`AMB-D-373`): one is *drawn* at the task after the
+/// status began (the two `added_*` fields), the other was there all along and *stopped being settled* under
+/// the holder — a decision reopened out of `accepted`, which drops `ready` just as silently as a new link
+/// does. Detaching a premise is neither: it is a hard delete ([`crate::ops::dependency::remove`],
+/// [`crate::ops::decision::unlink`]) that leaves no row to date — and a removal lifts `ready`, never drops
+/// it, so it falls outside the scope above regardless.
 ///
 /// **What dates a premise is an intent column, never a record one** (`AMB-D-372`): the edge's
 /// [`established_at`](crate::model::TaskDependency::established_at) and the link's
@@ -1785,13 +1788,20 @@ pub struct PremiseChangeRow {
     pub added_blockers: Vec<(i64, String)>,
     /// Unsettled decisions linked after the status began (decision id + title), in link-`id` order.
     pub added_decisions: Vec<(i64, String)>,
+    /// Decisions linked to this task that **stopped being settled** after the status began — reopened out
+    /// of `accepted`, or superseded — dated by the decision's own status clock (decision id + title), in
+    /// link-`id` order. Disjoint from `added_decisions`: a decision that arrived after the status began is
+    /// reported once, as the link it is.
+    pub reopened_decisions: Vec<(i64, String)>,
 }
 
 impl PremiseChangeRow {
-    /// Whether any premise was added after the status began — the bare "has it changed?" bit `D-366` asks
-    /// for, leaving *how strongly to react* to the caller.
+    /// Whether any premise moved after the status began — the bare "has it changed?" bit `D-366` asks for,
+    /// leaving *how strongly to react* to the caller.
     pub fn any(&self) -> bool {
-        !self.added_blockers.is_empty() || !self.added_decisions.is_empty()
+        !self.added_blockers.is_empty()
+            || !self.added_decisions.is_empty()
+            || !self.reopened_decisions.is_empty()
     }
 }
 
@@ -1800,9 +1810,9 @@ impl PremiseChangeRow {
 /// `status_changed_at` column — nothing to compare against). Read-only: the reaction is the caller's.
 ///
 /// A premise whose own intent column is unset is quiet for the same reason, from the other side: `NULL > ?`
-/// is not true, so an edge or link that no write and no backfill ever dated reads as predating the clock.
-/// Erring quiet on an undatable premise is the safe side — the loud side would warn on every row of a store
-/// restored from a snapshot old enough to lack the column.
+/// is not true, so an edge, a link, or a decision whose clock no write and no backfill ever set reads as
+/// predating the task's. Erring quiet on an undatable premise is the safe side — the loud side would warn on
+/// every row of a store restored from a snapshot old enough to lack the column.
 pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<PremiseChangeRow>> {
     let started = std::time::Instant::now();
     let Some(t) = task(conn, task_id)? else {
@@ -1810,7 +1820,11 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
     };
     let Some(since) = t.status_changed_at else {
         // No status clock (older store) — there is no instant to compare a premise's age against.
-        return Ok(Some(PremiseChangeRow { added_blockers: Vec::new(), added_decisions: Vec::new() }));
+        return Ok(Some(PremiseChangeRow {
+            added_blockers: Vec::new(),
+            added_decisions: Vec::new(),
+            reopened_decisions: Vec::new(),
+        }));
     };
     // Columns store the `to_rfc3339_z` form (fixed-width UTC), so a lexicographic `>` is chronological.
     let since = since.to_rfc3339_z();
@@ -1843,7 +1857,7 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
         let (did, dtitle) = (sel.col(DC.id), sel.col(DC.title));
         let pred = Pred::eq(L.task_id, task_id)
             .and(unsettled_premise(DC))
-            .and(Pred::cmp(L.linked_at, ">", since));
+            .and(Pred::cmp(L.linked_at, ">", since.clone()));
         let mut sql = Sql::from(&sel, L.table);
         sql.join(DC.table, same(DC.id, L.decision_id)).push_where(Some(&pred)).order_by([Sort::by(L.id)]);
         let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
@@ -1855,9 +1869,32 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
         rows
     };
 
-    let n = added_blockers.len() + added_decisions.len();
+    // Linked decisions that stopped being settled after the status began (`AMB-D-373`). The link may be
+    // older than the reservation — what is dated here is the *decision's* status clock, the mirror of the
+    // task's own, so the two intent columns are compared directly. A decision the query above already
+    // named is dropped: the link is the earlier, more informative fact, and one premise deserves one line.
+    let reopened_decisions = {
+        const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
+        const DC: col::decision::Cols = col::decision::of("dc");
+        let mut sel = Select::new();
+        let (did, dtitle) = (sel.col(DC.id), sel.col(DC.title));
+        let pred = Pred::eq(L.task_id, task_id)
+            .and(unsettled_premise(DC))
+            .and(Pred::cmp(DC.status_changed_at, ">", since));
+        let mut sql = Sql::from(&sel, L.table);
+        sql.join(DC.table, same(DC.id, L.decision_id)).push_where(Some(&pred)).order_by([Sort::by(L.id)]);
+        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| Ok((did.get(r)?, dtitle.get(r)?)))
+            .map_err(StoreEngineError::from)?
+            .collect::<rusqlite::Result<Vec<(i64, String)>>>()
+            .map_err(StoreEngineError::from)?;
+        rows.into_iter().filter(|(id, _)| !added_decisions.iter().any(|(a, _)| a == id)).collect::<Vec<_>>()
+    };
+
+    let n = added_blockers.len() + added_decisions.len() + reopened_decisions.len();
     crate::perf::record_query("engine.premise_change_since", n, n, started.elapsed());
-    Ok(Some(PremiseChangeRow { added_blockers, added_decisions }))
+    Ok(Some(PremiseChangeRow { added_blockers, added_decisions, reopened_decisions }))
 }
 
 /// How many comments the task carries — the count a detail row and a card both show.
@@ -4371,6 +4408,9 @@ mod tests {
         assert!(got.any());
         assert_eq!(got.added_blockers.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![blk]);
         assert_eq!(got.added_decisions.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![d_open.id]);
+        // `d_open`'s own status clock also postdates the reservation, but a decision that arrived after it
+        // is the link it is — reported once, on the axis that saw it first.
+        assert!(got.reopened_decisions.is_empty());
 
         // Move the clock past every premise → the same additions now predate it → nothing flagged.
         tx.set_field("task", held, "status_changed_at", text("2999-01-01T00:00:00Z")).unwrap();
@@ -4379,5 +4419,53 @@ mod tests {
         // A store predating the column (no stamp) has no instant to compare against → no change, not an error.
         tx.set_field("task", held, "status_changed_at", Value::Null).unwrap();
         assert!(!premise_change_since(tx.conn(), held).unwrap().unwrap().any());
+    }
+
+    /// The reopen axis (`AMB-D-373`): a ground that was settled when the task was reserved, and stopped
+    /// being settled since, is a premise change even though its link is older than the reservation — the
+    /// comparison is between two intent columns, the decision's status clock and the task's. A decision
+    /// whose settlement went away *before* the reservation is not one: the holder took the task knowing it.
+    #[test]
+    fn premise_change_since_flags_a_ground_that_stopped_being_settled_under_the_holder() {
+        use crate::ops::decision;
+        use crate::ops::test_support::{mk_project, mk_task_in};
+
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let tx = engine.write().unwrap();
+        let pid = mk_project(&tx, "amenbo 開発");
+        let held = mk_task_in(&tx, "held", Some(pid));
+
+        // Two accepted grounds, both linked long before the reservation.
+        let ground = |title: &str| {
+            let d = decision::add(
+                &tx,
+                decision::NewDecision { title: title.into(), body: String::new(), project_id: pid },
+            )
+            .unwrap();
+            decision::accept(&tx, d.id, None).unwrap();
+            let link = decision::link(&tx, d.id, held).unwrap().0;
+            tx.set_field("decision_task_link", link.id, "linked_at", text("2019-01-01T00:00:00Z")).unwrap();
+            tx.set_field("decision", d.id, "status_changed_at", text("2019-01-01T00:00:00Z")).unwrap();
+            d.id
+        };
+        let reopened = ground("着手後に開き直る");
+        let stayed = ground("採択のまま");
+
+        // The reservation comes after both were settled → nothing has moved.
+        tx.set_field("task", held, "status_changed_at", text("2020-01-01T00:00:00Z")).unwrap();
+        assert!(!premise_change_since(tx.conn(), held).unwrap().unwrap().any());
+
+        // One is reopened under the holder: the link is untouched, the settlement is what went away.
+        decision::reopen(&tx, reopened).unwrap();
+        let got = premise_change_since(tx.conn(), held).unwrap().unwrap();
+        assert!(got.any());
+        assert!(got.added_blockers.is_empty() && got.added_decisions.is_empty(), "no premise was drawn");
+        assert_eq!(got.reopened_decisions.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![reopened]);
+
+        // A ground reopened *before* the reservation is a premise the holder took the task with.
+        tx.set_field("decision", stayed, "status", text("proposed")).unwrap();
+        tx.set_field("decision", stayed, "status_changed_at", text("2019-06-01T00:00:00Z")).unwrap();
+        let got = premise_change_since(tx.conn(), held).unwrap().unwrap();
+        assert_eq!(got.reopened_decisions.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![reopened]);
     }
 }

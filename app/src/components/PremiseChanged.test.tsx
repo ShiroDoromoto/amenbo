@@ -23,7 +23,7 @@ function card(over: Partial<TaskCard>): TaskCard {
 }
 
 const change = (over: Partial<PremiseChangeDto> = {}): PremiseChangeDto => ({
-  addedBlockers: [], addedDecisions: [], ...over,
+  addedBlockers: [], addedDecisions: [], reopenedDecisions: [], ...over,
 });
 
 const chips = () => Array.from(container.querySelectorAll(".chip--premise"));
@@ -60,6 +60,18 @@ describe("PremiseChangedChip", () => {
     expect(chips()[0].getAttribute("title")).toContain("AMB-T-2 後付けブロッカー");
     expect(chips()[0].getAttribute("title")).toContain("D-159");
     expect(chips()[0].getAttribute("aria-label")).toContain("後付けブロッカー");
+  });
+
+  it("counts a ground that stopped being settled under the holder, and names it", () => {
+    act(() => root.render(createElement(PremiseChangedChip, { task: card({
+      status: "in_progress",
+      premiseChange: change({
+        reopenedDecisions: [{ id: 373, name: "開き直った決定", ref: "D-373" }],
+      }),
+    }) })));
+    expect(chips()).toHaveLength(1);
+    expect(chips()[0].textContent).toContain("1");
+    expect(chips()[0].getAttribute("title")).toContain("D-373 開き直った決定");
   });
 
   it("compact drops the count and shows only the glyph, tooltip still names what changed", () => {

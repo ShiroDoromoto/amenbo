@@ -1827,11 +1827,11 @@ pub fn task_detail(
     })
 }
 
-/// Premises a task acquired **after its current status began** (`AMB-D-366`) — the read a caller invokes
-/// to surface, to a holder, that their reservation may have been silently undercut (a blocker or an
-/// unsettled decision pinned on after they reserved). Read-only: it reports *what* changed; the caller
-/// decides how strongly to react. A missing task is `not_found`; a task never stamped (an older store)
-/// reports no change.
+/// Premises that moved **after a task's current status began** (`AMB-D-366`, `AMB-D-373`) — the read a
+/// caller invokes to surface, to a holder, that their reservation may have been silently undercut: a blocker
+/// or an unsettled decision pinned on after they reserved, or a decision that was already linked and has
+/// since stopped being settled. Read-only: it reports *what* changed; the caller decides how strongly to
+/// react. A missing task is `not_found`; a task never stamped (an older store) reports no change.
 pub fn premise_change_since(
     conn: &rusqlite::Connection,
     task_id: i64,
@@ -1853,6 +1853,11 @@ pub fn premise_change_since(
             .collect(),
         added_decisions: row
             .added_decisions
+            .into_iter()
+            .map(|(id, name)| DecisionRef { id, name: Some(name) })
+            .collect(),
+        reopened_decisions: row
+            .reopened_decisions
             .into_iter()
             .map(|(id, name)| DecisionRef { id, name: Some(name) })
             .collect(),

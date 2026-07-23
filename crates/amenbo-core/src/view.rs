@@ -117,13 +117,18 @@ pub struct PremiseChange {
     pub added_blockers: Vec<TaskRef>,
     /// Unsettled decisions linked after the status began, in link order.
     pub added_decisions: Vec<DecisionRef>,
+    /// Decisions already linked that stopped being settled after the status began — reopened or superseded
+    /// under the holder (`AMB-D-373`), in link order. Disjoint from `added_decisions`.
+    pub reopened_decisions: Vec<DecisionRef>,
 }
 
 impl PremiseChange {
-    /// Whether any premise was added after the status began — the bare "did it change?" bit, leaving the
+    /// Whether any premise moved after the status began — the bare "did it change?" bit, leaving the
     /// reaction to the caller.
     pub fn any(&self) -> bool {
-        !self.added_blockers.is_empty() || !self.added_decisions.is_empty()
+        !self.added_blockers.is_empty()
+            || !self.added_decisions.is_empty()
+            || !self.reopened_decisions.is_empty()
     }
 }
 

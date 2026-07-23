@@ -448,10 +448,11 @@ repaired: Array<string>,
 unresolved: Array<string>, };
 
 /**
- * Premises pinned on a task **after it was reserved** (`AMB-D-366`) — the holder-side surface. Each list
- * is the premises added since the task went `in_progress` that still bear on readiness: a not-done
- * blocker, a decision linked but not yet settled. Carried on the card only when there is a change to show
- * (see [`TaskCardDto::premise_change`]), so the screen draws the note exactly when it matters.
+ * Premises that moved under a task **after it was reserved** (`AMB-D-366`, `AMB-D-373`) — the holder-side
+ * surface. Each list is a way readiness was withdrawn since the task went `in_progress`: a not-done blocker
+ * pinned on, a decision linked but not yet settled, or a decision that was already linked and has stopped
+ * being settled. Carried on the card only when there is a change to show (see
+ * [`TaskCardDto::premise_change`]), so the screen draws the note exactly when it matters.
  */
 export type PremiseChangeDto = { 
 /**
@@ -461,7 +462,11 @@ addedBlockers: Array<TaskRefDto>,
 /**
  * Unsettled decisions linked after the reservation, in link order.
  */
-addedDecisions: Array<DecisionRefDto>, };
+addedDecisions: Array<DecisionRefDto>, 
+/**
+ * Decisions already linked that stopped being settled after the reservation, in link order.
+ */
+reopenedDecisions: Array<DecisionRefDto>, };
 
 /**
  * A reference to a premise decision (the far end of builds_on). It is more than a

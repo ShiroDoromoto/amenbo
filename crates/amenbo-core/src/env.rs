@@ -62,6 +62,19 @@ pub fn update_json_url() -> Option<String> {
     var("AMENBO_UPDATE_JSON_URL")
 }
 
+/// `AMENBO_ALLOW_UNSTAMPED_MIGRATE` — the escape hatch out of the release-stamp gate
+/// ([`crate::build_stamp`], `AMB-D-378`): it lets a locally built binary carry the production store
+/// forward for **this one run**. It exists for the case the gate cannot help with — a released build
+/// that cannot recover the store itself — and lives in the environment rather than in the binary
+/// precisely so an accidental launch never has it.
+///
+/// Off / `0` / `false` / `no` / empty read as not set, so a value that says "no" is not a way in.
+pub fn allow_unstamped_migrate() -> bool {
+    var("AMENBO_ALLOW_UNSTAMPED_MIGRATE")
+        .map(|v| !matches!(v.trim(), "" | "0" | "off" | "false" | "no"))
+        .unwrap_or(false)
+}
+
 /// `AMENBO_TEST_NETWORK_DIR` — a directory on a **genuine network volume**. Only the GUI's
 /// `tests/store_watch.rs` passes it, and only when exercising "can we recognize a network FS from
 /// its filesystem type?" against a real mount — mounting one takes manual work, so the test is

@@ -354,6 +354,11 @@ pub fn at_startup(
     if chain::pending(probe_format_version(&source.db_path), STEPS).is_empty() {
         return Ok(None);
     }
+    // There is a step waiting — and this is where an unreleased build stops (`AMB-D-378`). Asked after
+    // the pending check so a local build against an up-to-date store is untouched (the common case,
+    // and the whole point of gating the migration rather than the launch), and before the lock so a
+    // refusal blocks nothing.
+    crate::build_stamp::ensure_may_migrate()?;
 
     let _lock = crate::swap_lock::hold_exclusive(&migration_lock_path(&source.db_path))?;
     if chain::pending(probe_format_version(&source.db_path), STEPS).is_empty() {

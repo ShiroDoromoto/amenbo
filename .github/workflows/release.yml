@@ -30,6 +30,16 @@ concurrency:
 permissions:
   contents: read
 
+# The release stamp. Every binary compiled in this workflow — CLI, sidecar CLI, GUI —
+# carries `AMENBO_BUILD=release`, and that stamp is what allows a binary to migrate the
+# production store forward. It lives HERE and nowhere else: not in the Makefile, not in a
+# local `cargo build`, so a working-tree build cannot pass itself off as a distributed one
+# and carry real user data past what the released app can open. Losing this line ships
+# artifacts that refuse to migrate — the release rehearsal walks that path, so it surfaces
+# before users do.
+env:
+  AMENBO_BUILD: release
+
 jobs:
   macos:
     name: macOS installers (.pkg arm64 + x86_64) + CLI

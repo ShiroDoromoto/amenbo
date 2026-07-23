@@ -107,14 +107,20 @@ impl Paths {
         }
     }
 
+    /// The app-data "app name" of the **production** channel — the directory real user data lives in
+    /// (`…/work.amenbo.amenbo`). Named because more than the path is keyed off it:
+    /// [`crate::build_stamp`] asks whether this build is pointed at production before it lets an
+    /// unreleased binary migrate anything (`AMB-D-378`).
+    pub const PRODUCTION_APP_NAME: &'static str = "amenbo";
+
     /// The app-data "app name". Substitutable **at build time** via `AMENBO_APP_NAME`, which is how
-    /// dev and prod are kept apart. The default `amenbo` is production
-    /// (`~/Library/Application Support/work.amenbo.amenbo`); a dev build sets
-    /// `AMENBO_APP_NAME=amenbo-dev` and gets its own directory (`…/work.amenbo.amenbo-dev`), so its
-    /// identity and store never collide with production data.
+    /// dev and prod are kept apart. The default is production
+    /// ([`PRODUCTION_APP_NAME`](Self::PRODUCTION_APP_NAME) — `~/Library/Application Support/work.amenbo.amenbo`);
+    /// a dev build sets `AMENBO_APP_NAME=amenbo-dev` and gets its own directory
+    /// (`…/work.amenbo.amenbo-dev`), so its identity and store never collide with production data.
     pub const APP_NAME: &'static str = match option_env!("AMENBO_APP_NAME") {
         Some(name) => name,
-        None => "amenbo",
+        None => Self::PRODUCTION_APP_NAME,
     };
 
     /// The base for identity and config: `AMENBO_HOME` if set, otherwise the OS data directory.

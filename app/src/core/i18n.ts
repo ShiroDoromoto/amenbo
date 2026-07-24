@@ -325,6 +325,7 @@ const UI: Record<Lang, Record<string, string>> = {
     "plugins.consentAgree": "許可して有効にする", "plugins.consentCancel": "やめる",
     // the installed screen (the "manage what you have" tab)
     "plugins.installedCount": "{count} 件",
+    "plugins.incompatibleChip": "この版では動きません", "plugins.notFiring": "有効だが発火しません",
     "plugins.installsError": "インストール済みのプラグインを読めませんでした",
     "plugins.emptyInstalled": "この端末にはまだプラグインが入っていません",
     "plugins.emptyInstalledNote": "マーケットから入れられます。",
@@ -726,6 +727,7 @@ const UI: Record<Lang, Record<string, string>> = {
     "plugins.consentAgree": "Allow and enable", "plugins.consentCancel": "Cancel",
     // the installed screen (the "manage what you have" tab)
     "plugins.installedCount": "{count} installed",
+    "plugins.incompatibleChip": "This build cannot run it", "plugins.notFiring": "Enabled, but not firing",
     "plugins.installsError": "The installed plugins could not be read",
     "plugins.emptyInstalled": "No plugin is installed on this device yet",
     "plugins.emptyInstalledNote": "The market is where you add one.",

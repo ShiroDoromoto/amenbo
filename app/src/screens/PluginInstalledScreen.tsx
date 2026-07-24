@@ -67,6 +67,11 @@ export function PluginInstalledScreen() {
  * Installed and enabled are two facts (`AMB-D-351`), and a plugin that is here but fires nothing is the
  * ordinary state — so the row leads with the name and lets the gate say where it stands, rather than
  * badging "installed" on a screen where everything is.
+ *
+ * **An open gate is not the same as a plugin that fires** (`AMB-D-359`). A build this amenbo cannot speak
+ * to — a payload contract that is not ours, a version floor above us — is handed no event, whatever its
+ * switch says. So an incompatible row wears that instead of the plain "enabled", and the gate below it
+ * carries core's own reason: an enabled plugin sitting silent is exactly the state a badge has to name.
  */
 function InstalledRow({ install, projects, projectId, onProject }: {
   install: PluginInstall;
@@ -82,12 +87,19 @@ function InstalledRow({ install, projects, projectId, onProject }: {
           <span className="chip">
             {t(install.scope === "project" ? "plugins.gate.project" : "plugins.gate.machine")}
           </span>
-          {install.enabled === true && (
+          {!install.compatible ? (
+            <>
+              {" "}
+              <span className="chip chip--warn">
+                {t(install.enabled === true ? "plugins.notFiring" : "plugins.incompatibleChip")}
+              </span>
+            </>
+          ) : install.enabled === true ? (
             <>
               {" "}
               <span className="chip">{t("plugins.enabledChip")}</span>
             </>
-          )}
+          ) : null}
         </div>
         <PluginGate
           install={install}

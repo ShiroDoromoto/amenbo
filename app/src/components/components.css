@@ -235,6 +235,10 @@
    colour and speaks through its glyph and spacing alone — the two must not be confused. */
 .chip--block { white-space: nowrap; cursor: default; }
 .chip--official { background: var(--c-accent); color: #fff; }
+/* A chip that reports a state the user did not choose and would want to act on — an installed plugin
+   this build cannot speak to, which is handed no event however its switch stands (`AMB-D-359`). Warn
+   coloured, not error: nothing is broken, it simply does not fire. */
+.chip--warn { color: var(--c-warn); border: 1px solid var(--c-warn); background: transparent; }
 
 /* The plugin market's catalog panel: one row per registered catalog, plus the row that adds one. */
 .catsrc { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); background: var(--c-surface-sunken); }

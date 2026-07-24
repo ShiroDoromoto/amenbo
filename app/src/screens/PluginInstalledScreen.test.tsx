@@ -60,6 +60,8 @@ const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => 
 const button = (label: string) =>
   Array.from(container.querySelectorAll("button")).find((b) => b.textContent === label);
 const rows = () => Array.from(container.querySelectorAll(".feed__item"));
+/** Every badge on screen, in order — the row's own state, told apart from the prose around it. */
+const chips = () => Array.from(container.querySelectorAll(".chip")).map((c) => c.textContent);
 
 beforeEach(() => {
   hoisted.installs = [];
@@ -158,6 +160,33 @@ describe("moving a gate from the list", () => {
     ];
     render();
     expect(container.textContent).toContain("needs amenbo 9.0");
+    expect(container.textContent).toContain(t("plugins.incompatibleChip"));
     expect(button(t("plugins.enable"))!.disabled).toBe(true);
+  });
+});
+
+// An open gate is not a plugin that fires (`AMB-D-359`): a build amenbo cannot speak to is handed no
+// event, so the row has to say that rather than let "enabled" stand for "working".
+describe("a plugin this build cannot speak to", () => {
+  it("reads as enabled-but-silent, not as enabled", () => {
+    hoisted.installs = [
+      row({
+        name: "notify",
+        consented: true,
+        enabled: true,
+        compatible: false,
+        incompatibleReason: "payload v2, this build speaks v1",
+      }),
+    ];
+    render();
+    expect(chips()).toEqual([t("plugins.gate.machine"), t("plugins.notFiring")]);
+    // Core's own line, not a second judgement of our own.
+    expect(container.textContent).toContain("payload v2, this build speaks v1");
+  });
+
+  it("leaves a compatible row wearing the plain enabled badge", () => {
+    hoisted.installs = [row({ name: "notify", consented: true, enabled: true })];
+    render();
+    expect(chips()).toEqual([t("plugins.gate.machine"), t("plugins.enabledChip")]);
   });
 });

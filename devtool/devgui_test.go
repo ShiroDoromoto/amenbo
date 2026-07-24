@@ -89,6 +89,21 @@ func TestDevGUIBundleNamesPreferTheCheckoutsOwnInstance(t *testing.T) {
 	}
 }
 
+// TestDevGUIBuildCommandNamesTheCheckoutsOwnInstance holds the advice a failed launch gives: from a
+// task worktree it has to carry the id, because the command without one builds over the shared dev
+// app — the permanent setup the per-task instance exists to keep a task away from.
+func TestDevGUIBuildCommandNamesTheCheckoutsOwnInstance(t *testing.T) {
+	for root, want := range map[string]string{
+		"/w/amenbo-worktrees/2131": "make install-gui-dev AMB-T-ID=2131",
+		"/w/amenbo":                "make install-gui-dev",
+		"/w/amenbo-worktrees/wip":  "make install-gui-dev",
+	} {
+		if got := devGUIBuildCommand(root); got != want {
+			t.Errorf("devGUIBuildCommand(%q) = %q, want %q", root, got, want)
+		}
+	}
+}
+
 // TestInstanceNamesRoundTrip holds the sweep's reader to the builder it inverts: the names are the
 // only record that an instance exists, so a rename on the build side that the reader does not follow
 // makes every instance invisible — and invisible is exactly what the sweep exists to end.

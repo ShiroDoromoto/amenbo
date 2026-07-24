@@ -461,8 +461,8 @@ func devAppBinary() (string, error) {
 			return c, nil
 		}
 	}
-	return "", fmt.Errorf("no dev GUI found (%s) — build it with 'make install-gui-dev', or pass --app",
-		strings.Join(candidates, ", "))
+	return "", fmt.Errorf("no dev GUI found (%s) — build it with '%s', or pass --app",
+		strings.Join(candidates, ", "), devGUIBuildCommand(root))
 }
 
 // ---- shared ----

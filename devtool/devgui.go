@@ -62,6 +62,18 @@ func devGUIBundleNames(root string) []string {
 	return []string{sharedDevBundle}
 }
 
+// devGUIBuildCommand is the command that builds the dev GUI this checkout launches: a task worktree
+// builds its own throwaway instance, the main checkout the shared dev app. A message that asks for a
+// build has to name this one — bare `make install-gui-dev` installs over the shared app, the one
+// permanent setup a task is meant to keep its hands off, and a task session told to run it would do
+// exactly the thing the per-task instance exists to make impossible.
+func devGUIBuildCommand(root string) string {
+	if id := taskIDFromCheckout(root); id != "" {
+		return "make install-gui-dev AMB-T-ID=" + id
+	}
+	return "make install-gui-dev"
+}
+
 // appDataDirName is the directory one app-data name occupies, the way core's directories crate
 // spells it: `work.amenbo.<app name>`.
 func appDataDirName(appName string) string { return "work.amenbo." + appName }

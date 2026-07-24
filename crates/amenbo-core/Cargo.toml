@@ -28,7 +28,7 @@ thiserror.workspace = true
 directories.workspace = true
 tracing.workspace = true
 getrandom = "0.4"
-base64 = "0.22"
+base64 = "0.23"
 fs2 = "0.4"
 # Content-addressed blob store: BLAKE3 is the attachment content-address — a fast, tree-hashing
 # digest. The bytes never enter the truth source; the hash is the fingerprint of the content that

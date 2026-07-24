@@ -2773,7 +2773,7 @@ pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck,
     amenbo_core::agents::upsert_into_dir(
         path,
         store.config.language.as_deref(),
-        amenbo_core::config::Paths::APP_NAME,
+        amenbo_core::config::Paths::command_name(),
     );
     Ok(WriteAck::new(&["tasks"]))
 }
@@ -2795,7 +2795,7 @@ fn recover_lost_pointer(path: &std::path::Path, project_id: i64) -> Result<Write
     amenbo_core::agents::upsert_into_dir(
         path,
         store.config.language.as_deref(),
-        amenbo_core::config::Paths::APP_NAME,
+        amenbo_core::config::Paths::command_name(),
     );
     Ok(WriteAck::new(&["tasks"]))
 }
@@ -3014,7 +3014,7 @@ pub fn project_bind_folder(project_id: i64, dir: String) -> Result<WriteAck, Cmd
     amenbo_core::agents::upsert_into_dir(
         &cwd,
         store.config.language.as_deref(),
-        amenbo_core::config::Paths::APP_NAME,
+        amenbo_core::config::Paths::command_name(),
     );
     Ok(WriteAck::new(&[]))
 }
@@ -3357,7 +3357,7 @@ pub fn config_set_language(language: String) -> Result<WriteAck, CmdError> {
             amenbo_core::agents::upsert_into_dir(
                 std::path::Path::new(dir),
                 lang_code,
-                amenbo_core::config::Paths::APP_NAME,
+                amenbo_core::config::Paths::command_name(),
             );
         }
     }
@@ -3826,7 +3826,7 @@ pub fn resync_managed_blocks(dir: Option<String>) -> Result<ResyncReportDto, Cmd
     let report = amenbo_core::agents::resync_bound_blocks(
         &open_store_read()?.bindings(),
         dir.as_deref(),
-        amenbo_core::config::Paths::APP_NAME,
+        amenbo_core::config::Paths::command_name(),
     );
     Ok(ResyncReportDto {
         scanned: report.scanned as u32,
@@ -3952,7 +3952,7 @@ pub struct HookOfferDto {
 fn sweep_bound_repos(store: &Store, consent: Option<amenbo_core::hooks::HookConsent>, can_ask: bool) -> bool {
     use amenbo_core::hooks::{self, HookAction};
 
-    let cmd = amenbo_core::config::Paths::APP_NAME;
+    let cmd = amenbo_core::config::Paths::command_name();
     let mut question_is_live = false;
     for dir in store.bindings().all_dirs() {
         let path = std::path::Path::new(&dir);
@@ -4032,7 +4032,7 @@ fn hook_repairs_for(dir: &str) -> Vec<String> {
 pub fn hook_offer() -> Result<Option<HookOfferDto>, CmdError> {
     let store = open_store()?;
     let live = sweep_bound_repos(&store, store.config.hook_consent, true);
-    Ok(live.then(|| HookOfferDto { cmd: amenbo_core::config::Paths::APP_NAME.to_string() }))
+    Ok(live.then(|| HookOfferDto { cmd: amenbo_core::config::Paths::command_name().to_string() }))
 }
 
 /// One bound repository the banner has something to say about — the raw material for its wording, never
@@ -4077,7 +4077,7 @@ pub fn hook_notices() -> Result<Vec<HookNoticeDto>, CmdError> {
     use amenbo_core::hooks;
 
     let store = open_store_read()?;
-    let cmd = amenbo_core::config::Paths::APP_NAME;
+    let cmd = amenbo_core::config::Paths::command_name();
     let consent = store.config.hook_consent;
     let mut notices = Vec::new();
     for dir in store.bindings().all_dirs() {
@@ -5576,7 +5576,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::env::set_var("AMENBO_HOME", &tmp);
 
-        amenbo_core::agents::upsert_into_dir(&dir, None, amenbo_core::config::Paths::APP_NAME);
+        amenbo_core::agents::upsert_into_dir(&dir, None, amenbo_core::config::Paths::command_name());
         assert!(amenbo_core::agents::dir_has_managed_block(&dir), "precondition: a borrowed managed block is present");
         assert!(!dir.join(".amenbo").is_file(), "precondition: no owning pointer yet");
 
@@ -6504,7 +6504,7 @@ mod tests {
         project_bind_folder(asked, asked_dir.to_string_lossy().to_string()).unwrap();
 
         let offer = hook_offer().unwrap().expect("an unwired git repository raises the question");
-        assert_eq!(offer.cmd, amenbo_core::config::Paths::APP_NAME, "the wording gets this build's name to use");
+        assert_eq!(offer.cmd, amenbo_core::config::Paths::command_name(), "the wording gets the command name this build's channel installs");
 
         // A second unwired repository does not make a second question: the answer is the device's, so the
         // number of folders is not the number of clicks. That is the whole of the one-question design.

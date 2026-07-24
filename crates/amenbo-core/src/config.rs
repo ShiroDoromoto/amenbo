@@ -142,6 +142,31 @@ impl Paths {
         Self::is_dev_app_name(Self::APP_NAME)
     }
 
+    /// The CLI this build's channel installs — the name guidance tells a human or an AI to **type**,
+    /// which is not the same thing as the app-data name this build **reads**. The two coincide on
+    /// production and on the shared dev build, and part company on a throwaway per-task instance:
+    /// its app-data is `amenbo-dev-<id>`, but it ships no CLI of its own, so what there is to type is
+    /// still the dev CLI. Naming the app-data instead is how guidance ends up pointing at a command
+    /// that does not exist.
+    ///
+    /// Every surface that words a command for someone to run — the managed block's `{CMD}`, the hook
+    /// setup notice, `init`'s closing line — takes it from here, and everything that names a
+    /// directory or a channel keeps taking [`APP_NAME`](Self::APP_NAME).
+    pub fn command_name() -> &'static str {
+        Self::command_name_for(Self::APP_NAME)
+    }
+
+    /// The rule [`command_name`](Self::command_name) applies, taking the name as an argument for the
+    /// reason [`is_dev_app_name`](Self::is_dev_app_name) does — a running binary's channel is fixed
+    /// at compile time, so only a table can pin what each name maps to.
+    pub(crate) fn command_name_for(app_name: &str) -> &'static str {
+        if Self::is_dev_app_name(app_name) {
+            Self::DEV_APP_NAME // the dev CLI's name, which the shared dev build's app-data happens to share
+        } else {
+            Self::PRODUCTION_APP_NAME
+        }
+    }
+
     /// The naming rule [`is_dev_channel`](Self::is_dev_channel) applies, taking the name as an
     /// argument so the rule can be pinned by a table: the channel of a running binary is fixed at
     /// compile time, so a test cannot vary it. `amenbo-dev-ish` is not a task instance — only the
@@ -1036,6 +1061,18 @@ mod tests {
         for name in ["amenbo", "amenbo-devish", "dev", "amenbo-staging", ""] {
             assert!(!Paths::is_dev_app_name(name), "{name} is not the dev channel");
         }
+    }
+
+    /// What there is to type, per channel. The case that matters is the task instance: it reads its
+    /// own app-data but installs no CLI, so guidance that named the app-data would send someone to a
+    /// command that is not on the machine.
+    #[test]
+    fn the_command_to_type_is_the_channel_s_cli_not_the_app_data() {
+        assert_eq!(Paths::command_name_for("amenbo"), "amenbo");
+        assert_eq!(Paths::command_name_for("amenbo-dev"), "amenbo-dev");
+        assert_eq!(Paths::command_name_for("amenbo-dev-2134"), "amenbo-dev");
+        // Not the dev channel, so production's CLI — the same fallback `APP_NAME` itself takes.
+        assert_eq!(Paths::command_name_for("amenbo-devish"), "amenbo");
     }
 
     /// What each channel calls itself on screen. Production says nothing at all — the one case that

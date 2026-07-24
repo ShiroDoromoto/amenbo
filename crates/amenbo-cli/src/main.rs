@@ -2150,7 +2150,7 @@ fn hooks_cmd(store: &mut Store, flags: &Flags, sub: HooksCmd) -> Result<i32, Cli
         hint: None,
         exit: 1,
     })?;
-    let cmd = Paths::APP_NAME;
+    let cmd = Paths::command_name();
     let project = binding_project(store);
 
     match sub {
@@ -2320,7 +2320,7 @@ fn lint_hook_setup(store: &mut Store, flags: &Flags) {
     // steps past, because any marker reads to it as a managed slot. Runs under the answer just given or the
     // one already on record. A stale block (an older version) is upgraded silently; only genuine damage —
     // something changed or half-removed the block — is returned, and so is the only thing said out loud.
-    let restored = hooks::restore_blocks(&cwd, Paths::APP_NAME, answered.or(consent), opted_out);
+    let restored = hooks::restore_blocks(&cwd, Paths::command_name(), answered.or(consent), opted_out);
     if !restored.is_empty() && !flags.quiet {
         let names = restored.iter().map(|s| s.name()).collect::<Vec<_>>().join(", ");
         eprintln!("⚠ amenbo's lint block in {names} had been changed or removed — restored it.");
@@ -2350,7 +2350,7 @@ fn report_unfinished_setup(
         None => (states, consent),
     };
     let Some(notice) = hooks::setup_notice(states, consent, opted_out) else { return };
-    let cmd = Paths::APP_NAME;
+    let cmd = Paths::command_name();
     if flags.json {
         // Empty slots only — the ones install is sure to wire. A stranger's slot is not reported: install
         // either already coexisted with it (under a yes) or refuses it (a tracked hook), so "run install"
@@ -2386,7 +2386,7 @@ fn offer_lint_hook(
 ) -> Option<amenbo_core::hooks::HookConsent> {
     use amenbo_core::hooks::{self, HookAction, HookConsent};
 
-    let cmd = Paths::APP_NAME;
+    let cmd = Paths::command_name();
     match hooks::reconcile(&hooks::HookContext { states, consent, opted_out, can_ask }) {
         HookAction::Nothing => None,
         HookAction::Install => {
@@ -2747,13 +2747,13 @@ fn whoami(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 /// `CLAUDE.md` under `dir`. Only what lies between the markers is ours; the user's own Class P content is
 /// preserved (no file → create, markers present → replace the block, markers absent → append at the end).
 /// The command reference is not duplicated here — `{CMD} agent --json` is its single source of truth, which
-/// keeps this from rotting and keeps it out of commit diffs. `{CMD}` follows `Paths::APP_NAME` (`amenbo` in
-/// production, `amenbo-dev` in development) so a dev build never points people at production. With no
+/// keeps this from rotting and keeps it out of commit diffs. `{CMD}` follows `Paths::command_name` (`amenbo` in
+/// production, `amenbo-dev` on the dev channel) so a dev build never points people at production. With no
 /// `lang_code`, English. Returns only the files whose content actually changed (created or updated), so
 /// calling it again is a no-op.
 fn upsert_agent_guidance(dir: &std::path::Path, lang_code: Option<&str>) -> Vec<&'static str> {
     // Picking the language — the fallback, and keeping an existing block's language — is `upsert_into_dir`'s.
-    amenbo_core::agents::upsert_into_dir(dir, lang_code, Paths::APP_NAME)
+    amenbo_core::agents::upsert_into_dir(dir, lang_code, Paths::command_name())
 }
 
 /// When a new binary raises the managed-block template version, folders bound earlier keep the old one. A
@@ -2770,7 +2770,7 @@ fn sync_guide(store: &Store, flags: &Flags, dir: Option<String>) -> Result<i32, 
     // The resync itself is core's shared path (`resync_bound_blocks`, the same one the GUI uses); all that
     // happens here is formatting it for the terminal or for JSON. The bound folders come from the binding
     // table in the consolidated store.
-    let report = resync_bound_blocks(&store.bindings(), dir.as_deref(), Paths::APP_NAME);
+    let report = resync_bound_blocks(&store.bindings(), dir.as_deref(), Paths::command_name());
     let mut updated: Vec<serde_json::Value> = Vec::new();
     for (d, f) in &report.updated {
         human(flags, format!("✓ {d}: {f} resynced to the current version (v{MANAGED_BLOCK_VERSION})"));
@@ -2938,7 +2938,7 @@ fn init_cmd(flags: &Flags, name: Option<String>, language: Option<String>, force
         // `agent` right now, and close that gap. The command name follows the channel (amenbo / amenbo-dev).
         human(flags, format!(
             "  AI agents: run `{} agent --json` now and follow it — the managed guidance just written to CLAUDE.md/AGENTS.md does not take effect until your next session.",
-            Paths::APP_NAME,
+            Paths::command_name(),
         ));
     }
     Ok(0)

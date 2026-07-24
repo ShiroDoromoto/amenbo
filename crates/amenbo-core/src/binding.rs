@@ -172,7 +172,7 @@ pub fn live_projects_claiming(store: &Store, dir: &Path) -> Vec<i64> {
 /// resolves `.amenbo` through here, one hook suffices.
 pub fn resolve_upward(store: &Store, start: &Path) -> Option<(PathBuf, DirBinding)> {
     let (dir, binding) = find_upward(start)?;
-    crate::agents::follow_stale_block(&dir, crate::config::Paths::APP_NAME);
+    crate::agents::follow_stale_block(&dir, crate::config::Paths::command_name());
     if binding.project_id.is_some() {
         return Some((dir, binding));
     }

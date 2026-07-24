@@ -63,8 +63,9 @@ pub fn managed_block_version(text: &str) -> Option<u32> {
 }
 
 /// Body of the managed block (without the markers): English-based, plus the directive naming the
-/// language to talk to the human in. `cmd` is the launch command name (`amenbo` in production,
-/// `amenbo-dev` in development) and is used **only where a command is invoked** — the product name,
+/// language to talk to the human in. `cmd` is the launch command name
+/// ([`crate::config::Paths::command_name`] — `amenbo` in production, `amenbo-dev` on the dev
+/// channel) and is used **only where a command is invoked** — the product name,
 /// `.amenbo` and `AMENBO_*` are fixed and channel-independent. `language_label` is what
 /// `config::language_label` returns (e.g. `Japanese`).
 pub fn managed_block_body(language_label: &str, cmd: &str) -> String {
@@ -261,7 +262,8 @@ pub fn stale_bound_blocks(registry: &crate::binding::Registry) -> Vec<StaleBlock
 /// (`dir = None`) or in just one folder (`Some`). Each folder goes through [`upsert_into_dir`]: a
 /// file is written only when its content changed (low churn), and each folder's own language label
 /// is kept rather than downgraded. `cmd` is the launch command name
-/// ([`crate::config::Paths::APP_NAME`] — `amenbo` in production, `amenbo-dev` in development).
+/// ([`crate::config::Paths::command_name`] — `amenbo` in production, `amenbo-dev` on the dev
+/// channel, task instances included: they read their own app-data but install no CLI of their own).
 /// Moved or renamed folders are skipped. This is the one resync path shared by the CLI's
 /// `sync-guide` and the GUI. It takes a `Registry` so it stays independent of the persistence
 /// backend (the caller reads one from the root store).

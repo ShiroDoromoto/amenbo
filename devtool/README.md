@@ -56,6 +56,7 @@ permanent place a grown setup (plugins, catalog, projects) lives.
 | app-data | `amenbo-dev` | `amenbo-dev-<id>` |
 | bundle | `/Applications/amenbo (dev).app` | `/Applications/amenbo (dev <id>).app` |
 | header badge | `DEV` | `DEV AMB-T-<id>` |
+| the CLI it names | `amenbo-dev` | `amenbo-dev` — it installs none of its own |
 | built by | `make install-gui-dev` | `make install-gui-dev AMB-T-ID=<id>` |
 | deleted by | nothing — it is permanent | `devtool task finish <id>` |
 

@@ -417,7 +417,10 @@ fn put_edge(
         if before.kind == kind {
             return Ok(false); // idempotent: same-kind edge already present
         }
-        let after = DecisionEdge { kind, updated_at: now, ..before.clone() };
+        // The intent column moves with the kind: a `builds_on` promoted to `supersedes` began superseding
+        // here, not when it was first drawn, and dating the promotion by the original insert would put the
+        // supersession before a reservation it in fact came after (`AMB-D-373`).
+        let after = DecisionEdge { kind, drawn_at: Some(now), updated_at: now, ..before.clone() };
         emit_update(tx, record::decision_edge(&before), record::decision_edge(&after))?;
         return Ok(true);
     }
@@ -426,6 +429,7 @@ fn put_edge(
         decision_id,
         target_decision_id,
         kind,
+        drawn_at: Some(now),
         created_at: now,
         updated_at: now,
     };

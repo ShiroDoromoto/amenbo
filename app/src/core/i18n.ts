@@ -414,11 +414,13 @@ const UI: Record<Lang, Record<string, string>> = {
     "block.notStarted": "着手不可（着手日待ち）: {date} から",
     "premise.changed": "予約後に前提が変わった: {detail}",
     "premise.warn": "予約後に前提が変わりました（AMB-D-366）: {detail}。独立に仕上がる部分だけ完了するか、todo に戻して手放してください。",
-    "premise.noLongerSettled": "採択が外れた",
+    // One phrase covering both arms of the axis — unsettled (reopen/reject) and superseded. A word naming
+    // only the first cannot describe a decision that is still accepted and merely stopped being current.
+    "premise.noLongerSettled": "確定が外れた",
     "detail.premiseChanged": "予約後の変化",
-    "detail.premiseChangedHint": "予約後に動いた前提（後から付いた／採択が外れた・着手可否が下がった）",
+    "detail.premiseChangedHint": "予約後に動いた前提（後から付いた／確定が外れた・着手可否が下がった）",
     "detail.premiseAdded": "予約後に付いた前提",
-    "detail.premiseReopened": "予約後に採択が外れた前提（link は前からある）",
+    "detail.premiseReopened": "予約後に確定が外れた前提（未採択化／置き換え。link は前からある）",
   },
   en: {
     "topbar.refresh": "Refresh from source", "topbar.back": "Back", "topbar.forward": "Forward",
@@ -801,7 +803,7 @@ const UI: Record<Lang, Record<string, string>> = {
     "detail.premiseChanged": "Changed since reserved",
     "detail.premiseChangedHint": "Premises that moved after you reserved this — pinned on, or no longer settled (readiness withdrawn)",
     "detail.premiseAdded": "Pinned on after you reserved this",
-    "detail.premiseReopened": "Stopped being settled after you reserved this (the link is older)",
+    "detail.premiseReopened": "Stopped being settled after you reserved this — reopened or superseded (the link is older)",
   },
 };
 

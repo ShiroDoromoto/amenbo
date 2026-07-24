@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
 import { CommentRow } from "../components/CommentRow";
@@ -32,11 +32,17 @@ function statusColor(s: DecisionStatus): string {
  * or rejecting may carry an optional reason, so the buttons do not act at once — they raise a
  * confirmation with a reason field.
  */
-export function DecisionDetailPane({ decisionId, onOpenTask, onOpenDecision }: {
+export function DecisionDetailPane({
+  decisionId, onOpenTask, onOpenDecision, focusCommentAt, editCommentAt,
+}: {
   decisionId: number;
   onOpenTask?: (id: number) => void;
   /** Opens the decision on the other end of an edge — superseded, amended or built on (mirrors onOpenTask). */
   onOpenDecision?: (id: number) => void;
+  /** Nonce that focuses the comment box when opened via "↩ reply" in the activity feed. Every increment re-focuses, so you can reply to the same decision again and again. undefined = an ordinary selection. */
+  focusCommentAt?: number;
+  /** The comment to open in edit mode when opened via "✎" in the activity feed. The nonce lets the same comment be re-opened. The thread is drawn whole here, so unlike the task pane there is no window to widen first. */
+  editCommentAt?: { commentId: number; nonce: number };
 }) {
   const d = useDecision(decisionId);
   // The comment thread exists only under Tauri (the browser mock has no decisions); posting refetches via the WriteAck.
@@ -55,6 +61,22 @@ export function DecisionDetailPane({ decisionId, onOpenTask, onOpenDecision }: {
   const [bodyDraft, setBodyDraft] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
   const [editBusy, setEditBusy] = useState(false);
+  // "↩ reply" from the activity feed. The focus cannot land at request time — the textarea is not rendered until
+  // the decision has loaded — so the ask is held as a flag and spent on the render that produces the box.
+  const commentRef = useRef<HTMLTextAreaElement>(null);
+  const pendingCommentFocus = useRef(false);
+  useEffect(() => {
+    if (focusCommentAt === undefined) return;
+    pendingCommentFocus.current = true;
+  }, [focusCommentAt]);
+  useEffect(() => {
+    if (!pendingCommentFocus.current) return;
+    const el = commentRef.current;
+    if (!el) return; // Not rendered yet (the decision is still loading) — land it on the next render.
+    pendingCommentFocus.current = false;
+    el.focus();
+    el.scrollIntoView?.({ block: "nearest" });
+  });
   if (!d) return <div className="rightpane__empty">{t("dec.notFound")}</div>;
 
   const editable = d.status !== "rejected";
@@ -287,12 +309,14 @@ export function DecisionDetailPane({ decisionId, onOpenTask, onOpenDecision }: {
                     target="decision_comment"
                     onEdit={(text) => editDecisionComment(c.id, d.id, text)}
                     onRemove={() => removeDecisionComment(c.id, d.id)}
+                    startEditAt={editCommentAt?.commentId === c.id ? editCommentAt.nonce : undefined}
                   />
                 ))}
               </div>
             )}
             <div className="compose">
               <textarea
+                ref={commentRef}
                 className="compose__input"
                 rows={3}
                 placeholder={t("detail.commentPh")}

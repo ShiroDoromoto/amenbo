@@ -60,6 +60,26 @@ fn superseded(dc: col::decision::Cols) -> Pred {
         .pred()
 }
 
+/// [`superseded`], narrowed to a supersession drawn **after** `since` — the arm that lets the premise-change
+/// judgement date a premise that lost currency under a holder (`AMB-D-373`). The edge's own intent column is
+/// the only clock there is for it: the superseded row is never rewritten, so nothing on the premise side
+/// moved when it stopped being current. Unlike its bind-free sibling this one carries a bind, so it belongs
+/// in a `WHERE` and not in a select item.
+///
+/// An edge whose `drawn_at` is unset reads as older than any `since` (`NULL > ?` is not true) and so stays
+/// quiet — the same safe side the rest of the judgement errs on for an undatable premise.
+fn superseded_since(dc: col::decision::Cols, since: String) -> Pred {
+    const E: col::decision_edge::Cols = col::decision_edge::of("e");
+    const S: col::decision::Cols = col::decision::of("s");
+
+    Exists::over(E.table)
+        .join(S.table, same(S.id, E.decision_id))
+        .filter(same(E.target_decision_id, dc.id))
+        .filter(word(E.kind, crate::model::DecisionEdgeKind::Supersedes.as_str()))
+        .filter(Pred::cmp(E.drawn_at, ">", since))
+        .pred()
+}
+
 /// `<col> = '<word>'` — a column against one of the store's own enum spellings, written as a literal
 /// rather than a bind: this is grammar, not data, and the places it is needed (a select item, a `JOIN`'s
 /// `ON`) have no placeholder to bind. The word comes from the model's `as_str`, so it is not spelled
@@ -1805,8 +1825,9 @@ fn open_blockers(conn: &Connection, task_id: i64) -> Result<Vec<(i64, String)>> 
 /// it, so it falls outside the scope above regardless.
 ///
 /// **What dates a premise is an intent column, never a record one** (`AMB-D-372`): the edge's
-/// [`established_at`](crate::model::TaskDependency::established_at) and the link's
-/// [`linked_at`](crate::model::DecisionTaskLink::linked_at), each fixed when the row was written. Their
+/// [`established_at`](crate::model::TaskDependency::established_at), the link's
+/// [`linked_at`](crate::model::DecisionTaskLink::linked_at), and the decision edge's
+/// [`drawn_at`](crate::model::DecisionEdge::drawn_at), each fixed when the row was written. Their
 /// `created_at` holds the same instant, but a record column is one an out-of-band batch, migration or
 /// restore may rewrite — and the moment it moved, this judgement would misfire on rows nobody touched.
 pub struct PremiseChangeRow {
@@ -1816,9 +1837,9 @@ pub struct PremiseChangeRow {
     /// Unsettled decisions linked after the status began (decision id + title), in link-`id` order.
     pub added_decisions: Vec<(i64, String)>,
     /// Decisions linked to this task that **stopped being settled** after the status began — reopened out
-    /// of `accepted`, or superseded — dated by the decision's own status clock (decision id + title), in
-    /// link-`id` order. Disjoint from `added_decisions`: a decision that arrived after the status began is
-    /// reported once, as the link it is.
+    /// of `accepted` (dated by the decision's own status clock) or superseded (dated by the `supersedes`
+    /// edge's) — as decision id + title, in link-`id` order. Disjoint from `added_decisions`: a decision
+    /// that arrived after the status began is reported once, as the link it is.
     pub reopened_decisions: Vec<(i64, String)>,
 }
 
@@ -1897,20 +1918,23 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
     };
 
     // Linked decisions that stopped being settled after the status began (`AMB-D-373`). The link may be
-    // older than the reservation — what is dated here is the *decision's* status clock, the mirror of the
-    // task's own, so the two intent columns are compared directly. A decision the query above already
-    // named is dropped: the link is the earlier, more informative fact, and one premise deserves one line.
-    // `unsettled_premise` also holds for a premise that merely lost currency (superseded), but that never
-    // moves this clock — being superseded is an edge, not a status — so this axis reports the status arm
-    // only; dating a supersession needs a time the edge does not carry (`AMB-T-2121`).
+    // older than the reservation — what is dated here is the premise's *own* clock, not the link's. A
+    // decision the query above already named is dropped: the link is the earlier, more informative fact,
+    // and one premise deserves one line.
+    //
+    // Two ways a premise stops being settled, and `unsettled_premise` holds for both, so both are dated
+    // here or the axis is half deaf. A **reopen** out of `accepted` moves the decision's status clock, the
+    // mirror of the task's own. A **supersession** moves nothing on the premise: the old row is never
+    // rewritten, because being superseded is an edge and not a status — so it is dated by the edge's own
+    // intent column instead, the third of the three (`AMB-D-372`).
     let reopened_decisions = {
         const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
         const DC: col::decision::Cols = col::decision::of("dc");
         let mut sel = Select::new();
         let (did, dtitle) = (sel.col(DC.id), sel.col(DC.title));
-        let pred = Pred::eq(L.task_id, task_id)
-            .and(unsettled_premise(DC))
-            .and(Pred::cmp(DC.status_changed_at, ">", since));
+        let pred = Pred::eq(L.task_id, task_id).and(unsettled_premise(DC)).and(
+            Pred::cmp(DC.status_changed_at, ">", since.clone()).or(superseded_since(DC, since)),
+        );
         let mut sql = Sql::from(&sel, L.table);
         sql.join(DC.table, same(DC.id, L.decision_id)).push_where(Some(&pred)).order_by([Sort::by(L.id)]);
         let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
@@ -4539,5 +4563,61 @@ mod tests {
         tx.set_field("decision", stayed, "status_changed_at", text("2019-06-01T00:00:00Z")).unwrap();
         let got = premise_change_since(tx.conn(), held).unwrap().unwrap();
         assert_eq!(got.reopened_decisions.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![reopened]);
+    }
+
+    /// The other way a ground stops being settled: it is **superseded** under the holder. Nothing on the
+    /// premise's own row moves for it — the old side is never rewritten, and being superseded is an edge
+    /// and not a status — so the `supersedes` edge's own intent column is what dates it, and the same axis
+    /// reports it. A supersession drawn *before* the reservation is not a change, for the reason a reopen
+    /// before it is not: the holder took the task with it.
+    #[test]
+    fn premise_change_since_flags_a_ground_superseded_under_the_holder() {
+        use crate::ops::decision;
+        use crate::ops::test_support::{mk_project, mk_task_in};
+
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let tx = engine.write().unwrap();
+        let pid = mk_project(&tx, "amenbo 開発");
+        let held = mk_task_in(&tx, "held", Some(pid));
+
+        let mk = |title: &str| {
+            decision::add(
+                &tx,
+                decision::NewDecision { title: title.into(), body: String::new(), project_id: pid },
+            )
+            .unwrap()
+            .id
+        };
+        // An accepted ground, linked and settled long before the reservation — so neither the link's clock
+        // nor the decision's own can be what flags it below.
+        let ground = mk("置き換えられる前提");
+        decision::accept(&tx, ground, None).unwrap();
+        let link = decision::link(&tx, ground, held).unwrap().0;
+        tx.set_field("decision_task_link", link.id, "linked_at", text("2019-01-01T00:00:00Z")).unwrap();
+        tx.set_field("decision", ground, "status_changed_at", text("2019-01-01T00:00:00Z")).unwrap();
+        tx.set_field("task", held, "status_changed_at", text("2020-01-01T00:00:00Z")).unwrap();
+        assert!(!premise_change_since(tx.conn(), held).unwrap().unwrap().any());
+
+        // Superseded under the holder: `ready` drops, and the axis says why.
+        let newer = mk("置き換える方");
+        decision::supersede(&tx, newer, ground, None).unwrap();
+        let got = premise_change_since(tx.conn(), held).unwrap().unwrap();
+        assert!(got.added_blockers.is_empty() && got.added_decisions.is_empty(), "no premise was drawn");
+        assert_eq!(got.reopened_decisions.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![ground]);
+        assert_eq!(
+            decision(tx.conn(), ground).unwrap().unwrap().status_changed_at.map(|t| t.to_rfc3339_z()),
+            Some("2019-01-01T00:00:00Z".to_string()),
+            "the premise's own clock did not move — the edge is the only thing that dates this",
+        );
+
+        // The same edge, backdated to before the reservation: a premise the holder took the task with.
+        let edge = decision_edge_id(tx.conn(), newer, ground).unwrap().unwrap();
+        tx.set_field("decision_edge", edge, "drawn_at", text("2019-06-01T00:00:00Z")).unwrap();
+        assert!(!premise_change_since(tx.conn(), held).unwrap().unwrap().any());
+
+        // An edge from a store that predates the column reads as older than any reservation, and stays quiet
+        // rather than warning on every superseded ground at once.
+        tx.set_field("decision_edge", edge, "drawn_at", Value::Null).unwrap();
+        assert!(!premise_change_since(tx.conn(), held).unwrap().unwrap().any());
     }
 }

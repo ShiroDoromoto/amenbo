@@ -247,6 +247,7 @@ pub fn decision_edge(e: &DecisionEdge) -> Record {
                 ("decision_id", kv(e.decision_id)),
                 ("target_decision_id", kv(e.target_decision_id)),
                 ("kind", tv(e.kind.as_str())),
+                ("drawn_at", tsov(&e.drawn_at)),
             ],
             &e.created_at,
             &e.updated_at,

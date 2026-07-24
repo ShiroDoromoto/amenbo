@@ -20,10 +20,10 @@ const OVERSCAN = 8;
 const PAGE = 100;
 
 /**
- * The activity feed (history across every project). Only task rows are openable, and the reply / edit / remove actions
- * are task-only too: the feed also carries rows aimed at projects and decisions. A project row is always a deletion
- * (the ledger names one nowhere else), so it has nothing to open; a decision row is either a deletion or a comment on a
- * live decision, so that one does have somewhere to go — the door for it is not built yet, not absent by design.
+ * The activity feed (history across every project). A row opens whatever it names, as long as that is still there:
+ * tasks and decisions both, since a decision row is either a deletion or a comment on a live decision. A project row is
+ * always a deletion (the ledger names one nowhere else), so it has nothing to open. The reply / edit / remove actions
+ * follow the same two kinds — a comment thread hangs off a task or off a decision, and the row does not care which.
  * Comments are not edited on this surface: a row is a one-line summary, and a multi-line editor would change its height
  * and wreck the virtual scroller's row-height estimate. Editing, like replying, opens the detail pane with that comment
  * in edit mode. Filtering picks independently on two axes: kind (system / comment) × facet (human / AI); both default
@@ -31,13 +31,19 @@ const PAGE = 100;
  */
 export function ActivityFeed({
   onOpenTask,
+  onOpenDecision,
   onReplyToTask,
+  onReplyToDecision,
   onEditComment,
+  onEditDecisionComment,
 }: {
   onOpenTask: (id: number) => void;
-  // A reply lands on the task's timeline (there are no per-comment threads): open the detail and focus the comment box.
+  onOpenDecision: (id: number) => void;
+  // A reply lands on the target's timeline (there are no per-comment threads): open the detail and focus the comment box.
   onReplyToTask: (id: number) => void;
+  onReplyToDecision: (id: number) => void;
   onEditComment: (taskId: number, commentId: number) => void;
+  onEditDecisionComment: (decisionId: number, commentId: number) => void;
 }) {
   const store = useStore();
   // seed = the newest 100 rows from the snapshot (swapped out by the subscription). Older pages are appended to it.
@@ -99,11 +105,22 @@ export function ActivityFeed({
   const padBottom = Math.max(0, (total - endIdx) * ROW_H);
   const windowItems = items.slice(startIdx, endIdx);
 
-  const openTarget = (it: ActivityItem): (() => void) | null =>
-    it.target.live && it.target.type === "task" ? () => onOpenTask(it.target.id) : null;
+  const openTarget = (it: ActivityItem): (() => void) | null => {
+    if (!it.target.live) return null; // A deleted target stays in the ledger but has nowhere to go.
+    if (it.target.type === "task") return () => onOpenTask(it.target.id);
+    if (it.target.type === "decision") return () => onOpenDecision(it.target.id);
+    return null; // A project row is always a deletion, so it never reaches here live.
+  };
 
-  const remove = async (commentId: number, taskId: number) => {
-    if (await confirmDialog(t("comment.removeConfirm"))) store.removeComment(commentId, taskId);
+  // Whether this row's comment can be acted on: a comment hanging off a live task or a live decision. A comment whose
+  // target is gone has no thread left to reply to, edit in, or delete from — the row is history and nothing else.
+  const commentOn = (it: ActivityItem): "task" | "decision" | null =>
+    it.kind === "comment" && it.target.live && it.target.type !== "project" ? it.target.type : null;
+
+  const remove = async (it: ActivityItem, kind: "task" | "decision") => {
+    if (!(await confirmDialog(t("comment.removeConfirm")))) return;
+    if (kind === "task") store.removeComment(it.id, it.target.id);
+    else store.removeDecisionComment(it.id, it.target.id);
   };
 
   return (
@@ -135,6 +152,7 @@ export function ActivityFeed({
         <div style={{ height: padTop }} />
         {windowItems.map((it) => {
           const open = openTarget(it);
+          const actsOn = commentOn(it);
           return (
             <div key={it.id} className="feed__item">
               <FacetAvatar actor={it.author} />
@@ -153,24 +171,33 @@ export function ActivityFeed({
                   ) : (
                     <span className="feed__target feed__target--gone">→ {it.target.title}</span>
                   )}
-                  {it.kind === "comment" && it.target.type === "task" && (
-                    <button className="feed__action" onClick={() => onReplyToTask(it.target.id)}>
+                  {actsOn && (
+                    <button
+                      className="feed__action"
+                      onClick={() =>
+                        actsOn === "task" ? onReplyToTask(it.target.id) : onReplyToDecision(it.target.id)
+                      }
+                    >
                       ↩ {t("activity.reply")}
                     </button>
                   )}
-                  {inTauri() && it.kind === "comment" && it.target.type === "task" && (
+                  {inTauri() && actsOn && (
                     <>
                       <button
                         className="feed__action"
                         title={t("comment.edit")}
-                        onClick={() => onEditComment(it.target.id, it.id)}
+                        onClick={() =>
+                          actsOn === "task"
+                            ? onEditComment(it.target.id, it.id)
+                            : onEditDecisionComment(it.target.id, it.id)
+                        }
                       >
                         ✎
                       </button>
                       <button
                         className="feed__action"
                         title={t("comment.remove")}
-                        onClick={() => void remove(it.id, it.target.id)}
+                        onClick={() => void remove(it, actsOn)}
                       >
                         ✕
                       </button>

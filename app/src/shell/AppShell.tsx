@@ -7,6 +7,7 @@ import { Sidebar } from "./Sidebar";
 import { BoardScreen } from "../screens/BoardScreen";
 import { ActivityFeed } from "../screens/ActivityFeed";
 import { CommandCatalogScreen } from "../screens/CommandCatalogScreen";
+import { PluginMarketScreen } from "../screens/PluginMarketScreen";
 import { ListScreen } from "../screens/ListScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
@@ -343,6 +344,7 @@ export function AppShell() {
             />
           )}
           {nav.type === "view" && nav.id === "commands" && <CommandCatalogScreen />}
+          {nav.type === "view" && nav.id === "plugins" && <PluginMarketScreen />}
           {nav.type === "view" && nav.id === "settings" && <SettingsScreen />}
           {nav.type === "view" && nav.id === "onboarding" && <OnboardingScreen onNav={navTo} />}
           {nav.type === "view" && nav.id === "newProject" && (

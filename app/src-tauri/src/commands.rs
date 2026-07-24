@@ -4163,6 +4163,107 @@ pub fn open_latest_installer() -> Result<String, CmdError> {
     Ok(url)
 }
 
+/// One entry of the plugin market list. Only what the list draws: identity, the one-line
+/// description, and the axes it is filtered on (`AMB-D-347`). Nothing an install needs — the
+/// signature, the checksum and the asset map are the detail's, not the list's (`AMB-D-385`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginEntryDto {
+    /// The plugin's name, which is its identity in the catalog.
+    name: String,
+    desc: String,
+    author: String,
+    /// `owner/name` — the GitHub coordinates a detail view reads stars and README from, lazily.
+    repo: String,
+    /// The operating systems it supports, as the manifest spells them (`macos` / `windows` / `linux`).
+    os: Vec<String>,
+    category: String,
+    /// The official badge: catalog-authoritative, never the manifest author's claim (`AMB-D-347`).
+    official: bool,
+    /// When the catalog first listed it (`YYYY-MM-DD…`), for the "new" ordering. Absent on a catalog
+    /// that does not record it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    added_at: Option<String>,
+}
+
+/// One catalog that fed the merged list — the official one first, then each registered third-party
+/// one in registration order.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginCatalogSourceDto {
+    url: String,
+    official: bool,
+    /// Whether it answered at all — from the network or, failing that, its cache. `false` contributes
+    /// nothing to the list, and is what the front end tells the user about rather than failing the view.
+    reachable: bool,
+    /// How many entries it offered, before cross-catalog de-duplication.
+    offered: usize,
+}
+
+/// The plugin market view: every entry across the merged catalogs, plus which catalogs answered.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginCatalogDto {
+    entries: Vec<PluginEntryDto>,
+    sources: Vec<PluginCatalogSourceDto>,
+    /// How many entries the merge dropped (a manifest the door refused, or a name a later catalog
+    /// repeated). A count, not the rows: the list's job is to show what a catalog *is* shedding, and
+    /// the reasons belong to the CLI's `plugin catalog list` (`AMB-D-354`).
+    dropped: usize,
+}
+
+/// Hand the GUI the merged plugin catalog for browsing (`AMB-D-347`): the official catalog plus every
+/// registered third-party one, folded into one de-duplicated list by
+/// [`amenbo_core::plugin_catalog::discover`].
+///
+/// **One fetch feeds the whole screen.** Filtering, searching and paging are the front end's, over
+/// the list this returns — the browse never goes back to the network per keystroke, and never asks
+/// GitHub about an entry it is merely listing. Each catalog is read the incidental way (a cache
+/// inside the freshness window answers with no request), so re-opening the screen inside the hour
+/// costs nothing, and a source that cannot be reached is reported as unreachable rather than failing
+/// the view. The fetch goes off the main thread via `spawn_blocking`, because a dead source is only
+/// found out by waiting for its timeout.
+#[tauri::command]
+pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
+    tauri::async_runtime::spawn_blocking(|| -> Result<PluginCatalogDto, CmdError> {
+        let paths = amenbo_core::config::Paths::resolve()?;
+        let discovery = amenbo_core::plugin_catalog::discover(&paths);
+        Ok(PluginCatalogDto {
+            entries: discovery
+                .entries
+                .into_iter()
+                .map(|e| PluginEntryDto {
+                    name: e.manifest.name,
+                    desc: e.manifest.desc,
+                    author: e.manifest.author,
+                    repo: e.manifest.repo,
+                    os: e.manifest.os.iter().map(|o| o.as_str().to_string()).collect(),
+                    category: e.manifest.category,
+                    official: e.manifest.official,
+                    added_at: e.added_at,
+                })
+                .collect(),
+            sources: discovery
+                .sources
+                .into_iter()
+                .map(|s| PluginCatalogSourceDto {
+                    url: s.url,
+                    official: s.official,
+                    reachable: s.reachable,
+                    offered: s.offered,
+                })
+                .collect(),
+            dropped: discovery.dropped.len(),
+        })
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("プラグイン目録の取得に失敗しました: {e}").into() })?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

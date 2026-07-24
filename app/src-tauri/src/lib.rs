@@ -219,6 +219,7 @@ pub fn run() {
       commands::doctor_report,
       commands::doctor_fix,
       commands::open_latest_installer,
+      commands::plugin_catalog_browse,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

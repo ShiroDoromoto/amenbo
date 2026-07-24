@@ -118,6 +118,21 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
         })()}
       </div>
 
+      {/* Plugins are a section of their own, not an item under "other" (`AMB-D-356`): finding one and
+          managing what is installed are two surfaces, and this is where the second one joins. */}
+      <div className="sidebar__group">
+        <div className="sidebar__label">{t("side.plugins")}</div>
+        {(() => {
+          const n: Nav = { type: "view", id: "plugins" };
+          return (
+            <button className={`navitem ${isActive(n) ? "navitem--active" : ""}`} onClick={() => onNav(n)}>
+              <span style={{ width: 16, textAlign: "center" }}>🧩</span>
+              {t("plugins.market")}
+            </button>
+          );
+        })()}
+      </div>
+
       <div className="sidebar__group">
         <div className="sidebar__label">{t("side.other")}</div>
         {([

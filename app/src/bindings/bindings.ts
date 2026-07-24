@@ -433,6 +433,60 @@ export type PlacementDto = { project: ProjectRefDto, };
 export type PlainRefDto = { id: string, name: string, };
 
 /**
+ * The plugin market view: every entry across the merged catalogs, plus which catalogs answered.
+ */
+export type PluginCatalogDto = { entries: Array<PluginEntryDto>, sources: Array<PluginCatalogSourceDto>, 
+/**
+ * How many entries the merge dropped (a manifest the door refused, or a name a later catalog
+ * repeated). A count, not the rows: the list's job is to show what a catalog *is* shedding, and
+ * the reasons belong to the CLI's `plugin catalog list` (`AMB-D-354`).
+ */
+dropped: number, };
+
+/**
+ * One catalog that fed the merged list — the official one first, then each registered third-party
+ * one in registration order.
+ */
+export type PluginCatalogSourceDto = { url: string, official: boolean, 
+/**
+ * Whether it answered at all — from the network or, failing that, its cache. `false` contributes
+ * nothing to the list, and is what the front end tells the user about rather than failing the view.
+ */
+reachable: boolean, 
+/**
+ * How many entries it offered, before cross-catalog de-duplication.
+ */
+offered: number, };
+
+/**
+ * One entry of the plugin market list. Only what the list draws: identity, the one-line
+ * description, and the axes it is filtered on (`AMB-D-347`). Nothing an install needs — the
+ * signature, the checksum and the asset map are the detail's, not the list's (`AMB-D-385`).
+ */
+export type PluginEntryDto = { 
+/**
+ * The plugin's name, which is its identity in the catalog.
+ */
+name: string, desc: string, author: string, 
+/**
+ * `owner/name` — the GitHub coordinates a detail view reads stars and README from, lazily.
+ */
+repo: string, 
+/**
+ * The operating systems it supports, as the manifest spells them (`macos` / `windows` / `linux`).
+ */
+os: Array<string>, category: string, 
+/**
+ * The official badge: catalog-authoritative, never the manifest author's claim (`AMB-D-347`).
+ */
+official: boolean, 
+/**
+ * When the catalog first listed it (`YYYY-MM-DD…`), for the "new" ordering. Absent on a catalog
+ * that does not record it.
+ */
+addedAt?: string, };
+
+/**
  * What [`repair_pointers`] returns: how many folders were fixed, and how many were left waiting on
  * a human's judgement.
  */

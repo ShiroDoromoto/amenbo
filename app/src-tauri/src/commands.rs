@@ -675,30 +675,48 @@ fn date_iso(d: NaiveDate) -> String {
     amenbo_core::time::date_to_string(d)
 }
 
+/// A count and its unit in English, pluralized (`1 day` / `2 days`). Every English label worded in
+/// this file counts through here, so the rule is spelled once.
+fn en_plural(n: u64, unit: &str) -> String {
+    if n == 1 { format!("{n} {unit}") } else { format!("{n} {unit}s") }
+}
+
 /// The human label for a due date (today, tomorrow, in N days, ...). Core returns the bare date, so
-/// the GUI side does the wording.
-fn due_label(d: NaiveDate) -> String {
+/// the GUI side does the wording — in the reader's language, like every other label built here.
+fn due_label(d: NaiveDate, lang: &str) -> String {
     let diff = (d - amenbo_core::time::today()).num_days();
-    match diff {
-        0 => "今日".to_string(),
-        1 => "明日".to_string(),
-        -1 => "昨日".to_string(),
-        n if n > 1 => format!("{n}日後"),
-        n => format!("{}日前", -n),
+    let en = lang == "en";
+    match (diff, en) {
+        (0, true) => "Today".to_string(),
+        (0, false) => "今日".to_string(),
+        (1, true) => "Tomorrow".to_string(),
+        (1, false) => "明日".to_string(),
+        (-1, true) => "Yesterday".to_string(),
+        (-1, false) => "昨日".to_string(),
+        (n, true) if n > 1 => format!("In {}", en_plural(n as u64, "day")),
+        (n, false) if n > 1 => format!("{n}日後"),
+        (n, true) => format!("{} ago", en_plural(n.unsigned_abs(), "day")),
+        (n, false) => format!("{}日前", -n),
     }
 }
 
-/// The relative-time label (just now, N minutes ago, ...).
-fn ago_label(at: &Timestamp) -> String {
-    let secs = (chrono::Utc::now() - at.0).num_seconds().max(0);
+/// The relative-time label (just now, N minutes ago, ...), in the reader's language. The English
+/// wording of "just now" matches `act.justNow` in app/src/core/i18n.ts, which the browser fallback
+/// uses for the same spot.
+fn ago_label(at: &Timestamp, lang: &str) -> String {
+    let secs = (chrono::Utc::now() - at.0).num_seconds().max(0) as u64;
+    let en = lang == "en";
     if secs < 60 {
-        "たった今".to_string()
+        if en { "just now".to_string() } else { "たった今".to_string() }
     } else if secs < 3600 {
-        format!("{}分前", secs / 60)
+        let n = secs / 60;
+        if en { format!("{} ago", en_plural(n, "minute")) } else { format!("{n}分前") }
     } else if secs < 86400 {
-        format!("{}時間前", secs / 3600)
+        let n = secs / 3600;
+        if en { format!("{} ago", en_plural(n, "hour")) } else { format!("{n}時間前") }
     } else {
-        format!("{}日前", secs / 86400)
+        let n = secs / 86400;
+        if en { format!("{} ago", en_plural(n, "day")) } else { format!("{n}日前") }
     }
 }
 
@@ -778,10 +796,11 @@ fn render_event(ev: &serde_json::Value, title: &str, lang: &str) -> EventDto {
             match (en, tasks + decisions) {
                 (true, 0) => format!("Deleted “{title}”"),
                 (false, 0) => format!("「{title}」を削除"),
-                (true, _) => {
-                    let unit = |n: u64, one: &str| if n == 1 { format!("{n} {one}") } else { format!("{n} {one}s") };
-                    format!("Deleted “{title}” ({}, {})", unit(tasks, "task"), unit(decisions, "decision"))
-                }
+                (true, _) => format!(
+                    "Deleted “{title}” ({}, {})",
+                    en_plural(tasks, "task"),
+                    en_plural(decisions, "decision")
+                ),
                 (false, _) => format!("「{title}」を削除（タスク{tasks}件・決定{decisions}件）"),
             }
         }
@@ -797,6 +816,7 @@ fn render_event(ev: &serde_json::Value, title: &str, lang: &str) -> EventDto {
 /// comes from the placement.
 fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskCardRow) -> TaskCardDto {
     let config = &store.config;
+    let lang = lang_code(&config.language);
     let card_kind = |a: &amenbo_core::store_engine::read::CardActor| a.kind.as_deref().and_then(ActorKind::parse);
 
     let project_id = row.placement.as_ref().map(|p| p.project_id);
@@ -850,7 +870,7 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         assignee,
         priority: row.priority.as_deref().and_then(Priority::parse).map(|p| p.as_str()),
         due: due_date.map(date_iso),
-        due_label: due_date.map(due_label),
+        due_label: due_date.map(|d| due_label(d, lang)),
         completed_at: row
             .completed_at
             .as_deref()
@@ -1426,7 +1446,7 @@ pub fn change_cursor() -> Result<i64, CmdError> {
 /// Shape one row of the persistent read-model into a GUI DTO. Wording an `event` (system events
 /// only) and the relative-time label happen here, so core stays free of rendering and i18n.
 fn activity_dto(it: amenbo_core::activity::Item, lang: &str, config: &amenbo_core::config::Config) -> ActivityItemDto {
-    let ago = ago_label(&it.at);
+    let ago = ago_label(&it.at, lang);
     // Read before `it` is taken apart below: the sequence is derived from the whole row.
     let seq = it.seq().rank();
     let title = if it.title.is_empty() { nameless_title(lang).to_string() } else { it.title };
@@ -1446,7 +1466,7 @@ fn activity_dto(it: amenbo_core::activity::Item, lang: &str, config: &amenbo_cor
         },
         event,
         text: it.text,
-        edited_ago: it.edited_at.as_ref().map(ago_label),
+        edited_ago: it.edited_at.as_ref().map(|t| ago_label(t, lang)),
     }
 }
 
@@ -2043,12 +2063,14 @@ fn decision_comment_dto_from_row(
     row: amenbo_core::store_engine::read::CommentRow,
     config: &amenbo_core::config::Config,
 ) -> DecisionCommentDto {
-    let ago = Timestamp::parse_rfc3339(&row.created_at).map(|ts| ago_label(&ts)).unwrap_or_default();
+    let lang = lang_code(&config.language);
+    let ago =
+        Timestamp::parse_rfc3339(&row.created_at).map(|ts| ago_label(&ts, lang)).unwrap_or_default();
     let author_kind = row.author_kind.as_deref().and_then(ActorKind::parse);
     let edited_ago = row
         .edited_at
         .as_deref()
-        .map(|t| Timestamp::parse_rfc3339(t).map(|ts| ago_label(&ts)).unwrap_or_default());
+        .map(|t| Timestamp::parse_rfc3339(t).map(|ts| ago_label(&ts, lang)).unwrap_or_default());
     DecisionCommentDto {
         id: row.id,
         ago,
@@ -4826,6 +4848,34 @@ mod tests {
         let alive = activity_dto(nameless("生きているタスク"), "ja", &config);
         assert_eq!(alive.target.title, "生きているタスク");
         assert_eq!(alive.event.unwrap().text, "「生きているタスク」を完了に変更");
+    }
+
+    /// Every label this layer words follows the UI language, the due chip and the relative time
+    /// included — an English UI reads a card end to end in English, down to the date on it.
+    #[test]
+    fn the_due_and_relative_time_labels_follow_the_ui_language() {
+        let day = |n: i64| amenbo_core::time::today() + chrono::Duration::days(n);
+
+        assert_eq!(due_label(day(0), "en"), "Today");
+        assert_eq!(due_label(day(1), "en"), "Tomorrow");
+        assert_eq!(due_label(day(-1), "en"), "Yesterday");
+        assert_eq!(due_label(day(2), "en"), "In 2 days");
+        assert_eq!(due_label(day(-3), "en"), "3 days ago");
+        assert_eq!(due_label(day(0), "ja"), "今日");
+        assert_eq!(due_label(day(2), "ja"), "2日後");
+        assert_eq!(due_label(day(-3), "ja"), "3日前");
+
+        let ago = |secs: i64| Timestamp(chrono::Utc::now() - chrono::Duration::seconds(secs));
+
+        assert_eq!(ago_label(&ago(5), "en"), "just now");
+        // The singular is not cosmetic: "1 minutes ago" is the tell of a label built by rote.
+        assert_eq!(ago_label(&ago(60), "en"), "1 minute ago");
+        assert_eq!(ago_label(&ago(120), "en"), "2 minutes ago");
+        assert_eq!(ago_label(&ago(3600), "en"), "1 hour ago");
+        assert_eq!(ago_label(&ago(86_400 * 3), "en"), "3 days ago");
+        assert_eq!(ago_label(&ago(5), "ja"), "たった今");
+        assert_eq!(ago_label(&ago(120), "ja"), "2分前");
+        assert_eq!(ago_label(&ago(86_400 * 3), "ja"), "3日前");
     }
 
     /// Deleting a project or a decision also lands in the ledger (`activity_log::event`). Without a

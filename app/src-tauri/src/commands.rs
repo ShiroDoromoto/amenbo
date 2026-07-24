@@ -4547,6 +4547,62 @@ pub fn plugin_set_enabled(
     })
 }
 
+/// What an uninstall actually found and removed (`AMB-D-357`) — the receipt the face reports from.
+///
+/// Every piece is reported separately because the point of the receipt is that a plugin is more than its
+/// binary: the settings and the secrets are the part a user does not picture going, and saying so
+/// afterwards is what makes "a re-install starts clean" believable.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginRemovedDto {
+    /// The plugin was enabled, and its gate has been closed on the way out.
+    was_enabled: bool,
+    /// A consent record existed and is gone — a re-install asks again (`AMB-D-351`).
+    consent: bool,
+    /// Machine-default settings existed and are gone.
+    machine_defaults: bool,
+    /// Secrets existed and have been purged (`AMB-D-357`'s non-negotiable).
+    secrets: bool,
+    /// How many per-project setting rows were deleted, across every project.
+    #[ts(type = "number")]
+    project_overrides: usize,
+    /// How many per-project gate answers were deleted, across every project.
+    #[ts(type = "number")]
+    project_gates: usize,
+    /// The plugin's home under `plugins/` existed and has been removed.
+    directory: bool,
+    /// The plugin had runs in the execution log and they have been purged (`AMB-D-387`).
+    runs_log: bool,
+    /// Whether anything at all was found. `false` is not a failure: the name held nothing on this machine.
+    anything: bool,
+}
+
+/// Remove one plugin and everything it left behind (`AMB-D-357`) — the GUI's `plugin uninstall`.
+///
+/// **Uninstall is not disable.** It closes the gate on the way out and then takes the binary, the consent,
+/// the machine defaults, every project's overrides and gates, the secrets and the run log with it — so the
+/// face must have said as much before calling this. What came back is the receipt, not a promise: a piece
+/// that was not there is reported as one less thing removed rather than as a failure, which is also how a
+/// half-broken install gets cleaned up.
+#[tauri::command]
+pub fn plugin_uninstall(name: String) -> Result<PluginRemovedDto, CmdError> {
+    with_store_mut(|store| {
+        let r = amenbo_core::plugin_uninstall::uninstall(store, &name)?;
+        Ok(PluginRemovedDto {
+            was_enabled: r.was_enabled,
+            consent: r.consent,
+            machine_defaults: r.machine_defaults,
+            secrets: r.secrets,
+            project_overrides: r.project_overrides,
+            project_gates: r.project_gates,
+            directory: r.directory,
+            runs_log: r.runs_log,
+            anything: r.anything(),
+        })
+    })
+}
+
 /// One installed plugin the catalog holds a different build of (`AMB-D-359`) — an offer the face can act
 /// on, not a diff of two manifests.
 #[derive(Serialize, TS)]

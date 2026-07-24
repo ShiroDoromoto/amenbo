@@ -536,6 +536,51 @@ compatible: boolean,
 incompatibleReason?: string, };
 
 /**
+ * What an uninstall actually found and removed (`AMB-D-357`) — the receipt the face reports from.
+ *
+ * Every piece is reported separately because the point of the receipt is that a plugin is more than its
+ * binary: the settings and the secrets are the part a user does not picture going, and saying so
+ * afterwards is what makes "a re-install starts clean" believable.
+ */
+export type PluginRemovedDto = { 
+/**
+ * The plugin was enabled, and its gate has been closed on the way out.
+ */
+wasEnabled: boolean, 
+/**
+ * A consent record existed and is gone — a re-install asks again (`AMB-D-351`).
+ */
+consent: boolean, 
+/**
+ * Machine-default settings existed and are gone.
+ */
+machineDefaults: boolean, 
+/**
+ * Secrets existed and have been purged (`AMB-D-357`'s non-negotiable).
+ */
+secrets: boolean, 
+/**
+ * How many per-project setting rows were deleted, across every project.
+ */
+projectOverrides: number, 
+/**
+ * How many per-project gate answers were deleted, across every project.
+ */
+projectGates: number, 
+/**
+ * The plugin's home under `plugins/` existed and has been removed.
+ */
+directory: boolean, 
+/**
+ * The plugin had runs in the execution log and they have been purged (`AMB-D-387`).
+ */
+runsLog: boolean, 
+/**
+ * Whether anything at all was found. `false` is not a failure: the name held nothing on this machine.
+ */
+anything: boolean, };
+
+/**
  * What GitHub says about one plugin's repository — the figures the catalog deliberately does not
  * carry (`AMB-D-347`). Every one is optional on its own: the requests behind them fail
  * independently, and a repository with no release has no download count to report.

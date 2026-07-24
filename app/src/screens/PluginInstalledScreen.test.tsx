@@ -14,6 +14,12 @@ const hoisted = vi.hoisted(() => ({
   error: undefined as unknown,
   gated: [] as { name: string; projectId: number | null; enabled: boolean }[],
   projects: [] as { id: number; name: string }[],
+  removed: [] as string[],
+  /** What the uninstall answers — the receipt the screen reports from. */
+  receipt: {} as Record<string, unknown>,
+  /** What the confirmation was asked, and how it was answered. */
+  asked: [] as string[],
+  confirm: true,
 }));
 
 // Only the seam that talks to core is replaced: which rows exist, and what the write was called with.
@@ -30,8 +36,19 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
       hoisted.gated.push({ name, projectId, enabled });
       return Promise.resolve(enabled);
     },
+    uninstallPlugin: (name: string) => {
+      hoisted.removed.push(name);
+      return Promise.resolve(hoisted.receipt);
+    },
   };
 });
+
+vi.mock("../core/dialog", () => ({
+  confirmDialog: (message: string) => {
+    hoisted.asked.push(message);
+    return Promise.resolve(hoisted.confirm);
+  },
+}));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../core/snapshot")>();
@@ -69,6 +86,13 @@ beforeEach(() => {
   hoisted.error = undefined;
   hoisted.gated = [];
   hoisted.projects = [];
+  hoisted.removed = [];
+  hoisted.asked = [];
+  hoisted.confirm = true;
+  hoisted.receipt = {
+    wasEnabled: false, consent: true, machineDefaults: true, secrets: true,
+    projectOverrides: 2, projectGates: 1, directory: true, runsLog: true, anything: true,
+  };
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -188,5 +212,63 @@ describe("a plugin this build cannot speak to", () => {
     hoisted.installs = [row({ name: "notify", consented: true, enabled: true })];
     render();
     expect(chips()).toEqual([t("plugins.gate.machine"), t("plugins.enabledChip")]);
+  });
+});
+
+// Uninstall is not disable (`AMB-D-357`): it takes the settings in every project, the secrets and the
+// consent with it, and none of that comes back. So the question has to say so before anything is removed,
+// and the answer has to say what actually went.
+describe("removing a plugin from this screen", () => {
+  it("asks first, naming what goes beyond the plugin itself", async () => {
+    hoisted.installs = [row({ name: "notify" })];
+    render();
+
+    await act(async () => { button(t("plugins.remove"))!.click(); });
+    expect(hoisted.asked).toEqual([tf("plugins.removeConfirm", { name: "notify" })]);
+    expect(hoisted.removed).toEqual(["notify"]);
+  });
+
+  it("removes nothing when the question is declined", async () => {
+    hoisted.confirm = false;
+    hoisted.installs = [row({ name: "notify" })];
+    render();
+
+    await act(async () => { button(t("plugins.remove"))!.click(); });
+    expect(hoisted.removed).toEqual([]);
+  });
+
+  // The receipt is what makes "a re-install starts clean" believable, and it is drawn after the row is gone.
+  it("says what was taken, once the row it was about is gone", async () => {
+    hoisted.installs = [row({ name: "notify" })];
+    render();
+    await act(async () => { button(t("plugins.remove"))!.click(); });
+
+    hoisted.installs = [];
+    render();
+    expect(container.textContent).toContain(
+      tf("plugins.removed", {
+        name: "notify",
+        what: [
+          t("plugins.removedPart.binary"),
+          t("plugins.removedPart.settings"),
+          t("plugins.removedPart.secrets"),
+          t("plugins.removedPart.consent"),
+          t("plugins.removedPart.runs"),
+        ].join(t("common.listSeparator")),
+      }),
+    );
+  });
+
+  // A name that held nothing is not a failure — it is how a half-broken install gets cleaned up.
+  it("says so when the name held nothing on this machine", async () => {
+    hoisted.receipt = {
+      wasEnabled: false, consent: false, machineDefaults: false, secrets: false,
+      projectOverrides: 0, projectGates: 0, directory: false, runsLog: false, anything: false,
+    };
+    hoisted.installs = [row({ name: "notify" })];
+    render();
+
+    await act(async () => { button(t("plugins.remove"))!.click(); });
+    expect(container.textContent).toContain(tf("plugins.removedNothing", { name: "notify" }));
   });
 });

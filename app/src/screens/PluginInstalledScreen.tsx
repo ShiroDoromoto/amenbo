@@ -1,7 +1,13 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { PluginGate } from "../components/PluginGate";
-import { t, tf } from "../core/i18n";
-import { usePluginInstalls, type PluginInstall } from "../core/pluginInstalls";
+import { confirmDialog } from "../core/dialog";
+import { errText, t, tf } from "../core/i18n";
+import {
+  uninstallPlugin,
+  usePluginInstalls,
+  type PluginInstall,
+  type PluginRemoved,
+} from "../core/pluginInstalls";
 import {
   clearDismissedPluginUpdates,
   refreshPluginUpdates,
@@ -34,6 +40,8 @@ export function PluginInstalledScreen() {
   const { updates, loading: checking } = usePluginUpdates(gateProject);
   const [checked, setChecked] = useState(false);
   useEffect(() => { refreshPluginUpdates(); }, []);
+  // What the last uninstall took, kept here because the row that did it is gone by the time it is drawn.
+  const [removed, setRemoved] = useState<{ name: string; parts: string } | null>(null);
 
   return (
     <>
@@ -60,6 +68,15 @@ export function PluginInstalledScreen() {
         {error != null && (
           <div style={{ color: "var(--c-warn)", padding: "var(--s-2) 0" }}>{t("plugins.installsError")}</div>
         )}
+        {/* The receipt outlives the row it is about: what an uninstall took can only be said once the
+            plugin is gone from the list, so it is said here rather than where the row was. */}
+        {removed && (
+          <div className="faint" style={{ fontSize: "var(--fs-xs)", padding: "var(--s-2) 0" }}>
+            {removed.parts
+              ? tf("plugins.removed", { name: removed.name, what: removed.parts })
+              : tf("plugins.removedNothing", { name: removed.name })}
+          </div>
+        )}
         {loading && installs.length === 0 && (
           <div style={{ color: "var(--c-muted)", padding: 16 }}>{t("app.loading")}</div>
         )}
@@ -76,11 +93,30 @@ export function PluginInstalledScreen() {
             projects={projects}
             projectId={gateProject}
             onProject={setPickedProject}
+            onRemoved={setRemoved}
           />
         ))}
       </div>
     </>
   );
+}
+
+/**
+ * What an uninstall took, as a list a person can read — empty when the name held nothing on this machine.
+ *
+ * The settings are one item whichever tier they sat at (a machine default and a project override are the
+ * same thing to the person who typed them), and the binary is not the headline: what makes `AMB-D-357`
+ * worth saying out loud is that the settings, the secrets and the consent went with it.
+ */
+function removedParts(r: PluginRemoved): string {
+  const parts = [
+    r.directory && t("plugins.removedPart.binary"),
+    (r.machineDefaults || r.projectOverrides > 0) && t("plugins.removedPart.settings"),
+    r.secrets && t("plugins.removedPart.secrets"),
+    r.consent && t("plugins.removedPart.consent"),
+    r.runsLog && t("plugins.removedPart.runs"),
+  ].filter((p): p is string => typeof p === "string");
+  return parts.join(t("common.listSeparator"));
 }
 
 /**
@@ -95,12 +131,33 @@ export function PluginInstalledScreen() {
  * switch says. So an incompatible row wears that instead of the plain "enabled", and the gate below it
  * carries core's own reason: an enabled plugin sitting silent is exactly the state a badge has to name.
  */
-function InstalledRow({ install, projects, projectId, onProject }: {
+function InstalledRow({ install, projects, projectId, onProject, onRemoved }: {
   install: PluginInstall;
   projects: { id: number; name: string }[];
   projectId: number | null;
   onProject: (id: number | null) => void;
+  /** Report what an uninstall took, for the screen to say once this row is gone. */
+  onRemoved: (r: { name: string; parts: string }) => void;
 }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // The question names what goes beyond the binary (`AMB-D-357`): the settings in every project, the
+  // secrets and the consent are the part nobody pictures, and they do not come back with a re-install.
+  const onRemove = async () => {
+    if (!(await confirmDialog(tf("plugins.removeConfirm", { name: install.name })))) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const removed = await uninstallPlugin(install.name);
+      if (removed) onRemoved({ name: install.name, parts: removedParts(removed) });
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="feed__item">
       <div className="feed__body" style={{ minWidth: 0 }}>
@@ -129,6 +186,14 @@ function InstalledRow({ install, projects, projectId, onProject }: {
           projectId={projectId}
           onProject={onProject}
         />
+        {/* Set apart from the gate: disabling is a switch that can be flicked back, this is not
+            (`AMB-D-357`). */}
+        <div className="pluggate">
+          <button className="feed__action" disabled={busy} onClick={() => void onRemove()}>
+            {busy ? t("plugins.removing") : t("plugins.remove")}
+          </button>
+          {error && <div className="pluggate__note">{error}</div>}
+        </div>
       </div>
     </div>
   );

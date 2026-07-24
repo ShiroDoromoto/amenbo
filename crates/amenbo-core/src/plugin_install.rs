@@ -127,13 +127,13 @@ fn resolve<'a>(catalog: &'a Catalog, name: &str) -> Result<&'a Entry> {
                     .unwrap_or_default();
                 return Err(Error::invalid(
                     format!("the catalog's entry for '{name}' is not valid and was dropped ({first})"),
-                    format!("目録の '{name}' は検証に通らず取り込み時に落とされました（{first}）"),
+                    format!("カタログの '{name}' は検証に通らず取り込み時に落とされました（{first}）"),
                 ));
             }
             Dropped::Duplicate { name: dropped_name } if dropped_name == name => {
                 return Err(Error::invalid(
                     format!("the catalog carries more than one entry named '{name}'"),
-                    format!("目録に '{name}' という名前のエントリが複数あります"),
+                    format!("カタログに '{name}' という名前のエントリが複数あります"),
                 ));
             }
             _ => {}
@@ -141,7 +141,7 @@ fn resolve<'a>(catalog: &'a Catalog, name: &str) -> Result<&'a Entry> {
     }
     Err(Error::not_found(
         format!("no plugin named '{name}' in the catalog"),
-        format!("目録にプラグイン '{name}' はありません"),
+        format!("カタログにプラグイン '{name}' はありません"),
     ))
 }
 
@@ -357,7 +357,7 @@ pub(crate) fn place(paths: &Paths, manifest: &Manifest, program: &[u8]) -> Resul
     if is_reserved_plugin_name(name) {
         return Err(Error::invalid(
             format!("'{name}' is not a plugin name (it is reserved for the registry cache)"),
-            format!("'{name}' はプラグイン名ではありません（目録キャッシュ用に予約されています）"),
+            format!("'{name}' はプラグイン名ではありません（カタログのキャッシュ用に予約されています）"),
         ));
     }
     let home = paths.plugin_dir(name);

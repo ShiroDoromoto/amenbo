@@ -4301,7 +4301,7 @@ pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
         })
     })
     .await
-    .map_err(|e| -> CmdError { format!("プラグイン目録の取得に失敗しました: {e}").into() })?
+    .map_err(|e| -> CmdError { format!("プラグインカタログの取得に失敗しました: {e}").into() })?
 }
 
 /// Register a third-party catalog so browsing shows what it offers (`AMB-D-347`). Returns `false` when
@@ -4538,7 +4538,7 @@ mod tests {
         };
         // The term is in neither title nor body — only in a comment, which is what the client-side search
         // could not see.
-        let commented = store.add_decision(new("目録の署名", "公開鍵は同梱する")).unwrap();
+        let commented = store.add_decision(new("カタログの署名", "公開鍵は同梱する")).unwrap();
         store.add_decision_comment(commented.id, ActorKind::Ai, "ここには出るはず").unwrap();
         let other = store.add_decision(new("別の決定", "無関係な本文")).unwrap();
         drop(store);

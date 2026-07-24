@@ -260,7 +260,7 @@ pub fn apply(
     let entry = catalog.find(name).ok_or_else(|| {
         Error::not_found(
             format!("the catalog lists no plugin named '{name}', so there is no build to update to"),
-            format!("目録にプラグイン '{name}' は無いので、更新先の版がありません"),
+            format!("カタログにプラグイン '{name}' は無いので、更新先の版がありません"),
         )
     })?;
     if !differs(&installed.manifest, &entry.manifest, here) {

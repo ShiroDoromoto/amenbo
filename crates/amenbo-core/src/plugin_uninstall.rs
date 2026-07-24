@@ -80,7 +80,7 @@ pub fn uninstall(store: &mut Store, plugin: &str) -> Result<Removed> {
     if is_reserved_plugin_name(plugin) {
         return Err(Error::invalid(
             format!("'{plugin}' is not a plugin name (it is reserved for the registry cache)"),
-            format!("'{plugin}' はプラグイン名ではありません（目録キャッシュ用に予約されています）"),
+            format!("'{plugin}' はプラグイン名ではありません（カタログのキャッシュ用に予約されています）"),
         ));
     }
     let mut removed = Removed {

@@ -18,9 +18,9 @@
 #     doc comments in `cli.rs` into `--help` text, which this guard therefore does not reach.
 #   - everything from a file's first `#[cfg(test)]` — a test that pins the production spelling is
 #     asserting the production channel's answer, which is exactly right.
-#   - `crates/amenbo-core/src/agent.rs` — the agent spec's runnable lines are authored with the
-#     production spelling on purpose and retargeted as the spec is handed out; a test in that file
-#     holds the rule.
+#   - `crates/amenbo-core/src/agent.rs` — the agent spec is authored with the production spelling on
+#     purpose, in its runnable lines and its prose alike, and retargeted as the spec is handed out;
+#     tests in that file hold the rule.
 #
 # Recall is bounded by the list of command words below, and that is the intended trade: a name
 # followed by a real subcommand is a command someone is being told to type, while `amenbo` followed

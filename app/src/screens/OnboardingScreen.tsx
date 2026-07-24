@@ -1,10 +1,34 @@
 // The onboarding screen is help and reference. Creating a project navigates to a GUI screen (NewProjectScreen);
 // opening one (bind) has no GUI route, so the screen hands over the CLI command instead.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { t } from "../core/i18n";
+import { fetchCliCommandName } from "../core/mutations";
 import type { Nav } from "../shell/AppShell";
 
+/** The name a shipped build installs, and the fallback whenever the build is not there to be asked. */
+const PRODUCTION_CLI = "amenbo";
+
+/**
+ * The command this build installs, which is the one the steps may tell someone to type. Asked once —
+ * the channel is fixed at build time — and it stands at the production name until the answer comes,
+ * so the shipped build, where the answer *is* that name, never shows the change.
+ */
+function useCliCommandName(): string {
+  const [cmd, setCmd] = useState(PRODUCTION_CLI);
+  useEffect(() => {
+    let alive = true;
+    fetchCliCommandName()
+      .then((c) => alive && c && setCmd(c))
+      .catch(() => {}); // Unanswered: the production name is still the likeliest one to be there.
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return cmd;
+}
+
 export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
+  const cli = useCliCommandName();
   return (
     <div className="onboard">
       <div className="onboard__hero">
@@ -23,7 +47,7 @@ export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
             icon="📂"
             label={t("onboard.openLabel")}
             hint={t("onboard.openHint")}
-            cmd={`amenbo bind --project <${t("onboard.projectIdPh")}>`}
+            cmd={`${cli} bind --project <${t("onboard.projectIdPh")}>`}
           />
         </div>
       </div>
@@ -33,7 +57,7 @@ export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
           <h3 className="onboard__stepstitle">{t("onboard.stepsTitle")}</h3>
           <p className="muted">{t("onboard.stepsIntro")}</p>
         </div>
-        {steps().map((s, i) => (
+        {steps(cli).map((s, i) => (
           <Step key={s.cmd} n={i + 1} title={s.title} cmd={s.cmd}>
             {s.body}
           </Step>
@@ -43,18 +67,18 @@ export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
   );
 }
 
-/** The reference steps. */
-function steps(): { title: string; cmd: string; body: React.ReactNode }[] {
+/** The reference steps, worded for the CLI this build installs (`cli`). */
+function steps(cli: string): { title: string; cmd: string; body: React.ReactNode }[] {
   return [
     {
       title: t("onboard.s1title"),
-      cmd: "amenbo init",
+      cmd: `${cli} init`,
       body: <>{t("onboard.s1a")}<code>.amenbo</code>{t("onboard.s1b")}<code>AGENTS.md</code>{t("onboard.s1c")}</>,
     },
     {
       title: t("onboard.s2title"),
       cmd: "cat AGENTS.md",
-      body: <><code>AGENTS.md</code>{t("onboard.s2a")}<code>amenbo agent --json</code>{t("onboard.s2b")}</>,
+      body: <><code>AGENTS.md</code>{t("onboard.s2a")}<code>{`${cli} agent --json`}</code>{t("onboard.s2b")}</>,
     },
     { title: t("onboard.s4title"), cmd: t("onboard.s4cmd"), body: t("onboard.s4body") },
   ];

@@ -1285,6 +1285,19 @@ pub fn dev_badge() -> Option<String> {
     amenbo_core::config::Paths::dev_badge()
 }
 
+/// What this build's CLI is called where someone types it — `amenbo` in production, `amenbo-dev` on
+/// a dev build, the same answer every other surface that words a command takes
+/// ([`amenbo_core::config::Paths::command_name`]). Asked once at startup for the reason
+/// [`dev_badge`] is: the channel is stamped in at build time.
+///
+/// The onboarding steps are the surface that needs it. They hand over commands to run, and a dev
+/// window that spells them `amenbo` is naming a CLI that is not installed beside it — the reader
+/// types it and reaches production, or nothing at all.
+#[tauri::command]
+pub fn cli_command_name() -> &'static str {
+    amenbo_core::config::Paths::command_name()
+}
+
 /// Open the folder holding this machine's logs in the OS file manager — the one step between "please
 /// attach your logs" and a file the user can drag onto an issue (`AMB-D-382`).
 ///

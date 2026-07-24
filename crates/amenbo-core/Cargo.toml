@@ -87,6 +87,13 @@ pulldown-cmark = { version = "0.13", default-features = false }
 [target.'cfg(windows)'.dependencies]
 zip = { version = "8", default-features = false, features = ["deflate"] }
 
+# SIGPIPE control for the plugin stdin writer. The CLI hands SIGPIPE back to the kernel so `amenbo … |
+# head` ends cleanly (a process-wide disposition), which would otherwise kill the whole process when a
+# fire-and-forget hook closes its stdin before reading — so the writer thread blocks SIGPIPE on itself
+# (`sys::block_sigpipe_on_current_thread`) to get EPIPE back instead. Unix-only: Windows has no SIGPIPE.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 amenbo-scratch.workspace = true
 serde_json.workspace = true

@@ -75,6 +75,7 @@ dependencies = [
  "flate2",
  "fs2",
  "getrandom 0.4.3",
+ "libc",
  "minisign-verify",
  "pulldown-cmark",
  "rusqlite",

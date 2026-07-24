@@ -108,8 +108,9 @@ pub struct PremiseRef {
 
 /// The premises a task acquired **after its current status began** (`AMB-D-366`) — what a caller surfaces
 /// to a holder whose reservation may have been silently undercut. Each list is the added premises that
-/// still bear on readiness (a not-done blocker, an unsettled decision); an added edge onto a done task or a
-/// link onto a settled decision is not here, because it never moved `ready`. Read-only: *how strongly to
+/// still bear on readiness (a blocker that has not ended, an unsettled decision); an added edge onto a
+/// task that is already over, or a link onto a settled decision, is not here, because it never moved
+/// `ready`. Read-only: *how strongly to
 /// react* (a quiet note on a read, a firm warn at completion) is the caller's, not this type's.
 #[derive(Clone, Debug, Serialize)]
 pub struct PremiseChange {

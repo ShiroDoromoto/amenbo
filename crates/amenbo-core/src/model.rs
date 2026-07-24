@@ -127,6 +127,18 @@ pub enum TaskStatus {
 }
 
 impl TaskStatus {
+    /// The **terminals**: the statuses that mean the work is not coming back. Written once here so the
+    /// two readings of an ended task cannot drift apart — *closed* is this set, *carried out* is `Done`
+    /// alone ([`Task::completed`]).
+    pub const CLOSED: [TaskStatus; 2] = [TaskStatus::Done, TaskStatus::Rejected];
+
+    /// Is this task over, whichever way it ended? What a dependency asks before it releases what it was
+    /// holding back, and what an "outstanding work" count asks before it counts a task. Not the same
+    /// question as [`Task::completed`], which asks whether the work was *carried out*.
+    pub fn is_closed(&self) -> bool {
+        Self::CLOSED.contains(self)
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             TaskStatus::Todo => "todo",

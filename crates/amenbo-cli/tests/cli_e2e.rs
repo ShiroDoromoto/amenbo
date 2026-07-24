@@ -416,6 +416,41 @@ fn task_dependencies_drive_ready_and_unblock() {
     assert!(has_unblock, "task.unblocked was not recorded: {acts}");
 }
 
+/// A blocker that is **decided against** releases what it was holding back, exactly as a finished one
+/// does (`AMB-D-397`). The two terminals differ only in whether the work was carried out; leaving
+/// `rejected` out of the open-blocker reading would strand every dependent behind a task nobody is going
+/// to do, with `undepend` the only way out — and nothing on any screen to say so.
+///
+/// The unblock signal has to follow the same reading: readiness is derived on every query either way, so
+/// what would be lost is the line that says *when* it happened.
+#[test]
+fn rejecting_a_blocker_releases_its_dependents() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "却下PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    let a = cli.json(&["task", "add", "--title", "やらないと決めた土台", "--project", &pid, "--json"]);
+    let aid = id_str(&a["task"]["id"]);
+    let b = cli.json(&["task", "add", "--title", "上物", "--project", &pid, "--json"]);
+    let bid = id_str(&b["task"]["id"]);
+    cli.json(&["task", "depend", &bid, "--on", &aid, "--json"]);
+    assert_eq!(cli.json(&["task", "show", &bid, "--json"])["ready"], false);
+
+    cli.json(&["task", "status", &aid, "rejected", "--json"]);
+
+    let show_b = cli.json(&["task", "show", &bid, "--json"]);
+    assert_eq!(show_b["ready"], true, "a blocker decided against is a blocker no longer");
+    assert!(show_b["blocked_by"].as_array().unwrap().is_empty());
+    let acts = cli.json(&["activity", "--task", &bid, "--json"]);
+    let has_unblock = acts["items"].as_array().unwrap().iter()
+        .any(|i| i["event"]["kind"] == "task.unblocked");
+    assert!(has_unblock, "the unblock was not announced: {acts}");
+    // The rejected task itself is not a completed one — it is out of the open counts and out of the
+    // finished ones both.
+    let show_a = cli.json(&["task", "show", &aid, "--json"]);
+    assert_eq!(show_a["status"], "rejected");
+    assert_eq!(show_a["completed"], false, "decided against is not carried out");
+}
+
 #[test]
 fn config_onboarded_flag_roundtrips() {
     let cli = Cli::new();

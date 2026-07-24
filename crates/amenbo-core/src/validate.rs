@@ -241,7 +241,8 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
     // chosen over an exception in the ready predicate ("it is due, so ignore the start day"), which would
     // have left nobody able to read which of the two declarations won.
     //
-    // Done tasks are left out: the contradiction is only worth a sentence while the work is outstanding.
+    // Tasks that have ended are left out, whichever way they ended: the contradiction is only worth a
+    // sentence while the work is outstanding.
     // Both columns are stored as `YYYY-MM-DD`, so this is the lexicographic comparison the read model uses
     // everywhere for a day column.
     const S: col::task::Cols = col::task::ALL;
@@ -254,7 +255,7 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
                 Some(!Pred::is_blank(S.start_on)),
                 Some(!Pred::is_blank(S.due_on)),
                 Some(Pred::plain(format!("{} > {}", S.start_on.to_sql(), S.due_on.to_sql()))),
-                Some(Pred::ne(S.status, crate::model::TaskStatus::Done.as_str())),
+                Some(crate::store_engine::read::still_open(S.status)),
                 reach_pred(reach, S),
             ]
             .into_iter()

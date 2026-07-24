@@ -27,6 +27,24 @@ use crate::model::{ActorKind, Priority, TaskStatus};
 use crate::query::{AssigneeFilter, DueFilter, Filter, StartFilter};
 use crate::view::{ProjectRef, TaskCompact};
 
+/// The task named by `status` is **still work**: it has not reached either terminal. The single
+/// definition every read that asks "is this task outstanding?" shares — the open-blocker half of
+/// `ready:`, [`reserve_blockers`], `blocked_by` / `blocks`, the open counts and the buckets — so they
+/// cannot drift into disagreeing about what an unfinished task is.
+///
+/// **Closed is not the same question as done** (`AMB-D-397`). Work decided against is over, so it
+/// releases what it was blocking and leaves the open counts; what it must never do is join the
+/// *completed* ones, which is a separate derivation over `Done` alone ([`crate::model::Task::completed`],
+/// the completed count, `completed_today`) and is deliberately not routed through here.
+///
+/// Bind-free, like [`unsettled_premise`]: the only literals are the store's own enum spellings, grammar
+/// rather than data, which keeps the predicate usable as a select item as well as in a `WHERE`.
+pub(crate) fn still_open<E: Expr<Ty = SqlText>>(status: E) -> Pred {
+    let terminals: Vec<String> =
+        TaskStatus::CLOSED.iter().map(|s| format!("'{}'", s.as_str())).collect();
+    Pred::plain(format!("{} NOT IN ({})", status.to_sql(), terminals.join(", ")))
+}
+
 /// The premise decision `dc` is **unsettled** — it is not `accepted`, or it is not current because a
 /// live decision holds a `supersedes` edge at it (currency is derived from the edges, never a status).
 /// The single definition every premise read shares — the `ready:` filter, `task_detail`, the task card
@@ -461,7 +479,7 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
     if let Some(ready) = f.ready {
         // This is `crate::view::is_ready` restated in SQL, because a filter cannot ask three
         // booleans of a row it has not read yet. A task is held back by an *open* blocker (a live
-        // dependency edge to a live, not-done blocker), by an *unsettled premise*
+        // dependency edge to a live blocker that has not ended), by an *unsettled premise*
         // (`unsettled_premise`), or by a *start day that has not arrived*. The reserve guard
         // (`reserve_blockers`) reads the same derivations, so the filter and the guard cannot drift
         // apart, and `a_start_day_still_ahead_holds_the_task_back_on_every_read` holds this restatement
@@ -480,7 +498,7 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         let open_blocker = Exists::over(D.table)
             .join(B.table, same(B.id, D.blocked_by_id))
             .filter(same(D.task_id, T.id))
-            .filter(Pred::ne(B.status, TaskStatus::Done.as_str()))
+            .filter(still_open(B.status))
             .pred();
 
         // A `start_on` that is set and still ahead of today. Blank means nothing was declared about
@@ -1088,7 +1106,7 @@ pub fn reserve_blockers(
         // `id` **is** the conversational number, and it is never null.
         let mut sel = Select::new();
         let number = sel.col(B.id);
-        let pred = Pred::eq(DEP.task_id, task_id).and(Pred::ne(B.status, "done"));
+        let pred = Pred::eq(DEP.task_id, task_id).and(still_open(B.status));
         let mut sql = Sql::from(&sel, DEP.table);
         sql.join(B.table, same(B.id, DEP.blocked_by_id))
             .push_where(Some(&pred))
@@ -1445,7 +1463,7 @@ pub struct MailboxTask {
     pub comments: Vec<(String, bool, String)>,
 }
 
-/// Tasks for the mailbox's D bucket — live, assigned to my **human** facet, not done, and carrying at
+/// Tasks for the mailbox's D bucket — live, assigned to my **human** facet, still outstanding, and carrying at
 /// least one incoming comment — each bundled with its incoming comments so the caller derives `unread`
 /// from `read_receipts` without a second pass. One indexed pass joins those tasks
 /// to their **incoming** comments; rows arrive grouped by task (`task_id`) then
@@ -1466,7 +1484,7 @@ pub fn mailbox_comment_tasks(conn: &Connection, reach: crate::reach::Reach) -> R
     // fragment whose `?N` had to be counted against the others.
     let scope = reach.project().map(|pid| Pred::eq(T.project_id, pid));
     let pred = Pred::eq(T.assignee_kind, ActorKind::Human.as_str())
-        .and(Pred::ne(T.status, "done"))
+        .and(still_open(T.status))
         .and(Pred::eq(C.author_kind, ActorKind::Ai.as_str()));
     let pred = Pred::all(scope.into_iter().chain([pred])).expect("at least one predicate");
     let mut sql = Sql::from(&sel, C.table);
@@ -1788,14 +1806,14 @@ fn placement_of(conn: &Connection, task_id: i64) -> Result<Option<PlacementRow>>
     Ok(rows.into_iter().next())
 }
 
-/// Open blockers: live dependency → not-done blocker, in dependency-`id` order, with title. `ready` is
+/// Open blockers: live dependency → a blocker that has not ended, in dependency-`id` order, with title. `ready` is
 /// this being empty (and no unsettled premise) — the same predicate the `ready:` filter applies.
 fn open_blockers(conn: &Connection, task_id: i64) -> Result<Vec<(i64, String)>> {
     const D: col::task_dependency::Cols = col::task_dependency::of("d");
     const B: col::task::Cols = col::task::of("b");
     let mut sel = Select::new();
     let (bid, btitle) = (sel.col(B.id), sel.col(B.title));
-    let pred = Pred::eq(D.task_id, task_id).and(Pred::ne(B.status, "done"));
+    let pred = Pred::eq(D.task_id, task_id).and(still_open(B.status));
     let mut sql = Sql::from(&sel, D.table);
     sql.join(B.table, same(B.id, D.blocked_by_id))
         .push_where(Some(&pred))
@@ -1811,10 +1829,10 @@ fn open_blockers(conn: &Connection, task_id: i64) -> Result<Vec<(i64, String)>> 
 
 /// What premises a task acquired **after its current status began** — the read behind `AMB-D-366`'s
 /// "surface". Each field lists the premises that moved since [`crate::model::Task::status_changed_at`]
-/// *and* still bear on readiness: blockers that are not yet done, and linked decisions that are unsettled.
+/// *and* still bear on readiness: blockers that have not ended, and linked decisions that are unsettled.
 /// That conjunction is deliberate — `D-366` scopes a "premise change" to exactly what **silently drops
 /// `ready`**, so an edge onto an already-done task, or a link onto a settled decision, is not one (it never
-/// moved `ready`). The same `status <> 'done'` and [`unsettled_premise`] predicates the `ready:` filter and
+/// moved `ready`). The same [`still_open`] and [`unsettled_premise`] predicates the `ready:` filter and
 /// [`task_detail`] apply are reused here, so the detection cannot drift from what actually blocks.
 ///
 /// **Two ways a premise moves**, and both are read (`AMB-D-373`): one is *drawn* at the task after the
@@ -1877,14 +1895,14 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
     // Columns store the `to_rfc3339_z` form (fixed-width UTC), so a lexicographic `>` is chronological.
     let since = since.to_rfc3339_z();
 
-    // Blockers added after the status began that are not yet done.
+    // Blockers added after the status began that have not ended.
     let added_blockers = {
         const D: col::task_dependency::Cols = col::task_dependency::of("d");
         const B: col::task::Cols = col::task::of("b");
         let mut sel = Select::new();
         let (bid, btitle) = (sel.col(B.id), sel.col(B.title));
         let pred = Pred::eq(D.task_id, task_id)
-            .and(Pred::ne(B.status, "done"))
+            .and(still_open(B.status))
             .and(Pred::cmp(D.established_at, ">", since.clone()));
         let mut sql = Sql::from(&sel, D.table);
         sql.join(B.table, same(B.id, D.blocked_by_id)).push_where(Some(&pred)).order_by([Sort::by(D.id)]);
@@ -1968,7 +1986,7 @@ fn comment_count(conn: &Connection, task_id: i64) -> Result<usize> {
 /// instead of a scan per part. The query layer ([`crate::query::task_detail`]) parses the text fields and
 /// assembles a `view::TaskDetail`; what this row promises is that the task is fetched by id (a row
 /// exists ⇒ it is live, so a deleted task is `None` here and `show` reports "no such task"), that
-/// `placement` is where the task sits (absent when it is unplaced) with the live-only project name, that `blocked_by` are the live, not-done blockers in dependency-`id` order
+/// `placement` is where the task sits (absent when it is unplaced) with the live-only project name, that `blocked_by` are the live blockers that have not ended, in dependency-`id` order
 /// with their titles and `blocked_by_decisions` the live, unsettled linked decisions (`ready` is derived
 /// as both being empty), and that `num_comments` is the live comment count.
 pub struct TaskDetailRow {
@@ -1986,9 +2004,9 @@ pub struct TaskDetailRow {
     pub created_at: String,
     pub updated_at: String,
     pub placement: Option<PlacementRow>,
-    /// `(id, title)` of live, not-done blockers, in dependency-`id` order.
+    /// `(id, title)` of live blockers that have not ended, in dependency-`id` order.
     pub blocked_by: Vec<(i64, String)>,
-    /// `(id, title)` of live, not-done dependents (this task is their blocker), in dependency-`id`
+    /// `(id, title)` of live dependents that have not ended (this task is their blocker), in dependency-`id`
     /// order — the reverse of `blocked_by` (what finishing this task would unblock).
     pub blocks: Vec<(i64, String)>,
     /// `(id, title)` of the unsettled decisions linked to this task, in link-`id` order — a task cannot
@@ -2041,13 +2059,13 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
     row.placement = placement_of(conn, task_id)?;
     row.blocked_by = open_blockers(conn, task_id)?;
 
-    // Dependents (reverse of `blocked_by`): live dependency → live, not-done task that has this task as
+    // Dependents (reverse of `blocked_by`): live dependency → a live task that has not ended and has this task as
     // its blocker, in dependency-`id` order, with title (what finishing this task would unblock).
     {
         const D: col::task_dependency::Cols = col::task_dependency::of("d");
         let mut sel = Select::new();
         let (tid, ttitle) = (sel.col(T.id), sel.col(T.title));
-        let pred = Pred::eq(D.blocked_by_id, task_id).and(Pred::ne(T.status, "done"));
+        let pred = Pred::eq(D.blocked_by_id, task_id).and(still_open(T.status));
         let mut sql = Sql::from(&sel, D.table);
         sql.join(T.table, same(T.id, D.task_id))
             .push_where(Some(&pred))
@@ -2130,7 +2148,7 @@ pub struct TaskCardRow {
     pub created_by: Option<CardActor>,
     /// Where the task sits; absent when it is unplaced (inbox).
     pub placement: Option<PlacementRow>,
-    /// `(id, title)` of live, not-done blockers, in dependency-`id` order.
+    /// `(id, title)` of live blockers that have not ended, in dependency-`id` order.
     pub blocked_by: Vec<(i64, String)>,
     pub num_comments: usize,
     /// Live links to live decisions that motivate this task, in link-`id` order (`ref` = `AMB-D-n`) — the
@@ -2571,7 +2589,7 @@ pub fn project_overview(conn: &Connection, reach: crate::reach::Reach) -> Result
         let project_id = sel.col(TA.project_id.required());
         let count = sel.count_all();
         let pred = Pred::all(
-            [Pred::ne(TA.status, "done"), Pred::is_not_null(TA.project_id)]
+            [still_open(TA.status), Pred::is_not_null(TA.project_id)]
                 .into_iter()
                 .chain(scoped(reach, TA.project_id)),
         );
@@ -2845,7 +2863,7 @@ struct PrimaryCtx {
 /// than indexing every record, it joins only the page's tasks to their placement / assignee /
 /// open blockers. Cards come back in the input order; an id with no *live* task is skipped. A card takes
 /// the project it is placed in as its project, gates the project name on liveness, and carries the
-/// live, not-done blockers in dependency-`id` order. The ids come from somewhere — a query, a feed, a
+/// live blockers that have not ended, in dependency-`id` order. The ids come from somewhere — a query, a feed, a
 /// caller's own list — so the reach is declared here too: under a closed one, an id outside the bound
 /// project hydrates no card, exactly as a non-live id does. Hydration is the last step before content
 /// reaches a face, so this is the floor that holds even when the ids arrived without passing a scoped
@@ -2939,8 +2957,8 @@ pub fn hydrate_task_cards(
         }
     }
 
-    // 3) Open blockers: live dependency → not-done blocker, in dependency-id order (the same
-    //    `status <> 'done'` predicate the `ready:` filter and `open_blockers` apply).
+    // 3) Open blockers: live dependency → a blocker that has not ended, in dependency-id order (the same
+    //    `still_open` predicate the `ready:` filter and `open_blockers` apply).
     let mut blocked_by_task: HashMap<i64, Vec<i64>> = HashMap::new();
     {
         const D: col::task_dependency::Cols = col::task_dependency::of("d");
@@ -2948,7 +2966,7 @@ pub fn hydrate_task_cards(
         let mut sel = Select::new();
         let (task, blocker) = (sel.col(D.task_id), sel.col(D.blocked_by_id));
         let pred =
-            Pred::is_in(D.task_id, hydrated.iter().copied()).and(Pred::ne(B.status, "done"));
+            Pred::is_in(D.task_id, hydrated.iter().copied()).and(still_open(B.status));
         let mut sql = Sql::from(&sel, D.table);
         sql.join(B.table, same(B.id, D.blocked_by_id))
             .push_where(Some(&pred))
@@ -3061,7 +3079,7 @@ pub fn status_bucket_ids(
         Some(pid) => p.and(Pred::eq(TA.project_id, pid)),
         None => p,
     };
-    let open = || Pred::ne(TA.status, "done");
+    let open = || still_open(TA.status);
     // "Has a day on it" — the negation of the store's not-written reading, so the buckets and the
     // `due:none` filter cannot come to disagree about what an unwritten day is.
     let has_due = || !Pred::is_blank(TA.due_on);
@@ -3924,7 +3942,11 @@ pub struct ProjectTaskCountsRow {
 }
 
 /// Count one project's live tasks by completion and due date, in one aggregate pass. `today` is the
-/// caller's clock, so every reader buckets `overdue` / `due_today` against the same date. An empty
+/// caller's clock, so every reader buckets `overdue` / `due_today` against the same date.
+///
+/// `completed` is what was **carried out** (`Done` alone), while every due bucket asks whether the task is
+/// still work ([`still_open`], which drops both terminals). Keeping the two apart is the whole of
+/// `AMB-D-397` on this surface: a task decided against is in neither. An empty
 /// `due_on` is no due date, not a date that sorts before every other — [`status_bucket_ids`] guards it
 /// the same way.
 pub fn project_task_counts(
@@ -3937,7 +3959,7 @@ pub fn project_task_counts(
     // where it is compared (`Select::count_if`), like it would in a `WHERE`. Nothing about the day is
     // spliced into the SQL text, and no one-row derived table has to smuggle it in.
     let today = today.to_string();
-    let open = || Pred::ne(T.status, "done");
+    let open = || still_open(T.status);
     let has_due = || Pred::is_not_null(T.due_on).and(Pred::ne(T.due_on, ""));
 
     let mut sel = Select::new();
@@ -4079,7 +4101,7 @@ mod tests {
         assert_eq!(texts, vec!["一番目", "二番目"], "oldest-first, no d2 leak");
     }
 
-    /// Mailbox D: `mailbox_comment_tasks` returns only live, not-done tasks assigned to my human facet
+    /// Mailbox D: `mailbox_comment_tasks` returns only live, still-outstanding tasks assigned to my human facet
     /// that carry an *incoming* comment (my own human-facet comment does not count), bundling just those
     /// incoming comments. A task the AI is carrying stays out however loud its AI comments are — that is
     /// the AI reporting on its own work, not a move being asked of me. (The other half of the trigger —
@@ -4130,9 +4152,11 @@ mod tests {
         );
     }
 
-    /// `project_overview` carries per-project open-task counts — live tasks whose status is not `done`
-    /// (todo/in_progress/blocked count), grouped by the task's own `project_id`. Done and deleted tasks
-    /// and tasks with no project are excluded, and a project with no open tasks reports 0.
+    /// `project_overview` carries per-project open-task counts — live tasks that have not ended
+    /// (todo/in_progress/blocked count), grouped by the task's own `project_id`. **Both** terminals are
+    /// excluded, `rejected` as much as `done` (`AMB-D-397`): a badge counting work decided against would
+    /// show a project as busy over tasks nobody is going to do. Deleted tasks and tasks with no project
+    /// are excluded too, and a project with no open tasks reports 0.
     #[test]
     fn project_overview_open_counts() {
         let e = StoreEngine::open_in_memory_unchecked().unwrap();
@@ -4146,10 +4170,11 @@ mod tests {
             }
             e.put_record("task", id, &cols).unwrap();
         };
-        // project 1: todo + in_progress open, one done excluded => 2.
+        // project 1: todo + in_progress open; a done and a rejected one are both excluded => 2.
         task(1, Some("1"), "todo");
         task(2, Some("1"), "in_progress");
         task(3, Some("1"), "done");
+        task(4, Some("1"), "rejected");
         // project 2: a single blocked task still counts as open => 1.
         task(5, Some("2"), "blocked");
         // project 3: only a done task => 0 (badge hidden). A project-less task must not leak into any count.
@@ -4163,9 +4188,45 @@ mod tests {
                 .into_iter()
                 .map(|r| (r.id, r.open_count))
                 .collect();
-        assert_eq!(by.get(&1).copied(), Some(2), "todo+in_progress open; done excluded");
+        assert_eq!(by.get(&1).copied(), Some(2), "todo+in_progress open; done and rejected both excluded");
         assert_eq!(by.get(&2).copied(), Some(1), "blocked counts as open");
         assert_eq!(by.get(&3).copied(), Some(0), "only a done task => 0");
+    }
+
+    /// `project_task_counts` keeps the **two readings of an ended task apart** (`AMB-D-397`).
+    /// `completed` counts what was carried out — `done` alone — while every bucket built on "still work"
+    /// (overdue / due today / no due day) drops both terminals. So a task decided against belongs to
+    /// neither: counting it as completed would claim work that never happened, and leaving it in the due
+    /// buckets would keep nagging about a day nobody is going to meet.
+    #[test]
+    fn project_task_counts_keep_carried_out_and_closed_apart() {
+        let e = StoreEngine::open_in_memory_unchecked().unwrap();
+        e.put_record("project", 1, &[("name", text("Alpha")), ("order_key", text("a"))]).unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 7, 25).unwrap();
+        // The day column admits a day or nothing at all, so "no due day" is the column left unwritten.
+        let task = |id: i64, status: &str, due: Option<&str>| {
+            let mut cols = vec![
+                ("title", text(&id.to_string())),
+                ("status", text(status)),
+                ("project_id", text("1")),
+            ];
+            if let Some(day) = due {
+                cols.push(("due_on", text(day)));
+            }
+            e.put_record("task", id, &cols).unwrap();
+        };
+        task(1, "todo", Some("2026-07-01")); // overdue, and still work
+        task(2, "done", Some("2026-07-01")); // carried out
+        task(3, "rejected", Some("2026-07-01")); // over, and never carried out
+        task(4, "rejected", None); // …with no day on it either
+        task(5, "todo", None);
+
+        let c = project_task_counts(e.conn(), 1, today).unwrap();
+
+        assert_eq!(c.total, 5, "every live task of the project is in the total, however it ended");
+        assert_eq!(c.completed, 1, "only the one that was carried out");
+        assert_eq!(c.overdue, 1, "the rejected task stops being late the moment it is over");
+        assert_eq!(c.no_due, 1, "…and stops being an undated piece of work too");
     }
 
     /// `project_overview` carries per-project proposed (under-discussion) decision counts: `proposed`

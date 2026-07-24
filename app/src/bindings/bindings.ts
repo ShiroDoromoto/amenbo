@@ -670,9 +670,9 @@ unresolved: Array<string>, };
 
 /**
  * Premises that moved under a task **after it was reserved** (`AMB-D-366`, `AMB-D-373`) — the holder-side
- * surface. Each list is a way readiness was withdrawn since the task went `in_progress`: a not-done blocker
- * pinned on, a decision linked but not yet settled, or a decision that was already linked and has stopped
- * being settled. Carried on the card only when there is a change to show (see
+ * surface. Each list is a way readiness was withdrawn since the task went `in_progress`: a blocker that
+ * has not ended pinned on, a decision linked but not yet settled, or a decision that was already linked
+ * and has stopped being settled. Carried on the card only when there is a change to show (see
  * [`TaskCardDto::premise_change`]), so the screen draws the note exactly when it matters.
  */
 export type PremiseChangeDto = { 

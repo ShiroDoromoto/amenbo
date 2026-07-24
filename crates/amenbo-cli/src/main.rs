@@ -4386,12 +4386,13 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
                 if detail.linked_tasks.is_empty() {
                     human(flags, "linked tasks: (none)");
                 } else {
-                    // Let the decision show whether the work it spawned is still outstanding. What is done
-                    // recedes behind an `[x]`, and only what remains names its state — `todo` is the default,
-                    // so it says nothing.
+                    // Let the decision show whether the work it spawned is still outstanding. What has
+                    // ended recedes behind an `[x]` — carried out or decided against, it is off the list
+                    // either way — and everything but `todo`, the default, names its state, so a task that
+                    // receded still says which of the two ways it went.
                     human(flags, "linked tasks:");
                     for t in detail.linked_tasks.iter() {
-                        let check = if t.status == TaskStatus::Done { "x" } else { " " };
+                        let check = if t.status.is_closed() { "x" } else { " " };
                         let state = match t.status {
                             TaskStatus::InProgress | TaskStatus::Blocked | TaskStatus::Rejected => {
                                 format!(" ({})", t.status.as_str())
@@ -5024,8 +5025,9 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) ->
     let pc = premise_change_when(store, tid, completed && old == TaskStatus::InProgress);
     let t = store.set_task_completed(tid, completed, flags.actor).map_err(CliError::from)?;
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), t.status.as_str()));
-    // Going done may have made dependents ready — emit the unblock signal if so.
-    if t.status == TaskStatus::Done {
+    // Ending the task — carried out or decided against — may have made dependents ready; emit the
+    // unblock signal if so.
+    if t.status.is_closed() {
         emit_unblocks(store, flags, tid);
     }
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
@@ -5065,12 +5067,13 @@ fn task_set_status(store: &mut Store, flags: &Flags, id: &str, status: &str) -> 
     let pc = premise_change_when(
         store,
         tid,
-        old == TaskStatus::InProgress && matches!(new_status, TaskStatus::Done | TaskStatus::Blocked),
+        old == TaskStatus::InProgress && (new_status.is_closed() || new_status == TaskStatus::Blocked),
     );
     let t = store.set_task_status(tid, new_status, flags.actor).map_err(CliError::from)?;
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), new_status.as_str()));
-    // Going done may have made dependents ready — emit the unblock signal if so.
-    if t.status == TaskStatus::Done {
+    // Ending the task — carried out or decided against — may have made dependents ready; emit the
+    // unblock signal if so.
+    if t.status.is_closed() {
         emit_unblocks(store, flags, tid);
     }
     let detail = store.task_detail(t.id).map_err(CliError::from)?;

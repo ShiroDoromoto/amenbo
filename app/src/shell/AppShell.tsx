@@ -9,6 +9,7 @@ import { ActivityFeed } from "../screens/ActivityFeed";
 import { CommandCatalogScreen } from "../screens/CommandCatalogScreen";
 import { PluginInstalledScreen } from "../screens/PluginInstalledScreen";
 import { PluginMarketScreen } from "../screens/PluginMarketScreen";
+import { PluginUpdateBanner } from "../components/PluginUpdateBanner";
 import { ListScreen } from "../screens/ListScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
@@ -69,6 +70,13 @@ export function AppShell() {
   const selectedTaskId = loc.sel.type === "task" ? loc.sel.id : null;
   const selectedDecisionId = loc.sel.type === "decision" ? loc.sel.id : null;
   const [compose, setCompose] = useState<ComposeTarget | null>(null);
+  const projects = useSyncExternalStore(subscribe, () => getSnapshot().projects);
+  // Which project a plugin question is asked in (`AMB-D-379`): the one being looked at, or — on a store with a
+  // single project — that one, since naming it would be a question with one answer. `null` means no project is
+  // in context, and a project-scoped plugin simply has no answer here (never a made-up one).
+  const gateProject = nav.type === "project" || nav.type === "projectSettings"
+    ? Number(nav.id)
+    : projects.length === 1 ? projects[0]!.id : null;
 
   const needsSetup = useSyncExternalStore(
     subscribe,
@@ -313,6 +321,10 @@ export function AppShell() {
       />
       <UpdateBanner recheck={updateRecheck} />
       <UpdateCheckFeedback state={updateCheck} onDismiss={() => setUpdateCheck(null)} />
+      <PluginUpdateBanner
+        projectId={gateProject}
+        onOpenInstalled={() => navTo({ type: "view", id: "pluginsInstalled" })}
+      />
       <HealthBanner />
       <ManagedBlockBanner />
       <OrphanBindingBanner />

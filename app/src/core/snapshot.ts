@@ -150,6 +150,27 @@ export function notifyDataChanged(): void {
   for (const l of listeners) l();
 }
 
+// Subscribers to "re-ask what does not live in the store". Kept apart from the domain `listeners` for the
+// same reason the reflection listeners are: this fires on a wake-up, not on data changing.
+const outsideStoreListeners = new Set<() => void>();
+
+/**
+ * Subscribes to the moments worth re-asking state that lives **outside** the store — a plugin catalog, an
+ * upstream release — and therefore has no store signature to compare. It fires on a focus return that found
+ * the store unmoved, which is exactly the hole: every other reconcile ends in `invalidateAllQueries`, so a
+ * query for such state is already refetched there and firing again would only ask twice. The returned
+ * function unsubscribes.
+ */
+export function subscribeOutsideStore(fn: () => void): () => void {
+  outsideStoreListeners.add(fn);
+  return () => outsideStoreListeners.delete(fn);
+}
+
+/** Notifies the outside-store subscribers. `focusCatchUp`'s unmoved branch is the only caller. */
+function notifyOutsideStore(): void {
+  for (const l of outsideStoreListeners) l();
+}
+
 /**
  * Notifies that the device-local inbox archive changed. Archiving is the one way out of the inbox,
  * so membership shrinks: bump `inboxDataGeneration` and let the mailbox re-derive its badge count.
@@ -288,6 +309,7 @@ async function focusCatchUp(): Promise<void> {
     // the store, and this is the one moment we get to ask it: the user just came back to the app. Someone who only
     // reads never moves the signature, and would otherwise never be told about an update again after launch.
     await refreshVersionStatus();
+    notifyOutsideStore(); // and the same for everything else that lives outside the store (plugin updates).
     return;
   }
   await loadSnapshot(); // this also moves lastSignature to the current value.

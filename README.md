@@ -218,7 +218,10 @@ set off yourself (`amenbo update`, or `amenbo update --apply` for the standalone
 cached, whatever the catalog's size — and, for a plugin whose detail you open, that one
 repository's stars, downloads and README from GitHub's public API. Both carry no task
 data, and neither happens unless you go looking: nothing is fetched for a plugin you only
-see in the list.
+see in the list. That same cached catalog is also what says an installed plugin has a
+newer build: noticing rides the one fetch — inside its freshness window nothing is asked
+at all, and there is no timer — and taking the update is always something you set off
+yourself (`amenbo plugin update <name>`, or the button on the banner).
 
 </details>
 

@@ -111,6 +111,7 @@ pub fn run() {
       commands::check_updates_fresh,
       commands::store_locations,
       commands::dev_badge,
+      commands::cli_command_name,
       commands::open_logs_dir,
       commands::activity_page,
       commands::changes_since,

@@ -329,6 +329,16 @@ const UI: Record<Lang, Record<string, string>> = {
     "plugins.installsError": "インストール済みのプラグインを読めませんでした",
     "plugins.emptyInstalled": "この端末にはまだプラグインが入っていません",
     "plugins.emptyInstalledNote": "マーケットから入れられます。",
+    // the update banner and its explicit re-check
+    "plugins.updates.title": "プラグインの更新があります（{count} 件）",
+    "plugins.updates.apply": "更新", "plugins.updates.applyAll": "まとめて更新",
+    "plugins.updates.applying": "更新中…",
+    "plugins.updates.applied": "{count} 件を更新しました（有効/無効・設定はそのままです）",
+    "plugins.updates.holdIncompatible": "{name}：新しい版はこの版の amenbo では動きません",
+    "plugins.updates.holdSettings": "{name}：新しい版は未入力の必須設定を要求します（{keys}）",
+    "plugins.updates.open": "インストール済みを開く",
+    "plugins.updates.check": "更新を確認", "plugins.updates.checking": "確認中…",
+    "plugins.updates.none": "更新はありません",
     // dynamic activity text (mutations.ts sysItem templates)
     "common.you": "あなた", "act.justNow": "たった今",
     "act.created": "「{title}」を作成", "act.completed": "「{title}」を完了",
@@ -731,6 +741,16 @@ const UI: Record<Lang, Record<string, string>> = {
     "plugins.installsError": "The installed plugins could not be read",
     "plugins.emptyInstalled": "No plugin is installed on this device yet",
     "plugins.emptyInstalledNote": "The market is where you add one.",
+    // the update banner and its explicit re-check
+    "plugins.updates.title": "{count} plugin update(s) available",
+    "plugins.updates.apply": "Update", "plugins.updates.applyAll": "Update all",
+    "plugins.updates.applying": "Updating…",
+    "plugins.updates.applied": "Updated {count} (gates, settings and secrets are unchanged)",
+    "plugins.updates.holdIncompatible": "{name}: this build of amenbo cannot run the new one",
+    "plugins.updates.holdSettings": "{name}: the new build needs setting(s) not provided ({keys})",
+    "plugins.updates.open": "Open installed",
+    "plugins.updates.check": "Check for updates", "plugins.updates.checking": "Checking…",
+    "plugins.updates.none": "Everything is up to date",
     // dynamic activity text (mutations.ts sysItem templates)
     "common.you": "You", "act.justNow": "just now",
     "act.created": "Created “{title}”", "act.completed": "Completed “{title}”",

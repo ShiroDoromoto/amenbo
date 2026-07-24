@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Pager, usePager } from "../components/Pager";
 import { errText, t, tf } from "../core/i18n";
 import {
@@ -7,6 +7,7 @@ import {
   type PluginCatalog, type PluginEntry, type PluginLayer, type PluginSort,
 } from "../core/pluginCatalog";
 import { installOf, usePluginInstalls, type PluginInstall } from "../core/pluginInstalls";
+import { refreshPluginUpdates } from "../core/pluginUpdates";
 import { getSnapshot, subscribe } from "../core/snapshot";
 import { PluginDetail } from "./PluginDetail";
 
@@ -49,6 +50,9 @@ export function PluginMarketScreen() {
   // What this machine holds, drawn over the catalog by name. A separate, local read: the catalog says what
   // exists, this says what is here, and an unreachable catalog must not hide an installed plugin.
   const { installs } = usePluginInstalls(gateProject);
+  // Opening a plugin screen is one of the update triggers (`AMB-D-359`). The offer is the shell's banner, so
+  // nothing is drawn here for it — this only asks. Free inside the catalog's freshness window.
+  useEffect(() => { refreshPluginUpdates(); }, []);
 
   const categories = useMemo(() => pluginCategories(catalog.entries), [catalog.entries]);
   const shown = useMemo(

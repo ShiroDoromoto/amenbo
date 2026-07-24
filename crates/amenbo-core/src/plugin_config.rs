@@ -176,6 +176,52 @@ pub fn satisfied_keys(
     Ok(satisfied)
 }
 
+/// The `required` settings a **candidate** build would leave unset, judged where the plugin is enabled
+/// right now (`AMB-D-359`) — the resolution behind an update's `approve` gate, so a face only has to word
+/// the refusal it already knows how to word.
+///
+/// [`plugin_update`](crate::plugin_update) owns the timing (after "is it a different build", before the
+/// network) and deliberately leaves the values and the enabled state to its caller; this is that caller's
+/// half, shared so the CLI's `plugin update` and the GUI's cannot drift on *which* build is held back — only
+/// on how they say so. Empty means nothing is in the way.
+///
+/// It answers empty, letting the update through, in every case where there is nothing to break: a build this
+/// amenbo cannot run anyway (the write path refuses it with its own wording), a plugin that is not installed,
+/// a project-scoped plugin with no project in context, and — the common case — a disabled plugin, which fires
+/// nothing and whose own enable gate will catch an empty `required` when it is next turned on.
+pub fn required_unset_for_update(
+    store: &Store,
+    project: Option<i64>,
+    available: &crate::plugin_manifest::Manifest,
+) -> Result<Vec<String>> {
+    let name = available.name.as_str();
+    if crate::plugin_compat::check(available).is_err() {
+        return Ok(Vec::new());
+    }
+    // Where the plugin is enabled now is keyed by the *installed* scope; the new schema is what we re-judge
+    // against.
+    let Ok(installed) = crate::plugin_installed::read(&store.paths, name) else {
+        return Ok(Vec::new());
+    };
+    let Ok(gate) = crate::plugin_trust::gate_for(installed.manifest.scope, project) else {
+        return Ok(Vec::new());
+    };
+    if !crate::plugin_trust::effective_enabled_in(store, name, gate)? {
+        return Ok(Vec::new());
+    }
+    let tier = match gate {
+        crate::plugin_trust::Gate::Machine => Scope::MachineDefault,
+        crate::plugin_trust::Gate::Project(id) => Scope::Project(id),
+    };
+    let satisfied = satisfied_keys(store, name, &available.config, tier)?;
+    Ok(crate::plugin_trust::missing_required(&available.config, |f| {
+        satisfied.iter().any(|k| k == &f.key)
+    })
+    .into_iter()
+    .map(str::to_string)
+    .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -268,6 +314,96 @@ mod tests {
             get(&store, &text_field("events"), "slack", Scope::Project(project.id)).unwrap().as_deref(),
             Some("for-proj"),
         );
+    }
+
+    /// A machine-scoped install on disk, with the manifest an update would be judged against.
+    fn install_machine_plugin(paths: &Paths, name: &str, config: Vec<ConfigField>) -> crate::plugin_manifest::Manifest {
+        let manifest = crate::plugin_manifest::Manifest {
+            name: name.to_string(),
+            desc: "a test plugin".to_string(),
+            author: "amenbo".to_string(),
+            repo: "ShiroDoromoto/amenbo".to_string(),
+            os: vec![crate::plugin_manifest::Os::Macos, crate::plugin_manifest::Os::Linux, crate::plugin_manifest::Os::Windows],
+            category: "workflow".to_string(),
+            url: "https://example.invalid/x.tar.gz".to_string(),
+            checksum: "sha256:00".to_string(),
+            signature: None,
+            assets: Default::default(),
+            official: false,
+            scope: crate::plugin_manifest::Scope::Machine,
+            payload_v: 1,
+            min_amenbo: None,
+            config,
+            events: Vec::new(),
+        };
+        let home = paths.plugin_dir(name);
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(home.join(crate::plugin_installed::program_file_name(name)), b"#!/bin/sh\n").unwrap();
+        std::fs::write(
+            home.join(crate::plugin_installed::MANIFEST_FILE_NAME),
+            serde_json::to_string(&manifest).unwrap(),
+        )
+        .unwrap();
+        manifest
+    }
+
+    fn required_field(key: &str) -> ConfigField {
+        ConfigField { key: key.to_string(), label: key.to_string(), secret: false, required: true }
+    }
+
+    /// The gate an update runs (`AMB-D-359`): a schema that grew a `required` field the machine has no value
+    /// for holds the new build back — an *enabled* plugin must not be left missing what its author requires.
+    #[test]
+    fn a_new_required_setting_with_no_value_holds_an_enabled_plugin_back() {
+        let (mut store, _dir) = store_at("update-required");
+        install_machine_plugin(&store.paths.clone(), "slack", Vec::new());
+        crate::plugin_trust::enable(
+            &mut store,
+            "slack",
+            crate::plugin_trust::Gate::Machine,
+            &[],
+            |_| true,
+        )
+        .unwrap();
+        let available = install_machine_plugin(
+            &store.paths.clone(),
+            "slack",
+            vec![required_field("webhook_url")],
+        );
+
+        assert_eq!(
+            required_unset_for_update(&store, None, &available).unwrap(),
+            vec!["webhook_url".to_string()],
+        );
+
+        // Set it, and the same build goes through: presence is all this judges (`AMB-D-356`).
+        set(&mut store, &required_field("webhook_url"), "slack", "https://hooks/x", Scope::MachineDefault)
+            .unwrap();
+        assert!(required_unset_for_update(&store, None, &available).unwrap().is_empty());
+    }
+
+    /// A **disabled** plugin fires nothing, so there is nothing to keep working: its own enable gate is
+    /// where the empty `required` is caught, the next time anyone turns it on.
+    #[test]
+    fn a_disabled_plugin_is_never_held_back() {
+        let (store, _dir) = store_at("update-disabled");
+        let available =
+            install_machine_plugin(&store.paths.clone(), "slack", vec![required_field("webhook_url")]);
+
+        assert!(required_unset_for_update(&store, None, &available).unwrap().is_empty());
+    }
+
+    /// Nothing installed under that name is not this gate's business — `plugin update` refuses it upstream,
+    /// and answering "held back" here would name the wrong reason.
+    #[test]
+    fn a_plugin_that_is_not_installed_is_not_held_back() {
+        let (store, _dir) = store_at("update-absent");
+        let elsewhere = amenbo_scratch::scratch("plugin-config-update-absent-src");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        let available =
+            install_machine_plugin(&Paths::at(elsewhere), "slack", vec![required_field("webhook_url")]);
+
+        assert!(required_unset_for_update(&store, None, &available).unwrap().is_empty());
     }
 
     #[test]

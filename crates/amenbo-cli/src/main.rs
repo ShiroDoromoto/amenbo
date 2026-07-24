@@ -1442,40 +1442,19 @@ fn plugin_value_tier(gate: amenbo_core::plugin_trust::Gate) -> amenbo_core::plug
 /// fields to set first. Aligned with the apply side's fail-before-write posture: the safe reading is to
 /// refuse the replacement, not to leave an enabled plugin missing a value its own author marked required.
 ///
-/// It lets the update through, unchanged, in every case where there is nothing to break: a plugin not
-/// installed (nothing enabled), a build this amenbo cannot run anyway (the write path refuses it with its
-/// own wording), a project-scoped plugin with no project in context, and — the common case — a disabled plugin,
-/// which fires nothing and whose own enable gate will catch an empty `required` when it is next turned on.
+/// Which build is held back is [`amenbo_core::plugin_config::required_unset_for_update`]'s call, shared
+/// with the GUI's gate; what a terminal is told about it is this command's — hence the `amenbo plugin
+/// config set` line, which is the way out from here and nowhere else.
 fn refuse_update_leaving_required_unset(
     store: &Store,
     available: &amenbo_core::plugin_manifest::Manifest,
 ) -> amenbo_core::error::Result<()> {
     let name = available.name.as_str();
-    // An incompatible new build is refused by the write path itself; there is no point re-checking config
-    // for a build that will not run, and its own wording is the one to show.
-    if amenbo_core::plugin_compat::check(available).is_err() {
-        return Ok(());
-    }
-    // Where the plugin is enabled now is keyed by the *installed* scope; the new schema is what we re-judge
-    // against. Unreadable install, or a project-scoped plugin with no project here, is not enabled anywhere
-    // this command can see — nothing to hold back.
-    let Ok(installed) = amenbo_core::plugin_installed::read(&store.paths, name) else {
-        return Ok(());
-    };
-    let Ok(gate) = amenbo_core::plugin_trust::gate_for(installed.manifest.scope, bound_project(store))
-    else {
-        return Ok(());
-    };
-    if !amenbo_core::plugin_trust::effective_enabled_in(store, name, gate)? {
-        return Ok(());
-    }
-
-    let tier = plugin_value_tier(gate);
-    let satisfied =
-        amenbo_core::plugin_config::satisfied_keys(store, name, &available.config, tier)?;
-    let missing = amenbo_core::plugin_trust::missing_required(&available.config, |f| {
-        satisfied.iter().any(|k| k == &f.key)
-    });
+    let missing = amenbo_core::plugin_config::required_unset_for_update(
+        store,
+        bound_project(store),
+        available,
+    )?;
     if missing.is_empty() {
         return Ok(());
     }

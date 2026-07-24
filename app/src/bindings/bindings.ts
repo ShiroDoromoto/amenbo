@@ -562,6 +562,53 @@ readme?: string,
 rateLimited: boolean, };
 
 /**
+ * One installed plugin the catalog holds a different build of (`AMB-D-359`) — an offer the face can act
+ * on, not a diff of two manifests.
+ */
+export type PluginUpdateDto = { 
+/**
+ * The plugin's name — how the face names it and how an apply asks for it.
+ */
+name: string, 
+/**
+ * What the **new** build says it is, for a line the user can recognise it by.
+ */
+desc: string, 
+/**
+ * The offered build's identity for this machine (its asset digest — the same thing detection
+ * compared). A face keys a dismissal by it, so a *newer* build surfaces again on its own.
+ */
+availableChecksum?: string, 
+/**
+ * Why this one needs a decision before it can be applied, or absent when it can just be applied
+ * (`AMB-D-359`: send the user to a screen only when judgment is required). `incompatible` — the
+ * offered build cannot run on this amenbo; `settings` — it declares `required` settings this machine
+ * has no value for, and the plugin is enabled.
+ */
+hold?: "incompatible" | "settings", 
+/**
+ * The settings behind a `settings` hold, named so the face can say which to fill in.
+ */
+missing: Array<string>, };
+
+/**
+ * How one plugin fared in [`plugin_update_apply_all`] — a failure is a row, not the end of the run.
+ */
+export type PluginUpdateOutcomeDto = { 
+/**
+ * The plugin this row is about.
+ */
+name: string, 
+/**
+ * Whether its build was replaced.
+ */
+applied: boolean, 
+/**
+ * Why not, when it was not — core's own sentence, which is the one that knows the reason.
+ */
+error?: string, };
+
+/**
  * What [`repair_pointers`] returns: how many folders were fixed, and how many were left waiting on
  * a human's judgement.
  */

@@ -4547,6 +4547,187 @@ pub fn plugin_set_enabled(
     })
 }
 
+/// One installed plugin the catalog holds a different build of (`AMB-D-359`) — an offer the face can act
+/// on, not a diff of two manifests.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginUpdateDto {
+    /// The plugin's name — how the face names it and how an apply asks for it.
+    name: String,
+    /// What the **new** build says it is, for a line the user can recognise it by.
+    desc: String,
+    /// The offered build's identity for this machine (its asset digest — the same thing detection
+    /// compared). A face keys a dismissal by it, so a *newer* build surfaces again on its own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    available_checksum: Option<String>,
+    /// Why this one needs a decision before it can be applied, or absent when it can just be applied
+    /// (`AMB-D-359`: send the user to a screen only when judgment is required). `incompatible` — the
+    /// offered build cannot run on this amenbo; `settings` — it declares `required` settings this machine
+    /// has no value for, and the plugin is enabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = r#""incompatible" | "settings""#)]
+    hold: Option<String>,
+    /// The settings behind a `settings` hold, named so the face can say which to fill in.
+    missing: Vec<String>,
+}
+
+/// How one plugin fared in [`plugin_update_apply_all`] — a failure is a row, not the end of the run.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginUpdateOutcomeDto {
+    /// The plugin this row is about.
+    name: String,
+    /// Whether its build was replaced.
+    applied: bool,
+    /// Why not, when it was not — core's own sentence, which is the one that knows the reason.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    error: Option<String>,
+}
+
+/// Which installed plugins the catalog holds a different build of, and which of them need a decision first
+/// (`AMB-D-359`) — the GUI's `plugin update --check`.
+///
+/// **It never adds traffic of its own.** The comparison reads the catalog through its freshness boundary
+/// (`amenbo_core::plugin_update::available`), so a trigger arriving inside the window is answered from the
+/// cache and one outside it costs a single fetch of the whole index — which is what lets the face re-ask on
+/// a focus return, on opening the plugin screens and on an explicit "check now" without a resident timer.
+/// Nothing installed costs no read at all.
+///
+/// `project_id` is which project the `settings` judgment is made in: a project-scoped plugin's gate is one
+/// project's (`AMB-D-379`), so asking without one holds nothing back for it — the same answer the CLI gives
+/// outside a bound folder. Off the main thread, because past the boundary this fetches.
+#[tauri::command]
+pub async fn plugin_updates(project_id: Option<i64>) -> Result<Vec<PluginUpdateDto>, CmdError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<PluginUpdateDto>, CmdError> {
+        let paths = amenbo_core::config::Paths::resolve()?;
+        let updates = amenbo_core::plugin_update::available(&paths)?;
+        if updates.is_empty() {
+            return Ok(Vec::new());
+        }
+        let here = amenbo_core::plugin_manifest::Platform::here();
+        let store = open_store_read()?;
+        updates
+            .into_iter()
+            .map(|u| {
+                // The two gates that hold an update back, in the order the apply path applies them: a build
+                // this amenbo cannot speak to is not an improvement, and a schema that grew a `required`
+                // field an enabled plugin has no value for is not one either.
+                let (hold, missing) = if amenbo_core::plugin_compat::check(&u.available).is_err() {
+                    (Some("incompatible".to_string()), Vec::new())
+                } else {
+                    let missing = amenbo_core::plugin_config::required_unset_for_update(
+                        &store,
+                        project_id,
+                        &u.available,
+                    )?;
+                    ((!missing.is_empty()).then(|| "settings".to_string()), missing)
+                };
+                Ok(PluginUpdateDto {
+                    name: u.name,
+                    available_checksum: here
+                        .and_then(|p| u.available.asset_for(p))
+                        .map(|a| a.checksum),
+                    desc: u.available.desc,
+                    hold,
+                    missing,
+                })
+            })
+            .collect()
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("プラグインの更新確認に失敗しました: {e}").into() })?
+}
+
+/// Put the catalog's build of one plugin in place (`AMB-D-359`) — the GUI's `plugin update <name>`, the
+/// button the update banner offers so no screen has to be visited to take an update.
+///
+/// Every gate is core's ([`amenbo_core::plugin_update::apply`]): the asset is re-verified against amenbo's
+/// catalog key and its checksum, the previous build is retained as a `.bak`, and the gate, settings and
+/// secrets are carried over untouched. The one gate this side adds is the config re-check
+/// ([`amenbo_core::plugin_config::required_unset_for_update`], the same one the CLI runs) — a new schema
+/// that would leave an *enabled* plugin missing a `required` value keeps the working build and says so.
+///
+/// `false` means there was nothing to apply: the catalog publishes the build already installed. Off the
+/// main thread — it downloads.
+#[tauri::command]
+pub async fn plugin_update_apply(name: String, project_id: Option<i64>) -> Result<bool, CmdError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<bool, CmdError> {
+        let paths = amenbo_core::config::Paths::resolve()?;
+        let store = open_store_read()?;
+        let applied = amenbo_core::plugin_update::apply(&paths, &name, |available| {
+            refuse_update_leaving_required_unset(&store, project_id, available)
+        })?;
+        Ok(applied.is_some())
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("プラグインの更新に失敗しました: {e}").into() })?
+}
+
+/// Apply every update the catalog holds, one plugin at a time (`AMB-D-359`) — the banner's "update all".
+///
+/// Best-effort across plugins, exact within one: a plugin that fails is left exactly as it was and the next
+/// is still attempted, so one asset that will not verify cannot hold back every other update. The refusals
+/// come back as rows rather than as an error, because the caller has to report both halves of a mixed run.
+#[tauri::command]
+pub async fn plugin_update_apply_all(
+    project_id: Option<i64>,
+) -> Result<Vec<PluginUpdateOutcomeDto>, CmdError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<PluginUpdateOutcomeDto>, CmdError> {
+        use amenbo_core::plugin_update::Outcome;
+        let paths = amenbo_core::config::Paths::resolve()?;
+        let store = open_store_read()?;
+        let outcomes = amenbo_core::plugin_update::apply_all(&paths, |available| {
+            refuse_update_leaving_required_unset(&store, project_id, available)
+        })?;
+        Ok(outcomes
+            .into_iter()
+            .map(|o| match o {
+                Outcome::Replaced(r) => {
+                    PluginUpdateOutcomeDto { name: r.name, applied: true, error: None }
+                }
+                Outcome::Failed { name, error } => PluginUpdateOutcomeDto {
+                    name,
+                    applied: false,
+                    error: Some(error.to_string()),
+                },
+            })
+            .collect())
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("プラグインの更新に失敗しました: {e}").into() })?
+}
+
+/// The config re-check the two apply paths above hand to core as their `approve` gate (`AMB-D-359`).
+/// [`amenbo_core::plugin_config::required_unset_for_update`] decides *whether* a build is held back — the
+/// same call the CLI makes — and this only words the refusal for a window, where the way out is the
+/// plugin's settings and not a shell command.
+fn refuse_update_leaving_required_unset(
+    store: &Store,
+    project_id: Option<i64>,
+    available: &amenbo_core::plugin_manifest::Manifest,
+) -> amenbo_core::error::Result<()> {
+    let missing =
+        amenbo_core::plugin_config::required_unset_for_update(store, project_id, available)?;
+    if missing.is_empty() {
+        return Ok(());
+    }
+    let name = available.name.as_str();
+    Err(amenbo_core::error::Error::invalid(
+        format!(
+            "the new build of '{name}' needs setting(s) not provided: {}. Set them first, then update — the build in place is unchanged",
+            missing.join(", ")
+        ),
+        format!(
+            "'{name}' の新しい版は未入力の必須設定を要求します（{}）。先に設定してから更新してください——今の版はそのまま変わりません",
+            missing.join("、")
+        ),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

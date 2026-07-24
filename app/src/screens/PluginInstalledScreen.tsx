@@ -1,7 +1,12 @@
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { PluginGate } from "../components/PluginGate";
 import { t, tf } from "../core/i18n";
 import { usePluginInstalls, type PluginInstall } from "../core/pluginInstalls";
+import {
+  clearDismissedPluginUpdates,
+  refreshPluginUpdates,
+  usePluginUpdates,
+} from "../core/pluginUpdates";
 import { getSnapshot, subscribe } from "../core/snapshot";
 
 // What this machine holds — the "manage what you have" half of the plugin section (`AMB-D-356`), beside
@@ -23,12 +28,29 @@ export function PluginInstalledScreen() {
   const [pickedProject, setPickedProject] = useState<number | null>(null);
   const gateProject = pickedProject ?? (projects.length === 1 ? projects[0].id : null);
   const { installs, loading, error } = usePluginInstalls(gateProject);
+  // Opening this screen is one of the update triggers (`AMB-D-359`) — core answers from the catalog's
+  // freshness window, so arriving here inside the hour costs nothing. The offer itself is the shell's banner;
+  // what this screen reads it for is the "nothing is waiting" the banner has no reason to say.
+  const { updates, loading: checking } = usePluginUpdates(gateProject);
+  const [checked, setChecked] = useState(false);
+  useEffect(() => { refreshPluginUpdates(); }, []);
 
   return (
     <>
       <div className="filterbar">
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>🧩 {t("plugins.installed")}</span>
         <span className="topbar__spacer" style={{ flex: 1 }} />
+        {checked && !checking && updates.length === 0 && (
+          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.updates.none")}</span>
+        )}
+        {/* Asking in so many words also un-dismisses: a build waved away earlier is what the asker wants told. */}
+        <button
+          className="feed__action"
+          disabled={checking}
+          onClick={() => { setChecked(true); clearDismissedPluginUpdates(); refreshPluginUpdates(); }}
+        >
+          {checking ? t("plugins.updates.checking") : t("plugins.updates.check")}
+        </button>
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
           {tf("plugins.installedCount", { count: installs.length })}
         </span>

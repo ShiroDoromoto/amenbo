@@ -172,7 +172,15 @@
   border-left: 3px solid var(--c-border-strong); color: var(--c-text-muted);
 }
 .markdown hr { border: none; border-top: 1px solid var(--c-border); margin: var(--s-4) 0; }
-.markdown img { max-width: 100%; height: auto; border-radius: var(--r-sm); }
+/* An image's alt text, drawn in place of the picture (see Markdown.tsx): no image is ever emitted, so
+   this is what a README's badge row and any inline figure come out as. inline-block keeps a link's
+   underline off it, and the tokens make it read as a quiet label rather than as prose. */
+.markdown__imgalt {
+  display: inline-block; font-size: var(--fs-xs); line-height: 1.7;
+  padding: 0 var(--s-2); margin: 0 var(--s-1) 2px 0;
+  border-radius: var(--r-sm); background: var(--c-surface-sunken);
+  color: var(--c-text-muted); white-space: nowrap; vertical-align: middle;
+}
 /* Task lists (`- [ ]`): drop the bullet, keep the checkbox tinted and spaced from the label. */
 .markdown .contains-task-list { list-style: none; padding-left: 0; }
 .markdown .task-list-item input { margin: 0 var(--s-2) 0 0; accent-color: var(--c-accent); }

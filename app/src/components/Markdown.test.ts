@@ -159,3 +159,26 @@ describe("external links", () => {
     expect(render("[amenbo](https://example.invalid/x)")).toContain('href="https://example.invalid/x"');
   });
 });
+
+describe("images", () => {
+  // No image is ever emitted: the CSP allows no remote one, so a rendered <img> would only be a broken
+  // frame. The alt text is what still says something, and it is drawn as a label.
+  it("draws an image as its alt text, and nothing when it has none", () => {
+    const html = render("![License: Apache-2.0](https://img.example.invalid/l.svg)");
+    expect(html).toContain('class="markdown__imgalt"');
+    expect(html).toContain("License: Apache-2.0");
+    expect(html).not.toContain("<img");
+
+    expect(render("![](https://img.example.invalid/l.svg)")).not.toContain("markdown__imgalt");
+  });
+
+  // A README writes its badges one per line, and remark-breaks would stack them into a column.
+  it("keeps a badge row on one line, without touching the breaks in prose", () => {
+    const badges = render("[![CI](https://i.invalid/ci.svg)](https://ci.invalid)\n![Release](https://i.invalid/r.svg)");
+    expect(badges).not.toContain("<br");
+    expect(badges).toContain("CI");
+    expect(badges).toContain("Release");
+
+    expect(render("first line\nsecond line")).toContain("<br");
+  });
+});

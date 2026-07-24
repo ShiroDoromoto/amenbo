@@ -914,15 +914,19 @@ fn high_water(conn: &Connection, tables: &[&str]) -> Result<i64> {
 }
 
 /// The next id of the **activity sequence** — one counter shared by the file ledger's system events and
-/// the `task_comment` table. The timeline is the merge of those two streams and pages on
-/// `(created_at, id)`: with a counter each, both streams would hold an id `1`, the key would tie within
-/// one second, and a cursor cut there would lose rows (or repeat them). Drawing both from one sequence
-/// keeps the key unique across the streams and growing with time; the numbers are sparse in the table (an
-/// event consumes one the next comment will not take), which costs nothing because these ids are internal,
-/// unlike `task.id`/`decision.id` (the conversational numbers). Only one of the two streams leaves a row
-/// behind — a system event lives in the file alone, so there is no `MAX(id)` for the next call to see, and
-/// two events in a row would be handed the same id; every event therefore parks its id in
-/// [`ACTIVITY_HIGH_WATER`], inside the transaction that caused it, and this is where the two marks meet.
+/// the `task_comment` table. Those two streams pull from one sequence so that `id` alone separates them:
+/// with a counter each, both would hold an id `1`, and the timeline's key would tie within one second.
+/// The numbers are sparse in the table (an event consumes one the next comment will not take), which costs
+/// nothing because these ids are internal, unlike `task.id`/`decision.id` (the conversational numbers).
+/// Only one of the two streams leaves a row behind — a system event lives in the file alone, so there is no
+/// `MAX(id)` for the next call to see, and two events in a row would be handed the same id; every event
+/// therefore parks its id in [`ACTIVITY_HIGH_WATER`], inside the transaction that caused it, and this is
+/// where the two marks meet.
+///
+/// It is **not** the timeline's whole key. `decision_comment` is a third source on that timeline and
+/// numbers its rows against its own table, so the key carries which sequence a row came from
+/// ([`crate::activity::Seq`]) — this counter is what makes the tie-break work *within* the pair above,
+/// not across every source. A new source is free to number itself, as long as the key can name it.
 pub fn next_activity_id(conn: &Connection) -> Result<i64> {
     let rows = high_water(conn, &["task_comment"])?;
     Ok(rows.max(activity_high_water(conn)?) + 1)

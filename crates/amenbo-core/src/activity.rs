@@ -1,18 +1,23 @@
-//! Reading the timeline — the merge of the **file ledger** (system events) and the **`task_comment`**
-//! table (comments), in one total order.
+//! Reading the timeline — the merge of the **file ledger** (system events) and the two **comment**
+//! tables (`task_comment`, `decision_comment`), in one total order.
 //!
-//! The two halves of the timeline live in different places, and deliberately so. A comment is permanent
+//! The halves of the timeline live in different places, and deliberately so. A comment is permanent
 //! data: it is the only record of what someone said, so it stays a first-class row that nothing ages out.
 //! A system event narrates *how* a row reached the state its columns already hold — it is a bounded
 //! viewing stream ([`crate::activity_log`]), and the oldest of them may be trimmed away without losing a
 //! fact. Merging them at read time is what lets the two storage rules coexist behind one timeline.
 //!
-//! **The order is `(at, id)` and it is total.** Not because the file and the table were built to sort
-//! together, but because they draw their ids from **one counter**
-//! ([`crate::store_engine::read::next_activity_id`]) — no id is ever handed to both, and later events get
-//! larger ids. A cursor cut on this key therefore cannot lose or repeat a row.
+//! **The order is `(at, seq, id)` and it is total.** `at` is the part a reader sees: rows come in the
+//! order they happened. The other two only ever break a tie *inside* one second, and both are needed
+//! because the sources do not share one id space. The ledger and `task_comment` draw from **one counter**
+//! ([`crate::store_engine::read::next_activity_id`]), so between those two `id` alone separates every row;
+//! `decision_comment` numbers its own rows against its own table, so its ids repeat theirs by
+//! construction — a decision comment and a task comment posted in the same second can hold the same `id`.
+//! [`Seq`] names which sequence a row's `id` was drawn from, and sits between `at` and `id` so that no two
+//! rows can hold the same key. That is what a cursor cut on this key needs in order not to lose or repeat
+//! a row.
 //!
-//! **Neither half is read whole.** The comment half is an indexed `WHERE` over a table; the file half is
+//! **No half is read whole.** Each comment half is an indexed `WHERE` over its table; the file half is
 //! read **backwards from the end** and abandoned as soon as the window is filled ([`Ledger`] /
 //! [`crate::activity_log::rev_lines`]). A file with no index is not an excuse to load it: a
 //! timeline read costs the rows it shows, not the history it sits on.
@@ -57,8 +62,44 @@ impl Kind {
     }
 }
 
+/// Which id sequence a row's `id` was drawn from — the middle of the ordering key, and the reason it stays
+/// total now that the timeline merges three sources between which only two share a counter.
+///
+/// It is a property of the *source*, not something the reader chose, so it is derived
+/// ([`Item::seq`]) rather than stored: nothing in the database records it, exactly as nothing records
+/// [`Kind`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Seq {
+    /// The file ledger and `task_comment` — one counter between them
+    /// ([`crate::store_engine::read::next_activity_id`]), so they interleave within a second by `id`.
+    Activity,
+    /// `decision_comment` — its own dense per-table sequence, unrelated to the one above.
+    DecisionComment,
+}
+
+impl Seq {
+    /// The integer the key sorts on and the cursor carries. **Stable**: it travels inside an opaque cursor,
+    /// so a value that moved would silently shift a reader's place in the stream.
+    pub fn rank(self) -> i64 {
+        match self {
+            Seq::Activity => 0,
+            Seq::DecisionComment => 1,
+        }
+    }
+
+    /// The sequence a cursor's rank names. Unknown = `None`, so a cursor written by a build that knew a
+    /// sequence this one does not is refused rather than silently read as some other stream.
+    pub fn from_rank(rank: i64) -> Option<Seq> {
+        match rank {
+            0 => Some(Seq::Activity),
+            1 => Some(Seq::DecisionComment),
+            _ => None,
+        }
+    }
+}
+
 /// What a row is about. A system event names whichever subject it happened to (a decision deleted out of
-/// a project names the decision); a comment always names its task.
+/// a project names the decision); a comment names whatever it hangs on — its task, or its decision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TargetType {
     Task,
@@ -105,23 +146,37 @@ pub struct Item {
 }
 
 impl Item {
+    /// Which id sequence this row's `id` came from. A comment on a decision is the one row numbered against
+    /// its own table; everything else on the timeline — every ledger line, and every task comment — is on
+    /// the shared activity counter.
+    pub fn seq(&self) -> Seq {
+        match (self.kind, self.target_type) {
+            (Kind::Comment, TargetType::Decision) => Seq::DecisionComment,
+            _ => Seq::Activity,
+        }
+    }
+
     /// The key the whole timeline is ordered and paged on.
-    fn key(&self) -> (Timestamp, i64) {
-        (self.at, self.id)
+    fn key(&self) -> (Timestamp, Seq, i64) {
+        (self.at, self.seq(), self.id)
     }
 }
 
-/// What to read. Every field means the same thing on both halves; the ones that need a task's *current*
-/// columns (`project_id` / `for_facet`) resolve against the live `task` table on both sides, so a row
+/// What to read. Every field means the same thing on every half; the ones that need a task's *current*
+/// columns (`project_id` / `for_facet`) resolve against the live `task` table on every side, so a row
 /// follows its task rather than the project the event was filed under years ago.
+///
+/// Two fields ask a question a decision comment has no answer to, and it drops out of both rather than
+/// being let through: `task_id` names a task it does not hang on, and `for_facet` asks for the target
+/// *task's* assignee, which it has none of. `project_id` does reach it — through `decision.project_id`.
 #[derive(Default)]
 pub struct Filter {
     pub task_id: Option<i64>,
     pub project_id: Option<i64>,
     /// Rows stamped on or after this day (local `00:00`).
     pub since: Option<NaiveDate>,
-    /// Strictly-greater cursor over `(at, id)` — the incremental window.
-    pub after: Option<(Timestamp, i64)>,
+    /// Strictly-greater cursor over `(at, seq, id)` — the incremental window.
+    pub after: Option<(Timestamp, Seq, i64)>,
     /// `system` / `comment`. None = both.
     pub kind: Option<Kind>,
     /// The issuing facet (`--by`).
@@ -162,7 +217,7 @@ impl Ledger {
 /// empty title it already had — the same outcome as a name that was never written.
 const NAME_SCAN_BUDGET: u64 = 1024 * 1024;
 
-/// One window of the merged timeline, ordered by `(at, id)` in the direction the filter asks for.
+/// One window of the merged timeline, ordered by `(at, seq, id)` in the direction the filter asks for.
 ///
 /// Each half is asked for the newest (or oldest) `offset + limit` rows on its own — that is enough for
 /// the merge to be able to fill the window whichever half the rows come from — and the window is cut once
@@ -173,11 +228,13 @@ pub fn page(ledger: &Ledger, conn: &Connection, f: &Filter) -> Result<Vec<Item>>
     let tasks = (f.project_id.is_some() || f.for_facet.is_some()).then(|| task_index(conn)).transpose()?;
 
     let mut items: Vec<Item> = Vec::new();
+    if f.kind != Some(Kind::System) {
+        // Both comment tables answer to `--kind comment`: a comment is a comment whatever it hangs on.
+        items.extend(task_comment_rows(conn, f, need)?);
+        items.extend(decision_comment_rows(conn, f, need)?);
+    }
     if f.kind != Some(Kind::Comment) {
         items.extend(system_rows(ledger, f, tasks.as_ref(), need));
-    }
-    if f.kind != Some(Kind::System) {
-        items.extend(comment_rows(conn, f, need)?);
     }
 
     if f.oldest_first {
@@ -202,8 +259,12 @@ pub fn page(ledger: &Ledger, conn: &Connection, f: &Filter) -> Result<Vec<Item>>
 ///
 /// Two things end the walk early, and both come from the ledger being append-only (so file order is id
 /// order, newest last):
-/// - a **cursor** (`after`): every line before the cursor's id is older than it, so the first line at or
-///   below that id is where the incremental window ends. Nothing further back can belong to it.
+/// - a **cursor** (`after`), but **only one sitting on this very sequence** ([`Seq::Activity`]): every
+///   line before its id is older than it, so the first line at or below that id is where the incremental
+///   window ends. A cursor on `decision_comment` carries an id from *another* counter, which says nothing
+///   about how far back the ledger's own ids reach — stopping on it would cut the walk at an unrelated
+///   number and silently drop lines. So it does not bound this walk at all; the precise filter below is
+///   what applies it.
 /// - a **window** (`need`): the walk starts at the newest line, so the first `need` matching lines *are*
 ///   the newest `need` — the rest of the file cannot contain a row that outranks them.
 ///
@@ -211,12 +272,13 @@ pub fn page(ledger: &Ledger, conn: &Connection, f: &Filter) -> Result<Vec<Item>>
 /// a `since` day alone does not cut the walk, because a clock that stepped backwards could leave an older
 /// timestamp ahead of a newer one, and stopping on it would silently drop rows.
 fn system_rows(ledger: &Ledger, f: &Filter, tasks: Option<&TaskIndex>, need: Option<usize>) -> Vec<Item> {
+    let stop_below = f.after.and_then(|(_, seq, id)| (seq == Seq::Activity).then_some(id));
     let rows = ledger
         .newest_first()
-        .take_while(|l| f.after.map(|(_, cur_id)| l.id > cur_id).unwrap_or(true))
+        .take_while(|l| stop_below.map(|cur_id| l.id > cur_id).unwrap_or(true))
         .filter(|l| f.task_id.is_none() || (l.task == f.task_id))
         .filter(|l| f.since.map(|d| l.at.0.date_naive() >= d).unwrap_or(true))
-        .filter(|l| f.after.map(|cur| (l.at, l.id) > cur).unwrap_or(true))
+        .filter(|l| after_ok(f.after, Seq::Activity, l.at, l.id))
         .filter(|l| f.author_kind.map(|a| l.actor == Some(a)).unwrap_or(true))
         .filter(|l| line_project_ok(l, f, tasks))
         .filter(|l| line_for_ok(l, f, tasks))
@@ -272,9 +334,39 @@ fn line_for_ok(l: &activity_log::Line, f: &Filter, tasks: Option<&TaskIndex>) ->
         .unwrap_or(false)
 }
 
-/// The comment half: an indexed `WHERE` over `task_comment`, with the same predicates the ledger scan
+/// Whether an in-memory row is strictly past the cursor, compared on the whole key. The ledger's rows are
+/// filtered through this; the tables' rows through [`after_pred`], which says the same thing in SQL.
+fn after_ok(after: Option<(Timestamp, Seq, i64)>, seq: Seq, at: Timestamp, id: i64) -> bool {
+    after.map(|cur| (at, seq, id) > cur).unwrap_or(true)
+}
+
+/// The cursor cut for the rows of one sequence, as SQL.
+///
+/// Only rows on the cursor's **own** sequence ever compare by `id`. Within one second the sequence decides,
+/// so a cursor sitting on the other sequence either admits that whole second's rows (its rank is the lower
+/// of the two) or excludes them (the higher), with no id compared at all. This is the one place the split
+/// id spaces have to be held in mind: an `id` drawn from another counter is not a nearer or further
+/// *position* in this stream, it is a number about something else — comparing the two is how a cursor
+/// starts dropping rows.
+fn after_pred(
+    after: Option<(Timestamp, Seq, i64)>,
+    seq: Seq,
+    at: Col<Text, NotNull>,
+    id: Col<Int, NotNull>,
+) -> Option<Pred> {
+    let (cur_at, cur_seq, cur_id) = after?;
+    let newer = Pred::cmp(at, ">", cur_at.to_rfc3339_z());
+    let same_second = || Pred::eq(at, cur_at.to_rfc3339_z());
+    Some(match seq.cmp(&cur_seq) {
+        std::cmp::Ordering::Equal => newer.or(same_second().and(Pred::cmp(id, ">", cur_id))),
+        std::cmp::Ordering::Greater => newer.or(same_second()),
+        std::cmp::Ordering::Less => newer,
+    })
+}
+
+/// The task-comment half: an indexed `WHERE` over `task_comment`, with the same predicates the ledger scan
 /// applies, so neither side can let a row through the other would have dropped.
-fn comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> Result<Vec<Item>> {
+fn task_comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> Result<Vec<Item>> {
     /// The comment table's columns, spelled with the alias this query gives it.
     const C: col::task_comment::Cols = col::task_comment::of("c");
     /// The task joined onto it — the two filters that read a comment's task rather than the comment.
@@ -287,10 +379,7 @@ fn comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> Result<Ve
             // `created_at` is fixed-width `%Y-%m-%dT%H:%M:%SZ`, so a lexicographic `>=` against the bare
             // day is the day boundary.
             f.since.map(|d| Pred::cmp(C.created_at, ">=", d.format("%Y-%m-%d").to_string())),
-            f.after.map(|(at, id)| {
-                Pred::cmp(C.created_at, ">", at.to_rfc3339_z()).or(Pred::eq(C.created_at, at.to_rfc3339_z())
-                    .and(Pred::cmp(C.id, ">", id)))
-            }),
+            after_pred(f.after, Seq::Activity, C.created_at, C.id),
             f.author_kind.map(|a| Pred::eq(C.author_kind, a.as_str())),
             f.project_id.map(|p| Pred::eq(T.project_id, p)),
             f.for_facet.map(|a| Pred::eq(T.assignee_kind, a.as_str())),
@@ -336,6 +425,85 @@ fn comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> Result<Ve
                 event: None,
                 // `text` is `NOT NULL` in the registry; the `Item` field is optional because a system
                 // event has no text, not because a comment's may be missing.
+                text: Some(text.get(r)?),
+                edited_at: edited
+                    .get(r)?
+                    .as_deref()
+                    .map(|t| Timestamp::parse_rfc3339(t).unwrap_or_default()),
+            })
+        })
+        .map_err(&oops)?
+        .collect::<rusqlite::Result<Vec<Item>>>()
+        .map_err(&oops)?;
+    Ok(rows)
+}
+
+/// The decision-comment half: the shape of [`task_comment_rows`] over `decision_comment`, joined to
+/// `decision` for the one filter that reaches it.
+///
+/// Two of the filters cannot be answered here, and the answer is an empty window rather than a row let
+/// through: `task_id` names a task this comment does not hang on, and `for_facet` (`--for`) asks for the
+/// target *task's* assignee, which a decision has none of. Narrowing to nothing is what the ledger side
+/// already does with a line whose task is gone — a row with no assignee to match does not match an
+/// assignee.
+fn decision_comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> Result<Vec<Item>> {
+    /// The comment table's columns, spelled with the alias this query gives it.
+    const C: col::decision_comment::Cols = col::decision_comment::of("c");
+    /// The decision joined onto it — `--project` reaches these rows through `decision.project_id`.
+    const D: col::decision::Cols = col::decision::of("d");
+
+    if f.task_id.is_some() || f.for_facet.is_some() {
+        return Ok(Vec::new());
+    }
+
+    let oops = crate::error::sqlite_on(conn);
+    let pred = Pred::all(
+        [
+            // The day boundary, as a lexicographic cut on the fixed-width instant (as on the task side).
+            f.since.map(|d| Pred::cmp(C.created_at, ">=", d.format("%Y-%m-%d").to_string())),
+            after_pred(f.after, Seq::DecisionComment, C.created_at, C.id),
+            f.author_kind.map(|a| Pred::eq(C.author_kind, a.as_str())),
+            f.project_id.map(|p| Pred::eq(D.project_id, p)),
+        ]
+        .into_iter()
+        .flatten(),
+    );
+
+    let mut sel = Select::new();
+    let (id, decision_id, at, author, text, edited) = (
+        sel.col(C.id),
+        sel.col(C.decision_id),
+        sel.col(C.created_at),
+        sel.col(C.author_kind),
+        sel.col(C.text),
+        sel.col(C.edited_at),
+    );
+    let mut sql = Sql::from(&sel, C.table);
+    // An inner join drops nothing here: `decision_id` is an FK with `CASCADE`, so a comment whose decision
+    // is gone went with it. That is also why these rows are always `target_live` — unlike a ledger line,
+    // a comment cannot outlive what it hangs on.
+    sql.join(D.table, same(D.id, C.decision_id));
+    let newest_first = !f.oldest_first;
+    sql.push_where(pred.as_ref())
+        .order_by([
+            Sort::by(C.created_at).dir(newest_first),
+            Sort::by(C.id).dir(newest_first),
+        ])
+        .limit(need.map(|n| n as i64).unwrap_or(-1));
+
+    let mut stmt = conn.prepare(sql.text()).map_err(&oops)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok(Item {
+                id: id.get(r)?,
+                at: Timestamp::parse_rfc3339(&at.get(r)?).unwrap_or_default(),
+                kind: Kind::Comment,
+                author_kind: author.get(r)?.as_deref().and_then(ActorKind::parse),
+                target_type: TargetType::Decision,
+                target_id: decision_id.get(r)?,
+                title: String::new(),
+                target_live: false, // as above (one place decides).
+                event: None,
                 text: Some(text.get(r)?),
                 edited_at: edited
                     .get(r)?
@@ -624,6 +792,35 @@ mod tests {
         );
     }
 
+    fn decision(e: &StoreEngine, id: i64, project: i64, title_: &str) {
+        e.put_record(
+            "decision",
+            id,
+            &[
+                ("project_id", Sql::Integer(project)),
+                ("title", text(title_)),
+                ("body", text("本文")),
+                ("status", text("proposed")),
+            ],
+        )
+        .unwrap();
+    }
+
+    fn decision_comment(e: &StoreEngine, id: i64, sec: u32, decision_id: i64, text_: &str) {
+        e.put_record(
+            "decision_comment",
+            id,
+            &[
+                ("decision_id", Sql::Integer(decision_id)),
+                ("author_kind", text("human")),
+                ("text", text(text_)),
+                ("created_at", text(&at(sec).to_rfc3339_z())),
+                ("updated_at", text(&at(sec).to_rfc3339_z())),
+            ],
+        )
+        .unwrap();
+    }
+
     fn comment(e: &StoreEngine, id: i64, sec: u32, task: i64, text_: &str) {
         e.put_record(
             "task_comment",
@@ -705,7 +902,7 @@ mod tests {
         assert_eq!(ids(Filter { limit: Some(2), ..Default::default() }), vec![4, 3]);
         assert_eq!(ids(Filter { limit: Some(2), offset: 2, ..Default::default() }), vec![2, 1], "the next page");
         assert_eq!(
-            ids(Filter { after: Some((at(2), 2)), oldest_first: true, ..Default::default() }),
+            ids(Filter { after: Some((at(2), Seq::Activity, 2)), oldest_first: true, ..Default::default() }),
             vec![3, 4],
             "strictly newer than the cursor, oldest first"
         );
@@ -884,6 +1081,160 @@ mod tests {
             live,
             vec![(4, false), (3, false), (2, true), (1, true)],
             "live where the read-model still has the row, gone where only the ledger remembers it"
+        );
+    }
+
+    /// A comment on a decision is on the timeline like any other comment: same `kind`, its own body, and
+    /// named by the decision it hangs on rather than by a task. It is a *comment*, so `--kind` sorts it with
+    /// the other comments and not with the system events.
+    #[test]
+    fn a_decision_comment_is_on_the_timeline_named_by_its_decision() {
+        let (e, ledger) = fixture("decision-comment");
+        decision(&e, 9, 7, "決定のタイトル");
+        system(&ledger, 1, 1, Some(1), json!({ "kind": "task.created", "title": "AI のタスク" }));
+        comment(&e, 2, 2, 1, "タスクへの一言");
+        decision_comment(&e, 3, 3, 9, "決定への一言");
+
+        let items = page(&Ledger::open(&ledger), e.conn(), &Filter::default()).unwrap();
+
+        let newest = &items[0];
+        assert_eq!(newest.kind, Kind::Comment);
+        assert_eq!(newest.target_type, TargetType::Decision);
+        assert_eq!(newest.target_id, 9);
+        assert_eq!(newest.text.as_deref(), Some("決定への一言"));
+        assert_eq!(newest.title, "決定のタイトル", "the decision's live title is joined on");
+        assert!(newest.target_live, "a comment cannot outlive what it hangs on (the FK cascades)");
+
+        let only = |f: Filter| -> Vec<TargetType> {
+            page(&Ledger::open(&ledger), e.conn(), &f).unwrap().into_iter().map(|it| it.target_type).collect()
+        };
+        assert_eq!(
+            only(Filter { kind: Some(Kind::Comment), ..Default::default() }),
+            vec![TargetType::Decision, TargetType::Task],
+            "--kind comment takes both comment tables"
+        );
+        assert_eq!(
+            only(Filter { kind: Some(Kind::System), ..Default::default() }),
+            vec![TargetType::Task],
+            "--kind system takes the ledger alone"
+        );
+    }
+
+    /// The filters that ask a decision comment a question it has no answer to narrow it away rather than
+    /// letting it through: `--task` names a task it does not hang on, and `--for` asks for the target
+    /// *task's* assignee, which a decision has none of. `--project` does reach it — through the decision.
+    #[test]
+    fn the_filters_a_decision_comment_cannot_answer_drop_it() {
+        let (e, ledger) = fixture("decision-comment-filters");
+        decision(&e, 9, 7, "この PJ の決定");
+        e.put_record("project", 8, &[("name", text("Beta")), ("order_key", text("b"))]).unwrap();
+        decision(&e, 10, 8, "別 PJ の決定");
+        comment(&e, 1, 1, 1, "AI タスクへの一言");
+        decision_comment(&e, 2, 2, 9, "この PJ の決定への一言");
+        decision_comment(&e, 3, 3, 10, "別 PJ の決定への一言");
+
+        let ids = |f: Filter| -> Vec<(TargetType, i64)> {
+            page(&Ledger::open(&ledger), e.conn(), &f)
+                .unwrap()
+                .into_iter()
+                .map(|it| (it.target_type, it.id))
+                .collect()
+        };
+        assert_eq!(
+            ids(Filter { task_id: Some(1), ..Default::default() }),
+            vec![(TargetType::Task, 1)],
+            "--task: only the task's own timeline, never a decision's comments"
+        );
+        assert_eq!(
+            ids(Filter { for_facet: Some(ActorKind::Ai), ..Default::default() }),
+            vec![(TargetType::Task, 1)],
+            "--for ai: a row with no assignee to match does not match an assignee"
+        );
+        assert_eq!(
+            ids(Filter { project_id: Some(7), ..Default::default() }),
+            vec![(TargetType::Decision, 2), (TargetType::Task, 1)],
+            "--project reaches a decision comment through decision.project_id"
+        );
+        assert_eq!(
+            ids(Filter { project_id: Some(8), ..Default::default() }),
+            vec![(TargetType::Decision, 3)],
+            "and it keeps the other project's out"
+        );
+        assert_eq!(
+            ids(Filter { author_kind: Some(ActorKind::Human), ..Default::default() }),
+            vec![(TargetType::Decision, 3), (TargetType::Decision, 2), (TargetType::Task, 1)],
+            "--by is about who wrote it, which every comment table records"
+        );
+    }
+
+    /// The two comment tables number their rows against **their own** table, so the same `id` can name a
+    /// task comment and a decision comment at once — and the timeline has to keep them apart anyway. The
+    /// sequence in the key is what does it: both rows are on the timeline, in a fixed order, and a cursor
+    /// stopped between them consumes each exactly once.
+    ///
+    /// Without it the key is `(at, id)`, the two rows are indistinguishable, and the cursor below returns
+    /// nothing — the decision comment is dropped and no later read ever offers it again.
+    #[test]
+    fn two_rows_sharing_one_at_and_id_stay_two_rows_to_the_cursor() {
+        let (e, ledger) = fixture("collision");
+        decision(&e, 9, 7, "決定のタイトル");
+        comment(&e, 5, 2, 1, "タスクへの一言");
+        decision_comment(&e, 5, 2, 9, "決定への一言"); // the same second and the same id
+
+        let keys = |f: Filter| -> Vec<(TargetType, i64)> {
+            page(&Ledger::open(&ledger), e.conn(), &f)
+                .unwrap()
+                .into_iter()
+                .map(|it| (it.target_type, it.id))
+                .collect()
+        };
+        assert_eq!(
+            keys(Filter::default()),
+            vec![(TargetType::Decision, 5), (TargetType::Task, 5)],
+            "both are there, and the sequence fixes which comes first inside the second"
+        );
+        assert_eq!(
+            keys(Filter { after: Some((at(2), Seq::Activity, 5)), oldest_first: true, ..Default::default() }),
+            vec![(TargetType::Decision, 5)],
+            "a cursor on the task comment still owes the reader the decision comment"
+        );
+        assert!(
+            keys(Filter {
+                after: Some((at(2), Seq::DecisionComment, 5)),
+                oldest_first: true,
+                ..Default::default()
+            })
+            .is_empty(),
+            "and once past it, neither row comes again"
+        );
+    }
+
+    /// A cursor sitting on the decision-comment sequence must not bound the **ledger** walk: its id comes
+    /// from another counter, so it says nothing about how far back the ledger's own ids reach. Here the
+    /// ledger's newer line carries the *smaller* number, which an id-bounded walk would stop short of and
+    /// silently drop.
+    #[test]
+    fn a_decision_comments_cursor_does_not_cut_the_ledger_walk_short() {
+        let (e, ledger) = fixture("cross-sequence-cursor");
+        decision(&e, 9, 7, "決定のタイトル");
+        decision_comment(&e, 9, 2, 9, "決定への一言"); // a high id, early
+        system(&ledger, 1, 5, Some(1), json!({ "kind": "task.created", "title": "AI のタスク" })); // a low id, later
+
+        let items = page(
+            &Ledger::open(&ledger),
+            e.conn(),
+            &Filter {
+                after: Some((at(2), Seq::DecisionComment, 9)),
+                oldest_first: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            items.iter().map(|it| (it.kind, it.id)).collect::<Vec<_>>(),
+            vec![(Kind::System, 1)],
+            "the later ledger line is past the cursor, whatever its number is next to the other sequence's"
         );
     }
 }

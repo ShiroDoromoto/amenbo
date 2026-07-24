@@ -1812,6 +1812,48 @@ fn a_past_line_of_a_deleted_subject_says_the_subject_is_gone() {
     assert_eq!(alive["target"]["live"], true);
 }
 
+/// A decision record's comments are on the same timeline as a task's — `activity` is one stream, so a
+/// discussion held on a decision is not invisible there. `--kind comment` takes both tables; the two
+/// filters that ask about a task a decision comment does not hang on (`--task`, `--for`) leave it out.
+#[test]
+fn activity_carries_a_decision_records_comments_too() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    let task = id_str(
+        &cli.json(&["task", "add", "--title", "ai task", "--to", "tester", "--ai", "--actor", "ai", "--json"])
+            ["task"]["id"],
+    );
+    let dec = id_str(
+        &cli.json(&["decision", "add", "--title", "決定ひとつ", "--body", "本文", "--actor", "ai", "--json"])
+            ["decision"]["id"],
+    );
+    cli.run(&["comment", "add", &task, "--actor", "ai", "--text", "task said"]);
+    cli.run(&["decision", "comment", "add", &dec, "--actor", "ai", "--text", "decision said"]);
+
+    let comments = cli.json(&["activity", "--kind", "comment", "--json"]);
+    let items = comments["items"].as_array().unwrap().clone();
+    let on_decision = items
+        .iter()
+        .find(|i| i["target"]["type"] == "decision")
+        .expect("the decision's comment is on the timeline");
+    assert_eq!(on_decision["text"], "decision said");
+    assert_eq!(on_decision["target"]["id"].as_i64().unwrap().to_string(), dec);
+    assert_eq!(on_decision["target"]["title"], "決定ひとつ", "named by the decision it hangs on");
+    assert_eq!(on_decision["target"]["live"], true, "a comment cannot outlive what it hangs on");
+    assert!(items.iter().any(|i| i["target"]["type"] == "task"), "and the task's comment is still there");
+
+    for narrowed in [
+        cli.json(&["activity", "--task", &task, "--json"]),
+        cli.json(&["activity", "--for", "ai", "--json"]),
+    ] {
+        assert!(
+            narrowed["items"].as_array().unwrap().iter().all(|i| i["target"]["type"] != "decision"),
+            "a decision comment has no task to be filtered by, so it narrows away"
+        );
+    }
+}
+
 /// Built for agents: the opaque `--since <cursor>` returns only what is strictly newer than the last read,
 /// oldest-first, and `--for me` narrows to events on tasks assigned to my facet.
 #[test]
@@ -1828,7 +1870,7 @@ fn activity_incremental_cursor_and_for_me_scope() {
     // Read once to get the cursor to resume from; history responses carry one too.
     let base = cli.json(&["activity", "--json"]);
     let cursor = base["cursor"].as_str().expect("history response carries an opaque cursor").to_string();
-    assert!(cursor.starts_with("cur1_"), "opaque cursor prefix");
+    assert!(cursor.starts_with("cur2_"), "opaque cursor prefix");
 
     // Nothing is strictly newer yet, and the position holds.
     let empty = cli.json(&["activity", "--since", &cursor, "--json"]);

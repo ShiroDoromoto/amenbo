@@ -20,12 +20,14 @@ const OVERSCAN = 8;
 const PAGE = 100;
 
 /**
- * The activity feed (history across every project). Only task rows are openable — the feed also carries rows aimed at
- * projects and decisions, but the ledger only ever names those on deletion (no row points at a live project or
- * decision), so there is nothing to open. Comments are not edited on this surface: a row is a one-line summary, and a
- * multi-line editor would change its height and wreck the virtual scroller's row-height estimate. Editing, like
- * replying, opens the detail pane with that comment in edit mode. Filtering picks independently on two axes: kind
- * (system / comment) × facet (human / AI); both default to all.
+ * The activity feed (history across every project). Only task rows are openable, and the reply / edit / remove actions
+ * are task-only too: the feed also carries rows aimed at projects and decisions. A project row is always a deletion
+ * (the ledger names one nowhere else), so it has nothing to open; a decision row is either a deletion or a comment on a
+ * live decision, so that one does have somewhere to go — the door for it is not built yet, not absent by design.
+ * Comments are not edited on this surface: a row is a one-line summary, and a multi-line editor would change its height
+ * and wreck the virtual scroller's row-height estimate. Editing, like replying, opens the detail pane with that comment
+ * in edit mode. Filtering picks independently on two axes: kind (system / comment) × facet (human / AI); both default
+ * to all.
  */
 export function ActivityFeed({
   onOpenTask,

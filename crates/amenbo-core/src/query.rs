@@ -1220,43 +1220,55 @@ pub struct ActivityResult {
 }
 
 /// Prefix of activity's opaque incremental cursor, which denotes one point in the total order
-/// `(created_at, id)`. The internal representation is hidden: it travels as a base64url string
-/// starting with `cur1_`. The prefix exists so that `--since` can tell a cursor from a date
-/// expression (`today` / `+3d` / `YYYY-MM-DD` never start with `cur1_`). The key can be a total order
-/// only because the timeline's two sources — the file ledger (system events) and `task_comment` —
-/// **share a single id sequence** ([`crate::store_engine::read::next_activity_id`]). Break that and
-/// the same id appears twice within one second, so cutting the stream at a cursor starts dropping or
-/// duplicating rows.
-const ACTIVITY_CURSOR_PREFIX: &str = "cur1_";
+/// `(created_at, seq, id)`. The internal representation is hidden: it travels as a base64url string
+/// starting with `cur2_`. The prefix exists so that `--since` can tell a cursor from a date
+/// expression (`today` / `+3d` / `YYYY-MM-DD` never start with it). `seq` is in the key because the
+/// timeline's sources do **not** all share one id sequence: the file ledger and `task_comment` do
+/// ([`crate::store_engine::read::next_activity_id`]), but `decision_comment` numbers its own rows, so
+/// without it the same id appears twice within one second and cutting the stream at a cursor starts
+/// dropping or duplicating rows (see [`crate::activity`]).
+const ACTIVITY_CURSOR_PREFIX: &str = "cur2_";
 
-/// Activity's ordering key: `(at, id)`, where `id` is the INTEGER primary key.
-pub fn activity_sort_key(at: Timestamp, id: i64) -> (Timestamp, i64) {
-    (at, id)
-}
+/// The first cursor spelling — still **read, never written**. It carried `(at, id)` with no sequence,
+/// from before the timeline had a third source, so every token of it names a row on the shared activity
+/// sequence and reads back as one. Accepting it is what keeps a reader that was mid-stream when this build
+/// arrived from losing its place: the alternative is `--since` rejecting the token it was handed a minute
+/// earlier.
+const ACTIVITY_CURSOR_PREFIX_V1: &str = "cur1_";
 
-/// Encodes `(at, id)` into an opaque cursor.
-pub fn encode_activity_cursor(at: &Timestamp, id: i64) -> String {
+/// Encodes `(at, seq, id)` into an opaque cursor.
+pub fn encode_activity_cursor(at: &Timestamp, seq: crate::activity::Seq, id: i64) -> String {
     use base64::Engine;
-    let raw = format!("{}\n{}", at.to_rfc3339_z(), id);
+    let raw = format!("{}\n{}\n{}", at.to_rfc3339_z(), seq.rank(), id);
     format!("{ACTIVITY_CURSOR_PREFIX}{}", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw.as_bytes()))
 }
 
-/// Whether a string looks like a cursor (starts with `cur1_`). Used to tell dates from cursors in
-/// `--since`.
+/// Whether a string looks like a cursor. Used to tell dates from cursors in `--since` — and it answers for
+/// the older spelling too, so a token this build cannot read is reported as a bad *cursor* rather than
+/// being taken for a date and refused as a bad date.
 pub fn looks_like_activity_cursor(s: &str) -> bool {
-    s.starts_with(ACTIVITY_CURSOR_PREFIX)
+    s.starts_with(ACTIVITY_CURSOR_PREFIX) || s.starts_with(ACTIVITY_CURSOR_PREFIX_V1)
 }
 
-/// Decodes a cursor back into `(at, id)`. Malformed input (missing prefix, broken base64, …) gives
-/// `None`.
-pub fn parse_activity_cursor(s: &str) -> Option<(Timestamp, i64)> {
+/// Decodes a cursor back into `(at, seq, id)`. Malformed input (missing prefix, broken base64, a rank no
+/// sequence answers to, …) gives `None`.
+pub fn parse_activity_cursor(s: &str) -> Option<(Timestamp, crate::activity::Seq, i64)> {
     use base64::Engine;
-    let body = s.strip_prefix(ACTIVITY_CURSOR_PREFIX)?;
+    let (body, versioned) = match s.strip_prefix(ACTIVITY_CURSOR_PREFIX) {
+        Some(body) => (body, true),
+        None => (s.strip_prefix(ACTIVITY_CURSOR_PREFIX_V1)?, false),
+    };
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(body).ok()?;
     let text = String::from_utf8(bytes).ok()?;
-    let (at_s, id) = text.split_once('\n')?;
+    let (at_s, rest) = text.split_once('\n')?;
     let at = Timestamp::parse_rfc3339(at_s)?;
-    Some((at, id.parse().ok()?))
+    if !versioned {
+        // The v1 form is `(at, id)`: no sequence was recorded because there was only one to record.
+        return Some((at, crate::activity::Seq::Activity, rest.parse().ok()?));
+    }
+    let (rank, id) = rest.split_once('\n')?;
+    let seq = crate::activity::Seq::from_rank(rank.parse().ok()?)?;
+    Some((at, seq, id.parse().ok()?))
 }
 
 #[derive(Default)]
@@ -1268,10 +1280,10 @@ pub struct ActivityParams {
     /// From this date on (from 00:00 of that day). History mode, newest first. Mutually exclusive
     /// with `since_cursor`.
     pub since: Option<NaiveDate>,
-    /// The `(at, id)` origin decoded from an opaque cursor (`--since <cursor>`). When set, the read
+    /// The `(at, seq, id)` origin decoded from an opaque cursor (`--since <cursor>`). When set, the read
     /// runs in incremental mode: only what is strictly newer than the cursor, oldest-first (moving
     /// forward in time). Mutually exclusive with `since` (the date).
-    pub since_cursor: Option<(Timestamp, i64)>,
+    pub since_cursor: Option<(Timestamp, crate::activity::Seq, i64)>,
     /// Narrow to system events or comments.
     pub kind: Option<crate::activity::Kind>,
     /// Narrow to the facet that emitted the row.
@@ -1287,9 +1299,10 @@ pub struct ActivityParams {
 }
 
 /// Returns the unified timeline **newest first** (people and AIs read the same stream). The stream is
-/// a merge of two sources ([`crate::activity`]): system events come from the file ledger (outside the
-/// source of truth, bounded), while comments come from the first-class `task_comment` table
-/// (permanent data, never lost). All that is left here is the arithmetic of the window, the cursor
+/// a merge of three sources ([`crate::activity`]): system events come from the file ledger (outside the
+/// source of truth, bounded), while comments come from the first-class `task_comment` and
+/// `decision_comment` tables (permanent data, never lost). All that is left here is the arithmetic of
+/// the window, the cursor
 /// and `has_more`. `has_more` is not a COUNT: we **ask for `limit + 1` rows and see whether they
 /// overflow**, so no extra full aggregate is needed. History mode's bootstrap cursor is the newest
 /// row *before* offset is applied, so it comes from a separate `limit 1` read. `reach` is **always**
@@ -1328,15 +1341,17 @@ pub fn activity(
     if let Some(n) = params.limit {
         rows.truncate(n);
     }
+    // The cursor is cut from the merged row, not from its output shape: the key carries the row's id
+    // sequence, and `ActivityItem` does not — a reader has no use for it, only the stream's own paging does.
+    let tail = rows.last().map(|it| (it.at, it.seq(), it.id));
     let items: Vec<ActivityItem> = rows.into_iter().map(activity_item).collect();
 
-    if let Some((cur_at, cur_id)) = &params.since_cursor {
+    if let Some((cur_at, cur_seq, cur_id)) = &params.since_cursor {
         // Incremental mode: the last row of the returned window (the newest) becomes the next cursor.
         // If the window is empty, keep the incoming cursor so the reader does not lose its place.
-        let cursor = items
-            .last()
-            .map(|it| encode_activity_cursor(&it.at, it.id))
-            .or_else(|| Some(encode_activity_cursor(cur_at, *cur_id)));
+        let cursor = tail
+            .map(|(at, seq, id)| encode_activity_cursor(&at, seq, id))
+            .or_else(|| Some(encode_activity_cursor(cur_at, *cur_seq, *cur_id)));
         return Ok(ActivityResult { count: items.len(), cursor, has_more, items });
     }
 
@@ -1347,7 +1362,7 @@ pub fn activity(
         conn,
         &crate::activity::Filter { limit: Some(1), offset: 0, ..filter },
     )?;
-    let cursor = newest.first().map(|it| encode_activity_cursor(&it.at, it.id));
+    let cursor = newest.first().map(|it| encode_activity_cursor(&it.at, it.seq(), it.id));
     Ok(ActivityResult { count: items.len(), cursor, has_more, items })
 }
 
@@ -2292,19 +2307,42 @@ mod filter_tests {
         assert!(NumberFilter::parse("").is_err());
     }
 
-    /// A cursor is an opaque token hiding `(at, id)`: it round-trips, and it can be told apart from a
-    /// date expression or from garbage.
+    /// A cursor is an opaque token hiding `(at, seq, id)`: it round-trips carrying the sequence its row's
+    /// id was drawn from, and it can be told apart from a date expression or from garbage.
     #[test]
     fn activity_cursor_roundtrips_and_is_distinguishable() {
+        use crate::activity::Seq;
         let at = Timestamp::parse_rfc3339("2026-07-05T01:02:03Z").unwrap();
-        let c = encode_activity_cursor(&at, 12);
-        assert!(looks_like_activity_cursor(&c), "it starts with cur1_");
-        assert_eq!(parse_activity_cursor(&c), Some((at, 12)));
+        let c = encode_activity_cursor(&at, Seq::Activity, 12);
+        assert!(looks_like_activity_cursor(&c), "it starts with cur2_");
+        assert_eq!(parse_activity_cursor(&c), Some((at, Seq::Activity, 12)));
+        // The sequence is part of the token, so two rows that share `(at, id)` do not share a cursor.
+        let d = encode_activity_cursor(&at, Seq::DecisionComment, 12);
+        assert_ne!(c, d);
+        assert_eq!(parse_activity_cursor(&d), Some((at, Seq::DecisionComment, 12)));
         // Date expressions and garbage are not cursors (so `--since` branches to the date side).
         assert!(!looks_like_activity_cursor("today"));
         assert!(!looks_like_activity_cursor("2026-07-05"));
         assert!(parse_activity_cursor("today").is_none());
-        assert!(parse_activity_cursor("cur1_@@@not-base64@@@").is_none());
+        assert!(parse_activity_cursor("cur2_@@@not-base64@@@").is_none());
+    }
+
+    /// A `cur1_` token — written before the timeline had a third source — is still read, and reads back on
+    /// the shared activity sequence, which is the only one it could ever have named. A reader that was
+    /// mid-stream when this build arrived keeps its place instead of being told its cursor is malformed.
+    #[test]
+    fn the_first_cursor_spelling_is_still_read_as_the_activity_sequence() {
+        use base64::Engine;
+        let at = Timestamp::parse_rfc3339("2026-07-05T01:02:03Z").unwrap();
+        let raw = format!("{}\n{}", at.to_rfc3339_z(), 12);
+        let v1 = format!("cur1_{}", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw.as_bytes()));
+
+        assert!(looks_like_activity_cursor(&v1), "it is a cursor, not a date");
+        assert_eq!(parse_activity_cursor(&v1), Some((at, crate::activity::Seq::Activity, 12)));
+        assert!(
+            encode_activity_cursor(&at, crate::activity::Seq::Activity, 12).starts_with("cur2_"),
+            "read, never written: what goes out carries the sequence"
+        );
     }
 
     /// The reach cannot be **left undeclared**: `list` / `activity` / `decision_list` take it as an

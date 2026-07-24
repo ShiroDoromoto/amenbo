@@ -96,8 +96,15 @@ impl PluginInvocation {
         // error (the child closed stdin early, or exited before reading) is not fatal: the child made
         // its own choice, and its exit code / output is what we report.
         let mut stdin = child.stdin.take().expect("stdin was configured piped");
+        // The CLI runs with SIGPIPE at its default disposition (so `amenbo … | head` ends cleanly), which
+        // would otherwise kill the whole process the moment a hook that never reads stdin closes this pipe
+        // early (`AMB-D-352`). Guard the write two ways, one per platform: take SIGPIPE off this fd on
+        // macOS, and block it on the writer thread for Linux — so the closed pipe comes back as the EPIPE
+        // dropped below, never a signal.
+        crate::sys::suppress_child_stdin_sigpipe(&stdin);
         let payload = self.stdin_json.clone().into_bytes();
         let writer = std::thread::spawn(move || {
+            crate::sys::block_sigpipe_on_current_thread();
             let _ = stdin.write_all(&payload);
             // Dropping `stdin` closes the pipe, so the child reads EOF.
         });
@@ -223,5 +230,39 @@ impl PluginOutput {
     /// Whether the plugin exited cleanly (code 0). A signalled death (`code == None`) is not success.
     pub fn succeeded(&self) -> bool {
         self.code == Some(0)
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    /// A fire-and-forget hook that never reads its stdin and exits at once must not take amenbo down with
+    /// it (`AMB-D-352` — a hook failing changes nothing). The CLI runs with SIGPIPE at its default
+    /// disposition (so `amenbo … | head` ends cleanly), where an unguarded write to the now-closed stdin
+    /// pipe ends the whole process by signal; the spawn guards it (SIGPIPE off the fd on macOS, blocked on
+    /// the writer thread on Linux) so the closed pipe comes back as an EPIPE it drops instead. The payload
+    /// is far larger than any pipe buffer, so the write is still in flight when the child exits — the
+    /// losing side of the race the guard must win every time, which is why this reproduces deterministically
+    /// what the CLI e2e only flaked on.
+    #[test]
+    fn a_hook_that_ignores_a_large_stdin_and_exits_does_not_signal_us_down() {
+        // Reproduce the CLI's disposition for the length of this test, then restore it — a shared-process
+        // run (plain `cargo test`) must not inherit a fatal SIGPIPE from us.
+        // SAFETY: `signal` is async-signal-safe; this runs on the test thread before the spawn, and the
+        // prior handler is captured to put back below.
+        let prev = unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
+
+        let payload = "x".repeat(4 << 20); // 4 MiB, well past any pipe buffer: the write must block, then EPIPE
+        let out = PluginInvocation::new("/bin/sh")
+            .arg("-c")
+            .arg("exit 0")
+            .stdin_json(payload)
+            .run()
+            .expect("a hook that ignores stdin still runs to completion");
+        assert_eq!(out.code, Some(0), "the child exited cleanly and we lived to report it");
+
+        // SAFETY: restore the disposition the test found, same contract as above.
+        unsafe { libc::signal(libc::SIGPIPE, prev) };
     }
 }

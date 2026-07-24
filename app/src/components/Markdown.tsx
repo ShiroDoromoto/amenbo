@@ -13,6 +13,12 @@
 // sorted by what it names: a ref opens in the app, an http(s) URL opens in the browser, `#section`
 // stays in the document, and anything else (a relative path, an unknown scheme) is drawn as its text.
 //
+// A relative path is the one of those that can be recovered, and only where the body came from
+// somewhere: a plugin's README is read out of a repository, so its `LICENSE` and `./docs/x.md` name
+// files that exist and have a URL. `linkBase` is that place, passed by the render site that knows it —
+// a note, a comment and a decision body have no such origin, so they leave it unset and a relative
+// link there stays inert.
+//
 // An image is never drawn as one. amenbo's own bodies keep images in attachments rather than inline
 // (`conventions.markdown`), and a body from outside — a plugin's README — cannot draw one either: the
 // app's CSP allows no remote image, so the browser would put a broken-image frame where the picture
@@ -25,7 +31,7 @@
 // and defined twice. Numbers are globally unique on the device, so no project context is needed to resolve
 // one.
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
@@ -146,6 +152,25 @@ export function isExternalHref(href: string): boolean {
   return /^https?:\/\//i.test(href.trim());
 }
 
+/**
+ * Resolves a body's relative target against the place the body came from, and returns null when there
+ * is no such place or the target does not name a file under it.
+ *
+ * Landing outside the base is the interesting case: `../../elsewhere`, a root-relative `/owner/other`
+ * and a foreign scheme all resolve to something, and none of them is a file of this repository. So
+ * containment is the test rather than the syntax of the path — what the base cannot vouch for is left
+ * to be drawn as text, exactly as if there were no base at all.
+ */
+export function resolveAgainstBase(href: string, base: string | undefined): string | null {
+  if (!base) return null;
+  try {
+    const resolved = new URL(href, base).href;
+    return resolved.startsWith(base) ? resolved : null;
+  } catch {
+    return null; // not a URL even with a base to lean on
+  }
+}
+
 /** Clicking a reference link: core resolves the id and the detail pane switches to it. Unknown or ambiguous is a no-op. */
 async function openRef(raw: string, nav: RefNav): Promise<void> {
   const target = await resolveRef(raw);
@@ -154,7 +179,24 @@ async function openRef(raw: string, nav: RefNav): Promise<void> {
   else nav.selectDecision?.(target.id);
 }
 
-export function Markdown({ children }: { children: string }) {
+/** A link that leaves amenbo: it keeps its href (copy-link, and what the status bar shows) and the
+ * click is diverted to the browser instead of the webview. */
+function browserLink(href: string, children: ReactNode) {
+  return (
+    <a href={href} onClick={(e) => { e.preventDefault(); void openExternalUrl(href); }}>
+      {children}
+    </a>
+  );
+}
+
+export function Markdown({ children, linkBase }: {
+  children: string;
+  /**
+   * The absolute URL this body's relative paths are read against — a plugin README's repository, and
+   * nothing else so far. Left unset, a relative link stays inert (see the note at the top).
+   */
+  linkBase?: string;
+}) {
   const nav = useRefNav();
   const components = useMemo<Components>(
     () => ({
@@ -168,10 +210,13 @@ export function Markdown({ children }: { children: string }) {
         return <div className="markdown__tablewrap"><table>{children}</table></div>;
       },
       // The alt text in place of the picture. An image with no alt says nothing without its pixels, so
-      // it leaves nothing behind either.
+      // it leaves nothing behind either. The title carries where the picture is, which for a relative
+      // one is only an answer once it is resolved — the label is all the reader has left of it.
       img({ alt, src }) {
         if (!alt) return null;
-        return <span className="markdown__imgalt" title={typeof src === "string" ? src : undefined}>{alt}</span>;
+        const raw = typeof src === "string" ? src : undefined;
+        const title = raw && !isExternalHref(raw) ? (resolveAgainstBase(raw, linkBase) ?? raw) : raw;
+        return <span className="markdown__imgalt" title={title}>{alt}</span>;
       },
       a({ href, children }) {
         if (href?.startsWith(REF_SCHEME)) {
@@ -191,28 +236,24 @@ export function Markdown({ children }: { children: string }) {
         // An http(s) link goes to the browser, never to this window. The app window has no address
         // bar and no way back, so letting the webview follow a link would strand the user outside
         // amenbo with the app gone — and a rendered README (`AMB-D-347`) is mostly such links.
-        if (href && isExternalHref(href)) {
-          return (
-            <a
-              href={href}
-              onClick={(e) => { e.preventDefault(); void openExternalUrl(href); }}
-            >
-              {children}
-            </a>
-          );
-        }
+        if (href && isExternalHref(href)) return browserLink(href, children);
         // A link inside the document (`#section`) stays a link: following it moves the scroll position
-        // and reloads nothing.
+        // and reloads nothing. It is not resolved against the base, even where there is one: the
+        // headings here carry no id to land on, and that is a separate piece of work.
         if (href?.startsWith("#")) return <a href={href}>{children}</a>;
-        // Anything else has nowhere to go. A relative link — a README's `LICENSE`, `./docs/x.md` —
-        // resolves against *this app's* origin, so following it navigated the webview to amenbo's own
-        // index.html: the whole SPA reloaded and came back at its opening screen, which reads as the
-        // detail closing itself. Nothing here can open such a target, so it is drawn as the text it
-        // carries and does not pretend to be a link.
+        // A relative link — a README's `LICENSE`, `./docs/x.md` — must never be followed as written: it
+        // resolves against *this app's* origin, so the webview lands on amenbo's own index.html, the
+        // whole SPA reloads and comes back at its opening screen, which reads as the detail closing
+        // itself. Resolved against the repository it was written in, it names a real file and goes to
+        // the browser like any other outside link.
+        const resolved = href ? resolveAgainstBase(href, linkBase) : null;
+        if (resolved) return browserLink(resolved, children);
+        // Anything left has nowhere to go — no base to resolve against, or a target that base cannot
+        // vouch for — so it is drawn as the text it carries and does not pretend to be a link.
         return <span className="markdown__deadlink">{children}</span>;
       },
     }),
-    [nav],
+    [nav, linkBase],
   );
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkBadgeRows, remarkRefs]} urlTransform={refUrlTransform} components={components}>

@@ -176,6 +176,20 @@ export async function removeCatalogSource(url: string): Promise<boolean> {
 /** What GitHub could tell us about one plugin's repository (generated DTO). */
 export type PluginRepoFacts = PluginRepoFactsDto;
 
+/** Where a repository lives, from the `owner/name` a catalog entry carries. */
+export function repoUrl(repo: string): string {
+  return `https://github.com/${repo}`;
+}
+
+/**
+ * The place a README's relative paths are read against — its own repository, at the branch GitHub
+ * serves it from. `HEAD` is GitHub's name for whatever that branch is called, so the base is known
+ * from the coordinates alone and nothing has to be fetched to learn it.
+ */
+export function repoLinkBase(repo: string): string {
+  return `${repoUrl(repo)}/blob/HEAD/`;
+}
+
 /**
  * Read one repository's figures (Tauri: `plugin_repo_facts`). Core caches them per repository well
  * past the hour, because GitHub's unauthenticated rate limit — not freshness — is what bounds this.

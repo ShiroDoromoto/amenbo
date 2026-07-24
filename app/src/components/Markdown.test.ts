@@ -2,10 +2,14 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Element as HastElement } from "hast";
-import { findRefTokens, isExternalHref, mermaidSourceFromPre, Markdown } from "./Markdown";
+import { findRefTokens, isExternalHref, mermaidSourceFromPre, Markdown, resolveAgainstBase } from "./Markdown";
 
 // SSR needs no DOM, and it pins the whole remark wiring: detection → link node → urlTransform lets it through → an a.reflink is rendered.
-const render = (md: string) => renderToStaticMarkup(createElement(Markdown, { children: md }));
+const render = (md: string, linkBase?: string) =>
+  renderToStaticMarkup(createElement(Markdown, { children: md, linkBase }));
+
+// A plugin README's repository, in the form the detail passes down (`core/pluginCatalog`).
+const BASE = "https://github.com/owner/repo/blob/HEAD/";
 
 describe("findRefTokens", () => {
   const raws = (s: string) => findRefTokens(s).map((r) => r.raw);
@@ -202,5 +206,51 @@ describe("where a link may go", () => {
     const badge = render("[![License: Apache-2.0](https://i.invalid/l.svg)](LICENSE)");
     expect(badge).toContain("markdown__imgalt");
     expect(badge).not.toContain("<a");
+  });
+});
+
+describe("resolveAgainstBase", () => {
+  it("resolves a path under the base, and refuses everything that lands outside it", () => {
+    expect(resolveAgainstBase("LICENSE", BASE)).toBe(`${BASE}LICENSE`);
+    expect(resolveAgainstBase("./docs/x.md", BASE)).toBe(`${BASE}docs/x.md`);
+
+    // Not this repository's files, however they resolve.
+    expect(resolveAgainstBase("../../elsewhere", BASE)).toBeNull();
+    expect(resolveAgainstBase("/owner/other", BASE)).toBeNull();
+    expect(resolveAgainstBase("mailto:someone@example.invalid", BASE)).toBeNull();
+    expect(resolveAgainstBase("//example.invalid/x", BASE)).toBeNull();
+  });
+
+  it("resolves nothing without a base — a note and a comment come from no repository", () => {
+    expect(resolveAgainstBase("LICENSE", undefined)).toBeNull();
+  });
+});
+
+describe("a body read out of a repository", () => {
+  // The point of the base: the same relative link that has nowhere to go in a note names a real file
+  // in a README, and that file opens in the browser like any other outside link.
+  it("turns a relative link into a browser link, and leaves the same one dead without a base", () => {
+    const withBase = render("[LICENSE](LICENSE) and [docs](./docs/x.md)", BASE);
+    expect(withBase).toContain(`href="${BASE}LICENSE"`);
+    expect(withBase).toContain(`href="${BASE}docs/x.md"`);
+    expect(withBase).not.toContain("markdown__deadlink");
+
+    expect(render("[LICENSE](LICENSE)")).toContain("markdown__deadlink");
+  });
+
+  it("still draws a target the base cannot vouch for as text", () => {
+    expect(render("[out](../../elsewhere)", BASE)).toContain("markdown__deadlink");
+  });
+
+  // The headings here carry no id, so an anchor has nothing to land on either way — it is left where
+  // it is rather than sent to the repository.
+  it("does not send an in-document anchor to the repository", () => {
+    expect(render("[Layout](#layout)", BASE)).toContain('href="#layout"');
+  });
+
+  // The picture is gone, so where it lives is all the label can still say.
+  it("resolves the image label's title, and leaves an absolute one alone", () => {
+    expect(render("![logo](docs/logo.png)", BASE)).toContain(`title="${BASE}docs/logo.png"`);
+    expect(render("![CI](https://i.invalid/ci.svg)", BASE)).toContain('title="https://i.invalid/ci.svg"');
   });
 });

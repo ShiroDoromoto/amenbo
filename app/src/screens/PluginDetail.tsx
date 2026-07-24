@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Markdown } from "../components/Markdown";
 import { errText, t, tf } from "../core/i18n";
 import { openExternalUrl } from "../core/mutations";
-import { pluginLayer, usePluginRepoFacts, type PluginEntry } from "../core/pluginCatalog";
+import { pluginLayer, repoLinkBase, repoUrl, usePluginRepoFacts, type PluginEntry } from "../core/pluginCatalog";
 import { installPlugin, setPluginEnabled, type PluginInstall } from "../core/pluginInstalls";
 
 // The one plugin a user opened (`AMB-D-347`).
@@ -78,7 +78,7 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
 
         {/* Everything below this line came from GitHub, not from the catalog. */}
         <div className="plugdet__figures">
-          <button className="feed__action" onClick={() => void openExternalUrl(`https://github.com/${entry.repo}`)}>
+          <button className="feed__action" onClick={() => void openExternalUrl(repoUrl(entry.repo))}>
             {tf("plugins.openRepo", { repo: entry.repo })}
           </button>
           {loading && <span className="faint">{t("plugins.factsLoading")}</span>}
@@ -93,9 +93,11 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
         {facts?.rateLimited && <div className="plugdet__note">{t("plugins.rateLimited")}</div>}
         {error != null && !facts && <div className="plugdet__note">{t("plugins.factsError")}</div>}
 
+        {/* The README is the one body here that came from somewhere: its relative paths name files in
+            the repository it was read from, so that repository is what they are resolved against. */}
         <div className="plugdet__readme markdown">
           {facts?.readme ? (
-            <Markdown>{facts.readme}</Markdown>
+            <Markdown linkBase={repoLinkBase(entry.repo)}>{facts.readme}</Markdown>
           ) : (
             !loading && <span className="faint">{t("plugins.noReadme")}</span>
           )}

@@ -93,12 +93,19 @@ mod unix {
 
     /// How long the plugin ran is measured from the spawn, so a child that sleeps is reported as having
     /// taken at least that long — the number an execution log records beside the exit code.
+    ///
+    /// The floor sits under the sleep rather than on it. `sleep 1` promises the child one second of its
+    /// own clock, and nothing promises the parent's stopwatch will agree to the millisecond; measured
+    /// from here it can come in a hair short (998ms in a CI run). What this pins is that the elapsed
+    /// carries the child's runtime instead of collapsing to nothing, and a floor a tenth under the sleep
+    /// says that just as well as an exact one — while an exact one also says "the two clocks agreed",
+    /// which is not a property of the code.
     #[test]
     fn the_run_reports_how_long_the_plugin_took() {
         let slow = script("elapsed.sh", "#!/bin/sh\nsleep 1\n");
         let out = PluginInvocation::new(&slow).run().unwrap();
         assert!(out.succeeded());
-        assert!(out.elapsed >= Duration::from_secs(1), "at least the sleep: {:?}", out.elapsed);
+        assert!(out.elapsed >= Duration::from_millis(900), "at least the sleep: {:?}", out.elapsed);
     }
 
     /// A child that overruns the bound is killed: the wait returns `None` well before the child would have

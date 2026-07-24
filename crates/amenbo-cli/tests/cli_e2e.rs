@@ -4324,9 +4324,14 @@ fn plugin_runs_says_why_a_hook_did_nothing() {
     // Nothing has fired on this machine yet: an absent log is an empty log, not a failure.
     let empty = cli.json(&["plugin", "runs", "--json"]);
     assert_eq!(empty["count"], 0);
+    // And nothing has been *delivered* either, which is the other half of the same question (`AMB-D-380`):
+    // an empty log alone cannot say whether the dispatcher ran and found no subscriber, or never ran.
+    assert_eq!(empty["dispatch"]["cursor"], 0);
+    assert!(empty["dispatch"]["cursor_face"].is_null(), "no face has advanced it: {empty}");
     let (nothing, code) = cli.run(&["plugin", "runs"]);
     assert_eq!(code, 0, "an empty log is an answer, not an error");
     assert!(nothing.contains("No plugin runs recorded"), "{nothing}");
+    assert!(nothing.contains("nothing has been delivered from this store yet"), "{nothing}");
 
     // A plugin that fails the way a real one does: a diagnosis on stderr, and a non-zero exit.
     install_subscribing_plugin(&cli, "logger", &["task.created"]);
@@ -4366,6 +4371,15 @@ fn plugin_runs_says_why_a_hook_did_nothing() {
     let (other, code) = cli.run(&["plugin", "runs", "quiet"]);
     assert_eq!(code, 0);
     assert!(other.contains("No runs recorded for plugin 'quiet'"), "{other}");
+
+    // The cursor moved with that delivery, and carries the face that moved it. `task add` is the CLI, so
+    // that is what the stamp names — the fact a reader lines this log up against when chasing a double
+    // fire (`AMB-D-380`). Reported for a narrowed listing too: the cursor is the store's, not a plugin's.
+    let cursor = runs["dispatch"]["cursor"].as_i64().expect("the cursor is a number");
+    assert!(cursor > 0, "an event was delivered, so the cursor left the floor: {runs}");
+    assert_eq!(runs["dispatch"]["cursor_face"], "cli");
+    assert_eq!(named["dispatch"]["cursor"], cursor);
+    assert!(out.contains("last advanced by cli"), "{out}");
 }
 
 /// Plant an installed plugin that subscribes to `events` — [`install_plugin`] with the manifest field the

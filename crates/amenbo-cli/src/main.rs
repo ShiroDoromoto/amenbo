@@ -1103,10 +1103,19 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 ///
 /// No paging, no window flags: the log is bounded by construction (the last runs of each installed
 /// plugin), so the whole file *is* the recent window.
+///
+/// It leads with the **dispatch cursor**, and the face that last advanced it (`AMB-D-380`), because the
+/// questions this command is opened for are answered by the two together: the log says what ran, the cursor
+/// says how far delivery got, and a double fire or a miss is the disagreement between them. Reading them
+/// apart would leave a reader correlating two commands by hand — so this one reads the store's two meta rows
+/// as well as the machine-local file. The face is a stamp for that correlation and nothing else: it names
+/// who delivered a span, never whose turn is next.
 fn plugin_runs_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i32, CliError> {
     use amenbo_core::plugin_log::{self, Outcome};
 
     let path = store.paths.plugin_log_file();
+    let cursor = amenbo_core::plugin_drive::persisted_cursor(store.read_model())?;
+    let cursor_face = amenbo_core::plugin_drive::persisted_cursor_face(store.read_model())?;
     // Newest first either way — the run a reader is looking for is nearly always the last one.
     let lines = match name {
         Some(name) => plugin_log::recent(&path, name),
@@ -1134,11 +1143,19 @@ fn plugin_runs_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i
             .collect();
         print_json(&json!({
             "count": rows.len(),
+            "dispatch": {
+                "cursor": cursor,
+                "cursor_face": cursor_face.map(|f| f.as_str()),
+            },
             "log": path.display().to_string(),
             "plugin": name,
             "runs": rows,
         }));
-    } else if lines.is_empty() {
+        return Ok(0);
+    }
+
+    human(flags, dispatch_cursor_line(cursor, cursor_face));
+    if lines.is_empty() {
         match name {
             Some(name) => human(flags, format!("No runs recorded for plugin '{name}'.")),
             None => human(flags, format!("No plugin runs recorded ({}).", path.display())),
@@ -1176,6 +1193,26 @@ fn plugin_runs_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i
         }
     }
     Ok(0)
+}
+
+/// The dispatch-cursor line `plugin runs` leads with: how far this store has been delivered, and which face
+/// took it there (`AMB-D-380`).
+///
+/// A cursor of `0` with no face is a store nothing has ever been delivered from, which is a different fact
+/// from an empty log — a plugin that never fired and a dispatcher that never ran read the same in the runs
+/// below, and this line is what tells them apart. A cursor standing at some id with no face beside it is the
+/// third shape: delivered by a build that did not stamp one.
+///
+/// Split out from the command so the wording is one string, testable without a store, and so the two callers
+/// (`--json` and the listing) cannot drift into saying different things.
+fn dispatch_cursor_line(cursor: i64, face: Option<amenbo_core::plugin_drive::Face>) -> String {
+    if cursor == 0 && face.is_none() {
+        return "dispatch cursor 0 — nothing has been delivered from this store yet".to_string();
+    }
+    match face {
+        Some(face) => format!("dispatch cursor {cursor} · last advanced by {}", face.as_str()),
+        None => format!("dispatch cursor {cursor} · advanced by an unrecorded face"),
+    }
 }
 
 /// `plugin update` — the one command, and which of its three jobs this invocation asked for
@@ -6067,5 +6104,26 @@ mod tests {
         assert!(requires_pointer(&Some(Command::Whoami)));
         assert!(requires_pointer(&Some(Command::Status { scope: "today".to_string() })));
         assert!(requires_pointer(&Some(Command::Doctor { fix: false })));
+    }
+
+    /// The dispatch-cursor line (`AMB-D-380`) distinguishes the three shapes a store can be in, because a
+    /// reader chasing a missing hook has to tell "the dispatcher never ran" from "it ran and delivered
+    /// nothing you can see". The face is reported as who moved it, never as whose turn it is.
+    #[test]
+    fn the_dispatch_cursor_line_tells_never_delivered_from_delivered_by_someone() {
+        use amenbo_core::plugin_drive::Face;
+
+        let never = dispatch_cursor_line(0, None);
+        assert!(never.contains("nothing has been delivered"), "{never}");
+
+        let by_cli = dispatch_cursor_line(42, Some(Face::Cli));
+        assert!(by_cli.contains("42") && by_cli.contains("last advanced by cli"), "{by_cli}");
+        assert!(!by_cli.contains("next"), "the stamp is a record, not a turn order: {by_cli}");
+
+        // Stood at an id with no face beside it: an older build delivered this span. Still a delivered
+        // store, so it must not read as one nothing has run on.
+        let unstamped = dispatch_cursor_line(42, None);
+        assert!(unstamped.contains("42"), "{unstamped}");
+        assert!(!unstamped.contains("nothing has been delivered"), "{unstamped}");
     }
 }

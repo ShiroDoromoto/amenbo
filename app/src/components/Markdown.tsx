@@ -25,6 +25,12 @@
 // was. What still carries meaning is the alt text, most visibly in the badge row a README opens with,
 // so an image is rendered as that text in a small label.
 //
+// Headings carry an id (rehype-slug), so a body's own `#section` link has something to land on. The
+// ids are for this app only: they are recomputed on every render, nothing stores them, and no URL
+// outside the app can point at one — the app has no address bar to paste it into. Since a screen
+// shows several bodies at once (a task's notes and each of its comments), and two of them may head a
+// section the same way, an anchor is resolved inside the body it was written in and nowhere else.
+//
 // Conversational references in the body (AMB-T-NNN / AMB-D-NNN) are detected and made clickable.
 // Detection is a remark plugin (syntactic — it produces link nodes) whose pattern lives in core/idref.ts;
 // resolution is deferred to core's resolve_ref on click, so the number→id grammar is not reimplemented here
@@ -35,6 +41,7 @@ import { useMemo, type ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
+import rehypeSlug from "rehype-slug";
 import type { Root, Text, Link, RootContent } from "mdast";
 import type { Element as HastElement, Text as HastText } from "hast";
 import { useRefNav, type RefNav } from "../core/refNav";
@@ -171,6 +178,37 @@ export function resolveAgainstBase(href: string, base: string | undefined): stri
   }
 }
 
+/** The id a `#…` href names. A hand-written anchor can arrive percent-encoded, while the id rehype-slug
+ * puts on the heading never is, so the href is what gets decoded. */
+function anchorId(href: string): string {
+  const raw = href.slice(1);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw; // a stray % is not an encoding — take the text as written
+  }
+}
+
+/**
+ * The element a `#…` link names, searched within one rendered body. Ids are compared as values rather
+ * than handed to a selector: a heading slugged from Japanese, or from a title carrying punctuation,
+ * makes an id no `#…` selector would accept without escaping.
+ */
+export function findAnchorTarget(root: ParentNode, href: string): HTMLElement | null {
+  const id = anchorId(href);
+  if (!id) return null;
+  for (const el of root.querySelectorAll<HTMLElement>("[id]")) if (el.id === id) return el;
+  return null;
+}
+
+/** Following an anchor: scroll to the heading, inside the body the link sits in (every render site wraps
+ * this component in `.markdown`). An anchor naming no heading here does nothing, which is the honest
+ * answer — the window is never navigated, so there would be no way back from a jump. */
+function scrollToAnchor(from: HTMLElement, href: string): void {
+  const root: ParentNode = from.closest(".markdown") ?? from.ownerDocument;
+  findAnchorTarget(root, href)?.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
 /** Clicking a reference link: core resolves the id and the detail pane switches to it. Unknown or ambiguous is a no-op. */
 async function openRef(raw: string, nav: RefNav): Promise<void> {
   const target = await resolveRef(raw);
@@ -237,10 +275,19 @@ export function Markdown({ children, linkBase }: {
         // bar and no way back, so letting the webview follow a link would strand the user outside
         // amenbo with the app gone — and a rendered README (`AMB-D-347`) is mostly such links.
         if (href && isExternalHref(href)) return browserLink(href, children);
-        // A link inside the document (`#section`) stays a link: following it moves the scroll position
-        // and reloads nothing. It is not resolved against the base, even where there is one: the
-        // headings here carry no id to land on, and that is a separate piece of work.
-        if (href?.startsWith("#")) return <a href={href}>{children}</a>;
+        // A link inside the document (`#section`) stays a link, and following it only moves the scroll
+        // position. The jump is made here rather than left to the browser, whose own is document-wide:
+        // with several bodies on the screen it would land on whichever heading slugged that way first,
+        // which need not be one in the body being read. It is not resolved against the base, even where
+        // there is one — the heading it names is on this screen, so sending the reader out to the
+        // repository to read what is already in front of them would be the wrong answer.
+        if (href?.startsWith("#")) {
+          return (
+            <a href={href} onClick={(e) => { e.preventDefault(); scrollToAnchor(e.currentTarget, href); }}>
+              {children}
+            </a>
+          );
+        }
         // A relative link — a README's `LICENSE`, `./docs/x.md` — must never be followed as written: it
         // resolves against *this app's* origin, so the webview lands on amenbo's own index.html, the
         // whole SPA reloads and comes back at its opening screen, which reads as the detail closing
@@ -256,7 +303,15 @@ export function Markdown({ children, linkBase }: {
     [nav, linkBase],
   );
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkBadgeRows, remarkRefs]} urlTransform={refUrlTransform} components={components}>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkBreaks, remarkBadgeRows, remarkRefs]}
+      // Slugging happens on the hast tree, after remarkRefs has already turned any reference in a
+      // heading into a link node — the id is read off the heading's text either way, so a heading that
+      // names a task slugs the same as the words it reads.
+      rehypePlugins={[rehypeSlug]}
+      urlTransform={refUrlTransform}
+      components={components}
+    >
       {children}
     </ReactMarkdown>
   );

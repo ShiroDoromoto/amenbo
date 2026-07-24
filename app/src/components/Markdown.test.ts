@@ -242,8 +242,8 @@ describe("a body read out of a repository", () => {
     expect(render("[out](../../elsewhere)", BASE)).toContain("markdown__deadlink");
   });
 
-  // The headings here carry no id, so an anchor has nothing to land on either way — it is left where
-  // it is rather than sent to the repository.
+  // The heading an anchor names is on this screen (the ids are put there by rehype-slug), so there is
+  // nothing to gain by sending the reader out to the repository to read what is already in front of them.
   it("does not send an in-document anchor to the repository", () => {
     expect(render("[Layout](#layout)", BASE)).toContain('href="#layout"');
   });

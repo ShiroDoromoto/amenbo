@@ -47,7 +47,7 @@ if [ -n "$missing" ]; then
   echo "  → $APP"
   echo "  Build it again. If it keeps happening and this is the shared 'amenbo (dev).app', check"
   echo "  that no other session is installing over it — build into the task's own instance instead"
-  echo "  (make install-gui-dev TASK=<id>), which nobody else can reach."
+  echo "  (make install-gui-dev AMB-T-ID=<id>), which nobody else can reach."
   exit 1
 fi
 

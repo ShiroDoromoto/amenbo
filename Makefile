@@ -5,7 +5,7 @@
 #   dev   : command `amenbo-dev` / app-data `work.amenbo.amenbo-dev`  … development and experiments (never touch prod data)
 # The app-data name is switched by core via `AMENBO_APP_NAME` (at build time). dev builds into its
 # own target dir so it does not contend with prod over rebuilds.
-# The dev GUI splits once more, by TASK: unset is the shared dev app above, TASK=<id> is a
+# The dev GUI splits once more, by AMB-T-ID: unset is the shared dev app above, AMB-T-ID=<id> is a
 # throwaway instance owned by one task (app-data `work.amenbo.amenbo-dev-<id>`). See GUI_DEV_*.
 
 CARGO_BIN := $(HOME)/.cargo/bin
@@ -13,14 +13,19 @@ APPS_DIR  := /Applications
 BUNDLE_DIR := app/src-tauri/target/release/bundle/macos
 GUI_APP     := $(BUNDLE_DIR)/amenbo.app
 
-# The dev GUI comes in two shapes, and TASK picks which one every dev-GUI target builds and
+# The dev GUI comes in two shapes, and AMB-T-ID picks which one every dev-GUI target builds and
 # installs. Unset is the shared dev app: one permanent bundle, the place to keep a grown setup
-# (plugins, catalog, projects) that no task may delete. TASK=<id> is a throwaway instance one task
-# owns — its own bundle identifier, product name and app-data, so two parallel sessions verify
+# (plugins, catalog, projects) that no task may delete. AMB-T-ID=<id> is a throwaway instance one
+# task owns — its own bundle identifier, product name and app-data, so two parallel sessions verify
 # their own work instead of installing over each other. `devtool task finish <id>` deletes the
 # instance's bundle and its app-data together with the worktree.
-TASK ?=
-ifeq ($(strip $(TASK)),)
+#
+# The name is amenbo's own task namespace on purpose, and not a plain word like TASK: make reads
+# the environment as well as the command line, so a plain word is one a shell may already export
+# and this build would silently obey. A hyphenated name is one no shell can assign at all, which
+# leaves the command line as the only way in.
+AMB-T-ID ?=
+ifeq ($(strip $(AMB-T-ID)),)
 GUI_DEV_NAME := amenbo (dev)
 GUI_DEV_ID   := work.amenbo.app.dev
 GUI_DEV_DATA := amenbo-dev
@@ -28,12 +33,12 @@ else
 # Digits only, the same canonical task ref devtool pins its worktree and branch names to: the
 # bundle name has to be the identical string on both sides, or teardown looks for a bundle that
 # was never built under that name.
-ifneq ($(shell printf '%s' '$(TASK)' | tr -d '0-9'),)
-$(error TASK must be a task number (digits only) — got '$(TASK)')
+ifneq ($(shell printf '%s' '$(AMB-T-ID)' | tr -d '0-9'),)
+$(error AMB-T-ID must be a task number (digits only) — got '$(AMB-T-ID)')
 endif
-GUI_DEV_NAME := amenbo (dev $(TASK))
-GUI_DEV_ID   := work.amenbo.app.dev.$(TASK)
-GUI_DEV_DATA := amenbo-dev-$(TASK)
+GUI_DEV_NAME := amenbo (dev $(AMB-T-ID))
+GUI_DEV_ID   := work.amenbo.app.dev.$(AMB-T-ID)
+GUI_DEV_DATA := amenbo-dev-$(AMB-T-ID)
 endif
 GUI_APP_DEV := $(BUNDLE_DIR)/$(GUI_DEV_NAME).app
 
@@ -134,7 +139,7 @@ help:
 	@echo "make gui-dev      - build the dev GUI ($(GUI_DEV_NAME).app / $(GUI_DEV_ID))"
 	@echo "make install-gui     - [retired] the prod GUI ships in the unified installer; release with make release"
 	@echo "make install-gui-dev - build the dev GUI and put it in $(APPS_DIR)/$(GUI_DEV_NAME).app"
-	@echo "                       TASK=<id> builds that task's own throwaway instance (app-data work.amenbo.amenbo-dev-<id>) instead of the shared dev app; devtool task finish <id> deletes it"
+	@echo "                       AMB-T-ID=<id> builds that task's own throwaway instance (app-data work.amenbo.amenbo-dev-<id>) instead of the shared dev app; devtool task finish <id> deletes it"
 
 ## Tree guards: point the git hooks at .githooks.
 hooks:
@@ -516,9 +521,9 @@ gui:
 	@scripts/codesign-local.sh sign "$(GUI_APP)"
 	@echo "→ amenbo.app (prod): app/src-tauri/target/release/bundle/macos/amenbo.app"
 
-## Dev GUI: the dev identifier/productName and the dev AMENBO_APP_NAME. TASK=<id> swaps all three
+## Dev GUI: the dev identifier/productName and the dev AMENBO_APP_NAME. AMB-T-ID=<id> swaps all three
 ## for that task's throwaway instance (see the GUI_DEV_* block above). The second --config is
-## merged over the file, so one recipe covers both shapes; with TASK unset it merely restates what
+## merged over the file, so one recipe covers both shapes; with AMB-T-ID unset it merely restates what
 ## tauri.dev.conf.json already says.
 gui-dev:
 	cd app && AMENBO_APP_NAME=$(GUI_DEV_DATA) npm run tauri build -- --config src-tauri/tauri.dev.conf.json --config '{"productName":"$(GUI_DEV_NAME)","identifier":"$(GUI_DEV_ID)"}'
@@ -545,7 +550,7 @@ install-gui:
 	@exit 1
 
 ## Build the dev GUI and apply it to /Applications (quit it first if it is running, then replace).
-## TASK=<id> targets that task's own instance instead of the shared dev app.
+## AMB-T-ID=<id> targets that task's own instance instead of the shared dev app.
 install-gui-dev: gui-dev
 	-osascript -e 'quit app "$(GUI_DEV_NAME)"' >/dev/null 2>&1
 	rsync -a --delete "$(GUI_APP_DEV)/" "$(APPS_DIR)/$(GUI_DEV_NAME).app/"

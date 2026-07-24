@@ -55,7 +55,7 @@ permanent place a grown setup (plugins, catalog, projects) lives.
 | identifier | `work.amenbo.app.dev` | `work.amenbo.app.dev.<id>` |
 | app-data | `amenbo-dev` | `amenbo-dev-<id>` |
 | bundle | `/Applications/amenbo (dev).app` | `/Applications/amenbo (dev <id>).app` |
-| built by | `make install-gui-dev` | `make install-gui-dev TASK=<id>` |
+| built by | `make install-gui-dev` | `make install-gui-dev AMB-T-ID=<id>` |
 | deleted by | nothing — it is permanent | `devtool task finish <id>` |
 
 So **verify a task in its own app**: with no hand reaching the shared bundle,
@@ -91,7 +91,7 @@ elsewhere `task start` / `task finish` simply do not mention it.
    instance opens on the setup grown in the shared app rather than an empty one.
    Best-effort in the same sense as the `npm ci`, and an app-data already sitting
    there is left alone. The bundle itself is not built here — that is
-   `make install-gui-dev TASK=<id>`, run only when the task needs to look at it.
+   `make install-gui-dev AMB-T-ID=<id>`, run only when the task needs to look at it.
 5. Prints an eval-able `cd` to **stdout** (diagnostics go to stderr):
 
 ```sh

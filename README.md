@@ -534,6 +534,13 @@ please open an issue to discuss first; see [CONTRIBUTING.md](CONTRIBUTING.md). T
 part means holding to the [Code of Conduct](CODE_OF_CONDUCT.md). To report a security
 vulnerability, don't use a public issue — follow [SECURITY.md](SECURITY.md).
 
+**Extending amenbo takes no pull request.** A plugin is just an executable in any
+language: amenbo hands it JSON on stdin and reads what it writes back. The contract an
+author works to — the two faces, the manifest, enabling, signatures — is
+**[Writing a plugin](https://amenbo.work/en/plugins/)**
+(also [in Japanese](https://amenbo.work/plugins/)); `amenbo plugin validate <manifest>`
+checks a manifest against the same rules amenbo enforces at its door.
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE). Copyright the amenbo authors.

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Markdown } from "../components/Markdown";
+import { PluginGate } from "../components/PluginGate";
 import { errText, t, tf } from "../core/i18n";
 import { openExternalUrl } from "../core/mutations";
 import { pluginLayer, repoLinkBase, repoUrl, usePluginRepoFacts, type PluginEntry } from "../core/pluginCatalog";
-import { installPlugin, setPluginEnabled, type PluginInstall } from "../core/pluginInstalls";
+import { installPlugin, type PluginInstall } from "../core/pluginInstalls";
 
 // The one plugin a user opened (`AMB-D-347`).
 //
@@ -114,14 +115,8 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
  * **enable** (`AMB-D-351`). They are drawn as two separate steps because they are two separate things —
  * installing writes a binary that runs nothing, and only enabling opens the gate it fires through.
  *
- * **The consent is asked here, once per device.** Enabling means running somebody else's code on this
- * machine, so the first enable stops and asks; core records the answer, and `consented` on the row is what
- * keeps every later enable from asking again (a disable does not take it back — `disable ≠ uninstall`).
- *
- * **One switch, and the author says which** (`AMB-D-379`). A `machine` plugin has the device's, a
- * `project` plugin has one project's — so the second needs a project named before it can be moved, and the
- * picker below is that, not a choice of level. Everything else that can refuse (a build this amenbo cannot
- * speak to, a `required` setting with no value) is core's judgement, shown here as the reason it gave.
+ * Only the install half lives here: the switch is `PluginGate`, the one control the installed screen
+ * draws too, so the consent question and the project a gate speaks for cannot drift between the two faces.
  */
 function PluginActions({ entry, install, projects, projectId, onProject }: {
   entry: PluginEntry;
@@ -132,15 +127,24 @@ function PluginActions({ entry, install, projects, projectId, onProject }: {
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Open only while the consent question is on screen. Not a stored answer: what is remembered lives on
-  // the device (`consented`), and this is just the asking.
-  const [asking, setAsking] = useState(false);
 
-  const run = async (op: () => Promise<unknown>) => {
+  if (install) {
+    return (
+      <PluginGate
+        install={install}
+        projects={projects}
+        projectId={projectId}
+        onProject={onProject}
+        lead={<span className="chip">{t("plugins.installed")}</span>}
+      />
+    );
+  }
+
+  const runInstall = async () => {
     setBusy(true);
     setError(null);
     try {
-      await op();
+      await installPlugin(entry.name, projectId);
     } catch (e) {
       setError(errText(e));
     } finally {
@@ -148,94 +152,13 @@ function PluginActions({ entry, install, projects, projectId, onProject }: {
     }
   };
 
-  const failure = error && (
-    <div className="plugdet__note" style={{ color: "var(--c-warn)" }}>{error}</div>
-  );
-
-  if (!install) {
-    return (
-      <div className="plugdet__actions">
-        <button
-          className="btn"
-          disabled={busy}
-          onClick={() => void run(() => installPlugin(entry.name, projectId))}
-        >
-          {busy ? t("plugins.installing") : t("plugins.install")}
-        </button>
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.installNote")}</span>
-        {failure}
-      </div>
-    );
-  }
-
-  const perProject = install.scope === "project";
-  const enabled = install.enabled === true;
-  const where = t(perProject ? "plugins.gate.project" : "plugins.gate.machine");
-  // A project-scoped gate with no project named has no answer to move — the picker is the way out, so the
-  // buttons wait for it rather than acting on some default project nobody chose.
-  const unanswered = perProject && projectId == null;
-  const move = (next: boolean) => run(() => setPluginEnabled(entry.name, projectId, next));
-
   return (
     <div className="plugdet__actions">
-      <span className="chip">{t("plugins.installed")}</span>
-      {perProject && (
-        <select
-          value={projectId ?? ""}
-          onChange={(e) => onProject(e.target.value === "" ? null : Number(e.target.value))}
-          style={{ fontSize: "var(--fs-xs)" }}
-        >
-          <option value="">{t("plugins.pickProject")}</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      )}
-      {!unanswered && (
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
-          {tf(enabled ? "plugins.enabledAt" : "plugins.disabledAt", { where })}
-        </span>
-      )}
-      {enabled ? (
-        <button className="feed__action" disabled={busy} onClick={() => void move(false)}>
-          {t("plugins.disable")}
-        </button>
-      ) : (
-        <button
-          className="btn"
-          disabled={busy || unanswered || !install.compatible}
-          onClick={() => (install.consented ? void move(true) : setAsking(true))}
-        >
-          {t("plugins.enable")}
-        </button>
-      )}
-      {/* Not a warning about this machine but about the plugin: an open gate on a build amenbo cannot
-          speak to fires nothing, so saying why beats a switch that appears to work. */}
-      {!install.compatible && (
-        <div className="plugdet__note" style={{ color: "var(--c-warn)" }}>
-          {install.incompatibleReason ?? t("plugins.incompatible")}
-        </div>
-      )}
-      {unanswered && <div className="plugdet__note faint">{t("plugins.pickProjectNote")}</div>}
-      {asking && (
-        <div className="plugdet__consent">
-          <div>{tf("plugins.consentAsk", { name: entry.name })}</div>
-          <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.consentOnce")}</div>
-          <div className="plugdet__actions">
-            <button
-              className="btn"
-              disabled={busy}
-              onClick={() => { setAsking(false); void move(true); }}
-            >
-              {t("plugins.consentAgree")}
-            </button>
-            <button className="feed__action" disabled={busy} onClick={() => setAsking(false)}>
-              {t("plugins.consentCancel")}
-            </button>
-          </div>
-        </div>
-      )}
-      {failure}
+      <button className="btn" disabled={busy} onClick={() => void runInstall()}>
+        {busy ? t("plugins.installing") : t("plugins.install")}
+      </button>
+      <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.installNote")}</span>
+      {error && <div className="plugdet__note">{error}</div>}
     </div>
   );
 }

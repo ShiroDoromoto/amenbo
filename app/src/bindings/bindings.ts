@@ -481,6 +481,13 @@ os: Array<string>, category: string,
  */
 official: boolean, 
 /**
+ * Whether the official catalog is what served this entry — reviewed onto the official index. The
+ * other axis of the same trust picture as `official`, and not derivable from it: an official
+ * plugin is always listed, a listed one is written by anybody who passed review, and an entry
+ * from a third-party catalog is neither. Which catalog exactly is the `sources` list's business.
+ */
+listed: boolean, 
+/**
  * When the catalog first listed it (`YYYY-MM-DD…`), for the "new" ordering. Absent on a catalog
  * that does not record it.
  */

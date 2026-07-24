@@ -4181,6 +4181,11 @@ pub struct PluginEntryDto {
     category: String,
     /// The official badge: catalog-authoritative, never the manifest author's claim (`AMB-D-347`).
     official: bool,
+    /// Whether the official catalog is what served this entry — reviewed onto the official index. The
+    /// other axis of the same trust picture as `official`, and not derivable from it: an official
+    /// plugin is always listed, a listed one is written by anybody who passed review, and an entry
+    /// from a third-party catalog is neither. Which catalog exactly is the `sources` list's business.
+    listed: bool,
     /// When the catalog first listed it (`YYYY-MM-DD…`), for the "new" ordering. Absent on a catalog
     /// that does not record it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -4237,14 +4242,15 @@ pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
                 .entries
                 .into_iter()
                 .map(|e| PluginEntryDto {
-                    name: e.manifest.name,
-                    desc: e.manifest.desc,
-                    author: e.manifest.author,
-                    repo: e.manifest.repo,
-                    os: e.manifest.os.iter().map(|o| o.as_str().to_string()).collect(),
-                    category: e.manifest.category,
-                    official: e.manifest.official,
-                    added_at: e.added_at,
+                    name: e.entry.manifest.name,
+                    desc: e.entry.manifest.desc,
+                    author: e.entry.manifest.author,
+                    repo: e.entry.manifest.repo,
+                    os: e.entry.manifest.os.iter().map(|o| o.as_str().to_string()).collect(),
+                    category: e.entry.manifest.category,
+                    official: e.entry.manifest.official,
+                    listed: e.listed,
+                    added_at: e.entry.added_at,
                 })
                 .collect(),
             sources: discovery

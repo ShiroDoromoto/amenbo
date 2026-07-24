@@ -9,6 +9,7 @@ const entry = (over: Partial<PluginEntry>): PluginEntry => ({
   os: ["macos", "linux", "windows"],
   category: "workflow",
   official: true,
+  listed: true,
   ...over,
 });
 

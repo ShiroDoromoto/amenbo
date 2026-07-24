@@ -38,6 +38,7 @@ const catalogOf = (n: number): PluginCatalog => ({
     os: i % 2 === 0 ? ["macos", "linux"] : ["windows"],
     category: i % 2 === 0 ? "workflow" : "notify",
     official: i === 0,
+    listed: i < 4,
   })),
   sources: [{ url: "https://official", official: true, reachable: true, offered: n }],
   dropped: 0,

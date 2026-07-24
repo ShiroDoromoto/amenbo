@@ -23,6 +23,14 @@
 > local SQLite database — the single source of truth. There is no server and
 > nothing leaves your machine.
 
+<div align="center">
+
+<img src="assets/gui-board.png" alt="The amenbo desktop app: a board with To do / In progress / Blocked / Done columns, where each card shows its priority, its assignee — some of them the AI — and its AMB-T id" width="880">
+
+<sub>The desktop app — the same store the CLI writes to, on a board.</sub>
+
+</div>
+
 ## Contents
 
 - [Layout](#layout)
@@ -233,6 +241,14 @@ yourself (`amenbo plugin update <name>`, or the button on the banner).
 </details>
 
 ## Commands
+
+<div align="center">
+
+<img src="assets/cli-demo.gif" alt="A terminal recording: a person binds a folder with amenbo init, adds two tasks and hands one to their AI; the AI then lists its mailbox, reserves that task, reads the spec for the command it needs, and closes it" width="880">
+
+<sub>One store, two hands — the person files the work, their AI takes it (filmed from <a href="assets/cli-demo.tape">this script</a>).</sub>
+
+</div>
 
 <details>
 <summary>The full command tour — projects, tasks, dimensions, decisions, attachments, backup/restore, hooks</summary>

@@ -7,7 +7,7 @@
 // So the filtering below is deliberately plain client-side work over an array, not a query.
 import { invoke } from "./ipc";
 import { inTauri } from "./snapshot";
-import { useQuery } from "./query";
+import { invalidateQueries, useQuery } from "./query";
 import type { PluginCatalogDto, PluginEntryDto } from "../bindings/bindings";
 
 /** One catalog entry as the market list draws it (generated DTO). */
@@ -131,4 +131,34 @@ export function pluginCategories(entries: PluginEntry[]): string[] {
  */
 export function unreachableSources(catalog: PluginCatalog): string[] {
   return catalog.sources.filter((s) => !s.reachable).map((s) => s.url);
+}
+
+/** Refetch the merged catalog — after registering or unregistering a source changed what it holds. */
+function reloadCatalog(): void {
+  invalidateQueries((key) => key[0] === "plugin-catalog");
+}
+
+/**
+ * Register a third-party catalog. `false` means it was already registered (idempotent, not a
+ * failure); a URL core refuses — not `http(s)`, or the official catalog's own — throws.
+ *
+ * Registering only widens what discovery *shows*. Installing still accepts nothing a third-party
+ * catalog signed (`AMB-D-371`), so this is a browsing choice, not a trust one.
+ */
+export async function addCatalogSource(url: string): Promise<boolean> {
+  if (!inTauri()) return false;
+  const added = await invoke<boolean>("plugin_catalog_add_source", { url });
+  reloadCatalog();
+  return added;
+}
+
+/**
+ * Unregister a third-party catalog and drop its cached copy. `false` means it was not registered.
+ * A plugin installed from it stays installed: the catalog is where it was found, not what runs it.
+ */
+export async function removeCatalogSource(url: string): Promise<boolean> {
+  if (!inTauri()) return false;
+  const removed = await invoke<boolean>("plugin_catalog_remove_source", { url });
+  reloadCatalog();
+  return removed;
 }

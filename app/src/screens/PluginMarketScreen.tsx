@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { Pager, usePager } from "../components/Pager";
-import { t, tf } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import {
-  filterPlugins, pluginCategories, pluginLayer, sortPlugins, unreachableSources, usePluginCatalog,
-  type PluginEntry, type PluginLayer, type PluginSort,
+  addCatalogSource, filterPlugins, pluginCategories, pluginLayer, removeCatalogSource, sortPlugins,
+  unreachableSources, usePluginCatalog,
+  type PluginCatalog, type PluginEntry, type PluginLayer, type PluginSort,
 } from "../core/pluginCatalog";
 
 // The plugin market — the "find one" half of the plugin section (`AMB-D-356`); managing what is
@@ -32,6 +33,7 @@ export function PluginMarketScreen() {
   const [os, setOs] = useState("");
   const [layer, setLayer] = useState<PluginLayer | "">("");
   const [sort, setSort] = useState<PluginSort>("new");
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   const categories = useMemo(() => pluginCategories(catalog.entries), [catalog.entries]);
   const shown = useMemo(
@@ -91,10 +93,15 @@ export function PluginMarketScreen() {
           </select>
         </label>
         <span className="topbar__spacer" style={{ flex: 1 }} />
+        <button className="feed__action" onClick={() => setSourcesOpen((v) => !v)}>
+          {tf("plugins.sources", { count: catalog.sources.length })} {sourcesOpen ? "⌄" : "›"}
+        </button>
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
           {tf("plugins.count", { shown: shown.length, total: catalog.entries.length })}
         </span>
       </div>
+
+      {sourcesOpen && <CatalogSources catalog={catalog} />}
 
       <div style={{ padding: 12, overflowY: "auto" }}>
         {error != null && (
@@ -135,6 +142,71 @@ export function PluginMarketScreen() {
         />
       </div>
     </>
+  );
+}
+
+/**
+ * The catalogs the list is merged from, and the face for adding or removing one — the CLI's
+ * `plugin catalog add/remove/list` in the GUI.
+ *
+ * Registering a catalog widens what a user *sees*, and nothing else: an asset is still trusted only
+ * by amenbo's own catalog key (`AMB-D-371`), so nothing here loosens what may be installed. The
+ * official catalog is always merged first and cannot be removed, which is why its row has no button.
+ */
+function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async (op: () => Promise<boolean>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await op();
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const add = () => {
+    const target = url.trim();
+    if (!target) return;
+    void run(() => addCatalogSource(target).then((added) => { setUrl(""); return added; }));
+  };
+
+  return (
+    <div className="catsrc">
+      {catalog.sources.map((s) => (
+        <div className="catsrc__row" key={s.url}>
+          <span className="chip">{t(s.official ? "plugins.layer.official" : "plugins.layer.third-party")}</span>
+          <span className="catsrc__url">{s.url}</span>
+          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+            {s.reachable ? tf("plugins.offered", { count: s.offered }) : t("plugins.sourceDown")}
+          </span>
+          {!s.official && (
+            <button className="feed__action" disabled={busy} onClick={() => void run(() => removeCatalogSource(s.url))}>
+              {t("plugins.removeSource")}
+            </button>
+          )}
+        </div>
+      ))}
+      <div className="catsrc__row">
+        <input
+          className="board__search"
+          type="url"
+          placeholder={t("plugins.sourcePh")}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+          style={{ fontSize: "var(--fs-xs)", flex: 1, minWidth: 0 }}
+        />
+        <button className="btn" disabled={busy || !url.trim()} onClick={add}>{t("plugins.addSource")}</button>
+      </div>
+      {error && <div style={{ color: "var(--c-warn)", fontSize: "var(--fs-xs)" }}>{error}</div>}
+      <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.sourcesNote")}</div>
+    </div>
   );
 }
 

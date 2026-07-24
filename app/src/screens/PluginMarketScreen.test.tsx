@@ -9,6 +9,9 @@ import type { PluginCatalog } from "../core/pluginCatalog";
 
 const hoisted = vi.hoisted(() => ({
   catalog: { entries: [], sources: [], dropped: 0 } as PluginCatalog,
+  added: [] as string[],
+  removed: [] as string[],
+  addFails: false,
 }));
 
 // Replace only the data seam: the filtering, the paging and the rendering all run for real.
@@ -17,6 +20,15 @@ vi.mock("../core/pluginCatalog", async (importOriginal) => {
   return {
     ...orig,
     usePluginCatalog: () => ({ catalog: hoisted.catalog, loading: false, error: undefined }),
+    addCatalogSource: (url: string) => {
+      if (hoisted.addFails) return Promise.reject("plugin_catalog_url_invalid");
+      hoisted.added.push(url);
+      return Promise.resolve(true);
+    },
+    removeCatalogSource: (url: string) => {
+      hoisted.removed.push(url);
+      return Promise.resolve(true);
+    },
   };
 });
 
@@ -57,6 +69,9 @@ const select = (el: HTMLSelectElement, value: string) => {
 
 beforeEach(() => {
   hoisted.catalog = catalogOf(3);
+  hoisted.added = [];
+  hoisted.removed = [];
+  hoisted.addFails = false;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -148,5 +163,66 @@ describe("PluginMarketScreen", () => {
     render();
     expect(container.textContent).toContain("https://third");
     expect(container.textContent).toContain(t("plugins.emptyCatalog"));
+  });
+});
+
+describe("PluginMarketScreen — the catalogs it merges", () => {
+  const twoSources: PluginCatalog = {
+    ...catalogOf(2),
+    sources: [
+      { url: "https://official", official: true, reachable: true, offered: 2 },
+      { url: "https://third", official: false, reachable: false, offered: 0 },
+    ],
+  };
+
+  const openPanel = () => {
+    const toggle = Array.from(container.querySelectorAll("button"))
+      .find((b) => b.textContent!.includes(t("plugins.sources").split(" ")[0]))!;
+    act(() => toggle.click());
+  };
+
+  it("lists every catalog, and offers to remove only the third-party ones", () => {
+    hoisted.catalog = twoSources;
+    render();
+    openPanel();
+    const rows = Array.from(container.querySelectorAll(".catsrc__row"));
+    // Two catalogs plus the row that adds one.
+    expect(rows).toHaveLength(3);
+    expect(container.textContent).toContain("https://third");
+    expect(container.textContent).toContain(t("plugins.sourceDown"));
+    const removes = Array.from(container.querySelectorAll("button"))
+      .filter((b) => b.textContent === t("plugins.removeSource"));
+    expect(removes).toHaveLength(1);
+
+    act(() => removes[0].click());
+    expect(hoisted.removed).toEqual(["https://third"]);
+  });
+
+  it("registers a URL that was typed, trimmed", async () => {
+    hoisted.catalog = twoSources;
+    render();
+    openPanel();
+    const input = container.querySelector("input[type=url]") as HTMLInputElement;
+    act(() => type(input, "  https://new/catalog.json  "));
+    const add = Array.from(container.querySelectorAll("button"))
+      .find((b) => b.textContent === t("plugins.addSource"))!;
+    await act(async () => { add.click(); });
+    expect(hoisted.added).toEqual(["https://new/catalog.json"]);
+    expect(input.value).toBe("");
+  });
+
+  // A URL core refuses (not http(s), or the official catalog's own) must land on screen, not in the console.
+  it("shows why a rejected URL was rejected", async () => {
+    hoisted.catalog = twoSources;
+    hoisted.addFails = true;
+    render();
+    openPanel();
+    const input = container.querySelector("input[type=url]") as HTMLInputElement;
+    act(() => type(input, "ftp://nope"));
+    const add = Array.from(container.querySelectorAll("button"))
+      .find((b) => b.textContent === t("plugins.addSource"))!;
+    await act(async () => { add.click(); });
+    expect(container.textContent).toContain("plugin_catalog_url_invalid");
+    expect(hoisted.added).toEqual([]);
   });
 });

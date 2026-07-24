@@ -4270,6 +4270,34 @@ pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
     .map_err(|e| -> CmdError { format!("プラグイン目録の取得に失敗しました: {e}").into() })?
 }
 
+/// Register a third-party catalog so browsing shows what it offers (`AMB-D-347`). Returns `false` when
+/// the URL was already registered — idempotent, not an error.
+///
+/// Registering widens **what the user sees**, never what an install accepts: an asset is trusted only
+/// by amenbo's own catalog key (`AMB-D-371`), and adding a source does not touch that door. Core
+/// refuses a URL that is not `http(s)://…`, and the official catalog's own URL (it is not a
+/// third-party source and is merged first anyway).
+///
+/// The caller browses again afterwards, which is what fetches the newly registered catalog — so this
+/// does no network I/O of its own and stays a quick write of one small file.
+#[tauri::command]
+pub fn plugin_catalog_add_source(url: String) -> Result<bool, CmdError> {
+    let paths = amenbo_core::config::Paths::resolve()?;
+    amenbo_core::plugin_catalog::add_source(&paths, &url).map_err(CmdError::from)
+}
+
+/// Unregister a third-party catalog and drop its cached copy (`AMB-D-347`). Returns `false` when the
+/// URL was not registered — idempotent, like its opposite.
+///
+/// Removing a source removes nothing else: a plugin already installed from it stays installed and
+/// enabled, because the catalog is where a plugin was *found*, not what keeps it running
+/// (`AMB-D-350`).
+#[tauri::command]
+pub fn plugin_catalog_remove_source(url: String) -> Result<bool, CmdError> {
+    let paths = amenbo_core::config::Paths::resolve()?;
+    amenbo_core::plugin_catalog::remove_source(&paths, &url).map_err(CmdError::from)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

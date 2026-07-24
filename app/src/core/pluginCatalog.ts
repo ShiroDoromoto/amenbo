@@ -37,6 +37,19 @@ export function usePluginCatalog(): { catalog: PluginCatalog; loading: boolean; 
   return { catalog: data ?? EMPTY_CATALOG, loading, error };
 }
 
+/**
+ * Which trust layer an entry sits in (`AMB-D-347`). Two independent facts fold into one ladder here,
+ * because they nest: official (the amenbo team wrote it) is always listed as well, and an entry a
+ * third-party catalog offers is neither.
+ */
+export type PluginLayer = "official" | "listed" | "third-party";
+
+/** The layer one entry belongs to — the badge it wears, and what the layer filter matches. */
+export function pluginLayer(e: PluginEntry): PluginLayer {
+  if (e.official) return "official";
+  return e.listed ? "listed" : "third-party";
+}
+
 /** What the market list is narrowed by. Every field is optional; an unset one narrows nothing. */
 export interface PluginFilter {
   /** Free text, matched case-insensitively against the name, the description and the author. */
@@ -45,8 +58,12 @@ export interface PluginFilter {
   category?: string;
   /** Only entries that support this OS (`macos` / `windows` / `linux`), or "" for any. */
   os?: string;
-  /** Only entries the catalog marks official (`AMB-D-347` — the author is the amenbo team). */
-  officialOnly?: boolean;
+  /**
+   * Only entries at or above this layer, or "" for every layer: `official` is the amenbo team's own,
+   * `listed` also admits what review put on the official index, `third-party` narrows to what only a
+   * registered third-party catalog offers.
+   */
+  layer?: PluginLayer | "";
 }
 
 /**
@@ -56,7 +73,11 @@ export interface PluginFilter {
 export function filterPlugins(entries: PluginEntry[], f: PluginFilter): PluginEntry[] {
   const q = (f.q ?? "").trim().toLowerCase();
   return entries.filter((e) => {
-    if (f.officialOnly && !e.official) return false;
+    // "listed" is a floor, not an exact match: official entries are listed too, and hiding them from a
+    // reader who asked for reviewed plugins would be a lie about the catalog.
+    if (f.layer === "official" && !e.official) return false;
+    if (f.layer === "listed" && !e.listed) return false;
+    if (f.layer === "third-party" && e.listed) return false;
     if (f.category && e.category !== f.category) return false;
     if (f.os && !e.os.includes(f.os)) return false;
     if (!q) return true;
@@ -66,6 +87,33 @@ export function filterPlugins(entries: PluginEntry[], f: PluginFilter): PluginEn
       e.author.toLowerCase().includes(q)
     );
   });
+}
+
+/** How the market list is ordered. */
+export type PluginSort = "new" | "name";
+
+/**
+ * Order the entries. Sorting is the client's, over the list already in hand — the same reason the
+ * filtering is (`AMB-D-347`).
+ *
+ * "New" reads `addedAt`, which only the catalog's CI can know (a client holds no git history of the
+ * catalog repository). An entry without one is not old, it is unknown, so it sinks below the dated
+ * ones rather than sorting as the epoch. Ties keep catalog order, which puts the official catalog
+ * first.
+ */
+export function sortPlugins(entries: PluginEntry[], sort: PluginSort): PluginEntry[] {
+  const out = [...entries];
+  if (sort === "name") {
+    out.sort((a, b) => a.name.localeCompare(b.name));
+    return out;
+  }
+  out.sort((a, b) => {
+    if (!a.addedAt && !b.addedAt) return 0;
+    if (!a.addedAt) return 1;
+    if (!b.addedAt) return -1;
+    return b.addedAt.localeCompare(a.addedAt);
+  });
+  return out;
 }
 
 /**

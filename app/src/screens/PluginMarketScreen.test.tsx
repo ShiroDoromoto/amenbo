@@ -97,18 +97,44 @@ describe("PluginMarketScreen", () => {
     expect(rows()).toHaveLength(10);
   });
 
-  it("narrows by category and to official entries, and says so when nothing matches", () => {
+  it("narrows by category and by trust layer, and says so when nothing matches", () => {
     hoisted.catalog = catalogOf(6);
     render();
-    const [category] = Array.from(container.querySelectorAll("select")) as HTMLSelectElement[];
+    const [category, , layer] = Array.from(container.querySelectorAll("select")) as HTMLSelectElement[];
     act(() => select(category, "notify"));
     expect(rows()).toHaveLength(3);
 
-    const official = container.querySelector("input[type=checkbox]") as HTMLInputElement;
-    act(() => official.click());
+    act(() => select(layer, "official"));
     // plugin-0 is the only official one, and it is a workflow entry — so the two filters together match nothing.
     expect(rows()).toHaveLength(0);
     expect(container.textContent).toContain(t("plugins.emptyFilter"));
+  });
+
+  // The badge is the trust picture: who wrote it and who reviewed it, one label per row.
+  it("badges each row with its layer", () => {
+    hoisted.catalog = catalogOf(6);
+    render();
+    const badges = rows().map((r) => r.querySelector(".chip")!.textContent);
+    expect(badges[0]).toBe(t("plugins.layer.official"));
+    expect(badges[1]).toBe(t("plugins.layer.listed"));
+    expect(badges[5]).toBe(t("plugins.layer.third-party"));
+  });
+
+  it("orders by newest first, and by name when asked", () => {
+    hoisted.catalog = {
+      ...catalogOf(3),
+      entries: [
+        { ...catalogOf(3).entries[0], name: "zeta", addedAt: "2026-07-01T00:00:00Z" },
+        { ...catalogOf(3).entries[1], name: "alpha", addedAt: "2026-01-01T00:00:00Z" },
+      ],
+    };
+    render();
+    const names = () => rows().map((r) => r.querySelector("strong")!.textContent);
+    expect(names()).toEqual(["zeta", "alpha"]);
+
+    const sort = (Array.from(container.querySelectorAll("select")) as HTMLSelectElement[])[3];
+    act(() => select(sort, "name"));
+    expect(names()).toEqual(["alpha", "zeta"]);
   });
 
   // An empty catalog and a catalog we could not read are different answers, and the screen must not show

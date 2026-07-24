@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { filterPlugins, pluginCategories, unreachableSources, type PluginEntry } from "./pluginCatalog";
+import {
+  filterPlugins, pluginCategories, pluginLayer, sortPlugins, unreachableSources, type PluginEntry,
+} from "./pluginCatalog";
 
 const entry = (over: Partial<PluginEntry>): PluginEntry => ({
   name: "worktree",
@@ -17,7 +19,7 @@ describe("filterPlugins", () => {
   const entries = [
     entry({}),
     entry({ name: "slack", desc: "post to a channel", author: "someone", category: "notify", official: false, os: ["macos"] }),
-    entry({ name: "winonly", desc: "windows helper", author: "someone", category: "workflow", official: false, os: ["windows"] }),
+    entry({ name: "winonly", desc: "windows helper", author: "someone", category: "workflow", official: false, os: ["windows"], listed: false }),
   ];
 
   it("keeps everything when nothing is asked of it", () => {
@@ -36,15 +38,21 @@ describe("filterPlugins", () => {
     expect(filterPlugins(entries, { q: "   " })).toHaveLength(3);
   });
 
-  it("narrows by category, by OS support and to official entries", () => {
+  it("narrows by category and by OS support", () => {
     expect(filterPlugins(entries, { category: "notify" }).map((e) => e.name)).toEqual(["slack"]);
     expect(filterPlugins(entries, { os: "windows" }).map((e) => e.name)).toEqual(["worktree", "winonly"]);
-    expect(filterPlugins(entries, { officialOnly: true }).map((e) => e.name)).toEqual(["worktree"]);
+  });
+
+  // The layers nest, so "listed" has to keep the official entries: they passed the same review and more.
+  it("narrows by trust layer, keeping the official entries inside listed", () => {
+    expect(filterPlugins(entries, { layer: "official" }).map((e) => e.name)).toEqual(["worktree"]);
+    expect(filterPlugins(entries, { layer: "listed" }).map((e) => e.name)).toEqual(["worktree", "slack"]);
+    expect(filterPlugins(entries, { layer: "third-party" }).map((e) => e.name)).toEqual(["winonly"]);
   });
 
   // Every control narrows the same list, so two of them together narrow further rather than widening.
   it("combines the controls", () => {
-    expect(filterPlugins(entries, { category: "workflow", os: "windows", officialOnly: true }).map((e) => e.name))
+    expect(filterPlugins(entries, { category: "workflow", os: "macos", layer: "official" }).map((e) => e.name))
       .toEqual(["worktree"]);
     expect(filterPlugins(entries, { category: "notify", os: "windows" })).toEqual([]);
   });
@@ -71,5 +79,37 @@ describe("unreachableSources", () => {
       dropped: 0,
     };
     expect(unreachableSources(catalog)).toEqual(["https://third"]);
+  });
+});
+
+describe("pluginLayer", () => {
+  // Two independent facts, one ladder: who wrote it, and who reviewed it onto the official index.
+  it("reads the layer off the two flags", () => {
+    expect(pluginLayer(entry({}))).toBe("official");
+    expect(pluginLayer(entry({ official: false }))).toBe("listed");
+    expect(pluginLayer(entry({ official: false, listed: false }))).toBe("third-party");
+  });
+});
+
+describe("sortPlugins", () => {
+  const dated = [
+    entry({ name: "old", addedAt: "2026-01-01T00:00:00Z" }),
+    entry({ name: "undated" }),
+    entry({ name: "new", addedAt: "2026-07-01T00:00:00Z" }),
+  ];
+
+  it("puts the newest first", () => {
+    expect(sortPlugins(dated, "new").map((e) => e.name)).toEqual(["new", "old", "undated"]);
+  });
+
+  // A catalog that never wrote the field says the date is unknown, not that the plugin is ancient.
+  it("sinks an entry with no date rather than dating it to the epoch", () => {
+    const ordered = sortPlugins(dated, "new");
+    expect(ordered[ordered.length - 1].name).toBe("undated");
+  });
+
+  it("sorts by name on the other ordering, and never mutates its input", () => {
+    expect(sortPlugins(dated, "name").map((e) => e.name)).toEqual(["new", "old", "undated"]);
+    expect(dated.map((e) => e.name)).toEqual(["old", "undated", "new"]);
   });
 });

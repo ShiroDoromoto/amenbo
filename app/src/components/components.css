@@ -226,6 +226,7 @@
    from the human-declared status=blocked and its --c-blocked, so it borrows none of that
    colour and speaks through its glyph and spacing alone — the two must not be confused. */
 .chip--block { white-space: nowrap; cursor: default; }
+.chip--official { background: var(--c-accent); color: #fff; }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from
    --block (why anyone cannot start it) — this is what changed since *you* took it — so it speaks through its
    own 🔔 glyph and, like --block, borrows no status colour. */

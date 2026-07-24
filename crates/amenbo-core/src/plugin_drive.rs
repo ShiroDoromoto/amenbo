@@ -60,6 +60,15 @@ pub fn persisted_cursor(engine: &StoreEngine) -> Result<i64> {
     Ok(engine.get_meta(CURSOR_META)?.and_then(|v| v.parse().ok()).unwrap_or(0))
 }
 
+/// Read the face that last advanced the cursor ([`CURSOR_FACE_META`]), or `None` when nothing has advanced
+/// it — a store that has never delivered, or one last driven by a build that did not stamp the face. This is
+/// the diagnostic half of the pair: it says who moved the cursor to where it now stands, never whose turn is
+/// next (`AMB-D-380` — both faces drive, and nothing branches on this). An unreadable token reads as `None`,
+/// the same honest floor an unparsable cursor gets.
+pub fn persisted_cursor_face(engine: &StoreEngine) -> Result<Option<Face>> {
+    Ok(engine.get_meta(CURSOR_FACE_META)?.as_deref().and_then(Face::parse))
+}
+
 /// Drive the dispatcher once from the persisted cursor and persist where it advanced to — the mount both
 /// faces use (`AMB-D-380`). Reads the stored cursor, fires the subscribers of everything committed since,
 /// and writes the advanced cursor back so the next drive, in either face, continues past it (the persist is
@@ -171,6 +180,25 @@ mod tests {
             h.join().unwrap();
         }
         assert_eq!(persisted_cursor(&e).unwrap(), 3);
+    }
+
+    /// The face read back beside the cursor (`AMB-D-380`): absent until something has been delivered, the
+    /// driver's afterwards, and `None` again for a token this build does not know — a stamp it cannot read
+    /// is no answer rather than a wrong one. It says who moved the cursor; nothing anywhere chooses on it.
+    #[test]
+    fn the_cursor_face_reads_back_who_advanced_it_and_nothing_more() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        assert_eq!(persisted_cursor_face(&e).unwrap(), None, "nothing has delivered from this store");
+
+        emit(&e, "task.created", 1);
+        let _ = drive_persisted(&e, Face::Gui, &NoSubscribers, None).unwrap();
+        assert_eq!(persisted_cursor_face(&e).unwrap(), Some(Face::Gui));
+
+        // A face from a build that knows one this does not: unreadable, so unanswered.
+        let tx = e.write().unwrap();
+        tx.set_meta(CURSOR_FACE_META, Some("daemon")).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(persisted_cursor_face(&e).unwrap(), None);
     }
 
     /// With nothing installed ([`NoSubscribers`]) the drive fires nothing but still walks and persists the

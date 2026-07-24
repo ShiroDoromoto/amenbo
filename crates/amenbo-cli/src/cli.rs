@@ -417,7 +417,13 @@ pub enum PluginCmd {
     /// successful ones included. A `gap` line is not a run at all: it marks events the dispatcher could
     /// never deliver because retention had passed its cursor.
     ///
-    /// Reads one machine-local file and nothing else — no store rows, no network. The log is bounded by
+    /// It leads with the **dispatch cursor** — how far this store has been delivered, and which face last
+    /// advanced it (`AMB-D-380`). That is the other half of the same question: the runs say what fired, the
+    /// cursor says what was handed out, and a double fire or a silent miss is where the two disagree. The
+    /// face is a stamp for lining the store up against this log, not a turn order — both faces drive, and
+    /// nothing chooses between them.
+    ///
+    /// Reads one machine-local file and two store rows, and nothing else — no network. The log is bounded by
     /// construction (the last runs of each installed plugin), so there is no window to ask for and no
     /// deep history to page: a longer one is a logging plugin's business.
     Runs {

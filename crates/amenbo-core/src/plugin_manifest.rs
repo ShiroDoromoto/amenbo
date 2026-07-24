@@ -266,6 +266,17 @@ impl Face {
             Face::Gui => "gui",
         }
     }
+
+    /// The inverse of [`as_str`](Face::as_str) — for reading a face back out of a plain string that never
+    /// went through serde, which is how it is stored beside the dispatch cursor (`AMB-D-380`). A token
+    /// outside the vocabulary is `None`: a stamp this build cannot read is no answer, not a wrong one.
+    pub fn parse(s: &str) -> Option<Face> {
+        match s {
+            "cli" => Some(Face::Cli),
+            "gui" => Some(Face::Gui),
+            _ => None,
+        }
+    }
 }
 
 /// The faces a subscription fires on when it declares none: **both** (`AMB-D-383`). A bare event-name

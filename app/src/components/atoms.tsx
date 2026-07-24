@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Actor, Priority, Status, TaskCard } from "../mock/types";
 import type { PremiseChangeDto } from "../bindings/bindings";
+import { dueKind, todayStr } from "../core/calendar";
 import { currentLang, priorityLabel, statusLabel, t, tf } from "../core/i18n";
 import { getSnapshot } from "../core/snapshot";
 import { pushNotice } from "../core/notice";
@@ -127,10 +128,15 @@ export function PriorityDot({ priority }: { priority: Priority | null }) {
   );
 }
 
+/**
+ * The due date, coloured by how it stands against the device's own today (`todayStr()` at render, the same
+ * source the calendar and timeline colour by). The label beside it is worded by the backend against the same
+ * real day, so colour and wording have to be read off one clock — a colour judged against any other day says
+ * "overdue" next to a label that says "tomorrow".
+ */
 export function DueChip({ due, label }: { due: string | null; label: string | null }) {
   if (!due) return null;
-  const today = "2026-06-21";
-  const cls = due < today ? "due--overdue" : due === today ? "due--today" : "due--future";
+  const cls = `due--${dueKind(due, todayStr())}`;
   return <span className={`chip due ${cls}`}>🗓 {label ?? due}</span>;
 }
 

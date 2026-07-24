@@ -17,6 +17,7 @@ pub mod outbox;
 pub mod queue;
 pub mod read;
 pub mod record;
+pub mod runner;
 pub mod schema;
 pub mod sql;
 pub mod write;
@@ -32,6 +33,7 @@ pub use engine::{
 pub use hydrate::hydrate_database;
 pub use outbox::{events_since, outbox_head, EventRow, OutboxRow, OutboxSlice};
 pub use queue::{dequeue, queued_for, queued_plugins, QueueRow, QueuedEvent};
+pub use runner::{lease_of, Lease};
 pub use read::{
     decision_page, hydrate_task_cards, list_task_ids,
     project_name, project_overview, status_bucket_ids,

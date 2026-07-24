@@ -7,10 +7,11 @@
 //! read and write the same persisted one ([`drive_persisted`]), and trim is measured against that one
 //! (`AMB-D-380`). Where they still differ is only in *what becomes of the fires*:
 //!
-//! - A **short-lived CLI** **joins** the launched hooks before it exits (the caller's, from
-//!   [`Delivered::hooks`]), so a fire it started is not cut short by the process ending.
+//! - A **short-lived CLI** waits for the runners it started, under a budget
+//!   ([`Delivered::wait_for_runners`]), so what it set going is not cut short by the process ending — and a
+//!   plugin that never returns does not hold the command open either (`AMB-D-399`).
 //! - A **long-lived GUI** **drops** them — true fire-and-forget (`AMB-D-352`). Its process outlives the
-//!   fires, so nothing is cut short.
+//!   runs, so nothing is cut short.
 //!
 //! One cursor is what makes an event reach a plugin exactly once across the two: a session cursor held in
 //! the GUI's memory left the events it delivered still standing in the outbox, so the next CLI run
@@ -29,7 +30,8 @@
 //! everything the run needs.
 
 use crate::error::Result;
-use crate::plugin_dispatch::{fan_out, run_queues, Delivered, FannedOut, Subscribers};
+use crate::plugin_dispatch::{fan_out, Delivered, FannedOut, Subscribers};
+use crate::plugin_runner::RunnerEnv;
 use crate::store_engine::StoreEngine;
 
 /// The `store_meta` key the dispatch cursor is persisted under — the id of the last outbox event a drive
@@ -78,16 +80,21 @@ pub fn persisted_cursor_face(engine: &StoreEngine) -> Result<Option<Face>> {
 /// that observes it, deletes the outbox rows it copied, and the cursor that says how far it got is stored
 /// beside them. Either all three land or none does, so the outbox can never be reclaimed past what was
 /// queued, nor queued twice. The second half runs outside it — a subprocess must not be launched under the
-/// write lock — and needs nothing from it: each plugin's queue says for itself what it still owes.
+/// write lock — and needs nothing from it: each plugin's queue says for itself what it still owes, and the
+/// runner reading it holds that plugin's lease, so there is only ever one (`AMB-D-399`).
 ///
 /// `face` selects which subscriptions resolve (`AMB-D-383`) and is stamped beside the cursor for diagnosis
-/// ([`CURSOR_FACE_META`]). The returned [`Delivered`] carries the launched hooks — the CLI **joins** them
-/// before it exits, the GUI drops them — the replies to surface, and whether a retention gap was hit. `log`
-/// is the execution log every run and every gap is recorded in (`AMB-D-361`).
+/// ([`CURSOR_FACE_META`]). `env` is what a runner opens its own store and resolver through
+/// ([`RunnerEnv`]); `None` starts no runner at all — the fan-out still happens and its rows wait on the
+/// queues, which is what a caller with no device store behind it (a test of the walk itself) wants. The
+/// returned [`Delivered`] carries the runner threads — the CLI waits for them under a budget, the GUI drops
+/// them — the replies to surface, and whether a retention gap was hit. `log` is the execution log every run
+/// and every gap is recorded in (`AMB-D-361`).
 pub fn drive_persisted(
     engine: &StoreEngine,
     face: Face,
     subs: &dyn Subscribers,
+    env: Option<std::sync::Arc<dyn RunnerEnv>>,
     log: Option<&std::path::Path>,
 ) -> Result<Delivered> {
     let cursor = persisted_cursor(engine)?;
@@ -95,8 +102,12 @@ pub fn drive_persisted(
     // The transaction is closed by now, so the replying hooks can run: they are synchronous, and holding
     // the write lock across a subprocess is exactly what the queue exists to avoid.
     let replies = crate::plugin_dispatch::run_replies(fanned.replies, log);
-    let hooks = run_queues(engine.conn(), subs, log)?;
-    Ok(Delivered { cursor: fanned.cursor, hooks, replies, gapped: fanned.gapped })
+    let (sender, finished) = std::sync::mpsc::channel();
+    let runners = match env {
+        Some(env) => crate::plugin_runner::start(engine, env, log, &sender)?,
+        None => Vec::new(),
+    };
+    Ok(Delivered { cursor: fanned.cursor, runners, finished, replies, gapped: fanned.gapped })
 }
 
 /// The transactional half of a drive: fan the outbox out and store where the fan-out reached, on one
@@ -150,6 +161,16 @@ mod tests {
         PluginInvocation::new("/nonexistent/amenbo-drive-test-plugin")
     }
 
+    /// What is standing on a plugin's queue, taken off as it is read — these tests start no runner, so the
+    /// draining a runner would do is done here, and each assertion sees only what its own drive queued.
+    fn drained(e: &StoreEngine, plugin: &str) -> Vec<crate::store_engine::QueueRow> {
+        let rows = crate::store_engine::queued_for(e.conn(), plugin, 100).unwrap();
+        for row in &rows {
+            crate::store_engine::dequeue(e.conn(), row.id).unwrap();
+        }
+        rows
+    }
+
     fn emit(e: &StoreEngine, event: &str, id: i64) {
         let tx = e.write().unwrap();
         tx.emit_event(&EventRow { event, record_id: id, actor: "ai", at: "2026-07-23T09:00:00Z", new_state: None })
@@ -173,22 +194,16 @@ mod tests {
         emit(&e, "task.created", 2);
         let subs = Fixed { events: vec!["task.created"], invocation: bogus() };
 
-        // First run: both events fire, and the cursor is persisted at the head.
-        let first = drive_persisted(&e, Face::Cli, &subs, None).unwrap();
-        assert_eq!(first.hooks.len(), 2, "both committed events fire on the first run");
-        for h in first.hooks {
-            h.join().unwrap();
-        }
+        // First run: both events are queued for the subscriber, and the cursor is persisted at the head.
+        let _ = drive_persisted(&e, Face::Cli, &subs, None, None).unwrap();
+        assert_eq!(drained(&e, "fixed").len(), 2, "both committed events are queued on the first run");
         assert_eq!(persisted_cursor(&e).unwrap(), 2, "the cursor is stored at the head");
 
-        // A fresh event, then a second short-lived run: only the new event fires — the first two are behind
-        // the persisted cursor.
+        // A fresh event, then a second short-lived run: only the new event is queued — the first two are
+        // behind the persisted cursor.
         emit(&e, "task.created", 3);
-        let second = drive_persisted(&e, Face::Cli, &subs, None).unwrap();
-        assert_eq!(second.hooks.len(), 1, "only what committed since the stored cursor fires");
-        for h in second.hooks {
-            h.join().unwrap();
-        }
+        let _ = drive_persisted(&e, Face::Cli, &subs, None, None).unwrap();
+        assert_eq!(drained(&e, "fixed").len(), 1, "only what committed since the stored cursor is queued");
         assert_eq!(persisted_cursor(&e).unwrap(), 3);
     }
 
@@ -201,7 +216,7 @@ mod tests {
         assert_eq!(persisted_cursor_face(&e).unwrap(), None, "nothing has delivered from this store");
 
         emit(&e, "task.created", 1);
-        let _ = drive_persisted(&e, Face::Gui, &NoSubscribers, None).unwrap();
+        let _ = drive_persisted(&e, Face::Gui, &NoSubscribers, None, None).unwrap();
         assert_eq!(persisted_cursor_face(&e).unwrap(), Some(Face::Gui));
 
         // A face from a build that knows one this does not: unreadable, so unanswered.
@@ -219,8 +234,8 @@ mod tests {
         emit(&e, "task.created", 1);
         emit(&e, "task.status_changed", 2);
 
-        let d = drive_persisted(&e, Face::Cli, &NoSubscribers, None).unwrap();
-        assert!(d.hooks.is_empty(), "nobody is installed, so nothing fires");
+        let d = drive_persisted(&e, Face::Cli, &NoSubscribers, None, None).unwrap();
+        assert!(d.runners.is_empty(), "nobody is installed, so nothing is queued and nobody runs");
         assert!(!d.gapped);
         assert_eq!(persisted_cursor(&e).unwrap(), 2, "the cursor still walks to the head and is stored");
     }
@@ -231,12 +246,12 @@ mod tests {
     fn a_no_op_drive_does_not_rewrite_the_cursor() {
         let e = StoreEngine::open_in_memory().unwrap();
         emit(&e, "task.created", 1);
-        let _ = drive_persisted(&e, Face::Cli, &NoSubscribers, None).unwrap();
+        let _ = drive_persisted(&e, Face::Cli, &NoSubscribers, None, None).unwrap();
         assert_eq!(persisted_cursor(&e).unwrap(), 1);
 
         // Nothing committed since: the cursor holds, and the drive is a pure read.
-        let d = drive_persisted(&e, Face::Cli, &NoSubscribers, None).unwrap();
-        assert!(d.hooks.is_empty());
+        let d = drive_persisted(&e, Face::Cli, &NoSubscribers, None, None).unwrap();
+        assert!(d.runners.is_empty());
         assert_eq!(persisted_cursor(&e).unwrap(), 1, "an empty drive does not move the cursor");
     }
 
@@ -250,7 +265,7 @@ mod tests {
         emit(&e, "task.created", 1);
         emit(&e, "task.created", 2);
 
-        let d = drive_persisted(&e, Face::Cli, &NoSubscribers, None).unwrap();
+        let d = drive_persisted(&e, Face::Cli, &NoSubscribers, None, None).unwrap();
         assert_eq!(persisted_cursor(&e).unwrap(), 2, "the cursor walked to the head");
         assert!(!d.gapped);
 
@@ -275,7 +290,7 @@ mod tests {
         tx.set_meta(crate::store_engine::outbox::META_OUTBOX_TRUNCATED_THROUGH, Some("1")).unwrap();
         tx.commit().unwrap();
 
-        let d = drive_persisted(&e, Face::Cli, &NoSubscribers, None).unwrap();
+        let d = drive_persisted(&e, Face::Cli, &NoSubscribers, None, None).unwrap();
         assert!(d.gapped, "a cursor behind the watermark is a gap");
         assert_eq!(persisted_cursor(&e).unwrap(), 2, "the cursor resyncs to the head and is persisted");
     }
@@ -288,27 +303,24 @@ mod tests {
         emit(&e, "task.created", 1);
         let subs = Fixed { events: vec!["task.created"], invocation: bogus() };
 
-        // The long-lived face delivers it and drops the hooks, as it does in the GUI.
-        let gui = drive_persisted(&e, Face::Gui, &subs, None).unwrap();
-        assert_eq!(gui.hooks.len(), 1, "the GUI's drive fires the event");
+        // The long-lived face delivers it, as it does in the GUI.
+        let _ = drive_persisted(&e, Face::Gui, &subs, None, None).unwrap();
+        assert_eq!(drained(&e, "fixed").len(), 1, "the GUI's drive queues the event");
         assert_eq!(e.get_meta(CURSOR_FACE_META).unwrap().as_deref(), Some("gui"));
 
         // A short-lived run after it starts from the same stored cursor, so the event is already past.
-        let cli = drive_persisted(&e, Face::Cli, &subs, None).unwrap();
-        assert!(cli.hooks.is_empty(), "what the other face delivered does not fire a second time");
+        let _ = drive_persisted(&e, Face::Cli, &subs, None, None).unwrap();
+        assert!(drained(&e, "fixed").is_empty(), "what the other face delivered is not queued a second time");
         assert_eq!(
             e.get_meta(CURSOR_FACE_META).unwrap().as_deref(),
             Some("gui"),
             "a drive that moved nothing does not restamp the face"
         );
 
-        // The next event fires once, on whichever face gets there first.
+        // The next event is queued once, by whichever face gets there first.
         emit(&e, "task.created", 2);
-        let cli = drive_persisted(&e, Face::Cli, &subs, None).unwrap();
-        assert_eq!(cli.hooks.len(), 1);
-        for h in cli.hooks {
-            h.join().unwrap();
-        }
+        let _ = drive_persisted(&e, Face::Cli, &subs, None, None).unwrap();
+        assert_eq!(drained(&e, "fixed").len(), 1);
         assert_eq!(e.get_meta(CURSOR_FACE_META).unwrap().as_deref(), Some("cli"), "the face follows the mover");
     }
 
@@ -323,7 +335,7 @@ mod tests {
         emit(&e, "task.created", 3);
 
         // The winner fans the whole span out and stores its position.
-        let _ = drive_persisted(&e, Face::Gui, &NoSubscribers, None).unwrap();
+        let _ = drive_persisted(&e, Face::Gui, &NoSubscribers, None, None).unwrap();
         assert_eq!(persisted_cursor(&e).unwrap(), 3);
 
         // The loser comes back from the cursor it read before the race: the outbox is empty behind the
@@ -348,13 +360,10 @@ mod tests {
         emit(&e, "task.created", 1);
         emit(&e, "task.created", 2);
 
-        // A resolver that subscribes but whose program does not exist: the rows are queued, and the runs
-        // fail — which changes nothing about the reclaim, and that is the point.
+        // A resolver that subscribes, with nobody started to run what it queues: the reclaim does not wait
+        // on a run, and that is the point.
         let subs = Fixed { events: vec!["task.created"], invocation: bogus() };
-        let d = drive_persisted(&e, Face::Cli, &subs, None).unwrap();
-        for h in d.hooks {
-            h.join().unwrap();
-        }
+        let _ = drive_persisted(&e, Face::Cli, &subs, None, None).unwrap();
 
         assert_eq!(persisted_cursor(&e).unwrap(), 2, "the cursor is stored at the fan-out's position");
         assert_eq!(
@@ -362,9 +371,10 @@ mod tests {
             OutboxSlice::Gap,
             "the outbox is reclaimed through the fan-out, whatever became of the runs"
         );
-        assert!(
-            queued_for(e.conn(), "fixed", 10).unwrap().is_empty(),
-            "and the queue is empty again, the rows having been handed to the plugin"
+        assert_eq!(
+            queued_for(e.conn(), "fixed", 10).unwrap().len(),
+            2,
+            "and what it was reclaimed against is standing on the plugin's queue"
         );
     }
 }

@@ -116,7 +116,7 @@ pub fn fire_with_timeout(
 /// becomes a log line and stops there. The running itself, and the warning on anything but a clean exit,
 /// are [`execute`]'s; this only decides the result's fate: log it and drop it.
 fn run_one(hook: &Hook, timeout: Duration, log: Option<&Path>) {
-    let recorded = execute(hook, timeout);
+    let recorded = execute(hook, Some(timeout));
     if let Some(path) = log {
         plugin_log::record(path, &recorded);
     }
@@ -132,7 +132,7 @@ fn run_one(hook: &Hook, timeout: Duration, log: Option<&Path>) {
 /// stdout. A timeout (`AMB-D-383`: overrun is dropped) or a failure to launch produces no reply — nothing
 /// useful was said — while the log still carries the warning [`execute`] emitted.
 pub fn run_reply(hook: &Hook, timeout: Duration, log: Option<&Path>) -> Option<String> {
-    let recorded = execute(hook, timeout);
+    let recorded = execute(hook, Some(timeout));
     if let Some(path) = log {
         plugin_log::record(path, &recorded);
     }
@@ -142,11 +142,32 @@ pub fn run_reply(hook: &Hook, timeout: Duration, log: Option<&Path>) -> Option<S
     }
 }
 
-/// Run one hook under `timeout`, warn on anything but a clean exit, and build the [`Run`] to record. Shared
-/// by the fire-and-forget path ([`run_one`]) and the synchronous reply path ([`run_reply`]): the only
-/// difference between them is what becomes of the result — logged and dropped, or logged and returned — so
-/// the running, the four end-arms, and the warnings all live here, once.
-fn execute(hook: &Hook, timeout: Duration) -> Run {
+/// Run one queued hook **on this thread, to its end**, and record it (`AMB-D-399`).
+///
+/// This is the queue runner's path ([`crate::plugin_runner`]), and it differs from [`fire`] in both halves:
+/// it does not spawn a thread — the runner *is* the thread, and one plugin's events are run one at a time,
+/// in the order they were queued — and it names no timeout. The five-second kill exists to stop a hook the
+/// write path launched from leaking a process for good; a runner is not the write path, nothing waits
+/// behind it but the rest of its own plugin's queue, and a plugin killed mid-work is exactly the half-done
+/// outside effect the queue was split off to stop. So a slow plugin is waited on, and only a plugin that
+/// never returns holds its own queue — which its lease's horizon then hands to the next runner.
+pub fn run_queued(hook: &Hook, log: Option<&Path>) {
+    let recorded = execute(hook, None);
+    if let Some(path) = log {
+        plugin_log::record(path, &recorded);
+    }
+}
+
+/// Run one hook under `bound`, warn on anything but a clean exit, and build the [`Run`] to record. Shared
+/// by the fire-and-forget path ([`run_one`]), the synchronous reply path ([`run_reply`]) and the queue
+/// runner's ([`run_queued`]): the only difference between them is what becomes of the result — logged and
+/// dropped, or logged and returned — so the running, the end-arms, and the warnings all live here, once.
+///
+/// `None` waits for the plugin to finish, however long it takes. That is the queue runner's bound, because
+/// a queue runner has no one to keep waiting: nothing is behind it but the rest of its own plugin's queue
+/// (`AMB-D-399`). A bound is what the other two need — a caller is waiting on the reply, and a fire the
+/// write path launched must not leak a process for good.
+fn execute(hook: &Hook, bound: Option<Duration>) -> Run {
     let program = hook.invocation.program.display().to_string();
     let run = |outcome, code, elapsed, stderr: &str| Run {
         plugin: hook.plugin.clone(),
@@ -158,7 +179,11 @@ fn execute(hook: &Hook, timeout: Duration) -> Run {
     };
     // Only these fields ever reach the log: the invocation — whose env carries the plugin's injected
     // secrets (`AMB-D-356`) — stays in this function.
-    let recorded = match hook.invocation.spawn().and_then(|running| running.wait_timeout(timeout)) {
+    let waited = hook.invocation.spawn().and_then(|running| match bound {
+        Some(timeout) => running.wait_timeout(timeout),
+        None => running.wait().map(Some),
+    });
+    let recorded = match waited {
         Ok(Some(output)) if output.succeeded() => {
             run(Outcome::Ok, output.code, output.elapsed, &output.stderr)
         }
@@ -174,6 +199,9 @@ fn execute(hook: &Hook, timeout: Duration) -> Run {
             run(Outcome::Failed, output.code, output.elapsed, &output.stderr)
         }
         Ok(None) => {
+            // Unreachable without a bound: an unbounded wait either finishes or never returns, so the
+            // arm is the bounded callers' and the elapsed it records is the bound they named.
+            let timeout = bound.unwrap_or_default();
             tracing::warn!(
                 plugin = %hook.plugin,
                 event = %hook.event,

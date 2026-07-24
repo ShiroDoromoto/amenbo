@@ -225,6 +225,9 @@ impl Store {
             &self.engine,
             face,
             subs,
+            // The runners open their own store from these same paths: they outlive this drive, and this
+            // `Store` is the caller's, closed when the command that opened it returns (`AMB-D-399`).
+            Some(std::sync::Arc::new(crate::plugin_runner::device_env(self.paths.clone()))),
             Some(&self.paths.plugin_log_file()),
         )
     }

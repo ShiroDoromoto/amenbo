@@ -224,8 +224,10 @@ fn download(url: &str) -> Result<Vec<u8>> {
     })
 }
 
-/// The executable inside a verified asset, recognised by the asset's own leading bytes: a gzip'd tar, or
-/// the executable itself. A zip is named and refused rather than guessed at.
+/// The executable inside a verified asset, recognised by the asset's own leading bytes: a gzip'd tar, the
+/// executable itself, or — **on Windows only** — a zip. The zip path exists because that is the shape
+/// wharfy writes for Windows (mirroring [`crate::self_update`]); off Windows nothing ships one, so a zip
+/// is named and refused rather than guessed at.
 ///
 /// This runs **after** provenance, so the bytes are the ones the catalog blessed — the shapes here are a
 /// packaging question, not a trust one. The size cap still applies to what comes out of the archive,
@@ -241,14 +243,21 @@ fn unpack_program(asset: &[u8], name: &str) -> Result<Vec<u8>> {
         return from_tar_gz(asset, name);
     }
     if asset.starts_with(&ZIP_MAGIC) {
-        return Err(Error::invalid(
-            format!(
-                "the asset for plugin '{name}' is a zip — publish it as a .tar.gz, or as the executable itself"
-            ),
-            format!(
-                "プラグイン '{name}' の asset が zip です——.tar.gz か実行ファイルそのものとして配布してください"
-            ),
-        ));
+        #[cfg(windows)]
+        {
+            return from_zip(asset, name);
+        }
+        #[cfg(not(windows))]
+        {
+            return Err(Error::invalid(
+                format!(
+                    "the asset for plugin '{name}' is a zip — a zip is only taken on Windows; publish it as a .tar.gz, or as the executable itself"
+                ),
+                format!(
+                    "プラグイン '{name}' の asset が zip です——zip を受理するのは Windows だけです。.tar.gz か実行ファイルそのものとして配布してください"
+                ),
+            ));
+        }
     }
     Ok(asset.to_vec())
 }
@@ -283,6 +292,49 @@ fn from_tar_gz(asset: &[u8], name: &str) -> Result<Vec<u8>> {
         }
         let mut program = Vec::new();
         entry.take(MAX_ASSET_BYTES).read_to_end(&mut program).map_err(unreadable)?;
+        return Ok(program);
+    }
+    Err(Error::invalid(
+        format!("the asset for plugin '{name}' holds no '{wanted}' entry"),
+        format!("プラグイン '{name}' の asset に '{wanted}' が入っていません"),
+    ))
+}
+
+/// The Windows path: read the plugin's executable out of a zip — the entry whose **file name** is the
+/// plugin's own ([`plugin_installed::program_file_name`], i.e. `<name>.exe` here). Matching on the file
+/// name alone means a leading directory still resolves and a member path that climbs out of the archive
+/// is never the one looked for; `enclosed_name` sanitizes against zip-slip and only a regular file is
+/// read. The size cap applies to the **decompressed** bytes — the part a signature cannot bound. This is
+/// the counterpart to [`from_tar_gz`], mirroring [`crate::self_update`]'s zip reader, and — like the
+/// `zip` dependency itself — Windows-only, because no other platform ships a zip.
+#[cfg(windows)]
+fn from_zip(asset: &[u8], name: &str) -> Result<Vec<u8>> {
+    use std::io::Read;
+
+    let wanted = plugin_installed::program_file_name(name);
+    let unreadable = |e: String| {
+        Error::invalid(
+            format!("the asset for plugin '{name}' is not a readable zip: {e}"),
+            format!("プラグイン '{name}' の asset を zip として読めません：{e}"),
+        )
+    };
+
+    let mut zip =
+        zip::ZipArchive::new(std::io::Cursor::new(asset)).map_err(|e| unreadable(e.to_string()))?;
+    for i in 0..zip.len() {
+        let entry = zip.by_index(i).map_err(|e| unreadable(e.to_string()))?;
+        let is_wanted = entry
+            .enclosed_name()
+            .and_then(|p| p.file_name().map(|n| n.to_os_string()))
+            .is_some_and(|n| n == wanted.as_str());
+        if !is_wanted || !entry.is_file() {
+            continue;
+        }
+        let mut program = Vec::new();
+        entry
+            .take(MAX_ASSET_BYTES)
+            .read_to_end(&mut program)
+            .map_err(|e| unreadable(e.to_string()))?;
         return Ok(program);
     }
     Err(Error::invalid(
@@ -594,12 +646,62 @@ mod tests {
         assert!(unpack_program(b"", "worktree").is_err());
     }
 
+    /// Off Windows nothing ships a zip, so one is named and refused by its shape (never parsed).
+    #[cfg(not(windows))]
     #[test]
-    fn a_zip_asset_is_refused_by_name() {
+    fn a_zip_asset_is_refused_off_windows() {
         let mut zip = ZIP_MAGIC.to_vec();
         zip.extend_from_slice(b"...the rest of a zip...");
         let err = unpack_program(&zip, "worktree").unwrap_err();
         assert!(format!("{err:?}").contains("zip"), "the shape is named: {err:?}");
+    }
+
+    /// A Deflate zip holding one file per `(path, bytes)`. Windows-only, matching where zips are taken.
+    #[cfg(windows)]
+    fn zip_of(files: &[(&str, &[u8])]) -> Vec<u8> {
+        use std::io::Write;
+        use zip::write::{SimpleFileOptions, ZipWriter};
+        use zip::CompressionMethod;
+        let mut buf = Vec::new();
+        {
+            let mut zw = ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let opts = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+            for (path, bytes) in files {
+                zw.start_file(*path, opts).unwrap();
+                zw.write_all(bytes).unwrap();
+            }
+            zw.finish().unwrap();
+        }
+        buf
+    }
+
+    /// On Windows the zip path mirrors the tar one: the entry named after the plugin is the program, and
+    /// the extra files a release archive carries — plus a leading directory — are ignored.
+    #[cfg(windows)]
+    #[test]
+    fn the_named_entry_is_taken_out_of_a_zip() {
+        let program = plugin_installed::program_file_name("worktree");
+        let asset = zip_of(&[
+            ("worktree-v1/README.md", b"docs" as &[u8]),
+            (&format!("worktree-v1/{program}"), b"MZ-ish"),
+        ]);
+        assert_eq!(unpack_program(&asset, "worktree").unwrap(), b"MZ-ish");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_zip_without_the_named_entry_is_refused() {
+        let asset = zip_of(&[("worktree-v1/some-other-binary.exe", b"x" as &[u8])]);
+        let err = unpack_program(&asset, "worktree").unwrap_err();
+        assert!(format!("{err:?}").contains("worktree"), "the entry looked for is named: {err:?}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_corrupt_zip_asset_is_refused() {
+        let mut corrupt = ZIP_MAGIC.to_vec();
+        corrupt.extend_from_slice(b"not really a zip stream");
+        assert!(unpack_program(&corrupt, "worktree").is_err());
     }
 
     /// The tar path: the entry named after the plugin is the program, and the extra files a release

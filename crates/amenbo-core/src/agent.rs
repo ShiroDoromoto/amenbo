@@ -9,7 +9,7 @@
 
 use crate::config::Paths;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const SCHEMA_VERSION: &str = "1";
@@ -19,16 +19,21 @@ pub const SCHEMA_VERSION: &str = "1";
 /// English. Only the GUI's command palette goes through here, swapping the **prose fields**
 /// (capability / command.summary / args.help / flags.help) for their translations just before
 /// display. Command names, flag names and the CLI strings in examples are identifiers and runnable
-/// lines, so no locale changes them (the one thing that does is the channel — [`build`] retargets
-/// the command word in them). An item with no translation, and an unknown locale, pass through in
+/// lines, so no locale changes them (the one thing that does is the channel — [`retarget`] swaps the
+/// command word). An item with no translation, and an unknown locale, pass through in
 /// English (graceful fallback) — add a translation and that one item starts rendering translated.
 /// The default `en` is identical to [`build`]. Translations go in [`phrasebook`].
+///
+/// The order of the two steps is not free: translating reads the authored English character for
+/// character, so the locale swap goes first and the retarget last — [`build`]'s own order, one step
+/// shorter.
 pub fn build_localized(locale: &str) -> Value {
-    let mut spec = build();
+    let mut spec = spec_as_authored();
     let table: HashMap<&str, &str> = phrasebook(locale).iter().copied().collect();
     if !table.is_empty() {
         localize_prose(&mut spec, &table);
     }
+    retarget(&mut spec, Paths::command_name());
     spec
 }
 
@@ -421,17 +426,18 @@ fn tr(field: Option<&mut Value>, table: &HashMap<&str, &str>) {
 }
 
 /// Builds the spec. A single local store, so there is one shape: personal mode. Every exit —
-/// [`build_index`], [`command_spec`], [`build_localized`] — comes through here, so the retarget
-/// below reaches all of them.
+/// [`build_index`], [`command_spec`], [`build_localized`] — comes through here or repeats its last
+/// step, so the retarget reaches all of them.
 pub fn build() -> Value {
     let mut spec = spec_as_authored();
-    retarget_runnable_lines(&mut spec, Paths::command_name());
+    retarget(&mut spec, Paths::command_name());
     spec
 }
 
-/// The spec as it is written in this file: every runnable line spelled with the production CLI, the
-/// name a reader of the source recognises. [`build`] is what hands it out, and it retargets those
-/// lines first — this is not a second source of truth, it is the one source before that one step.
+/// The spec as it is written in this file: every command spelled with the production CLI, the name a
+/// reader of the source recognises. [`build`] is what hands it out, and it retargets that name
+/// first — this is not a second source of truth, it is the one source before that one step. The
+/// phrasebook is keyed on this text, so a test that holds the two together reads it from here.
 fn spec_as_authored() -> Value {
     json!({
         "amenbo": "A local-first task manager with no central server. You (the AI agent) operate it on the user's behalf.",
@@ -521,29 +527,66 @@ fn spec_as_authored() -> Value {
 /// below has to know which strings it may rewrite.
 const RUNNABLE_LINE_FIELDS: [&str; 3] = ["examples", "example", "inspect"];
 
-/// Retargets every runnable line to `cli` — the CLI this build actually installs
-/// ([`Paths::command_name`]). The lines are authored with the production spelling and rewritten on
-/// the way out, so the source stays a set of literal, readable, copy-pasteable commands and no
-/// author has to remember to interpolate anything. Without this a dev build hands an AI, and shows
-/// in the GUI's command catalog, examples for a command that is not installed there — beside a
-/// heading the GUI already spells from `command_name`.
+/// Retargets the whole spec to `cli` — the CLI this build actually installs
+/// ([`Paths::command_name`]). Everything is authored with the production spelling and rewritten on
+/// the way out, so the source stays literal, readable and copy-pasteable and no author has to
+/// remember to interpolate anything. Without this a dev build hands an AI, and shows in the GUI's
+/// command catalog, commands that are not installed there — beside a heading the GUI already spells
+/// from `command_name`.
 ///
-/// Only the runnable-line fields are touched: prose mentioning a command in a code span is left
-/// alone, because prose is what the GUI localizes and the phrasebook is keyed on the English source
-/// character for character. Production rewrites nothing (the authored spelling is already its own),
-/// but it still walks — one path for both channels means a break shows up wherever the tests run.
-fn retarget_runnable_lines(node: &mut Value, cli: &str) {
+/// Two rules, because the spec holds two kinds of string, and the looser rule would be wrong for
+/// prose. A runnable line is nothing but a command, so every standalone occurrence goes. Prose says
+/// `amenbo` for the product as often as for the command (`Update amenbo:`, `amenbo is a single local
+/// store`), and only a following command name tells the two apart. Production rewrites nothing (the
+/// authored spelling is already its own), but it still walks — one path for both channels means a
+/// break shows up wherever the tests run.
+///
+/// This runs **last**, after any locale swap: a translation is looked up by its authored English, and
+/// arrives holding the authored command word, so it has to be retargeted after it lands rather than
+/// looked up after the source moved ([`build_localized`]).
+fn retarget(spec: &mut Value, cli: &str) {
+    let commands = command_words(spec);
+    retarget_node(spec, cli, &commands);
+}
+
+/// A command name that is a plain English noun as often as it is a command, and so cannot be read as
+/// one in prose: "a minimum amenbo version" is about the product, not a line to type. Retargeting it
+/// would rename the product; not retargeting it costs one prose mention of `amenbo version`, which
+/// the examples carry anyway.
+const NOT_A_COMMAND_IN_PROSE: [&str; 1] = ["version"];
+
+/// The first word of each command name (`task add` → `task`) — what has to follow `amenbo` in prose
+/// for it to be a command someone is being told to type. Read off the spec itself, so a command added
+/// to it is covered with no second list to keep in step.
+fn command_words(spec: &Value) -> HashSet<String> {
+    spec["commands"]
+        .as_array()
+        .map(|cmds| {
+            cmds.iter()
+                .filter_map(|c| c["name"].as_str())
+                .filter_map(|n| n.split_whitespace().next())
+                .filter(|w| !NOT_A_COMMAND_IN_PROSE.contains(w))
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn retarget_node(node: &mut Value, cli: &str, commands: &HashSet<String>) {
     match node {
         Value::Object(map) => {
             for (key, value) in map.iter_mut() {
                 if RUNNABLE_LINE_FIELDS.contains(&key.as_str()) {
                     retarget_line(value, cli);
                 } else {
-                    retarget_runnable_lines(value, cli);
+                    retarget_node(value, cli, commands);
                 }
             }
         }
-        Value::Array(items) => items.iter_mut().for_each(|i| retarget_runnable_lines(i, cli)),
+        Value::Array(items) => items.iter_mut().for_each(|i| retarget_node(i, cli, commands)),
+        Value::String(prose) => {
+            *prose = rewrite(prose, cli, |after| names_a_command(after, commands));
+        }
         _ => {}
     }
 }
@@ -552,26 +595,36 @@ fn retarget_runnable_lines(node: &mut Value, cli: &str) {
 fn retarget_line(node: &mut Value, cli: &str) {
     match node {
         Value::Array(items) => items.iter_mut().for_each(|i| retarget_line(i, cli)),
-        Value::String(line) => *line = retarget_words(line, cli),
+        Value::String(line) => *line = rewrite(line, cli, |_| true),
         _ => {}
     }
 }
 
-/// Rewrites every standalone occurrence of the authored command word, not merely a leading one: a
-/// line can wrap the command (`eval "$(amenbo plugin run …)"`), and one that names it in the middle
-/// is as unrunnable on the dev channel as one that opens with it.
-fn retarget_words(line: &str, cli: &str) -> String {
+/// Rewrites each standalone occurrence of the authored command word that `accept` takes, given the
+/// text that follows it. Not merely a leading one: a line can wrap the command
+/// (`eval "$(amenbo plugin run …)"`), and one that names it in the middle is as unrunnable on the dev
+/// channel as one that opens with it.
+fn rewrite(text: &str, cli: &str, accept: impl Fn(&str) -> bool) -> String {
     let authored = Paths::PRODUCTION_APP_NAME;
-    let mut out = String::with_capacity(line.len());
-    let mut rest = line;
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
     while let Some(at) = rest.find(authored) {
         let (before, after) = (&rest[..at], &rest[at + authored.len()..]);
         out.push_str(before);
-        out.push_str(if standalone(before, after) { cli } else { authored });
+        let swap = standalone(before, after) && accept(after);
+        out.push_str(if swap { cli } else { authored });
         rest = after;
     }
     out.push_str(rest);
     out
+}
+
+/// Whether the text right after the command word is a space and then a command name — the one thing
+/// that makes `amenbo …` in prose an instruction rather than the product's name.
+fn names_a_command(after: &str, commands: &HashSet<String>) -> bool {
+    let Some(tail) = after.strip_prefix(' ') else { return false };
+    let word: String = tail.chars().take_while(|c| c.is_ascii_lowercase() || *c == '-').collect();
+    commands.contains(&word)
 }
 
 /// Whether the command word between these two sides is a word of its own. What may touch it is
@@ -1359,9 +1412,12 @@ pub fn build_index() -> Value {
         map.insert("commands".to_string(), Value::Array(index));
         // Unless we say it is an index, the AI reads it as the whole spec and hallucinates flags.
         // Say how to pull the rest, right here.
+        // Added after the retarget, so this one words the CLI's name itself — `<cmd>` is a
+        // placeholder rather than a command name, which is not something prose can be read for.
+        let cli = Paths::command_name();
         map.insert(
             "commandDetail".to_string(),
-            json!("`commands` is an index: every command's name, and nothing more. For what one is for, read `capabilities` — it maps intent to command names. To use one, pull its full spec — summary, flags, args, examples — with `amenbo agent --command <name>` (or `amenbo <cmd> --help`); never guess a flag from the name. `amenbo agent --full` prints every command's full spec at once, but you rarely need it — pull the two or three you are about to run."),
+            json!(format!("`commands` is an index: every command's name, and nothing more. For what one is for, read `capabilities` — it maps intent to command names. To use one, pull its full spec — summary, flags, args, examples — with `{cli} agent --command <name>` (or `{cli} <cmd> --help`); never guess a flag from the name. `{cli} agent --full` prints every command's full spec at once, but you rarely need it — pull the two or three you are about to run.")),
         );
     }
     spec
@@ -1539,10 +1595,11 @@ mod tests {
 
     /// Every key of `JA_PHRASEBOOK` must match the spec's localizable prose character for
     /// character. Reword the spec and leave the key behind, and that item renders in English in the
-    /// GUI.
+    /// GUI. Read from [`spec_as_authored`], not [`build`]: the lookup happens before the retarget, so
+    /// the text a key has to match is the authored one, whatever channel the test is built for.
     #[test]
     fn ja_phrasebook_has_no_orphan_keys() {
-        let en = build();
+        let en = spec_as_authored();
         let prose = spec_prose(&en);
         let orphans: Vec<&str> =
             JA_PHRASEBOOK.iter().map(|(k, _)| *k).filter(|k| !prose.contains(k)).collect();
@@ -1556,7 +1613,7 @@ mod tests {
     /// in exact correspondence.
     #[test]
     fn ja_phrasebook_covers_every_spec_prose() {
-        let en = build();
+        let en = spec_as_authored();
         let translated: std::collections::HashSet<&str> =
             JA_PHRASEBOOK.iter().map(|(k, _)| *k).collect();
         let mut missing: Vec<&str> =
@@ -1682,7 +1739,7 @@ mod tests {
         }
 
         let mut dev = build();
-        retarget_runnable_lines(&mut dev, Paths::DEV_APP_NAME);
+        retarget(&mut dev, Paths::DEV_APP_NAME);
         let mut dev_lines = Vec::new();
         runnable_lines(&dev, &mut dev_lines);
         assert_eq!(dev_lines.len(), lines.len(), "the retarget changed how many runnable lines there are");
@@ -1690,6 +1747,31 @@ mod tests {
             assert!(names(line, Paths::DEV_APP_NAME), "a runnable line kept its authored CLI through the retarget: {line}");
             assert!(!names(line, Paths::PRODUCTION_APP_NAME), "a runnable line still names the production CLI after the retarget: {line}");
         }
+    }
+
+    /// The other half of the retarget: prose that tells the reader to type something must move too,
+    /// while prose that names the product must not. Both directions are checked on the dev spelling,
+    /// where the two spellings finally differ — and the second is the one that needs a test, since a
+    /// rule loose enough to catch every command would also rename the product ("a newer amenbo").
+    #[test]
+    fn retargeting_prose_moves_commands_and_leaves_the_product_alone() {
+        let mut dev = spec_as_authored();
+        retarget(&mut dev, Paths::DEV_APP_NAME);
+
+        let cycle = dev["agentCycle"].as_array().unwrap().iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ");
+        assert!(cycle.contains("`amenbo-dev task list --filter"), "the mailbox query still names the production CLI: {cycle}");
+        assert!(cycle.contains("`amenbo-dev task status <id> in_progress`"), "the reserve step still names the production CLI");
+        assert!(dev["conventions"]["reach"].as_str().unwrap().contains("`amenbo-dev bind --project"), "the way out of an unbound folder still names the production CLI");
+        let hooks = dev["commands"].as_array().unwrap().iter().find(|c| c["name"] == "hooks install").unwrap();
+        assert!(hooks["summary"].as_str().unwrap().contains("`amenbo-dev lint`"), "a command summary still names the production CLI");
+
+        // The product keeps its name: `amenbo` followed by anything but a command is prose about it.
+        assert_eq!(dev["amenbo"], spec_as_authored()["amenbo"], "the product line was retargeted as if it were a command");
+        let update = dev["commands"].as_array().unwrap().iter().find(|c| c["name"] == "update").unwrap();
+        assert!(update["summary"].as_str().unwrap().contains("Updates amenbo."), "the product's name was rewritten inside prose");
+        assert!(update["summary"].as_str().unwrap().contains("amenbo never updates in the background"), "the product's name was rewritten inside prose");
+        let prose = dev.to_string();
+        assert!(prose.contains("minimum amenbo version"), "a command name that doubles as a noun was read as a command ({NOT_A_COMMAND_IN_PROSE:?})");
     }
 
     /// The entry point must teach how to explore — narrow, list, then open the few that matter. Lose

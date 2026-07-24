@@ -16,6 +16,8 @@ const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
   /** What core answers, by query text. Anything unlisted matches nothing. */
   answers: new Map<string, number[]>(),
+  /** Queries core refuses outright (how a broken command looks from here). */
+  refuse: new Set<string>(),
 }));
 
 vi.mock("./snapshot", async (importOriginal) => {
@@ -26,6 +28,7 @@ vi.mock("./ipc", () => ({
   invoke: (cmd: string, args: { text: string }) => {
     if (cmd !== "decision_search") throw new Error(`unexpected command ${cmd}`);
     hoisted.asked.push(args.text);
+    if (hoisted.refuse.has(args.text)) return Promise.reject(new Error("core refused"));
     return Promise.resolve(hoisted.answers.get(args.text) ?? []);
   },
 }));
@@ -39,7 +42,8 @@ let root: Root;
 
 /** Render the hook's answer as text: `all` for null (nothing asked), otherwise the ids it narrowed to. */
 function Probe({ text }: { text: string }) {
-  const hits = useDecisionSearchIds(1, text);
+  const { hits, error } = useDecisionSearchIds(1, text);
+  if (error) return createElement("span", { id: "out" }, `error:${String(error)}`);
   return createElement("span", { id: "out" }, hits === null ? "all" : `[${[...hits].join(",")}]`);
 }
 
@@ -54,6 +58,7 @@ async function settle() {
 beforeEach(() => {
   hoisted.asked.length = 0;
   hoisted.answers.clear();
+  hoisted.refuse.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -108,6 +113,16 @@ describe("useDecisionSearchIds", () => {
 
     render("");
     expect(shown()).toBe("all");
+  });
+
+  // The failure this exists for: `decision_search` refused every call for a release, the hook read that as
+  // "nothing asked", and the screen answered a search by showing every decision. A refusal must not be able
+  // to wear the face of a word that matched everything.
+  it("a refused search is reported, not read as an unasked one", async () => {
+    hoisted.refuse.add("落ちる語");
+    render("落ちる語");
+    await settle();
+    expect(shown()).toContain("error:");
   });
 
   it("the query is sent trimmed, so trailing space does not make a second one of the same search", async () => {

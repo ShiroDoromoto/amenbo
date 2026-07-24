@@ -3,7 +3,7 @@ import { type Decision, type DecisionStatus } from "../core/snapshot";
 import { addDecision } from "../core/mutations";
 import { useDecisionPage, useDecisionSearchIds } from "../core/reads";
 import { Pager, usePager } from "../components/Pager";
-import { currentLang, t } from "../core/i18n";
+import { currentLang, errText, t } from "../core/i18n";
 import { parseRefQuery } from "../core/filters";
 
 // The list of decision records. A decision is a first-class entity that keeps "why we went with X"
@@ -58,7 +58,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   const ref = parseRefQuery(search);
   // A ref query is answered here, so it never becomes a text search: `D-12` is a number, not a word to look
   // for. `null` back from the hook is "nothing was asked", which is not the same as "nothing matched".
-  const hits = useDecisionSearchIds(projectId, ref ? "" : q);
+  const { hits, error: searchError } = useDecisionSearchIds(projectId, ref ? "" : q);
   const shown = decisions
     .filter((d) => filter === "all" || (filter === "superseded" ? !d.current : d.status === filter))
     .filter((d) =>
@@ -80,6 +80,13 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
           onChange={(e) => setSearch(e.target.value)}
           style={{ fontSize: "var(--fs-xs)", width: 180 }}
         />
+        {/* A search that could not run narrows nothing, and narrowing nothing looks exactly like a word
+            that matched everything. Say which it was, next to the box that asked. */}
+        {searchError != null && (
+          <span className="faint" role="alert" style={{ fontSize: "var(--fs-xs)" }}>
+            ⚠ {t("dec.searchFailed")} — {errText(searchError)}
+          </span>
+        )}
         <label style={{ fontSize: "var(--fs-xs)" }}>
           {t("board.filter")}{" "}
           <select value={filter} onChange={(e) => setFilter(e.target.value as DecisionFilterKey)}>

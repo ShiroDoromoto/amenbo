@@ -129,12 +129,19 @@ export function useDecisionPage(projectId: number): Decision[] {
  * the GUI cannot. Loading every thread to close that gap is the opposite of what a bounded page is for, so
  * the query goes to core instead and comes back as ids the screen narrows what it already holds by.
  *
- * `null` means "no search" (an empty box), which is not the same as "matched nothing" — the caller must not
- * confuse an unasked question with an empty answer.
+ * `hits === null` means "no search" (an empty box), which is not the same as "matched nothing" — the caller
+ * must not confuse an unasked question with an empty answer.
+ *
+ * `error` is handed back rather than swallowed. A search that could not run leaves `hits` null, and null is
+ * "narrow by nothing", so the screen shows **every** decision — a refusal wearing the face of a word that
+ * matched everything. It has to be said out loud, or the next failure here is as quiet as the first was.
  */
-export function useDecisionSearchIds(projectId: number, text: string): Set<number> | null {
+export function useDecisionSearchIds(
+  projectId: number,
+  text: string,
+): { hits: Set<number> | null; error: unknown } {
   const q = text.trim();
-  const { data } = useQuery<number[] | null>(
+  const { data, error } = useQuery<number[] | null>(
     ["decisionSearch", projectId, q],
     () => fetchDecisionSearchIds(projectId, q),
   );
@@ -144,7 +151,7 @@ export function useDecisionSearchIds(projectId: number, text: string): Set<numbe
   const held = useRef<Set<number> | null>(null);
   if (q === "") held.current = null;
   else if (data) held.current = new Set(data);
-  return held.current;
+  return { hits: held.current, error: q === "" ? undefined : error };
 }
 
 /** The fetch behind {@link useDecisionSearchIds}. `null` for an empty query — nothing to ask. */

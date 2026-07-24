@@ -976,6 +976,36 @@ mod tests {
         assert_eq!(r.count, 1, "a later term in the same comment also hits");
     }
 
+    /// `DecisionListParams`'s own doc says the sort defaults to `-created`, and until this test its
+    /// `Default` did not deliver that: the derived default is the empty string, which reached the sort as
+    /// an unknown key and made every `..Default::default()` caller an error. It cost the GUI's decision
+    /// search a release — the command failed on every keystroke, and a screen that reads "no answer" as
+    /// "nothing was asked" showed every decision instead.
+    #[test]
+    fn the_default_params_sort_the_way_the_field_says_they_do() {
+        use crate::query::{decision_list, DecisionListParams};
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let first = add(tx, NewDecision {
+            title: "先の決定".to_string(), body: String::new(), project_id: pid,
+        }).unwrap();
+        let second = add(tx, NewDecision {
+            title: "後の決定".to_string(), body: String::new(), project_id: pid,
+        }).unwrap();
+
+        let r = decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
+            project_id: Some(pid),
+            ..Default::default()
+        })
+        .expect("naming no sort is not an error");
+        assert_eq!(
+            r.decisions.iter().map(|d| d.id).collect::<Vec<_>>(),
+            vec![second.id, first.id],
+            "newest first, which is what the field documents as its default",
+        );
+    }
+
     /// The structural `text` term (`DecisionListParams::text`) is the same search as the grammar's `text:`,
     /// for the callers that cannot spell one — a search box hands over a phrase, and the grammar splits on
     /// whitespace, so an expression would silently drop everything after the first word. Given both, the

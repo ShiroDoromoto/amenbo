@@ -1406,31 +1406,6 @@ fn plugin_rollback_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, 
     Ok(0)
 }
 
-/// Which of the author's settings currently hold a value, probed at the tier the enable is for
-/// (`AMB-D-356`): the machine defaults, plus this project's overrides on top when the gate being opened is
-/// a project's. Probed into a list first because the probe reads the store while the enable writes inside
-/// it, so the two cannot borrow it at once.
-fn satisfied_settings(
-    store: &Store,
-    name: &str,
-    fields: &[amenbo_core::plugin_manifest::ConfigField],
-    scope: amenbo_core::plugin_config::Scope,
-) -> amenbo_core::error::Result<Vec<String>> {
-    use amenbo_core::plugin_config::{self, Scope};
-    let mut satisfied = Vec::new();
-    for field in fields {
-        let held = plugin_config::get(store, field, name, Scope::MachineDefault)?.is_some()
-            || match scope {
-                Scope::MachineDefault => false,
-                Scope::Project(_) => plugin_config::get(store, field, name, scope)?.is_some(),
-            };
-        if held {
-            satisfied.push(field.key.clone());
-        }
-    }
-    Ok(satisfied)
-}
-
 /// The gate one installed plugin's declaration names, from where this command is standing
 /// (`AMB-D-379`): a `machine` plugin's device-wide switch, or a `project` plugin's switch in the bound
 /// project. The refusal for a project-scoped plugin outside any project comes from the boundary itself, so
@@ -1495,7 +1470,9 @@ fn refuse_update_leaving_required_unset(
         return Ok(());
     }
 
-    let satisfied = satisfied_settings(store, name, &available.config, plugin_value_tier(gate))?;
+    let tier = plugin_value_tier(gate);
+    let satisfied =
+        amenbo_core::plugin_config::satisfied_keys(store, name, &available.config, tier)?;
     let missing = amenbo_core::plugin_trust::missing_required(&available.config, |f| {
         satisfied.iter().any(|k| k == &f.key)
     });
@@ -1526,8 +1503,9 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
         .map_err(|incompatible| CliError::from(incompatible.into_error(name)))?;
     let gate = plugin_gate(store, plugin.manifest.scope)?;
     let fields = plugin.manifest.config.clone();
-    let satisfied =
-        satisfied_settings(store, name, &fields, plugin_value_tier(gate)).map_err(CliError::from)?;
+    let tier = plugin_value_tier(gate);
+    let satisfied = amenbo_core::plugin_config::satisfied_keys(store, name, &fields, tier)
+        .map_err(CliError::from)?;
     let has_value = |f: &amenbo_core::plugin_manifest::ConfigField| {
         satisfied.iter().any(|k| k == &f.key)
     };

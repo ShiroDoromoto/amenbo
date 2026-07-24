@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { Pager, usePager } from "../components/Pager";
 import { errText, t, tf } from "../core/i18n";
 import {
@@ -6,6 +6,8 @@ import {
   unreachableSources, usePluginCatalog,
   type PluginCatalog, type PluginEntry, type PluginLayer, type PluginSort,
 } from "../core/pluginCatalog";
+import { installOf, usePluginInstalls, type PluginInstall } from "../core/pluginInstalls";
+import { getSnapshot, subscribe } from "../core/snapshot";
 import { PluginDetail } from "./PluginDetail";
 
 // The plugin market — the "find one" half of the plugin section (`AMB-D-356`); managing what is
@@ -38,6 +40,15 @@ export function PluginMarketScreen() {
   // The opened entry is held by name, not as a row: the catalog can be refetched underneath, and a
   // detail must then show what the catalog now holds rather than a copy frozen at the click.
   const [openName, setOpenName] = useState<string | null>(null);
+  // Which project a project-scoped gate speaks for (`AMB-D-379`). The market is not opened inside a
+  // project, so it has to be named — except on a store with exactly one project, where naming it would be
+  // asking a question with a single answer.
+  const [pickedProject, setPickedProject] = useState<number | null>(null);
+  const projects = useSyncExternalStore(subscribe, () => getSnapshot().projects);
+  const gateProject = pickedProject ?? (projects.length === 1 ? projects[0].id : null);
+  // What this machine holds, drawn over the catalog by name. A separate, local read: the catalog says what
+  // exists, this says what is here, and an unreachable catalog must not hide an installed plugin.
+  const { installs } = usePluginInstalls(gateProject);
 
   const categories = useMemo(() => pluginCategories(catalog.entries), [catalog.entries]);
   const shown = useMemo(
@@ -137,7 +148,12 @@ export function PluginMarketScreen() {
           <div style={{ color: "var(--c-muted)", padding: 16 }}>{t("plugins.emptyFilter")}</div>
         )}
         {pager.pageItems.map((e) => (
-          <PluginCard key={e.name} entry={e} onOpen={() => setOpenName(e.name)} />
+          <PluginCard
+            key={e.name}
+            entry={e}
+            install={installOf(installs, e.name)}
+            onOpen={() => setOpenName(e.name)}
+          />
         ))}
         <Pager
           page={pager.page}
@@ -149,7 +165,16 @@ export function PluginMarketScreen() {
         />
       </div>
 
-      {open && <PluginDetail entry={open} onClose={() => setOpenName(null)} />}
+      {open && (
+        <PluginDetail
+          entry={open}
+          install={installOf(installs, open.name)}
+          projects={projects}
+          projectId={gateProject}
+          onProject={setPickedProject}
+          onClose={() => setOpenName(null)}
+        />
+      )}
     </>
   );
 }
@@ -225,7 +250,12 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
  * Opening it is what costs a request: the detail asks GitHub about this one repository (`AMB-D-347`),
  * which is why the row itself is a button rather than something that loads on sight.
  */
-function PluginCard({ entry, onOpen }: { entry: PluginEntry; onOpen: () => void }) {
+function PluginCard({ entry, install, onOpen }: {
+  entry: PluginEntry;
+  /** This machine's row for it, when it holds one — what turns a catalog row into a state. */
+  install?: PluginInstall;
+  onOpen: () => void;
+}) {
   // One badge, not two: the layers nest, so an official plugin wearing both would only invite the
   // reading that "official" and "listed" are a scale of the same thing rather than who wrote it and
   // who reviewed it.
@@ -244,6 +274,16 @@ function PluginCard({ entry, onOpen }: { entry: PluginEntry; onOpen: () => void 
           <span className={`chip ${layer === "official" ? "chip--official" : ""}`}>
             {t(`plugins.layer.${layer}`)}
           </span>
+          {/* Installed and enabled are two facts (`AMB-D-351`), and the row says which one it is: a plugin
+              that is here but fires nothing is the ordinary state, not a half-finished install. */}
+          {install && (
+            <>
+              {" "}
+              <span className="chip">
+                {install.enabled ? t("plugins.enabledChip") : t("plugins.installed")}
+              </span>
+            </>
+          )}
           {entry.addedAt && (
             <span className="faint" style={{ fontSize: "var(--fs-xs)" }}> {tf("plugins.added", { date: entry.addedAt.slice(0, 10) })}</span>
           )}

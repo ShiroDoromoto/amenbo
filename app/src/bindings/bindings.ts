@@ -501,6 +501,41 @@ listed: boolean,
 addedAt?: string, };
 
 /**
+ * One plugin this machine holds, as the market draws its state on top of the catalog entry of the same
+ * name (`AMB-D-351`). Installed and enabled are two facts, not one: an installed plugin that fires
+ * nothing is the ordinary state.
+ */
+export type PluginInstallDto = { 
+/**
+ * The plugin's name — the key the market joins this row onto a catalog entry by.
+ */
+name: string, 
+/**
+ * The level its one switch sits at, as the author declared it (`AMB-D-379`): `project` or `machine`.
+ */
+scope: "project" | "machine", 
+/**
+ * Whether it fires at the gate the request named — `null` when there is no answer to give: a
+ * project-scoped plugin asked about without a project is not "off", it is unanswered.
+ */
+enabled?: boolean, 
+/**
+ * Whether this device has already answered the run-arbitrary-code question for it (`AMB-D-351`).
+ * The consent is the device's whichever gate moves, and it is asked **once** — this is what tells a
+ * first enable from every later one.
+ */
+consented: boolean, 
+/**
+ * Whether this build can speak to it at all (`AMB-D-359`). An open gate on an incompatible plugin
+ * fires nothing, and amenbo updates underneath an install, so this is not derivable from `enabled`.
+ */
+compatible: boolean, 
+/**
+ * Why not, when `compatible` is false — the mismatch named, rather than left to the log.
+ */
+incompatibleReason?: string, };
+
+/**
  * What GitHub says about one plugin's repository — the figures the catalog deliberately does not
  * carry (`AMB-D-347`). Every one is optional on its own: the requests behind them fail
  * independently, and a repository with no release has no download count to report.

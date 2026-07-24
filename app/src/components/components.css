@@ -256,6 +256,11 @@
 .plugdet__meta { display: flex; gap: var(--s-2); flex-wrap: wrap; font-size: var(--fs-xs); }
 .plugdet__figures { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; margin: var(--s-3) 0; font-size: var(--fs-sm); }
 .plugdet__note { color: var(--c-warn); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
+/* Install, then enable — the two acts, on one line, wrapping rather than pushing the README down. */
+.plugdet__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); }
+/* The consent question (`AMB-D-351`), asked once per device. Set apart from the row it came from: it is a
+   stop, not another control, and it must not read as one more button beside "Enable". */
+.plugdet__consent { flex-basis: 100%; border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-bg); padding: var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); font-size: var(--fs-sm); }
 .plugdet__readme { border-top: 1px solid var(--c-border); padding-top: var(--s-3); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .plugdet__foot { border-top: 1px solid var(--c-border); margin-top: var(--s-4); padding-top: var(--s-2); font-size: var(--fs-xs); }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from

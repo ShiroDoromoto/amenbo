@@ -76,7 +76,7 @@ task start   reserve <id> (todo→in_progress, prod amenbo from the main repo) a
              repo — a pure dev env. For a GUI checkout it also runs a best-effort
              'npm ci' in app/ (skip with --no-deps) and seeds the app-data of the
              task's own throwaway dev GUI from the shared dev store — build it
-             with 'make install-gui-dev TASK=<id>'. Manage the backlog
+             with 'make install-gui-dev AMB-T-ID=<id>'. Manage the backlog
              (comment/done) from the main repo; verify code there with
              'make verify'.
 task finish  safely tear it down: refuse unless the worktree is clean and the

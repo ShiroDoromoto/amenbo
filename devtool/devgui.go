@@ -15,7 +15,7 @@ import (
 // installing over each other.
 //
 // devtool provisions and deletes an instance; the root Makefile builds it (`make install-gui-dev
-// TASK=<id>`), so a task that never opens a GUI never pays for a bundle. That split means the names
+// AMB-T-ID=<id>`), so a task that never opens a GUI never pays for a bundle. That means the names
 // below are the same strings the Makefile's GUI_DEV_ block derives, and the two sides have to agree
 // literally — a name that drifts leaves a 38MB bundle and a store behind on every teardown, which is
 // the cost the teardown exists to reclaim.
@@ -106,7 +106,7 @@ func provisionTaskDevGUI(worktree, id string) {
 			logf("  dev GUI : app-data %s cloned from the shared dev store", filepath.Base(dst))
 		}
 	}
-	logf("  dev GUI : verify this task in its own app — `make install-gui-dev TASK=%s` builds %q", id, taskDevBundle(id))
+	logf("  dev GUI : verify this task in its own app — `make install-gui-dev AMB-T-ID=%s` builds %q", id, taskDevBundle(id))
 }
 
 // removeTaskDevGUI deletes the instance: the installed bundle and its app-data both. This is the

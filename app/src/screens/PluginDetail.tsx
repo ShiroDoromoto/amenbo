@@ -74,7 +74,7 @@ export function PluginDetail({ entry, onClose }: { entry: PluginEntry; onClose: 
         {facts?.rateLimited && <div className="plugdet__note">{t("plugins.rateLimited")}</div>}
         {error != null && !facts && <div className="plugdet__note">{t("plugins.factsError")}</div>}
 
-        <div className="plugdet__readme">
+        <div className="plugdet__readme markdown">
           {facts?.readme ? (
             <Markdown>{facts.readme}</Markdown>
           ) : (

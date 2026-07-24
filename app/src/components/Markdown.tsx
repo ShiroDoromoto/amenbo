@@ -7,6 +7,12 @@
 // exists by the time remarkRefs walks the text nodes in each cell and turns refs into links. Raw
 // HTML is not allowed (no rehype-raw).
 //
+// An image is never drawn as one. amenbo's own bodies keep images in attachments rather than inline
+// (`conventions.markdown`), and a body from outside — a plugin's README — cannot draw one either: the
+// app's CSP allows no remote image, so the browser would put a broken-image frame where the picture
+// was. What still carries meaning is the alt text, most visibly in the badge row a README opens with,
+// so an image is rendered as that text in a small label.
+//
 // Conversational references in the body (AMB-T-NNN / AMB-D-NNN) are detected and made clickable.
 // Detection is a remark plugin (syntactic — it produces link nodes) whose pattern lives in core/idref.ts;
 // resolution is deferred to core's resolve_ref on click, so the number→id grammar is not reimplemented here
@@ -77,6 +83,35 @@ function remarkRefs() {
   };
 }
 
+/** An image, or the link a badge wraps itself in (`[![CI](badge.svg)](ci-url)`) — one label either way. */
+function isBadge(node: RootContent | undefined): boolean {
+  if (!node) return false;
+  if (node.type === "image" || node.type === "imageReference") return true;
+  return (node.type === "link" || node.type === "linkReference") &&
+    node.children.length === 1 && isBadge(node.children[0]);
+}
+
+/**
+ * Put a badge row back on one line. A README writes its badges one per source line, which CommonMark
+ * joins into a single line — but remark-breaks (above) turns every one of those newlines into a break,
+ * and the row comes out as a column of labels. So a break next to a badge is dropped, which leaves the
+ * breaks people actually typed into their prose untouched.
+ */
+function remarkBadgeRows() {
+  return (tree: Root) => {
+    const walk = (node: { type: string; children?: RootContent[] }): void => {
+      if (!node.children) return;
+      if (node.type === "paragraph") {
+        node.children = node.children.filter(
+          (child, i, all) => child.type !== "break" || !(isBadge(all[i - 1]) || isBadge(all[i + 1])),
+        );
+      }
+      for (const child of node.children) walk(child as { type: string; children?: RootContent[] });
+    };
+    walk(tree);
+  };
+}
+
 // urlTransform's default sanitizer would strip the ref: scheme, so let it through and leave every other URL to the default.
 function refUrlTransform(url: string): string {
   return url.startsWith(REF_SCHEME) ? url : defaultUrlTransform(url);
@@ -126,6 +161,12 @@ export function Markdown({ children }: { children: string }) {
       table({ children }) {
         return <div className="markdown__tablewrap"><table>{children}</table></div>;
       },
+      // The alt text in place of the picture. An image with no alt says nothing without its pixels, so
+      // it leaves nothing behind either.
+      img({ alt, src }) {
+        if (!alt) return null;
+        return <span className="markdown__imgalt" title={typeof src === "string" ? src : undefined}>{alt}</span>;
+      },
       a({ href, children }) {
         if (href?.startsWith(REF_SCHEME)) {
           const raw = href.slice(REF_SCHEME.length);
@@ -160,7 +201,7 @@ export function Markdown({ children }: { children: string }) {
     [nav],
   );
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkRefs]} urlTransform={refUrlTransform} components={components}>
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkBadgeRows, remarkRefs]} urlTransform={refUrlTransform} components={components}>
       {children}
     </ReactMarkdown>
   );

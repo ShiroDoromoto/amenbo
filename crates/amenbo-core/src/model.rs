@@ -127,6 +127,17 @@ pub enum TaskStatus {
 }
 
 impl TaskStatus {
+    /// Every status there is, in the order a board reads them. The one place they are enumerated, so a
+    /// surface that lists them (the filter grammar an agent reads before it queries) cannot fall behind
+    /// the enum.
+    pub const ALL: [TaskStatus; 5] = [
+        TaskStatus::Todo,
+        TaskStatus::InProgress,
+        TaskStatus::Done,
+        TaskStatus::Blocked,
+        TaskStatus::Rejected,
+    ];
+
     /// The **terminals**: the statuses that mean the work is not coming back. Written once here so the
     /// two readings of an ended task cannot drift apart — *closed* is this set, *carried out* is `Done`
     /// alone ([`Task::completed`]).

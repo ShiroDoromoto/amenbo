@@ -451,6 +451,50 @@ fn rejecting_a_blocker_releases_its_dependents() {
     assert_eq!(show_a["completed"], false, "decided against is not carried out");
 }
 
+/// `done:` asks whether a task is **closed**, and `status:` asks which state it is in — two questions
+/// with two answers (`AMB-D-397`). A task decided against belongs with `done:true` and stays out of
+/// `done:false`, which is the shape of every mailbox query; what was carried out is `status:done`, and
+/// `rejected` is an any-of element there like any other value.
+#[test]
+fn done_asks_whether_a_task_is_closed_and_status_asks_which_way() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "終端PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    let ids: Vec<String> = ["残っている", "やり遂げた", "やらないと決めた"]
+        .iter()
+        .map(|t| id_str(&cli.json(&["task", "add", "--title", t, "--project", &pid, "--json"])["task"]["id"]))
+        .collect();
+    cli.json(&["task", "done", &ids[1], "--json"]);
+    cli.json(&["task", "status", &ids[2], "rejected", "--json"]);
+
+    let listed = |filter: &str| -> Vec<String> {
+        cli.json(&["task", "list", "--project", &pid, "--filter", filter, "--json"])["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| id_str(&t["id"]))
+            .collect()
+    };
+
+    assert_eq!(listed("done:false"), vec![ids[0].clone()], "only what is still work");
+    let mut closed = listed("done:true");
+    closed.sort();
+    let mut both_terminals = vec![ids[1].clone(), ids[2].clone()];
+    both_terminals.sort();
+    assert_eq!(closed, both_terminals, "both ways of ending are closed");
+    assert_eq!(listed("status:done"), vec![ids[1].clone()], "carried out is its own question");
+    assert_eq!(listed("status:rejected"), vec![ids[2].clone()], "and so is decided against");
+    let mut any_of = listed("status:todo,rejected");
+    any_of.sort();
+    let mut expected = vec![ids[0].clone(), ids[2].clone()];
+    expected.sort();
+    assert_eq!(any_of, expected, "the new value is an any-of element like the others");
+
+    let (err, code) = cli.run_err(&["task", "list", "--filter", "status:shipped", "--json"]);
+    assert_ne!(code, 0);
+    assert!(err.contains("rejected"), "the refusal names every value it would take: {err}");
+}
+
 #[test]
 fn config_onboarded_flag_roundtrips() {
     let cli = Cli::new();

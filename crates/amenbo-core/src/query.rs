@@ -355,7 +355,7 @@ impl Filter {
                     let mut statuses = Vec::new();
                     for part in value.split(',') {
                         let parsed = TaskStatus::parse(part).ok_or_else(|| {
-                            Error::invalid("status must be todo / in_progress / done / blocked", "status は todo / in_progress / done / blocked")
+                            Error::invalid("status must be todo / in_progress / done / blocked / rejected", "status は todo / in_progress / done / blocked / rejected")
                         })?;
                         if !statuses.contains(&parsed) {
                             statuses.push(parsed);

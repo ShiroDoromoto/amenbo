@@ -27,10 +27,10 @@ use crate::model::{ActorKind, Priority, TaskStatus};
 use crate::query::{AssigneeFilter, DueFilter, Filter, StartFilter};
 use crate::view::{ProjectRef, TaskCompact};
 
-/// The task named by `status` is **still work**: it has not reached either terminal. The single
-/// definition every read that asks "is this task outstanding?" shares — the open-blocker half of
-/// `ready:`, [`reserve_blockers`], `blocked_by` / `blocks`, the open counts and the buckets — so they
-/// cannot drift into disagreeing about what an unfinished task is.
+/// The task named by `status` has **ended**: it reached one of the two terminals. The single definition
+/// of that question, shared with its complement [`still_open`] — between them they carry the `done:`
+/// filter, the open-blocker half of `ready:`, [`reserve_blockers`], `blocked_by` / `blocks`, the open
+/// counts and the due buckets — so no reading can drift into its own idea of what an ended task is.
 ///
 /// **Closed is not the same question as done** (`AMB-D-397`). Work decided against is over, so it
 /// releases what it was blocking and leaves the open counts; what it must never do is join the
@@ -39,10 +39,16 @@ use crate::view::{ProjectRef, TaskCompact};
 ///
 /// Bind-free, like [`unsettled_premise`]: the only literals are the store's own enum spellings, grammar
 /// rather than data, which keeps the predicate usable as a select item as well as in a `WHERE`.
-pub(crate) fn still_open<E: Expr<Ty = SqlText>>(status: E) -> Pred {
+pub(crate) fn closed<E: Expr<Ty = SqlText>>(status: E) -> Pred {
     let terminals: Vec<String> =
         TaskStatus::CLOSED.iter().map(|s| format!("'{}'", s.as_str())).collect();
-    Pred::plain(format!("{} NOT IN ({})", status.to_sql(), terminals.join(", ")))
+    Pred::plain(format!("{} IN ({})", status.to_sql(), terminals.join(", ")))
+}
+
+/// The complement of [`closed`] — the task is still work. The two are one definition, so a reading that
+/// takes the negative can never come to disagree with the one that takes the positive.
+pub(crate) fn still_open<E: Expr<Ty = SqlText>>(status: E) -> Pred {
+    !closed(status)
 }
 
 /// The premise decision `dc` is **unsettled** — it is not `accepted`, or it is not current because a
@@ -389,11 +395,10 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
     let mut preds: Vec<Pred> = Vec::new();
 
     if let Some(done) = f.done {
-        preds.push(if done {
-            Pred::eq(T.status, "done")
-        } else {
-            Pred::ne(T.status, "done")
-        });
+        // `done:` asks whether the task is **closed**, not whether it was carried out (`AMB-D-397`): a
+        // task decided against is over, so it belongs with `done:true` and must stay out of `done:false`,
+        // which is the shape of every mailbox query. What was actually finished is `status:done`.
+        preds.push(closed(T.status).negated_if(!done));
     }
     if let Some(statuses) = &f.status {
         // `status:` is an allow-set (a comma-separated any-of): one value means the same as `= ?`, several

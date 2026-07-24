@@ -1557,6 +1557,10 @@ pub struct DecisionListResult {
     pub decisions: Vec<DecisionCompact>,
 }
 
+/// The order `decision list` uses when none is named: newest first. Named here rather than only in the
+/// CLI's `default_value`, so the in-code default and the command-line one are the same string.
+pub const DECISION_SORT_DEFAULT: &str = "-created";
+
 #[derive(Default)]
 pub struct DecisionListParams {
     pub project_id: Option<i64>,
@@ -1568,8 +1572,9 @@ pub struct DecisionListParams {
     /// everything after the first word. When both are given this one wins, on the grounds that a caller
     /// reaching for it is one that could not say what it means in the grammar.
     pub text: Option<String>,
-    /// `decided` / `created` / `number` / `title` / `status` (leading `-` for descending). Defaults to
-    /// `-created`.
+    /// `decided` / `created` / `number` / `title` / `status` (leading `-` for descending). Empty is the
+    /// default ([`DECISION_SORT_DEFAULT`]), so a caller that builds these params in code and leaves the
+    /// field to `Default` gets the documented order rather than an unknown-key error.
     pub sort: String,
     /// Page size (the first `limit` items in sort order). `None` = unlimited.
     pub limit: Option<usize>,
@@ -1669,7 +1674,11 @@ pub fn decision_list(
     // `sort_decisions` sorts a `&mut [&Decision]`. To bring `entries` into the same order, sort the
     // references, then read off each id's rank and sort `entries` by it.
     let mut refs: Vec<&crate::model::Decision> = entries.iter().map(|e| &e.decision).collect();
-    sort_decisions(&mut refs, &params.sort)?;
+    // No sort named is the documented default, not an unknown key. The CLI always names one (clap fills
+    // it in), so this is the door for a caller that builds the params in code and takes the derived
+    // `Default` for the field — which the field's own documentation promises is `-created`.
+    let sort = if params.sort.is_empty() { DECISION_SORT_DEFAULT } else { &params.sort };
+    sort_decisions(&mut refs, sort)?;
     let order: std::collections::HashMap<i64, usize> =
         refs.iter().enumerate().map(|(i, d)| (d.id, i)).collect();
     entries.sort_by_key(|e| order[&e.decision.id]);

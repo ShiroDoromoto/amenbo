@@ -4506,6 +4506,53 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// `decision_search` **against a real store**, because a command whose only exercise is a mocked
+    /// frontend is a command nobody has run. This one shipped broken: it built its params with
+    /// `..Default::default()`, whose empty sort string reached core as an unknown sort key, so every call
+    /// failed — and the screen, reading "no answer" as "nothing was asked", answered a search by showing
+    /// every decision. Every layer's own tests were green.
+    ///
+    /// So this asserts the thing the mocks cannot: that calling it returns the ids, and that the match
+    /// reaches a **comment body** — the arm the whole command exists for, since the page payload the client
+    /// filters over does not carry one.
+    #[test]
+    fn decision_search_runs_against_a_real_store_and_reaches_comment_bodies() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("decision-search");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let mut store = Store::open().unwrap();
+        let project_id = store
+            .project_add(amenbo_core::ops::project::NewProject {
+                name: "テストPJ".into(),
+                view: View::List,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap()
+            .id;
+        let new = |title: &str, body: &str| amenbo_core::ops::decision::NewDecision {
+            title: title.to_string(),
+            body: body.to_string(),
+            project_id,
+        };
+        // The term is in neither title nor body — only in a comment, which is what the client-side search
+        // could not see.
+        let commented = store.add_decision(new("目録の署名", "公開鍵は同梱する")).unwrap();
+        store.add_decision_comment(commented.id, ActorKind::Ai, "ここには出るはず").unwrap();
+        let other = store.add_decision(new("別の決定", "無関係な本文")).unwrap();
+        drop(store);
+
+        let hits = decision_search(project_id, "出るはず".to_string()).expect("the command runs");
+        assert_eq!(hits, vec![commented.id], "the comment arm hits, and narrows to it");
+        assert!(!hits.contains(&other.id));
+
+        // A term nowhere is an empty answer, not an error — the screen shows nothing rather than everything.
+        assert!(decision_search(project_id, "どこにも無い語".to_string()).unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     /// The card gates the holder-side premise surface (`AMB-D-366`) on `in_progress`: a task that was never
     /// reserved carries no `premise_change` even with a blocker on it, and a premise that was already there
     /// *before* the reservation is not a change *after* it. (Detection of a premise pinned on after the

@@ -548,12 +548,12 @@ jobs:
           guards/check-prose.sh
 
   tree-guards:
-    name: Tree guards (internal-note refs, test prose, CLI shim)
+    name: Tree guards (internal-note refs, test prose, CLI shim, change scopes)
     runs-on: ubuntu-latest
     # Backstop for the local pre-commit hook, which runs the first two scans over
-    # staged additions only. All have fixed patterns — no secret needed. The CLI
-    # shim guard is the odd one out: it asserts a build-config invariant rather than
-    # scanning added lines, so it lives in `make test` and here, not in pre-commit.
+    # staged additions only. All have fixed patterns — no secret needed. The last two
+    # are the odd ones out: they assert an invariant across two sources rather than
+    # scanning added lines, so they live in `make test` and here, not in pre-commit.
     steps:
       - uses: actions/checkout@v7
 
@@ -571,3 +571,8 @@ jobs:
         run: |
           chmod +x guards/check-cli-shim.sh
           guards/check-cli-shim.sh
+
+      - name: Assert every change-feed dataset is folded into a GUI scope
+        run: |
+          chmod +x guards/check-change-scopes.sh
+          guards/check-change-scopes.sh

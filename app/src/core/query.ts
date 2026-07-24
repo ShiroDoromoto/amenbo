@@ -106,6 +106,9 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       case "decision": return touchesScope("decisions");
       case "decisionComments": return touchesScope("decisions");
       case "attachments": return touchesScope("attachments");
+      // The installed rows carry the gate the change feed just moved; the plugins themselves are files on
+      // disk, so nothing else on that screen goes stale with them.
+      case "plugin-installs": return touchesScope("plugins");
       default: return false;
     }
   });

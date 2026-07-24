@@ -8,7 +8,9 @@
 import { act, createElement, StrictMode, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { __queryCache, invalidateAllQueries, invalidateQueries, useQuery, type QueryKey } from "./query";
+import {
+  __queryCache, invalidateAllQueries, invalidateQueries, invalidateScopes, useQuery, type QueryKey,
+} from "./query";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -200,5 +202,29 @@ describe("useQuery — invalidations reach queries that have subscribers", () =>
     invalidateAllQueries();
     await settle();
     expect(count("board-1")).toBe(1); // the refetch runs the latest fetcher, not the stale closure
+  });
+});
+
+// The other half of the fold in `core/changes`: a scope is only worth naming if some query listens for it.
+// The two are written apart — a dataset map and a switch — so a scope added to one and not the other is a
+// silent no-op: the feed folds it, nothing refetches, and the screen keeps the state it had.
+describe("invalidateScopes — a scope reaches the queries drawn from it", () => {
+  function KeyProbe({ qkey, k }: { qkey: QueryKey; k: string }) {
+    const { data } = useQuery<string>(qkey, () => fetchFor(k));
+    return createElement("span", { "data-k": k }, data ?? "…");
+  }
+
+  it("refetches the installed plugins for the plugin scope, and for no other", async () => {
+    render(createElement(KeyProbe, { qkey: ["plugin-installs", 1], k: "installs" }));
+    await settle();
+    expect(count("installs")).toBe(1);
+
+    invalidateScopes(new Set(["tasks"]));
+    await settle();
+    expect(count("installs")).toBe(1); // a task write is not a plugin's business
+
+    invalidateScopes(new Set(["plugins"]));
+    await settle();
+    expect(count("installs")).toBe(2); // a gate moved outside this window: re-read the rows that draw it
   });
 });

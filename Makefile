@@ -111,7 +111,7 @@ LINUX_LINT_IMAGE  := amenbo-linux-lint:$(HOST_GUI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks verify lint-linux verify-gui-linux verify-network-linux verify-network-mac test doc-gate shell-gate comment-gate go-gate sweep-stale dist-gui dist-gui-mac dist-gui-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks verify lint-linux verify-gui-linux verify-network-linux verify-network-mac test doc-gate shell-gate comment-gate go-gate scopes-gate sweep-stale dist-gui dist-gui-mac dist-gui-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -123,6 +123,7 @@ help:
 	@echo "make comment-gate - audit every comment in the tree, and the prose and config values of every tracked file that carries no code, against esorp.yaml = the same commands CI runs (automatic at the start of make test; skipped without esorp)"
 	@echo "make go-gate      - gofmt/vet/test the optional devtool module = the same checks CI's go job runs (automatic at the start of make test; skipped without Go)"
 	@echo "make shim-gate    - assert the GUI/CLI version-skew invariant holds (mac CLI symlinked into the .app, win CLI co-located in the per-user \$$INSTDIR) = the same guard CI runs (automatic at the start of make test)"
+	@echo "make scopes-gate  - assert every dataset the change feed names is folded into a GUI scope (an unfolded table costs a full re-read) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make sweep-stale  - if the cargo cache exceeds $(SWEEP_LIMIT_GB)GB, drop artifacts untouched for $(SWEEP_DAYS) days (automatic at the end of make test)"
 	@echo "make dist-gui     - build the prod GUI (mac dmg) with build-time signing into dist/ (a supplement for non-installer users; not a wharfy bundle)"
 	@echo "make dist-gui-mac - build the mac unified .pkg (GUI to /Applications, CLI to /usr/local/bin) into dist/ (the mac release bundle itself; Intel build via MAC_GUI_ARCH=amd64)"
@@ -377,6 +378,7 @@ test:
 	$(MAKE) --no-print-directory comment-gate
 	$(MAKE) --no-print-directory go-gate
 	$(MAKE) --no-print-directory shim-gate
+	$(MAKE) --no-print-directory scopes-gate
 	## Two runs, not one: the same split CI makes (ci.yml), so the heavy e2e suite never shares the
 	## box with the scale seeds. The build is shared, so the second run only schedules tests.
 	cargo nextest run --features scale,e2e -E 'not binary(cli_e2e)'
@@ -487,6 +489,13 @@ comment-gate:
 ## Declared once and shared: `make test` and CI's tree-guards both run this file.
 shim-gate:
 	@guards/check-cli-shim.sh
+
+## Guard the change feed's fold: every dataset core can name has to have a scope in the GUI's
+## DATASET_SCOPES, or writes to that table silently fall back to re-reading everything. Both sides
+## compile and pass their own tests while they disagree, so nothing else would notice.
+## Declared once and shared: `make test` and CI's tree-guards both run this file.
+scopes-gate:
+	@guards/check-change-scopes.sh
 
 ## Trim a bloated cargo cache by atime LRU. `target/` has no GC, and old artifacts with a different
 ## hash pile up forever (measured ~3.7GB/day). A periodic run would eat idle time, so sweep at the end

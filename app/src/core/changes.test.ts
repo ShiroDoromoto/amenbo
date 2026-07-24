@@ -43,6 +43,14 @@ describe("foldScopes — folding datasets into invalidation scopes", () => {
     expect([...foldScopes([row("project")]).scopes]).toEqual(["projects"]);
   });
 
+  // A plugin gate flipped from the CLI used to arrive as a dataset with no receiver, so every such write
+  // cost a full re-read of everything on screen. It folds to the one surface that draws it.
+  it("a plugin's gate and its settings fold into the plugin scope", () => {
+    const { scopes, unknown } = foldScopes([row("plugin_enable"), row("plugin_config")]);
+    expect(unknown).toBe(false);
+    expect([...scopes]).toEqual(["plugins"]);
+  });
+
   it("no changes means no scopes", () => {
     expect(foldScopes([])).toEqual({ scopes: new Set(), unknown: false });
   });

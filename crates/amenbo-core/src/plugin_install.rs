@@ -42,7 +42,7 @@ use crate::config::{is_reserved_plugin_name, Paths};
 use crate::error::{Error, Result};
 use crate::plugin_catalog::{self, Catalog, Dropped, Entry};
 use crate::plugin_installed;
-use crate::plugin_manifest::{Manifest, Os};
+use crate::plugin_manifest::{Manifest, Platform};
 use crate::plugin_provenance;
 
 /// Cap on the asset download, and on what is read out of an archive entry — the second is what keeps a
@@ -170,10 +170,10 @@ fn refuse_an_overwrite(paths: &Paths, name: &str) -> Result<()> {
 /// Refuse an OS the manifest does not list, and hand back the one it does — the platform every later step
 /// resolves against. A plugin that never claimed this platform has nothing built to run here, whichever
 /// form its distributables take.
-fn refuse_another_platform(manifest: &Manifest) -> Result<Os> {
+fn refuse_another_platform(manifest: &Manifest) -> Result<Platform> {
     let here = std::env::consts::OS;
-    if let Some(os) = Os::here().filter(|os| manifest.os.contains(os)) {
-        return Ok(os);
+    if let Some(platform) = Platform::here().filter(|p| manifest.os.contains(&p.os)) {
+        return Ok(platform);
     }
     let supported: Vec<&str> = manifest.os.iter().map(|os| os.as_str()).collect();
     let supported = supported.join(", ");
@@ -186,22 +186,26 @@ fn refuse_another_platform(manifest: &Manifest) -> Result<Os> {
     ))
 }
 
-/// This platform's distributable, or the refusal that the entry claims the platform and publishes nothing
-/// for it (`AMB-D-381`). The catalog door keeps `os` and `assets` in step, so reaching this refusal means
-/// a manifest that did not come through it — a hand-placed one, most likely — and the honest answer is to
-/// stop rather than reach for another platform's bytes.
-fn published_for(manifest: &Manifest, os: Os) -> Result<crate::plugin_manifest::Asset> {
-    manifest.asset_for(os).ok_or_else(|| {
+/// This platform's distributable, or the refusal that the entry claims the OS yet publishes nothing this
+/// machine can run (`AMB-D-381`, `AMB-D-384`). Reached when neither the exact `<os>-<arch>` nor the
+/// arch-agnostic `<os>` key answers — the fail-open `AMB-D-384` closes, refused at the door instead of a
+/// mismatched binary at run time. The catalog door keeps `os` answered by a key, so a bare-OS refusal here
+/// is a manifest that did not come through it — a hand-placed one, most likely — and the honest answer is
+/// to stop rather than reach for another platform's bytes.
+fn published_for(manifest: &Manifest, here: Platform) -> Result<crate::plugin_manifest::Asset> {
+    manifest.asset_for(here).ok_or_else(|| {
         Error::invalid(
             format!(
-                "plugin '{}' lists {} but publishes no asset for it",
+                "plugin '{}' lists {} but publishes no asset for {}",
                 manifest.name,
-                os.as_str()
+                here.os.as_str(),
+                here.token()
             ),
             format!(
-                "プラグイン '{}' は {} を挙げていますが、その配布物がありません",
+                "プラグイン '{}' は {} を挙げていますが、{} 向けの配布物がありません",
                 manifest.name,
-                os.as_str()
+                here.os.as_str(),
+                here.token()
             ),
         )
     })
@@ -335,7 +339,12 @@ pub(crate) fn place(paths: &Paths, manifest: &Manifest, program: &[u8]) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin_manifest::Os;
+    use crate::plugin_manifest::{Arch, Os};
+
+    /// An arch-agnostic platform key (`<os>`).
+    fn plat(os: Os) -> Platform {
+        Platform { os, arch: None }
+    }
 
     fn paths_at(tag: &str) -> Paths {
         let dir = amenbo_scratch::scratch(&format!("plugin-install-{tag}"));
@@ -507,7 +516,7 @@ mod tests {
         m.checksum = String::new();
         m.assets = [
             (
-                here,
+                plat(here),
                 Asset {
                     url: "https://example.invalid/here.tar.gz".into(),
                     checksum: "sha256:here".into(),
@@ -515,7 +524,7 @@ mod tests {
                 },
             ),
             (
-                other,
+                plat(other),
                 Asset {
                     url: "https://example.invalid/other.tar.gz".into(),
                     checksum: "sha256:other".into(),
@@ -533,9 +542,44 @@ mod tests {
 
         // An entry claiming this platform and publishing nothing for it stops, rather than reaching for
         // the other one's binary. Only a manifest that skipped the door can be in this state.
-        m.assets.remove(&here);
-        let err = published_for(&m, here).unwrap_err();
+        m.assets.remove(&plat(here));
+        let err = published_for(&m, Platform::here().unwrap()).unwrap_err();
         assert!(format!("{err:?}").contains(here.as_str()), "{err:?}");
+    }
+
+    /// An arch-specific `assets` map serves this machine's arch, and refuses a machine whose arch it does
+    /// not publish — the fail-open `AMB-D-384` closes, at the door.
+    #[test]
+    fn an_os_arch_map_is_resolved_and_refuses_an_unpublished_arch() {
+        use crate::plugin_manifest::Asset;
+
+        let Some(here) = Platform::here() else { return };
+        let Some(arch) = here.arch else { return };
+        let other_arch = if arch == Arch::Arm64 { Arch::X64 } else { Arch::Arm64 };
+
+        let mut m = manifest("worktree");
+        m.os = vec![here.os];
+        m.url = String::new();
+        m.checksum = String::new();
+
+        // Only this machine's exact os-arch is published: it resolves, on the exact key.
+        m.assets = [(
+            Platform { os: here.os, arch: Some(arch) },
+            Asset { url: "https://example.invalid/exact.tar.gz".into(), checksum: "sha256:exact".into(), signature: None },
+        )]
+        .into_iter()
+        .collect();
+        assert_eq!(published_for(&m, here).unwrap().checksum, "sha256:exact");
+
+        // Only the *other* arch is published: no arch-agnostic key to fall back to, so it is refused rather
+        // than handed a binary built for a different arch.
+        m.assets = [(
+            Platform { os: here.os, arch: Some(other_arch) },
+            Asset { url: "https://example.invalid/other.tar.gz".into(), checksum: "sha256:other".into(), signature: None },
+        )]
+        .into_iter()
+        .collect();
+        assert!(published_for(&m, here).is_err(), "a build for another arch is not this machine's");
     }
 
     // ---- what the asset may be ----

@@ -342,13 +342,16 @@ fn is_repo_char(c: char) -> bool {
 
 /// Check the entry actually publishes something, in one of the two forms a manifest may take
 /// (`AMB-D-381`): one `url`/`checksum` serving every OS it lists, or one
-/// [`Asset`](crate::plugin_manifest::Asset) per OS in `assets`.
+/// [`Asset`](crate::plugin_manifest::Asset) per [`Platform`](crate::plugin_manifest::Platform) in
+/// `assets` — where a platform key is an OS alone or an OS-arch pair (`AMB-D-384`).
 ///
 /// Which form is in play is decided by `assets` alone, and the two rules that follow are what make the
-/// per-OS form worth having: **every declared OS has an asset**, so an entry cannot claim a platform it
-/// publishes nothing for, and **no asset names an OS the entry does not declare**, so bytes cannot be
-/// published for a platform the plugin never said it runs on. Without the pair, `os` would go back to
-/// being a claim nothing checks — which is the gap the decision exists to close.
+/// per-platform form worth having: **every declared OS is answered by at least one key** — its
+/// arch-agnostic `<os>` or any `<os>-<arch>` — so an entry cannot claim an OS it publishes nothing for,
+/// and **no key names an OS the entry does not declare**, so bytes cannot be published for a platform the
+/// plugin never said it runs on. Without the pair, `os` would go back to being a claim nothing checks —
+/// which is the gap the decision exists to close. The coupling is kept at OS granularity (`AMB-D-384`):
+/// arch subdivides beneath a declared OS, it does not have to be listed in `os` itself.
 ///
 /// The single fields are *not* refused beside a map: `asset_for` prefers the map, and a leftover pair is
 /// a document that says one thing twice, not one that says something wrong. Their shape is still checked
@@ -361,8 +364,11 @@ fn check_assets(problems: &mut Vec<Problem>, m: &Manifest) {
         return;
     }
 
+    // Each declared OS must be answered by at least one key — its arch-agnostic `<os>` or any of its
+    // `<os>-<arch>` (`AMB-D-384`). The clean one-to-one `AMB-D-381` bought is kept at OS granularity; arch
+    // may subdivide beneath it.
     for os in &m.os {
-        if !m.assets.contains_key(os) {
+        if !m.assets.keys().any(|p| p.os == *os) {
             problems.push(Problem::new(
                 "assets",
                 ProblemCode::AssetMismatch,
@@ -371,14 +377,14 @@ fn check_assets(problems: &mut Vec<Problem>, m: &Manifest) {
             ));
         }
     }
-    for (os, asset) in &m.assets {
-        let at = format!("assets.{}", os.as_str());
-        if !m.os.contains(os) {
+    for (platform, asset) in &m.assets {
+        let at = format!("assets.{}", platform.token());
+        if !m.os.contains(&platform.os) {
             problems.push(Problem::new(
                 at.clone(),
                 ProblemCode::AssetMismatch,
-                format!("assets publishes for {} but os does not list it", os.as_str()),
-                format!("assets が {} 向けに配布していますが、os がそれを挙げていません", os.as_str()),
+                format!("assets publishes for {} but os does not list it", platform.token()),
+                format!("assets が {} 向けに配布していますが、os がそれを挙げていません", platform.token()),
             ));
         }
         check_url(problems, &format!("{at}.url"), &asset.url);
@@ -573,7 +579,17 @@ fn check_events(problems: &mut Vec<Problem>, m: &Manifest) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin_manifest::{Asset, ConfigField, EventSubscription, Face, Manifest, Os};
+    use crate::plugin_manifest::{Arch, Asset, ConfigField, EventSubscription, Face, Manifest, Os, Platform};
+
+    /// An arch-agnostic platform key (`<os>`).
+    fn plat(os: Os) -> Platform {
+        Platform { os, arch: None }
+    }
+
+    /// An arch-specific platform key (`<os>-<arch>`).
+    fn plat_arch(os: Os, arch: Arch) -> Platform {
+        Platform { os, arch: Some(arch) }
+    }
 
     /// A well-formed distributable — the shape rules are what these tests are about, not the values.
     fn asset() -> Asset {
@@ -635,17 +651,17 @@ mod tests {
         let mut m = valid();
         m.url = String::new();
         m.checksum = String::new();
-        m.assets = [(Os::Macos, asset()), (Os::Linux, asset())].into_iter().collect();
+        m.assets = [(plat(Os::Macos), asset()), (plat(Os::Linux), asset())].into_iter().collect();
         assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
 
         // A platform claimed and not published: the entry offers an install that could never be served.
         let mut short = m.clone();
-        short.assets.remove(&Os::Linux);
+        short.assets.remove(&plat(Os::Linux));
         assert!(codes(&validate_manifest(&short)).contains(&ProblemCode::AssetMismatch));
 
         // And the other way — bytes published for a platform the plugin never said it runs on.
         let mut extra = m.clone();
-        extra.assets.insert(Os::Windows, asset());
+        extra.assets.insert(plat(Os::Windows), asset());
         let problems = validate_manifest(&extra);
         assert!(codes(&problems).contains(&ProblemCode::AssetMismatch));
         assert!(
@@ -656,7 +672,7 @@ mod tests {
         // Each asset carries its own url and digest, so each is checked at its own location.
         let mut bad = m.clone();
         bad.assets.insert(
-            Os::Linux,
+            plat(Os::Linux),
             Asset { url: "http://example.com/x".into(), checksum: "nope".into(), signature: None },
         );
         let problems = validate_manifest(&bad);
@@ -664,6 +680,41 @@ mod tests {
         assert!(problems
             .iter()
             .any(|p| p.location == "assets.linux.checksum" && p.code == ProblemCode::BadChecksum));
+    }
+
+    /// The os-arch form (`AMB-D-384`): an OS is answered by its arch-agnostic key or any `<os>-<arch>`, arch
+    /// may subdivide beneath a declared OS, and a key naming an OS `os` never listed is still refused.
+    #[test]
+    fn an_os_may_be_answered_by_arch_specific_keys() {
+        // linux split into two arch builds, macOS as one universal key — every declared OS is answered.
+        let mut m = valid();
+        m.url = String::new();
+        m.checksum = String::new();
+        m.os = vec![Os::Macos, Os::Linux];
+        m.assets = [
+            (plat(Os::Macos), asset()),
+            (plat_arch(Os::Linux, Arch::X64), asset()),
+            (plat_arch(Os::Linux, Arch::Arm64), asset()),
+        ]
+        .into_iter()
+        .collect();
+        assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
+
+        // An OS answered by no key at all — neither <os> nor any <os>-<arch> — is the fail-open the door closes.
+        let mut short = m.clone();
+        short.assets.remove(&plat_arch(Os::Linux, Arch::X64));
+        short.assets.remove(&plat_arch(Os::Linux, Arch::Arm64));
+        assert!(codes(&validate_manifest(&short)).contains(&ProblemCode::AssetMismatch));
+
+        // An arch key for an OS the entry never declared is refused, located by its full token.
+        let mut extra = m.clone();
+        extra.assets.insert(plat_arch(Os::Windows, Arch::X64), asset());
+        let problems = validate_manifest(&extra);
+        assert!(codes(&problems).contains(&ProblemCode::AssetMismatch));
+        assert!(
+            problems.iter().any(|p| p.location == "assets.windows-x64"),
+            "the problem names the full platform token: {problems:?}"
+        );
     }
 
     /// The one-file form still owes a url and a digest: with no map, they *are* the distributable, so an

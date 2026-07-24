@@ -1214,16 +1214,16 @@ fn plugin_update_cmd(
 fn plugin_update_check_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     let updates =
         amenbo_core::plugin_update::available(&store.paths).map_err(CliError::from)?;
-    let here = amenbo_core::plugin_manifest::Os::here();
+    let here = amenbo_core::plugin_manifest::Platform::here();
 
     if flags.json {
         let rows: Vec<_> = updates
             .iter()
             .map(|u| {
-                // This machine's distributable on both sides (`AMB-D-381`) — the digests the detection
-                // actually compared, not another platform's.
-                let installed = here.and_then(|os| u.installed.asset_for(os));
-                let available = here.and_then(|os| u.available.asset_for(os));
+                // This machine's distributable on both sides (`AMB-D-381`/`AMB-D-384`) — the digests the
+                // detection actually compared, resolved os-arch then os, not another platform's.
+                let installed = here.and_then(|p| u.installed.asset_for(p));
+                let available = here.and_then(|p| u.available.asset_for(p));
                 json!({
                     "name": u.name,
                     "desc": u.available.desc,

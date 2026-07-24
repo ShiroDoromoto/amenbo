@@ -101,6 +101,112 @@ impl Os {
     }
 }
 
+/// A CPU architecture a distributable is built for, in the **same vocabulary
+/// [`update_check`](crate::update_check) uses** (`AMB-D-384`): `std::env::consts::ARCH` normalized to
+/// wharfy's tokens (`aarch64` → `arm64`, `x86_64` → `x64`), so a plugin's asset keys and the self-updater's
+/// keys never spell the same machine two ways.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Arch {
+    Arm64,
+    X64,
+}
+
+impl Arch {
+    /// The arch this build runs on, or `None` for one amenbo's vocabulary cannot name — the same honest
+    /// gap as [`Os::here`]: an unnameable arch matches only an arch-agnostic asset (the `<os>` key), never
+    /// an `<os>-<arch>` one.
+    pub fn here() -> Option<Arch> {
+        Arch::parse_consts(std::env::consts::ARCH)
+    }
+
+    /// The wire token (`arm64` / `x64`).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Arch::Arm64 => "arm64",
+            Arch::X64 => "x64",
+        }
+    }
+
+    /// Parse a wire token (`arm64` / `x64`) back to an [`Arch`]; `None` for anything else.
+    pub fn parse(s: &str) -> Option<Arch> {
+        match s {
+            "arm64" => Some(Arch::Arm64),
+            "x64" => Some(Arch::X64),
+            _ => None,
+        }
+    }
+
+    /// Normalize a `std::env::consts::ARCH` value onto the wire token — the same mapping the self-updater's
+    /// `current_platform_key` applies, kept here so the two never drift.
+    fn parse_consts(s: &str) -> Option<Arch> {
+        match s {
+            "aarch64" => Some(Arch::Arm64),
+            "x86_64" => Some(Arch::X64),
+            _ => None,
+        }
+    }
+}
+
+/// **What keys an [`assets`](Manifest::assets) map** (`AMB-D-384`): an OS alone — one distributable for
+/// **all** of that OS's arches (a universal binary, a script) — or an OS with a specific [`Arch`], the
+/// build for exactly that pair.
+///
+/// The two forms let a manifest be as coarse or as fine as its bytes are: `macos` is one entry for every
+/// Mac, while `linux-x64` and `linux-arm64` are two different binaries. Resolution is **exact then
+/// OS-wide** ([`Manifest::asset_for`]): the running platform's `<os>-<arch>` is tried first, then its
+/// `<os>`, and neither present is a refusal at the door rather than another platform's bytes at run time —
+/// the fail-open `AMB-D-384` closes.
+///
+/// Spelled `<os>` or `<os>-<arch>` on the wire (so it can be a JSON/YAML map key), and ordered by OS then
+/// arch — `None` before `Some`, so `macos` sorts ahead of `macos-arm64` — giving a re-emitted manifest a
+/// stable key order with no meaning of its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Platform {
+    pub os: Os,
+    /// `None` is the arch-agnostic form (all of `os`'s arches); `Some` is that one arch only.
+    pub arch: Option<Arch>,
+}
+
+impl Platform {
+    /// The platform this build runs on, or `None` when amenbo's vocabulary cannot name its OS (an arch it
+    /// cannot name is still a platform — the arch is simply `None`, matching only an arch-agnostic asset).
+    pub fn here() -> Option<Platform> {
+        Some(Platform { os: Os::here()?, arch: Arch::here() })
+    }
+
+    /// The wire token: `<os>` for the arch-agnostic form, `<os>-<arch>` for a specific pair.
+    pub fn token(&self) -> String {
+        match self.arch {
+            Some(arch) => format!("{}-{}", self.os.as_str(), arch.as_str()),
+            None => self.os.as_str().to_string(),
+        }
+    }
+
+    /// Parse a wire token back to a [`Platform`]: an OS alone, or `<os>-<arch>`. `None` for any token
+    /// whose OS or arch is outside the vocabulary — the same fail-to-parse an unknown `os` or `scope` gets.
+    pub fn parse(s: &str) -> Option<Platform> {
+        if let Some(os) = Os::parse(s) {
+            return Some(Platform { os, arch: None });
+        }
+        let (os, arch) = s.rsplit_once('-')?;
+        Some(Platform { os: Os::parse(os)?, arch: Some(Arch::parse(arch)?) })
+    }
+}
+
+impl Serialize for Platform {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.token())
+    }
+}
+
+impl<'de> Deserialize<'de> for Platform {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let token = String::deserialize(deserializer)?;
+        Platform::parse(&token)
+            .ok_or_else(|| serde::de::Error::custom(format!("unknown platform token '{token}'")))
+    }
+}
+
 /// **What one switch turns this plugin on** (`AMB-D-379`) — declared by the author, because only the
 /// author knows which one is meaningful for their plugin.
 ///
@@ -305,21 +411,27 @@ pub struct Manifest {
     /// GitHub build-provenance attestation is a separate check, not this field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
-    /// **One distributable per operating system** (`AMB-D-381`), keyed by the same tokens `os` uses.
+    /// **One distributable per platform** (`AMB-D-381`, `AMB-D-384`), keyed by a [`Platform`] — an OS
+    /// alone, or an OS-arch pair.
     ///
     /// `os` can name three platforms while a single `url` can point at only one set of bytes, which is
     /// fine for a plugin that is one file everywhere and impossible for one built per platform: a native
-    /// plugin is three different binaries, and the name is the identity, so it cannot be split into three
-    /// entries either (`AMB-D-360`). This map is the join — the OS an entry claims and the bytes actually
-    /// served there, one to one. Signature and checksum sit inside each [`Asset`] because both are claims
-    /// about *the bytes that will run*, so their grain is the bytes', not the entry's.
+    /// plugin is different binaries per OS *and* per arch, and the name is the identity, so it cannot be
+    /// split into separate entries either (`AMB-D-360`). This map is the join — the platform an entry
+    /// claims and the bytes actually served there, one to one. Signature and checksum sit inside each
+    /// [`Asset`] because both are claims about *the bytes that will run*, so their grain is the bytes', not
+    /// the entry's.
+    ///
+    /// A key may be arch-agnostic (`macos`, one build for every Mac) or arch-specific (`linux-arm64`); the
+    /// door keeps `os` answered by at least one key per OS ([`crate::plugin_validate`]) and
+    /// [`asset_for`](Manifest::asset_for) resolves the running platform exact-then-OS-wide.
     ///
     /// **Absent means the single-`url` form**, which stays valid: the two are alternatives, and where both
-    /// are written this one answers. That the keys match the declared `os` set is the door's to enforce
-    /// ([`crate::plugin_validate`]) — this type only carries the map, and an OS token it does not know
-    /// fails to parse the same way an unknown `scope` does.
+    /// are written this one answers. That the keys match the declared `os` set is the door's to enforce —
+    /// this type only carries the map, and a platform token it does not know fails to parse the same way an
+    /// unknown `scope` does.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub assets: BTreeMap<Os, Asset>,
+    pub assets: BTreeMap<Platform, Asset>,
     /// The official badge: the author is the amenbo team. Catalog-authoritative (`AMB-D-347`), never
     /// self-declared — absent means `false`.
     #[serde(default)]
@@ -390,14 +502,24 @@ impl Manifest {
     /// one-file kind. Every layer that fetches, verifies or compares an asset goes through here, so the
     /// two forms are resolved in exactly one place.
     ///
-    /// `None` means this manifest publishes nothing for that OS. A declared `assets` map is taken at its
-    /// word and never falls back to the single fields: the fallback would hand out bytes built for another
-    /// platform, which is a worse answer than none. The door keeps the map and the `os` set in step
-    /// ([`crate::plugin_validate`]), so `None` here is a manifest that never went through it — a
-    /// hand-placed one, or an entry whose `os` and `assets` disagree.
-    pub fn asset_for(&self, os: Os) -> Option<Asset> {
+    /// Resolution is **exact then OS-wide** (`AMB-D-384`): the running platform's `<os>-<arch>` key is
+    /// tried first, then its arch-agnostic `<os>` key. A machine whose arch amenbo cannot name
+    /// ([`Arch::here`] is `None`) skips the exact step and can only match an arch-agnostic asset — an
+    /// `<os>-<arch>` build cannot be claimed to run on an arch we cannot even name.
+    ///
+    /// `None` means this manifest publishes nothing for that platform. A declared `assets` map is taken at
+    /// its word and never falls back to the single fields: the fallback would hand out bytes built for
+    /// another platform, which is a worse answer than none. The door keeps the map and the `os` set in step
+    /// ([`crate::plugin_validate`]), so `None` here is either a platform not published for or a manifest
+    /// that never went through the door — a hand-placed one, or an entry whose `os` and `assets` disagree.
+    pub fn asset_for(&self, here: Platform) -> Option<Asset> {
         if !self.assets.is_empty() {
-            return self.assets.get(&os).cloned();
+            if here.arch.is_some() {
+                if let Some(asset) = self.assets.get(&here) {
+                    return Some(asset.clone());
+                }
+            }
+            return self.assets.get(&Platform { os: here.os, arch: None }).cloned();
         }
         (!self.url.is_empty()).then(|| Asset {
             url: self.url.clone(),
@@ -458,6 +580,16 @@ pub struct ConfigField {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A running platform with no specific arch — matches only an arch-agnostic `<os>` key.
+    fn plat(os: Os) -> Platform {
+        Platform { os, arch: None }
+    }
+
+    /// A running platform with a specific arch — tries `<os>-<arch>` first, then `<os>`.
+    fn plat_arch(os: Os, arch: Arch) -> Platform {
+        Platform { os, arch: Some(arch) }
+    }
 
     fn full_json() -> serde_json::Value {
         serde_json::json!({
@@ -552,12 +684,12 @@ mod tests {
     /// The two forms a manifest may take (`AMB-D-381`), and the one place they become one answer.
     #[test]
     fn the_asset_for_an_os_comes_from_the_map_when_there_is_one() {
-        // One file for every OS: the single fields answer for whichever platform asks.
+        // One file for every OS: the single fields answer for whichever platform asks, arch and all.
         let m: Manifest = serde_json::from_value(full_json()).unwrap();
-        let single = m.asset_for(Os::Macos).unwrap();
+        let single = m.asset_for(plat_arch(Os::Macos, Arch::Arm64)).unwrap();
         assert_eq!(single.url, m.url);
         assert_eq!(single.checksum, m.checksum);
-        assert_eq!(m.asset_for(Os::Linux).unwrap().url, m.url, "one url is every OS's");
+        assert_eq!(m.asset_for(plat(Os::Linux)).unwrap().url, m.url, "one url is every OS's");
 
         // Per OS: each platform gets its own bytes, and one this manifest does not publish for gets
         // nothing rather than another platform's build.
@@ -569,10 +701,10 @@ mod tests {
             "linux": { "url": "https://example.com/x-linux.tar.gz", "checksum": "sha256:linux" },
         });
         let m: Manifest = serde_json::from_value(v).unwrap();
-        assert_eq!(m.asset_for(Os::Macos).unwrap().checksum, "sha256:mac");
-        assert_eq!(m.asset_for(Os::Macos).unwrap().signature.as_deref(), Some("sig-mac"));
-        assert!(m.asset_for(Os::Linux).unwrap().signature.is_none(), "unsigned is a shape, not an error");
-        assert!(m.asset_for(Os::Windows).is_none(), "nothing published here is nothing, not a fallback");
+        assert_eq!(m.asset_for(plat_arch(Os::Macos, Arch::Arm64)).unwrap().checksum, "sha256:mac");
+        assert_eq!(m.asset_for(plat_arch(Os::Macos, Arch::Arm64)).unwrap().signature.as_deref(), Some("sig-mac"));
+        assert!(m.asset_for(plat(Os::Linux)).unwrap().signature.is_none(), "unsigned is a shape, not an error");
+        assert!(m.asset_for(plat(Os::Windows)).is_none(), "nothing published here is nothing, not a fallback");
 
         // And a map never falls back to the single fields, which would hand out another OS's binary.
         let mut v = full_json();
@@ -581,7 +713,84 @@ mod tests {
         });
         let m: Manifest = serde_json::from_value(v).unwrap();
         assert!(!m.url.is_empty(), "the single url is still in the document");
-        assert!(m.asset_for(Os::Windows).is_none(), "and the map is still the only answer");
+        assert!(m.asset_for(plat(Os::Windows)).is_none(), "and the map is still the only answer");
+    }
+
+    /// Arch resolution is exact-then-OS-wide (`AMB-D-384`): `<os>-<arch>` wins, `<os>` is the fallback, and
+    /// a machine whose arch amenbo cannot name matches only the arch-agnostic key.
+    #[test]
+    fn asset_for_resolves_arch_exact_then_os_wide() {
+        let mut v = full_json();
+        v.as_object_mut().unwrap().remove("url");
+        v.as_object_mut().unwrap().remove("checksum");
+        v["assets"] = serde_json::json!({
+            "macos":       { "url": "https://example.com/mac-universal.tar.gz", "checksum": "sha256:mac-uni" },
+            "linux-x64":   { "url": "https://example.com/linux-x64.tar.gz",     "checksum": "sha256:lx64" },
+            "linux-arm64": { "url": "https://example.com/linux-arm64.tar.gz",   "checksum": "sha256:larm" },
+        });
+        let mut v2 = v.clone();
+        v2["os"] = serde_json::json!(["macos", "linux"]);
+        let m: Manifest = serde_json::from_value(v2).unwrap();
+
+        // The exact os-arch key wins where it exists.
+        assert_eq!(m.asset_for(plat_arch(Os::Linux, Arch::X64)).unwrap().checksum, "sha256:lx64");
+        assert_eq!(m.asset_for(plat_arch(Os::Linux, Arch::Arm64)).unwrap().checksum, "sha256:larm");
+
+        // The arch-agnostic key answers every arch of that OS — and any arch, and none.
+        assert_eq!(m.asset_for(plat_arch(Os::Macos, Arch::Arm64)).unwrap().checksum, "sha256:mac-uni");
+        assert_eq!(m.asset_for(plat_arch(Os::Macos, Arch::X64)).unwrap().checksum, "sha256:mac-uni");
+        assert_eq!(m.asset_for(plat(Os::Macos)).unwrap().checksum, "sha256:mac-uni");
+
+        // An arch this build cannot name (`None`) never matches an os-arch key — only the arch-agnostic one,
+        // which linux does not have here, so it is nothing rather than a guess.
+        assert!(m.asset_for(plat(Os::Linux)).is_none(), "an unnameable arch matches only an <os> key");
+    }
+
+    /// Platform tokens round-trip through the wire form, and one outside the vocabulary does not parse.
+    #[test]
+    fn platform_tokens_are_the_os_and_os_arch_forms() {
+        assert_eq!(plat(Os::Macos).token(), "macos");
+        assert_eq!(plat_arch(Os::Macos, Arch::Arm64).token(), "macos-arm64");
+        assert_eq!(plat_arch(Os::Linux, Arch::X64).token(), "linux-x64");
+
+        assert_eq!(Platform::parse("windows"), Some(plat(Os::Windows)));
+        assert_eq!(Platform::parse("linux-arm64"), Some(plat_arch(Os::Linux, Arch::Arm64)));
+        assert_eq!(Platform::parse("macos-x64"), Some(plat_arch(Os::Macos, Arch::X64)));
+        assert_eq!(Platform::parse("bsd"), None, "an unknown os does not parse");
+        assert_eq!(Platform::parse("macos-riscv"), None, "an unknown arch does not parse");
+        assert_eq!(Platform::parse("linux-x64-extra"), None, "a stray segment does not parse");
+
+        // Arch vocabulary matches the self-updater's (`arm64`/`x64` from `aarch64`/`x86_64`).
+        assert_eq!(Arch::Arm64.as_str(), "arm64");
+        assert_eq!(Arch::X64.as_str(), "x64");
+        assert_eq!(Arch::parse("arm64"), Some(Arch::Arm64));
+        assert_eq!(Arch::parse("aarch64"), None, "the consts spelling is not the wire token");
+    }
+
+    /// A platform-keyed `assets` map round-trips as JSON, keys and all.
+    #[test]
+    fn an_os_arch_assets_map_round_trips() {
+        let mut v = full_json();
+        v.as_object_mut().unwrap().remove("url");
+        v.as_object_mut().unwrap().remove("checksum");
+        v["os"] = serde_json::json!(["linux"]);
+        v["assets"] = serde_json::json!({
+            "linux-arm64": { "url": "https://example.com/linux-arm64.tar.gz", "checksum": "sha256:larm" },
+            "linux-x64":   { "url": "https://example.com/linux-x64.tar.gz",   "checksum": "sha256:lx64" },
+        });
+        let m: Manifest = serde_json::from_value(v.clone()).unwrap();
+        assert_eq!(m.assets.len(), 2);
+        assert_eq!(serde_json::to_value(&m).unwrap()["assets"], v["assets"]);
+    }
+
+    /// A platform token whose arch is outside the vocabulary is refused at the shape, like an unknown OS.
+    #[test]
+    fn an_asset_for_an_arch_outside_the_vocabulary_does_not_parse() {
+        let mut v = full_json();
+        v["assets"] = serde_json::json!({
+            "linux-riscv": { "url": "https://example.com/x.tar.gz", "checksum": "sha256:x" },
+        });
+        assert!(serde_json::from_value::<Manifest>(v).is_err());
     }
 
     /// An unknown OS key is refused where every other unknown token is — at the shape.

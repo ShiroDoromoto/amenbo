@@ -20,6 +20,7 @@ import remarkGfm from "remark-gfm";
 import type { Root, Text, Link, RootContent } from "mdast";
 import type { Element as HastElement, Text as HastText } from "hast";
 import { useRefNav, type RefNav } from "../core/refNav";
+import { openExternalUrl } from "../core/mutations";
 import { resolveRef } from "../core/reads";
 import { REF_RE } from "../core/idref";
 import { Mermaid } from "./Mermaid";
@@ -99,6 +100,11 @@ export function mermaidSourceFromPre(node: HastElement | undefined): string | nu
     .replace(/\n$/, "");
 }
 
+/** Whether a link leaves the app: `http(s)` only, so the `ref:` scheme and in-document anchors stay put. */
+export function isExternalHref(href: string): boolean {
+  return /^https?:\/\//i.test(href.trim());
+}
+
 /** Clicking a reference link: core resolves the id and the detail pane switches to it. Unknown or ambiguous is a no-op. */
 async function openRef(raw: string, nav: RefNav): Promise<void> {
   const target = await resolveRef(raw);
@@ -130,6 +136,19 @@ export function Markdown({ children }: { children: string }) {
               tabIndex={0}
               onClick={(e) => { e.preventDefault(); void openRef(raw, nav); }}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void openRef(raw, nav); } }}
+            >
+              {children}
+            </a>
+          );
+        }
+        // An http(s) link goes to the browser, never to this window. The app window has no address
+        // bar and no way back, so letting the webview follow a link would strand the user outside
+        // amenbo with the app gone — and a rendered README (`AMB-D-347`) is mostly such links.
+        if (href && isExternalHref(href)) {
+          return (
+            <a
+              href={href}
+              onClick={(e) => { e.preventDefault(); void openExternalUrl(href); }}
             >
               {children}
             </a>

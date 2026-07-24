@@ -232,6 +232,24 @@
 .catsrc { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); background: var(--c-surface-sunken); }
 .catsrc__row { display: flex; align-items: center; gap: var(--s-2); }
 .catsrc__url { font-size: var(--fs-xs); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+
+/* A market row is the way into the detail, so it says so on hover — the click is what costs a request
+   to GitHub (`AMB-D-347`), and a row that looked inert would hide that. */
+.plugcard { cursor: pointer; }
+.plugcard:hover { background: var(--c-surface-2); }
+
+/* The one plugin a user opened: the catalog's own fields, then what was fetched from GitHub for this
+   entry alone. Taller than the other modals because a README is the bulk of it, and it scrolls
+   inside itself rather than growing the page. */
+.plugdet { width: min(720px, 100%); max-height: 84vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
+.plugdet__head { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-3); }
+.plugdet__name { font-size: var(--fs-lg); }
+.plugdet__desc { margin-bottom: var(--s-2); }
+.plugdet__meta { display: flex; gap: var(--s-2); flex-wrap: wrap; font-size: var(--fs-xs); }
+.plugdet__figures { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; margin: var(--s-3) 0; font-size: var(--fs-sm); }
+.plugdet__note { color: var(--c-warn); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
+.plugdet__readme { border-top: 1px solid var(--c-border); padding-top: var(--s-3); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.plugdet__foot { border-top: 1px solid var(--c-border); margin-top: var(--s-4); padding-top: var(--s-2); font-size: var(--fs-xs); }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from
    --block (why anyone cannot start it) — this is what changed since *you* took it — so it speaks through its
    own 🔔 glyph and, like --block, borrows no status colour. */

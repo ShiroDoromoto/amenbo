@@ -222,6 +222,7 @@ pub fn run() {
       commands::plugin_catalog_browse,
       commands::plugin_catalog_add_source,
       commands::plugin_catalog_remove_source,
+      commands::plugin_repo_facts,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

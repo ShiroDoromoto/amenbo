@@ -494,6 +494,32 @@ listed: boolean,
 addedAt?: string, };
 
 /**
+ * What GitHub says about one plugin's repository — the figures the catalog deliberately does not
+ * carry (`AMB-D-347`). Every one is optional on its own: the requests behind them fail
+ * independently, and a repository with no release has no download count to report.
+ */
+export type PluginRepoFactsDto = { 
+/**
+ * `number` on the TS side (the default `bigint` has no `toLocaleString` grouping to draw it with,
+ * and a star count is nowhere near the range that motivates one).
+ */
+stars?: number, 
+/**
+ * The current release's downloads, summed over its assets. Whatever else pulls an asset (CI,
+ * mirrors) is in there too, so it is a sense of scale rather than a user count (`AMB-D-347`).
+ */
+downloads?: number, 
+/**
+ * The README as Markdown, for the front end's renderer (which allows no raw HTML).
+ */
+readme?: string, 
+/**
+ * GitHub refused because too many requests came from this address. A different thing to tell the
+ * user than a failure: the answer is to wait, not to check the network.
+ */
+rateLimited: boolean, };
+
+/**
  * What [`repair_pointers`] returns: how many folders were fixed, and how many were left waiting on
  * a human's judgement.
  */

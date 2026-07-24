@@ -12,6 +12,11 @@ const hoisted = vi.hoisted(() => ({
   added: [] as string[],
   removed: [] as string[],
   addFails: false,
+  // Which repositories the screen asked GitHub about, in order — the proof that a listed entry costs
+  // nothing and only an opened one does (`AMB-D-347`).
+  asked: [] as string[],
+  facts: undefined as { stars?: number; downloads?: number; readme?: string; rateLimited: boolean } | undefined,
+  factsError: undefined as unknown,
 }));
 
 // Replace only the data seam: the filtering, the paging and the rendering all run for real.
@@ -28,6 +33,10 @@ vi.mock("../core/pluginCatalog", async (importOriginal) => {
     removeCatalogSource: (url: string) => {
       hoisted.removed.push(url);
       return Promise.resolve(true);
+    },
+    usePluginRepoFacts: (repo: string) => {
+      hoisted.asked.push(repo);
+      return { facts: hoisted.facts, loading: false, error: hoisted.factsError };
     },
   };
 });
@@ -72,6 +81,9 @@ beforeEach(() => {
   hoisted.added = [];
   hoisted.removed = [];
   hoisted.addFails = false;
+  hoisted.asked = [];
+  hoisted.facts = { stars: 512, downloads: 1234, readme: "# a plugin\n\nwhat it does", rateLimited: false };
+  hoisted.factsError = undefined;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -163,6 +175,86 @@ describe("PluginMarketScreen", () => {
     render();
     expect(container.textContent).toContain("https://third");
     expect(container.textContent).toContain(t("plugins.emptyCatalog"));
+  });
+});
+
+describe("PluginMarketScreen — the one entry it opens", () => {
+  const open = (i: number) => act(() => (rows()[i] as HTMLElement).click());
+  const detail = () => container.querySelector(".plugdet");
+
+  // The load-bearing half of `AMB-D-347`: a list of any size asks GitHub nothing, and opening one entry
+  // asks about that entry only.
+  it("asks GitHub about an entry only once it is opened", () => {
+    hoisted.catalog = catalogOf(6);
+    render();
+    expect(hoisted.asked).toEqual([]);
+    expect(detail()).toBeNull();
+
+    open(2);
+    expect(hoisted.asked).toEqual(["owner/plugin-2"]);
+    expect(detail()).not.toBeNull();
+  });
+
+  it("draws the figures and the README GitHub answered with", () => {
+    hoisted.catalog = catalogOf(3);
+    render();
+    open(0);
+    const text = detail()!.textContent!;
+    expect(text).toContain("512");
+    expect(text).toContain("1,234");
+    expect(text).toContain("what it does");
+  });
+
+  // The catalog fields must stand on their own: a repository that answered nothing still has a name, a
+  // description and a badge, and the detail says why the numbers are missing rather than showing none.
+  it("still shows the catalog's own fields when GitHub could not be read", () => {
+    hoisted.catalog = catalogOf(3);
+    hoisted.facts = undefined;
+    hoisted.factsError = "offline";
+    render();
+    open(1);
+    const text = detail()!.textContent!;
+    expect(text).toContain("plugin-1");
+    expect(text).toContain(t("plugins.factsError"));
+    expect(text).toContain(t("plugins.noReadme"));
+  });
+
+  // Too many requests is different news from a failure — waiting fixes it — so it gets its own line.
+  it("says when GitHub is rate-limiting, over whatever it did have", () => {
+    hoisted.catalog = catalogOf(3);
+    hoisted.facts = { stars: 7, rateLimited: true };
+    render();
+    open(0);
+    expect(detail()!.textContent).toContain(t("plugins.rateLimited"));
+    expect(detail()!.textContent).toContain("7");
+  });
+
+  it("closes on the button and on Escape", () => {
+    hoisted.catalog = catalogOf(3);
+    render();
+
+    open(0);
+    const close = Array.from(detail()!.querySelectorAll("button"))
+      .find((b) => b.textContent === t("plugins.close"))!;
+    act(() => close.click());
+    expect(detail()).toBeNull();
+
+    open(0);
+    act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
+    expect(detail()).toBeNull();
+  });
+
+  // An entry the catalog stopped offering (a source was unregistered while its detail was open) has
+  // nothing left to draw, so the detail goes with it rather than showing a plugin that is no longer listed.
+  it("closes when the entry leaves the catalog underneath it", () => {
+    hoisted.catalog = catalogOf(3);
+    render();
+    open(2);
+    expect(detail()).not.toBeNull();
+
+    hoisted.catalog = catalogOf(2);
+    render();
+    expect(detail()).toBeNull();
   });
 });
 

@@ -4,8 +4,10 @@ amenbo's portable developer-support CLI — a single static Go binary (no runtim
 no venv) you can drop into any project regardless of its language.
 
 It stamps out and tears down **per-task git worktrees** so several implementation
-sessions can run in parallel without stepping on each other, and it measures what
-a diff does to the `amenbo agent --json` entry.
+sessions can run in parallel without stepping on each other, it measures what a
+diff does to the `amenbo agent --json` entry, and it stands up a **fake outside
+world** the dev GUI can be verified against — including the failures the real one
+will not produce on demand.
 
 ## Build
 
@@ -125,6 +127,60 @@ to the author instead of answering it.
 - Measurement goes through `make verify`, which is what pins the isolation (a
   throwaway `AMENBO_HOME` **and** a CWD with no `.amenbo` ancestor) — the real
   store is never read.
+
+### `devtool fixtures refresh [--catalog <url|path>] [--repo owner/name]`
+
+Captures the outside world into `devtool/fixtures/`, from the real sources:
+
+```
+devtool/fixtures/catalog.json                          the plugin catalog
+devtool/fixtures/update/latest.json                    the update check's answer
+devtool/fixtures/github/repos/<owner>__<name>.json     /repos/{repo}
+devtool/fixtures/github/releases/<owner>__<name>.json  /repos/{repo}/releases/latest
+devtool/fixtures/github/readme/<owner>__<name>.md      /repos/{repo}/readme
+```
+
+**They are copies, never written by hand.** A hand-written fixture drifts from
+what the producer actually sends, and the mismatch shows up as a green check over
+a broken screen — an aggregation that quietly stopped copying a field is the kind
+of thing only a real capture catches. The repositories fetched are the ones the
+catalog itself names, so no list is kept beside it to go stale; `--repo` adds one
+the catalog does not name yet.
+
+`--catalog` takes the envelope from somewhere else — a checkout of the catalog
+repository, where its own CI generated it — which is the answer while the
+published catalog is still empty. It is still a generated artifact, not a
+hand-written one.
+
+### `devtool fixtures gui [--fail <face>=<mode>] [--fresh] [--port n] [--app path] [--no-launch]`
+
+Serves those fixtures on a local host and starts the dev GUI pointed at it,
+through the three overrides the app already reads (`crates/amenbo-core/src/env.rs`)
+— there is no development-only branch in the product:
+
+| face | env var | what it answers |
+|---|---|---|
+| `catalog` | `AMENBO_PLUGIN_CATALOG_URL` | the market list, catalog registration |
+| `github` | `AMENBO_GITHUB_API_URL` | one opened plugin's stars, downloads, README |
+| `update` | `AMENBO_UPDATE_JSON_URL` | the update banner |
+
+**`--fail` is the half the real world cannot be asked for.** `--fail github=429`
+is a rate limit on demand, `--fail all=timeout` is a request that never comes
+back, and any status works (`404`, `500`). These are the branches that never get
+exercised against the real API, because the way to reach them there is to spend
+the quota or unplug the network.
+
+**`--fresh` runs against a throwaway store** (`AMENBO_HOME`), so every cache
+starts cold. Without it a catalog fetch is answered from disk for an hour and a
+repository's figures for six, so the fake world is usually never asked and an
+injected failure never bites. The cost is that the store is empty too: `--fresh`
+is for looking at the market, the detail and the update banner, not at tasks.
+Every request is logged, so "it did not ask" is distinguishable from "it asked
+and the fixture was missing".
+
+It replaces no test that talks to the real world: a fake answers what it was told
+to answer, so it can only confirm what we already believe. The `#[ignore]`d tests
+against the real API stay.
 
 ## Env
 

@@ -1,7 +1,9 @@
 // Command devtool is amenbo's portable developer-support CLI: a single static
-// Go binary (no runtime, no venv) that can be dropped into any project. Today it
-// stamps out and tears down per-task git worktrees so several implementation
-// sessions can run in parallel without stepping on each other.
+// Go binary (no runtime, no venv) that can be dropped into any project. It stamps
+// out and tears down per-task git worktrees so several implementation sessions can
+// run in parallel without stepping on each other, and it stands up a fake outside
+// world (fixtures.go) for verifying the GUI against answers the real one will not
+// give on demand.
 //
 // A task's worktree lives OUTSIDE the repo, in a sibling dir:
 //
@@ -42,6 +44,8 @@ func main() {
 		taskCmd(args[1:])
 	case "agent":
 		agentCmd(args[1:])
+	case "fixtures":
+		fixturesCmd(args[1:])
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -58,6 +62,8 @@ Usage:
   devtool task start  <id> [--base main] [--no-reserve] [--no-deps]
   devtool task finish <id> [--base main] [--force] [--reset]
   devtool agent size       [--base main] [--json]
+  devtool fixtures refresh [--catalog <url|path>] [--repo owner/name]
+  devtool fixtures gui     [--fail <face>=<status|timeout>] [--port n] [--app path] [--no-launch]
 
 task start   reserve <id> (todo→in_progress, prod amenbo from the main repo) and
              add a git worktree on branch task/<id> in a sibling dir OUTSIDE the
@@ -67,6 +73,12 @@ task start   reserve <id> (todo→in_progress, prod amenbo from the main repo) a
              'make verify'.
 task finish  safely tear it down: refuse unless the worktree is clean and the
              branch is merged into --base (override with --force).
+fixtures     a fake outside world for GUI verification. 'refresh' captures the
+             catalog, GitHub's answers and latest.json from the real world (they
+             are copies, never written by hand); 'gui' serves them and starts the
+             dev GUI pointed at them. --fail makes a face answer 429/500/404, or
+             never answer at all — the responses the real API will not produce on
+             demand, and so the branches nothing else reaches.
 agent size   print what this tree does to the 'amenbo agent --json' entry, by
              section, against the merge-base with --base. A signal, not a gate:
              it always exits 0. The entry is read once per AI session, so what

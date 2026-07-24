@@ -7,6 +7,7 @@
 //! sharing, sync, key or multi-device face — so the spec always returns the one personal shape
 //! (`mode: personal`).
 
+use crate::config::Paths;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -18,7 +19,8 @@ pub const SCHEMA_VERSION: &str = "1";
 /// English. Only the GUI's command palette goes through here, swapping the **prose fields**
 /// (capability / command.summary / args.help / flags.help) for their translations just before
 /// display. Command names, flag names and the CLI strings in examples are identifiers and runnable
-/// lines, so they never change. An item with no translation, and an unknown locale, pass through in
+/// lines, so no locale changes them (the one thing that does is the channel — [`build`] retargets
+/// the command word in them). An item with no translation, and an unknown locale, pass through in
 /// English (graceful fallback) — add a translation and that one item starts rendering translated.
 /// The default `en` is identical to [`build`]. Translations go in [`phrasebook`].
 pub fn build_localized(locale: &str) -> Value {
@@ -418,8 +420,19 @@ fn tr(field: Option<&mut Value>, table: &HashMap<&str, &str>) {
     }
 }
 
-/// Builds the spec. A single local store, so there is one shape: personal mode.
+/// Builds the spec. A single local store, so there is one shape: personal mode. Every exit —
+/// [`build_index`], [`command_spec`], [`build_localized`] — comes through here, so the retarget
+/// below reaches all of them.
 pub fn build() -> Value {
+    let mut spec = spec_as_authored();
+    retarget_runnable_lines(&mut spec, Paths::command_name());
+    spec
+}
+
+/// The spec as it is written in this file: every runnable line spelled with the production CLI, the
+/// name a reader of the source recognises. [`build`] is what hands it out, and it retargets those
+/// lines first — this is not a second source of truth, it is the one source before that one step.
+fn spec_as_authored() -> Value {
     json!({
         "amenbo": "A local-first task manager with no central server. You (the AI agent) operate it on the user's behalf.",
         "operating": [
@@ -501,6 +514,73 @@ pub fn build() -> Value {
             "The AI (--actor ai) can only delete tasks it created as the AI. Deleting tasks created by others and archiving/deleting projects are denied by ai_guardrail (ask a human; the local policy config ai_allow_project_ops can allow those). Reversible ops on the bound project itself (update/move/unarchive) are allowed — the guard covers only the destructive/hiding ones."
         ]
     })
+}
+
+/// The fields of the spec that are lines to **type**, not prose about them: every command's
+/// `examples`, the `inspect` list, and `filterGrammar.example`. Named here because the retarget
+/// below has to know which strings it may rewrite.
+const RUNNABLE_LINE_FIELDS: [&str; 3] = ["examples", "example", "inspect"];
+
+/// Retargets every runnable line to `cli` — the CLI this build actually installs
+/// ([`Paths::command_name`]). The lines are authored with the production spelling and rewritten on
+/// the way out, so the source stays a set of literal, readable, copy-pasteable commands and no
+/// author has to remember to interpolate anything. Without this a dev build hands an AI, and shows
+/// in the GUI's command catalog, examples for a command that is not installed there — beside a
+/// heading the GUI already spells from `command_name`.
+///
+/// Only the runnable-line fields are touched: prose mentioning a command in a code span is left
+/// alone, because prose is what the GUI localizes and the phrasebook is keyed on the English source
+/// character for character. Production rewrites nothing (the authored spelling is already its own),
+/// but it still walks — one path for both channels means a break shows up wherever the tests run.
+fn retarget_runnable_lines(node: &mut Value, cli: &str) {
+    match node {
+        Value::Object(map) => {
+            for (key, value) in map.iter_mut() {
+                if RUNNABLE_LINE_FIELDS.contains(&key.as_str()) {
+                    retarget_line(value, cli);
+                } else {
+                    retarget_runnable_lines(value, cli);
+                }
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(|i| retarget_runnable_lines(i, cli)),
+        _ => {}
+    }
+}
+
+/// Swaps the command word in one runnable line (or in each line of a list of them).
+fn retarget_line(node: &mut Value, cli: &str) {
+    match node {
+        Value::Array(items) => items.iter_mut().for_each(|i| retarget_line(i, cli)),
+        Value::String(line) => *line = retarget_words(line, cli),
+        _ => {}
+    }
+}
+
+/// Rewrites every standalone occurrence of the authored command word, not merely a leading one: a
+/// line can wrap the command (`eval "$(amenbo plugin run …)"`), and one that names it in the middle
+/// is as unrunnable on the dev channel as one that opens with it.
+fn retarget_words(line: &str, cli: &str) -> String {
+    let authored = Paths::PRODUCTION_APP_NAME;
+    let mut out = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(at) = rest.find(authored) {
+        let (before, after) = (&rest[..at], &rest[at + authored.len()..]);
+        out.push_str(before);
+        out.push_str(if standalone(before, after) { cli } else { authored });
+        rest = after;
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Whether the command word between these two sides is a word of its own. What may touch it is
+/// punctuation a shell puts there — a space, a quote, `$(`, `)`. What may not is anything that would
+/// make it part of a longer name: `amenbo-dev` (already retargeted), `.amenbo` (the pointer file),
+/// `work.amenbo.amenbo` (an app-data path).
+fn standalone(before: &str, after: &str) -> bool {
+    let edge = |c: char| !(c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | '/'));
+    before.chars().next_back().is_none_or(edge) && after.chars().next().is_none_or(edge)
 }
 
 /// cold path: the trigger-indexed catalog agentCycle branches to. Each cycle separates a
@@ -1552,6 +1632,64 @@ mod tests {
             assert_eq!(spec, full_row, "the pulled spec differs from the source of truth");
         }
         assert!(command_spec("no such command").is_none());
+    }
+
+    /// Walks the runnable-line fields the same way [`retarget_runnable_lines`] does, so a field it
+    /// stops reaching is a line this collector still finds — spelled at the wrong CLI.
+    fn runnable_lines(node: &Value, out: &mut Vec<String>) {
+        fn collect(node: &Value, out: &mut Vec<String>) {
+            match node {
+                Value::Array(items) => items.iter().for_each(|i| collect(i, out)),
+                Value::String(line) => out.push(line.clone()),
+                _ => {}
+            }
+        }
+        match node {
+            Value::Object(map) => {
+                for (key, value) in map {
+                    if RUNNABLE_LINE_FIELDS.contains(&key.as_str()) {
+                        collect(value, out);
+                    } else {
+                        runnable_lines(value, out);
+                    }
+                }
+            }
+            Value::Array(items) => items.iter().for_each(|i| runnable_lines(i, out)),
+            _ => {}
+        }
+    }
+
+    /// A line the spec tells someone to type must name the CLI this build installs — and name it at
+    /// all, since a line that dropped the command word is unrunnable on every channel. The dev
+    /// channel is where the first half bites: its examples would otherwise send an AI, and the GUI's
+    /// command catalog, to a command that is not installed there. So the rule is checked twice: as
+    /// this build hands the spec out, and after a retarget to the dev spelling, which is what says
+    /// the rewrite reaches every runnable-line field.
+    #[test]
+    fn every_runnable_line_names_this_builds_cli() {
+        /// Whether the line names `cli` as a word of its own — the reading side of [`standalone`].
+        fn names(line: &str, cli: &str) -> bool {
+            line.match_indices(cli)
+                .any(|(at, _)| standalone(&line[..at], &line[at + cli.len()..]))
+        }
+
+        let mut lines = Vec::new();
+        runnable_lines(&build(), &mut lines);
+        assert!(lines.len() > 50, "the walk found almost no runnable lines ({}) — it stopped reaching them", lines.len());
+        let here = Paths::command_name();
+        for line in &lines {
+            assert!(names(line, here), "a runnable line does not name this build's CLI ({here}): {line}");
+        }
+
+        let mut dev = build();
+        retarget_runnable_lines(&mut dev, Paths::DEV_APP_NAME);
+        let mut dev_lines = Vec::new();
+        runnable_lines(&dev, &mut dev_lines);
+        assert_eq!(dev_lines.len(), lines.len(), "the retarget changed how many runnable lines there are");
+        for line in &dev_lines {
+            assert!(names(line, Paths::DEV_APP_NAME), "a runnable line kept its authored CLI through the retarget: {line}");
+            assert!(!names(line, Paths::PRODUCTION_APP_NAME), "a runnable line still names the production CLI after the retarget: {line}");
+        }
     }
 
     /// The entry point must teach how to explore — narrow, list, then open the few that matter. Lose

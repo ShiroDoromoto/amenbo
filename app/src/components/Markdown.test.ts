@@ -182,3 +182,25 @@ describe("images", () => {
     expect(render("first line\nsecond line")).toContain("<br");
   });
 });
+
+describe("where a link may go", () => {
+  // The bug this closes: a relative link resolves against amenbo's own origin, so following it
+  // reloaded the whole app and looked like the plugin detail closing itself.
+  it("draws a relative link as text, and keeps an in-document one a link", () => {
+    const relative = render("[LICENSE](LICENSE) and [docs](./docs/x.md)");
+    expect(relative).toContain('class="markdown__deadlink"');
+    expect(relative).not.toContain("<a");
+    expect(relative).toContain("LICENSE");
+
+    const anchor = render("[Layout](#layout)");
+    expect(anchor).toContain('href="#layout"');
+  });
+
+  // A badge is a label wrapped in a link, and the same rule applies to it: nothing about being an
+  // image makes a relative target reachable.
+  it("applies the same rule to a badge's link", () => {
+    const badge = render("[![License: Apache-2.0](https://i.invalid/l.svg)](LICENSE)");
+    expect(badge).toContain("markdown__imgalt");
+    expect(badge).not.toContain("<a");
+  });
+});

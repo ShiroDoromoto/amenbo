@@ -7,6 +7,12 @@
 // exists by the time remarkRefs walks the text nodes in each cell and turns refs into links. Raw
 // HTML is not allowed (no rehype-raw).
 //
+// Nothing here ever navigates the window. The app is a single page with no address bar and no way
+// back, so a followed link either strands the user outside amenbo or — for a link that resolves
+// against amenbo's own origin — reloads the SPA and drops it back at its opening screen. So a link is
+// sorted by what it names: a ref opens in the app, an http(s) URL opens in the browser, `#section`
+// stays in the document, and anything else (a relative path, an unknown scheme) is drawn as its text.
+//
 // An image is never drawn as one. amenbo's own bodies keep images in attachments rather than inline
 // (`conventions.markdown`), and a body from outside — a plugin's README — cannot draw one either: the
 // app's CSP allows no remote image, so the browser would put a broken-image frame where the picture
@@ -195,7 +201,15 @@ export function Markdown({ children }: { children: string }) {
             </a>
           );
         }
-        return <a href={href}>{children}</a>;
+        // A link inside the document (`#section`) stays a link: following it moves the scroll position
+        // and reloads nothing.
+        if (href?.startsWith("#")) return <a href={href}>{children}</a>;
+        // Anything else has nowhere to go. A relative link — a README's `LICENSE`, `./docs/x.md` —
+        // resolves against *this app's* origin, so following it navigated the webview to amenbo's own
+        // index.html: the whole SPA reloaded and came back at its opening screen, which reads as the
+        // detail closing itself. Nothing here can open such a target, so it is drawn as the text it
+        // carries and does not pretend to be a link.
+        return <span className="markdown__deadlink">{children}</span>;
       },
     }),
     [nav],

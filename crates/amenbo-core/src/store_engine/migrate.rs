@@ -147,6 +147,25 @@ pub const STEPS: &[Step] = &[
              UPDATE decision_task_link SET linked_at = NULLIF(created_at, '');",
         ),
     },
+    Step {
+        to: 8,
+        name: "add the decision edge's intent column, seeded from when each row was written",
+        // The third premise edge, arriving after its two siblings (v7): a supersession had no instant to be
+        // dated by, so a premise that lost currency under a holder could not be surfaced (`AMB-D-373`). The
+        // seed is `created_at` for the same reason as v7's — an edge row is written once, and the one
+        // rewrite it does admit (a pair's kind promoted in place) moves `updated_at`, which would date the
+        // *promotion* rather than the edge. On a store this runs on the two are the same instant for every
+        // row that was never promoted, and for one that was, the honest reading of a column that did not
+        // exist yet is "drawn no later than this" — the quiet side, as v6's unseeded column is.
+        //
+        // `NULLIF` guards the `''` a row caught mid-create carries: the column's `CHECK` admits an instant
+        // or NULL, and `''` is neither. Spelled in frozen text, as every step's is.
+        apply: Apply::Sql(
+            "ALTER TABLE decision_edge ADD COLUMN drawn_at TEXT \
+                 CHECK(drawn_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');
+             UPDATE decision_edge SET drawn_at = NULLIF(created_at, '');",
+        ),
+    },
 ];
 
 /// v4: the lint-hook question stopped being one per project and became one for the device
@@ -367,6 +386,7 @@ mod tests {
         (6, "task", "status_changed_at"),
         (7, "task_dependency", "established_at"),
         (7, "decision_task_link", "linked_at"),
+        (8, "decision_edge", "drawn_at"),
     ];
 
     /// A store stamped at `version` — the shape an older build left behind, which is what the chain
@@ -489,6 +509,10 @@ mod tests {
             .conn()
             .query_row("SELECT COUNT(linked_at) FROM decision_task_link", [], |r| r.get::<_, i64>(0))
             .expect("v7 put the link's intent column back");
+        engine
+            .conn()
+            .query_row("SELECT COUNT(drawn_at) FROM decision_edge", [], |r| r.get::<_, i64>(0))
+            .expect("v8 put the decision edge's intent column back");
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -714,6 +738,41 @@ mod tests {
             vec![(1, Some("2026-03-04T05:06:07Z".to_string()))],
             "a link is seeded at the instant it was drawn"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v8 in full, on the store shape v7 left behind: decision edges with no intent column. The seed is the
+    /// same shape as v7's — `created_at`, the instant the edge was drawn, and NULL rather than the `''` a
+    /// row caught mid-create carries — because without it a supersession drawn before this ran has no
+    /// instant at all, and the reopen axis would flag every superseded premise in the backlog at once.
+    #[test]
+    fn the_decision_edge_is_seeded_from_when_it_was_drawn() {
+        let dir = scratch("edge-intent-column");
+        let engine = store_at(&dir, 7);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO decision (id, project_id, title, body, status, created_at, updated_at) VALUES
+                     (1, 1, 'old', '', 'accepted', '2025-10-01T00:00:00Z', '2025-10-01T00:00:00Z'),
+                     (2, 1, 'new', '', 'accepted', '2025-10-01T00:00:00Z', '2025-10-01T00:00:00Z');
+                 INSERT INTO decision_edge (id, decision_id, target_decision_id, kind, created_at, updated_at)
+                 VALUES (1, 2, 1, 'supersedes', '2026-04-05T06:07:08Z', '2026-04-05T06:07:08Z'),
+                        (2, 1, 2, 'builds_on',  '',                    '');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let conn = engine.conn();
+        let mut stmt = conn.prepare("SELECT id, drawn_at FROM decision_edge ORDER BY id").unwrap();
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Option<String>>(1)?))).unwrap();
+        assert_eq!(
+            rows.filter_map(|r| r.ok()).collect::<Vec<_>>(),
+            vec![(1, Some("2026-04-05T06:07:08Z".to_string())), (2, None)],
+            "an edge is seeded at the instant it was drawn, and `''` is no instant"
+        );
+        drop(stmt);
         std::fs::remove_dir_all(&dir).ok();
     }
 

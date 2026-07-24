@@ -455,6 +455,11 @@ pub struct DecisionEdge {
     /// The side pointed at — the older decision.
     pub target_decision_id: i64,
     pub kind: DecisionEdgeKind,
+    /// When the edge came to carry its current `kind` — the third premise-change intent column, beside
+    /// [`TaskDependency::established_at`] and [`DecisionTaskLink::linked_at`] (`AMB-D-372`). What dates a
+    /// supersession, the target's row being left alone by it (`AMB-D-373`).
+    #[serde(default)]
+    pub drawn_at: Option<Timestamp>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

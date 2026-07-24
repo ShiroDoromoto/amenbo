@@ -239,6 +239,7 @@ pub(super) fn decision_edge_row(r: &Row) -> rusqlite::Result<DecisionEdge> {
         decision_id: get(r, C.decision_id)?,
         target_decision_id: get(r, C.target_decision_id)?,
         kind: enum_req(r, C.kind, DecisionEdgeKind::parse)?,
+        drawn_at: ts_opt(r, C.drawn_at)?,
         created_at,
         updated_at,
     })
@@ -513,6 +514,7 @@ mod tests {
                 decision_id: 43,
                 target_decision_id: 43,
                 kind: DecisionEdgeKind::Amends,
+                drawn_at: Some(now),
                 created_at: now,
                 updated_at: now,
             }],

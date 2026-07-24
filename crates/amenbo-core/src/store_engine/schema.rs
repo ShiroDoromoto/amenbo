@@ -567,6 +567,15 @@ datasets! {
         decision_id: fk("decision", "CASCADE"),
         target_decision_id: fk("decision", "CASCADE"),
         kind: enum_col("supersedes", "amends", "builds_on"),
+        // When the edge came to carry the `kind` it carries now — the third of the premise-change intent
+        // columns (`AMB-D-372`), beside `task_dependency.established_at` and `decision_task_link.linked_at`.
+        // It is what dates a supersession: the target's own row is never rewritten, so nothing on the
+        // premise side records *when* it stopped being current, and its `status_changed_at` does not move
+        // (being superseded is an edge, not a status). Re-stamped when a pair's kind is rewritten in place,
+        // because a `builds_on` promoted to `supersedes` began superseding at the promotion, not at the
+        // original insert. Nullable for the reason the other two are: `ALTER TABLE ADD COLUMN` starts every
+        // existing row at NULL, and the step that adds it seeds them in the same transaction.
+        drawn_at: ts_opt,
     }
 
     decision_task_link => decision_task_link {

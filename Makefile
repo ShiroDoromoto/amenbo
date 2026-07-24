@@ -5,12 +5,37 @@
 #   dev   : command `amenbo-dev` / app-data `work.amenbo.amenbo-dev`  … development and experiments (never touch prod data)
 # The app-data name is switched by core via `AMENBO_APP_NAME` (at build time). dev builds into its
 # own target dir so it does not contend with prod over rebuilds.
+# The dev GUI splits once more, by TASK: unset is the shared dev app above, TASK=<id> is a
+# throwaway instance owned by one task (app-data `work.amenbo.amenbo-dev-<id>`). See GUI_DEV_*.
 
 CARGO_BIN := $(HOME)/.cargo/bin
 APPS_DIR  := /Applications
 BUNDLE_DIR := app/src-tauri/target/release/bundle/macos
 GUI_APP     := $(BUNDLE_DIR)/amenbo.app
-GUI_APP_DEV := $(BUNDLE_DIR)/amenbo (dev).app
+
+# The dev GUI comes in two shapes, and TASK picks which one every dev-GUI target builds and
+# installs. Unset is the shared dev app: one permanent bundle, the place to keep a grown setup
+# (plugins, catalog, projects) that no task may delete. TASK=<id> is a throwaway instance one task
+# owns — its own bundle identifier, product name and app-data, so two parallel sessions verify
+# their own work instead of installing over each other. `devtool task finish <id>` deletes the
+# instance's bundle and its app-data together with the worktree.
+TASK ?=
+ifeq ($(strip $(TASK)),)
+GUI_DEV_NAME := amenbo (dev)
+GUI_DEV_ID   := work.amenbo.app.dev
+GUI_DEV_DATA := amenbo-dev
+else
+# Digits only, the same canonical task ref devtool pins its worktree and branch names to: the
+# bundle name has to be the identical string on both sides, or teardown looks for a bundle that
+# was never built under that name.
+ifneq ($(shell printf '%s' '$(TASK)' | tr -d '0-9'),)
+$(error TASK must be a task number (digits only) — got '$(TASK)')
+endif
+GUI_DEV_NAME := amenbo (dev $(TASK))
+GUI_DEV_ID   := work.amenbo.app.dev.$(TASK)
+GUI_DEV_DATA := amenbo-dev-$(TASK)
+endif
+GUI_APP_DEV := $(BUNDLE_DIR)/$(GUI_DEV_NAME).app
 
 DIST_DIR := dist
 VERSION  := $(shell awk '/\[workspace.package\]/{f=1} f&&/^version/{gsub(/[",]/,"",$$3);print $$3;exit}' Cargo.toml)
@@ -106,9 +131,10 @@ help:
 	@echo "make hooks        - enable the git hooks (core.hooksPath=.githooks): pre-commit runs the tree guards over the staged diff, commit-msg holds the message to the same vocabulary"
 	@echo "make devtool      - build the optional parallel-development helper to ~/.cargo/bin/devtool (needs Go; amenbo itself builds and tests without it)"
 	@echo "make gui          - build the prod GUI (amenbo.app / work.amenbo.app)"
-	@echo "make gui-dev      - build the dev GUI (amenbo (dev).app / work.amenbo.app.dev)"
+	@echo "make gui-dev      - build the dev GUI ($(GUI_DEV_NAME).app / $(GUI_DEV_ID))"
 	@echo "make install-gui     - [retired] the prod GUI ships in the unified installer; release with make release"
-	@echo "make install-gui-dev - build the dev GUI and put it in /Applications/amenbo (dev).app"
+	@echo "make install-gui-dev - build the dev GUI and put it in $(APPS_DIR)/$(GUI_DEV_NAME).app"
+	@echo "                       TASK=<id> builds that task's own throwaway instance (app-data work.amenbo.amenbo-dev-<id>) instead of the shared dev app; devtool task finish <id> deletes it"
 
 ## Tree guards: point the git hooks at .githooks.
 hooks:
@@ -490,9 +516,12 @@ gui:
 	@scripts/codesign-local.sh sign "$(GUI_APP)"
 	@echo "→ amenbo.app (prod): app/src-tauri/target/release/bundle/macos/amenbo.app"
 
-## Dev GUI: the dev identifier/productName and AMENBO_APP_NAME=amenbo-dev.
+## Dev GUI: the dev identifier/productName and the dev AMENBO_APP_NAME. TASK=<id> swaps all three
+## for that task's throwaway instance (see the GUI_DEV_* block above). The second --config is
+## merged over the file, so one recipe covers both shapes; with TASK unset it merely restates what
+## tauri.dev.conf.json already says.
 gui-dev:
-	cd app && AMENBO_APP_NAME=amenbo-dev npm run tauri build -- --config src-tauri/tauri.dev.conf.json
+	cd app && AMENBO_APP_NAME=$(GUI_DEV_DATA) npm run tauri build -- --config src-tauri/tauri.dev.conf.json --config '{"productName":"$(GUI_DEV_NAME)","identifier":"$(GUI_DEV_ID)"}'
 	@# Tauri emits an ad-hoc (linker-signed) .app whose CDHash changes every rebuild,
 	@# re-prompting the keychain each cycle. Sign with the stable local identity so
 	@# one "Always Allow" survives future rebuilds (matches install/install-dev).
@@ -500,7 +529,7 @@ gui-dev:
 	@# Say which frontend went in, and stop here if it is not the one just built. A bundle carrying
 	@# an older frontend looks exactly like an implementation that does not work (scripts/verify-gui-front.sh).
 	@scripts/verify-gui-front.sh "$(GUI_APP_DEV)"
-	@echo "→ amenbo (dev).app (dev; work.amenbo.app.dev)"
+	@echo "→ $(GUI_DEV_NAME).app (dev; $(GUI_DEV_ID))"
 
 ## Applying the prod GUI locally is retired (it is distributed via the unified installer). Replacing
 ## /Applications' prod amenbo.app locally clobbers the Developer ID signed, notarized build with a
@@ -516,13 +545,14 @@ install-gui:
 	@exit 1
 
 ## Build the dev GUI and apply it to /Applications (quit it first if it is running, then replace).
+## TASK=<id> targets that task's own instance instead of the shared dev app.
 install-gui-dev: gui-dev
-	-osascript -e 'quit app "amenbo (dev)"' >/dev/null 2>&1
-	rsync -a --delete "$(GUI_APP_DEV)/" "$(APPS_DIR)/amenbo (dev).app/"
-	@# Check the copy that is actually clicked, not just the one that was built: /Applications holds a
-	@# single shared dev app, so a parallel session can land its own build over this one.
-	@scripts/verify-gui-front.sh "$(APPS_DIR)/amenbo (dev).app"
-	@echo "→ updated /Applications/amenbo (dev).app (dev; app-data: work.amenbo.amenbo-dev)"
+	-osascript -e 'quit app "$(GUI_DEV_NAME)"' >/dev/null 2>&1
+	rsync -a --delete "$(GUI_APP_DEV)/" "$(APPS_DIR)/$(GUI_DEV_NAME).app/"
+	@# Check the copy that is actually clicked, not just the one that was built: the shared dev app is
+	@# one bundle for the whole machine, so a parallel session can land its own build over this one.
+	@scripts/verify-gui-front.sh "$(APPS_DIR)/$(GUI_DEV_NAME).app"
+	@echo "→ updated $(APPS_DIR)/$(GUI_DEV_NAME).app (dev; app-data: work.amenbo.$(GUI_DEV_DATA))"
 
 ## The parallel-development helper (Go, one static binary): it stamps out and tears down a git
 ## worktree per task so several implementation sessions run without stepping on each other, and it

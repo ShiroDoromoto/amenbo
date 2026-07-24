@@ -49,7 +49,8 @@ pub const COMPLEXITY_MIN_ROWS: usize = 200;
 /// - **env** `AMENBO_PERF` (`RUST_LOG` form) wins outright; empty / `off` / `0` / `false` is an
 ///   explicit OFF.
 /// - **config** `perf_log` (`off` / `budget-only` / `verbose`) when set.
-/// - **channel** default: the `amenbo-dev` build is ON (budget-only), `amenbo` (prod) is OFF.
+/// - **channel** default: the development channel is ON (budget-only) — the shared `amenbo-dev`
+///   build and each throwaway per-task instance alike — and `amenbo` (prod) is OFF.
 /// - **build** default: debug builds are ON (budget-only), release is OFF. (Release keeps the spans
 ///   compiled in — only the default filter differs — so a prod binary can be turned ON locally.)
 pub fn resolve_directive(perf_log: Option<PerfLog>) -> String {
@@ -66,7 +67,7 @@ pub fn resolve_directive(perf_log: Option<PerfLog>) -> String {
         return mode.directive().to_string();
     }
     // 3. channel default.
-    if is_dev_channel() {
+    if crate::config::Paths::is_dev_channel() {
         return PerfLog::BudgetOnly.directive().to_string();
     }
     // amenbo (prod) channel is OFF by default — only env/config can turn it on.
@@ -79,12 +80,6 @@ pub fn resolve_directive(perf_log: Option<PerfLog>) -> String {
     } else {
         PerfLog::Off.directive().to_string()
     }
-}
-
-/// Whether this binary is the development channel (`amenbo-dev` app-data). Build-time `AMENBO_APP_NAME`
-/// picks the channel, so this is a compile-time constant comparison.
-fn is_dev_channel() -> bool {
-    crate::config::Paths::APP_NAME.ends_with("-dev")
 }
 
 /// The `scanned / returned` complexity ratio (≥1; clamps `returned` to 1 to avoid div-by-zero). A

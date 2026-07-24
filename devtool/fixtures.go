@@ -435,20 +435,23 @@ func (f failure) String() string {
 	return strconv.Itoa(f.status)
 }
 
-// devAppBinary finds the dev GUI to launch. On macOS that is the installed bundle — the single
-// shared dev app that `make install-gui-dev` updates and that a click actually reaches — and
-// elsewhere the binary the dev build leaves in the tree. `--app` overrides it, which is also the
-// answer for a bundle installed somewhere else.
+// devAppBinary finds the dev GUI to launch. On macOS that is the installed bundle a click actually
+// reaches, taken in the order devGUIBundleNames gives — this checkout's own instance ahead of the
+// shared dev app — and elsewhere the binary the dev build leaves in the tree. `--app` overrides it,
+// which is also the answer for a bundle installed somewhere else. The launch names the binary it
+// picked, so which of the two it landed on is never a guess.
 func devAppBinary() (string, error) {
 	root := mustTreeRoot()
 	built := filepath.Join(root, "app", "src-tauri", "target", "release", "amenbo-app")
 	candidates := []string{built}
 	switch runtime.GOOS {
 	case "darwin":
-		candidates = []string{
-			"/Applications/amenbo (dev).app/Contents/MacOS/amenbo-app",
-			filepath.Join(root, "app", "src-tauri", "target", "release", "bundle", "macos",
-				"amenbo (dev).app", "Contents", "MacOS", "amenbo-app"),
+		candidates = nil
+		for _, name := range devGUIBundleNames(root) {
+			candidates = append(candidates,
+				filepath.Join(macAppsDir, name+".app", "Contents", "MacOS", "amenbo-app"),
+				filepath.Join(root, "app", "src-tauri", "target", "release", "bundle", "macos",
+					name+".app", "Contents", "MacOS", "amenbo-app"))
 		}
 	case "windows":
 		candidates = []string{built + ".exe"}

@@ -494,6 +494,9 @@ gui-dev:
 	@# re-prompting the keychain each cycle. Sign with the stable local identity so
 	@# one "Always Allow" survives future rebuilds (matches install/install-dev).
 	@scripts/codesign-local.sh sign "$(GUI_APP_DEV)"
+	@# Say which frontend went in, and stop here if it is not the one just built. A bundle carrying
+	@# an older frontend looks exactly like an implementation that does not work (scripts/verify-gui-front.sh).
+	@scripts/verify-gui-front.sh "$(GUI_APP_DEV)"
 	@echo "→ amenbo (dev).app (dev; work.amenbo.app.dev)"
 
 ## Applying the prod GUI locally is retired (it is distributed via the unified installer). Replacing
@@ -513,6 +516,9 @@ install-gui:
 install-gui-dev: gui-dev
 	-osascript -e 'quit app "amenbo (dev)"' >/dev/null 2>&1
 	rsync -a --delete "$(GUI_APP_DEV)/" "$(APPS_DIR)/amenbo (dev).app/"
+	@# Check the copy that is actually clicked, not just the one that was built: /Applications holds a
+	@# single shared dev app, so a parallel session can land its own build over this one.
+	@scripts/verify-gui-front.sh "$(APPS_DIR)/amenbo (dev).app"
 	@echo "→ updated /Applications/amenbo (dev).app (dev; app-data: work.amenbo.amenbo-dev)"
 
 ## The parallel-development helper (Go, one static binary): it stamps out and tears down a git

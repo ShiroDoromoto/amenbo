@@ -11,8 +11,9 @@
 //!    [`Subscribers`] who observes each event, copies the event onto the
 //!    [queue](crate::store_engine::queue::QueueRow) of every plugin that does, and deletes the outbox rows it copied
 //!    — all on the caller's transaction, so nothing is copied twice and nothing is reclaimed uncopied.
-//! 2. **[`run_queues`] — from what is to do to what ran.** It reads each plugin's queue from the head,
-//!    rebuilds that plugin's invocation for the row, launches the hook, and removes the row.
+//! 2. **The runners — from what is to do to what ran.** One per plugin ([`crate::plugin_runner`]) reads its
+//!    own queue from the head and takes each row off it; [`hook_for`] is the half that lives here, turning
+//!    one row back into that plugin's invocation.
 //!
 //! The split is what keeps the outbox clear of the slowest plugin: reclaiming it waits on the fan-out,
 //! which runs at the store's speed, rather than on whether some plugin's subprocess has run yet. A stalled
@@ -63,11 +64,6 @@ use crate::store_engine::{events_since, outbox_head, queue, OutboxSlice, WriteTx
 /// event at a time; this only bounds a catch-up drain after downtime, so it is generous — the page cost is
 /// one query, not one process.
 const DELIVER_PAGE: i64 = 256;
-
-/// How many queued rows one [`run_queues`] pass reads from a plugin's queue at a time. The same shape as
-/// [`DELIVER_PAGE`], and for the same reason: a page is one query, and the pass keeps reading until the
-/// queue is empty.
-const RUN_PAGE: i64 = 256;
 
 /// One resolved subscriber: the plugin to fire and its non-secret config to hand it alongside the event.
 ///
@@ -186,15 +182,21 @@ impl Subscribers for NoSubscribers {
 /// it started are not cut short), or **drop them to forget** (the true fire-and-forget a long-lived GUI
 /// wants). That choice is the caller's, exactly as [`plugin_hooks::fire`](crate::plugin_hooks::fire)
 /// hands it over.
-#[must_use = "join or drop `hooks`, and surface `replies`"]
+#[must_use = "wait for or drop `runners`, and surface `replies`"]
 pub struct Delivered {
     /// The cursor the fan-out reached — the id of the last outbox event copied onto the queues, or the
     /// outbox head when a gap forced a resync. Never moves backwards.
     pub cursor: i64,
-    /// The launched hook threads (one per fired **fire-and-forget** invocation). Join before exiting a
-    /// short-lived process; drop to forget. A `reply:true` hook is not here — it ran synchronously and its
-    /// output is in [`replies`](Delivered::replies).
-    pub hooks: Vec<JoinHandle<()>>,
+    /// The runner threads this drive started — one per plugin whose lease it took (`AMB-D-399`), each
+    /// working that plugin's whole queue. A long-lived face drops them; a short-lived one waits for them
+    /// with [`wait_for_runners`](Delivered::wait_for_runners) rather than joining, so a plugin that never
+    /// returns cannot hold the process open. A `reply:true` hook is in neither — it ran synchronously and
+    /// its output is in [`replies`](Delivered::replies).
+    pub runners: Vec<JoinHandle<()>>,
+    /// Signalled once by each runner as it ends — the bounded half of the wait above. It is a channel and
+    /// not a join because a runner is not bounded by anything: waiting on one is a choice the caller can
+    /// stop making, which joining does not allow.
+    pub finished: std::sync::mpsc::Receiver<()>,
     /// The replies gathered from `reply:true` hooks, in fan-out order (`AMB-D-383`). Each ran synchronously
     /// under [`REPLY_TIMEOUT`], and carries the stderr the caller should surface. Empty on the GUI face,
     /// which never resolves a replying subscriber, and empty whenever no fired hook asked to reply.
@@ -203,6 +205,27 @@ pub struct Delivered {
     /// never queued. The cursor is resynced to the head. A caller may log this (`AMB-D-361`); delivery being
     /// best-effort, it is not an error (`AMB-D-352`).
     pub gapped: bool,
+}
+
+impl Delivered {
+    /// Wait up to `budget` for the runners this drive started, then walk away — what a **short-lived** face
+    /// does before it exits (`AMB-D-399`).
+    ///
+    /// A process about to end has to wait for something, or the runner it just started dies with it and the
+    /// events it queued sit until the store is next driven. But it must not wait for *ever*: a runner is
+    /// deliberately unbounded — a plugin is no longer killed for being slow — so joining would hand every
+    /// command's exit to the slowest plugin installed. The budget is the line between the two. What is still
+    /// running when it runs out is left running; the process ends, that runner dies with it, and its rows
+    /// stay queued behind a lease that expires — the next drive picks the queue up where this one left it.
+    pub fn wait_for_runners(self, budget: std::time::Duration) {
+        let deadline = std::time::Instant::now() + budget;
+        for _ in 0..self.runners.len() {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            if self.finished.recv_timeout(left).is_err() {
+                break; // the budget ran out, or every runner is already gone
+            }
+        }
+    }
 }
 
 /// What one [`fan_out`] pass moved: how far it read, how much it queued, the replying hooks it could not
@@ -362,88 +385,56 @@ pub fn run_replies(hooks: Vec<Hook>, log: Option<&std::path::Path>) -> Vec<Reply
     replies
 }
 
-/// **Run the queues** — the second layer of delivery (`AMB-D-399`): every plugin with work waiting has its
-/// queue read from the head, each row turned back into that plugin's invocation, and the hook launched.
+/// The hook one **queued row** runs, or `None` when the row names nothing runnable any more.
 ///
-/// A row is removed as it is handed on, which is the delivery contract as it stands (`AMB-D-352`): a hook
-/// that will not launch or exits non-zero is a warning and nothing more, so a row that has been fired is
-/// done with either way. (Removing it on the plugin's *reply* instead — so a run cut short is retried —
-/// is the next step of `AMB-D-399`, and needs a reply channel that does not exist yet.)
+/// This is the second layer's per-row half (`AMB-D-399`): the row is turned back into the plugin's
+/// invocation on the face the fan-out resolved it for, with the event payload and the plugin's own text
+/// config on stdin. Taking the row *off* the queue is the runner's ([`crate::plugin_runner`]) — it does that
+/// on a transaction of its own, whether or not there is a hook to run.
 ///
 /// A row whose plugin no longer resolves — disabled, uninstalled, or updated out of the subscription — is
-/// dropped rather than fired: what is on a queue is a claim about the past, and the gate is read now. Same
-/// for a row this build cannot rebuild (an unknown event or face): it is warned about and removed, so a row
+/// `None` rather than a hook: what is on a queue is a claim about the past, and the gate is read now. Same
+/// for a row this build cannot rebuild (an unknown event or face): it is warned about and dropped, so a row
 /// nobody can run never blocks the ones behind it.
-///
-/// Returns the launched threads for the caller to join or drop, exactly as
-/// [`plugin_hooks::fire`](crate::plugin_hooks::fire) hands them over.
-pub fn run_queues(
-    conn: &Connection,
-    subs: &dyn Subscribers,
-    log: Option<&std::path::Path>,
-) -> Result<Vec<JoinHandle<()>>> {
-    let mut launched = Vec::new();
-    for plugin in queue::queued_plugins(conn)? {
-        loop {
-            let rows = queue::queued_for(conn, &plugin, RUN_PAGE)?;
-            if rows.is_empty() {
-                break;
-            }
-            let read = rows.len() as i64;
-            let mut hooks = Vec::new();
-            for row in &rows {
-                // Off the queue first, then fired: a row is delivered once, and the contract is that a
-                // failed run is not retried. Dropping it here also means the loop always makes progress —
-                // a row nothing can run cannot come back on the next page.
-                queue::dequeue(conn, row.id)?;
-                let (Some(payload), Some(face)) =
-                    (Payload::from_queue_row(row), Face::parse(&row.face))
-                else {
-                    tracing::warn!(
-                        plugin = %row.plugin,
-                        event = %row.event,
-                        face = %row.face,
-                        "unrecognised queued plugin event; dropped"
-                    );
-                    continue;
-                };
-                let project = project_of_event(conn, payload.event, payload.id).unwrap_or_else(|e| {
-                    tracing::warn!(
-                        event = %payload.event,
-                        id = payload.id,
-                        error = %e,
-                        "could not read the event's project"
-                    );
-                    None
-                });
-                // Who this plugin is *now*: its program, its config, and whether it still subscribes at all.
-                // A subscriber that no longer resolves has been turned off since the fan-out, and a plugin
-                // that is off must not fire.
-                let Some(sub) = subs.resolve_one(&plugin, payload.event, project, face) else {
-                    tracing::debug!(
-                        plugin = %plugin,
-                        event = %payload.event,
-                        "queued for a plugin that no longer subscribes; dropped"
-                    );
-                    continue;
-                };
-                // Compose this subscriber's stdin: the event payload with the plugin's own text config
-                // folded under `config` (`AMB-D-356`). Serialized straight from the typed payload so its
-                // declared field order is the wire order — `v` leads (`AMB-D-349`) — rather than
-                // round-tripping through a `serde_json::Value`, whose map sorts the keys.
-                let json = with_config(&payload, sub.config)?;
-                // A `reply:true` subscription resolved here is one the fan-out did not see (the manifest
-                // changed in between): there is no caller waiting on this row, so it is fired and forgotten
-                // like the rest, and what it says lands in the execution log.
-                hooks.push(Hook::new(sub.plugin, payload.event, sub.invocation.stdin_json(json)));
-            }
-            launched.extend(crate::plugin_hooks::fire(hooks, log));
-            if read < RUN_PAGE {
-                break;
-            }
-        }
-    }
-    Ok(launched)
+pub fn hook_for(conn: &Connection, subs: &dyn Subscribers, row: &queue::QueueRow) -> Result<Option<Hook>> {
+    let (Some(payload), Some(face)) = (Payload::from_queue_row(row), Face::parse(&row.face)) else {
+        tracing::warn!(
+            plugin = %row.plugin,
+            event = %row.event,
+            face = %row.face,
+            "unrecognised queued plugin event; dropped"
+        );
+        return Ok(None);
+    };
+    let project = project_of_event(conn, payload.event, payload.id).unwrap_or_else(|e| {
+        tracing::warn!(
+            event = %payload.event,
+            id = payload.id,
+            error = %e,
+            "could not read the event's project"
+        );
+        None
+    });
+    // Who this plugin is *now*: its program, its config, and whether it still subscribes at all. A
+    // subscriber that no longer resolves has been turned off since the fan-out, and a plugin that is off
+    // must not fire.
+    let Some(sub) = subs.resolve_one(&row.plugin, payload.event, project, face) else {
+        tracing::debug!(
+            plugin = %row.plugin,
+            event = %payload.event,
+            "queued for a plugin that no longer subscribes; dropped"
+        );
+        return Ok(None);
+    };
+    // Compose this subscriber's stdin: the event payload with the plugin's own text config folded under
+    // `config` (`AMB-D-356`). Serialized straight from the typed payload so its declared field order is the
+    // wire order — `v` leads (`AMB-D-349`) — rather than round-tripping through a `serde_json::Value`,
+    // whose map sorts the keys.
+    let json = with_config(&payload, sub.config)?;
+    // A `reply:true` subscription resolved here is one the fan-out did not see (the manifest changed in
+    // between): there is no caller waiting on this row, so it is run and forgotten like the rest, and what
+    // it says lands in the execution log.
+    Ok(Some(Hook::new(sub.plugin, payload.event, sub.invocation.stdin_json(json))))
 }
 
 /// The project one drained event happened in, or `None` when nothing says so any more.
@@ -507,23 +498,45 @@ mod tests {
     use super::*;
     use crate::store_engine::{outbox::EventRow, StoreEngine};
 
-    /// One whole pass over a store: fan out on a transaction, run the replies it handed back, then run the
-    /// queues — what [`crate::plugin_drive::drive_persisted`] does, minus the persisted cursor. Both halves
-    /// have to line up for anything to fire, which is what most of these tests are about; the tests that are
-    /// about one half call [`fan_out`] or [`run_queues`] directly.
+    /// What one whole pass over a store came to — the test-side counterpart of [`Delivered`], where the
+    /// runs are the hooks themselves rather than the threads that would have carried them.
+    struct Pass {
+        cursor: i64,
+        ran: Vec<Hook>,
+        replies: Vec<Reply>,
+        gapped: bool,
+    }
+
+    /// One whole pass over a store: fan out on a transaction, run the replies it handed back, then drain
+    /// every queue the way a runner does — what [`crate::plugin_drive::drive_persisted`] does, minus the
+    /// persisted cursor and minus the threads. Both halves have to line up for anything to run, which is
+    /// what most of these tests are about; the tests that are about one half call [`fan_out`] or
+    /// [`hook_for`] directly. Each row is run where it is read, on this thread, so a test that looks at what
+    /// a plugin actually received has it by the time it looks. The draining is deliberately not a runner
+    /// ([`crate::plugin_runner`]): a runner's own loop, its lease and its leaving are tested where they
+    /// live, and what is under test here is which hook a queued row comes back as.
     fn deliver(
         e: &StoreEngine,
         cursor: i64,
         subs: &dyn Subscribers,
         face: Face,
         log: Option<&std::path::Path>,
-    ) -> Result<Delivered> {
+    ) -> Result<Pass> {
         let tx = e.write()?;
         let fanned = fan_out(&tx, cursor, subs, face, log)?;
         tx.commit()?;
         let replies = run_replies(fanned.replies, log);
-        let hooks = run_queues(e.conn(), subs, log)?;
-        Ok(Delivered { cursor: fanned.cursor, hooks, replies, gapped: fanned.gapped })
+        let mut ran = Vec::new();
+        for plugin in queue::queued_plugins(e.conn())? {
+            for row in queue::queued_for(e.conn(), &plugin, 256)? {
+                queue::dequeue(e.conn(), row.id)?;
+                if let Some(hook) = hook_for(e.conn(), subs, &row)? {
+                    crate::plugin_hooks::run_queued(&hook, log);
+                    ran.push(hook);
+                }
+            }
+        }
+        Ok(Pass { cursor: fanned.cursor, ran, replies, gapped: fanned.gapped })
     }
 
     /// Fan out on its own transaction — for the tests that look at what landed on the queues, rather than at
@@ -574,7 +587,7 @@ mod tests {
 
         let d = deliver(&e, 0, &NoSubscribers, Face::Cli, None).unwrap();
         assert_eq!(d.cursor, 2, "the cursor walks to the head even with nobody listening");
-        assert!(d.hooks.is_empty(), "no subscriber, no fire");
+        assert!(d.ran.is_empty(), "no subscriber, no fire");
         assert!(!d.gapped);
     }
 
@@ -589,10 +602,7 @@ mod tests {
         let subs = Fixed { events: vec!["task.status_changed"], invocation: bogus() };
         let d = deliver(&e, 0, &subs, Face::Cli, None).unwrap();
         assert_eq!(d.cursor, 3);
-        assert_eq!(d.hooks.len(), 2, "two status_changed events fire, the creation does not");
-        for h in d.hooks {
-            h.join().unwrap();
-        }
+        assert_eq!(d.ran.len(), 2, "two status_changed events fire, the creation does not");
     }
 
     /// Delivering again from the returned cursor fires nothing — a committed event is delivered once.
@@ -603,14 +613,11 @@ mod tests {
         let subs = Fixed { events: vec!["task.status_changed"], invocation: bogus() };
 
         let first = deliver(&e, 0, &subs, Face::Cli, None).unwrap();
-        assert_eq!(first.hooks.len(), 1);
-        for h in first.hooks {
-            h.join().unwrap();
-        }
+        assert_eq!(first.ran.len(), 1);
 
         let second = deliver(&e, first.cursor, &subs, Face::Cli, None).unwrap();
         assert_eq!(second.cursor, first.cursor, "nothing new, so the cursor holds");
-        assert!(second.hooks.is_empty(), "the event already fired once");
+        assert!(second.ran.is_empty(), "the event already fired once");
     }
 
     /// A row whose event is outside the v1 catalog is warned about and skipped, but the cursor still walks
@@ -624,10 +631,7 @@ mod tests {
         let subs = Fixed { events: vec!["task.created", "task.exploded"], invocation: bogus() };
         let d = deliver(&e, 0, &subs, Face::Cli, None).unwrap();
         assert_eq!(d.cursor, 2, "the cursor walks past the unrecognised row");
-        assert_eq!(d.hooks.len(), 1, "only the recognised event resolved a subscriber");
-        for h in d.hooks {
-            h.join().unwrap();
-        }
+        assert_eq!(d.ran.len(), 1, "only the recognised event resolved a subscriber");
     }
 
     /// A cursor behind the retention watermark is a gap: nothing is fired for the lost span and the cursor
@@ -646,7 +650,7 @@ mod tests {
         let d = deliver(&e, 0, &subs, Face::Cli, None).unwrap();
         assert!(d.gapped, "a cursor behind the watermark is a gap");
         assert_eq!(d.cursor, 2, "the cursor resyncs to the head");
-        assert!(d.hooks.is_empty(), "the lost span is not replayed");
+        assert!(d.ran.is_empty(), "the lost span is not replayed");
     }
 
     /// A gap fires nothing, so it leaves no run to look at: the one line it does leave in the execution log
@@ -738,10 +742,7 @@ mod tests {
         emit(&e, "task.status_changed", 42, Some("in_progress"));
 
         let d = deliver(&e, 0, &subs, Face::Cli, None).unwrap();
-        assert_eq!(d.hooks.len(), 1);
-        for h in d.hooks {
-            h.join().unwrap();
-        }
+        assert_eq!(d.ran.len(), 1);
 
         let got: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
@@ -771,10 +772,7 @@ mod tests {
         emit(&e, "task.status_changed", 42, Some("in_progress"));
 
         let d = deliver(&e, 0, &subs, Face::Cli, None).unwrap();
-        assert_eq!(d.hooks.len(), 1);
-        for h in d.hooks {
-            h.join().unwrap();
-        }
+        assert_eq!(d.ran.len(), 1);
 
         let got: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
@@ -863,11 +861,10 @@ mod tests {
 
         // The same resolver, driven by nobody in particular: the row still resolves, because the face comes
         // from the row.
-        let hooks = run_queues(e.conn(), &subs, None).unwrap();
-        assert_eq!(hooks.len(), 1, "the CLI-only subscription runs from its queue");
-        for h in hooks {
-            h.join().unwrap();
-        }
+        assert!(
+            hook_for(e.conn(), &subs, &rows[0]).unwrap().is_some(),
+            "the CLI-only subscription runs from its queue"
+        );
     }
 
     /// A row whose plugin no longer subscribes — disabled, uninstalled, updated out of it — is dropped
@@ -881,8 +878,11 @@ mod tests {
         let _ = fan(&e, 0, &Fixed { events: vec!["task.created"], invocation: bogus() }, Face::Cli);
         assert_eq!(queued_for(e.conn(), "fixed", 10).unwrap().len(), 1);
 
-        let hooks = run_queues(e.conn(), &NoSubscribers, None).unwrap();
-        assert!(hooks.is_empty(), "a plugin that is off does not fire");
+        let row = queued_for(e.conn(), "fixed", 10).unwrap().remove(0);
+        assert!(hook_for(e.conn(), &NoSubscribers, &row).unwrap().is_none(), "a plugin that is off does not fire");
+        // The runner takes the row off whether or not it came back as a hook, so it cannot block the rows
+        // behind it — the drop is what this test is about, the taking is `plugin_runner`'s.
+        assert!(queue::dequeue(e.conn(), row.id).unwrap());
         assert!(queued_for(e.conn(), "fixed", 10).unwrap().is_empty(), "and its row does not linger");
     }
 
@@ -982,7 +982,7 @@ mod tests {
         emit(&e, "task.status_changed", 7, Some("in_progress"));
 
         let d = deliver(&e, 0, &subs, Face::Cli, None).unwrap();
-        assert!(d.hooks.is_empty(), "a replying hook ran inline, not as a fire-and-forget thread");
+        assert!(d.ran.is_empty(), "a replying hook ran inline, and never joined a queue");
         assert_eq!(d.replies.len(), 1, "its reply is carried back");
         assert_eq!(d.replies[0].plugin, "advisor");
         assert_eq!(d.replies[0].event, "task.status_changed");
@@ -1002,7 +1002,7 @@ mod tests {
 
         let d = deliver(&e, 0, &subs, Face::Cli, None).unwrap();
         assert!(d.replies.is_empty(), "a silent reply hook carries nothing back");
-        assert!(d.hooks.is_empty(), "and it was not launched fire-and-forget either");
+        assert!(d.ran.is_empty(), "and it was not queued as a fire-and-forget one either");
     }
 
     /// The same hook without `reply` is a fire-and-forget one: it lands in `hooks`, and nothing is relayed —
@@ -1019,9 +1019,6 @@ mod tests {
 
         let d = deliver(&e, 0, &subs, Face::Cli, None).unwrap();
         assert!(d.replies.is_empty(), "a hook that did not ask to reply relays nothing");
-        assert_eq!(d.hooks.len(), 1, "it was launched fire-and-forget");
-        for h in d.hooks {
-            h.join().unwrap();
-        }
+        assert_eq!(d.ran.len(), 1, "it was queued and run as a fire-and-forget one");
     }
 }

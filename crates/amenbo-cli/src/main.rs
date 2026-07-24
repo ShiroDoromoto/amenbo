@@ -2488,6 +2488,15 @@ fn parse_date_opt(s: &Option<String>) -> Result<Option<NaiveDate>, CliError> {
 /// and the cursor still walks and persists, so a plugin installed later starts from what fires *next*, not
 /// the whole backlog. A dispatch failure is a warning, never the command's exit: the mutation is already
 /// committed.
+/// How long a command waits for the plugin runners it started before it exits (`AMB-D-399`).
+///
+/// A short-lived process has to wait for something — the runner it just started dies with it, and what it
+/// was running would sit until the store is next driven. But the wait has to end: the plugin itself is no
+/// longer killed for being slow, so this is what keeps a slow one from being felt as a slow `amenbo`. It is
+/// where the old per-hook timeout sat, moved from the plugin's side to ours: what runs long is left running,
+/// not cut off.
+const RUNNER_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
 fn with_dispatch(
     store: &mut Store,
     op: impl FnOnce(&mut Store) -> Result<i32, CliError>,
@@ -2512,9 +2521,11 @@ fn with_dispatch(
             for reply in &delivered.replies {
                 eprintln!("[{}] {}", reply.plugin, reply.stderr.trim_end());
             }
-            for hook in delivered.hooks {
-                let _ = hook.join();
-            }
+            // Wait for the runners this command started, but not for ever: a runner is unbounded on
+            // purpose (`AMB-D-399` took the five-second kill off this path), so joining would hand this
+            // command's exit to the slowest plugin installed. What is still running when the budget runs
+            // out dies with the process, and its rows stay queued for the next drive to pick up.
+            delivered.wait_for_runners(RUNNER_WAIT);
         }
         Err(e) => eprintln!("warning: could not dispatch plugin observation hooks: {e}"),
     }

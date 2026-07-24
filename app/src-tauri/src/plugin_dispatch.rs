@@ -10,9 +10,9 @@
 //!   (`commands::with_store_mut`), so there is no long-lived store to hang a loop off. The dispatcher runs
 //!   once after each mutating command committed, on that command's own open store — the same shape the
 //!   CLI has at its write seam.
-//! - **The hooks are dropped, not joined.** Dropping the handles is true fire-and-forget
-//!   (`AMB-D-352`): this process is not about to exit, so a hook it launched runs to its own end. Joining
-//!   would make every write wait on a subprocess.
+//! - **The runners are dropped, not waited on.** Dropping the handles is true fire-and-forget
+//!   (`AMB-D-352`): this process is not about to exit, so a runner it started works its plugin's queue to
+//!   the end on its own. Waiting would make every write wait on a subprocess.
 //!
 //! There is no session start to set, either: whatever sits past the stored cursor is undelivered, and a GUI
 //! launched today delivers it if no CLI run already did — one cursor is the only answer to how far this
@@ -40,7 +40,7 @@ pub fn drive(store: &Store) {
         }
     };
     let subscribers = EnabledSubscribers::new(&installed, store);
-    // The returned `Delivered` is dropped here, and with it the hooks' handles: fire-and-forget
+    // The returned `Delivered` is dropped here, and with it the runners' handles: fire-and-forget
     // (`AMB-D-352`). The cursor it advanced to is already stored.
     if let Err(e) = store.drive_plugins_persisted(Face::Gui, &subscribers) {
         log::warn!("could not dispatch the plugin observation hooks: {e}");

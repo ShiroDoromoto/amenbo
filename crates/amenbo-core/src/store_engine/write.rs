@@ -116,6 +116,35 @@ impl<'a> WriteTx<'a> {
         super::queue::enqueue(&self.tx, event)
     }
 
+    /// Take one row off a plugin's queue **inside this transaction** — what a runner does as it hands the
+    /// event on (`AMB-D-399`). It rides the same transaction that pushes the runner's lease out, so a runner
+    /// that has lost its lease takes nothing. See [`super::queue`].
+    pub fn dequeue_event(&self, row: i64) -> Result<bool> {
+        super::queue::dequeue(&self.tx, row)
+    }
+
+    /// Take `plugin`'s runner lease for `owner` until `expires_at`, judged against `now` — `true` when it
+    /// was taken, `false` when a live lease is already standing (`AMB-D-399`). Claiming **inside this
+    /// transaction** is what makes "at most one runner per plugin" hold: the read that finds the lease
+    /// absent and the write that takes it are one atom under the write lock, so two drives cannot both find
+    /// it free. See [`super::runner`].
+    pub fn claim_runner(&self, plugin: &str, owner: &str, expires_at: &str, now: &str) -> Result<bool> {
+        super::runner::claim(&self.tx, plugin, owner, expires_at, now)
+    }
+
+    /// Push `owner`'s lease on `plugin` out to `expires_at`; `false` when the lease is no longer its own —
+    /// it was taken over past its horizon. See [`super::runner`].
+    pub fn extend_runner(&self, plugin: &str, owner: &str, expires_at: &str) -> Result<bool> {
+        super::runner::extend(&self.tx, plugin, owner, expires_at)
+    }
+
+    /// Give up `owner`'s lease on `plugin`; `false` when it was already taken over. Issue it **on the
+    /// transaction that read the queue empty** — the pairing is what leaves no gap between "nothing left to
+    /// run" and "nobody is running" (`AMB-D-399`). See [`super::runner`].
+    pub fn release_runner(&self, plugin: &str, owner: &str) -> Result<bool> {
+        super::runner::release(&self.tx, plugin, owner)
+    }
+
     /// Commit the batch. Everything written through this guard lands together; on any earlier `?` the
     /// guard drops and none of it does. Consumes the guard, so a committed transaction cannot be
     /// written to again — and the caller's activity append can only follow this returning `Ok`. **The

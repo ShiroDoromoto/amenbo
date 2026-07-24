@@ -817,6 +817,26 @@ plain_tables! {
         new_state: text_opt,
     }
 
+    /// Who is **running** a plugin's queue right now — at most one row per plugin, and the whole of the
+    /// "one runner per plugin" rule (`AMB-D-399`). A drive that has just fanned out claims the row before
+    /// it starts a runner: the row is there, so nobody starts a second one, and a runner leaves only by
+    /// deleting it — in the same transaction that found its queue empty. Both sides pass through one
+    /// transaction, so the order is always one or the other: a fan-out that lands first leaves the row
+    /// standing and the running runner picks its event up; a runner that leaves first frees the row and
+    /// the fan-out starts a new one.
+    ///
+    /// `expires_at` is what keeps the rule from becoming a deadlock. A runner killed with the machine, or
+    /// with the process it rode in on, never deletes its row; without a horizon that plugin would be
+    /// "already running" forever and never run again. A runner pushes its horizon out while it works, and
+    /// a row past it is void — whoever finds it takes the queue over. `owner` names the runner the row is
+    /// for, so the predecessor of such a takeover deletes nothing on its way out: the row it left is no
+    /// longer the row that is there.
+    plugin_runner {
+        plugin: text("PRIMARY KEY"),
+        owner: text,
+        expires_at: text,
+    }
+
     /// The device-local **folder bindings** — the project's main dir, one row per project
     /// ([`crate::binding::Registry`] resolves by it). The key is the project's `INTEGER` id, as a
     /// *natural* key: the record shape would force a surrogate `id`. No `REFERENCES project(id)`: a

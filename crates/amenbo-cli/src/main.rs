@@ -1195,13 +1195,13 @@ fn plugin_runs_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i
     Ok(0)
 }
 
-/// The dispatch-cursor line `plugin runs` leads with: how far this store has been delivered, and which face
-/// took it there (`AMB-D-380`).
+/// The dispatch-cursor line `plugin runs` leads with: how far this store's outbox has been fanned out onto
+/// the plugins' queues, and which face took it there (`AMB-D-380`, `AMB-D-399`).
 ///
-/// A cursor of `0` with no face is a store nothing has ever been delivered from, which is a different fact
+/// A cursor of `0` with no face is a store nothing has ever been handed out from, which is a different fact
 /// from an empty log — a plugin that never fired and a dispatcher that never ran read the same in the runs
 /// below, and this line is what tells them apart. A cursor standing at some id with no face beside it is the
-/// third shape: delivered by a build that did not stamp one.
+/// third shape: fanned out by a build that did not stamp one.
 ///
 /// Split out from the command so the wording is one string, testable without a store, and so the two callers
 /// (`--json` and the listing) cannot drift into saying different things.

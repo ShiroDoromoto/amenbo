@@ -1,33 +1,35 @@
 //! Mounting the single observation-hook dispatcher at the write seam, and owning its cursor
-//! (`AMB-D-367`, `AMB-D-380`).
+//! (`AMB-D-367`, `AMB-D-380`, `AMB-D-399`).
 //!
-//! [`deliver`] is **pure over its cursor**: it drains the
-//! outbox past a cursor and returns the one to store next, holding none of its own. This module is the
-//! caller `AMB-D-367` hands that cursor to — the mount. The dispatcher is single, and so is the cursor:
-//! both faces read and write the same persisted one ([`drive_persisted`]), and trim is measured against
-//! that one (`AMB-D-380`). Where they still differ is only in *what becomes of the fires*:
+//! [`fan_out`] is **pure over its cursor**: it drains the outbox past a cursor onto the subscribed plugins'
+//! queues and returns the one to store next, holding none of its own. This module is the caller
+//! `AMB-D-367` hands that cursor to — the mount. The dispatcher is single, and so is the cursor: both faces
+//! read and write the same persisted one ([`drive_persisted`]), and trim is measured against that one
+//! (`AMB-D-380`). Where they still differ is only in *what becomes of the fires*:
 //!
 //! - A **short-lived CLI** **joins** the launched hooks before it exits (the caller's, from
 //!   [`Delivered::hooks`]), so a fire it started is not cut short by the process ending.
 //! - A **long-lived GUI** **drops** them — true fire-and-forget (`AMB-D-352`). Its process outlives the
 //!   fires, so nothing is cut short.
 //!
-//! One cursor is what makes an event fire exactly once across the two: a session cursor held in the GUI's
-//! memory left the events it delivered still standing in the outbox, so the next CLI run delivered them a
-//! second time — and an observation hook's effects leave the machine, which makes a double fire a bug the
-//! user sees. There is no per-face start position either: the persisted cursor is the single answer to
-//! "how far has this store been delivered", and whatever sits past it is undelivered, whichever face
-//! launched when.
+//! One cursor is what makes an event reach a plugin exactly once across the two: a session cursor held in
+//! the GUI's memory left the events it delivered still standing in the outbox, so the next CLI run
+//! delivered them a second time — and an observation hook's effects leave the machine, which makes a double
+//! fire a bug the user sees. There is no per-face start position either: the persisted cursor is the single
+//! answer to "how far has this store been fanned out", and whatever sits past it is unqueued, whichever
+//! face launched when.
 //!
 //! Because both faces drain, the advance is **contention-tolerant**: the cursor is re-read under the write
 //! lock and only ever moves forward, so a face that loses the race leaves the winner's position standing
-//! and picks up from it on its next drive. The whole advance — cursor, face, and the trim it authorises —
-//! rides one transaction of its own, separate from the mutation that triggered the drive: the drive never
-//! enlarges that operation, and the persist is skipped when the cursor did not move, so a read command that
-//! drives finds nothing and writes nothing.
+//! and picks up from it on its next drive. The fan-out, the outbox reclaim it authorises and the cursor
+//! that records it ride **one transaction of their own**, separate from the mutation that triggered the
+//! drive: the drive never enlarges that operation, and the cursor is not rewritten when it did not move, so
+//! a read command that drives finds nothing and writes nothing. Running the queues sits outside that
+//! transaction — a subprocess must not be launched under the write lock, and by then each queue holds
+//! everything the run needs.
 
 use crate::error::Result;
-use crate::plugin_dispatch::{deliver, Delivered, Subscribers};
+use crate::plugin_dispatch::{fan_out, run_queues, Delivered, FannedOut, Subscribers};
 use crate::store_engine::StoreEngine;
 
 /// The `store_meta` key the dispatch cursor is persisted under — the id of the last outbox event a drive
@@ -69,14 +71,19 @@ pub fn persisted_cursor_face(engine: &StoreEngine) -> Result<Option<Face>> {
     Ok(engine.get_meta(CURSOR_FACE_META)?.as_deref().and_then(Face::parse))
 }
 
-/// Drive the dispatcher once from the persisted cursor and persist where it advanced to — the mount both
-/// faces use (`AMB-D-380`). Reads the stored cursor, fires the subscribers of everything committed since,
-/// and writes the advanced cursor back so the next drive, in either face, continues past it (the persist is
-/// skipped when the cursor did not move). `face` is stamped beside the cursor for diagnosis
-/// ([`CURSOR_FACE_META`]) and changes nothing about what is delivered. The returned [`Delivered`] carries
-/// the launched hooks — the CLI **joins** them before it exits, the GUI drops them — and whether a retention
-/// gap was hit. `log` is the execution log every run and every gap is recorded in (`AMB-D-361`), passed
-/// straight down to [`deliver`]. The cursor is already stored on return.
+/// Drive the dispatcher once from the persisted cursor: fan the outbox out onto the plugins' queues,
+/// persist where it advanced to, and run the queues — the mount both faces use (`AMB-D-380`, `AMB-D-399`).
+///
+/// The first half rides **one transaction**: the fan-out copies each event onto the queue of every plugin
+/// that observes it, deletes the outbox rows it copied, and the cursor that says how far it got is stored
+/// beside them. Either all three land or none does, so the outbox can never be reclaimed past what was
+/// queued, nor queued twice. The second half runs outside it — a subprocess must not be launched under the
+/// write lock — and needs nothing from it: each plugin's queue says for itself what it still owes.
+///
+/// `face` selects which subscriptions resolve (`AMB-D-383`) and is stamped beside the cursor for diagnosis
+/// ([`CURSOR_FACE_META`]). The returned [`Delivered`] carries the launched hooks — the CLI **joins** them
+/// before it exits, the GUI drops them — the replies to surface, and whether a retention gap was hit. `log`
+/// is the execution log every run and every gap is recorded in (`AMB-D-361`).
 pub fn drive_persisted(
     engine: &StoreEngine,
     face: Face,
@@ -84,35 +91,38 @@ pub fn drive_persisted(
     log: Option<&std::path::Path>,
 ) -> Result<Delivered> {
     let cursor = persisted_cursor(engine)?;
-    let delivered = deliver(engine.conn(), cursor, subs, face, log)?;
-    if delivered.cursor != cursor {
-        // Everything through the new cursor is now delivered (or, on a gap resync, jumped past and
-        // accepted as lost — either way the dispatcher will never read it again), so the same call that
-        // stores the cursor reclaims the outbox through it (`AMB-T-2021`). One cursor is what trim waits
-        // on, and it has, by definition, passed `delivered.cursor`.
-        advance_cursor(engine, face, delivered.cursor)?;
-    }
-    Ok(delivered)
+    let fanned = fan_out_persisted(engine, cursor, face, subs, log)?;
+    // The transaction is closed by now, so the replying hooks can run: they are synchronous, and holding
+    // the write lock across a subprocess is exactly what the queue exists to avoid.
+    let replies = crate::plugin_dispatch::run_replies(fanned.replies, log);
+    let hooks = run_queues(engine.conn(), subs, log)?;
+    Ok(Delivered { cursor: fanned.cursor, hooks, replies, gapped: fanned.gapped })
 }
 
-/// Move the persisted cursor forward to `to`, stamp `face` beside it, and reclaim the outbox through it —
-/// all on one transaction. Returns whether the cursor actually moved.
+/// The transactional half of a drive: fan the outbox out and store where the fan-out reached, on one
+/// transaction. Returns what it moved, the replying hooks included — those are the caller's to run once
+/// this has committed.
 ///
 /// The cursor is re-read **inside** the transaction, whose `BEGIN IMMEDIATE` holds the write lock from the
-/// start: the other face may have drained the same span while this one was firing, so a `to` that is not
-/// ahead of what is already stored writes nothing and trims nothing. The loser of that race simply reads
-/// the winner's position on its next drive (`AMB-D-380`) — the cursor never goes backwards, which is what
-/// keeps a delivered event from being replayed.
-fn advance_cursor(engine: &StoreEngine, face: Face, to: i64) -> Result<bool> {
+/// start: the other face may have fanned the same span out while this one was assembling, so a cursor that
+/// is not ahead of what is already stored is not written (the fan-out itself found nothing to copy in that
+/// case — it read past the same trimmed rows). The cursor never goes backwards, which is what keeps a
+/// queued event from being queued twice (`AMB-D-380`).
+fn fan_out_persisted(
+    engine: &StoreEngine,
+    cursor: i64,
+    face: Face,
+    subs: &dyn Subscribers,
+    log: Option<&std::path::Path>,
+) -> Result<FannedOut> {
     let tx = engine.write()?;
-    let moved = to > persisted_cursor(engine)?;
-    if moved {
-        tx.set_meta(CURSOR_META, Some(&to.to_string()))?;
+    let fanned = fan_out(&tx, cursor, subs, face, log)?;
+    if fanned.cursor > persisted_cursor(engine)? {
+        tx.set_meta(CURSOR_META, Some(&fanned.cursor.to_string()))?;
         tx.set_meta(CURSOR_FACE_META, Some(face.as_str()))?;
-        crate::store_engine::outbox::trim_delivered(tx.conn(), to)?;
     }
     tx.commit()?;
-    Ok(moved)
+    Ok(fanned)
 }
 
 #[cfg(test)]
@@ -302,23 +312,59 @@ mod tests {
         assert_eq!(e.get_meta(CURSOR_FACE_META).unwrap().as_deref(), Some("cli"), "the face follows the mover");
     }
 
-    /// The advance only ever moves forward: a face that lost the race — the other one having drained the
-    /// same span while it was firing — stores nothing and leaves the winner's position standing
-    /// (`AMB-D-380`). Replaying a delivered event is exactly what this refuses.
+    /// The stored cursor only ever moves forward: a face that comes back with an older one — the other
+    /// having fanned the same span out while this was running — stores nothing and leaves the winner's
+    /// position standing (`AMB-D-380`). Queueing an event twice is exactly what this refuses.
     #[test]
-    fn the_cursor_never_moves_backwards() {
+    fn the_stored_cursor_never_moves_backwards() {
         let e = StoreEngine::open_in_memory().unwrap();
         emit(&e, "task.created", 1);
         emit(&e, "task.created", 2);
         emit(&e, "task.created", 3);
 
-        assert!(advance_cursor(&e, Face::Gui, 3).unwrap(), "the first advance moves the cursor");
+        // The winner fans the whole span out and stores its position.
+        let _ = drive_persisted(&e, Face::Gui, &NoSubscribers, None).unwrap();
         assert_eq!(persisted_cursor(&e).unwrap(), 3);
 
-        // A slower face finishing behind the winner: no move, and no restamp of the face either.
-        assert!(!advance_cursor(&e, Face::Cli, 2).unwrap(), "a cursor behind what is stored does not land");
-        assert_eq!(persisted_cursor(&e).unwrap(), 3);
-        assert!(!advance_cursor(&e, Face::Cli, 3).unwrap(), "nor does one that merely ties");
-        assert_eq!(e.get_meta(CURSOR_FACE_META).unwrap().as_deref(), Some("gui"));
+        // The loser comes back from the cursor it read before the race: the outbox is empty behind the
+        // winner's trim, so it finds nothing to queue and does not write its own position back.
+        let _ = fan_out_persisted(&e, 0, Face::Cli, &NoSubscribers, None).unwrap();
+        assert_eq!(persisted_cursor(&e).unwrap(), 3, "the winner's position stands");
+        assert_eq!(
+            e.get_meta(CURSOR_FACE_META).unwrap().as_deref(),
+            Some("gui"),
+            "and the face is not restamped by a pass that stored nothing"
+        );
+    }
+
+    /// The two halves are one atom: what the fan-out queued, what it reclaimed from the outbox, and the
+    /// cursor that says how far it got all commit together (`AMB-D-399`). A plugin that has not run yet is
+    /// what makes the three visible at once — its queue holds the events, and the outbox is already free of
+    /// them.
+    #[test]
+    fn one_transaction_carries_the_queues_the_reclaim_and_the_cursor() {
+        use crate::store_engine::{queued_for, OutboxSlice};
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, "task.created", 1);
+        emit(&e, "task.created", 2);
+
+        // A resolver that subscribes but whose program does not exist: the rows are queued, and the runs
+        // fail — which changes nothing about the reclaim, and that is the point.
+        let subs = Fixed { events: vec!["task.created"], invocation: bogus() };
+        let d = drive_persisted(&e, Face::Cli, &subs, None).unwrap();
+        for h in d.hooks {
+            h.join().unwrap();
+        }
+
+        assert_eq!(persisted_cursor(&e).unwrap(), 2, "the cursor is stored at the fan-out's position");
+        assert_eq!(
+            crate::store_engine::events_since(e.conn(), 0, 10).unwrap(),
+            OutboxSlice::Gap,
+            "the outbox is reclaimed through the fan-out, whatever became of the runs"
+        );
+        assert!(
+            queued_for(e.conn(), "fixed", 10).unwrap().is_empty(),
+            "and the queue is empty again, the rows having been handed to the plugin"
+        );
     }
 }

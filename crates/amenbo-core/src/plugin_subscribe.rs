@@ -22,7 +22,7 @@
 //!
 //! For each such plugin the resolver builds a [`Subscriber`]: the program to run, its secret config set as
 //! environment variables (off argv, off logs), and its non-secret config for the payload's `config` key.
-//! It never sets the event payload itself — [`deliver`](crate::plugin_dispatch::deliver) composes stdin, so
+//! It never sets the event payload itself — [`plugin_dispatch`](crate::plugin_dispatch) composes stdin, so
 //! the payload channel stays the dispatcher's.
 //!
 //! **What is installed is given, not discovered here.** The resolver is handed the set of
@@ -110,7 +110,7 @@ impl Subscribers for EnabledSubscribers<'_> {
             }
             // Subscribed to this event, and declaring the face driving this dispatch (`AMB-D-383`): a
             // `faces:[cli]` hook stays silent on a GUI drive and vice versa. The matching subscription also
-            // carries `reply`, which rides down to `deliver` — it is what tells the CLI face to run this one
+            // carries `reply`, which rides down to the fan-out — it is what tells the CLI face to run this one
             // synchronously and relay its stderr (and, since `reply:true` is pinned to `faces:[cli]`, a GUI
             // drive never resolves a replying subscriber). A plugin subscribes to one event at most once, so
             // the first match on (event, face) is the subscription.
@@ -357,7 +357,7 @@ mod tests {
             subs[0].invocation.env,
             vec![("AMENBO_CONFIG_WEBHOOK_URL".to_string(), "https://hooks/x".to_string())]
         );
-        // Text → the config map deliver folds onto stdin.
+        // Text → the config map the dispatcher folds onto stdin.
         assert_eq!(subs[0].config.get("channel").and_then(|v| v.as_str()), Some("#ops"));
         assert!(subs[0].config.get("webhook_url").is_none(), "a secret never rides the stdin config");
     }
@@ -458,7 +458,7 @@ mod tests {
         );
     }
 
-    /// The matching subscription's `reply` flag rides onto the resolved subscriber, so `deliver` knows to run
+    /// The matching subscription's `reply` flag rides onto the resolved subscriber, so the fan-out knows to run
     /// it synchronously and relay its stderr (`AMB-D-383`). A plain subscription resolves `reply:false`.
     #[test]
     fn a_replying_subscription_resolves_a_replying_subscriber() {

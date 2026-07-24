@@ -107,6 +107,15 @@ impl<'a> WriteTx<'a> {
         super::outbox::append(&self.tx, event)
     }
 
+    /// Place one event on a plugin's queue **inside this transaction** — the fan-out's write
+    /// (`AMB-D-399`). It rides the same transaction that deletes the outbox rows it copied, so an event is
+    /// on every subscriber's queue and off the outbox together, or neither: no copy is made twice, and none
+    /// is reclaimed uncopied. As with [`emit_event`](Self::emit_event) the caller composes the row and the
+    /// store interprets none of its strings. See [`super::queue`].
+    pub fn queue_event(&self, event: &super::queue::QueuedEvent<'_>) -> Result<()> {
+        super::queue::enqueue(&self.tx, event)
+    }
+
     /// Commit the batch. Everything written through this guard lands together; on any earlier `?` the
     /// guard drops and none of it does. Consumes the guard, so a committed transaction cannot be
     /// written to again — and the caller's activity append can only follow this returning `Ok`. **The

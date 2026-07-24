@@ -21,11 +21,12 @@
 //!    trust root.
 //!
 //! **What the asset may be.** The bytes are recognised by what they start with, not by the URL's
-//! extension: a gzip'd tar (the form the catalog's own example publishes), from which the entry named
-//! after the plugin is taken, or the executable itself. A zip is refused rather than guessed at — naming
-//! the two accepted shapes beats a half-supported third. Extraction never trusts a path: the entry is
-//! matched on its *file name*, so a member called `../../etc/cron.d/x` is simply not the one being looked
-//! for, and only a regular file is ever read.
+//! extension, and there are three shapes: a gzip'd tar (the form the catalog's own example publishes),
+//! from which the entry named after the plugin is taken; the executable itself; and — **on Windows
+//! only** — a zip, because that is the shape wharfy writes there. Off Windows a zip is named and
+//! refused rather than guessed at, since nothing ships one. Extraction never trusts a path: the entry
+//! is matched on its *file name*, so a member called `../../etc/cron.d/x` is simply not the one being
+//! looked for, and only a regular file is ever read.
 //!
 //! **Install is not enable** (`AMB-D-351`). Nothing here opens a gate, records consent, or fires
 //! anything: the plugin lands on disk inert, and `plugin enable` is the separate, explicit act — which is
@@ -53,7 +54,8 @@ const MAX_ASSET_BYTES: u64 = 64 * 1024 * 1024;
 /// The first bytes of a gzip stream (`.tar.gz`).
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 
-/// The first bytes of a zip archive — recognised only so it can be refused by name.
+/// The first bytes of a zip archive — read on Windows, and elsewhere recognised so it can be refused
+/// by name rather than taken for the executable itself.
 const ZIP_MAGIC: [u8; 4] = [b'P', b'K', 0x03, 0x04];
 
 /// What an [`install`] put on this machine — the receipt a caller reports from, rather than re-reading

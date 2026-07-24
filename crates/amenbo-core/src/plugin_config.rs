@@ -147,6 +147,35 @@ pub fn get(store: &Store, field: &ConfigField, plugin: &str, scope: Scope) -> Re
     }
 }
 
+/// Which of the author's declared `fields` currently hold a value, probed at the tier an enable is for
+/// (`AMB-D-356`): the machine defaults, plus this project's overrides on top when the gate being opened is
+/// a project's. This is the `has_value` probe
+/// [`plugin_trust::enable`](crate::plugin_trust::enable) asks its caller for — that boundary judges
+/// `required` and deliberately does not read storage, so the resolution lives here with the rest of the
+/// value routing, and both faces (CLI `plugin enable`, the GUI's) run the same one.
+///
+/// Probed into a list first because the probe reads the store while the enable writes inside it, so the
+/// two cannot borrow it at once.
+pub fn satisfied_keys(
+    store: &Store,
+    plugin: &str,
+    fields: &[ConfigField],
+    tier: Scope,
+) -> Result<Vec<String>> {
+    let mut satisfied = Vec::new();
+    for field in fields {
+        let held = get(store, field, plugin, Scope::MachineDefault)?.is_some()
+            || match tier {
+                Scope::MachineDefault => false,
+                Scope::Project(_) => get(store, field, plugin, tier)?.is_some(),
+            };
+        if held {
+            satisfied.push(field.key.clone());
+        }
+    }
+    Ok(satisfied)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

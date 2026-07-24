@@ -4386,6 +4386,142 @@ pub async fn plugin_repo_facts(repo: String) -> Result<PluginRepoFactsDto, CmdEr
     .map_err(|e| -> CmdError { format!("GitHub の情報取得に失敗しました: {e}").into() })?
 }
 
+/// One plugin this machine holds, as the market draws its state on top of the catalog entry of the same
+/// name (`AMB-D-351`). Installed and enabled are two facts, not one: an installed plugin that fires
+/// nothing is the ordinary state.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginInstallDto {
+    /// The plugin's name — the key the market joins this row onto a catalog entry by.
+    name: String,
+    /// The level its one switch sits at, as the author declared it (`AMB-D-379`): `project` or `machine`.
+    #[ts(type = r#""project" | "machine""#)]
+    scope: String,
+    /// Whether it fires at the gate the request named — `null` when there is no answer to give: a
+    /// project-scoped plugin asked about without a project is not "off", it is unanswered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    enabled: Option<bool>,
+    /// Whether this device has already answered the run-arbitrary-code question for it (`AMB-D-351`).
+    /// The consent is the device's whichever gate moves, and it is asked **once** — this is what tells a
+    /// first enable from every later one.
+    consented: bool,
+    /// Whether this build can speak to it at all (`AMB-D-359`). An open gate on an incompatible plugin
+    /// fires nothing, and amenbo updates underneath an install, so this is not derivable from `enabled`.
+    compatible: bool,
+    /// Why not, when `compatible` is false — the mismatch named, rather than left to the log.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    incompatible_reason: Option<String>,
+}
+
+/// Read one installed plugin into its DTO at the gate `project` names (the shape `plugin list` prints).
+fn install_row(
+    store: &Store,
+    plugin: &amenbo_core::plugin_subscribe::InstalledPlugin,
+    project: Option<i64>,
+) -> Result<PluginInstallDto, CmdError> {
+    use amenbo_core::plugin_trust::{effective_enabled_in, gate_for};
+    let why = amenbo_core::plugin_compat::check(&plugin.manifest).err();
+    // A gate that cannot be resolved from here is no answer at all, never a made-up `false`.
+    let enabled = match gate_for(plugin.manifest.scope, project) {
+        Ok(gate) => Some(effective_enabled_in(store, &plugin.name, gate)?),
+        Err(_) => None,
+    };
+    Ok(PluginInstallDto {
+        name: plugin.name.clone(),
+        scope: plugin.manifest.scope.as_str().to_string(),
+        enabled,
+        consented: store.config.plugin_consented(&plugin.name),
+        compatible: why.is_none(),
+        incompatible_reason: why.map(|why| why.to_string()),
+    })
+}
+
+/// What this machine has installed, and where each one's switch currently stands — the state the market
+/// draws over the catalog it is browsing (`AMB-D-351`).
+///
+/// `project_id` is which project the answer is for: a `project`-scoped plugin's gate is one project's, so
+/// asking without one comes back `enabled: null` rather than a device-wide answer it does not have
+/// (`AMB-D-379`). A `machine`-scoped plugin ignores it entirely.
+///
+/// Reads the app-data `plugins/` directory and this store, and nothing else — no network, no catalog
+/// fetch — so it answers the same offline, and a directory that will not read as an install is skipped
+/// rather than allowed to hide the rest.
+#[tauri::command]
+pub fn plugin_installs(project_id: Option<i64>) -> Result<Vec<PluginInstallDto>, CmdError> {
+    let store = open_store_read()?;
+    let installed = amenbo_core::plugin_installed::installed(&store.paths)?;
+    installed.iter().map(|p| install_row(&store, p, project_id)).collect()
+}
+
+/// Install one plugin from the catalog by name (`AMB-D-351`) — the GUI's half of `plugin install`.
+///
+/// Every gate is core's ([`amenbo_core::plugin_install::install`]): the name resolves against the catalog,
+/// the asset is verified fail-closed against amenbo's own catalog key and the manifest's checksum, and
+/// only then is anything written. This command adds no trust of its own, and cannot: the key is not a
+/// parameter down there.
+///
+/// **Installing never enables.** The plugin lands inert and [`plugin_set_enabled`] is the separate,
+/// explicit act where the consent is taken — which is why this returns the fresh row rather than an
+/// enabled one. Off the main thread: it downloads.
+#[tauri::command]
+pub async fn plugin_install(
+    name: String,
+    project_id: Option<i64>,
+) -> Result<PluginInstallDto, CmdError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<PluginInstallDto, CmdError> {
+        let paths = amenbo_core::config::Paths::resolve()?;
+        amenbo_core::plugin_install::install(&paths, &name)?;
+        let store = open_store_read()?;
+        let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
+        install_row(&store, &installed, project_id)
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("プラグインのインストールに失敗しました: {e}").into() })?
+}
+
+/// Move one installed plugin's gate — the GUI's `plugin enable` / `plugin disable`, through the one
+/// boundary that moves that state ([`amenbo_core::plugin_trust`]).
+///
+/// There is one switch and the author declared where it lives (`AMB-D-379`), so `project_id` does not
+/// choose a level: it says which project the caller is speaking for, and a `project`-scoped plugin without
+/// one is refused by core rather than answered device-wide. Enabling is fail-closed twice over, both in
+/// core: on the compatibility declarations (`AMB-D-359`) before any consent is recorded, and on the
+/// author's `required` settings, probed at the tier that gate reads
+/// ([`amenbo_core::plugin_config::satisfied_keys`], `AMB-D-356`).
+///
+/// **Calling this to enable is the consent** (`AMB-D-351`) — the face asks first, once per device, and
+/// core records the answer. Returns where the gate ended up.
+#[tauri::command]
+pub fn plugin_set_enabled(
+    name: String,
+    project_id: Option<i64>,
+    enabled: bool,
+) -> Result<bool, CmdError> {
+    use amenbo_core::plugin_trust::{disable, effective_enabled_in, enable, gate_for, Gate};
+    with_store_mut(|store| {
+        let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
+        let gate = gate_for(installed.manifest.scope, project_id)?;
+        if enabled {
+            amenbo_core::plugin_compat::check(&installed.manifest)
+                .map_err(|incompatible| CmdError::from(incompatible.into_error(&name)))?;
+            let fields = installed.manifest.config.clone();
+            let tier = match gate {
+                Gate::Machine => amenbo_core::plugin_config::Scope::MachineDefault,
+                Gate::Project(id) => amenbo_core::plugin_config::Scope::Project(id),
+            };
+            let satisfied =
+                amenbo_core::plugin_config::satisfied_keys(store, &name, &fields, tier)?;
+            enable(store, &name, gate, &fields, |f| satisfied.iter().any(|k| k == &f.key))?;
+        } else {
+            disable(store, &name, gate)?;
+        }
+        Ok(effective_enabled_in(store, &name, gate)?)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4463,6 +4599,86 @@ mod tests {
     /// and the mtime of `store.sqlite` itself does not move until a checkpoint. The change signature
     /// rests on **`PRAGMA data_version`**, so a write from another process always moves it, even
     /// though the main file was never touched — pinned here against a real store.
+    /// Plant an installed plugin under the test's app-data: the manifest (which is the install marker)
+    /// and the executable named after it — the whole on-disk shape `plugin_installed::read` looks for.
+    fn plant_plugin(home: &std::path::Path, name: &str, scope: &str) {
+        let dir = home.join("plugins").join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        let manifest = serde_json::json!({
+            "name": name,
+            "desc": "テスト用",
+            "author": "amenbo",
+            "repo": "ShiroDoromoto/amenbo-plugin-test",
+            "os": ["macos", "linux", "windows"],
+            "category": "workflow",
+            "url": "https://example.com/x.tar.gz",
+            "checksum": "sha256:deadbeef",
+            "scope": scope,
+            "config": [],
+        });
+        std::fs::write(dir.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+        let program = amenbo_core::plugin_installed::program_file_name(name);
+        std::fs::write(dir.join(program), b"x").unwrap();
+    }
+
+    /// The GUI's gate commands are the CLI's `plugin enable/disable` through the same boundary, and the
+    /// two facts they carry must not collapse into one: enabling records the device's consent
+    /// (`AMB-D-351`) and opens **the** gate the author declared (`AMB-D-379`), while disabling closes that
+    /// gate and keeps the consent — so a later enable asks nothing again.
+    #[test]
+    fn the_gate_commands_move_one_switch_and_keep_the_consent() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("plugin-gate");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "テストPJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        plant_plugin(&tmp, "device-wide", "machine");
+        plant_plugin(&tmp, "per-project", "project");
+
+        // Installed is not enabled, and nothing has been consented to yet.
+        let rows = plugin_installs(Some(project_id)).unwrap();
+        assert_eq!(rows.len(), 2, "both plants read as installed");
+        assert!(rows.iter().all(|r| r.enabled == Some(false) && !r.consented));
+
+        assert!(plugin_set_enabled("device-wide".into(), Some(project_id), true).unwrap());
+        let row = |name: &str, project: Option<i64>| {
+            plugin_installs(project).unwrap().into_iter().find(|r| r.name == name).unwrap()
+        };
+        let on = row("device-wide", Some(project_id));
+        assert_eq!(on.enabled, Some(true));
+        assert!(on.consented, "enabling is what records the consent");
+
+        // Disabling closes the gate and keeps the consent (`disable ≠ uninstall`).
+        assert!(!plugin_set_enabled("device-wide".into(), Some(project_id), false).unwrap());
+        let off = row("device-wide", Some(project_id));
+        assert_eq!(off.enabled, Some(false));
+        assert!(off.consented, "the device's answer survives a disable");
+
+        // A project-scoped plugin's switch is that project's: it is refused without one, and read from
+        // outside a project it has no answer rather than a made-up "off".
+        assert!(
+            plugin_set_enabled("per-project".into(), None, true).is_err(),
+            "there is no device-wide answer for a project-scoped gate to fall back on"
+        );
+        assert!(plugin_set_enabled("per-project".into(), Some(project_id), true).unwrap());
+        assert_eq!(row("per-project", Some(project_id)).enabled, Some(true));
+        assert_eq!(row("per-project", None).enabled, None, "unanswered, not off");
+        // The device-wide plugin ignores the project entirely, whichever way it is asked.
+        assert_eq!(row("device-wide", None).enabled, Some(false));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     #[test]
     fn store_signature_moves_on_an_external_writers_wal_only_commit() {
         let _env = env_guard();

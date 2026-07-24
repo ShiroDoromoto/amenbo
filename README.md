@@ -53,6 +53,11 @@ crates/
 app/                  the desktop GUI shown above (React + Vite front end; Tauri shell
                       in `app/src-tauri`, calling amenbo-core directly — no server)
 assets/               the logo, the CLI demo and its script, the GUI screenshot
+verification/         black-box checks of an installed build, run before a release
+                      (its own cargo workspace, so `make test` never pulls it in)
+devtool/              optional Go helper: a throwaway worktree, and a dev GUI, per task
+guards/               one invariant apiece, asserted over the tree by `make test` and CI
+scripts/              the shell the Makefile calls out to: build, sign, notarise, verify
 ```
 
 Design points:

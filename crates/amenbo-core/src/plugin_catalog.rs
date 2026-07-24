@@ -418,6 +418,26 @@ pub struct DiscoveredSource {
     pub offered: usize,
 }
 
+/// One entry as browsing sees it: the catalog entry, plus which catalog served it.
+///
+/// Provenance belongs to the merge, not to the document: a catalog file says nothing about where it
+/// itself came from, and once the fold is done every entry sits in one list with that fact otherwise
+/// lost. It is not decoration — the trust layers are two independent axes (`AMB-D-347`), and only one
+/// of them rides on the manifest. Whether the author is the amenbo team is
+/// [`Manifest::official`](crate::plugin_manifest::Manifest::official); whether an entry was reviewed
+/// into the official index is this.
+#[derive(Clone, Debug)]
+pub struct DiscoveredEntry {
+    /// The entry as its catalog published it.
+    pub entry: Entry,
+    /// The URL of the catalog that served it.
+    pub source: String,
+    /// Whether [`source`](DiscoveredEntry::source) is the official catalog — the entry passed review
+    /// onto the official index. Said once here so no caller has to re-derive it by comparing URLs.
+    /// An official plugin is always listed too; a listed one is not necessarily official.
+    pub listed: bool,
+}
+
 /// The merged catalog a user browses: the official catalog plus every registered third-party one, folded
 /// into a single de-duplicated list (`AMB-T-1980`). This is the discovery view only — see the module note
 /// on why install and update do not use it.
@@ -425,7 +445,7 @@ pub struct DiscoveredSource {
 pub struct Discovery {
     /// Every entry across the merged catalogs, official first then each source in registration order, with
     /// a name that already appeared dropped in favour of the earlier one.
-    pub entries: Vec<Entry>,
+    pub entries: Vec<DiscoveredEntry>,
     /// Each catalog that went into the merge, and what it contributed.
     pub sources: Vec<DiscoveredSource>,
     /// Entries dropped during the merge: each catalog's own intake drops ([`Dropped`]), plus a
@@ -439,9 +459,10 @@ pub struct Discovery {
 /// without a request, so listing many sources does not mean many fetches. A source that cannot be reached
 /// and has no cache contributes nothing and is marked unreachable — one dead URL does not cost the view.
 /// The official catalog is merged first and wins every name clash, so a third-party catalog cannot shadow
-/// an official plugin in what the user sees.
+/// an official plugin in what the user sees. Each entry keeps the catalog it came from
+/// ([`DiscoveredEntry`]), which the fold is the only place that still knows.
 pub fn discover(paths: &Paths) -> Discovery {
-    let mut entries: Vec<Entry> = Vec::new();
+    let mut entries: Vec<DiscoveredEntry> = Vec::new();
     let mut sources_meta: Vec<DiscoveredSource> = Vec::new();
     let mut dropped: Vec<Dropped> = Vec::new();
 
@@ -452,10 +473,14 @@ pub fn discover(paths: &Paths) -> Discovery {
                 let offered = catalog.entries.len();
                 dropped.extend(catalog.dropped);
                 for entry in catalog.entries {
-                    if entries.iter().any(|e| e.manifest.name == entry.manifest.name) {
+                    if entries.iter().any(|e| e.entry.manifest.name == entry.manifest.name) {
                         dropped.push(Dropped::Duplicate { name: entry.manifest.name });
                     } else {
-                        entries.push(entry);
+                        entries.push(DiscoveredEntry {
+                            entry,
+                            source: url.clone(),
+                            listed: official,
+                        });
                     }
                 }
                 sources_meta.push(DiscoveredSource { url, official, reachable: true, offered });
@@ -764,12 +789,16 @@ mod tests {
         .unwrap();
 
         let discovery = discover(&paths);
-        let names: Vec<_> = discovery.entries.iter().map(|e| e.manifest.name.as_str()).collect();
+        let names: Vec<_> =
+            discovery.entries.iter().map(|e| e.entry.manifest.name.as_str()).collect();
         assert_eq!(names, vec!["worktree", "extra"], "official first, then the source's fresh entry");
         assert_eq!(
-            discovery.entries[0].manifest.desc, "a plugin",
+            discovery.entries[0].entry.manifest.desc, "a plugin",
             "the official 'worktree' held; the impostor did not displace it"
         );
+        assert!(discovery.entries[0].listed, "the official catalog served it");
+        assert!(!discovery.entries[1].listed, "the third-party source served this one");
+        assert_eq!(discovery.entries[1].source, src, "and it says which catalog that was");
         assert!(
             matches!(discovery.dropped.as_slice(), [Dropped::Duplicate { name }] if name == "worktree"),
             "the shadowed third-party entry is recorded as a drop: {:?}",

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -271,22 +272,112 @@ func stopTaskDevGUI(id string) bool {
 	return false
 }
 
-// taskDevGUIRunning reports whether a process is running out of this instance's bundle. The process
-// table is matched as plain text, not as a pattern: the bundle name holds parentheses, which a
-// `pgrep -f` regex would read as a group and quietly match the wrong thing (or nothing).
+// taskDevGUIRunning reports whether a process is running out of this instance's bundle — anything
+// under it and not only the app process, because this is what guards an irreversible removal. The
+// process table is matched as plain text, not as a pattern: the bundle name holds parentheses,
+// which a `pgrep -f` regex would read as a group and quietly match the wrong thing (or nothing).
 func taskDevGUIRunning(id string) bool {
-	out, err := run("", "ps", "-Ao", "args=")
+	out, err := run("", "ps", "-Ao", "pid=,args=")
 	if err != nil {
 		return false // unable to look is not evidence of running; the quit below is harmless either way
 	}
-	return strings.Contains(out, taskDevGUIProcessMarker(id))
+	return pidRunningFrom(out, taskDevGUIProcessMarker(id)) != 0
 }
 
 // taskDevGUIProcessMarker is the substring only this instance's own processes carry: every one of
 // them is executed out of its installed bundle, and all three builds share the process name
 // `amenbo-app`, so the bundle path is the only thing that tells them apart.
 func taskDevGUIProcessMarker(id string) string {
-	return filepath.Join(macAppsDir, taskDevBundle(id)+".app") + "/"
+	return devGUIProcessMarker(taskDevBundle(id))
+}
+
+// devGUIProcessMarker is that same substring for any installed bundle, the shared dev app included.
+func devGUIProcessMarker(bundle string) string {
+	return filepath.Join(macAppsDir, bundle+".app") + "/"
+}
+
+// devGUIExecPrefix is what the command line of the bundle's own app process starts with. The pid
+// lookup matches on this rather than on the bundle path alone, because a window belongs to the app
+// process: anything else executed out of the bundle, or merely naming it in an argument, is not
+// something `uiauto window <pid>` can resolve a window from.
+func devGUIExecPrefix(bundle string) string {
+	return filepath.Join(macAppsDir, bundle+".app", "Contents", "MacOS") + "/"
+}
+
+// devGUIPID reports the pid of the app process of the installed bundle `bundle`, and 0 when none is
+// running — an unreadable process table included, since being unable to look is not evidence of
+// anything.
+func devGUIPID(bundle string) int {
+	out, err := run("", "ps", "-Ao", "pid=,args=")
+	if err != nil {
+		return 0
+	}
+	return pidRunningFrom(out, devGUIExecPrefix(bundle))
+}
+
+// pidRunningFrom is the pure half of both lookups: the pid of the process `ps -Ao pid=,args=` lists
+// with a command line starting at prefix, and 0 when there is none.
+//
+// A line is matched on the command it ran, not searched as text anywhere: a path also shows up as
+// an *argument* of things that are not the app — a `codesign` of the bundle mid-build, an
+// `osascript` naming it — and taking one of those would hand out a pid whose window does not exist,
+// or hold a teardown back on a process that is not the instance. Of two matches the lower pid wins,
+// which is the older one: a second copy launched over the first is not the one whose window has
+// been on screen.
+func pidRunningFrom(psOut, prefix string) int {
+	best := 0
+	for _, line := range strings.Split(psOut, "\n") {
+		field, args, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok || !strings.HasPrefix(strings.TrimLeft(args, " "), prefix) {
+			continue
+		}
+		pid, err := strconv.Atoi(field)
+		if err != nil || pid <= 0 {
+			continue
+		}
+		if best == 0 || pid < best {
+			best = pid
+		}
+	}
+	return best
+}
+
+// devGUIShowPID prints on stdout the pid of a dev GUI instance, so a caller can hand it straight to
+// `uiauto window <pid>` — the step that turns "which of these windows is mine" from a guess into a
+// lookup, and the reason this exists: the production app, the shared dev app and every per-task
+// instance all run under the process name `amenbo-app`, so `System Events`' front window answers
+// with whichever happens to be in front (in practice the production one, which is how a session
+// came to shoot it and report it as the dev app — 2026-07-24).
+//
+// With no id it resolves the dev GUI *this checkout* launches, in the order devGUIBundleNames gives
+// — a task worktree's own instance ahead of the shared app — so the same words work from either.
+// `--front` activates it first, because uiauto skips a window behind another Space and a shot of a
+// window nobody fronted is a shot of what is over it.
+func devGUIShowPID(id string, front bool) error {
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("the dev GUI is only installed on macOS — there is no pid to report here")
+	}
+	bundles := []string{taskDevBundle(id)}
+	build := "make install-gui-dev AMB-T-ID=" + id
+	if id == "" {
+		root := mustTreeRoot()
+		bundles, build = devGUIBundleNames(root), devGUIBuildCommand(root)
+	}
+	for _, bundle := range bundles {
+		pid := devGUIPID(bundle)
+		if pid == 0 {
+			continue
+		}
+		if front {
+			if _, err := run("", "osascript", "-e", fmt.Sprintf("tell application %q to activate", bundle)); err != nil {
+				logf("  warning: bringing %s to the front failed (%v) — the pid below is still its own", bundle, err)
+			}
+		}
+		logf("  %s is running", bundle)
+		fmt.Printf("%d\n", pid)
+		return nil
+	}
+	return fmt.Errorf("no dev GUI is running (%s) — build it with `%s`, then open it", strings.Join(bundles, ", "), build)
 }
 
 // reclaim removes each path that is actually there and reports it, leaving the rest untouched — an

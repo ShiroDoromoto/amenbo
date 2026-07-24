@@ -94,10 +94,17 @@ cargo run -p amenbo-scenario --bin emit -- scenarios/task-appears-on-board.yaml
 
 ```sh
 cd verification
+ID=2147   # the task whose own dev GUI you built and opened
 # front the dev GUI, resolve its window via uiauto (by pid), and shoot one shot per step:
 cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/task-appears-on-board.yaml \
-  --app 'amenbo (dev)' --pid "$(pgrep -x 'amenbo (dev)')"
+  --app "amenbo (dev $ID)" --pid "$(devtool devgui pid "$ID")"
 ```
+
+`--pid` comes from `devtool devgui pid` and not from `pgrep`: the production app, the shared dev
+app and every per-task instance run under the one process name `amenbo-app`, so a name is not
+something `pgrep` can separate them by — only the bundle they were executed out of is, which is
+what devtool matches (`devtool/README.md`). Inside a task worktree the id can be dropped entirely:
+with no argument the command answers for the dev GUI that checkout launches.
 
 uiauto is the input primitive, called here, never moved: `window <pid>` yields the id
 `screencapture -l` needs and the window bounds (in the manifest) an operator uses to turn a shot's

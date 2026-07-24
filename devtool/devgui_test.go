@@ -144,6 +144,50 @@ func TestProcessMarkerIsTheBundlePath(t *testing.T) {
 	}
 }
 
+// TestPIDRunningFromPicksTheAppProcess is the whole value of the pid lookup: the answer has to be
+// the process that owns a window. The table is the real shapes of `ps -Ao pid=,args=` — the three
+// builds side by side under one process name, plus the two ways the bundle path shows up without
+// being the app (as an argument of something else, and as a neighbouring instance whose id starts
+// with this one's).
+func TestPIDRunningFromPicksTheAppProcess(t *testing.T) {
+	const ps = `  501 /Users/x/Applications/amenbo.app/Contents/MacOS/amenbo-app
+  777 /Applications/amenbo (dev).app/Contents/MacOS/amenbo-app
+  999 /Applications/amenbo (dev 21310).app/Contents/MacOS/amenbo-app
+ 1234 /Applications/amenbo (dev 2131).app/Contents/MacOS/amenbo-app
+ 1235 /usr/bin/codesign --force /Applications/amenbo (dev 2131).app/
+ 1236 /Applications/amenbo (dev 2131).app/Contents/Resources/something`
+	for bundle, want := range map[string]int{
+		taskDevBundle("2131"):  1234,
+		taskDevBundle("21310"): 999,
+		sharedDevBundle:        777,
+		taskDevBundle("404"):   0,
+	} {
+		if got := pidRunningFrom(ps, devGUIExecPrefix(bundle)); got != want {
+			t.Errorf("pid of %q = %d, want %d", bundle, got, want)
+		}
+	}
+	// The teardown's question is the wider one — anything running out of the bundle holds it back —
+	// so its prefix takes the process under Resources too. What neither takes is the `codesign`:
+	// naming the path is not running out of it, and a teardown held back by a build step that has
+	// already finished leaves the instance for nobody to reclaim.
+	if got := pidRunningFrom(ps, taskDevGUIProcessMarker("2131")); got != 1234 {
+		t.Errorf("teardown's lookup = %d, want the app process 1234 (the lowest of 1234/1236)", got)
+	}
+	if got := pidRunningFrom(" 1235 /usr/bin/codesign --force "+taskDevGUIProcessMarker("2131"), taskDevGUIProcessMarker("2131")); got != 0 {
+		t.Errorf("a codesign naming the bundle was read as the instance running (pid %d)", got)
+	}
+}
+
+// TestPIDRunningFromPrefersTheOlderCopy pins which one is answered when a second copy was launched
+// over the first: the older process, whose window is the one that has been on screen.
+func TestPIDRunningFromPrefersTheOlderCopy(t *testing.T) {
+	const ps = ` 4321 /Applications/amenbo (dev 2131).app/Contents/MacOS/amenbo-app
+ 1234 /Applications/amenbo (dev 2131).app/Contents/MacOS/amenbo-app`
+	if got := pidRunningFrom(ps, devGUIExecPrefix(taskDevBundle("2131"))); got != 1234 {
+		t.Errorf("pid = %d, want the older 1234", got)
+	}
+}
+
 // TestScanTaskDevGUIsSeparatesLiveFromOrphan is the sweep's whole judgment: an instance a worktree
 // still claims is in use, and only what nothing claims is offered for removal. It also pins that a
 // half-removed instance is still found — one half left behind is still disk nobody will reclaim by

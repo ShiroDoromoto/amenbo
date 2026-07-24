@@ -63,7 +63,9 @@ permanent place a grown setup (plugins, catalog, projects) lives.
 All three builds run as the same process, `amenbo-app`, so a click lands on
 whichever window is in front. The badge is how you tell them apart *inside* the
 window: it sits in the header, so it survives a cropped screenshot, and
-production carries none at all.
+production carries none at all. To reach one *without* a click, ask for its pid
+(`devgui pid` below) and drive that pid — the badge tells you afterwards what
+you shot, the pid decides beforehand what you shoot.
 
 So **verify a task in its own app**: with no hand reaching the shared bundle,
 two parallel sessions cannot install over each other, and the collision is gone
@@ -142,6 +144,31 @@ reported it reclaimed reads as green while the leftover returns minutes later.
 otherwise the `in_progress` status is left as-is — finish your task with
 `amenbo task done <id>`). `finish` works whether you run it from the main
 checkout or from inside the worktree.
+
+### `devtool devgui pid [<id>] [--front]`
+
+Prints on **stdout** the pid of a running dev GUI, so it can be handed straight
+to the tools that take one:
+
+```sh
+# the dev GUI this checkout launches, fronted, and its window id for screencapture -l
+swift app/scripts/uiauto/uiauto.swift window "$(devtool devgui pid --front)"
+```
+
+Nothing else on the machine tells the three builds apart: they all run under the
+process name `amenbo-app`, `pgrep -x 'amenbo (dev)'` matches nothing, and
+`System Events`' front window answers with whichever is in front — in practice
+the **production** app. The lookup matches the bundle a process was executed out
+of, and only the app process itself, so what comes back is a pid a window
+actually belongs to.
+
+- With no `<id>` it answers for the dev GUI **this checkout** launches — a task
+  worktree's own instance ahead of the shared app, the same order a launch takes.
+  An `<id>` names one instance directly, from anywhere.
+- `--front` activates it first. uiauto skips a window behind another Space, and
+  a shot of a window nobody fronted is a shot of whatever is over it.
+- Nothing running is a **non-zero exit** with the build command named, not an
+  empty answer that reads as a pid of zero.
 
 ### `devtool devgui sweep [--yes]`
 

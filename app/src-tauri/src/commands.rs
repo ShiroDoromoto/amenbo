@@ -1273,6 +1273,18 @@ pub fn store_locations() -> StoreLocationsDto {
     }
 }
 
+/// What this build calls itself in the header, or `null` on production — production ships no badge
+/// (`AMB-D-390`). Constant for the life of the process: the channel is fixed at build time by
+/// `AMENBO_APP_NAME`, so the GUI asks once at startup and never again.
+///
+/// It exists because the three builds a developer runs side by side — production, the shared dev app,
+/// one task's throwaway instance — are the same process under the same name, and the window title is
+/// the only thing telling them apart until a screenshot crops it off.
+#[tauri::command]
+pub fn dev_badge() -> Option<String> {
+    amenbo_core::config::Paths::dev_badge()
+}
+
 /// Open the folder holding this machine's logs in the OS file manager — the one step between "please
 /// attach your logs" and a file the user can drag onto an issue (`AMB-D-382`).
 ///

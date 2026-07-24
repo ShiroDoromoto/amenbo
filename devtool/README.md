@@ -55,8 +55,14 @@ permanent place a grown setup (plugins, catalog, projects) lives.
 | identifier | `work.amenbo.app.dev` | `work.amenbo.app.dev.<id>` |
 | app-data | `amenbo-dev` | `amenbo-dev-<id>` |
 | bundle | `/Applications/amenbo (dev).app` | `/Applications/amenbo (dev <id>).app` |
+| header badge | `DEV` | `DEV AMB-T-<id>` |
 | built by | `make install-gui-dev` | `make install-gui-dev AMB-T-ID=<id>` |
 | deleted by | nothing — it is permanent | `devtool task finish <id>` |
+
+All three builds run as the same process, `amenbo-app`, so a click lands on
+whichever window is in front. The badge is how you tell them apart *inside* the
+window: it sits in the header, so it survives a cropped screenshot, and
+production carries none at all.
 
 So **verify a task in its own app**: with no hand reaching the shared bundle,
 two parallel sessions cannot install over each other, and the collision is gone

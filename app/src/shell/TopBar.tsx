@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BrandMark } from "../components/BrandMark";
 import { reconcile, subscribeStoreChangeReflected } from "../core/snapshot";
-import { openExternalUrl } from "../core/mutations";
+import { fetchDevBadge, openExternalUrl } from "../core/mutations";
 import { t } from "../core/i18n";
 
 /** The product page, opened in the default browser by clicking "Amenbo" in the TopBar. */
@@ -27,6 +27,19 @@ export function TopBar({
 }) {
   const [reflecting, setReflecting] = useState(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Which build this is, beside the brand it qualifies. Fetched once — the channel is stamped in at
+  // build time — and null on production, which is the whole point: the badge only ever marks a
+  // development window, so it costs a shipped user nothing and stands out where it does appear.
+  const [devBadge, setDevBadge] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchDevBadge()
+      .then((b) => alive && setDevBadge(b))
+      .catch(() => {}); // Unanswered: show no badge rather than a wrong one.
+    return () => {
+      alive = false;
+    };
+  }, []);
   useEffect(() => {
     const unsub = subscribeStoreChangeReflected(() => {
       // Debounce: writes landing during the flash fold into that one flash, so it never glows continuously.
@@ -82,6 +95,7 @@ export function TopBar({
         ↻
       </button>
       <div className="topbar__spacer" />
+      {devBadge && <span className="topbar__envbadge">{devBadge}</span>}
       <span className="topbar__brand" title="amenbo"><BrandMark /></span>
       <span
         className={`topbar__ws${reflecting ? " topbar__ws--reflect" : ""}`}

@@ -69,6 +69,10 @@ pub(crate) fn lift_legacy_identity(base: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+/// The word a development build wears on screen. Not translated: it names a channel, the way a
+/// version number does, and a reader who sees it in someone else's screenshot must read the same word.
+const DEV_BADGE: &str = "DEV";
+
 /// Where the data and config files live. The store is a single SQLite file
 /// (`<app-data>/store.sqlite`); identity, config and the store itself all sit flat under the same
 /// base (`base_dir`). **The data itself never lives in a project directory**, which may be synced
@@ -147,6 +151,37 @@ impl Paths {
             || name
                 .strip_prefix(Self::DEV_APP_NAME)
                 .is_some_and(|rest| rest.starts_with('-'))
+    }
+
+    /// What this build should call itself on screen, or `None` on production — the string the GUI puts
+    /// in its header so a screenshot says which of the three same-named windows it came from
+    /// (production, the shared dev build, one task's throwaway instance all run as `amenbo-app`).
+    ///
+    /// Production is deliberately silent: a badge that showed everywhere would be shipped chrome
+    /// nobody reads, and its absence is what makes the dev one worth noticing.
+    pub fn dev_badge() -> Option<String> {
+        Self::dev_badge_for(Self::APP_NAME)
+    }
+
+    /// The labelling rule [`dev_badge`](Self::dev_badge) applies, taking the name as an argument for
+    /// the reason [`is_dev_app_name`](Self::is_dev_app_name) does — a running binary's channel is
+    /// fixed at compile time, so only a table can pin what each name reads as.
+    ///
+    /// A task instance carries its number, and it is spelled as the ref the task is known by, not as
+    /// the raw app-data suffix: the badge is read next to the task it belongs to. A suffix that is not
+    /// a number is shown as it stands rather than dropped — the build only ever writes digits there
+    /// (`AMB-T-ID`), so anything else is worth seeing rather than hiding behind a bare `DEV`.
+    pub(crate) fn dev_badge_for(name: &str) -> Option<String> {
+        if name == Self::DEV_APP_NAME {
+            return Some(DEV_BADGE.to_owned());
+        }
+        let instance = name
+            .strip_prefix(Self::DEV_APP_NAME)
+            .and_then(|rest| rest.strip_prefix('-'))?;
+        Some(match instance.parse::<i64>() {
+            Ok(task_id) => format!("{DEV_BADGE} {}", crate::idref::task(task_id)),
+            Err(_) => format!("{DEV_BADGE} {instance}"),
+        })
     }
 
     /// The base for identity and config: `AMENBO_HOME` if set, otherwise the OS data directory.
@@ -1001,5 +1036,19 @@ mod tests {
         for name in ["amenbo", "amenbo-devish", "dev", "amenbo-staging", ""] {
             assert!(!Paths::is_dev_app_name(name), "{name} is not the dev channel");
         }
+    }
+
+    /// What each channel calls itself on screen. Production says nothing at all — the one case that
+    /// would ship a development marker to a user — and a task instance names its task, so a
+    /// screenshot of one window is telling apart from a screenshot of the other.
+    #[test]
+    fn the_badge_names_the_channel_and_production_wears_none() {
+        assert_eq!(Paths::dev_badge_for("amenbo"), None);
+        assert_eq!(Paths::dev_badge_for("amenbo-dev"), Some("DEV".to_owned()));
+        assert_eq!(Paths::dev_badge_for("amenbo-dev-2133"), Some("DEV AMB-T-2133".to_owned()));
+        // Not a dev name at all: no badge, for the same reason production has none.
+        assert_eq!(Paths::dev_badge_for("amenbo-devish"), None);
+        // The build writes digits and nothing else there, so an unreadable suffix is shown, not swallowed.
+        assert_eq!(Paths::dev_badge_for("amenbo-dev-wip"), Some("DEV wip".to_owned()));
     }
 }

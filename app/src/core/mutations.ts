@@ -964,6 +964,18 @@ export async function fetchStoreLocations(): Promise<StoreLocationsDto | null> {
 }
 
 /**
+ * What this build calls itself in the header — `DEV`, or `DEV AMB-T-<id>` for a task's throwaway
+ * instance — and null on production, which wears none.
+ *
+ * Asked **once, at startup**: the channel is stamped in at build time, so the answer cannot change
+ * while the process runs. Null in the browser too, where there is no build to ask about.
+ */
+export async function fetchDevBadge(): Promise<string | null> {
+  if (!inTauri()) return null;
+  return await invoke<string | null>("dev_badge");
+}
+
+/**
  * Open the folder holding this machine's logs, beside the location line in Settings > Data: the one
  * step between "please attach your logs" and a file the user can drag onto an issue. Core rejects the
  * call when there is no folder yet, and the caller shows what it said. A no-op outside Tauri, where

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
+	"time"
 )
 
 // The dev GUI comes in two shapes. One is shared and permanent: a single installed bundle on the
@@ -59,10 +62,113 @@ func devGUIBundleNames(root string) []string {
 	return []string{sharedDevBundle}
 }
 
+// appDataDirName is the directory one app-data name occupies, the way core's directories crate
+// spells it: `work.amenbo.<app name>`.
+func appDataDirName(appName string) string { return "work.amenbo." + appName }
+
+// appSupportDir is the macOS folder every app-data directory sits in.
+func appSupportDir(home string) string {
+	return filepath.Join(home, "Library", "Application Support")
+}
+
 // appDataDir is where a macOS build keeps the store of one app-data name, mirroring what core
 // resolves through the directories crate: `work.amenbo.<app name>` under Application Support.
 func appDataDir(home, appName string) string {
-	return filepath.Join(home, "Library", "Application Support", "work.amenbo."+appName)
+	return filepath.Join(appSupportDir(home), appDataDirName(appName))
+}
+
+// taskIDFromBundleName and taskIDFromAppDataName read a task id back out of what an instance is
+// called on disk — the inverse of taskDevBundle / taskDevAppData, held to them by a round-trip test.
+// Reading the id off the name is the only way to find an instance whose session never came back to
+// finish it: nothing else on the machine records that it was ever created.
+//
+// Both go through canonicalID, so only digits are taken. That is the same line taskIDFromCheckout
+// draws, and it matters more here: a hand-made `amenbo (dev wip).app` is somebody's own, and a sweep
+// that read it as a task instance would delete it.
+func taskIDFromBundleName(name string) string {
+	rest, ok := strings.CutPrefix(name, "amenbo (dev ")
+	if !ok {
+		return ""
+	}
+	rest, ok = strings.CutSuffix(rest, ").app")
+	if !ok {
+		return ""
+	}
+	return digitsOnly(rest)
+}
+
+func taskIDFromAppDataName(name string) string {
+	rest, ok := strings.CutPrefix(name, appDataDirName(sharedDevAppData)+"-")
+	if !ok {
+		return "" // the shared dev store itself lands here too, and it is nobody's to sweep
+	}
+	return digitsOnly(rest)
+}
+
+func digitsOnly(id string) string {
+	canon, err := canonicalID(id)
+	if err != nil {
+		return ""
+	}
+	return canon
+}
+
+// taskDevGUIInstance is one throwaway instance found on disk, and whether a checkout still claims
+// it. `live` is the whole safety of the sweep: an instance a worktree owns belongs to a session that
+// may be looking at it right now.
+type taskDevGUIInstance struct {
+	id    string
+	live  bool
+	paths []string
+}
+
+// scanTaskDevGUIs finds every per-task instance present under `appsDir` and `home` and marks the
+// ones `liveIDs` still claims. It reports what is actually on disk — an instance whose bundle was
+// built but whose app-data was removed by hand is still an instance, and still worth reclaiming —
+// so `paths` holds only the halves that exist.
+//
+// The two roots and the live set are arguments so the whole scan can be pointed at a temp dir; the
+// caller is what binds it to /Applications and to `git worktree list`.
+func scanTaskDevGUIs(home, appsDir string, liveIDs []string) []taskDevGUIInstance {
+	live := make(map[string]bool, len(liveIDs))
+	for _, id := range liveIDs {
+		live[id] = true
+	}
+	found := map[string]bool{}
+	for _, half := range []struct {
+		dir  string
+		idOf func(string) string
+	}{
+		{appsDir, taskIDFromBundleName},
+		{appSupportDir(home), taskIDFromAppDataName},
+	} {
+		entries, err := os.ReadDir(half.dir)
+		if err != nil {
+			continue // nothing readable there is nothing to reclaim from there
+		}
+		for _, e := range entries {
+			if id := half.idOf(e.Name()); id != "" {
+				found[id] = true
+			}
+		}
+	}
+	ids := make([]string, 0, len(found))
+	for id := range found {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	instances := make([]taskDevGUIInstance, 0, len(ids))
+	for _, id := range ids {
+		inst := taskDevGUIInstance{id: id, live: live[id]}
+		for _, p := range taskDevGUIPaths(home, appsDir, id) {
+			if _, err := os.Lstat(p); err == nil {
+				inst.paths = append(inst.paths, p)
+			}
+		}
+		instances = append(instances, inst)
+	}
+	return instances
 }
 
 // taskDevGUIPaths lists everything an instance occupies on disk, in the order teardown removes it.
@@ -121,7 +227,54 @@ func removeTaskDevGUI(id string) {
 	if err != nil {
 		return
 	}
+	if !stopTaskDevGUI(id) {
+		logf("  %s is still running — quit it, then `devtool devgui sweep --yes` reclaims it", taskDevBundle(id))
+		return
+	}
 	reclaim(taskDevGUIPaths(home, macAppsDir, id))
+}
+
+// stopTaskDevGUI asks the instance to quit and reports whether it is gone, because removing the
+// files under a running one does not remove the instance: it writes its store back on the way out,
+// and what teardown reported as reclaimed is on disk again minutes later (observed 2026-07-24, on a
+// session that left the app open). `make install-gui-dev` asks the same way before it replaces a
+// bundle.
+//
+// It reports rather than forces, and the caller keeps its hands off an instance that says no. A
+// half-removed instance is the worse outcome of the two: the quit is by **name**, so an instance
+// whose bundle has already been deleted can no longer be reached — leaving both halves in place is
+// what keeps the sweep able to come back for it.
+func stopTaskDevGUI(id string) bool {
+	if !taskDevGUIRunning(id) {
+		return true
+	}
+	_, _ = run("", "osascript", "-e", fmt.Sprintf("quit app %q", taskDevBundle(id)))
+	// Quitting is asynchronous: the app returns from the event before its process is gone.
+	for range 15 {
+		time.Sleep(200 * time.Millisecond)
+		if !taskDevGUIRunning(id) {
+			return true
+		}
+	}
+	return false
+}
+
+// taskDevGUIRunning reports whether a process is running out of this instance's bundle. The process
+// table is matched as plain text, not as a pattern: the bundle name holds parentheses, which a
+// `pgrep -f` regex would read as a group and quietly match the wrong thing (or nothing).
+func taskDevGUIRunning(id string) bool {
+	out, err := run("", "ps", "-Ao", "args=")
+	if err != nil {
+		return false // unable to look is not evidence of running; the quit below is harmless either way
+	}
+	return strings.Contains(out, taskDevGUIProcessMarker(id))
+}
+
+// taskDevGUIProcessMarker is the substring only this instance's own processes carry: every one of
+// them is executed out of its installed bundle, and all three builds share the process name
+// `amenbo-app`, so the bundle path is the only thing that tells them apart.
+func taskDevGUIProcessMarker(id string) string {
+	return filepath.Join(macAppsDir, taskDevBundle(id)+".app") + "/"
 }
 
 // reclaim removes each path that is actually there and reports it, leaving the rest untouched — an
@@ -138,6 +291,83 @@ func reclaim(paths []string) {
 		}
 		logf("  removed the task's dev GUI: %s", path)
 	}
+}
+
+// devGUISweep reports every per-task instance on this machine and, with `apply`, reclaims the ones
+// no worktree claims any more. It exists because `task finish` is the only thing that deletes an
+// instance, and a session that dies — or one that never runs it — leaves ~38MB of bundle plus a
+// store behind under a number nobody will type again.
+//
+// **A live instance is never touched, and never offered.** That is the same hands-off line a
+// pre-existing worktree draws: the worktree is the evidence a session owns this number, and whether
+// that session is "really" still working is not this command's to judge. It follows that the live
+// set has to be known — if git cannot answer, the sweep refuses outright rather than treating an
+// unreadable answer as "nothing is claimed", which would delete every instance on the machine.
+//
+// Reporting is the default and removal is opt-in (`--yes`), because what goes is irreversible and
+// the report is the whole review: an instance holds a store, and a clone of the shared dev setup is
+// not a thing to delete on a verb the caller only half meant.
+func devGUISweep(apply bool) error {
+	if runtime.GOOS != "darwin" {
+		logf("  the dev GUI is only installed on macOS — nothing to sweep here")
+		return nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	root, _, _, err := paths("0") // the id is unused: this only needs the main repo root
+	if err != nil {
+		return err
+	}
+	checkouts, err := worktreeCheckouts(root)
+	if err != nil {
+		return fmt.Errorf("git worktree list: %w — without it a live instance cannot be told from an orphan, and this refuses to guess", err)
+	}
+	var liveIDs []string
+	for _, c := range checkouts {
+		if id := taskIDFromCheckout(c); id != "" {
+			liveIDs = append(liveIDs, id)
+		}
+	}
+
+	instances := scanTaskDevGUIs(home, macAppsDir, liveIDs)
+	if len(instances) == 0 {
+		logf("  no per-task dev GUI on this machine")
+		return nil
+	}
+	var orphans []taskDevGUIInstance
+	for _, inst := range instances {
+		state := "orphan"
+		if inst.live {
+			state = "in use"
+		} else {
+			orphans = append(orphans, inst)
+		}
+		logf("  task %-6s %s", inst.id, state)
+		for _, p := range inst.paths {
+			logf("    %s", p)
+		}
+	}
+	if len(orphans) == 0 {
+		logf("  every instance still belongs to a worktree — nothing to reclaim")
+		return nil
+	}
+	if !apply {
+		logf("  %d orphan(s) — `devtool devgui sweep --yes` reclaims them (the ones in use are never touched)", len(orphans))
+		return nil
+	}
+	reclaimed := 0
+	for _, inst := range orphans {
+		if !stopTaskDevGUI(inst.id) {
+			logf("  task %s is still running — quit %s and run this again", inst.id, taskDevBundle(inst.id))
+			continue
+		}
+		reclaim(inst.paths)
+		reclaimed++
+	}
+	logf("✓ reclaimed %d of %d orphan instance(s)", reclaimed, len(orphans))
+	return nil
 }
 
 func dirExists(path string) bool {

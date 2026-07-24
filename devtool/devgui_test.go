@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -84,6 +85,92 @@ func TestDevGUIBundleNamesPreferTheCheckoutsOwnInstance(t *testing.T) {
 		got := devGUIBundleNames(root)
 		if len(got) != len(want) || got[0] != want[0] {
 			t.Errorf("devGUIBundleNames(%q) = %v, want %v", root, got, want)
+		}
+	}
+}
+
+// TestInstanceNamesRoundTrip holds the sweep's reader to the builder it inverts: the names are the
+// only record that an instance exists, so a rename on the build side that the reader does not follow
+// makes every instance invisible — and invisible is exactly what the sweep exists to end.
+func TestInstanceNamesRoundTrip(t *testing.T) {
+	for _, id := range []string{"1", "2131", "21310"} {
+		if got := taskIDFromBundleName(taskDevBundle(id) + ".app"); got != id {
+			t.Errorf("bundle name of %s reads back as %q", id, got)
+		}
+		if got := taskIDFromAppDataName(appDataDirName(taskDevAppData(id))); got != id {
+			t.Errorf("app-data name of %s reads back as %q", id, got)
+		}
+	}
+	// What must NOT read as an instance. The shared dev app is permanent, and a name carrying
+	// anything but digits is someone's own build — the sweep deletes what it recognises, so
+	// recognising too much is the expensive direction.
+	for _, name := range []string{"amenbo (dev).app", "amenbo.app", "amenbo (dev wip).app", "amenbo (dev 21)", "Safari.app"} {
+		if got := taskIDFromBundleName(name); got != "" {
+			t.Errorf("%q was read as instance %q", name, got)
+		}
+	}
+	for _, name := range []string{"work.amenbo.amenbo", "work.amenbo.amenbo-dev", "work.amenbo.amenbo-dev-wip", "com.other.app"} {
+		if got := taskIDFromAppDataName(name); got != "" {
+			t.Errorf("%q was read as instance %q", name, got)
+		}
+	}
+}
+
+// TestProcessMarkerIsTheBundlePath pins what a running instance is recognised by. The three builds
+// share the process name `amenbo-app`, so anything shorter than the bundle path would read the
+// production app — or a neighbouring instance — as this one.
+func TestProcessMarkerIsTheBundlePath(t *testing.T) {
+	got := taskDevGUIProcessMarker("2131")
+	if want := "/Applications/amenbo (dev 2131).app/"; got != want {
+		t.Errorf("marker = %q, want %q", got, want)
+	}
+	if strings.HasPrefix(taskDevGUIProcessMarker("21310"), got) {
+		t.Error("the marker of 21310 starts with 2131's — one instance would be read as the other")
+	}
+}
+
+// TestScanTaskDevGUIsSeparatesLiveFromOrphan is the sweep's whole judgment: an instance a worktree
+// still claims is in use, and only what nothing claims is offered for removal. It also pins that a
+// half-removed instance is still found — one half left behind is still disk nobody will reclaim by
+// hand.
+func TestScanTaskDevGUIsSeparatesLiveFromOrphan(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	apps := filepath.Join(root, "Applications")
+	mk := func(path string) {
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk(apps)
+	mk(appSupportDir(home))
+	for _, id := range []string{"2131", "2135"} {
+		for _, p := range taskDevGUIPaths(home, apps, id) {
+			mk(p)
+		}
+	}
+	// Only the bundle: the app-data was removed by hand, or never opened.
+	mk(taskDevGUIPaths(home, apps, "2140")[0])
+	// Neither is an instance: the shared dev store is permanent, and a stranger's app is not ours.
+	mk(appDataDir(home, sharedDevAppData))
+	mk(filepath.Join(apps, "Safari.app"))
+
+	got := scanTaskDevGUIs(home, apps, []string{"2135"})
+
+	want := []taskDevGUIInstance{
+		{id: "2131", live: false, paths: taskDevGUIPaths(home, apps, "2131")},
+		{id: "2135", live: true, paths: taskDevGUIPaths(home, apps, "2135")},
+		{id: "2140", live: false, paths: taskDevGUIPaths(home, apps, "2140")[:1]},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("scanned %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i].id != want[i].id || got[i].live != want[i].live {
+			t.Errorf("instance %d = %s live=%v, want %s live=%v", i, got[i].id, got[i].live, want[i].id, want[i].live)
+		}
+		if len(got[i].paths) != len(want[i].paths) {
+			t.Errorf("instance %s paths = %v, want %v", got[i].id, got[i].paths, want[i].paths)
 		}
 	}
 }

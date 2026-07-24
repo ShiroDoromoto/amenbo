@@ -131,11 +131,38 @@ Then it removes the worktree and deletes the branch, and prunes the
 `<repo>/../<repo-name>-worktrees` base dir once it holds no other worktree. It
 also deletes the task's dev GUI — the `/Applications` bundle **and** its
 app-data, naming each path it removed. Those live outside the worktree, so this
-is the only place they are reclaimed; skipping it costs ~38MB per task, forever.
+is where they are reclaimed; skipping it costs ~38MB per task, forever
+(`devgui sweep` is the way back for a task that skipped it).
+
+A **running** instance is asked to quit first, and if it will not, both halves
+are left where they are. Deleting the store under a running instance does not
+remove it — it writes the store back on the way out, and the teardown that
+reported it reclaimed reads as green while the leftover returns minutes later.
 `--reset` also returns the task to `todo` (`amenbo task status <id> todo`;
 otherwise the `in_progress` status is left as-is — finish your task with
 `amenbo task done <id>`). `finish` works whether you run it from the main
 checkout or from inside the worktree.
+
+### `devtool devgui sweep [--yes]`
+
+Lists every per-task dev GUI on this machine and says which ones no worktree
+claims any more. `task finish` is the only other thing that deletes an instance,
+so a session that died — or one that never ran it — leaves ~38MB of bundle plus a
+store behind under a number nobody will type again.
+
+- **An instance a worktree still owns is never touched, and never offered.** That
+  is the same hands-off line a pre-existing worktree draws elsewhere: the
+  worktree is the evidence a session owns that number, and whether the session is
+  "really" still working is not this command's to judge.
+- If `git worktree list` cannot be read, it **refuses** rather than guess — an
+  unreadable answer would read as "nothing is claimed", i.e. delete everything.
+- Reporting is the default; `--yes` reclaims. What goes is a store, and the
+  report is the review.
+- A running instance is asked to quit and skipped if it will not (see
+  `task finish` above).
+
+Only the digits form an instance: a hand-made `amenbo (dev wip).app` is
+somebody's own, and the shared `amenbo (dev)` app is permanent.
 
 ### `devtool agent size [--base main] [--json]`
 

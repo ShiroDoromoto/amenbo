@@ -36,6 +36,26 @@ func worktreeRemove(root, path string, force bool) error {
 	return err
 }
 
+// worktreeCheckouts lists the checkouts git knows about, the main one included. The porcelain form
+// is parsed rather than the human one because it is the stable contract: one `worktree <path>` line
+// opens each record, and nothing else starts with that word.
+//
+// An error here is not "no worktrees": the caller must be able to tell "git could not answer" from
+// "git says none", because the second reads as "everything on disk is an orphan".
+func worktreeCheckouts(root string) ([]string, error) {
+	out, err := run(root, "git", "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	for _, line := range strings.Split(out, "\n") {
+		if p, ok := strings.CutPrefix(line, "worktree "); ok {
+			paths = append(paths, strings.TrimSpace(p))
+		}
+	}
+	return paths, nil
+}
+
 // branchExists reports whether refs/heads/branch is present.
 func branchExists(root, branch string) bool {
 	_, err := run(root, "git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)

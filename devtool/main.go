@@ -48,6 +48,8 @@ func main() {
 	switch args[0] {
 	case "task":
 		taskCmd(args[1:])
+	case "devgui":
+		devGUICmd(args[1:])
 	case "agent":
 		agentCmd(args[1:])
 	case "fixtures":
@@ -67,6 +69,7 @@ func usage() {
 Usage:
   devtool task start  <id> [--base main] [--no-reserve] [--no-deps]
   devtool task finish <id> [--base main] [--force] [--reset]
+  devtool devgui sweep     [--yes]
   devtool agent size       [--base main] [--json]
   devtool fixtures refresh [--catalog <url|path>] [--repo owner/name]
   devtool fixtures gui     [--fail <face>=<status|timeout>] [--port n] [--app path] [--no-launch]
@@ -82,6 +85,12 @@ task start   reserve <id> (todo→in_progress, prod amenbo from the main repo) a
 task finish  safely tear it down: refuse unless the worktree is clean and the
              branch is merged into --base (override with --force). Deletes the
              task's dev GUI too — the bundle and its app-data both.
+devgui sweep list every per-task dev GUI on this machine and say which ones no
+             worktree claims any more (a session that never reached 'task
+             finish' leaves ~38MB of bundle plus a store behind). Reports only;
+             --yes reclaims the orphans. An instance a worktree still owns is
+             never touched, and if git cannot list the worktrees the sweep
+             refuses rather than guess.
 fixtures     a fake outside world for GUI verification. 'refresh' captures the
              catalog, GitHub's answers and latest.json from the real world (they
              are copies, never written by hand); 'gui' serves them and starts the
@@ -169,6 +178,34 @@ func taskCmd(args []string) {
 		}
 	default:
 		logf("devtool: unknown task subcommand %q", sub)
+		usage()
+		os.Exit(2)
+	}
+}
+
+// devGUICmd dispatches the `devgui` subcommands: the report, and the removal the report is the
+// review for. `sweep` takes no id — the point is the instances nobody named.
+func devGUICmd(args []string) {
+	if len(args) == 0 {
+		usage()
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "sweep":
+		fs := flag.NewFlagSet("devgui sweep", flag.ExitOnError)
+		apply := fs.Bool("yes", false, "actually remove the orphans (without it, only report)")
+		fs.Parse(args[1:])
+		if fs.NArg() > 0 {
+			logf("devtool: devgui sweep takes no arguments, got: %s", strings.Join(fs.Args(), " "))
+			usage()
+			os.Exit(2)
+		}
+		if err := devGUISweep(*apply); err != nil {
+			logf("devtool: %v", err)
+			os.Exit(1)
+		}
+	default:
+		logf("devtool: unknown devgui subcommand %q", args[0])
 		usage()
 		os.Exit(2)
 	}

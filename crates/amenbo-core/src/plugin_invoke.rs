@@ -92,12 +92,13 @@ pub fn prepare(
 
     let gate = gate_for(plugin.manifest.scope, project)?;
     if !effective_enabled_in(store, name, gate)? {
+        let cmd = crate::config::Paths::command_name();
         return Err(crate::error::Error::invalid(
             format!(
-                "plugin '{name}' is installed but not enabled — `amenbo plugin enable {name}` opens its gate"
+                "plugin '{name}' is installed but not enabled — `{cmd} plugin enable {name}` opens its gate"
             ),
             format!(
-                "プラグイン '{name}' はインストール済みですが有効ではありません——`amenbo plugin enable {name}` で門を開いてください"
+                "プラグイン '{name}' はインストール済みですが有効ではありません——`{cmd} plugin enable {name}` で門を開いてください"
             ),
         ));
     }

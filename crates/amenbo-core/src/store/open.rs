@@ -114,10 +114,13 @@ pub(crate) fn ensure_format_supported(stamp: &crate::store_engine::FormatStamp) 
             format!("use amenbo {app} or newer — that is the version that wrote this store"),
             format!("amenbo {app} 以降を使ってください（このストアを書いたのがその版です）"),
         ),
-        None => (
-            "reinstall from the latest installer (GUI + CLI ship together) or run `amenbo update`".to_string(),
-            "最新インストーラで入れ直すか `amenbo update` を実行してください（GUI と CLI は一体配布）".to_string(),
-        ),
+        None => {
+            let cmd = crate::config::Paths::command_name();
+            (
+                format!("reinstall from the latest installer (GUI + CLI ship together) or run `{cmd} update`"),
+                format!("最新インストーラで入れ直すか `{cmd} update` を実行してください（GUI と CLI は一体配布）"),
+            )
+        }
     };
     Err(Error::format_ahead(
         format!(

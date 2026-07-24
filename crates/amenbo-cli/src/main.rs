@@ -204,7 +204,7 @@ fn handle_parse_error(e: clap::Error) -> i32 {
         let obj = json!({ "error": {
             "code": code,
             "message": e.to_string().lines().next().unwrap_or("argument error"),
-            "hint": "Run `amenbo agent --json` to see the available commands."
+            "hint": format!("Run `{} agent --json` to see the available commands.", Paths::command_name())
         }});
         eprintln!("{}", serde_json::to_string_pretty(&obj).unwrap());
     } else {
@@ -421,7 +421,7 @@ fn self_update_cmd(
         return Err(CliError {
             code: "io_error",
             message: "could not reach the release manifest to check for an update".to_string(),
-            hint: Some("check your connection, or run `amenbo update` to open the installer.".to_string()),
+            hint: Some(format!("check your connection, or run `{} update` to open the installer.", Paths::command_name())),
             exit: 1,
         });
     };
@@ -440,7 +440,7 @@ fn self_update_cmd(
             } else {
                 human(flags, format!("Updated amenbo: {} → {}.", done.from, done.to));
                 human(flags, "Restart amenbo to run the new version.");
-                human(flags, format!("The previous binary is kept at {} — undo with `amenbo update --rollback`.", done.backup.display()));
+                human(flags, format!("The previous binary is kept at {} — undo with `{} update --rollback`.", done.backup.display(), Paths::command_name()));
             }
             Ok(0)
         }
@@ -464,7 +464,7 @@ fn self_update_cmd(
             } else {
                 human(flags, e.to_string());
                 if matches!(e, SelfUpdateError::GuiManaged { .. }) {
-                    human(flags, "Run `amenbo update` to open the desktop installer instead.");
+                    human(flags, format!("Run `{} update` to open the desktop installer instead.", Paths::command_name()));
                 }
             }
             Ok(0)
@@ -473,9 +473,9 @@ fn self_update_cmd(
         Err(e) => {
             let hint = match e {
                 SelfUpdateError::NoArchive { .. } => {
-                    Some("run `amenbo update` to open the installer instead.".to_string())
+                    Some(format!("run `{} update` to open the installer instead.", Paths::command_name()))
                 }
-                _ => Some("try again, or run `amenbo update` to open the installer.".to_string()),
+                _ => Some(format!("try again, or run `{} update` to open the installer.", Paths::command_name())),
             };
             Err(CliError { code: "io_error", message: e.to_string(), hint, exit: 1 })
         }
@@ -537,7 +537,7 @@ fn self_rollback_cmd(flags: &Flags) -> Result<i32, CliError> {
         Err(e) => Err(CliError {
             code: "io_error",
             message: e.to_string(),
-            hint: Some("try again, or run `amenbo update` to reinstall from the installer.".to_string()),
+            hint: Some(format!("try again, or run `{} update` to reinstall from the installer.", Paths::command_name())),
             exit: 1,
         }),
     }
@@ -857,7 +857,7 @@ fn plugin_config_value(value: String) -> Result<String, CliError> {
         return Err(CliError {
             code: "invalid_value",
             message: "`-` says the value comes in on stdin, but stdin is a terminal".to_string(),
-            hint: Some("Pipe the value in (`… | amenbo plugin config set … -`), or pass it directly.".to_string()),
+            hint: Some(format!("Pipe the value in (`… | {} plugin config set … -`), or pass it directly.", Paths::command_name())),
             exit: 2,
         });
     }
@@ -976,7 +976,7 @@ fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, C
         amenbo_core::plugin_install::install(&store.paths, name).map_err(CliError::from)?;
 
     human(flags, format!("Installed plugin: {name} — {}", installed.manifest.desc));
-    human(flags, format!("It is not enabled yet: `amenbo plugin enable {name}` opens its gate."));
+    human(flags, format!("It is not enabled yet: `{} plugin enable {name}` opens its gate.", Paths::command_name()));
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "plugin.install", "plugin": name,
@@ -1229,27 +1229,28 @@ fn plugin_update_cmd(
     check: bool,
     all: bool,
 ) -> Result<i32, CliError> {
-    let misuse = |message: String, hint: &str| CliError {
+    let cmd = Paths::command_name();
+    let misuse = |message: String, hint: String| CliError {
         code: "invalid_value",
         message,
-        hint: Some(hint.to_string()),
+        hint: Some(hint),
         exit: 2,
     };
     match (check, all, name) {
         (true, false, None) => plugin_update_check_cmd(store, flags),
         (true, _, _) => Err(misuse(
             "--check reports every install and applies nothing".to_string(),
-            "Pass --check on its own, or drop it to apply: `amenbo plugin update <name>` / `--all`.",
+            format!("Pass --check on its own, or drop it to apply: `{cmd} plugin update <name>` / `--all`."),
         )),
         (false, true, Some(name)) => Err(misuse(
             format!("--all is every installed plugin, so it cannot also name '{name}'"),
-            "Pass one or the other: `amenbo plugin update <name>`, or `amenbo plugin update --all`.",
+            format!("Pass one or the other: `{cmd} plugin update <name>`, or `{cmd} plugin update --all`."),
         )),
         (false, true, None) => plugin_update_all_cmd(store, flags),
         (false, false, Some(name)) => plugin_update_apply_cmd(store, flags, name),
         (false, false, None) => Err(misuse(
             "say what to update".to_string(),
-            "`amenbo plugin update --check` to see what there is, `<name>` or `--all` to apply it.",
+            format!("`{cmd} plugin update --check` to see what there is, `<name>` or `--all` to apply it."),
         )),
     }
 }
@@ -1460,12 +1461,14 @@ fn refuse_update_leaving_required_unset(
     }
     Err(amenbo_core::error::Error::invalid(
         format!(
-            "the new build of '{name}' needs setting(s) not provided: {}. Set them first, then update — the build in place is unchanged: `amenbo plugin config set {name} <key> <value>`",
-            missing.join(", ")
+            "the new build of '{name}' needs setting(s) not provided: {}. Set them first, then update — the build in place is unchanged: `{} plugin config set {name} <key> <value>`",
+            missing.join(", "),
+            Paths::command_name()
         ),
         format!(
-            "'{name}' の新しい版は未入力の必須設定を要求します（{}）。先に設定してから更新してください——今の版はそのまま変わりません：`amenbo plugin config set {name} <key> <value>`",
-            missing.join("、")
+            "'{name}' の新しい版は未入力の必須設定を要求します（{}）。先に設定してから更新してください——今の版はそのまま変わりません：`{} plugin config set {name} <key> <value>`",
+            missing.join("、"),
+            Paths::command_name()
         ),
     ))
 }
@@ -1759,9 +1762,10 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     if let Some(rel) = upstream.as_ref() {
         if rel.is_newer_than(agent::VERSION) {
             eprintln!(
-                "⚠ A newer amenbo ({}) is available (this build is {}). Run `amenbo update` to install it, or see {}",
+                "⚠ A newer amenbo ({}) is available (this build is {}). Run `{} update` to install it, or see {}",
                 rel.version,
                 agent::VERSION,
+                Paths::command_name(),
                 rel.update_url(),
             );
         }
@@ -1810,8 +1814,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         let doctor = store.doctor().map_err(CliError::from)?;
         let n = doctor.issues.len();
         if n > 0 {
+            let cmd = Paths::command_name();
             eprintln!(
-                "⚠ Startup integrity check found {n} issue(s) (error {} / warning {}). Run `amenbo doctor` for details (repair: `amenbo doctor --fix`).",
+                "⚠ Startup integrity check found {n} issue(s) (error {} / warning {}). Run `{cmd} doctor` for details (repair: `{cmd} doctor --fix`).",
                 doctor.summary.error, doctor.summary.warning
             );
         }
@@ -1836,7 +1841,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             return Err(CliError {
                 code: "invalid_value",
                 message: format!("project '{p}' is archived or deleted — cannot use it as an explicit --project context"),
-                hint: Some("Pass a live project (see `amenbo project list`).".to_string()),
+                hint: Some(format!("Pass a live project (see `{} project list`).", Paths::command_name())),
                 exit: 2,
             });
         }
@@ -1936,8 +1941,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 }
                 if vs.update_available {
                     human(flags, format!(
-                        "update available — a newer amenbo ({}) is out. Run `amenbo update` to get the installer.",
+                        "update available — a newer amenbo ({}) is out. Run `{} update` to get the installer.",
                         vs.newer_version.as_deref().unwrap_or("—"),
+                        Paths::command_name(),
                     ));
                 }
             }
@@ -1994,7 +2000,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 for dir in &repair.unresolved {
                     human(
                         flags,
-                        format!("⚠ {dir}: no single live project claims this folder — run `amenbo bind --project <id>` there."),
+                        format!("⚠ {dir}: no single live project claims this folder — run `{} bind --project <id>` there.", Paths::command_name()),
                     );
                 }
 
@@ -2837,7 +2843,7 @@ fn init_cmd(flags: &Flags, name: Option<String>, language: Option<String>, force
     // out of the AI's project context.
     let mut store = if store_exists {
         if name.is_some() {
-            human(flags, "  (--name is ignored: this device already holds an amenbo store; change your display name with `amenbo config set human_name <name>`)");
+            human(flags, format!("  (--name is ignored: this device already holds an amenbo store; change your display name with `{} config set human_name <name>`)", Paths::command_name()));
         }
         Store::open_at(paths).map_err(CliError::from)?
     } else {
@@ -2908,7 +2914,7 @@ fn init_cmd(flags: &Flags, name: Option<String>, language: Option<String>, force
             None, false, "");
     } else {
         human(flags, format!("✓ Ready — project '{}' is set up; an AI launched in this folder can now operate amenbo (you are {}).", project_name, human_name));
-        human(flags, "  Next: amenbo status");
+        human(flags, format!("  Next: {} status", Paths::command_name()));
         if !placed.is_empty() {
             human(flags, format!("  (placed {})", placed.join(", ")));
         }
@@ -2959,7 +2965,7 @@ fn recover_lost_pointer(
             "✓ Recovered — this folder was already linked to project '{}' but its .amenbo pointer was missing; rewrote it (you are {}).",
             project_name.clone().unwrap_or_else(|| project_id.to_string()), human_name,
         ));
-        human(flags, "  Next: amenbo status");
+        human(flags, format!("  Next: {} status", Paths::command_name()));
     }
     Ok(0)
 }
@@ -3052,7 +3058,7 @@ fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<S
                 None, false, "");
         } else {
             human(flags, format!("✓ Linked this folder to project '{name}' — an AI launched here can now operate this project."));
-            human(flags, "  Next: amenbo status");
+            human(flags, format!("  Next: {} status", Paths::command_name()));
         }
         return Ok(0);
     }
@@ -3078,14 +3084,14 @@ fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<S
                 if let Some(warning) = &mismatch {
                     human(flags, warning);
                 }
-                human(flags, "To link a project, run `amenbo bind --project <name or ID>`.");
+                human(flags, format!("To link a project, run `{} bind --project <name or ID>`.", Paths::command_name()));
             }
         }
         None => {
             if flags.json {
                 print_json(&json!({ "ok": true, "action": "bind.show", "binding": null }));
             } else {
-                human(flags, "No .amenbo found in this directory (or above). Link one with `amenbo bind --project <name or ID>`.");
+                human(flags, format!("No .amenbo found in this directory (or above). Link one with `{} bind --project <name or ID>`.", Paths::command_name()));
             }
         }
     }
@@ -3282,15 +3288,15 @@ fn project(store: &mut Store, flags: &Flags, sub: ProjectCmd) -> Result<i32, Cli
                         // Say what the inspection found on the same line (same material as the JSON; the
                         // order runs strongest first, and "the folder is gone" outranks the rest).
                         let mark = if !f["exists"].as_bool().unwrap_or(false) {
-                            "  (missing)"
+                            "  (missing)".to_string()
                         } else if f["pointer_missing"].as_bool().unwrap_or(false) {
-                            "  (no .amenbo — run `amenbo init` there to relink)"
+                            format!("  (no .amenbo — run `{} init` there to relink)", Paths::command_name())
                         } else if f["legacy"].as_bool().unwrap_or(false) {
-                            "  (legacy .amenbo)"
+                            "  (legacy .amenbo)".to_string()
                         } else if !f["mismatch"].is_null() {
-                            "  (.amenbo points at another store)"
+                            "  (.amenbo points at another store)".to_string()
                         } else {
-                            ""
+                            String::new()
                         };
                         human(flags, format!("  {path}{mark}"));
                     }
@@ -3681,7 +3687,8 @@ fn slug_mismatch_warning(store: &Store, binding: &amenbo_core::binding::DirBindi
     let m = amenbo_core::binding::slug_mismatch(store, binding)?;
     Some(format!(
         "warning: this folder's .amenbo names project '{}', but {} is '{}' — the pointer looks \
-         like it came from another store. Re-link it with `amenbo bind --project <name or ID>`.",
+         like it came from another store. Re-link it with `{} bind --project <name or ID>`.",
+        Paths::command_name(),
         m.recorded,
         amenbo_core::idref::project(m.project_id),
         m.actual.as_deref().unwrap_or("(no slug)")
@@ -3782,7 +3789,7 @@ fn warn_premise_change(pc: &amenbo_core::view::PremiseChange) {
     for line in premise_change_lines(pc) {
         eprintln!("{line}");
     }
-    eprintln!("  Finish only the part that stands on its own, or hand it back with `amenbo task status <id> todo`.");
+    eprintln!("  Finish only the part that stands on its own, or hand it back with `{} task status <id> todo`.", Paths::command_name());
 }
 
 /// Fold the premise change into a write command's JSON resource, so a `--json` caller sees it structurally
@@ -4525,7 +4532,7 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
         DecisionCmd::Promote { comment, title, project } => {
             // Promote a comment (task_comment) into a decision: its text becomes the body, its task's project
             // becomes the home, and the decision is linked back to that task.
-            let not_found = || CliError { code: "not_found", message: format!("comment '{comment}' not found"), hint: Some("pass a comment id from `amenbo comment list <task>`".to_string()), exit: 1 };
+            let not_found = || CliError { code: "not_found", message: format!("comment '{comment}' not found"), hint: Some(format!("pass a comment id from `{} comment list <task>`", Paths::command_name())), exit: 1 };
             let cid = store.resolve_task_comment(&comment).map_err(CliError::from)?.first().copied().ok_or_else(not_found)?;
             let c = store.task_comment(cid).map_err(CliError::from)?.ok_or_else(not_found)?;
             let task_id = c.task_id;
@@ -4859,7 +4866,7 @@ fn resolve_attachment(store: &Store, id: &str) -> Result<Attachment, CliError> {
     let not_found = || CliError {
         code: "not_found",
         message: format!("attachment '{id}' not found"),
-        hint: Some("list ids with `amenbo attach ls <target>`".to_string()),
+        hint: Some(format!("list ids with `{} attach ls <target>`", Paths::command_name())),
         exit: 1,
     };
     let hit = store.resolve_attachment(id)?.first().copied().ok_or_else(not_found)?;
@@ -5263,7 +5270,8 @@ fn export(store: &Store, flags: &Flags, out: Option<String>) -> Result<i32, CliE
             // note goes to stderr: stdout is the dump itself and must stay pipeable.
             if !flags.json && !flags.quiet {
                 eprintln!(
-                    "note: attachment files are not in this stream — run `amenbo export --out <dir>` to take them with you"
+                    "note: attachment files are not in this stream — run `{} export --out <dir>` to take them with you",
+                    Paths::command_name()
                 );
             }
         }
@@ -5280,7 +5288,7 @@ fn run_backup(store: &Store, flags: &Flags, path: Option<String>) -> Result<i32,
         return Err(CliError {
             code: "missing_required_flag",
             message: "backup needs a destination path".to_string(),
-            hint: Some(format!("Run `amenbo backup <path>.{}`.", archive::ARCHIVE_EXT)),
+            hint: Some(format!("Run `{} backup <path>.{}`.", Paths::command_name(), archive::ARCHIVE_EXT)),
             exit: 2,
         });
     };
@@ -5289,7 +5297,7 @@ fn run_backup(store: &Store, flags: &Flags, path: Option<String>) -> Result<i32,
         return Err(CliError {
             code: "backup_error",
             message: "found no store to back up on this device".to_string(),
-            hint: Some("Create or bind a store first (`amenbo init`).".to_string()),
+            hint: Some(format!("Create or bind a store first (`{} init`).", Paths::command_name())),
             exit: 1,
         });
     };
@@ -5303,7 +5311,8 @@ fn run_backup(store: &Store, flags: &Flags, path: Option<String>) -> Result<i32,
         // check holds after the fact too — a directory could only have been one before the run.
         hint: Some(if dest.is_dir() {
             format!(
-                "Give a file path, not a folder — e.g. `amenbo backup {}/mystore.{}`.",
+                "Give a file path, not a folder — e.g. `{} backup {}/mystore.{}`.",
+                Paths::command_name(),
                 dest.display(),
                 archive::ARCHIVE_EXT
             )
@@ -5446,7 +5455,8 @@ fn migrate_at_startup(flags: &Flags) -> Result<(), CliError> {
             );
         }
         eprintln!(
-            "  Older amenbo builds can no longer open this store — update them (`amenbo update`, or reinstall from the latest installer; GUI and CLI ship together)."
+            "  Older amenbo builds can no longer open this store — update them (`{} update`, or reinstall from the latest installer; GUI and CLI ship together).",
+            Paths::command_name()
         );
     }
     Ok(())
@@ -5522,7 +5532,7 @@ fn hard_erase(store: &mut Store, flags: &Flags, sub: HardEraseCmd) -> Result<i32
         return Err(CliError {
             code: "backup_error",
             message: "found no store to back up before erasing".to_string(),
-            hint: Some("Create or bind a store first (`amenbo init`).".to_string()),
+            hint: Some(format!("Create or bind a store first (`{} init`).", Paths::command_name())),
             exit: 1,
         });
     };
@@ -5533,8 +5543,8 @@ fn hard_erase(store: &mut Store, flags: &Flags, sub: HardEraseCmd) -> Result<i32
             code: "backup_error", message: e.to_string(), hint: None, exit: 1,
         })?;
     human(flags, format!(
-        "↩ Safety backup written to {} ({} attachment(s)) — it still contains the erased content, so delete it once you have verified the erase (`amenbo restore` puts it back)",
-        safety.backup.path, safety.backup.blobs
+        "↩ Safety backup written to {} ({} attachment(s)) — it still contains the erased content, so delete it once you have verified the erase (`{} restore` puts it back)",
+        safety.backup.path, safety.backup.blobs, Paths::command_name()
     ));
     // One rewind point per kind, the newest. Say what went, so a deleted copy is never a silent one.
     if !safety.superseded.is_empty() {
@@ -5654,7 +5664,7 @@ fn run_restore(
         return Err(CliError {
             code: "missing_required_flag",
             message: "restore needs the archive path".to_string(),
-            hint: Some(format!("Run `amenbo restore <path>.{}`.", archive::ARCHIVE_EXT)),
+            hint: Some(format!("Run `{} restore <path>.{}`.", Paths::command_name(), archive::ARCHIVE_EXT)),
             exit: 2,
         });
     };
@@ -5669,7 +5679,7 @@ fn run_restore(
     let manifest = archive::read_manifest(archive).map_err(|e| CliError {
         code: "restore_error",
         message: e.to_string(),
-        hint: Some("Pass a .amenbo-backup archive produced by `amenbo backup`.".to_string()),
+        hint: Some(format!("Pass a .amenbo-backup archive produced by `{} backup`.", Paths::command_name())),
         exit: 1,
     })?;
     if !confirm(
@@ -5687,7 +5697,7 @@ fn run_restore(
         .map_err(|e| CliError {
             code: "restore_error",
             message: e.to_string(),
-            hint: Some("On a too-new archive, update amenbo first (`amenbo update`).".to_string()),
+            hint: Some(format!("On a too-new archive, update amenbo first (`{} update`).", Paths::command_name())),
             exit: 1,
         })?;
     if flags.json {

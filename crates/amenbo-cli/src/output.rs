@@ -4,6 +4,7 @@
 use std::io::{IsTerminal, Write};
 use std::sync::OnceLock;
 
+use amenbo_core::config::Paths;
 use amenbo_core::model::ActorKind;
 use serde::Serialize;
 use serde_json::json;
@@ -100,13 +101,14 @@ impl CliError {
     /// them is a plain SQLite probe: it never opens a store, so it cannot forward-migrate one as a side
     /// effect.
     pub fn no_pointer(candidate_projects: &[String]) -> CliError {
-        let mut hint = String::from(
-            "Pick one:\n  • Start a new project here: amenbo init --name <you>\n  • Link an existing project: amenbo bind --project <name or id>",
+        let cmd = Paths::command_name();
+        let mut hint = format!(
+            "Pick one:\n  • Start a new project here: {cmd} init --name <you>\n  • Link an existing project: {cmd} bind --project <name or id>",
         );
         if !candidate_projects.is_empty() {
             hint.push_str("\nExisting projects:");
             for p in candidate_projects {
-                hint.push_str(&format!("\n  • amenbo bind --project {p}"));
+                hint.push_str(&format!("\n  • {cmd} bind --project {p}"));
             }
         }
         CliError {
@@ -129,9 +131,12 @@ impl CliError {
             message: format!(
                 "This folder ({dir}) is already linked to amenbo (project {project_id}){data_note}. init was refused because it would create a new project and overwrite the pointer."
             ),
-            hint: Some(format!(
-                "To use the existing project in this folder, run `amenbo bind --project {project_id}`. If only the pointer is broken, recover with `amenbo bind --project <name or id>`. To really create a brand-new project and overwrite, run `amenbo init --force`."
-            )),
+            hint: Some({
+                let cmd = Paths::command_name();
+                format!(
+                    "To use the existing project in this folder, run `{cmd} bind --project {project_id}`. If only the pointer is broken, recover with `{cmd} bind --project <name or id>`. To really create a brand-new project and overwrite, run `{cmd} init --force`."
+                )
+            }),
             exit: 1,
         }
     }
@@ -143,11 +148,12 @@ impl CliError {
     /// recovered outright and zero means init just proceeds, so we only land here when it is genuinely
     /// ambiguous.
     pub fn init_ambiguous_owners(dir: &str, project_ids: &[String]) -> CliError {
+        let cmd = Paths::command_name();
         let mut hint = String::from("Multiple projects claim this folder. Pick the one to recover:");
         for pid in project_ids {
-            hint.push_str(&format!("\n  • amenbo bind --project {pid}"));
+            hint.push_str(&format!("\n  • {cmd} bind --project {pid}"));
         }
-        hint.push_str("\nOr run `amenbo init --force` to create a brand-new project here.");
+        hint.push_str(&format!("\nOr run `{cmd} init --force` to create a brand-new project here."));
         CliError {
             code: CliErrorCode::InitAmbiguousOwners.as_str(),
             message: format!(
@@ -201,11 +207,12 @@ impl CliError {
     /// place. If an ancestor is bound, we do not quietly unbind it and take the whole tree down with it;
     /// we say to run unbind there instead (unbind only ever releases **that** folder's binding).
     pub fn unbind_no_binding(dir: &str, ancestor: Option<&str>) -> CliError {
+        let cmd = Paths::command_name();
         let hint = match ancestor {
             Some(a) => format!(
-                "This folder inherits a binding from an ancestor ({a}). To unbind that, run `amenbo unbind` there (or `amenbo unbind --dir {a}`)."
+                "This folder inherits a binding from an ancestor ({a}). To unbind that, run `{cmd} unbind` there (or `{cmd} unbind --dir {a}`)."
             ),
-            None => "Nothing to unbind here. Link a folder with `amenbo init` or `amenbo bind`.".to_string(),
+            None => format!("Nothing to unbind here. Link a folder with `{cmd} init` or `{cmd} bind`."),
         };
         CliError {
             code: CliErrorCode::UnbindNoBinding.as_str(),
@@ -248,23 +255,22 @@ impl CliError {
 impl From<amenbo_core::Error> for CliError {
     fn from(e: amenbo_core::Error) -> CliError {
         use amenbo_core::Error as E;
+        let cmd = Paths::command_name();
         let hint = match &e {
             E::AmbiguousId { candidates, .. } => {
                 Some(format!("Candidates: {}", candidates.join(", ")))
             }
-            E::NotFound(_) => Some("Run `amenbo agent --json` to see how to operate.".to_string()),
-            E::BindingStale(_) => Some("Re-link it with `amenbo bind --project <id>`.".to_string()),
-            E::AlreadyReserved(_) => Some(
-                "Another session reserved it first. Pick the next task (`amenbo agent --json`), or hand it back with `amenbo task status <id> todo` if the reservation is stale."
-                    .to_string(),
-            ),
+            E::NotFound(_) => Some(format!("Run `{cmd} agent --json` to see how to operate.")),
+            E::BindingStale(_) => Some(format!("Re-link it with `{cmd} bind --project <id>`.")),
+            E::AlreadyReserved(_) => Some(format!(
+                "Another session reserved it first. Pick the next task (`{cmd} agent --json`), or hand it back with `{cmd} task status <id> todo` if the reservation is stale."
+            )),
             // The counterpart to `already_reserved`. That one means someone else holds it (→ move on to
             // the next task); this one means a premise you declared is unmet (→ resolve the premise).
             // The two point in opposite directions, so keep them apart.
-            E::NotReady(_) => Some(
-                "A declared premise is unmet, and there is no --force. Resolve it: finish the blocker (`amenbo task done <blocker>`) or drop the edge (`amenbo task undepend <id> --on <blocker>`); settle the premise (`amenbo decision accept AMB-D-N`) or unlink it (`amenbo decision link AMB-D-N <id> --unlink`)."
-                    .to_string(),
-            ),
+            E::NotReady(_) => Some(format!(
+                "A declared premise is unmet, and there is no --force. Resolve it: finish the blocker (`{cmd} task done <blocker>`) or drop the edge (`{cmd} task undepend <id> --on <blocker>`); settle the premise (`{cmd} decision accept AMB-D-N`) or unlink it (`{cmd} decision link AMB-D-N <id> --unlink`)."
+            )),
             _ => None,
         };
         CliError {

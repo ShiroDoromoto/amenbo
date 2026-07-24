@@ -6,6 +6,7 @@
 //! `match` enforced by the compiler: add a rule in core and the build stays broken until this face
 //! writes its sentence, so nothing ships with the English missing.
 
+use amenbo_core::config::Paths;
 use amenbo_core::validate::{Issue, IssueRule};
 
 /// How to fix it — as a **CLI command**, phrased so that whoever reads `--json` (an AI) can run it
@@ -15,9 +16,11 @@ pub fn fix_hint(issue: &Issue) -> String {
     // command someone can type, so substitute the bare id with the prefix stripped off.
     let id = issue.target.strip_prefix("task:").unwrap_or(&issue.target);
     match issue.rule {
-        IssueRule::Required => {
-            format!("Give it a {}: `amenbo task update {id} --title \"...\"`.", issue.field)
-        }
+        IssueRule::Required => format!(
+            "Give it a {}: `{} task update {id} --title \"...\"`.",
+            issue.field,
+            Paths::command_name()
+        ),
     }
 }
 

@@ -157,13 +157,18 @@ fn out_of_reach(what: &str, bound: i64) -> Error {
 /// nothing" rather than "you may not look", and points at the ways out: have a human bind it, or work in a
 /// folder that already is.
 fn unbound() -> Error {
+    let cmd = crate::config::Paths::command_name();
     Error::out_of_reach(
-        "this folder is not bound to any project — an AI reaches only the project its .amenbo names, \
-         so an unbound folder reaches nothing. Ask a human to bind it (`amenbo bind --project \
-         <name or id>`), or work in a folder that is already bound.",
-        "このフォルダはどのプロジェクトにも束縛されていません — AI が到達できるのは .amenbo が指す \
-         プロジェクトだけなので、束縛の無いフォルダからは何にも到達できません。人間に束縛して \
-         もらう（`amenbo bind --project <name or id>`）か、既に束縛されたフォルダで作業してください。",
+        format!(
+            "this folder is not bound to any project — an AI reaches only the project its .amenbo names, \
+             so an unbound folder reaches nothing. Ask a human to bind it (`{cmd} bind --project \
+             <name or id>`), or work in a folder that is already bound."
+        ),
+        format!(
+            "このフォルダはどのプロジェクトにも束縛されていません — AI が到達できるのは .amenbo が指す \
+             プロジェクトだけなので、束縛の無いフォルダからは何にも到達できません。人間に束縛して \
+             もらう（`{cmd} bind --project <name or id>`）か、既に束縛されたフォルダで作業してください。"
+        ),
     )
 }
 

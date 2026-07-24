@@ -576,3 +576,8 @@ jobs:
         run: |
           chmod +x guards/check-change-scopes.sh
           guards/check-change-scopes.sh
+
+      - name: Assert every worded command names this build's CLI
+        run: |
+          chmod +x guards/check-cli-name.sh
+          guards/check-cli-name.sh

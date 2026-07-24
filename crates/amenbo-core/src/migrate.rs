@@ -396,14 +396,17 @@ fn roll_back(
                 "移行に失敗したため、開始前の状態へ丸ごと戻しました: {failure}（移行前バックアップは {at} に残しています）"
             ),
         ),
-        Err(rollback) => Error::invalid(
-            format!(
-                "the migration failed ({failure}) and rolling back failed too ({rollback}). your store may be half-migrated — restore it from the pre-migration backup at {at} (`amenbo restore {at}`)"
-            ),
-            format!(
-                "移行に失敗し（{failure}）、開始前の状態へ戻すことにも失敗しました（{rollback}）。ストアが移行途中のままの可能性があります——移行前バックアップ {at} から復元してください（`amenbo restore {at}`）"
-            ),
-        ),
+        Err(rollback) => {
+            let cmd = crate::config::Paths::command_name();
+            Error::invalid(
+                format!(
+                    "the migration failed ({failure}) and rolling back failed too ({rollback}). your store may be half-migrated — restore it from the pre-migration backup at {at} (`{cmd} restore {at}`)"
+                ),
+                format!(
+                    "移行に失敗し（{failure}）、開始前の状態へ戻すことにも失敗しました（{rollback}）。ストアが移行途中のままの可能性があります——移行前バックアップ {at} から復元してください（`{cmd} restore {at}`）"
+                ),
+            )
+        }
     }
 }
 

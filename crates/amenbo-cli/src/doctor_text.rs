@@ -7,6 +7,7 @@
 //! exhaustive `match` enforced by the compiler: add a kind in core and the build stays broken until
 //! this face writes its sentence, so nothing ships with the English missing.
 
+use amenbo_core::config::Paths;
 use amenbo_core::validate::{DoctorIssue, DoctorIssueKind};
 
 /// A value out of `params`. Core's [`DoctorIssue::new`] checks the keys are exactly the expected
@@ -69,46 +70,43 @@ pub fn message(issue: &DoctorIssue) -> String {
 /// How to fix it — in terms of **what the CLI offers**.
 pub fn fix_hint(issue: &DoctorIssue) -> String {
     let project = p(issue, "project");
+    let cmd = Paths::command_name();
     match issue.kind {
-        DoctorIssueKind::SelfDependency => "Drop the edge with `amenbo task undepend`.".to_string(),
-        DoctorIssueKind::DuplicateOrderKey => {
-            "Re-order the tasks (`amenbo task move <task> --top/--bottom`) and the duplicate is gone."
-                .to_string()
-        }
-        DoctorIssueKind::StaleManagedBlock => {
-            "Run amenbo in that folder and the block follows this binary on its own; \
-             `amenbo sync-guide` does every bound folder at once (one folder: `--dir`)."
-                .to_string()
-        }
+        DoctorIssueKind::SelfDependency => format!("Drop the edge with `{cmd} task undepend`."),
+        DoctorIssueKind::DuplicateOrderKey => format!(
+            "Re-order the tasks (`{cmd} task move <task> --top/--bottom`) and the duplicate is gone."
+        ),
+        DoctorIssueKind::StaleManagedBlock => format!(
+            "Run {cmd} in that folder and the block follows this binary on its own; \
+             `{cmd} sync-guide` does every bound folder at once (one folder: `--dir`)."
+        ),
         DoctorIssueKind::LegacyPointer => format!(
-            "Run amenbo in that folder and the pointer rewrites itself to the current format \
-             (project #{project}); explicitly: `amenbo bind --project {project}`."
+            "Run {cmd} in that folder and the pointer rewrites itself to the current format \
+             (project #{project}); explicitly: `{cmd} bind --project {project}`."
         ),
         DoctorIssueKind::MissingPointer => format!(
-            "Run `amenbo init` in that folder to restore the pointer; explicitly: \
-             `amenbo bind --project {project}`."
+            "Run `{cmd} init` in that folder to restore the pointer; explicitly: \
+             `{cmd} bind --project {project}`."
         ),
         DoctorIssueKind::LegacyPointerAmbiguous | DoctorIssueKind::MissingPointerAmbiguous => {
-            "The binding does not resolve to a single project - pick one: \
-             `amenbo bind --project <name or id>`."
-                .to_string()
+            format!(
+                "The binding does not resolve to a single project - pick one: \
+                 `{cmd} bind --project <name or id>`."
+            )
         }
-        DoctorIssueKind::OrphanBinding => {
-            "`amenbo doctor --fix` forgets it from the index (neither the folder nor its `.amenbo` is touched)."
-                .to_string()
-        }
-        DoctorIssueKind::DeadRef => {
-            "Open the body (`amenbo task show` / `decision show` / `comment list`) and edit it: drop the \
+        DoctorIssueKind::OrphanBinding => format!(
+            "`{cmd} doctor --fix` forgets it from the index (neither the folder nor its `.amenbo` is touched)."
+        ),
+        DoctorIssueKind::DeadRef => format!(
+            "Open the body (`{cmd} task show` / `decision show` / `comment list`) and edit it: drop the \
              ref, or point it at what stands in its place. Nothing rewrites a body on your behalf - \
              only a person knows what it meant to say."
-                .to_string()
-        }
-        DoctorIssueKind::StartAfterDue => {
-            "Correct whichever of the two declarations is wrong: `amenbo task update <task> --start <date>` \
+        ),
+        DoctorIssueKind::StartAfterDue => format!(
+            "Correct whichever of the two declarations is wrong: `{cmd} task update <task> --start <date>` \
              or `--due <date>`. Nothing picks a winner between them on your behalf - a start day that \
              falls after the deadline could mean either one was mistyped."
-                .to_string()
-        }
+        ),
     }
 }
 
@@ -134,7 +132,10 @@ pub fn print_grouped(issues: &[DoctorIssue], mut out: impl FnMut(String)) {
             out(format!("    {}", message(issue)));
         }
         if let Some(withheld) = of_kind.len().checked_sub(HUMAN_LIST_CAP).filter(|n| *n > 0) {
-            out(format!("    … and {withheld} more (the full list is in `amenbo doctor --json`)"));
+            out(format!(
+                "    … and {withheld} more (the full list is in `{} doctor --json`)",
+                Paths::command_name()
+            ));
         }
         out(format!("      → {}", fix_hint(first)));
     }

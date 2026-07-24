@@ -1954,11 +1954,14 @@ fn discover_from(st: StatusResult) -> DiscoverResult {
         summary: st.counts,
         today,
         next_suggested: st.next_suggested,
-        hints: vec![
-            "全コマンド仕様は `amenbo agent --json`".to_string(),
-            "新規タスクは `amenbo task add --title \"...\" --project <id>`".to_string(),
-            "今やることは `amenbo status`".to_string(),
-        ],
+        hints: {
+            let cmd = crate::config::Paths::command_name();
+            vec![
+                format!("全コマンド仕様は `{cmd} agent --json`"),
+                format!("新規タスクは `{cmd} task add --title \"...\" --project <id>`"),
+                format!("今やることは `{cmd} status`"),
+            ]
+        },
     }
 }
 

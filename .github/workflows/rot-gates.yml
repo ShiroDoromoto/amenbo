@@ -5,21 +5,22 @@ name: Rot gates
 # of each:
 #
 #   - ci.yml calls this on push:main / pull_request, with the `changes` path filter deciding which
-#     of the three run — a change that touches no dependency shouldn't pay for an audit.
-#   - rot-weekly.yml calls it on a schedule with every input left at its default (true), so all three
-#     run unconditionally. Rot is not a function of the diff: a dependency nobody edited turns red
-#     when a new advisory is published, and the linters
-#     below install the newest release on every run, so the RUNNER moves under a tree that didn't.
-#     Neither is visible to a path filter, and `push` is deliberately not a per-commit event here
-#     (it is reserved for changes only CI can judge), so without the weekly leg these three go
-#     unjudged for as long as main sits unpushed.
+#     of them run — a change that touches no dependency shouldn't pay for an audit.
+#   - rot-weekly.yml calls it on a schedule with every input left at its default (true), so all of
+#     them run unconditionally. Rot is not a function of the diff: a dependency nobody edited turns
+#     red when a new advisory is published, the linters below install the newest release on every
+#     run so the RUNNER moves under a tree that didn't, and the catalog key's other copy lives in
+#     another repository entirely. None of that is visible to a path filter, and `push` is
+#     deliberately not a per-commit event here (it is reserved for changes only CI can judge), so
+#     without the weekly leg these go unjudged for as long as main sits unpushed.
 #
 # What is NOT here, on purpose: rust / app-rust / gui-web. Those only break when code changes, and
 # code changes are already judged — by the local gate (`make test`, plus `make lint-linux` for the
 # Linux-only branches) before the merge, and by ci.yml after it. Running them weekly would buy
 # nothing and spend minutes (this repo is private; see the cost note in ci.yml's header).
 #
-# Cost: three Linux jobs (x1), a few minutes each. The weekly leg is on the order of 20 min/month.
+# Cost: four Linux jobs (x1), a few minutes each (the key comparison is seconds). The weekly leg is
+# on the order of 20 min/month.
 
 on:
   workflow_call:
@@ -34,6 +35,10 @@ on:
         default: true
       npm_deps:
         description: run npm audit
+        type: boolean
+        default: true
+      catalog_key:
+        description: run the catalog public key comparison
         type: boolean
         default: true
 
@@ -151,3 +156,21 @@ jobs:
       - name: Audit dev toolchain (informational)
         continue-on-error: true
         run: npm audit --audit-level=high
+
+  # The public key amenbo verifies plugin assets against exists twice: compiled into this tree, and
+  # published by the catalog repository for anyone who wants to check a signature themselves. The
+  # catalog CI proves its signing key matches its published one and can say nothing about the copy in
+  # here, so this is the only place the two are compared. Drift makes every install fail closed with
+  # a signature that cannot be verified, and the user sees no cause.
+  #
+  # It belongs in this file for the reason the others do: the far side lives in another repository
+  # and can be rotated with no diff here at all, so only the timer would catch it.
+  catalog-key:
+    name: catalog public key (matches the catalog repository)
+    runs-on: ubuntu-latest
+    if: ${{ inputs.catalog_key }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare the shipped key with the published one
+        run: guards/check-catalog-key.sh

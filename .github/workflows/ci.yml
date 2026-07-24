@@ -89,6 +89,7 @@ jobs:
       shell: ${{ steps.filter.outputs.shell }}
       cargo_deps: ${{ steps.filter.outputs.cargo_deps }}
       npm_deps: ${{ steps.filter.outputs.npm_deps }}
+      catalog_key: ${{ steps.filter.outputs.catalog_key }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -130,7 +131,7 @@ jobs:
               - '.githooks/**'
               - 'Makefile'
               - '.github/workflows/**'
-            # The two below gate jobs whose steps live in rot-gates.yml, so that file is a build
+            # The three below gate jobs whose steps live in rot-gates.yml, so that file is a build
             # input for them just as this one is. (`shell` needs no such entry: its
             # '.github/workflows/**' rule already covers every workflow, rot-gates.yml included.)
             cargo_deps:
@@ -147,6 +148,14 @@ jobs:
               - '.cargo/audit.toml'
               # The license allow-list the cargo-license job below reads.
               - 'deny.toml'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/rot-gates.yml'
+            # The key comparison is a function of the file the key is compiled into and the guard
+            # that reads it. The far side of the comparison lives in another repository, which no
+            # filter here can see — that half is what the weekly leg is for.
+            catalog_key:
+              - 'crates/amenbo-core/src/plugin_provenance.rs'
+              - 'guards/check-catalog-key.sh'
               - '.github/workflows/ci.yml'
               - '.github/workflows/rot-gates.yml'
             npm_deps:
@@ -334,8 +343,8 @@ jobs:
       - name: Format, vet and test the devtool module
         run: bash scripts/go-gate.sh
 
-  # The three gates that can also go red on a tree nobody touched (the linter floats its runner-side
-  # version; the audits float the advisory DB). Their definitions live in rot-gates.yml so that this
+  # The gates that can also go red on a tree nobody touched (the linter floats its runner-side
+  # version; the audits float the advisory DB; the catalog key's other copy is another repository's). Their definitions live in rot-gates.yml so that this
   # workflow and the weekly timer (rot-weekly.yml) run the same thing rather than two copies that
   # drift — see that file for what each one gates and why the build/test jobs are not among them.
   # Here they keep their path filter; the weekly leg runs them unfiltered.
@@ -346,6 +355,7 @@ jobs:
       shell: ${{ needs.changes.outputs.shell == 'true' }}
       cargo_deps: ${{ needs.changes.outputs.cargo_deps == 'true' }}
       npm_deps: ${{ needs.changes.outputs.npm_deps == 'true' }}
+      catalog_key: ${{ needs.changes.outputs.catalog_key == 'true' }}
 
   # amenbo is Apache-2.0 and ships binaries that statically link every Rust dependency, so a
   # strong-copyleft crate anywhere in the tree would make what we distribute undistributable.

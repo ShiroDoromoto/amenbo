@@ -1592,6 +1592,7 @@ fn plugin_uninstall_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<
                 "secrets": removed.secrets,
                 "project_overrides": removed.project_overrides,
                 "directory": removed.directory,
+                "runs_log": removed.runs_log,
             },
         }));
     }

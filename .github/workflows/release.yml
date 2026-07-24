@@ -384,7 +384,7 @@ jobs:
       # (The windows setup.exe itself is a wharfy-declared bundle and is already attested; only its
       # detached .sig rides via gh, so only the .sig is listed here.)
       - name: Attest the gh-attached updater artifacts
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/amenbo-darwin-arm64.app.tar.gz

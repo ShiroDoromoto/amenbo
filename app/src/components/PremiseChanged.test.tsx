@@ -2,8 +2,9 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { PremiseChangedChip, StatusSelect } from "./atoms";
+import { PremiseChangedChip, PremiseChangedField, StatusSelect } from "./atoms";
 import { subscribeNotice } from "../core/notice";
+import { t } from "../core/i18n";
 import type { TaskCard } from "../mock/types";
 import type { PremiseChangeDto } from "../bindings/bindings";
 
@@ -74,6 +75,20 @@ describe("PremiseChangedChip", () => {
     expect(chips()[0].getAttribute("title")).toContain("D-373 開き直った決定");
   });
 
+  it("tells the two axes apart in the tooltip — pinned on, versus settlement come off", () => {
+    act(() => root.render(createElement(PremiseChangedChip, { task: card({
+      status: "in_progress",
+      premiseChange: change({
+        addedDecisions: [{ id: 159, name: "後から張られた決定", ref: "D-159" }],
+        reopenedDecisions: [{ id: 373, name: "開き直った決定", ref: "D-373" }],
+      }),
+    }) })));
+    const title = chips()[0].getAttribute("title") ?? "";
+    // The tag sits on the reopened side only; without it the two read as one list.
+    expect(title).toContain(`${t("premise.noLongerSettled")}: D-373 開き直った決定`);
+    expect(title.indexOf("D-159")).toBeLessThan(title.indexOf(t("premise.noLongerSettled")));
+  });
+
   it("compact drops the count and shows only the glyph, tooltip still names what changed", () => {
     act(() => root.render(createElement(PremiseChangedChip, { task: card({
       status: "in_progress",
@@ -83,6 +98,41 @@ describe("PremiseChangedChip", () => {
     expect(glyphs()).toHaveLength(1);
     expect(glyphs()[0].textContent).toBe("🔔");
     expect(glyphs()[0].getAttribute("title")).toContain("AMB-T-2 後付け");
+  });
+});
+
+describe("PremiseChangedField (the detail pane's spelled-out surface)", () => {
+  const fieldChips = () => Array.from(container.querySelectorAll("button.chip--link"));
+
+  it("draws every axis, the reopened one included, and navigates to what it names", () => {
+    const opened: number[] = [];
+    act(() => root.render(createElement(PremiseChangedField, {
+      pc: change({
+        addedBlockers: [{ id: 2, name: "後付けブロッカー" }],
+        addedDecisions: [{ id: 159, name: "後から張られた決定", ref: "D-159" }],
+        reopenedDecisions: [{ id: 373, name: "開き直った決定", ref: "D-373" }],
+      }),
+      onSelectDecision: (id: number) => opened.push(id),
+    })));
+    const labels = fieldChips().map((c) => c.textContent ?? "");
+    expect(labels).toHaveLength(3);
+    expect(labels[0]).toContain("⛔ 後付けブロッカー");
+    expect(labels[1]).toContain("⚠ D-159 後から張られた決定");
+    // The axis the pane used to drop entirely: the link is older, the settlement is what went away.
+    expect(labels[2]).toContain("🔓 D-373 開き直った決定");
+    act(() => { (fieldChips()[2] as HTMLButtonElement).click(); });
+    expect(opened).toEqual([373]);
+  });
+
+  it("marks which axis each decision is on, so the two glyphs are readable", () => {
+    act(() => root.render(createElement(PremiseChangedField, {
+      pc: change({
+        addedDecisions: [{ id: 159, name: "後から張られた決定", ref: "D-159" }],
+        reopenedDecisions: [{ id: 373, name: "開き直った決定", ref: "D-373" }],
+      }),
+    })));
+    expect(fieldChips()[0].getAttribute("title")).toBe(t("detail.premiseAdded"));
+    expect(fieldChips()[1].getAttribute("title")).toBe(t("detail.premiseReopened"));
   });
 });
 
@@ -110,6 +160,16 @@ describe("StatusSelect premise-change safety net (AMB-D-366)", () => {
     expect(notices[0]).toContain("後付け");
     // Surface, not veto: the transition is still handed on.
     expect(got).toEqual([7, "done"]);
+  });
+
+  it("names a ground that stopped being settled, not only the ones pinned on", () => {
+    const notices = fireChange({
+      id: 7, status: "in_progress", onStatus: () => {},
+      premiseChange: change({ reopenedDecisions: [{ id: 373, name: "開き直った決定", ref: "D-373" }] }),
+    }, "done");
+    // The toast once fired with an empty detail here: the axis was in the chip and missing from the warn.
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain("開き直った決定");
   });
 
   it("stays silent when there is no premise change", () => {

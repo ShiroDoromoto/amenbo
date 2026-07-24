@@ -1900,6 +1900,9 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
     // older than the reservation — what is dated here is the *decision's* status clock, the mirror of the
     // task's own, so the two intent columns are compared directly. A decision the query above already
     // named is dropped: the link is the earlier, more informative fact, and one premise deserves one line.
+    // `unsettled_premise` also holds for a premise that merely lost currency (superseded), but that never
+    // moves this clock — being superseded is an edge, not a status — so this axis reports the status arm
+    // only; dating a supersession needs a time the edge does not carry (`AMB-T-2121`).
     let reopened_decisions = {
         const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
         const DC: col::decision::Cols = col::decision::of("dc");

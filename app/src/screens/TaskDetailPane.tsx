@@ -11,7 +11,7 @@ import { addComment as mutAddComment, editComment as mutEditComment, removeComme
 import { loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
 import {
-  DueChip, FacetAvatar, PriorityDot, StatusSelect, TaskIdChip,
+  DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip,
 } from "../components/atoms";
 import { errText, priorityLabel, t, tf } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
@@ -316,39 +316,15 @@ export function TaskDetailPane({
               </span>
             </div>
           )}
-          {/* Holder-side surface of `AMB-D-366`: premises pinned on after this task was reserved. It reads a
-              different axis from `blockedBy` above (why anyone cannot start it) — here it is what changed since
-              the holder took it — so it is its own field, permanent beside the transient toast the safety net
-              fires at status change. */}
+          {/* Holder-side surface of `AMB-D-366` / `AMB-D-373`: what moved under the holder after they reserved
+              this. Core fills it only for a reservation that actually acquired one, so the field appears
+              exactly when there is something to say. */}
           {task.premiseChange && (
-            <div className="detail__field">
-              <span className="detail__flabel">{t("detail.premiseChanged")}</span>
-              <span title={t("detail.premiseChangedHint")}>
-                🔔{" "}
-                {task.premiseChange.addedBlockers.map((b) => (
-                  <button
-                    type="button"
-                    className="chip chip--link"
-                    key={`b${b.id}`}
-                    style={{ marginRight: 4 }}
-                    onClick={() => refNav.selectTask?.(b.id)}
-                  >
-                    ⛔ {b.name}
-                  </button>
-                ))}
-                {task.premiseChange.addedDecisions.map((d) => (
-                  <button
-                    type="button"
-                    className="chip chip--link"
-                    key={`d${d.id}`}
-                    style={{ marginRight: 4 }}
-                    onClick={() => onSelectDecision?.(d.id)}
-                  >
-                    ⚠ {d.ref ?? ""} {d.name ?? t("dec.unknownName")}
-                  </button>
-                ))}
-              </span>
-            </div>
+            <PremiseChangedField
+              pc={task.premiseChange}
+              onSelectTask={(id) => refNav.selectTask?.(id)}
+              onSelectDecision={(id) => onSelectDecision?.(id)}
+            />
           )}
           {task.linkedDecisions && task.linkedDecisions.length > 0 && (
             <div className="detail__field">

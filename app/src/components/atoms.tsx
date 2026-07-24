@@ -98,10 +98,7 @@ export function StatusSelect({ id, status, onStatus, premiseChange, className = 
 }) {
   const change = (next: Status) => {
     if (status === "in_progress" && next !== "in_progress" && premiseChange) {
-      const blockers = premiseChange.addedBlockers.map((b) => `${taskRef(b.id)} ${b.name}`).join(", ");
-      const decisions = premiseChange.addedDecisions.map((d) => `${d.ref ?? ""} ${d.name ?? ""}`.trim()).join(", ");
-      const detail = [blockers, decisions].filter(Boolean).join(" / ");
-      pushNotice(tf("premise.warn", { detail }));
+      pushNotice(tf("premise.warn", { detail: premiseChangeDetail(premiseChange) }));
     }
     onStatus(id, next);
   };
@@ -193,6 +190,27 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
   );
 }
 
+/** How a decision is named where a premise change lists one: the ref plus its title. */
+export function premiseDecisionName(d: PremiseChangeDto["addedDecisions"][number]): string {
+  return `${d.ref ?? ""} ${d.name ?? t("dec.unknownName")}`.trim();
+}
+
+/**
+ * What changed under the holder, as one line — the text both premise-change surfaces show (the chip's
+ * tooltip, and the firm toast fired on leaving `in_progress`). It lives here, and not inline in each, so the
+ * two cannot come to name different subsets of the same change: the reopen axis (`AMB-D-373`) was once in
+ * the chip and missing from the toast. The two axes read differently, so the decisions that *stopped being
+ * settled* carry a tag — without it they are indistinguishable from the ones newly pinned on.
+ */
+export function premiseChangeDetail(pc: PremiseChangeDto): string {
+  const named = (ds: PremiseChangeDto["addedDecisions"]) => ds.map(premiseDecisionName).join(", ");
+  const blockers = pc.addedBlockers.map((b) => `${taskRef(b.id)} ${b.name}`).join(", ");
+  const reopened = pc.reopenedDecisions.length > 0
+    ? `${t("premise.noLongerSettled")}: ${named(pc.reopenedDecisions)}`
+    : "";
+  return [blockers, named(pc.addedDecisions), reopened].filter(Boolean).join(" / ");
+}
+
 /**
  * The holder-side surface of `AMB-D-366` and `AMB-D-373`: a chip on the row of a task whose premises shifted
  * **after it was reserved** — a blocker or an unsettled decision pinned on since it went `in_progress`, or a
@@ -207,15 +225,74 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
 export function PremiseChangedChip({ task, compact = false }: { task: TaskCard; compact?: boolean }) {
   const pc = task.premiseChange;
   if (!pc) return null;
-  const named = (ds: typeof pc.addedDecisions) => ds.map((d) => `${d.ref ?? ""} ${d.name ?? ""}`.trim()).join(", ");
-  const blockers = pc.addedBlockers.map((b) => `${taskRef(b.id)} ${b.name}`).join(", ");
-  const detail = [blockers, named(pc.addedDecisions), named(pc.reopenedDecisions)].filter(Boolean).join(" / ");
+  const detail = premiseChangeDetail(pc);
   const count = pc.addedBlockers.length + pc.addedDecisions.length + pc.reopenedDecisions.length;
   const cls = compact ? "chip--blockglyph" : "chip chip--premise";
   return (
     <span className={cls} role="img" title={tf("premise.changed", { detail })} aria-label={tf("premise.changed", { detail })}>
       {compact ? "🔔" : `🔔 ${count}`}
     </span>
+  );
+}
+
+/**
+ * The same fact as {@link PremiseChangedChip}, spelled out: the detail pane's field naming every premise that
+ * moved under the holder, each a chip that navigates to it. It reads a different axis from `blockedBy` (why
+ * anyone cannot start it) — here it is what changed since *this* holder took it — so it is its own field,
+ * permanent beside the transient toast the safety net fires at status change. The two decision axes are drawn
+ * apart: ⚠ for a premise **pinned on** after the reservation, 🔓 for one already linked whose settlement
+ * **came off** (`AMB-D-373`) — one glyph for both would leave the reader unable to tell which to go and look
+ * at. It lives here rather than in the pane so the axes it draws stay tied to the chip's, and adding one
+ * cannot again land in a single surface.
+ */
+export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
+  pc: PremiseChangeDto;
+  onSelectTask?: (id: number) => void;
+  onSelectDecision?: (id: number) => void;
+}) {
+  return (
+    <div className="detail__field">
+      <span className="detail__flabel">{t("detail.premiseChanged")}</span>
+      <span title={t("detail.premiseChangedHint")}>
+        🔔{" "}
+        {pc.addedBlockers.map((b) => (
+          <button
+            type="button"
+            className="chip chip--link"
+            key={`b${b.id}`}
+            style={{ marginRight: 4 }}
+            title={t("detail.premiseAdded")}
+            onClick={() => onSelectTask?.(b.id)}
+          >
+            ⛔ {b.name}
+          </button>
+        ))}
+        {pc.addedDecisions.map((d) => (
+          <button
+            type="button"
+            className="chip chip--link"
+            key={`d${d.id}`}
+            style={{ marginRight: 4 }}
+            title={t("detail.premiseAdded")}
+            onClick={() => onSelectDecision?.(d.id)}
+          >
+            ⚠ {premiseDecisionName(d)}
+          </button>
+        ))}
+        {pc.reopenedDecisions.map((d) => (
+          <button
+            type="button"
+            className="chip chip--link"
+            key={`r${d.id}`}
+            style={{ marginRight: 4 }}
+            title={t("detail.premiseReopened")}
+            onClick={() => onSelectDecision?.(d.id)}
+          >
+            🔓 {premiseDecisionName(d)}
+          </button>
+        ))}
+      </span>
+    </div>
   );
 }
 

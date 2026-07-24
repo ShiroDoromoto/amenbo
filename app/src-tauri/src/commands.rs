@@ -508,6 +508,12 @@ pub struct EventDto {
 pub struct ActivityItemDto {
     #[ts(type = "number")]
     id: i64,
+    /// Which id sequence this row's `id` was drawn from (`amenbo_core::activity::Seq::rank`). The
+    /// timeline merges sources that number independently, so `id` alone names no row: a task comment
+    /// and a decision comment can carry the same one (`AMB-D-388`). A front end that identifies rows —
+    /// to de-duplicate a page boundary, or to key a list — has to pair the two.
+    #[ts(type = "number")]
+    seq: i64,
     at: String,
     ago: String,
     #[ts(type = "\"system\" | \"comment\"")]
@@ -1396,10 +1402,13 @@ pub fn change_cursor() -> Result<i64, CmdError> {
 /// only) and the relative-time label happen here, so core stays free of rendering and i18n.
 fn activity_dto(it: amenbo_core::activity::Item, lang: &str, config: &amenbo_core::config::Config) -> ActivityItemDto {
     let ago = ago_label(&it.at);
+    // Read before `it` is taken apart below: the sequence is derived from the whole row.
+    let seq = it.seq().rank();
     let title = if it.title.is_empty() { nameless_title(lang).to_string() } else { it.title };
     let event = it.event.as_ref().map(|ev| render_event(ev, &title, lang));
     ActivityItemDto {
         id: it.id,
+        seq,
         at: it.at.to_rfc3339_z(),
         ago,
         kind: it.kind.as_str().to_string(),

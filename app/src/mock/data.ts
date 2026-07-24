@@ -118,46 +118,47 @@ export const tasks: TaskCard[] = [
 
 export const activity: ActivityItem[] = [
   {
-    id: 1, at: "2026-06-21T09:58:00Z", ago: "2分前", kind: "system", author: A_AI,
+    id: 1, seq: 0, at: "2026-06-21T09:58:00Z", ago: "2分前", kind: "system", author: A_AI,
     target: { type: "task", id: 3, title: "API 設計", live: true },
     event: { kind: "task.status_changed", text: "「API 設計」を着手中に変更" },
   },
   {
-    id: 2, at: "2026-06-21T09:55:00Z", ago: "5分前", kind: "comment", author: A_H,
+    id: 2, seq: 0, at: "2026-06-21T09:55:00Z", ago: "5分前", kind: "comment", author: A_H,
     target: { type: "task", id: 1, title: "ワイヤーフレーム作成", live: true },
     text: "先方確認待ち。木曜には返ってくる想定。",
   },
   {
-    id: 3, at: "2026-06-21T09:52:00Z", ago: "8分前", kind: "system", author: A_AI,
+    id: 3, seq: 0, at: "2026-06-21T09:52:00Z", ago: "8分前", kind: "system", author: A_AI,
     target: { type: "task", id: 3, title: "API 設計", live: true },
     event: { kind: "task.created", text: "タスクを3件作成（媒体別に分解）" },
     burstCount: 3,
   },
   {
-    id: 4, at: "2026-06-21T09:48:00Z", ago: "12分前", kind: "system", author: A_H,
+    id: 4, seq: 0, at: "2026-06-21T09:48:00Z", ago: "12分前", kind: "system", author: A_H,
     target: { type: "project", id: 9, title: "旧サイト（統合前）", live: false },
     event: { kind: "project.deleted", text: "「旧サイト（統合前）」を削除（タスク4件・決定1件）" },
   },
   {
-    id: 5, at: "2026-06-21T09:42:00Z", ago: "18分前", kind: "system", author: A_H,
+    id: 5, seq: 0, at: "2026-06-21T09:42:00Z", ago: "18分前", kind: "system", author: A_H,
     target: { type: "task", id: 6, title: "配色チェック", live: true },
     event: { kind: "task.status_changed", text: "「配色チェック」を完了" },
   },
   {
-    id: 7, at: "2026-06-21T09:36:00Z", ago: "24分前", kind: "system", author: A_H,
+    id: 7, seq: 0, at: "2026-06-21T09:36:00Z", ago: "24分前", kind: "system", author: A_H,
     target: { type: "task", id: 11, title: "重複していた下書き", live: false },
     event: { kind: "task.deleted", text: "「重複していた下書き」を削除" },
   },
   {
     // A comment on a *live* decision — the row the feed opens, replies to and edits on the decision side, the twin
-    // of the task-aimed comment above. Its target id deliberately repeats a task id: the two are separate numbering
-    // spaces, so anything routing by id alone gets caught here.
-    id: 8, at: "2026-06-21T09:33:00Z", ago: "27分前", kind: "comment", author: A_H,
+    // of the task-aimed comment above. Two ids here deliberately repeat one from another space: its *target* id is
+    // also a task id, and its own row id is one the shared activity counter already gave out (`AMB-D-388` — a
+    // decision comment is numbered against its own table). Anything routing or identifying by id alone is caught here.
+    id: 2, seq: 1, at: "2026-06-21T09:33:00Z", ago: "27分前", kind: "comment", author: A_H,
     target: { type: "decision", id: 3, title: "RDB を真実源にする", live: true },
     text: "この線で進める。移行は次の版で。",
   },
   {
-    id: 6, at: "2026-06-21T09:30:00Z", ago: "30分前", kind: "system", author: A_H,
+    id: 6, seq: 0, at: "2026-06-21T09:30:00Z", ago: "30分前", kind: "system", author: A_H,
     target: { type: "decision", id: 2, title: "旧方針の決定", live: false },
     event: { kind: "decision.deleted", text: "「旧方針の決定」を削除" },
   },

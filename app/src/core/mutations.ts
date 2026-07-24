@@ -121,6 +121,9 @@ function unblock(tasks: TaskCard[], blockerId: number): TaskCard[] {
 function sysRow(target: ActivityTargetDto, kind: string, text: string): ActivityItem {
   return {
     id: Date.now(),
+    // The shared activity counter (`AMB-D-388`): a ledger row is numbered against it, and so is the
+    // optimistic stand-in for one.
+    seq: 0,
     at: new Date().toISOString(),
     ago: tf("act.justNow"),
     kind: "system",
@@ -1316,7 +1319,7 @@ export async function addComment(taskId: number, text: string): Promise<void> {
     tasks: s.tasks.map((x) => (x.id === taskId ? { ...x, comments: x.comments + 1 } : x)),
     activity: [
       {
-        id: Date.now(), at: new Date().toISOString(), ago: tf("act.justNow"), kind: "comment",
+        id: Date.now(), seq: 0, at: new Date().toISOString(), ago: tf("act.justNow"), kind: "comment",
         author: me(), target: { type: "task", id: taskId, title: t.title, live: true }, text,
       },
       ...s.activity,

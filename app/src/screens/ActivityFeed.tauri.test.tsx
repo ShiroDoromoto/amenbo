@@ -20,7 +20,10 @@ vi.mock("../core/snapshot", async (importOriginal) => {
   return { ...orig, inTauri: () => true };
 });
 // Paging back through history invokes core. Since we are only impersonating Tauri, hold it to never being called.
-vi.mock("../core/activity", () => ({
+// Only the paging seam is replaced: the row identity these rows are keyed and de-duplicated by is the
+// real one (`AMB-D-388`), and mocking it away would hide the collision it exists to survive.
+vi.mock("../core/activity", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../core/activity")>()),
   loadActivityPage: () => Promise.resolve([]),
   loadTaskActivity: () => Promise.resolve([]),
 }));
@@ -107,14 +110,17 @@ describe("ActivityFeed ✎ / ✕ (Tauri only)", () => {
     expect(hoisted.removed).toEqual([[2, 1]]);
   });
 
+  // The decision comment in the fixture carries comment id 2 — the same number a task comment already
+  // has, since the two tables number independently (`AMB-D-388`). So this also pins that a row is
+  // routed by what it hangs on, never by its id.
   it("a comment on a decision is edited and deleted through the decision's own writes", async () => {
     act(() => editButtons()[1].click());
-    expect(editedOnDecision).toEqual([[3, 8]]);
+    expect(editedOnDecision).toEqual([[3, 2]]);
     expect(edited).toEqual([]);
     await act(async () => {
       removeButtons()[1].click();
     });
-    expect(hoisted.removedFromDecision).toEqual([[8, 3]]);
+    expect(hoisted.removedFromDecision).toEqual([[2, 3]]);
     expect(hoisted.removed).toEqual([]); // never through the task-side write
   });
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store/store";
 import { FacetAvatar } from "../components/atoms";
 import { t } from "../core/i18n";
-import { loadActivityPage } from "../core/activity";
+import { activityRowKey, dedupActivityRows, loadActivityPage } from "../core/activity";
 import { inTauri } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import {
@@ -58,15 +58,15 @@ export function ActivityFeed({
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   // When another process appends rows the seed shifts, moving the boundary between seed and older, so the pages
-  // already appended are dropped and the history is rebuilt. The head id detects that the seed changed.
-  const seedKey = `${seed.length}:${seed[0]?.id ?? ""}`;
+  // already appended are dropped and the history is rebuilt. The head row detects that the seed changed.
+  const seedKey = `${seed.length}:${seed[0] ? activityRowKey(seed[0]) : ""}`;
   useEffect(() => {
     setOlder([]);
     setExhausted(!inTauri());
   }, [seedKey]);
 
   // raw = everything loaded so far (the basis for the paging offset); items = what survives the filter (the basis for windowing).
-  const raw = older.length ? dedupById(seed.concat(older)) : seed;
+  const raw = older.length ? dedupActivityRows(seed.concat(older)) : seed;
   const noFilter = kindFilter === "all" && facetFilter === "all";
   const items = noFilter ? raw : raw.filter((it) => matchesActivityFilter(it, kindFilter, facetFilter));
   const total = items.length;
@@ -154,7 +154,7 @@ export function ActivityFeed({
           const open = openTarget(it);
           const actsOn = commentOn(it);
           return (
-            <div key={it.id} className="feed__item">
+            <div key={activityRowKey(it)} className="feed__item">
               <FacetAvatar actor={it.author} />
               <div className="feed__body">
                 <div className="feed__line">
@@ -219,14 +219,3 @@ function chipCls(on: boolean): string {
   return on ? "filterchip filterchip--on" : "filterchip";
 }
 
-/** Dedupe by id, so an item arriving on both sides of the seed/older-page boundary appears once. Order is preserved. */
-function dedupById(list: ActivityItem[]): ActivityItem[] {
-  const seen = new Set<number>();
-  const out: ActivityItem[] = [];
-  for (const it of list) {
-    if (seen.has(it.id)) continue;
-    seen.add(it.id);
-    out.push(it);
-  }
-  return out;
-}

@@ -8,7 +8,7 @@ import { dataAdapter } from "../mock/adapter";
 import { getSnapshot, inTauri } from "../core/snapshot";
 import { useTask } from "../core/reads";
 import { addComment as mutAddComment, editComment as mutEditComment, removeComment as mutRemoveComment, fetchTaskDimensions } from "../core/mutations";
-import { loadTaskActivity } from "../core/activity";
+import { activityRowKey, loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
 import {
   DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip,
@@ -467,7 +467,9 @@ export function TaskDetailPane({
           ) : (
             <div className="feed">
               {taskActivity.map((it) => (
-                <div className="feed__item" key={it.id}>
+                // One task's rows all come from the shared counter today, but the identity of an
+                // activity row is (sequence, id) wherever it is drawn (`AMB-D-388`).
+                <div className="feed__item" key={activityRowKey(it)}>
                   <div className="feed__body">
                     <div className="feed__line">
                       <strong>{it.author.name}</strong>{" "}

@@ -19,3 +19,28 @@ export async function loadTaskActivity(taskId: number, limit?: number): Promise<
   if (!inTauri()) return [];
   return invoke<ActivityItem[]>("task_activity", { taskId, limit });
 }
+
+/**
+ * What names one row: its id **and** the sequence that id was drawn from (`AMB-D-388`).
+ *
+ * The timeline merges sources that number independently — the ledger and task comments share one
+ * counter, a decision comment is numbered against its own table — so an id on its own names two
+ * different rows. Anything that treats a row as identified (de-duplicating a page boundary, keying a
+ * list) has to pair the two, or one of the collided rows quietly stands in for the other.
+ */
+export function activityRowKey(it: ActivityItem): string {
+  return `${it.seq}:${it.id}`;
+}
+
+/** Drop repeats, so a row arriving on both sides of the seed/older-page boundary appears once. Order is preserved. */
+export function dedupActivityRows(list: ActivityItem[]): ActivityItem[] {
+  const seen = new Set<string>();
+  const out: ActivityItem[] = [];
+  for (const it of list) {
+    const key = activityRowKey(it);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(it);
+  }
+  return out;
+}

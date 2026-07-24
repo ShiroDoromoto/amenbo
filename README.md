@@ -1,13 +1,20 @@
+<div align="center">
+
+<img src="assets/logo.svg" alt="" width="120" height="120">
+
 # amenbo
 
-[![License: Apache-2.0](https://img.shields.io/github/license/ShiroDoromoto/amenbo?color=blue)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/ShiroDoromoto/amenbo/ci.yml?branch=main&label=CI)](https://github.com/ShiroDoromoto/amenbo/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/ShiroDoromoto/amenbo?label=release)](https://github.com/ShiroDoromoto/amenbo/releases)
-![OS: macOS | Windows | Linux](https://img.shields.io/badge/OS-macOS%20%7C%20Windows%20%7C%20Linux-informational)
-
-**[amenbo.work](https://amenbo.work/)** — downloads, and what this is for.
-
 **A task & project manager where an AI and a human collaborate on one machine.**
+
+<!-- The badges belong on one line of source: a single newline is a hard break in GFM, so one per line
+     would stack them into a column. -->
+[![License: Apache-2.0](https://img.shields.io/github/license/ShiroDoromoto/amenbo?color=blue)](LICENSE) [![CI](https://img.shields.io/github/actions/workflow/status/ShiroDoromoto/amenbo/ci.yml?branch=main&label=CI)](https://github.com/ShiroDoromoto/amenbo/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/ShiroDoromoto/amenbo?label=release)](https://github.com/ShiroDoromoto/amenbo/releases) ![OS: macOS | Windows | Linux](https://img.shields.io/badge/OS-macOS%20%7C%20Windows%20%7C%20Linux-informational)
+
+**[Download](https://amenbo.work/en/start/)** · **[Docs](#contents)** · **[Commands](#commands)**
+
+</div>
+
+**[amenbo.work](https://amenbo.work/en/)** — the site: what this is for, and the installers.
 
 - **Local, single-store** — your data lives on your machine in a single SQLite store, and can be exported at any time.
 - **CLI-first & AI-agent-friendly** — a Rust core library does the domain work; the CLI is a thin shell on top of it.

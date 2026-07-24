@@ -69,6 +69,7 @@ func usage() {
 Usage:
   devtool task start  <id> [--base main] [--no-reserve] [--no-deps]
   devtool task finish <id> [--base main] [--force] [--reset]
+  devtool devgui pid       [<id>] [--front]
   devtool devgui sweep     [--yes]
   devtool agent size       [--base main] [--json]
   devtool fixtures refresh [--catalog <url|path>] [--repo owner/name]
@@ -85,6 +86,13 @@ task start   reserve <id> (todo→in_progress, prod amenbo from the main repo) a
 task finish  safely tear it down: refuse unless the worktree is clean and the
              branch is merged into --base (override with --force). Deletes the
              task's dev GUI too — the bundle and its app-data both.
+devgui pid   print the pid of a running dev GUI, for 'uiauto window <pid>' to
+             resolve its window from. All three builds run under the process
+             name 'amenbo-app', so nothing but the bundle they were executed out
+             of tells them apart, and the front window is whichever is in front.
+             Without an <id> it answers for the dev GUI this checkout launches
+             (a task worktree's own instance ahead of the shared app); --front
+             activates it first, since uiauto skips a window behind a Space.
 devgui sweep list every per-task dev GUI on this machine and say which ones no
              worktree claims any more (a session that never reached 'task
              finish' leaves ~38MB of bundle plus a store behind). Reports only;
@@ -183,14 +191,31 @@ func taskCmd(args []string) {
 	}
 }
 
-// devGUICmd dispatches the `devgui` subcommands: the report, and the removal the report is the
-// review for. `sweep` takes no id — the point is the instances nobody named.
+// devGUICmd dispatches the `devgui` subcommands: the pid lookup, the report, and the removal the
+// report is the review for. `pid` takes an optional id (without one it answers for the checkout in
+// hand); `sweep` takes none — the point there is the instances nobody named.
 func devGUICmd(args []string) {
 	if len(args) == 0 {
 		usage()
 		os.Exit(2)
 	}
 	switch args[0] {
+	case "pid":
+		fs := flag.NewFlagSet("devgui pid", flag.ExitOnError)
+		front := fs.Bool("front", false, "bring the instance to the front before printing its pid")
+		id, extra := parseAroundID(fs, args[1:])
+		if len(extra) > 0 {
+			logf("devtool: devgui pid takes one id at most, got extra argument(s): %s", strings.Join(extra, " "))
+			usage()
+			os.Exit(2)
+		}
+		if id != "" {
+			id = mustID(id)
+		}
+		if err := devGUIShowPID(id, *front); err != nil {
+			logf("devtool: %v", err)
+			os.Exit(1)
+		}
 	case "sweep":
 		fs := flag.NewFlagSet("devgui sweep", flag.ExitOnError)
 		apply := fs.Bool("yes", false, "actually remove the orphans (without it, only report)")

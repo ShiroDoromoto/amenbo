@@ -118,6 +118,7 @@ pub fn run() {
       commands::task_page,
       commands::tasks_by_ids,
       commands::decision_page,
+      commands::decision_search,
       commands::decisions_by_ids,
       commands::resolve_ref,
       commands::task_add,

@@ -1578,6 +1578,31 @@ pub fn decision_page(
     Ok(DecisionPageDto { decisions, total_matched: page.total_matched })
 }
 
+/// The ids of a project's decisions matching a free-text search — title, body, **and any live comment
+/// body**, which is the arm the client cannot reach on its own (comments are not on the page payload, and
+/// loading every decision's thread to look through them is exactly what the bounded page exists to avoid).
+///
+/// It returns ids and not cards on purpose: the screen already holds the project's decisions, so the search
+/// is a narrowing of what it has rather than a second listing to reconcile. And it goes through the same
+/// `decision_list` the CLI's `--filter text:` does, so the two faces cannot come to disagree about what a
+/// word matches — the term is passed structurally because the filter grammar splits on whitespace and a
+/// search box hands over phrases.
+#[tauri::command]
+pub fn decision_search(project_id: i64, text: String) -> Result<Vec<i64>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("decision_search");
+    let store = open_store_read()?;
+    let result = amenbo_core::query::decision_list(
+        store.read_model().conn(),
+        store.reach(),
+        amenbo_core::query::DecisionListParams {
+            project_id: Some(project_id),
+            text: Some(text),
+            ..Default::default()
+        },
+    )?;
+    Ok(result.decisions.into_iter().map(|d| d.id).collect())
+}
+
 /// Hydrate the given ids into `DecisionDto` (input order preserved). The decision twin of
 /// `tasks_by_ids`; the decision detail pane uses it to fetch a single decision. Ids that do not
 /// exist are dropped silently.

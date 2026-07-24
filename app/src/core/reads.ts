@@ -11,6 +11,7 @@
 // (snapshot.watchStore→changes.drainChanges→query.invalidateScopes); read-receipt changes refetch coarsely
 // (store.markSeen). That keeps "another process's write shows up in the view" without ever copying the whole
 // store, and stops every write from refetching every view.
+import { useRef } from "react";
 import { getSnapshot, inTauri, type Decision } from "./snapshot";
 import { useQuery } from "./query";
 import { loadCommentTasks, loadTriggeredAt, loadReadReceipts } from "./readReceipts";
@@ -112,11 +113,52 @@ export async function fetchDecisionPage(projectId: number): Promise<Decision[]> 
   return getSnapshot().decisions.filter((d) => d.project?.id === projectId);
 }
 
-/** Subscribing read of a project's decision records, used by the decisions tab. Status filtering, search and
- * sorting are layered on top client-side because the row count is bounded (same policy as the board's tasks). */
+/** Subscribing read of a project's decision records, used by the decisions tab. Status filtering and sorting
+ * are layered on top client-side because the row count is bounded (same policy as the board's tasks); the
+ * text search is not — see {@link useDecisionSearchIds}. */
 export function useDecisionPage(projectId: number): Decision[] {
   const { data } = useQuery<Decision[]>(["decisions", projectId], () => fetchDecisionPage(projectId));
   return data ?? [];
+}
+
+/**
+ * The ids of a project's decisions matching `text` — the search, run by core rather than over the page.
+ *
+ * The page payload carries a decision's title and body but not its comment thread, so a client-side
+ * substring match can only ever reach two of the three places `text:` reaches, and the CLI answers a search
+ * the GUI cannot. Loading every thread to close that gap is the opposite of what a bounded page is for, so
+ * the query goes to core instead and comes back as ids the screen narrows what it already holds by.
+ *
+ * `null` means "no search" (an empty box), which is not the same as "matched nothing" — the caller must not
+ * confuse an unasked question with an empty answer.
+ */
+export function useDecisionSearchIds(projectId: number, text: string): Set<number> | null {
+  const q = text.trim();
+  const { data } = useQuery<number[] | null>(
+    ["decisionSearch", projectId, q],
+    () => fetchDecisionSearchIds(projectId, q),
+  );
+  // Hold the last answer while the next one is in flight. Every keystroke is a new query key, so `data` is
+  // undefined for a render — and reading that as "no search" makes the list flash back to every decision
+  // between characters. An empty result is an answer and is kept as one; only "not back yet" falls through.
+  const held = useRef<Set<number> | null>(null);
+  if (q === "") held.current = null;
+  else if (data) held.current = new Set(data);
+  return held.current;
+}
+
+/** The fetch behind {@link useDecisionSearchIds}. `null` for an empty query — nothing to ask. */
+async function fetchDecisionSearchIds(projectId: number, text: string): Promise<number[] | null> {
+  if (text === "") return null;
+  if (inTauri()) return invoke<number[]>("decision_search", { projectId, text });
+  // Browser fallback. The fixtures carry no decisions and no decision comments at all, so title and body
+  // *are* the whole of what could match here — this is the mock's shape, not a second definition of the
+  // search.
+  const needle = text.toLowerCase();
+  return getSnapshot()
+    .decisions.filter((d) => d.project?.id === projectId)
+    .filter((d) => d.title.toLowerCase().includes(needle) || d.body.toLowerCase().includes(needle))
+    .map((d) => d.id);
 }
 
 /** Hydrate ids into decisions (Tauri: `decisions_by_ids`; browser: from the snapshot). Input order is kept. */

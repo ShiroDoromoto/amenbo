@@ -1561,6 +1561,13 @@ pub struct DecisionListResult {
 pub struct DecisionListParams {
     pub project_id: Option<i64>,
     pub filter_expr: Option<String>,
+    /// The free-text term, given **structurally** instead of through `filter_expr`'s `text:` key — the
+    /// same term, reaching the same three places (title, body, any live comment body). It exists because
+    /// the filter grammar splits on whitespace and so cannot carry a phrase: a search box hands over
+    /// whatever was typed, spaces and all, and spelling that back into an expression would silently drop
+    /// everything after the first word. When both are given this one wins, on the grounds that a caller
+    /// reaching for it is one that could not say what it means in the grammar.
+    pub text: Option<String>,
     /// `decided` / `created` / `number` / `title` / `status` (leading `-` for descending). Defaults to
     /// `-created`.
     pub sort: String,
@@ -1595,6 +1602,9 @@ pub fn decision_list(
         Some(e) => DecisionFilter::parse(e, time::today())?,
         None => DecisionFilter::default(),
     };
+    if let Some(text) = &params.text {
+        filter.text = Some(text.clone());
+    }
     filter.resolve(conn)?; // As on the task side: names are accepted, unresolvable refs are an error.
 
     // Fold the reach into the scope, and refuse a `project:` by name from inside a closed reach (same

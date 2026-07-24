@@ -4336,7 +4336,9 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
         DecisionCmd::List { project, filter, sort, limit, offset, with_body } => {
             let project_id = project.map(|p| store.resolve_project_ref(&p)).transpose().map_err(CliError::from)?;
             let result = store.decision_list(query::DecisionListParams {
-                project_id, filter_expr: filter, sort, limit, offset, with_body,
+                // `text` is the structural term, for a caller with no grammar to spell it in. The CLI has
+                // one — `--filter "text:…"` — so it goes on saying it there.
+                project_id, filter_expr: filter, text: None, sort, limit, offset, with_body,
             }).map_err(CliError::from)?;
             if flags.json {
                 print_json(&result);

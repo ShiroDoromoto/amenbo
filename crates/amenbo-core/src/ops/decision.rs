@@ -976,6 +976,63 @@ mod tests {
         assert_eq!(r.count, 1, "a later term in the same comment also hits");
     }
 
+    /// The structural `text` term (`DecisionListParams::text`) is the same search as the grammar's `text:`,
+    /// for the callers that cannot spell one — a search box hands over a phrase, and the grammar splits on
+    /// whitespace, so an expression would silently drop everything after the first word. Given both, the
+    /// structural one is the term.
+    #[test]
+    fn the_structural_text_term_carries_a_phrase_the_grammar_cannot() {
+        use crate::query::{decision_list, DecisionListParams};
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let d = add(tx, NewDecision {
+            title: "the store is the truth".to_string(),
+            body: String::new(),
+            project_id: pid,
+        }).unwrap();
+        add_comment(tx, d.id, ActorKind::Ai, "measured first, designed after").unwrap();
+        add(tx, NewDecision {
+            title: "commits are English".to_string(),
+            body: String::new(),
+            project_id: pid,
+        }).unwrap();
+
+        let list = |params: DecisionListParams| {
+            decision_list(tx.conn(), crate::reach::Reach::All, params).unwrap()
+        };
+
+        // A phrase with a space, matched against a comment body — the whole point of the structural term.
+        let r = list(DecisionListParams {
+            project_id: Some(pid),
+            text: Some("measured first".to_string()),
+            sort: "-created".to_string(),
+            ..Default::default()
+        });
+        assert_eq!(r.count, 1, "the phrase reaches the comment arm whole");
+        assert_eq!(r.decisions[0].id, d.id);
+
+        // The same phrase through the grammar cannot be said at all: whitespace ends the value.
+        let via_grammar = decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
+            project_id: Some(pid),
+            filter_expr: Some("text:measured first".to_string()),
+            sort: "-created".to_string(),
+            ..Default::default()
+        });
+        assert!(via_grammar.is_err(), "the grammar refuses the bare word rather than searching for it");
+
+        // Given both, the structural one is the term.
+        let r = list(DecisionListParams {
+            project_id: Some(pid),
+            filter_expr: Some("text:English".to_string()),
+            text: Some("measured".to_string()),
+            sort: "-created".to_string(),
+            ..Default::default()
+        });
+        assert_eq!(r.count, 1);
+        assert_eq!(r.decisions[0].id, d.id, "the structural term won, not the expression's");
+    }
+
     #[test]
     fn decision_list_with_body_carries_body_only_when_requested() {
         use crate::query::{decision_list, DecisionListParams};

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { type Decision, type DecisionStatus } from "../core/snapshot";
 import { addDecision } from "../core/mutations";
-import { useDecisionPage } from "../core/reads";
+import { useDecisionPage, useDecisionSearchIds } from "../core/reads";
 import { Pager, usePager } from "../components/Pager";
 import { currentLang, t } from "../core/i18n";
 import { parseRefQuery } from "../core/filters";
@@ -32,11 +32,15 @@ function compareDecisions(a: Decision, b: Decision, sort: DecisionSort): number 
 
 /**
  * The decision records of a single project. Only this project's decisions are fetched, and the status
- * filter, the search and the sort are layered on the client because the count is bounded. "Superseded"
- * is not a status but something derived (current:false), so it appears only as a filter choice. Search
- * is a case-insensitive substring match over title and body, ANDed with the status filter; recognise a
- * decision ref (`AMB-D-n`, or the bare `D-n`) and it narrows to that number instead (a task number lives in another space,
- * so on this plane it matches nothing).
+ * filter and the sort are layered on the client because the count is bounded. "Superseded" is not a status
+ * but something derived (current:false), so it appears only as a filter choice.
+ *
+ * **The search is core's, not the client's.** It reaches title, body and any live comment body — the third
+ * of those being why it cannot be a substring match over the page: comments are not on the page payload,
+ * and fetching every thread to look through them is what the bounded page exists to avoid. So the typed
+ * text goes to `decision_search`, the same `text:` the CLI's filter runs, and comes back as the ids to
+ * narrow to. Recognise a decision ref (`AMB-D-n`, or the bare `D-n`) and it narrows to that number instead,
+ * without asking core at all (a task number lives in another space, so on this plane it matches nothing).
  */
 export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecision }: {
   projectId: number;
@@ -50,14 +54,15 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   const [composing, setComposing] = useState(false);
 
   const FILTERS: Exclude<DecisionFilterKey, "all">[] = ["proposed", "accepted", "rejected", "superseded"];
-  const q = search.trim().toLowerCase();
+  const q = search.trim();
   const ref = parseRefQuery(search);
+  // A ref query is answered here, so it never becomes a text search: `D-12` is a number, not a word to look
+  // for. `null` back from the hook is "nothing was asked", which is not the same as "nothing matched".
+  const hits = useDecisionSearchIds(projectId, ref ? "" : q);
   const shown = decisions
     .filter((d) => filter === "all" || (filter === "superseded" ? !d.current : d.status === filter))
     .filter((d) =>
-      ref
-        ? ref.space === "decision" && Number(d.id) === ref.num
-        : q === "" || d.title.toLowerCase().includes(q) || d.body.toLowerCase().includes(q),
+      ref ? ref.space === "decision" && Number(d.id) === ref.num : hits === null || hits.has(Number(d.id)),
     )
     .sort((a, b) => compareDecisions(a, b, sort));
   // Paging sits outside filtering and sorting: change the filter, the search or the sort and we return to the first page.

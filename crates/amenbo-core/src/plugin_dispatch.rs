@@ -218,11 +218,6 @@ pub fn deliver(
                         );
                         continue;
                     };
-                    // Serialize the event once per row; each subscriber's stdin is this payload with the
-                    // plugin's own text config merged under `config` (`AMB-D-356` — the payload's config
-                    // key). The base payload is a JSON object (`Payload` serializes to a map), so the merge
-                    // is a key insertion, not a re-parse.
-                    let base = serde_json::to_value(&payload)?;
                     // Which project the event happened in, read from the record it names — the outbox row
                     // does not carry it (`AMB-D-379` needs it for a project-scoped plugin's gate). A read
                     // that fails is treated as "unknown", the same as a record that has gone: this walk is
@@ -238,7 +233,11 @@ pub fn deliver(
                         None
                     });
                     for sub in subs.resolve(payload.event, project, face) {
-                        let json = serde_json::to_string(&with_config(base.clone(), sub.config))?;
+                        // Compose this subscriber's stdin: the event payload with the plugin's own text
+                        // config folded under `config` (`AMB-D-356`). Serialized straight from the typed
+                        // payload so its declared field order is the wire order — `v` leads (`AMB-D-349`) —
+                        // rather than round-tripping through a `serde_json::Value`, whose map sorts the keys.
+                        let json = with_config(&payload, sub.config)?;
                         // The event is kept beside the plugin's name here, where both are still known:
                         // a page of events folds into one list of hooks, and the runner below has no
                         // other way back to which row fired which plugin.
@@ -302,19 +301,28 @@ pub fn project_of_event(conn: &Connection, event: &str, record_id: i64) -> Resul
     }
 }
 
-/// Fold a subscriber's non-secret config into the event payload under `config` (`AMB-D-356`). An empty
-/// config adds no key, so a plugin with no text settings receives the bare event payload — the absent and
-/// the empty forms stay one wire document, as elsewhere in the plugin contract.
+/// Fold a subscriber's non-secret config into the event payload under `config` (`AMB-D-356`), producing the
+/// wire JSON a plugin reads on stdin. An empty config adds no key, so a plugin with no text settings
+/// receives the bare event payload — the absent and the empty forms stay one wire document, as elsewhere in
+/// the plugin contract.
+///
+/// The payload is serialized straight from its typed form, so its declared field order survives onto the
+/// wire — `v` leads (`AMB-D-349`), with `config` appended last. Routing through a `serde_json::Value` would
+/// lose that: its map sorts the keys (`v` is not first alphabetically), which is the bug `AMB-T-2084` fixes.
 fn with_config(
-    mut payload: serde_json::Value,
+    payload: &Payload,
     config: serde_json::Map<String, serde_json::Value>,
-) -> serde_json::Value {
-    if !config.is_empty() {
-        if let Some(obj) = payload.as_object_mut() {
-            obj.insert("config".to_string(), serde_json::Value::Object(config));
-        }
+) -> Result<String> {
+    /// The wire document: the event payload's fields inlined (`flatten` streams them in declaration order,
+    /// so `v` still leads), then `config` last — dropped entirely when empty.
+    #[derive(serde::Serialize)]
+    struct Wire<'a> {
+        #[serde(flatten)]
+        payload: &'a Payload,
+        #[serde(skip_serializing_if = "serde_json::Map::is_empty")]
+        config: serde_json::Map<String, serde_json::Value>,
     }
-    payload
+    Ok(serde_json::to_string(&Wire { payload, config })?)
 }
 
 #[cfg(test)]
@@ -460,23 +468,31 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// `with_config` folds a plugin's text config under `config`, and adds no key when the config is empty
-    /// so a plugin with no text settings still receives the bare event payload.
+    /// `with_config` folds a plugin's text config under `config`, adds no key when the config is empty (so a
+    /// plugin with no text settings still receives the bare event payload), and keeps `v` at the head of the
+    /// wire in both cases (`AMB-D-349`) — the regression `AMB-T-2084` fixes.
     #[test]
     fn with_config_merges_under_the_config_key_only_when_present() {
-        let base = serde_json::json!({ "v": 1, "event": "task.created", "id": 7 });
+        use crate::model::ActorKind;
+        use crate::time::Timestamp;
+        let at = Timestamp::parse_rfc3339("2026-07-22T09:00:00Z").unwrap();
+        let payload = Payload::task_created(7, ActorKind::Ai, at);
 
-        // Empty config: the payload is untouched, no `config` key appears.
-        let bare = with_config(base.clone(), serde_json::Map::new());
-        assert!(bare.get("config").is_none(), "an empty config adds no key");
-        assert_eq!(bare, base);
+        // Empty config: the bare event payload, `v` leading, no `config` key.
+        let bare = with_config(&payload, serde_json::Map::new()).unwrap();
+        assert!(bare.starts_with(r#"{"v":1,"#), "v leads the wire: {bare}");
+        assert!(!bare.contains(r#""config""#), "an empty config adds no key");
+        let bare_val: serde_json::Value = serde_json::from_str(&bare).unwrap();
+        assert_eq!(bare_val["event"], "task.created");
 
-        // Non-empty config: it lands under `config`, the event fields untouched.
+        // Non-empty config: it lands under `config`, `v` still leads, the event fields untouched.
         let mut cfg = serde_json::Map::new();
         cfg.insert("channel".to_string(), serde_json::Value::String("#ops".to_string()));
-        let merged = with_config(base, cfg);
-        assert_eq!(merged["config"]["channel"], "#ops");
-        assert_eq!(merged["event"], "task.created", "the event fields are left alone");
+        let merged = with_config(&payload, cfg).unwrap();
+        assert!(merged.starts_with(r#"{"v":1,"#), "v leads the wire even with config: {merged}");
+        let merged_val: serde_json::Value = serde_json::from_str(&merged).unwrap();
+        assert_eq!(merged_val["config"]["channel"], "#ops");
+        assert_eq!(merged_val["event"], "task.created", "the event fields are left alone");
     }
 
     /// The whole chain end to end: a committed event's payload reaches the subscribed plugin on stdin, in

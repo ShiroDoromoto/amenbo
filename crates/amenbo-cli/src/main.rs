@@ -4382,7 +4382,7 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
                     for t in detail.linked_tasks.iter() {
                         let check = if t.status == TaskStatus::Done { "x" } else { " " };
                         let state = match t.status {
-                            TaskStatus::InProgress | TaskStatus::Blocked => {
+                            TaskStatus::InProgress | TaskStatus::Blocked | TaskStatus::Rejected => {
                                 format!(" ({})", t.status.as_str())
                             }
                             TaskStatus::Todo | TaskStatus::Done => String::new(),

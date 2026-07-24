@@ -166,6 +166,15 @@ pub const STEPS: &[Step] = &[
              UPDATE decision_edge SET drawn_at = NULLIF(created_at, '');",
         ),
     },
+    Step {
+        to: 9,
+        name: "let task.status admit 'rejected', the terminal for work decided against",
+        // `AMB-D-397`: a task nobody is going to do gets a terminal of its own, so the closed set the
+        // column's `CHECK` names has to grow by one. Widening a `CHECK` is the one schema change SQLite has
+        // no `ALTER TABLE` for, and the rebuild-and-swap its documentation prescribes cannot be done from
+        // here — see the function.
+        apply: Apply::Custom(admit_rejected_task_status),
+    },
 ];
 
 /// v4: the lint-hook question stopped being one per project and became one for the device
@@ -264,6 +273,76 @@ fn add_task_status_clock(ctx: &Ctx<'_>) -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+/// v9: widen `task.status`'s closed set by one value (`AMB-D-397`).
+///
+/// **Why this is not SQL.** SQLite has no `ALTER TABLE … DROP CONSTRAINT`; the documented way to change a
+/// `CHECK` is to build a new table, copy the rows, drop the old one and rename — and that path is closed
+/// here. Enforcement is on (`super::engine::init`), six child tables reference `task` with
+/// `ON DELETE CASCADE`, and dropping a referenced table performs an implicit `DELETE` that fires those
+/// actions: the rebuild would take every comment, dependency, dimension assignment, decision link and
+/// commit anchor with it. The escape SQLite prescribes — `PRAGMA foreign_keys = OFF` around the swap — is
+/// a no-op inside a transaction, and a step *is* a transaction (that is what commits the version stamp
+/// with the change). So the table is left exactly where it is and only its declaration is rewritten.
+///
+/// **Why the text is read rather than written.** A step's SQL is normally frozen text, but the whole
+/// declaration cannot be: `status_changed_at` reaches a store either as a column of its birth
+/// `CREATE TABLE` (registry order) or appended by v6's `ALTER TABLE`, so two stores at the same version
+/// legitimately carry the same columns in different order. Writing one fixed declaration over both would
+/// make one of them describe a table that is not there. What *is* frozen is the clause: the closed set
+/// [`enum_col`](super::schema) emits has been one string since the baseline, so the step takes the store's
+/// own declaration and replaces that clause alone — everything else, column order included, survives
+/// untouched. A store whose declaration does not carry it is refused rather than guessed at.
+///
+/// The rewrite is checked both ways round it: the column list before and after must be identical (this
+/// changes a constraint, never the shape), and `writable_schema` is shut again before anything else can
+/// fail, because it is connection state that would outlive this step's rolled-back transaction.
+fn admit_rejected_task_status(ctx: &Ctx<'_>) -> Result<()> {
+    /// The closed set as every store from the baseline on declares it — frozen text, like every step's.
+    const NARROW: &str = "CHECK(status IN ('', 'todo', 'in_progress', 'done', 'blocked'))";
+    /// The same set with the new terminal in it.
+    const WIDE: &str = "CHECK(status IN ('', 'todo', 'in_progress', 'done', 'blocked', 'rejected'))";
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'task'",
+        [],
+        |r| r.get(0),
+    )?;
+    if declared.contains(WIDE) {
+        // Already wide: a store born from a registry that carries the value, stamped back to an earlier
+        // version. Nothing to widen, and nothing wrong.
+        return Ok(());
+    }
+    if !declared.contains(NARROW) {
+        return Err(super::StoreEngineError::UnrecognisedDdl { table: "task", expected: NARROW });
+    }
+    let widened = declared.replace(NARROW, WIDE);
+
+    let before = task_column_names(ctx.tx)?;
+    ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = ctx.tx.execute(
+        "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'task'",
+        [&widened],
+    );
+    // `RESET` both shuts the door and drops the connection's parsed schema, so the very next statement
+    // sees the widened `CHECK` instead of the one this connection read at open.
+    ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+    let after = task_column_names(ctx.tx)?;
+    if before != after {
+        return Err(super::StoreEngineError::UnrecognisedDdl { table: "task", expected: NARROW });
+    }
+    Ok(())
+}
+
+/// The `task` table's columns, in physical order — the invariant [`admit_rejected_task_status`] holds
+/// itself to, since a rewritten declaration that changed the shape would be a corrupted store rather
+/// than a migrated one.
+fn task_column_names(tx: &Transaction<'_>) -> Result<Vec<String>> {
+    let mut stmt = tx.prepare("SELECT name FROM pragma_table_info('task') ORDER BY cid")?;
+    let names = stmt.query_map([], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(names)
 }
 
 /// The version a store ends at once the chain has run — the last step's, or the baseline if there is
@@ -579,6 +658,130 @@ mod tests {
             .optional()
             .unwrap();
         assert_eq!(has_old, None, "the per-project table is retired");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The `task` table as a store carried it before v9: the registry's declaration with the **narrow**
+    /// value set, in frozen text. It is laid down before the engine opens, so genesis's
+    /// `CREATE TABLE IF NOT EXISTS` leaves it alone and builds everything else around it — which is the
+    /// only way to get the shape an older build really left behind, now that this build's registry is
+    /// born wide.
+    const TASK_TABLE_AT_V8: &str = "CREATE TABLE task (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '',
+        subtype TEXT NOT NULL DEFAULT '' CHECK(subtype IN ('', 'default', 'milestone')),
+        completed_at TEXT CHECK(completed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+        status TEXT NOT NULL DEFAULT '' CHECK(status IN ('', 'todo', 'in_progress', 'done', 'blocked')),
+        status_changed_at TEXT CHECK(status_changed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+        created_by_kind TEXT CHECK(created_by_kind IN ('human', 'ai')),
+        assignee_kind TEXT CHECK(assignee_kind IN ('human', 'ai')),
+        start_on TEXT CHECK(start_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        due_on TEXT CHECK(due_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        priority TEXT CHECK(priority IN ('high', 'medium', 'low')),
+        project_id BIGINT REFERENCES project(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+        order_key TEXT,
+        created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+        updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+    );";
+
+    /// A store stamped at v8 whose `task` table is declared by `ddl` — the seam v9 has to work through.
+    fn store_with_task_declared_as(dir: &Path, ddl: &str) -> StoreEngine {
+        let path = dir.join("store.sqlite");
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch(ddl).unwrap();
+        }
+        let engine = StoreEngine::open(&path).unwrap();
+        engine
+            .conn()
+            .execute(
+                "INSERT INTO store_meta (key, value) VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                rusqlite::params![META_FORMAT_VERSION, "8"],
+            )
+            .unwrap();
+        engine
+    }
+
+    /// v9 in full, on the store shape v8 left behind: `task.status` admits four values, and the terminal
+    /// for work decided against (`AMB-D-397`) is not one of them.
+    ///
+    /// The rows around the task are the point. Widening a `CHECK` has no `ALTER TABLE`, and the
+    /// rebuild-and-swap SQLite's documentation prescribes would drop a table six child tables reference
+    /// with `ON DELETE CASCADE` — so this asserts the comment, the dependency and the commit anchor are
+    /// still there afterwards. A step that took the documented route would pass every other assertion here
+    /// and empty them.
+    #[test]
+    fn the_task_status_set_widens_without_disturbing_the_table_or_its_children() {
+        let dir = scratch("task-status-widen");
+        let engine = store_with_task_declared_as(&dir, TASK_TABLE_AT_V8);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id) VALUES (1, 'kept', 'todo', 1), (2, 'blocker', 'done', 1);
+                 INSERT INTO task_comment (task_id, text) VALUES (1, 'why');
+                 INSERT INTO task_dependency (task_id, blocked_by_id) VALUES (1, 2);
+                 INSERT INTO task_commit (task_id, sha) VALUES (1, 'abc');",
+            )
+            .unwrap();
+        let before = {
+            let tx = engine.conn().unchecked_transaction().unwrap();
+            task_column_names(&tx).unwrap()
+        };
+        assert!(
+            engine.conn().execute("UPDATE task SET status = 'rejected' WHERE id = 1", []).is_err(),
+            "the store starts out refusing the value the step exists to admit"
+        );
+
+        let run = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert!(run.applied.iter().any(|s| s.contains("'rejected'")), "v9 ran: {:?}", run.applied);
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        engine
+            .conn()
+            .execute("UPDATE task SET status = 'rejected' WHERE id = 1", [])
+            .expect("the widened set admits the new terminal");
+        let count = |table: &str| {
+            engine
+                .conn()
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get::<_, i64>(0))
+                .unwrap()
+        };
+        assert_eq!(count("task"), 2, "no row moved");
+        assert_eq!(count("task_comment"), 1, "the cascade never fired: the comment is still there");
+        assert_eq!(count("task_dependency"), 1, "…and so is the dependency edge");
+        assert_eq!(count("task_commit"), 1, "…and so is the commit anchor");
+        let after = {
+            let tx = engine.conn().unchecked_transaction().unwrap();
+            task_column_names(&tx).unwrap()
+        };
+        assert_eq!(before, after, "a constraint changed, not the shape");
+        assert!(
+            engine.conn().execute("UPDATE task SET status = 'shipped' WHERE id = 1", []).is_err(),
+            "the set is still closed — one value wider, not open"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A store whose `task` declaration does not carry the clause v9 rewrites is **refused**, not guessed
+    /// at. The step edits the store's own DDL text in place, so the one thing it may never do is write a
+    /// declaration over a table it did not recognise — that would leave the store describing itself
+    /// wrongly, which is worse than a migration that stops with the pre-migration backup beside it.
+    #[test]
+    fn a_task_table_the_step_does_not_recognise_stops_the_chain() {
+        let dir = scratch("task-status-unknown");
+        let engine = store_with_task_declared_as(
+            &dir,
+            // Same columns, no closed set on `status` — a shape this build never wrote.
+            &TASK_TABLE_AT_V8.replace(" CHECK(status IN ('', 'todo', 'in_progress', 'done', 'blocked'))", ""),
+        );
+
+        let err = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap_err();
+
+        assert!(matches!(err, super::super::StoreEngineError::UnrecognisedDdl { table: "task", .. }), "{err}");
+        assert_eq!(engine.format_version().unwrap(), 8, "the failed step left the version where it was");
         std::fs::remove_dir_all(&dir).ok();
     }
 

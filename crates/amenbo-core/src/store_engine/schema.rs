@@ -520,7 +520,10 @@ datasets! {
         subtype: enum_col("default", "milestone"),
         // There is no separate "done" column: completion is derived from `status == 'done'`.
         completed_at: ts_opt,
-        status: enum_col("todo", "in_progress", "done", "blocked"),
+        // Two of these are terminals — `done` (carried out) and `rejected` (decided against). Widening a
+        // closed set is not a column addition, so the step that carries it rewrites the `CHECK` a store
+        // already has rather than adding anything (`super::migrate`, v9).
+        status: enum_col("todo", "in_progress", "done", "blocked", "rejected"),
         // When `status` last changed — stamped on a status transition only (`ops::task::set_status`), so
         // it answers "when did the current status begin" where `updated_at` (moved by any write) cannot.
         // Nullable: a task from a store that predates the column was never stamped (`AMB-D-366`).

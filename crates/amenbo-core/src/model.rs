@@ -107,6 +107,11 @@ impl Subtype {
 
 /// A task's status. It is **the authority on completion**: being done is derived from `Done`
 /// ([`Task::completed`]), never stored alongside it.
+///
+/// `Done` and `Rejected` are the two terminals, and the difference between them is whether the work was
+/// *carried out* (`AMB-D-397`): a task nobody is going to do ends at `Rejected`, where recording it as
+/// `Done` would make the history claim something that never happened and deleting it would take the
+/// reasoning away with the row.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
@@ -115,6 +120,10 @@ pub enum TaskStatus {
     InProgress,
     Done,
     Blocked,
+    /// Considered, and decided against. A terminal that is not an achievement — so `completed_at`, the
+    /// day the work was *finished*, stays unset, and when the rejection happened is what
+    /// [`Task::status_changed_at`] holds.
+    Rejected,
 }
 
 impl TaskStatus {
@@ -124,6 +133,7 @@ impl TaskStatus {
             TaskStatus::InProgress => "in_progress",
             TaskStatus::Done => "done",
             TaskStatus::Blocked => "blocked",
+            TaskStatus::Rejected => "rejected",
         }
     }
 
@@ -133,6 +143,7 @@ impl TaskStatus {
             "in_progress" => Some(TaskStatus::InProgress),
             "done" => Some(TaskStatus::Done),
             "blocked" => Some(TaskStatus::Blocked),
+            "rejected" => Some(TaskStatus::Rejected),
             _ => None,
         }
     }

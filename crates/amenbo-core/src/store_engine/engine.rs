@@ -54,6 +54,12 @@ pub enum StoreEngineError {
     UnknownColumn { dataset: String, col: String },
     #[error("unknown sort key: {0}")]
     InvalidSort(String),
+    /// A migration step read the store's own `CREATE TABLE` text and did not find the clause it was
+    /// written to rewrite. Refusing is the point: a step that edits a store's declaration in place has to
+    /// know exactly what it is editing, and one that guessed would leave the declaration saying something
+    /// the table is not.
+    #[error("cannot migrate {table}: its stored definition does not carry `{expected}`")]
+    UnrecognisedDdl { table: &'static str, expected: &'static str },
     /// The read was asked for something outside the reach it declared. Carried as its own variant so
     /// the `out_of_reach` code survives the crossing into [`crate::error::Error`] — flattened into
     /// `Storage`, the boundary would report a storage failure for a containment refusal.

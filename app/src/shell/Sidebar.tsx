@@ -122,15 +122,22 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
           managing what is installed are two surfaces, and this is where the second one joins. */}
       <div className="sidebar__group">
         <div className="sidebar__label">{t("side.plugins")}</div>
-        {(() => {
-          const n: Nav = { type: "view", id: "plugins" };
+        {([
+          { id: "plugins", icon: "🧩", label: t("plugins.market") },
+          { id: "pluginsInstalled", icon: "🔌", label: t("plugins.installed") },
+        ] as const).map((item) => {
+          const n: Nav = { type: "view", id: item.id };
           return (
-            <button className={`navitem ${isActive(n) ? "navitem--active" : ""}`} onClick={() => onNav(n)}>
-              <span style={{ width: 16, textAlign: "center" }}>🧩</span>
-              {t("plugins.market")}
+            <button
+              key={item.id}
+              className={`navitem ${isActive(n) ? "navitem--active" : ""}`}
+              onClick={() => onNav(n)}
+            >
+              <span style={{ width: 16, textAlign: "center" }}>{item.icon}</span>
+              {item.label}
             </button>
           );
-        })()}
+        })}
       </div>
 
       <div className="sidebar__group">

@@ -323,6 +323,11 @@ const UI: Record<Lang, Record<string, string>> = {
     "plugins.consentAsk": "「{name}」はこの端末で任意のコードを実行します。実行を許可しますか？",
     "plugins.consentOnce": "確認するのは初回だけです（この端末に記録します）。無効にしても記録は残ります。",
     "plugins.consentAgree": "許可して有効にする", "plugins.consentCancel": "やめる",
+    // the installed screen (the "manage what you have" tab)
+    "plugins.installedCount": "{count} 件",
+    "plugins.installsError": "インストール済みのプラグインを読めませんでした",
+    "plugins.emptyInstalled": "この端末にはまだプラグインが入っていません",
+    "plugins.emptyInstalledNote": "マーケットから入れられます。",
     // dynamic activity text (mutations.ts sysItem templates)
     "common.you": "あなた", "act.justNow": "たった今",
     "act.created": "「{title}」を作成", "act.completed": "「{title}」を完了",
@@ -719,6 +724,11 @@ const UI: Record<Lang, Record<string, string>> = {
     "plugins.consentAsk": "“{name}” runs code of its own on this device. Allow it to run?",
     "plugins.consentOnce": "Asked once and remembered on this device. Disabling later keeps the answer.",
     "plugins.consentAgree": "Allow and enable", "plugins.consentCancel": "Cancel",
+    // the installed screen (the "manage what you have" tab)
+    "plugins.installedCount": "{count} installed",
+    "plugins.installsError": "The installed plugins could not be read",
+    "plugins.emptyInstalled": "No plugin is installed on this device yet",
+    "plugins.emptyInstalledNote": "The market is where you add one.",
     // dynamic activity text (mutations.ts sysItem templates)
     "common.you": "You", "act.justNow": "just now",
     "act.created": "Created “{title}”", "act.completed": "Completed “{title}”",

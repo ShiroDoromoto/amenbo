@@ -73,6 +73,21 @@ func TestReclaimTakesBothHalvesAndSpareTheRest(t *testing.T) {
 	}
 }
 
+// TestDevGUIBundleNamesPreferTheCheckoutsOwnInstance holds the launch order: a task worktree opens
+// its own app, and only a checkout that owns no instance reaches the shared one.
+func TestDevGUIBundleNamesPreferTheCheckoutsOwnInstance(t *testing.T) {
+	for root, want := range map[string][]string{
+		"/w/amenbo-worktrees/2131": {"amenbo (dev 2131)", "amenbo (dev)"},
+		"/w/amenbo":                {"amenbo (dev)"},
+		"/w/amenbo-worktrees/wip":  {"amenbo (dev)"},
+	} {
+		got := devGUIBundleNames(root)
+		if len(got) != len(want) || got[0] != want[0] {
+			t.Errorf("devGUIBundleNames(%q) = %v, want %v", root, got, want)
+		}
+	}
+}
+
 func TestCopyTreeCarriesTheContentsAndSkipsWhatIsNotAFile(t *testing.T) {
 	src := filepath.Join(t.TempDir(), "src")
 	if err := os.MkdirAll(filepath.Join(src, "plugins", "hello"), 0o755); err != nil {

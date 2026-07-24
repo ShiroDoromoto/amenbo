@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // The dev GUI comes in two shapes. One is shared and permanent: a single installed bundle on the
@@ -23,6 +24,7 @@ import (
 // targets speak /Applications, osascript and codesign. Elsewhere these are no-ops.
 const (
 	sharedDevAppData = "amenbo-dev"
+	sharedDevBundle  = "amenbo (dev)"
 	macAppsDir       = "/Applications"
 )
 
@@ -31,6 +33,31 @@ func taskDevAppData(id string) string { return sharedDevAppData + "-" + id }
 
 // taskDevBundle is the product name — and so the bundle's file name — of that same instance.
 func taskDevBundle(id string) string { return "amenbo (dev " + id + ")" }
+
+// taskIDFromCheckout names the task a checkout belongs to, and "" for the main one. A task worktree
+// sits at `<repo-name>-worktrees/<id>` (see paths), so the directory name is the id — read back
+// through the same canonical form task start pinned it to, or a hand-made directory beside the real
+// ones would be taken for a task.
+func taskIDFromCheckout(root string) string {
+	if !strings.HasSuffix(filepath.Base(filepath.Dir(root)), "-worktrees") {
+		return ""
+	}
+	id, err := canonicalID(filepath.Base(root))
+	if err != nil {
+		return ""
+	}
+	return id
+}
+
+// devGUIBundleNames are the dev GUI bundles a checkout may launch, most specific first: a task
+// worktree reaches for its own instance and falls back to the shared dev app only when it has not
+// built one, and the main checkout has only the shared app to reach.
+func devGUIBundleNames(root string) []string {
+	if id := taskIDFromCheckout(root); id != "" {
+		return []string{taskDevBundle(id), sharedDevBundle}
+	}
+	return []string{sharedDevBundle}
+}
 
 // appDataDir is where a macOS build keeps the store of one app-data name, mirroring what core
 // resolves through the directories crate: `work.amenbo.<app name>` under Application Support.

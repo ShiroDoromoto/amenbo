@@ -18,8 +18,14 @@
 //   - Debug verification (does my code work) → the worktree's dev build against
 //     a throwaway store (e.g. `make verify`), inside the outside worktree.
 //
-// devtool does NOT provision any amenbo store; isolation comes from the worktree
-// living outside the repo plus `make verify`'s mktemp store.
+// The GUI is isolated a second way, because a bundle is installed machine-wide
+// and a worktree cannot contain it: a task gets its own throwaway dev GUI, with
+// its own identifier and app-data, seeded from the shared dev store. devtool
+// provisions and deletes it around the worktree (devgui.go); the Makefile builds
+// it, so only the tasks that look at a GUI pay for one.
+//
+// Beyond that seed devtool provisions no amenbo store: isolation comes from the
+// worktree living outside the repo plus `make verify`'s mktemp store.
 package main
 
 import (
@@ -62,11 +68,14 @@ Usage:
 task start   reserve <id> (todo→in_progress, prod amenbo from the main repo) and
              add a git worktree on branch task/<id> in a sibling dir OUTSIDE the
              repo — a pure dev env. For a GUI checkout it also runs a best-effort
-             'npm ci' in app/ (skip with --no-deps). Manage the backlog
+             'npm ci' in app/ (skip with --no-deps) and seeds the app-data of the
+             task's own throwaway dev GUI from the shared dev store — build it
+             with 'make install-gui-dev TASK=<id>'. Manage the backlog
              (comment/done) from the main repo; verify code there with
              'make verify'.
 task finish  safely tear it down: refuse unless the worktree is clean and the
-             branch is merged into --base (override with --force).
+             branch is merged into --base (override with --force). Deletes the
+             task's dev GUI too — the bundle and its app-data both.
 agent size   print what this tree does to the 'amenbo agent --json' entry, by
              section, against the merge-base with --base. A signal, not a gate:
              it always exits 0. The entry is read once per AI session, so what
@@ -252,9 +261,10 @@ func worktreeConflict(id, worktree, status string) error {
 
 // taskStart reserves the task (todo→in_progress, which is itself the whole
 // double-work guard), verifies the backlog agrees, then adds the worktree on a fresh
-// branch and warms the GUI app's node_modules for it. It ends by printing a human
-// summary and the task's context to stderr and an eval-able `cd` to stdout, so a
-// caller can `eval "$(devtool task start <id>)"` to enter the worktree. The context
+// branch, warms the GUI app's node_modules for it and seeds the app-data of the task's
+// own throwaway dev GUI. It ends by printing a human summary and the task's context to
+// stderr and an eval-able `cd` to stdout, so a caller can
+// `eval "$(devtool task start <id>)"` to enter the worktree. The context
 // is front-loaded here because reserve time is the moment before coding, where it
 // cannot be skipped by reading notes alone; like the npm install, it is best-effort
 // and never fails a start whose worktree and branch already exist.
@@ -303,6 +313,7 @@ func taskStart(id, base string, noReserve, noDeps bool) error {
 	if !noDeps {
 		ensureAppDeps(worktree)
 	}
+	provisionTaskDevGUI(worktree, id)
 
 	logf("✓ task %s ready: %s", id, t.Title)
 	logf("  dev env : %s  (branch %s)", worktree, branchName(id))
@@ -324,7 +335,9 @@ func taskStart(id, base string, noReserve, noDeps bool) error {
 // clean and the branch is merged into base (force overrides both). `git worktree
 // remove` deletes the dir, but a leftover is swept defensively afterwards, and the
 // sibling base dir is pruned once it is empty — a non-empty error there means another
-// task's worktree still lives in it, so it is left alone.
+// task's worktree still lives in it, so it is left alone. The task's throwaway dev GUI
+// goes with it, bundle and app-data both: those live outside the worktree, so this is
+// the only place they are ever reclaimed.
 func taskFinish(id, base string, force, rel bool) error {
 	root, wtBase, worktree, err := paths(id)
 	if err != nil {
@@ -368,6 +381,7 @@ func taskFinish(id, base string, force, rel bool) error {
 	_ = os.Remove(wtBase)
 
 	logf("✓ torn down task %s (worktree + branch %s removed)", id, branchName(id))
+	removeTaskDevGUI(id)
 	if !rel {
 		t, err := show(root, id)
 		status := t.Status

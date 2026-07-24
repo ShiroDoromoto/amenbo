@@ -13,7 +13,7 @@
 #   crate's dep-info and a frontend-only edit does force a rebuild. Quitting is synchronous too —
 #   `osascript quit` neither launches a stopped app nor returns before it is gone, so the rsync
 #   that follows cannot land under a still-running instance. What remains are the causes we cannot
-#   enumerate (another session installing over the single shared dev app, a partial copy), and the
+#   enumerate (another session installing over the shared dev app, a partial copy), and the
 #   answer to a cause you cannot enumerate is to check the outcome rather than to prevent it.
 #
 # How it can tell:
@@ -45,8 +45,9 @@ if [ -n "$missing" ]; then
   echo "$missing" | sed 's/^/    expected (app\/dist): /'
   printf '%s\n' "$embedded" | grep -E '/assets/index-[A-Za-z0-9._-]+\.js' | sed 's/^/    bundled  (the .app): /' || true
   echo "  → $APP"
-  echo "  Build it again. If it keeps happening, check that no other session is installing the"
-  echo "  dev GUI at the same time — /Applications holds a single shared 'amenbo (dev).app'."
+  echo "  Build it again. If it keeps happening and this is the shared 'amenbo (dev).app', check"
+  echo "  that no other session is installing over it — build into the task's own instance instead"
+  echo "  (make install-gui-dev TASK=<id>), which nobody else can reach."
   exit 1
 fi
 

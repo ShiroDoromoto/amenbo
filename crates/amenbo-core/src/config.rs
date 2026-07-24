@@ -123,6 +123,32 @@ impl Paths {
         None => Self::PRODUCTION_APP_NAME,
     };
 
+    /// The app-data "app name" of the **development** channel — the shared dev build's own directory
+    /// (`…/work.amenbo.amenbo-dev`). It is a prefix as much as a name: a throwaway dev GUI built for
+    /// one task extends it with that task's number (`amenbo-dev-<id>`, `AMB-D-390`) so two parallel
+    /// sessions never share a store, which is why the channel test below is not an equality.
+    pub const DEV_APP_NAME: &'static str = "amenbo-dev";
+
+    /// Whether this build is on the development channel: the shared dev build, or a throwaway
+    /// per-task instance named after it. Build-time `AMENBO_APP_NAME` picks the channel, so a given
+    /// binary always answers the same. Channel defaults that should follow development rather than
+    /// production — the perf log's, for one — key off this instead of matching a single name, or a
+    /// task instance would quietly fall through to the production behaviour.
+    pub fn is_dev_channel() -> bool {
+        Self::is_dev_app_name(Self::APP_NAME)
+    }
+
+    /// The naming rule [`is_dev_channel`](Self::is_dev_channel) applies, taking the name as an
+    /// argument so the rule can be pinned by a table: the channel of a running binary is fixed at
+    /// compile time, so a test cannot vary it. `amenbo-dev-ish` is not a task instance — only the
+    /// separator makes one, which is what keeps a future channel name from being read as one.
+    pub(crate) fn is_dev_app_name(name: &str) -> bool {
+        name == Self::DEV_APP_NAME
+            || name
+                .strip_prefix(Self::DEV_APP_NAME)
+                .is_some_and(|rest| rest.starts_with('-'))
+    }
+
     /// The base for identity and config: `AMENBO_HOME` if set, otherwise the OS data directory.
     /// `pub(crate)` so that store discovery and vault resolution follow the environment to the same
     /// base.
@@ -962,5 +988,18 @@ mod tests {
         let loaded: Config = serde_json::from_value(json).expect("legacy keychain keys load");
         // The knobs are gone; the rest of the config is intact.
         assert_eq!(loaded.default_view, Config::default().default_view);
+    }
+
+    /// The dev channel covers the shared dev build and every throwaway per-task instance, and
+    /// nothing else — production least of all, since a channel default that leaked onto it would be
+    /// a development behaviour running against real user data.
+    #[test]
+    fn dev_channel_covers_the_shared_build_and_its_task_instances() {
+        for name in ["amenbo-dev", "amenbo-dev-2131", "amenbo-dev-0"] {
+            assert!(Paths::is_dev_app_name(name), "{name} is the dev channel");
+        }
+        for name in ["amenbo", "amenbo-devish", "dev", "amenbo-staging", ""] {
+            assert!(!Paths::is_dev_app_name(name), "{name} is not the dev channel");
+        }
     }
 }

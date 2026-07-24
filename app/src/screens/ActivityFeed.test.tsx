@@ -11,7 +11,9 @@ import { loadSnapshot } from "../core/snapshot";
 let container: HTMLDivElement;
 let root: Root;
 const replied: number[] = [];
+const repliedDecisions: number[] = [];
 const openedTasks: number[] = [];
+const openedDecisions: number[] = [];
 const edited: Array<[number, number]> = [];
 
 const replyButtons = () =>
@@ -26,7 +28,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   replied.length = 0;
+  repliedDecisions.length = 0;
   openedTasks.length = 0;
+  openedDecisions.length = 0;
   edited.length = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -38,8 +42,11 @@ beforeEach(() => {
         null,
         createElement(ActivityFeed, {
           onOpenTask: (id: number) => openedTasks.push(id),
+          onOpenDecision: (id: number) => openedDecisions.push(id),
           onReplyToTask: (id: number) => replied.push(id),
+          onReplyToDecision: (id: number) => repliedDecisions.push(id),
           onEditComment: (taskId: number, commentId: number) => edited.push([taskId, commentId]),
+          onEditDecisionComment: () => {},
         }),
       ),
     ),
@@ -68,22 +75,36 @@ describe("ActivityFeed target buttons", () => {
     expect(container.textContent).toContain("→ 旧サイト（統合前）");
   });
 
-  // A row aimed at a decision (decision.deleted) is the same: decisions are deleted outright, so there is
-  // nothing to open. Miss this and the decision's id gets opened as if it were a task id.
-  it("a row aimed at a decision is not a clickable button", () => {
+  // A row aimed at a *deleted* decision (decision.deleted) has nothing to open, exactly like a deleted task.
+  it("a row aimed at a deleted decision is not a clickable button", () => {
     expect(targetButtons().some((x) => x.textContent?.includes("旧方針の決定"))).toBe(false);
     expect(container.textContent).toContain("→ 旧方針の決定");
+  });
+
+  // A live decision does have somewhere to go. It must open as a *decision*: the two numbering spaces overlap, so
+  // routing the id to onOpenTask would open whatever task happens to carry the same number.
+  it("a row aimed at a live decision opens that decision, not the task of the same number", () => {
+    const b = targetButtons().find((x) => x.textContent?.includes("RDB を真実源にする"));
+    act(() => b!.click());
+    expect(openedDecisions).toEqual([3]);
+    expect(openedTasks).toEqual([]);
   });
 });
 
 describe("ActivityFeed reply buttons", () => {
-  it("appears only on comment rows aimed at a task", () => {
-    // The mock's activity is one comment (aimed at task #1) plus a system row.
-    expect(replyButtons()).toHaveLength(1);
+  it("appears on every comment row, whatever it hangs off", () => {
+    // The mock's activity holds two comments — one on task #1, one on decision #3 — plus the system rows.
+    expect(replyButtons()).toHaveLength(2);
   });
 
   it("clicking returns the task to reply to", () => {
     act(() => replyButtons()[0].click());
     expect(replied).toEqual([1]);
+  });
+
+  it("a comment on a decision replies on the decision's timeline", () => {
+    act(() => replyButtons()[1].click());
+    expect(repliedDecisions).toEqual([3]);
+    expect(replied).toEqual([]);
   });
 });

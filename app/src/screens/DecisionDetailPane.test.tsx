@@ -24,6 +24,8 @@ const hoisted = vi.hoisted(() => ({
   calls: [] as Array<Array<number | string>>,
   /** Names of writes that reject instead of resolving (how the store refusing a write looks from here). */
   failing: new Set<string>(),
+  /** The decision's comment thread (`useDecisionComments`). */
+  comments: [] as Array<{ id: number; author: { kind: string; name: string }; ago: string; text: string }>,
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -32,7 +34,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
 });
 vi.mock("../core/reads", () => ({
   useDecision: (id: number) => hoisted.decisions.get(id),
-  useDecisionComments: () => [],
+  useDecisionComments: () => hoisted.comments,
   useDecisionPage: () => hoisted.page,
 }));
 vi.mock("../core/dialog", () => ({
@@ -80,12 +82,16 @@ function decision(id: number, over: Partial<Decision> = {}): Decision {
 }
 const ref = (id: number): DecisionRef => ({ id, name: `決定${id}`, ref: `D-${id}` });
 
-/** Draw the pane. It looks the decision up by id in `decisions`. */
-function render(decisionId: number) {
+/**
+ * Draw the pane. It looks the decision up by id in `decisions`. Re-rendering into the same root is a props update,
+ * which is how a reply or edit request from the activity feed arrives after the pane is already up.
+ */
+function render(decisionId: number, over: { focusCommentAt?: number; editCommentAt?: { commentId: number; nonce: number } } = {}) {
   act(() =>
     root.render(createElement(DecisionDetailPane, {
       decisionId,
       onOpenDecision: (id: number) => opened.push(id),
+      ...over,
     })),
   );
 }
@@ -122,6 +128,7 @@ beforeEach(() => {
   hoisted.answers.length = 0;
   hoisted.calls.length = 0;
   hoisted.failing.clear();
+  hoisted.comments.length = 0;
   opened.length = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -463,5 +470,50 @@ describe("editing the title and body in place", () => {
     expect(hoisted.calls).toEqual([["editDecision", 1, "題", "直した本文"]]);
     expect(container.querySelector("[role=alert]")?.textContent).toContain("editDecision refused");
     expect(container.querySelector("textarea")?.value).toBe("直した本文"); // the draft survives for a retry
+  });
+});
+
+// The receiving end of the activity feed's "↩ reply" and "✎" on a decision-comment row: the feed only names the
+// decision and the comment, and it is this pane that has to land on the right box. The task-side twin of these
+// lives in TaskDetailPane.test.tsx.
+describe("DecisionDetailPane reply / edit focus", () => {
+  const commentBox = () => container.querySelector<HTMLTextAreaElement>(".compose__input");
+
+  it("even when the decision arrives later, focus lands the moment the comment box is rendered", () => {
+    render(1, { focusCommentAt: 1 });
+    expect(commentBox()).toBeNull();
+    expect(container.textContent).toContain(t("dec.notFound"));
+
+    hoisted.decisions.set(1, decision(1));
+    render(1, { focusCommentAt: 1 });
+
+    const box = commentBox();
+    expect(box).not.toBeNull();
+    expect(document.activeElement).toBe(box);
+  });
+
+  it("a fresh nonce for the same decision focuses again, so you can reply twice running", () => {
+    hoisted.decisions.set(1, decision(1));
+    render(1, { focusCommentAt: 1 });
+    act(() => commentBox()!.blur());
+    expect(document.activeElement).not.toBe(commentBox());
+
+    render(1, { focusCommentAt: 2 });
+    expect(document.activeElement).toBe(commentBox());
+  });
+
+  it("✎ opens that comment's editor, and no other's", () => {
+    hoisted.decisions.set(1, decision(1));
+    hoisted.comments.push(
+      { id: 7, author: { kind: "human", name: "私" }, ago: "1分前", text: "先の一言" },
+      { id: 8, author: { kind: "ai", name: "AI" }, ago: "1分前", text: "後の一言" },
+    );
+    render(1, { editCommentAt: { commentId: 8, nonce: 1 } });
+
+    // Two boxes are up: the thread's own compose box (empty) and one open editor holding the named comment's
+    // body. The editor autofocuses, so it is also where the caret is.
+    const values = Array.from(container.querySelectorAll("textarea")).map((el) => el.value);
+    expect(values.filter((v) => v !== "")).toEqual(["後の一言"]);
+    expect((document.activeElement as HTMLTextAreaElement).value).toBe("後の一言");
   });
 });

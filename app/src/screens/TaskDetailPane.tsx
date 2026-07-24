@@ -146,7 +146,9 @@ export function TaskDetailPane({
   // per-task fetch (taskActivity); in the mock it falls back to filtering the store's window.
   const commentSource = taskActivity !== null
     ? taskActivity.filter((a) => a.kind === "comment")
-    : store.listActivity().filter((a) => a.kind === "comment" && a.target.id === taskId);
+    // The id alone does not name a task: decision comments ride the same timeline and number against their own
+    // table, so without the type a decision's comment lands in the thread of the task that shares its number.
+    : store.listActivity().filter((a) => a.kind === "comment" && a.target.type === "task" && a.target.id === taskId);
   const allComments = commentSource.slice().reverse();
   const editIndex = editCommentAt ? allComments.findIndex((c) => c.id === editCommentAt.commentId) : -1;
   const limit = editIndex >= 0 ? Math.max(commentLimit, allComments.length - editIndex) : commentLimit;

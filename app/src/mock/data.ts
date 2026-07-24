@@ -149,6 +149,14 @@ export const activity: ActivityItem[] = [
     event: { kind: "task.deleted", text: "「重複していた下書き」を削除" },
   },
   {
+    // A comment on a *live* decision — the row the feed opens, replies to and edits on the decision side, the twin
+    // of the task-aimed comment above. Its target id deliberately repeats a task id: the two are separate numbering
+    // spaces, so anything routing by id alone gets caught here.
+    id: 8, at: "2026-06-21T09:33:00Z", ago: "27分前", kind: "comment", author: A_H,
+    target: { type: "decision", id: 3, title: "RDB を真実源にする", live: true },
+    text: "この線で進める。移行は次の版で。",
+  },
+  {
     id: 6, at: "2026-06-21T09:30:00Z", ago: "30分前", kind: "system", author: A_H,
     target: { type: "decision", id: 2, title: "旧方針の決定", live: false },
     event: { kind: "decision.deleted", text: "「旧方針の決定」を削除" },

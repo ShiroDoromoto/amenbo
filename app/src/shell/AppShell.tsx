@@ -173,19 +173,40 @@ export function AppShell() {
       setEditFocus((prev) => ({ taskId, commentId, nonce: (prev?.nonce ?? 0) + 1 }));
     }
   }, [selectTask]);
-  const selectDecision = useCallback(async (id: number | null) => {
-    if (id === null && selectedDecisionId === null && compose === null) return;
-    if (id !== null && id === selectedDecisionId && compose === null) return;
-    if (!(await guardDirty())) return;
+  // Reports whether the decision is now the selection, the way `selectTask` does: a refused discard is the one path
+  // that leaves it where it was, and the callers below must not act on a move that did not happen.
+  const selectDecision = useCallback(async (id: number | null): Promise<boolean> => {
+    if (id === null && selectedDecisionId === null && compose === null) return true;
+    if (id !== null && id === selectedDecisionId && compose === null) return true;
+    if (!(await guardDirty())) return false;
     setCompose(null);
     go({ nav, sel: id === null ? NO_SELECTION : { type: "decision", id } });
+    return true;
   }, [selectedDecisionId, compose, guardDirty, nav, go]);
+  // The decision-side twins of replyToTask / editCommentInTask, for the activity feed's decision rows.
+  const [decisionReplyFocus, setDecisionReplyFocus] = useState<{ decisionId: number; nonce: number } | null>(null);
+  const replyToDecision = useCallback(async (id: number) => {
+    if (await selectDecision(id)) setDecisionReplyFocus((prev) => ({ decisionId: id, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, [selectDecision]);
+  const [decisionEditFocus, setDecisionEditFocus] =
+    useState<{ decisionId: number; commentId: number; nonce: number } | null>(null);
+  const editDecisionCommentIn = useCallback(async (decisionId: number, commentId: number) => {
+    if (await selectDecision(decisionId)) {
+      setDecisionEditFocus((prev) => ({ decisionId, commentId, nonce: (prev?.nonce ?? 0) + 1 }));
+    }
+  }, [selectDecision]);
 
   const openCompose = (target: ComposeTarget) => {
     setCompose(target);
   };
   // After a save, delete or create we simply close (nothing is unsaved). Clear dirty and push a Location with no selection.
-  const closeRight = () => { rightDirtyRef.current = false; setCompose(null); setReplyFocus(null); go({ nav, sel: NO_SELECTION }); };
+  const closeRight = () => {
+    rightDirtyRef.current = false;
+    setCompose(null);
+    setReplyFocus(null);
+    setDecisionReplyFocus(null);
+    go({ nav, sel: NO_SELECTION });
+  };
   const afterCreate = (newId: number | null) => {
     rightDirtyRef.current = false;
     setCompose(null);
@@ -339,8 +360,11 @@ export function AppShell() {
           {nav.type === "view" && nav.id === "activity" && (
             <ActivityFeed
               onOpenTask={selectTask}
+              onOpenDecision={selectDecision}
               onReplyToTask={replyToTask}
+              onReplyToDecision={replyToDecision}
               onEditComment={editCommentInTask}
+              onEditDecisionComment={editDecisionCommentIn}
             />
           )}
           {nav.type === "view" && nav.id === "commands" && <CommandCatalogScreen />}
@@ -387,6 +411,12 @@ export function AppShell() {
                   decisionId={selectedDecisionId}
                   onOpenTask={selectTask}
                   onOpenDecision={selectDecision}
+                  focusCommentAt={decisionReplyFocus?.decisionId === selectedDecisionId
+                    ? decisionReplyFocus.nonce
+                    : undefined}
+                  editCommentAt={decisionEditFocus?.decisionId === selectedDecisionId
+                    ? { commentId: decisionEditFocus.commentId, nonce: decisionEditFocus.nonce }
+                    : undefined}
                 />
               ) : null}
             </div>

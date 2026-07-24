@@ -25,6 +25,8 @@ interface Store {
   addComment(taskId: number, text: string): void;
   /** Take back a comment posted by mistake (it is deleted outright). */
   removeComment(commentId: number, taskId: number): void;
+  /** The same, for a comment on a decision record — the activity feed retracts either kind from the row. */
+  removeDecisionComment(commentId: number, decisionId: number): void;
   setNotes(id: number, notes: string): void;
   setTitle(id: number, title: string): void;
   deleteTask(id: number): void;
@@ -111,6 +113,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setAssignee(id, kind) { run(mut.setAssignee(id, kind)); },
     addComment(taskId, text) { run(mut.addComment(taskId, text)); },
     removeComment(commentId, taskId) { run(mut.removeComment(commentId, taskId)); },
+    removeDecisionComment(commentId, decisionId) { run(mut.removeDecisionComment(commentId, decisionId)); },
     setNotes(id, notes) { run(mut.setNotes(id, notes)); },
     setTitle(id, title) { run(mut.setTitle(id, title)); },
     deleteTask(id) { run(mut.deleteTask(id)); },

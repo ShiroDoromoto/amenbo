@@ -9,7 +9,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 // Stub the Tauri check and the surroundings that only work under Tauri (paging back through history, the native
 // confirm dialog, writes to the store). Only the boundary that asks "are we inside Tauri" is replaced; the feed's
 // own rendering runs for real.
-const hoisted = vi.hoisted(() => ({ confirmAnswer: true, removed: [] as Array<[number, number]> }));
+const hoisted = vi.hoisted(() => ({
+  confirmAnswer: true,
+  removed: [] as Array<[number, number]>,
+  removedFromDecision: [] as Array<[number, number]>,
+}));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../core/snapshot")>();
@@ -27,6 +31,8 @@ vi.mock("../store/store", async () => {
     useStore: () => ({
       listActivity: () => getSnapshot().activity,
       removeComment: (commentId: number, taskId: number) => hoisted.removed.push([commentId, taskId]),
+      removeDecisionComment: (commentId: number, decisionId: number) =>
+        hoisted.removedFromDecision.push([commentId, decisionId]),
     }),
   };
 });
@@ -40,6 +46,7 @@ import { t } from "../core/i18n";
 let container: HTMLDivElement;
 let root: Root;
 const edited: Array<[number, number]> = [];
+const editedOnDecision: Array<[number, number]> = [];
 
 const buttonsTitled = (title: string) =>
   Array.from(container.querySelectorAll("button")).filter((b) => b.getAttribute("title") === title);
@@ -53,7 +60,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   edited.length = 0;
+  editedOnDecision.length = 0;
   hoisted.removed.length = 0;
+  hoisted.removedFromDecision.length = 0;
   hoisted.confirmAnswer = true;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -62,8 +71,12 @@ beforeEach(() => {
     root.render(
       createElement(ActivityFeed, {
         onOpenTask: () => {},
+        onOpenDecision: () => {},
         onReplyToTask: () => {},
+        onReplyToDecision: () => {},
         onEditComment: (taskId: number, commentId: number) => edited.push([taskId, commentId]),
+        onEditDecisionComment: (decisionId: number, commentId: number) =>
+          editedOnDecision.push([decisionId, commentId]),
       }),
     ),
   );
@@ -75,10 +88,11 @@ afterEach(() => {
 });
 
 describe("ActivityFeed ✎ / ✕ (Tauri only)", () => {
-  it("appears only on comment rows aimed at a task (not on system rows or project-aimed rows)", () => {
-    // The fixtures hold exactly one comment. A system row, or a row addressed to a project or decision, has nothing to edit or delete.
-    expect(editButtons()).toHaveLength(1);
-    expect(removeButtons()).toHaveLength(1);
+  it("appears on every comment row, and on no system row", () => {
+    // The fixtures hold two comments — one on a task, one on a live decision. A system row, and a row addressed to a
+    // project or to something deleted, has no thread left to edit or delete in.
+    expect(editButtons()).toHaveLength(2);
+    expect(removeButtons()).toHaveLength(2);
   });
 
   it("✎ hands \"this comment of this task\" to the detail pane (does not edit inline)", () => {
@@ -91,6 +105,17 @@ describe("ActivityFeed ✎ / ✕ (Tauri only)", () => {
       removeButtons()[0].click();
     });
     expect(hoisted.removed).toEqual([[2, 1]]);
+  });
+
+  it("a comment on a decision is edited and deleted through the decision's own writes", async () => {
+    act(() => editButtons()[1].click());
+    expect(editedOnDecision).toEqual([[3, 8]]);
+    expect(edited).toEqual([]);
+    await act(async () => {
+      removeButtons()[1].click();
+    });
+    expect(hoisted.removedFromDecision).toEqual([[8, 3]]);
+    expect(hoisted.removed).toEqual([]); // never through the task-side write
   });
 
   it("does not delete when the ✕ confirmation is canceled", async () => {

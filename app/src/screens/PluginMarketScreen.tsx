@@ -6,6 +6,7 @@ import {
   unreachableSources, usePluginCatalog,
   type PluginCatalog, type PluginEntry, type PluginLayer, type PluginSort,
 } from "../core/pluginCatalog";
+import { PluginDetail } from "./PluginDetail";
 
 // The plugin market — the "find one" half of the plugin section (`AMB-D-356`); managing what is
 // installed is its own surface. The catalog arrives once as a merged list (`AMB-D-347`) and
@@ -34,6 +35,9 @@ export function PluginMarketScreen() {
   const [layer, setLayer] = useState<PluginLayer | "">("");
   const [sort, setSort] = useState<PluginSort>("new");
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  // The opened entry is held by name, not as a row: the catalog can be refetched underneath, and a
+  // detail must then show what the catalog now holds rather than a copy frozen at the click.
+  const [openName, setOpenName] = useState<string | null>(null);
 
   const categories = useMemo(() => pluginCategories(catalog.entries), [catalog.entries]);
   const shown = useMemo(
@@ -44,6 +48,9 @@ export function PluginMarketScreen() {
   // about the new one.
   const pager = usePager(shown, `${search}|${category}|${os}|${layer}|${sort}`);
   const unreachable = unreachableSources(catalog);
+  // An entry that left the catalog while its detail was open closes it, rather than drawing a plugin
+  // the merge no longer offers.
+  const open = catalog.entries.find((e) => e.name === openName) ?? null;
 
   return (
     <>
@@ -130,7 +137,7 @@ export function PluginMarketScreen() {
           <div style={{ color: "var(--c-muted)", padding: 16 }}>{t("plugins.emptyFilter")}</div>
         )}
         {pager.pageItems.map((e) => (
-          <PluginCard key={e.name} entry={e} />
+          <PluginCard key={e.name} entry={e} onOpen={() => setOpenName(e.name)} />
         ))}
         <Pager
           page={pager.page}
@@ -141,6 +148,8 @@ export function PluginMarketScreen() {
           onPage={pager.setPage}
         />
       </div>
+
+      {open && <PluginDetail entry={open} onClose={() => setOpenName(null)} />}
     </>
   );
 }
@@ -210,14 +219,25 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
   );
 }
 
-/** One entry, drawn from the catalog alone — every field here is in the list document (`AMB-D-385`). */
-function PluginCard({ entry }: { entry: PluginEntry }) {
+/**
+ * One entry, drawn from the catalog alone — every field here is in the list document (`AMB-D-385`).
+ *
+ * Opening it is what costs a request: the detail asks GitHub about this one repository (`AMB-D-347`),
+ * which is why the row itself is a button rather than something that loads on sight.
+ */
+function PluginCard({ entry, onOpen }: { entry: PluginEntry; onOpen: () => void }) {
   // One badge, not two: the layers nest, so an official plugin wearing both would only invite the
   // reading that "official" and "listed" are a scale of the same thing rather than who wrote it and
   // who reviewed it.
   const layer = pluginLayer(entry);
   return (
-    <div className="feed__item">
+    <div
+      className="feed__item plugcard"
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
+    >
       <div className="feed__body" style={{ minWidth: 0 }}>
         <div className="feed__line">
           <strong>{entry.name}</strong>{" "}

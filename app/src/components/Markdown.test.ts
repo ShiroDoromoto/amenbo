@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Element as HastElement } from "hast";
-import { findRefTokens, mermaidSourceFromPre, Markdown } from "./Markdown";
+import { findRefTokens, isExternalHref, mermaidSourceFromPre, Markdown } from "./Markdown";
 
 // SSR needs no DOM, and it pins the whole remark wiring: detection → link node → urlTransform lets it through → an a.reflink is rendered.
 const render = (md: string) => renderToStaticMarkup(createElement(Markdown, { children: md }));
@@ -138,5 +138,24 @@ describe("Markdown Mermaid rendering", () => {
     expect(html).toContain('class="language-js"');
     expect(html).toContain("const x = 1");
     expect(html).not.toContain("mermaid");
+  });
+});
+
+describe("external links", () => {
+  // The app window has no address bar and no way back, so a link that leaves amenbo must go to the
+  // browser. Everything else — the ref scheme, an anchor — stays in the document.
+  it("recognises only http(s) as leaving the app", () => {
+    expect(isExternalHref("https://github.com/owner/repo")).toBe(true);
+    expect(isExternalHref("  http://example.invalid/x  ")).toBe(true);
+    expect(isExternalHref("ref:AMB-T-1")).toBe(false);
+    expect(isExternalHref("#section")).toBe(false);
+    expect(isExternalHref("./relative.md")).toBe(false);
+    expect(isExternalHref("javascript:alert(1)")).toBe(false);
+  });
+
+  // Diverting the click must not cost the link its href: it is still what a copy-link does, and what
+  // the status bar shows. (The click handler itself is a DOM behaviour, out of SSR's reach.)
+  it("keeps the href on an external link", () => {
+    expect(render("[amenbo](https://example.invalid/x)")).toContain('href="https://example.invalid/x"');
   });
 });

@@ -69,6 +69,13 @@ pub fn plugin_catalog_url() -> Option<String> {
     var("AMENBO_PLUGIN_CATALOG_URL")
 }
 
+/// `AMENBO_GITHUB_API_URL` — override the GitHub API base a plugin's detail reads its stars, README
+/// and download count from ([`crate::plugin_github::GITHUB_API_URL`]), so development and manual
+/// testing can answer those requests locally instead of spending the real API's rate limit.
+pub fn github_api_url() -> Option<String> {
+    var("AMENBO_GITHUB_API_URL")
+}
+
 /// `AMENBO_ALLOW_UNSTAMPED_MIGRATE` — the escape hatch out of the release-stamp gate
 /// ([`crate::build_stamp`], `AMB-D-378`): it lets a locally built binary carry the production store
 /// forward for **this one run**. It exists for the case the gate cannot help with — a released build

@@ -4298,6 +4298,60 @@ pub fn plugin_catalog_remove_source(url: String) -> Result<bool, CmdError> {
     amenbo_core::plugin_catalog::remove_source(&paths, &url).map_err(CmdError::from)
 }
 
+/// What GitHub says about one plugin's repository — the figures the catalog deliberately does not
+/// carry (`AMB-D-347`). Every one is optional on its own: the requests behind them fail
+/// independently, and a repository with no release has no download count to report.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginRepoFactsDto {
+    /// `number` on the TS side (the default `bigint` has no `toLocaleString` grouping to draw it with,
+    /// and a star count is nowhere near the range that motivates one).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    stars: Option<u64>,
+    /// The current release's downloads, summed over its assets. Whatever else pulls an asset (CI,
+    /// mirrors) is in there too, so it is a sense of scale rather than a user count (`AMB-D-347`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    downloads: Option<u64>,
+    /// The README as Markdown, for the front end's renderer (which allows no raw HTML).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    readme: Option<String>,
+    /// GitHub refused because too many requests came from this address. A different thing to tell the
+    /// user than a failure: the answer is to wait, not to check the network.
+    rate_limited: bool,
+}
+
+/// Read the figures for the **one** plugin a user opened (`AMB-D-347`).
+///
+/// This is the detail's counterpart to [`plugin_catalog_browse`], and the one place the market talks
+/// to GitHub. The list never does: stars, downloads and a README are per-repository, so fetching them
+/// for a list would be exactly the "one request per plugin" shape the catalog exists to avoid. Core
+/// caches per repository and answers from that cache well past the hour, because GitHub's
+/// unauthenticated rate limit — not freshness — is what bounds this.
+///
+/// Failure is partial by design: what did not answer comes back absent, and the detail draws what it
+/// has. An error here means nothing about the repository could be read at all, which the front end
+/// shows as a note beside a detail that is otherwise complete from the catalog. Off the main thread,
+/// because up to three requests run in sequence behind it.
+#[tauri::command]
+pub async fn plugin_repo_facts(repo: String) -> Result<PluginRepoFactsDto, CmdError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<PluginRepoFactsDto, CmdError> {
+        let paths = amenbo_core::config::Paths::resolve()?;
+        let facts = amenbo_core::plugin_github::facts(&paths, &repo)?;
+        Ok(PluginRepoFactsDto {
+            stars: facts.stars,
+            downloads: facts.downloads,
+            readme: facts.readme,
+            rate_limited: facts.rate_limited,
+        })
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("GitHub の情報取得に失敗しました: {e}").into() })?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

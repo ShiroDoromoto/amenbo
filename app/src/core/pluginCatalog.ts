@@ -8,7 +8,7 @@
 import { invoke } from "./ipc";
 import { inTauri } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
-import type { PluginCatalogDto, PluginEntryDto } from "../bindings/bindings";
+import type { PluginCatalogDto, PluginEntryDto, PluginRepoFactsDto } from "../bindings/bindings";
 
 /** One catalog entry as the market list draws it (generated DTO). */
 export type PluginEntry = PluginEntryDto;
@@ -161,4 +161,42 @@ export async function removeCatalogSource(url: string): Promise<boolean> {
   const removed = await invoke<boolean>("plugin_catalog_remove_source", { url });
   reloadCatalog();
   return removed;
+}
+
+// ---- the one entry a user opened ----
+//
+// The other half of `AMB-D-347`'s discovery shape, and the **only** place the market talks to GitHub:
+// stars, downloads and a README are per-repository, so asking for them anywhere but a detail would be
+// exactly the "one request per plugin" the catalog exists to avoid. Everything here is keyed on the
+// repository and fetched when a detail opens — never for a row that is merely listed.
+//
+// The detail file `plugins/<name>.json` (`AMB-D-385`) is fetched from this same seam when the install
+// side lands: one opened entry, one place that goes and gets what only opening it justifies.
+
+/** What GitHub could tell us about one plugin's repository (generated DTO). */
+export type PluginRepoFacts = PluginRepoFactsDto;
+
+/**
+ * Read one repository's figures (Tauri: `plugin_repo_facts`). Core caches them per repository well
+ * past the hour, because GitHub's unauthenticated rate limit — not freshness — is what bounds this.
+ * Outside Tauri there is no core to ask, so the browser mock reports nothing rather than inventing a
+ * star count.
+ */
+export async function fetchPluginRepoFacts(repo: string): Promise<PluginRepoFacts> {
+  if (inTauri()) return invoke<PluginRepoFacts>("plugin_repo_facts", { repo });
+  return { rateLimited: false };
+}
+
+/**
+ * The opened entry's GitHub figures. Call it only from a detail that is actually open: a hook fetches
+ * when it mounts, so what keeps this request tied to opening one entry is that nothing on the list
+ * side mounts it.
+ */
+export function usePluginRepoFacts(
+  repo: string,
+): { facts: PluginRepoFacts | undefined; loading: boolean; error: unknown } {
+  const { data, loading, error } = useQuery<PluginRepoFacts>(["plugin-repo-facts", repo], () =>
+    fetchPluginRepoFacts(repo),
+  );
+  return { facts: data, loading, error };
 }

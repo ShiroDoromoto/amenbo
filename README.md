@@ -205,13 +205,20 @@ Substitute your platform's asset name.
 
 On the network, amenbo keeps two layers apart. **Feature-side communication stays
 at zero**: no telemetry, no phone-home, no central server — your task data never
-leaves your device. The one exception is an **infra-side update check**: amenbo
-reads a small static `latest.json` from this repository's latest release to notice when a
-newer version is out. That request carries no task data, is on by default, and can
-be turned off (`amenbo config set update_check false`, or `AMENBO_UPDATE_CHECK=0`).
-The check only reads that static file; amenbo never updates itself in the background —
-downloading and applying a new version is always something you set off yourself
-(`amenbo update`, or `amenbo update --apply` for the standalone CLI).
+leaves your device. What does go out is **infra-side**, and there are two kinds.
+
+The **update check** reads a small static `latest.json` from this repository's latest
+release to notice when a newer version is out. That request carries no task data, is on
+by default, and can be turned off (`amenbo config set update_check false`, or
+`AMENBO_UPDATE_CHECK=0`). The check only reads that static file; amenbo never updates
+itself in the background — downloading and applying a new version is always something you
+set off yourself (`amenbo update`, or `amenbo update --apply` for the standalone CLI).
+
+**Looking for a plugin** reads the plugin catalog — one static file, fetched once and
+cached, whatever the catalog's size — and, for a plugin whose detail you open, that one
+repository's stars, downloads and README from GitHub's public API. Both carry no task
+data, and neither happens unless you go looking: nothing is fetched for a plugin you only
+see in the list.
 
 </details>
 

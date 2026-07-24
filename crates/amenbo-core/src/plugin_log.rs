@@ -299,6 +299,74 @@ fn trim_locked(path: &Path) -> std::io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
+/// Drop every line of one plugin from the log — the last trace an [`uninstall`](crate::plugin_uninstall)
+/// clears, so nothing of a removed plugin is left behind (`AMB-D-357`). Returns whether any line was
+/// actually removed. A line this build cannot parse is kept: its owner cannot be told, and this removes
+/// only what it is sure belongs to `plugin` (gap lines, owned by no plugin, are kept for the same reason).
+///
+/// Takes the lock **blocking**, unlike [`trim`]: uninstall's contract is to leave nothing behind, so a
+/// purge that skipped under a trim in flight would put the residue straight back — the very bug this closes
+/// (`AMB-T-2098`). It is a rare user command and never a hook thread, so it may wait the moment a concurrent
+/// trim holds the lock; the hook path still only ever `try_lock`s and skips.
+pub fn forget(path: &Path, plugin: &str) -> bool {
+    let Some(_lock) = lock_blocking(&lock_path(path)) else {
+        // The lock sidecar could not be made (e.g. an unwritable base). The log is a debugging aid, not
+        // store data, so a purge that cannot run is a warn, not a failure of the uninstall around it.
+        tracing::warn!(plugin, "plugin log: cannot lock to purge; lines left in place");
+        return false;
+    };
+    match forget_locked(path, plugin) {
+        Ok(removed) => removed,
+        Err(e) => {
+            tracing::warn!(plugin, error = %e, "plugin log: purge failed; lines left in place");
+            false
+        }
+    }
+}
+
+fn forget_locked(path: &Path, plugin: &str) -> std::io::Result<bool> {
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(e),
+    };
+    let text = String::from_utf8_lossy(&bytes);
+    let mut kept: Vec<&str> = Vec::new();
+    let mut dropped = false;
+    for line in text.lines() {
+        // Only a line that parses *and* names this plugin goes; everything else — another plugin's runs,
+        // gap lines, an unreadable line — stays exactly as it was.
+        match parse_line(line) {
+            Some(l) if l.plugin == plugin => dropped = true,
+            _ => kept.push(line),
+        }
+    }
+    if !dropped {
+        return Ok(false); // the plugin left no line — leave the file untouched
+    }
+    let mut out = kept.join("\n");
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    let tmp = path.with_extension("jsonl.tmp");
+    std::fs::write(&tmp, out)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(true)
+}
+
+/// Take the trim lock, waiting until it is free — the purge path ([`forget`]) needs it to actually happen,
+/// not to skip. `None` only when the sidecar cannot be made or the lock call itself errors.
+fn lock_blocking(path: &Path) -> Option<File> {
+    let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path).ok()?;
+    match file.lock() {
+        Ok(()) => Some(file),
+        Err(e) => {
+            tracing::warn!(error = %e, "plugin log: cannot take the trim lock to purge");
+            None
+        }
+    }
+}
+
 /// The lines worth keeping, in their original order: the last [`RUNS_PER_PLUGIN`] of each plugin, and the
 /// same number of gap lines (which belong to no plugin and are the rarest thing in the file).
 ///
@@ -501,6 +569,38 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].stderr, "second", "newest first");
         assert_eq!(rows[1].stderr, "first");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// `forget` clears one plugin's runs and leaves everything else — another plugin's runs, gap lines, and
+    /// even an unreadable line whose owner cannot be told — exactly where they were (`AMB-T-2098`).
+    #[test]
+    fn forget_purges_one_plugins_runs_and_leaves_the_rest() {
+        let dir = dir("forget");
+        let path = dir.join(FILE_NAME);
+        record(&path, &run("slack", Outcome::Ok, "first"));
+        record(&path, &run("worktree", Outcome::Ok, "neighbour"));
+        record(&path, &run("slack", Outcome::Failed, "second"));
+        record_gap(&path);
+        // A line no build can parse — its owner is unknowable, so forget must keep it.
+        write_line(&path, b"{\"v\":999,\"whose\":\"?\"}\n").unwrap();
+
+        assert!(forget(&path, "slack"), "slack had runs, so something was removed");
+
+        assert!(recent(&path, "slack").is_empty(), "slack's runs are gone");
+        assert_eq!(recent(&path, "worktree").len(), 1, "the neighbour's run stays");
+        let all = read(&path);
+        assert!(all.iter().any(|l| l.outcome == Outcome::Gap), "the gap line stays");
+        // The unreadable line is not parsed by `read`, so count raw lines to prove it survived.
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(raw.contains("\"v\":999"), "the unreadable line is left in place");
+
+        // A second purge finds nothing of slack left and rewrites nothing.
+        assert!(!forget(&path, "slack"), "a plugin with no lines is a no-op");
+        // A name that never ran is a no-op too, and a missing file is not a failure.
+        assert!(!forget(&path, "never-ran"));
+        assert!(!forget(&dir.join("nothing.jsonl"), "slack"));
 
         std::fs::remove_dir_all(&dir).ok();
     }

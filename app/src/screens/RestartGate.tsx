@@ -12,8 +12,9 @@
 // the version that wrote the store and nothing on this screen can ask the store anything.
 import { useEffect, useState } from "react";
 import { invoke } from "../core/ipc";
+import { useCliCommandName } from "../core/cliCommand";
 import { formatAheadDetail } from "../core/formatAhead";
-import { currentLang, normalizeLang, t } from "../core/i18n";
+import { currentLang, normalizeLang, t, tf } from "../core/i18n";
 import { inTauri } from "../core/snapshot";
 
 /**
@@ -24,6 +25,9 @@ import { inTauri } from "../core/snapshot";
 export function RestartGate() {
   const [lang, setLang] = useState(currentLang);
   const [failed, setFailed] = useState(false);
+  // The restore line is a command to type, and the build that is stuck here is the one whose CLI the
+  // reader has beside them.
+  const cli = useCliCommandName();
   // Read once: the flag never lowers, so neither does what raised it.
   const [detail] = useState(formatAheadDetail);
 
@@ -81,7 +85,7 @@ export function RestartGate() {
             </pre>
           )}
           <p className="muted">{t("restart.stuck.how", lang)}</p>
-          <pre className="restart__detail" style={{ whiteSpace: "pre-wrap" }}>{t("restart.stuck.command", lang)}</pre>
+          <pre className="restart__detail" style={{ whiteSpace: "pre-wrap" }}>{tf("restart.stuck.command", { cmd: cli }, lang)}</pre>
           <p className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("restart.stuck.where", lang)}</p>
         </div>
       </div>

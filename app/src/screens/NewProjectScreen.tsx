@@ -8,6 +8,7 @@
 // there is none). The primary action is "Open the board". This carries the same information as the
 // CLI's own init/bind success output.
 import { useState } from "react";
+import { useCliCommandName } from "../core/cliCommand";
 import { createProject, openTerminal, pickFolder, revealFolder } from "../core/mutations";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
@@ -110,10 +111,12 @@ function DoneStep({ created, onOpenBoard }: { created: Created; onOpenBoard: () 
   const { name, dir } = created;
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What is copied is meant to be pasted into a terminal, so it has to be the command this build installs.
+  const cli = useCliCommandName();
 
   const copyStatus = async () => {
     try {
-      await navigator.clipboard.writeText("amenbo status");
+      await navigator.clipboard.writeText(`${cli} status`);
       setError(null);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -146,7 +149,7 @@ function DoneStep({ created, onOpenBoard }: { created: Created; onOpenBoard: () 
             <span className="newproj__label">{t("newproj.nextTitle")}</span>
             <div className="newproj__nextrow">
               <button className="btn" onClick={() => void copyStatus()}>
-                {copied ? t("newproj.copied") : `📋 ${t("newproj.copyStatus")}`}
+                {copied ? t("newproj.copied") : `📋 ${tf("newproj.copyStatus", { cmd: cli })}`}
               </button>
               <button className="btn" onClick={() => void terminal()}>⌨️ {t("newproj.openTerminal")}</button>
               <button className="btn" onClick={() => void reveal()}>📂 {t("newproj.openFinder")}</button>

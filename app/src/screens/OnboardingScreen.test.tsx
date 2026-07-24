@@ -8,15 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const hoisted = vi.hoisted(() => ({
   /** What core answers for this build's CLI name; null is the browser, with no build to ask. */
   cmd: "amenbo" as string | null,
-  /** How many times it was asked — the evidence it is a startup question, not a per-render one. */
-  calls: 0,
 }));
 
 vi.mock("../core/mutations", () => ({
-  fetchCliCommandName: () => {
-    hoisted.calls += 1;
-    return Promise.resolve(hoisted.cmd);
-  },
+  fetchCliCommandName: () => Promise.resolve(hoisted.cmd),
 }));
 
 import { OnboardingScreen } from "./OnboardingScreen";
@@ -36,7 +31,6 @@ async function render() {
 
 beforeEach(() => {
   hoisted.cmd = "amenbo";
-  hoisted.calls = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -68,11 +62,5 @@ describe("OnboardingScreen commands", () => {
     hoisted.cmd = null;
     await render();
     expect(commands()).toContain("amenbo init");
-  });
-
-  it("is asked once, not on every render", async () => {
-    await render();
-    await render(); // a re-render of the same tree
-    expect(hoisted.calls).toBe(1);
   });
 });

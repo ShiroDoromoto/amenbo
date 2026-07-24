@@ -346,7 +346,10 @@ test:
 	$(MAKE) --no-print-directory comment-gate
 	$(MAKE) --no-print-directory go-gate
 	$(MAKE) --no-print-directory shim-gate
-	cargo nextest run --features scale,e2e
+	## Two runs, not one: the same split CI makes (ci.yml), so the heavy e2e suite never shares the
+	## box with the scale seeds. The build is shared, so the second run only schedules tests.
+	cargo nextest run --features scale,e2e -E 'not binary(cli_e2e)'
+	cargo nextest run --features scale,e2e -E 'binary(cli_e2e)'
 	cargo test --doc --features scale,e2e
 	$(MAKE) --no-print-directory doc-gate
 	## The app crate's build.rs (tauri_build) checks that tauri.conf.json's externalBin=binaries/amenbo

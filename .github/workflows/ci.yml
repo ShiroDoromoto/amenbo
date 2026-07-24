@@ -208,8 +208,21 @@ jobs:
       # wall-clock guards run nightly via scale-heavy.yml, off the PR path. The `ci` profile
       # (.config/nextest.toml) runs every test to completion (no fail-fast) so one failure doesn't
       # mask the rest.
-      - name: Test (incl. feature-gated scale + e2e suites)
-        run: cargo nextest run --profile ci --features scale,e2e
+      #
+      # The two heavy suites run one after the other rather than interleaved. Run together, the e2e
+      # suite has twice been ended mid-test by a signal — the CLI child had already written its
+      # answer, and re-running the same commit was green — which points at the load the run puts on
+      # the box rather than at anything either suite asserts. Splitting them costs nothing (the
+      # build is shared) and it partitions the question: an e2e run that dies by signal with nothing
+      # else on the machine takes the load story off the table.
+      - name: Test (feature-gated scale suites + everything else)
+        run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(cli_e2e)'
+
+      # Run even when the step above failed: the `ci` profile deliberately reports every failure
+      # rather than the first, and splitting the run must not take half of that picture away.
+      - name: Test (the CLI e2e suite, on its own)
+        if: ${{ !cancelled() }}
+        run: cargo nextest run --profile ci --features scale,e2e -E 'binary(cli_e2e)'
 
       # nextest does NOT run doctests; run them separately so a future `/// ```rust`
       # example can't silently skip CI. Today there are none (only ```text blocks), so

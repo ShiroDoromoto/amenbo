@@ -9,6 +9,54 @@ fn temp_home() -> std::path::PathBuf {
     amenbo_scratch::scratch("home")
 }
 
+/// The child's exit code — or a stop that names the signal that ended it.
+///
+/// A signalled child has no code at all, and folding that into a number (`-1`) makes it read as an
+/// ordinary non-zero exit: the assertion that follows blames the command's behaviour, so whoever
+/// pushed reads the red as their own change breaking something. It is a different fact — the run did
+/// not fail, it was ended, usually after it had already written its answer — and it has only ever been
+/// seen on CI's combined scale+e2e run, where re-running the same commit came back green
+/// (`AMB-T-2103`). Say which signal, where the fact is still known.
+fn exit_code(out: &std::process::Output) -> i32 {
+    match out.status.code() {
+        Some(code) => code,
+        None => panic!(
+            "the amenbo child was ended by {}, not by a command that failed — no assertion was reached.\n\
+             Re-run before suspecting the change: this has been seen on CI's combined scale+e2e run only.\n\
+             stdout: {}\nstderr: {}",
+            signal_name(&out.status),
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr),
+        ),
+    }
+}
+
+/// Name the signal that ended a child, since the number alone is what nobody remembers. The few that
+/// can plausibly land here are named; anything else is reported as its number.
+#[cfg(unix)]
+fn signal_name(status: &std::process::ExitStatus) -> String {
+    use std::os::unix::process::ExitStatusExt;
+    match status.signal() {
+        Some(sig) => {
+            let known = match sig {
+                6 => " (SIGABRT)",
+                9 => " (SIGKILL — an out-of-memory kill arrives as this)",
+                11 => " (SIGSEGV)",
+                13 => " (SIGPIPE — a write to a pipe nobody is reading)",
+                _ => "",
+            };
+            format!("signal {sig}{known}")
+        }
+        None => "no exit code and no signal".to_string(),
+    }
+}
+
+/// Off Unix there is no signal to name: a child that ends without a code is all the platform says.
+#[cfg(not(unix))]
+fn signal_name(_status: &std::process::ExitStatus) -> String {
+    "no exit code".to_string()
+}
+
 struct Cli {
     home: std::path::PathBuf,
 }
@@ -36,7 +84,7 @@ impl Cli {
             .expect("failed to run the binary");
         (
             String::from_utf8_lossy(&out.stdout).to_string(),
-            out.status.code().unwrap_or(-1),
+            exit_code(&out),
         )
     }
 
@@ -52,7 +100,7 @@ impl Cli {
             .output()
             .expect("failed to run the binary");
         let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-        assert_eq!(out.status.code(), Some(0), "command {args:?} exited non-zero: {stdout}");
+        assert_eq!(exit_code(&out), 0, "command {args:?} exited non-zero: {stdout}");
         serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("failed to parse JSON {args:?}: {e}\n{stdout}"))
     }
 
@@ -82,7 +130,7 @@ impl Cli {
         drop(child.stdin.take());
         let out = child.wait_with_output().expect("failed to wait for the binary");
         let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-        assert_eq!(out.status.code(), Some(0), "command {args:?} exited non-zero: {stdout}");
+        assert_eq!(exit_code(&out), 0, "command {args:?} exited non-zero: {stdout}");
         serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("failed to parse JSON {args:?}: {e}\n{stdout}"))
     }
 
@@ -100,7 +148,7 @@ impl Cli {
         (
             String::from_utf8_lossy(&out.stdout).to_string(),
             String::from_utf8_lossy(&out.stderr).to_string(),
-            out.status.code().unwrap_or(-1),
+            exit_code(&out),
         )
     }
 
@@ -119,7 +167,7 @@ impl Cli {
             .expect("failed to run the binary");
         (
             String::from_utf8_lossy(&out.stderr).to_string(),
-            out.status.code().unwrap_or(-1),
+            exit_code(&out),
         )
     }
 
@@ -2156,7 +2204,7 @@ fn facet_required_fails_loud_on_unspecified_machine_writes_only() {
             .args(args)
             .output()
             .expect("run amenbo");
-        (String::from_utf8_lossy(&out.stderr).to_string(), out.status.code().unwrap_or(-1))
+        (String::from_utf8_lossy(&out.stderr).to_string(), exit_code(&out))
     };
 
     // The write (task add) stops with facet_required.
@@ -2377,7 +2425,7 @@ fn bind_refuses_nested_subdirectory_without_force() {
             .expect("run amenbo bind");
         (
             String::from_utf8_lossy(&out.stderr).to_string(),
-            out.status.code().unwrap_or(-1),
+            exit_code(&out),
         )
     };
 
@@ -3526,7 +3574,7 @@ fn lint(cwd: &std::path::Path, home: &std::path::Path, args: &[&str], stdin: Opt
     (
         String::from_utf8_lossy(&out.stdout).to_string(),
         String::from_utf8_lossy(&out.stderr).to_string(),
-        out.status.code().unwrap_or(-1),
+        exit_code(&out),
     )
 }
 
@@ -3680,7 +3728,7 @@ fn the_hook_probe_spawns_git_once_per_command_and_never_for_hooks_itself() {
             .args(args)
             .output()
             .expect("failed to run the binary");
-        assert_eq!(out.status.code(), Some(0), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        assert_eq!(exit_code(&out), 0, "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
         std::fs::read_to_string(&log).map(|s| s.lines().count()).unwrap_or(0)
     };
 

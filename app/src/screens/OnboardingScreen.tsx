@@ -1,31 +1,9 @@
 // The onboarding screen is help and reference. Creating a project navigates to a GUI screen (NewProjectScreen);
 // opening one (bind) has no GUI route, so the screen hands over the CLI command instead.
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useCliCommandName } from "../core/cliCommand";
 import { t } from "../core/i18n";
-import { fetchCliCommandName } from "../core/mutations";
 import type { Nav } from "../shell/AppShell";
-
-/** The name a shipped build installs, and the fallback whenever the build is not there to be asked. */
-const PRODUCTION_CLI = "amenbo";
-
-/**
- * The command this build installs, which is the one the steps may tell someone to type. Asked once —
- * the channel is fixed at build time — and it stands at the production name until the answer comes,
- * so the shipped build, where the answer *is* that name, never shows the change.
- */
-function useCliCommandName(): string {
-  const [cmd, setCmd] = useState(PRODUCTION_CLI);
-  useEffect(() => {
-    let alive = true;
-    fetchCliCommandName()
-      .then((c) => alive && c && setCmd(c))
-      .catch(() => {}); // Unanswered: the production name is still the likeliest one to be there.
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return cmd;
-}
 
 export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
   const cli = useCliCommandName();

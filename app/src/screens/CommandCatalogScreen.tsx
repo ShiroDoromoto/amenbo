@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useCliCommandName } from "../core/cliCommand";
 import { t } from "../core/i18n";
 import { useAgentSpec, type CommandSpec } from "../core/reads";
 
@@ -8,6 +9,8 @@ import { useAgentSpec, type CommandSpec } from "../core/reads";
 // runs the CLI.
 export function CommandCatalogScreen() {
   const { spec, loading } = useAgentSpec();
+  // The catalogue lists commands to type, so each line is worded for the CLI this build installs.
+  const cli = useCliCommandName();
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -68,6 +71,7 @@ export function CommandCatalogScreen() {
             {g.commands.map((c) => (
               <CommandRow
                 key={c.name}
+                cli={cli}
                 cmd={c}
                 open={expanded === c.name}
                 onToggle={() => setExpanded((cur) => (cur === c.name ? null : c.name))}
@@ -80,7 +84,7 @@ export function CommandCatalogScreen() {
   );
 }
 
-function CommandRow({ cmd, open, onToggle }: { cmd: CommandSpec; open: boolean; onToggle: () => void }) {
+function CommandRow({ cli, cmd, open, onToggle }: { cli: string; cmd: CommandSpec; open: boolean; onToggle: () => void }) {
   const args = cmd.args ?? [];
   const flags = cmd.flags ?? [];
   const examples = cmd.examples ?? [];
@@ -88,7 +92,7 @@ function CommandRow({ cmd, open, onToggle }: { cmd: CommandSpec; open: boolean; 
     <div className="feed__item">
       <div className="feed__body">
         <button className="feed__line feed__action cmdcat__head" onClick={onToggle}>
-          <code className="palette__cmd">amenbo {cmd.name}</code>{" "}
+          <code className="palette__cmd">{cli} {cmd.name}</code>{" "}
           <span className="muted">{cmd.summary}</span>
           <span className="faint"> {open ? "⌄" : "›"}</span>
         </button>

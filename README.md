@@ -50,6 +50,9 @@ crates/
   amenbo-core/        domain model, persistence, operations, queries, export
   amenbo-cli/         the `amenbo` binary (clap; human + --json output; `agent --json`)
   amenbo-scratch/     test support: the throwaway directory a test works in
+app/                  the desktop GUI shown above (React + Vite front end; Tauri shell
+                      in `app/src-tauri`, calling amenbo-core directly — no server)
+assets/               the logo, the CLI demo and its script, the GUI screenshot
 ```
 
 Design points:

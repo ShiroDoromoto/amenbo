@@ -614,6 +614,11 @@ const STDIN_LABEL: &str = "<stdin>";
 /// authored in the catalog repo). A parse failure is itself a fail-closed refusal — a manifest missing a
 /// required field is the shape half of the door — so it is reported as a problem, not surfaced as a crash.
 /// Exits non-zero when the manifest is invalid, dropping cleanly into a pre-submit check.
+///
+/// On `--json` a passing manifest also carries a `manifest` field — the whole serde shape amenbo read
+/// (`AMB-T-2109`) — so the catalog aggregator builds install entries from it rather than from its own list
+/// of fields to copy, which silently drops a field amenbo later adds. It rides back only when the manifest
+/// passes: a parse error read nothing, and a rule-breaking manifest is refused at the door.
 fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
     let text = std::fs::read_to_string(&path).map_err(|e| CliError {
         code: "io_error",
@@ -653,7 +658,18 @@ fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
                 })
             })
             .collect();
-        print_json(&json!({ "ok": problems.is_empty(), "path": path, "count": problems.len(), "problems": arr }));
+        let mut out = json!({ "ok": problems.is_empty(), "path": path, "count": problems.len(), "problems": arr });
+        // When the manifest passes, hand the caller the manifest amenbo *read* — the whole serde shape,
+        // so a consumer (the catalog's aggregator) writes install entries from it without keeping its own
+        // list of which fields to copy, a list that silently drops any field amenbo later adds (`AMB-T-2105`
+        // lost `scope`/`events` that way). Present exactly when `ok`: a parse error leaves nothing to read,
+        // and a manifest that broke a rule is refused at the door, so neither carries a `manifest` here.
+        // `skip_serializing_if` keeps an omitted optional field omitted, so the emitted body round-trips
+        // what the author wrote.
+        if problems.is_empty() {
+            out["manifest"] = serde_json::to_value(&manifest).unwrap();
+        }
+        print_json(&out);
     } else if problems.is_empty() {
         human(flags, format!("plugin validate: ok — {path} is a valid manifest."));
     } else {

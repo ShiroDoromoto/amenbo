@@ -4105,6 +4105,68 @@ fn the_listing_marks_a_plugin_the_catalog_has_a_different_build_of() {
     );
 }
 
+/// `plugin validate --json` hands back the manifest it read when the manifest passes (`AMB-T-2109`), so a
+/// consumer (the catalog aggregator) builds install entries from amenbo's own reading instead of keeping a
+/// list of which fields to copy — a list that silently drops a field amenbo later adds. The body carries
+/// every field, including the ones such a list has dropped before (`scope`, `events`); a manifest that does
+/// not pass carries no body, since a parse error leaves nothing to read and a rule-breaking manifest is
+/// refused at the door.
+#[test]
+fn plugin_validate_json_carries_the_read_manifest_only_when_it_passes() {
+    let cli = Cli::new();
+
+    // A valid manifest, written where the command reads it by path (no store is opened). It declares the
+    // two fields a hand-written copy list has dropped before — `scope` and `events` — so the test proves the
+    // whole shape rides back, not a hand-picked subset.
+    let good = cli.home.join("worktree.json");
+    let manifest = serde_json::json!({
+        "name": "worktree",
+        "desc": "Isolate each task in its own git worktree",
+        "author": "amenbo",
+        "repo": "ShiroDoromoto/amenbo-plugin-worktree",
+        "os": ["macos", "linux"],
+        "category": "workflow",
+        "url": "https://example.com/worktree-v1.tar.gz",
+        "checksum": format!("sha256:{}", "a".repeat(64)),
+        "scope": "machine",
+        "events": ["task.done"],
+        "min_amenbo": "1.8.0",
+    });
+    std::fs::write(&good, serde_json::to_vec(&manifest).unwrap()).unwrap();
+
+    let out = cli.json(&["plugin", "validate", good.to_str().unwrap(), "--json"]);
+    assert_eq!(out["ok"], true, "a well-formed manifest passes");
+    let body = &out["manifest"];
+    assert_eq!(body["name"], "worktree", "the read manifest rides back on success");
+    assert_eq!(body["scope"], "machine", "a field a copy list has dropped before is present");
+    assert_eq!(body["events"], serde_json::json!(["task.done"]), "and so is `events`");
+    assert_eq!(body["min_amenbo"], "1.8.0");
+    // `skip_serializing_if` keeps an omitted optional field omitted, so the body round-trips what was written.
+    assert!(body.get("assets").is_none(), "an absent optional field stays absent in the body");
+
+    // A manifest that parses but breaks a rule: the door refuses it, so there is no body to hand back.
+    let bad = cli.home.join("bad.json");
+    let mut broken = manifest.clone();
+    broken["checksum"] = serde_json::json!("nope");
+    std::fs::write(&bad, serde_json::to_vec(&broken).unwrap()).unwrap();
+    let (stdout, code) = cli.run(&["plugin", "validate", bad.to_str().unwrap(), "--json"]);
+    assert_eq!(code, 1, "an invalid manifest exits non-zero");
+    let out: Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(out["ok"], false);
+    assert!(out["count"].as_u64().unwrap() >= 1, "it names the problem");
+    assert!(out.get("manifest").is_none(), "a manifest that did not pass carries no body");
+
+    // A manifest that does not even parse: nothing was read, so likewise no body.
+    let junk = cli.home.join("junk.json");
+    std::fs::write(&junk, b"{ not json").unwrap();
+    let (stdout, code) = cli.run(&["plugin", "validate", junk.to_str().unwrap(), "--json"]);
+    assert_eq!(code, 1);
+    let out: Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(out["ok"], false);
+    assert!(out["parse_error"].is_string(), "a parse failure is reported as such");
+    assert!(out.get("manifest").is_none(), "and there is no manifest to carry");
+}
+
 /// `plugin catalog add/list/remove` registers third-party catalogs for the browsing view (`AMB-T-1980`):
 /// the merged listing is the official catalog plus each registered source, and registration is idempotent
 /// and reversible. A dead loopback URL registers, is marked unreachable, and does not cost the official

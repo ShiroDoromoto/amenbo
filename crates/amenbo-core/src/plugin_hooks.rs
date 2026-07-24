@@ -124,8 +124,8 @@ fn run_one(hook: &Hook, timeout: Duration, log: Option<&Path>) {
 
 /// Run one `reply:true` hook synchronously and hand its **advice** back to the caller (`AMB-D-383`).
 ///
-/// This is the consumed-reply path [`deliver`](crate::plugin_dispatch::deliver) takes on the CLI face: the
-/// hook is run inline (not on a background thread), recorded in the execution log exactly as
+/// This is the consumed-reply path [`run_replies`](crate::plugin_dispatch::run_replies) takes on the CLI
+/// face: the hook is run inline (not on a background thread), recorded in the execution log exactly as
 /// [`run_one`] records a fire-and-forget one, and its stderr is returned for the caller to surface. A reply
 /// is carried only when the hook actually **ran** and wrote something — a clean or non-zero exit with
 /// non-empty stderr; the exit code is not the gate, since stderr is the advice channel (`AMB-D-353`), not

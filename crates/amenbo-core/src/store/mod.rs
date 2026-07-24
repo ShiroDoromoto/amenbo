@@ -204,13 +204,14 @@ impl Store {
     //
     // The ops write points appended semantic events to the outbox inside their transactions (`AMB-D-367`);
     // these are the caller `AMB-D-367` hands the cursor to — the single dispatcher's mount. The cursor is
-    // owned here, not by `plugin_dispatch::deliver`, and both faces share the one persisted cursor
+    // owned here, not by the dispatcher's own halves, and both faces share the one persisted cursor
     // (`AMB-D-380`; see `crate::plugin_drive`).
 
     /// Drive the plugin observation dispatcher once from the **persisted** cursor — the mount both faces
-    /// use (`AMB-D-380`). Reads the stored cursor, fires the subscribers of everything committed since, and
-    /// persists where it advanced to so the next drive, in either face, continues past it. `face` is
-    /// recorded beside the cursor for diagnosis and selects nothing. The returned
+    /// use (`AMB-D-380`). Reads the stored cursor, fans everything committed since onto the queues of the
+    /// plugins that observe it, persists where it got to so the next drive — in either face — continues
+    /// past it, and then runs the queues (`AMB-D-399`). `face` selects which subscriptions resolve and is
+    /// recorded beside the cursor for diagnosis. The returned
     /// [`Delivered`](crate::plugin_dispatch::Delivered) carries the launched hooks — the short-lived face
     /// **joins** them before the process exits, the long-lived one drops them — and whether a retention gap
     /// was hit. The cursor is already stored on return. Every run, and a gap, land in this machine's

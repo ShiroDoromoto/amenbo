@@ -25,6 +25,11 @@
 //! reason: a reader that has been away drains in pages, and a cursor that has fallen behind retention is
 //! told [`OutboxSlice::Gap`] rather than handed a silent empty page. Each consumer keeps its **own**
 //! cursor and reads independently; the query holds no state of its own.
+//!
+//! **This table is the record of what happened, and nothing else** (`AMB-D-399`). What each plugin still
+//! *owes* is its own [queue](super::queue)'s business, and the only reader here is the fan-out that copies
+//! rows onto those queues: it drains this log, writes the copies, and trims what it copied, all on one
+//! transaction. So reclaiming this table is bounded by the fan-out alone, never by how fast a plugin runs.
 
 use rusqlite::{Connection, OptionalExtension};
 
@@ -35,8 +40,9 @@ use super::sql::{Delete, Expr, Pred, Select, Sort, Sql};
 /// The `store_meta` key recording how far outbox retention has trimmed — the watermark
 /// [`events_since`] compares a cursor against to answer [`OutboxSlice::Gap`]. It is the outbox's own
 /// key, distinct from the change feed's (`AMB-D-367`: retention here is a *separate policy* — an event
-/// survives until it is delivered, not merely until a window slides past it). A store that has never
-/// trimmed carries no row, which reads back as `0` — the same answer, said by the absence.
+/// survives until it has been fanned out onto the queues of everyone who observes it, not merely until a
+/// window slides past it). A store that has never trimmed carries no row, which reads back as `0` — the
+/// same answer, said by the absence.
 pub(crate) const META_OUTBOX_TRUNCATED_THROUGH: &str = "plugin_outbox_truncated_through";
 
 /// One semantic event to append to the outbox — the fields a fired event carries, minus the payload
@@ -101,10 +107,10 @@ pub enum OutboxSlice {
     /// The events since the cursor, oldest first. `more` says the `limit` cut the page short, so the
     /// reader should come back with the last id it saw.
     Events { rows: Vec<OutboxRow>, more: bool },
-    /// **The cursor is gone.** Retention has removed events the reader had not delivered, so the outbox
-    /// can no longer replay them — the dispatcher must resync its cursor to the head and accept the gap
-    /// rather than read an empty page as "nothing fired". Saying it out loud is the whole reason a trim
-    /// records a watermark ([`META_OUTBOX_TRUNCATED_THROUGH`]).
+    /// **The cursor is gone.** Retention has removed events the reader had not read, so the outbox can no
+    /// longer replay them — the fan-out must resync its cursor to the head and accept the gap rather than
+    /// read an empty page as "nothing fired". Saying it out loud is the whole reason a trim records a
+    /// watermark ([`META_OUTBOX_TRUNCATED_THROUGH`]).
     Gap,
 }
 
@@ -175,23 +181,26 @@ pub fn outbox_head(conn: &Connection) -> Result<i64> {
         .map_err(StoreEngineError::from)
 }
 
-/// Reclaim what has been delivered — the outbox's retention (`AMB-D-367`). Everything at or below
-/// `through` (the dispatcher's delivered high-water mark, the persisted
-/// [`crate::plugin_drive::CURSOR_META`]) is removed, and the watermark [`events_since`] reads to answer
-/// [`OutboxSlice::Gap`] is advanced to `through`. Returns how many rows were removed.
+/// Reclaim what has been fanned out — the outbox's retention (`AMB-D-367`, `AMB-D-399`). Everything at or
+/// below `through` (the fan-out's high-water mark, the persisted [`crate::plugin_drive::CURSOR_META`]) is
+/// removed, and the watermark [`events_since`] reads to answer [`OutboxSlice::Gap`] is advanced to
+/// `through`. Returns how many rows were removed.
 ///
 /// This is deliberately **not** the change feed's window trim: the feed drops its oldest rows once a
 /// count-based window slides past them, consumed or not, because a stale GUI cache re-reads on a gap and
-/// loses nothing that matters. An observation event that is dropped before it is delivered is a hook that
-/// never fired, so retention here is gated on *delivery*, never on age or count — an event survives until
-/// the dispatcher has passed it. `through <= 0` (a dispatcher that never delivered) trims nothing.
+/// loses nothing that matters. An observation event dropped before anyone was offered it is a hook that
+/// never fired, so retention here is gated on the *fan-out*, never on age or count — an event survives
+/// until it is on the queue of every plugin that observes it, which is precisely what the caller's
+/// transaction makes true before it calls this. What happens after that is each queue's business
+/// (`AMB-D-399`): a plugin that has not run yet still holds its rows, and this table no longer waits on it.
+/// `through <= 0` (a fan-out that copied nothing) trims nothing.
 ///
 /// Runs on the caller's transaction so the delete and the watermark land together or not at all: a
 /// watermark ahead of the rows it claims are gone would turn a live cursor into a false gap; rows gone
-/// with no watermark to name them would read back as "nothing fired" and freeze the dispatcher. The
+/// with no watermark to name them would read back as "nothing fired" and freeze the fan-out. The
 /// watermark is written only when a row was actually removed, so a repeat call on an already-trimmed
 /// outbox is a pure read.
-pub fn trim_delivered(conn: &Connection, through: i64) -> Result<usize> {
+pub fn trim_fanned_out(conn: &Connection, through: i64) -> Result<usize> {
     if through <= 0 {
         return Ok(0);
     }
@@ -347,13 +356,13 @@ mod tests {
     /// reads back as a gap and what it left reads normally — the two halves the retention contract needs
     /// (`AMB-T-2021`).
     #[test]
-    fn trim_delivered_cuts_through_the_cursor_and_records_the_watermark() {
+    fn trim_cuts_through_the_cursor_and_records_the_watermark() {
         let e = StoreEngine::open_in_memory().unwrap();
         for i in 1..=5 {
             emit(&e, &ev("comment.added", i, None));
         }
-        // The dispatcher delivered through id 3.
-        assert_eq!(trim_delivered(e.conn(), 3).unwrap(), 3, "ids 1..=3 are gone");
+        // The fan-out copied through id 3.
+        assert_eq!(trim_fanned_out(e.conn(), 3).unwrap(), 3, "ids 1..=3 are gone");
 
         // A cursor behind the cut is a gap; a cursor at the cut reads only what remains.
         assert_eq!(events_since(e.conn(), 0, 10).unwrap(), OutboxSlice::Gap, "the trimmed span is gone");
@@ -366,23 +375,23 @@ mod tests {
     /// A dispatcher that never delivered (`through = 0`) trims nothing and records no watermark — the
     /// outbox is untouched and every event still reads.
     #[test]
-    fn trim_delivered_of_a_nondelivering_cursor_is_a_noop() {
+    fn a_trim_of_a_cursor_that_copied_nothing_is_a_noop() {
         let e = StoreEngine::open_in_memory().unwrap();
         emit(&e, &ev("task.created", 1, None));
         emit(&e, &ev("task.created", 2, None));
-        assert_eq!(trim_delivered(e.conn(), 0).unwrap(), 0, "nothing delivered, nothing trimmed");
+        assert_eq!(trim_fanned_out(e.conn(), 0).unwrap(), 0, "nothing delivered, nothing trimmed");
         assert_eq!(drain_all(&e).len(), 2, "no watermark, so a bare cursor still reads the whole log");
     }
 
     /// Re-trimming an already-trimmed outbox removes nothing — the second call is a pure read, so a drive
     /// that advances the cursor by nothing does not churn the watermark.
     #[test]
-    fn trim_delivered_is_idempotent() {
+    fn trimming_twice_is_idempotent() {
         let e = StoreEngine::open_in_memory().unwrap();
         for i in 1..=3 {
             emit(&e, &ev("task.created", i, None));
         }
-        assert_eq!(trim_delivered(e.conn(), 3).unwrap(), 3);
-        assert_eq!(trim_delivered(e.conn(), 3).unwrap(), 0, "the rows are already gone");
+        assert_eq!(trim_fanned_out(e.conn(), 3).unwrap(), 3);
+        assert_eq!(trim_fanned_out(e.conn(), 3).unwrap(), 0, "the rows are already gone");
     }
 }

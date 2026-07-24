@@ -159,10 +159,29 @@ impl Payload {
     /// `actor` / `at` that does not parse — so the dispatcher can warn and skip rather than fire a payload
     /// it cannot faithfully build.
     pub fn from_outbox_row(row: &crate::store_engine::OutboxRow) -> Option<Self> {
-        let event = V1_EVENTS.iter().copied().find(|name| *name == row.event)?;
-        let actor = ActorKind::parse(&row.actor)?;
-        let at = Timestamp::parse_rfc3339(&row.at)?;
-        Some(Self { v: VERSION, event, id: row.record_id, actor, at, new: row.new_state.clone() })
+        Self::from_wire(&row.event, row.record_id, &row.actor, &row.at, row.new_state.as_deref())
+    }
+
+    /// The same rebuild, from a row on a plugin's queue (`AMB-D-399`). A queued row is an outbox row the
+    /// fan-out addressed to one plugin, so the wire fields — and what makes them unrecognisable — are the
+    /// same; only the reader differs (the runner of one queue, rather than the drain of the outbox).
+    pub fn from_queue_row(row: &crate::store_engine::QueueRow) -> Option<Self> {
+        Self::from_wire(&row.event, row.record_id, &row.actor, &row.at, row.new_state.as_deref())
+    }
+
+    /// The mapping both stored forms share: opaque strings in, the typed payload out, `None` for anything
+    /// this build cannot faithfully rebuild.
+    fn from_wire(
+        event: &str,
+        record_id: i64,
+        actor: &str,
+        at: &str,
+        new: Option<&str>,
+    ) -> Option<Self> {
+        let event = V1_EVENTS.iter().copied().find(|name| *name == event)?;
+        let actor = ActorKind::parse(actor)?;
+        let at = Timestamp::parse_rfc3339(at)?;
+        Some(Self { v: VERSION, event, id: record_id, actor, at, new: new.map(str::to_string) })
     }
 }
 

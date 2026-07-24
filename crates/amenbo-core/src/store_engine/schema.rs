@@ -779,9 +779,34 @@ plain_tables! {
     /// stay separate. `id` is the reader's cursor — monotonic and gap-free (AUTOINCREMENT), the same
     /// "everything after N" contract the feed offers, but each consumer (the dispatcher) keeps its **own**
     /// cursor. Retention is a separate policy from the feed's window-trim: an event must survive until it
-    /// is delivered, so nothing here is trimmed on the "consumed or not" basis the feed uses.
+    /// has been fanned out onto the queue of every plugin that observes it (`plugin_queue` below,
+    /// `AMB-D-399`), so nothing here is trimmed on the "consumed or not" basis the feed uses.
     plugin_outbox {
         id: integer("PRIMARY KEY AUTOINCREMENT"),
+        event: text,
+        record_id: bigint,
+        actor: text,
+        at: text,
+        new_state: text_opt,
+    }
+
+    /// One plugin's **work queue**: the events fanned out to it and not yet run (`AMB-D-399`). Delivery is
+    /// two-layered, and this is the second layer — where the outbox is *what happened*, a queue is *what is
+    /// still to do*, per plugin. The fan-out reads the outbox once, copies each event onto the queue of
+    /// every plugin subscribed to it, and deletes the outbox rows it copied, all in one transaction: the
+    /// outbox is then reclaimed independently of how fast any plugin runs, so one stalled plugin backs up
+    /// only its own queue.
+    ///
+    /// The columns are the outbox's wire fields (opaque here too — the store classifies nothing) plus the
+    /// two the split needs: `plugin` says whose queue the row is on, and `face` records the face the fan-out
+    /// resolved the subscription on (`AMB-D-383`), so the runner can rebuild that plugin's invocation for
+    /// this row whichever face gets to it. `id` is the queue's own order — a plugin's rows are run oldest
+    /// first, and a row is deleted once it has been run. Being a per-row table rather than a cursor is what
+    /// leaves room to record *this one failed*, which a position number has nowhere to say.
+    plugin_queue {
+        id: integer("PRIMARY KEY AUTOINCREMENT"),
+        plugin: text,
+        face: text,
         event: text,
         record_id: bigint,
         actor: text,
@@ -905,6 +930,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS plugin_config_triple ON plugin_config(project_
 -- gate by finding this row rather than appending a second answer. The unique index *is* that constraint,
 -- and its leading column also serves a read that seeks one project's overrides.
 CREATE UNIQUE INDEX IF NOT EXISTS plugin_enable_pair ON plugin_enable(project_id, plugin);
+-- A plugin's queue, read the only way it is ever read: that plugin's own rows, oldest first. The pair is
+-- the whole query (`plugin` seeks, `id` orders), so the runner reads its head without scanning the rows
+-- queued for every other plugin, and the fan-out's "which plugins have work" seek stays on the index too.
+CREATE INDEX IF NOT EXISTS plugin_queue_by_plugin ON plugin_queue(plugin, id);
 -- The read layer's own two seeks over the task table: `status` narrows a mailbox query, and
 -- `project_id` — placement is folded onto the task — scopes every list to one project.
 CREATE INDEX IF NOT EXISTS task_by_status    ON task(status);

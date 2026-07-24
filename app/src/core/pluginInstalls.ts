@@ -13,10 +13,12 @@
 import { invoke } from "./ipc";
 import { inTauri } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
-import type { PluginInstallDto } from "../bindings/bindings";
+import type { PluginInstallDto, PluginRemovedDto } from "../bindings/bindings";
 
 /** One installed plugin and where its switch stands (generated DTO). */
 export type PluginInstall = PluginInstallDto;
+/** What an uninstall found and removed (generated DTO). */
+export type PluginRemoved = PluginRemovedDto;
 
 const NONE: PluginInstall[] = [];
 
@@ -82,6 +84,23 @@ export async function setPluginEnabled(
   const now = await invoke<boolean>("plugin_set_enabled", { name, projectId, enabled });
   reloadInstalls();
   return now;
+}
+
+/**
+ * Remove one plugin and everything it left behind (Tauri: `plugin_uninstall`, `AMB-D-357`), and answer
+ * what was actually found.
+ *
+ * **Uninstall is not disable**: the gate closes on the way out, and the binary, the consent, the settings
+ * in every project and the secrets go with it — a re-install starts clean. Ask before calling; the receipt
+ * is for saying what went, not for asking whether it should.
+ */
+export async function uninstallPlugin(name: string): Promise<PluginRemoved | null> {
+  if (!inTauri()) return null;
+  const removed = await invoke<PluginRemoved>("plugin_uninstall", { name });
+  reloadInstalls();
+  // An offer to update what is no longer here would be an offer to install it again (`AMB-D-359`).
+  invalidateQueries((key) => key[0] === "plugin-updates");
+  return removed;
 }
 
 /** The row for one catalog entry's name, or `undefined` when this machine does not hold it. */

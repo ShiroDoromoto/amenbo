@@ -339,6 +339,15 @@ const UI: Record<Lang, Record<string, string>> = {
     "plugins.updates.open": "インストール済みを開く",
     "plugins.updates.check": "更新を確認", "plugins.updates.checking": "確認中…",
     "plugins.updates.none": "更新はありません",
+    // uninstall (what goes with it is the part worth saying out loud)
+    "plugins.remove": "削除", "plugins.removing": "削除中…",
+    "plugins.removeConfirm": "「{name}」を削除しますか？ 本体だけでなく、全プロジェクトの設定・秘密・許可の記録も削除されます。入れ直しても戻りません。",
+    "plugins.removed": "{name} を削除しました（{what}）",
+    "plugins.removedNothing": "{name} はこの端末にありませんでした",
+    "plugins.removedPart.binary": "本体", "plugins.removedPart.settings": "設定",
+    "plugins.removedPart.secrets": "秘密", "plugins.removedPart.consent": "許可の記録",
+    "plugins.removedPart.runs": "実行ログ",
+    "common.listSeparator": "・",
     // dynamic activity text (mutations.ts sysItem templates)
     "common.you": "あなた", "act.justNow": "たった今",
     "act.created": "「{title}」を作成", "act.completed": "「{title}」を完了",
@@ -751,6 +760,15 @@ const UI: Record<Lang, Record<string, string>> = {
     "plugins.updates.open": "Open installed",
     "plugins.updates.check": "Check for updates", "plugins.updates.checking": "Checking…",
     "plugins.updates.none": "Everything is up to date",
+    // uninstall (what goes with it is the part worth saying out loud)
+    "plugins.remove": "Remove", "plugins.removing": "Removing…",
+    "plugins.removeConfirm": "Remove “{name}”? Not just the plugin: its settings in every project, its secrets and the permission you gave it go too. A re-install starts clean.",
+    "plugins.removed": "Removed {name} ({what})",
+    "plugins.removedNothing": "{name} was not on this machine",
+    "plugins.removedPart.binary": "the plugin", "plugins.removedPart.settings": "settings",
+    "plugins.removedPart.secrets": "secrets", "plugins.removedPart.consent": "the permission",
+    "plugins.removedPart.runs": "the run log",
+    "common.listSeparator": ", ",
     // dynamic activity text (mutations.ts sysItem templates)
     "common.you": "You", "act.justNow": "just now",
     "act.created": "Created “{title}”", "act.completed": "Completed “{title}”",

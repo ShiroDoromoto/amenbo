@@ -145,7 +145,7 @@ pub fn parse(json: &str) -> Result<Catalog> {
     let envelope: Envelope = serde_json::from_str(json).map_err(|e| {
         Error::invalid(
             format!("the plugin catalog is not readable: {e}"),
-            format!("プラグイン目録を読み取れません：{e}"),
+            format!("プラグインカタログを読み取れません：{e}"),
         )
     })?;
     if envelope.catalog_v > SUPPORTED_CATALOG_V {
@@ -155,7 +155,7 @@ pub fn parse(json: &str) -> Result<Catalog> {
                 envelope.catalog_v
             ),
             format!(
-                "このプラグイン目録は版 {} で、この amenbo が解釈できる版（{SUPPORTED_CATALOG_V}）より新しいです。amenbo を更新してください。",
+                "このプラグインカタログは版 {} で、この amenbo が解釈できる版（{SUPPORTED_CATALOG_V}）より新しいです。amenbo を更新してください。",
                 envelope.catalog_v
             ),
         ));
@@ -353,13 +353,13 @@ pub fn add_source(paths: &Paths, url: &str) -> Result<bool> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err(Error::invalid(
             format!("a catalog URL must start with http:// or https://: {url}"),
-            format!("目録の URL は http:// か https:// で始まる必要があります：{url}"),
+            format!("カタログの URL は http:// か https:// で始まる必要があります：{url}"),
         ));
     }
     if url == catalog_url() {
         return Err(Error::invalid(
             "that is the official catalog's URL — it is always included and cannot be registered as a third-party source".to_string(),
-            "それは公式目録の URL です——常に含まれるため、サードパーティ目録として登録できません。".to_string(),
+            "それは公式カタログの URL です——常に含まれるため、サードパーティカタログとして登録できません。".to_string(),
         ));
     }
     let mut list = sources(paths);

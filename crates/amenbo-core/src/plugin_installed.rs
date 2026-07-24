@@ -65,7 +65,7 @@ pub fn read(paths: &Paths, name: &str) -> Result<InstalledPlugin> {
     if is_reserved_plugin_name(name) {
         return Err(Error::invalid(
             format!("'{name}' is not a plugin name (it is reserved for the registry cache)"),
-            format!("'{name}' はプラグイン名ではありません（目録キャッシュ用に予約されています）"),
+            format!("'{name}' はプラグイン名ではありません（カタログのキャッシュ用に予約されています）"),
         ));
     }
     let manifest_file = manifest_path(paths, name);

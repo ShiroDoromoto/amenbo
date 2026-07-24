@@ -399,8 +399,11 @@ const UI: Record<Lang, Record<string, string>> = {
     "block.notStarted": "着手不可（着手日待ち）: {date} から",
     "premise.changed": "予約後に前提が変わった: {detail}",
     "premise.warn": "予約後に前提が変わりました（AMB-D-366）: {detail}。独立に仕上がる部分だけ完了するか、todo に戻して手放してください。",
+    "premise.noLongerSettled": "採択が外れた",
     "detail.premiseChanged": "予約後の変化",
-    "detail.premiseChangedHint": "予約後に付いた前提（着手可否が下がった）",
+    "detail.premiseChangedHint": "予約後に動いた前提（後から付いた／採択が外れた・着手可否が下がった）",
+    "detail.premiseAdded": "予約後に付いた前提",
+    "detail.premiseReopened": "予約後に採択が外れた前提（link は前からある）",
   },
   en: {
     "topbar.refresh": "Refresh from source", "topbar.back": "Back", "topbar.forward": "Forward",
@@ -764,8 +767,11 @@ const UI: Record<Lang, Record<string, string>> = {
     "block.notStarted": "Cannot start (waiting on its start day): from {date}",
     "premise.changed": "Premises changed after you reserved this: {detail}",
     "premise.warn": "Premises changed after you reserved this (AMB-D-366): {detail}. Finish only the part that stands on its own, or hand it back by setting it to todo.",
+    "premise.noLongerSettled": "no longer settled",
     "detail.premiseChanged": "Changed since reserved",
-    "detail.premiseChangedHint": "Premises pinned on after you reserved this (readiness withdrawn)",
+    "detail.premiseChangedHint": "Premises that moved after you reserved this — pinned on, or no longer settled (readiness withdrawn)",
+    "detail.premiseAdded": "Pinned on after you reserved this",
+    "detail.premiseReopened": "Stopped being settled after you reserved this (the link is older)",
   },
 };
 

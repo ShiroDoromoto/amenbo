@@ -117,8 +117,10 @@ pub struct PremiseChange {
     pub added_blockers: Vec<TaskRef>,
     /// Unsettled decisions linked after the status began, in link order.
     pub added_decisions: Vec<DecisionRef>,
-    /// Decisions already linked that stopped being settled after the status began — reopened or superseded
-    /// under the holder (`AMB-D-373`), in link order. Disjoint from `added_decisions`.
+    /// Decisions already linked whose **own status** stopped being settled after the status began — reopened
+    /// or rejected under the holder (`AMB-D-373`), in link order. Disjoint from `added_decisions`. A premise
+    /// that lost currency instead, by being superseded, is not on this axis: currency is an edge, and the
+    /// edge carries no time, so there is nothing to date it by (`AMB-T-2121`).
     pub reopened_decisions: Vec<DecisionRef>,
 }
 

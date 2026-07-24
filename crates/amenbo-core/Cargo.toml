@@ -38,7 +38,7 @@ blake3 = "1"
 # asset, re-checked cheaply on every use to catch a post-install swap. Distinct from blake3 (the blob
 # content-address): the checksum format is pinned to sha256 so a manifest cannot downgrade to a weaker
 # digest. Verify-only — nothing here hashes a secret.
-sha2 = "0.10"
+sha2 = "0.11"
 # Plugin provenance — the origin half: a minisign signature over a plugin asset is verified against
 # amenbo's embedded catalog public key. Verify-only crate — the catalog private key lives solely in the
 # catalog CI, never in a shipped binary; every amenbo carries only the public key, which can check but

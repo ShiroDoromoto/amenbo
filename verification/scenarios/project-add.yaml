@@ -1,0 +1,38 @@
+id: project-add
+title: A project is registered, renamed, reordered, archived out of the everyday list and brought back
+description: >
+  The place work is kept. A project that cannot be created, renamed or reordered leaves tasks with
+  nowhere to sit, and archiving is the one operation that takes a project out of the everyday listing
+  without deleting it — so both listings have to be asked to prove it moved between them.
+steps:
+  # Registered, and readable back under the name it was given.
+  - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — the place work is kept }, as: pj }
+  - { type: assert, domain: project, op: field, with: { target: pj, field: name, equals: SCENARIO PROJECT — the place work is kept } }
+  - { type: assert, domain: project, op: listed, with: { target: pj, present: true } }
+
+  # Edited in place: the fields it names change, and the row is the same row.
+  - { type: action, domain: project, op: update, with: { target: pj, name: SCENARIO PROJECT — renamed, notes: what this place is for } }
+  - { type: assert, domain: project, op: field, with: { target: pj, field: name, equals: SCENARIO PROJECT — renamed } }
+  - { type: assert, domain: project, op: field, with: { target: pj, field: notes, equals: what this place is for } }
+
+  # Order is the store's to keep, so where it sits is the only place the reorder is visible.
+  - { type: action, domain: project, op: move, with: { target: pj, position: top } }
+  - { type: assert, domain: project, op: listed, with: { target: pj, position: first } }
+  - { type: action, domain: project, op: move, with: { target: pj, position: bottom } }
+  - { type: assert, domain: project, op: listed, with: { target: pj, position: last } }
+
+  # A task filed here is counted on the project, which is what makes the project a place and not a label.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — filed in the new project }, as: filed }
+  - { type: action, domain: task, op: move, with: { target: filed, project: pj } }
+  - { type: assert, domain: project, op: field, with: { target: pj, field: task_counts.total, equals: 1 } }
+
+  # Archived: gone from the everyday listing, still there in the one that carries the archived.
+  - { type: action, domain: project, op: archive, with: { target: pj } }
+  - { type: assert, domain: project, op: field, with: { target: pj, field: archived, equals: true } }
+  - { type: assert, domain: project, op: listed, with: { target: pj, present: false } }
+  - { type: assert, domain: project, op: listed, with: { target: pj, archived: true, present: true } }
+
+  # And brought back: archiving is reversible, unlike deleting.
+  - { type: action, domain: project, op: unarchive, with: { target: pj } }
+  - { type: assert, domain: project, op: field, with: { target: pj, field: archived, equals: false } }
+  - { type: assert, domain: project, op: listed, with: { target: pj, present: true } }

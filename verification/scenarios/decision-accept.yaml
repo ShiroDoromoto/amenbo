@@ -1,13 +1,16 @@
-# A decision's own lifecycle: it is written down as a proposal, worked on while it is still one,
-# and then accepted — the move that freezes it. What the shipped build has to get right is the
-# order: the body is editable up to acceptance, and the status the store keeps afterwards is what
-# every reader downstream trusts.
+# A decision's whole lifecycle: written down as a proposal, worked on while it is still one, and
+# then ruled on — accepted, reopened and accepted again, replaced by a successor, or turned down.
+# What the shipped build has to get right is the order: the body is editable up to acceptance, and
+# the status the store keeps afterwards is what every reader downstream trusts.
 id: decision-accept
-title: A recorded decision is proposed, its body edited, and accepting it freezes what was decided
+title: A decision is proposed, accepted, reopened for a second look, replaced — and another is turned down
 description: >
-  Record a decision, read back the state it starts in, edit its body, and accept it — checking the
-  body the store kept and the status after the move. Acceptance is what other work waits on, so the
-  status this line reads is the one a task's readiness is derived from.
+  Walk one decision through every ruling it can meet, reading the store back after each: accepted
+  (which freezes the body), reopened (which lifts the freeze), and superseded (which leaves it
+  readable but no longer current, with the chain on both ends). A second decision takes the third
+  ruling, rejection, whose reason lands on the timeline rather than in a field of its own.
+  Acceptance is what other work waits on, so the status these lines read is the one a task's
+  readiness is derived from.
 steps:
   - type: action
     domain: decision
@@ -65,3 +68,147 @@ steps:
       target: rec
       field: current
       equals: true
+
+  # A ruling is not a one-way door. Reopening un-settles it, which is what makes the body editable
+  # again — the freeze is what acceptance is, so taking the ruling back has to lift it.
+  - type: action
+    domain: decision
+    op: reopen
+    with:
+      target: rec
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: status
+      equals: proposed
+
+  - type: action
+    domain: decision
+    op: edit
+    with:
+      target: rec
+      body: "SCENARIO — the rationale, as it reads after the second look."
+
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: rec
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: body
+      equals: "SCENARIO — the rationale, as it reads after the second look."
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: status
+      equals: accepted
+
+  # Superseding is how a settled decision is replaced rather than rewritten: the old one stays,
+  # readable and accepted, and stops being the current one. Both ends carry the chain, since a
+  # reader arriving at either has to be able to walk to the other.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — the ruling that replaces the first
+    as: successor
+
+  - type: action
+    domain: decision
+    op: supersede
+    with:
+      target: successor
+      replaces: rec
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: successor
+      field: status
+      equals: accepted
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: successor
+      field: current
+      equals: true
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: current
+      equals: false
+
+  # Replaced, not deleted: what it decided is still there to read.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: status
+      equals: accepted
+
+  - type: assert
+    domain: decision
+    op: edge
+    with:
+      target: rec
+      kind: superseded_by
+      other: successor
+      present: true
+
+  - type: assert
+    domain: decision
+    op: edge
+    with:
+      target: successor
+      kind: supersedes
+      other: rec
+      present: true
+
+  # The third ruling: turned down. A rejected proposal never settles anything, and the reason it was
+  # turned down lands on its timeline — there is no field for it, because it is a thing said.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — a proposal that does not carry
+    as: dropped
+
+  - type: action
+    domain: decision
+    op: reject
+    with:
+      target: dropped
+      reason: SCENARIO — turned down, and here is why
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: dropped
+      field: status
+      equals: rejected
+
+  - type: assert
+    domain: decision
+    op: commented
+    with:
+      target: dropped
+      text: SCENARIO — turned down, and here is why

@@ -555,6 +555,23 @@ fn retarget(spec: &mut Value, cli: &str) {
     retarget_node(spec, cli, &commands);
 }
 
+/// Retargets one piece of **prose** written elsewhere — the `--help` text clap builds out of the doc
+/// comments in the CLI's command definitions ([`crate::config::Paths::command_name`]).
+///
+/// The same problem as the spec's, arriving through a different door: a doc comment is a literal that
+/// clap prints verbatim, so a runnable line inside one is authored with the production spelling and
+/// names a command a dev build does not answer to. The derive takes literals only, and there is
+/// nothing to interpolate into — but the text is a plain string by the time clap holds it, which is
+/// where this reaches it. The authoring rule is therefore the same everywhere in the source: write
+/// `amenbo`, and let the way out do the swapping.
+///
+/// It is the prose rule ([`names_a_command`]), not the runnable-line one: help text says `amenbo` for
+/// the product beside `amenbo` the command, and only what follows tells them apart.
+pub fn retarget_prose(text: &str) -> String {
+    let commands = command_words(&spec_as_authored());
+    rewrite(text, Paths::command_name(), |after| names_a_command(after, &commands))
+}
+
 /// A command name that is a plain English noun as often as it is a command, and so cannot be read as
 /// one in prose: "a minimum amenbo version" is about the product, not a line to type. Retargeting it
 /// would rename the product; not retargeting it costs one prose mention of `amenbo version`, which
@@ -625,10 +642,17 @@ fn rewrite(text: &str, cli: &str, accept: impl Fn(&str) -> bool) -> String {
     out
 }
 
-/// Whether the text right after the command word is a space and then a command name — the one thing
-/// that makes `amenbo …` in prose an instruction rather than the product's name.
+/// Whether the text right after the command word is a space and then a command name, or a flag — the
+/// two things that make `amenbo …` in prose an instruction rather than the product's name.
+///
+/// A flag counts because a global one may be placed ahead of the subcommand
+/// (`amenbo --project <name> decision add …`), which puts a dash where the command word would
+/// otherwise be. Nothing is lost to it: prose about the product never carries a flag behind the name.
 fn names_a_command(after: &str, commands: &HashSet<String>) -> bool {
     let Some(tail) = after.strip_prefix(' ') else { return false };
+    if tail.starts_with('-') {
+        return true;
+    }
     let word: String = tail.chars().take_while(|c| c.is_ascii_lowercase() || *c == '-').collect();
     commands.contains(&word)
 }
@@ -1784,6 +1808,25 @@ mod tests {
         assert!(update["summary"].as_str().unwrap().contains("amenbo never updates in the background"), "the product's name was rewritten inside prose");
         let prose = dev.to_string();
         assert!(prose.contains("minimum amenbo version"), "a command name that doubles as a noun was read as a command ({NOT_A_COMMAND_IN_PROSE:?})");
+    }
+
+    /// The prose rule read at the door the CLI's `--help` comes through: text authored elsewhere, one
+    /// string at a time. What follows the name is the whole of the rule — a command word or a flag
+    /// makes it a line to type, anything else leaves it the product's name — so all three arms are
+    /// held here, on the dev spelling, where the two spellings differ.
+    #[test]
+    fn retargeting_help_prose_moves_commands_and_flags_only() {
+        let commands = command_words(&spec_as_authored());
+        let dev = |text: &str| rewrite(text, Paths::DEV_APP_NAME, |a| names_a_command(a, &commands));
+
+        assert_eq!(dev("run `amenbo lint` on every commit"), "run `amenbo-dev lint` on every commit");
+        // A global flag may sit ahead of the subcommand, putting a dash where the command word goes.
+        assert_eq!(dev("`amenbo --project <name> decision add …`"), "`amenbo-dev --project <name> decision add …`");
+        // Wrapped rather than leading, and still a line to type.
+        assert_eq!(dev(r#"`eval "$(amenbo plugin run worktree start 123)"`"#), r#"`eval "$(amenbo-dev plugin run worktree start 123)"`"#);
+        // The product, not a command: nothing follows that says otherwise.
+        assert_eq!(dev("Update amenbo to the latest release."), "Update amenbo to the latest release.");
+        assert_eq!(dev("the store amenbo-dev keeps"), "the store amenbo-dev keeps");
     }
 
     /// The entry point must teach how to explore — narrow, list, then open the few that matter. Lose

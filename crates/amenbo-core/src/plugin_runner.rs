@@ -17,8 +17,9 @@
 //! - **Nothing is killed for being slow.** A runner has nobody behind it but the rest of its own plugin's
 //!   queue, so a hook is waited on to its end ([`plugin_hooks::run_queued`](crate::plugin_hooks::run_queued))
 //!   rather than cut off at five seconds — being cut off mid-work is exactly the half-done outside effect
-//!   this layer exists to stop. What a plugin that never returns holds is its own queue, and only until its
-//!   lease's horizon hands it to the next runner.
+//!   this layer exists to stop. The lease is pushed out **during** that wait as well as between rows
+//!   ([`BEAT`], `AMB-T-2174`), so being slow is not mistaken for being gone: what a plugin that never
+//!   returns holds is its own queue, and it holds it for as long as its runner is alive to say so.
 //!
 //! **A runner is a process of its own, and the drive does not wait for it** (`AMB-T-2175`). A runner started
 //! as a thread of the driving process was only ever as long-lived as that process: a CLI command that
@@ -68,20 +69,29 @@ use crate::time::Timestamp;
 /// reading until its queue is empty, so this bounds memory and nothing else.
 const RUN_PAGE: i64 = 256;
 
-/// How far ahead a runner holds its lease, pushed out again before every row it takes.
+/// How far ahead a runner holds its lease, pushed out again before every row it takes and while one runs.
 ///
 /// It is the answer to one question only: **how long after a runner dies is its queue stuck?** Too short and
-/// a plugin that legitimately takes a while gets its queue taken over while it works (harmless — the worst
-/// of it is one event delivered twice, which the contract already admits — but pointless); too long and a
-/// machine that lost power leaves that plugin unrun for that long after it comes back. A minute is generous
-/// against the first and barely noticeable against the second, since a store is nearly always driven again
-/// within it.
+/// a queue is taken over on account of a runner that is merely quiet; too long and a machine that lost power
+/// leaves that plugin unrun for that long after it comes back. A minute is generous against the first and
+/// barely noticeable against the second, since a store is nearly always driven again within it.
 ///
-/// The horizon moves **between rows**, not while one is being run: the wait for a plugin's child is a single
-/// blocking call, and pushing the lease out during it would take a second connection and a thread of its
-/// own. So a plugin whose *one* run outlasts this may have its queue taken over mid-run — the double
-/// delivery the contract already admits, but systematically rather than rarely, for a plugin that slow.
+/// It is *only* that question because a live runner keeps saying so ([`BEAT`]). Being slow and being gone
+/// are different things, and the horizon is asked to tell apart only the second.
 pub const LEASE_TTL: Duration = Duration::from_secs(60);
+
+/// How often a runner pushes its lease out **while a plugin is still running** (`AMB-T-2174`).
+///
+/// Without it the horizon moves only between rows, so a plugin whose *one* run outlasts [`LEASE_TTL`] has
+/// its queue taken over mid-run — not the rare double delivery the contract admits (`AMB-D-399`) but one on
+/// every single run, for exactly the plugins whose work is worth not doing twice. A runner is doing nothing
+/// but waiting on its child, so it beats from that wait
+/// ([`wait_watched`](crate::plugin_exec::RunningPlugin::wait_watched)) on the connection it already holds —
+/// no second connection, no thread.
+///
+/// A third of the horizon: two beats may be lost to a machine that stalls, or to a `beat` that finds the
+/// store's write lock held, before anyone concludes this runner is gone.
+const BEAT: Duration = Duration::from_secs(LEASE_TTL.as_secs() / 3);
 
 /// How a face launches a runner — a **process**, and one it never waits for (`AMB-T-2175`).
 ///
@@ -239,10 +249,11 @@ fn give_back(engine: &StoreEngine, plugin: &str, owner: &str) -> Result<()> {
 /// before the plugin runs, and [`settle`] once it has returned. Both push the lease's horizon out and both
 /// stop the runner when the lease is no longer its — the first so a runner already taken over does not fire
 /// an event that is its successor's, the second because taking a row off a queue that is no longer this
-/// runner's would be removing its successor's work. The loop ends where the queue does: [`leave`] re-reads
-/// it under the write lock and releases the lease only if it is still empty, so an event queued a moment
-/// earlier is either seen by that read (and this runner stays for it) or lands after the release (and the
-/// drive that queued it starts the next runner).
+/// runner's would be removing its successor's work. Between the two, [`beat`] pushes the horizon out from
+/// inside the wait, so a run longer than the horizon is not mistaken for a runner that has died on it. The
+/// loop ends where the queue does: [`leave`] re-reads it under the write lock and releases the lease only if
+/// it is still empty, so an event queued a moment earlier is either seen by that read (and this runner stays
+/// for it) or lands after the release (and the drive that queued it starts the next runner).
 ///
 /// A store error stops the runner where it stands, without releasing: warning is all there is to do, and the
 /// lease's horizon is what brings the queue back rather than a lease held by a runner that is no longer
@@ -267,7 +278,14 @@ pub fn run_queue(
                 Err(e) => return warn_stop(plugin, &e.to_string()),
             }
             match hook_for(subs, row) {
-                Ok(Some(hook)) => crate::plugin_hooks::run_queued(&hook, log),
+                Ok(Some(hook)) => crate::plugin_hooks::run_queued(
+                    &hook,
+                    log,
+                    Some(crate::plugin_hooks::Heartbeat {
+                        every: BEAT,
+                        beat: &|| beat(engine, plugin, owner),
+                    }),
+                ),
                 Ok(None) => {}
                 Err(e) => tracing::warn!(
                     plugin = %plugin,
@@ -290,9 +308,10 @@ pub fn run_queue(
     }
 }
 
-/// Push the lease out before a row is run, and say whether it is still this runner's to push. `false` means
-/// the queue has been taken over past this runner's horizon: the row is its successor's to run, and firing
-/// it here would be a delivery nobody asked for on top of the one the successor is making.
+/// Push the lease out before a row is run — and, through [`beat`], while it runs — saying whether it is
+/// still this runner's to push. `false` means the queue has been taken over past this runner's horizon: the
+/// row is its successor's to run, and firing it here would be a delivery nobody asked for on top of the one
+/// the successor is making.
 fn hold(engine: &StoreEngine, plugin: &str, owner: &str) -> Result<bool> {
     let tx = engine.write()?;
     if !tx.extend_runner(plugin, owner, &horizon(Timestamp::now()))? {
@@ -300,6 +319,29 @@ fn hold(engine: &StoreEngine, plugin: &str, owner: &str) -> Result<bool> {
     }
     tx.commit()?;
     Ok(true)
+}
+
+/// Push the lease out **while the row's plugin is still running** (`AMB-T-2174`), from the wait itself
+/// ([`BEAT`]). Unlike [`hold`] it decides nothing: a run under way is not stopped part-done on account of a
+/// lease, whatever the answer would be.
+///
+/// - **Taken over** — a successor is on this queue and will run this row again. Nothing to do here but
+///   finish what is running; [`settle`] is where this runner reads the same fact and leaves the row to it.
+/// - **A store error** — likely the write lock held by whoever took over, or a store that has gone away.
+///   Either way the next beat tries again, and [`settle`] is the one that has to decide.
+fn beat(engine: &StoreEngine, plugin: &str, owner: &str) {
+    match hold(engine, plugin, owner) {
+        Ok(true) => {}
+        Ok(false) => tracing::debug!(
+            plugin = %plugin,
+            "this runner's lease was taken over while its plugin was still running"
+        ),
+        Err(e) => tracing::debug!(
+            plugin = %plugin,
+            error = %e,
+            "a running plugin's lease could not be pushed out; trying again at the next beat"
+        ),
+    }
 }
 
 /// Take one row off the queue now that its plugin has replied, and push the lease out, on one transaction —
@@ -570,6 +612,47 @@ mod tests {
             crate::store_engine::lease_of(e.conn(), "slack").unwrap().unwrap().owner,
             "successor",
             "and the successor's lease is left standing"
+        );
+    }
+
+    /// A beat from inside a run pushes the horizon out, which is what keeps a long single run from looking
+    /// like a runner that died on it (`AMB-T-2174`). The lease is planted with a horizon already in the past
+    /// — the state a run longer than [`LEASE_TTL`] would otherwise reach — and one beat carries it forward.
+    #[test]
+    fn a_beat_carries_a_running_plugins_lease_past_its_horizon() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        let tx = e.write().unwrap();
+        assert!(tx
+            .claim_runner("slack", "mine", "2000-01-01T00:00:00Z", &Timestamp::now().to_rfc3339_z())
+            .unwrap());
+        tx.commit().unwrap();
+
+        beat(&e, "slack", "mine");
+
+        let lease = crate::store_engine::lease_of(e.conn(), "slack").unwrap().unwrap();
+        assert_eq!(lease.owner, "mine", "the lease is the same runner's");
+        assert!(
+            lease.expires_at.as_str() > Timestamp::now().to_rfc3339_z().as_str(),
+            "and its horizon is ahead again: {}",
+            lease.expires_at
+        );
+    }
+
+    /// A beat by a runner whose lease was taken over moves nothing — the horizon it would push out is its
+    /// successor's. The run under way is not stopped for it either: [`settle`] is where that is decided, once
+    /// the plugin has actually returned.
+    #[test]
+    fn a_beat_by_a_taken_over_runner_moves_nothing() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        claim(&e, "slack", "successor");
+        let before = crate::store_engine::lease_of(e.conn(), "slack").unwrap().unwrap();
+
+        beat(&e, "slack", "the-one-taken-over");
+
+        assert_eq!(
+            crate::store_engine::lease_of(e.conn(), "slack").unwrap().unwrap(),
+            before,
+            "the successor's lease is untouched"
         );
     }
 

@@ -49,7 +49,7 @@ fn a_queued_hook_runs_to_completion() {
     let done = marker("clean.marker");
     let hook = script("clean.sh", &format!("#!/bin/sh\ntouch '{}'\n", done.display()));
 
-    run_queued(&hook_for("clean", &hook), None);
+    run_queued(&hook_for("clean", &hook), None, None);
     assert!(done.exists(), "the hook's side effect landed");
 }
 
@@ -61,8 +61,37 @@ fn a_slow_queued_hook_is_waited_out_not_killed() {
     let done = marker("slow-queued.marker");
     let hook = script("slow-queued.sh", &format!("#!/bin/sh\nsleep 3\ntouch '{}'\n", done.display()));
 
-    run_queued(&hook_for("slow", &hook), None);
+    run_queued(&hook_for("slow", &hook), None, None);
     assert!(done.exists(), "the plugin finished its work instead of being cut off");
+}
+
+/// A queued hook's caller is handed the waiting thread at its own interval while the plugin runs
+/// (`AMB-T-2174`) — which is how the queue runner pushes its lease out during a run, and not only between
+/// rows. The beats are counted against a plugin that outlives several of them, and counted again after it
+/// returned: the wait is the only thing making them, so they stop with it and nothing is left ticking.
+#[test]
+fn a_queued_hook_beats_while_it_runs_and_stops_when_it_ends() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let every = Duration::from_millis(100);
+    let hook = script("beating.sh", "#!/bin/sh\nsleep 1\n");
+    let beats = AtomicUsize::new(0);
+    let count = || {
+        beats.fetch_add(1, Ordering::Relaxed);
+    };
+
+    run_queued(
+        &hook_for("beating", &hook),
+        None,
+        Some(amenbo_core::plugin_hooks::Heartbeat { every, beat: &count }),
+    );
+
+    // Well under the beats a whole second of running affords, so a machine under load cannot invert it.
+    let during = beats.load(Ordering::Relaxed);
+    assert!(during >= 2, "the plugin ran long enough to be beaten for, and was: {during}");
+
+    std::thread::sleep(every * 3);
+    assert_eq!(beats.load(Ordering::Relaxed), during, "and nothing goes on beating after the run ended");
 }
 
 /// The runner records what it ran (`AMB-D-361`): a clean hook and a failing one both land in the
@@ -77,8 +106,8 @@ fn every_run_lands_in_the_execution_log_with_its_diagnosis() {
 
     let good = script("logged-ok.sh", "#!/bin/sh\nexit 0\n");
     let bad = script("logged-bad.sh", "#!/bin/sh\necho 'no such channel' >&2\nexit 3\n");
-    run_queued(&hook_for("good", &good), Some(&log));
-    run_queued(&hook_for("bad", &bad), Some(&log));
+    run_queued(&hook_for("good", &good), Some(&log), None);
+    run_queued(&hook_for("bad", &bad), Some(&log), None);
 
     let lines = plugin_log::read(&log);
     assert_eq!(lines.len(), 2, "both runs are recorded, the clean one included");
@@ -105,7 +134,7 @@ fn a_hook_that_cannot_launch_is_recorded_as_such() {
     let _ = std::fs::remove_file(&log);
 
     let missing = PathBuf::from("/nonexistent/amenbo-hook-that-is-not-there");
-    run_queued(&hook_for("ghost", &missing), Some(&log));
+    run_queued(&hook_for("ghost", &missing), Some(&log), None);
 
     let lines = plugin_log::read(&log);
     assert_eq!(lines.len(), 1);
@@ -130,7 +159,7 @@ fn an_injected_secret_never_reaches_the_log() {
     let hook = script("secret.sh", "#!/bin/sh\necho 'ran' >&2\nexit 1\n");
     let invocation = PluginInvocation::new(&hook).env("AMENBO_CONFIG_TOKEN", "T0P-53CR3T");
 
-    run_queued(&Hook::new("secretive", "task.created", invocation), Some(&log));
+    run_queued(&Hook::new("secretive", "task.created", invocation), Some(&log), None);
 
     let raw = std::fs::read_to_string(&log).unwrap();
     assert!(raw.contains("ran"), "the run itself was recorded: {raw}");

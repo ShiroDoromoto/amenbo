@@ -15,9 +15,10 @@ use std::io::IsTerminal;
 use std::sync::OnceLock;
 
 use chrono::NaiveDate;
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches};
 use serde_json::json;
 
+use amenbo_core::agent as core_agent;
 use amenbo_core::config::Paths;
 use amenbo_core::model::{ActorKind, Attachment, AttachmentTarget, Priority, TaskStatus, View};
 use amenbo_core::ops::Position;
@@ -73,7 +74,10 @@ fn restore_sigpipe() {
 fn restore_sigpipe() {}
 
 fn real_main() -> i32 {
-    let parsed = match Cli::try_parse() {
+    let parsed = match retargeted_cli()
+        .try_get_matches()
+        .and_then(|m| Cli::from_arg_matches(&m))
+    {
         Ok(c) => c,
         Err(e) => return handle_parse_error(e),
     };
@@ -236,6 +240,49 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // Everything else — every write, and every read that surfaces store content.
         _ => true,
     }
+}
+
+/// The command tree clap parses with, worded for the CLI **this build installs**
+/// ([`Paths::command_name`]).
+///
+/// `cli.rs` is authored with the production spelling throughout — the derive takes literals only, so
+/// there is nowhere to interpolate a name into, and a doc comment full of `{}` would be unreadable
+/// besides. The swap happens here instead, on the way out, which is the same shape the agent spec
+/// takes ([`core_agent::retarget_prose`], which words the rule). Without it a dev build's `--help` opens
+/// with a usage line naming a command that is not installed, and hands out examples nobody there can
+/// run.
+///
+/// On the production channel every string is already its own spelling and nothing changes — but the
+/// walk still happens, so a break in it shows up wherever the tests run rather than only on a channel
+/// nothing tests.
+fn retargeted_cli() -> clap::Command {
+    let named = Cli::command().name(Paths::command_name());
+    reword_help(named, &core_agent::retarget_prose)
+}
+
+/// Puts `reword` through every help string clap holds: one command's about and long about, each of
+/// its arguments' help and long help, and then the same for each subcommand, all the way down.
+///
+/// The rule is the caller's so the walk can be tested for what it is — whether it *reaches* every
+/// string. On the channel the tests run, the real rule rewrites nothing, so a walk that missed a
+/// whole branch would look exactly like one that worked.
+fn reword_help(mut cmd: clap::Command, reword: &impl Fn(&str) -> String) -> clap::Command {
+    if let Some(about) = cmd.get_about().map(ToString::to_string) {
+        cmd = cmd.about(reword(&about));
+    }
+    if let Some(long) = cmd.get_long_about().map(ToString::to_string) {
+        cmd = cmd.long_about(reword(&long));
+    }
+    cmd.mut_args(|mut arg| {
+        if let Some(help) = arg.get_help().map(ToString::to_string) {
+            arg = arg.help(reword(&help));
+        }
+        if let Some(long) = arg.get_long_help().map(ToString::to_string) {
+            arg = arg.long_help(reword(&long));
+        }
+        arg
+    })
+    .mut_subcommands(|sub| reword_help(sub, reword))
 }
 
 /// Map a clap parse error onto an exit code. With `--json`, emit the error as JSON.
@@ -6298,6 +6345,38 @@ mod tests {
         let agent: HashSet<String> = agent::command_names().into_iter().collect();
         let missing: Vec<&String> = leaves.iter().filter(|n| !agent.contains(*n)).collect();
         assert!(missing.is_empty(), "not registered in agent --json: {missing:?}");
+    }
+
+    /// Every help string clap holds must be reachable by the reword — the whole of `--help`, not the
+    /// branches someone remembered. A rewriter that marks what it touched is used instead of the real
+    /// rule, because the real one rewrites nothing on the channel the tests run: an untouched string
+    /// would then be indistinguishable from a correctly-left-alone one.
+    #[test]
+    fn rewording_reaches_every_help_string() {
+        let reworded = reword_help(Cli::command(), &|text: &str| format!("«{text}"));
+        let (mut seen, mut unreached) = (0usize, Vec::new());
+        fn walk(cmd: &clap::Command, path: &str, seen: &mut usize, out: &mut Vec<String>) {
+            let mut check = |s: Option<&clap::builder::StyledStr>, what: &str| {
+                if let Some(text) = s {
+                    *seen += 1;
+                    if !text.to_string().starts_with('«') {
+                        out.push(format!("{path}: {what}"));
+                    }
+                }
+            };
+            check(cmd.get_about(), "about");
+            check(cmd.get_long_about(), "long about");
+            for arg in cmd.get_arguments() {
+                check(arg.get_help(), &format!("{} help", arg.get_id()));
+                check(arg.get_long_help(), &format!("{} long help", arg.get_id()));
+            }
+            for sub in cmd.get_subcommands().filter(|s| s.get_name() != "help") {
+                walk(sub, &format!("{path} {}", sub.get_name()), seen, out);
+            }
+        }
+        walk(&reworded, "amenbo", &mut seen, &mut unreached);
+        assert!(unreached.is_empty(), "the reword did not reach: {unreached:?}");
+        assert!(seen > 250, "the walk found almost no help strings ({seen}) — it stopped reaching them");
     }
 
     /// Every command a capability points at must exist — this catches a typo'd or dropped command name — and

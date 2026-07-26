@@ -451,6 +451,7 @@ fn stamp(tx: &Transaction<'_>, version: i64) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store_engine::schema;
     use crate::store_engine::schema_frozen::{frozen_or_panic, OLDEST_FROZEN_VERSION};
     use rusqlite::OptionalExtension;
 
@@ -562,6 +563,67 @@ mod tests {
             .expect("the genesis DDL names a column the baseline store does not have");
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **A column declared in the registry with no step to carry it.** Every column the read model names
+    /// must be on the table of a store the chain has finished with — a store an older build wrote, not one
+    /// born from today's registry.
+    ///
+    /// This is the failure the chain exists to prevent and the only one it cannot notice by itself. A
+    /// column added to [`schema::DATASETS`] is there the instant a *new* store is created, so every test
+    /// that makes its own store passes; the store that breaks is the one already on someone's disk, which
+    /// no test and no reviewer ever sees — and "there is no step" is an absence, which does not show up in
+    /// a diff. It has happened (`AMB-D-374`): a column reached the registry alone and every existing store
+    /// failed at the first read of a task with `no such column`, all the way to a release.
+    ///
+    /// The starting shape must come from the frozen DDL and not from this build's registry-minus-the-
+    /// declared-diff: the subtraction can only remove what a step *says* it added, so the column with no
+    /// step would never be taken off, and the check would pass on a store that already had it.
+    ///
+    /// **Every frozen version is a starting point, not just the baseline.** Genesis creates what a store
+    /// is *missing* whole, from today's registry — so a table that came along after the baseline is born
+    /// complete on a baseline store, new column included, and a check that started only there would be
+    /// blind to exactly the tables the project keeps adding. The store that breaks is the one that already
+    /// had the table, which is any store from the version the table arrived at onwards.
+    ///
+    /// If this goes red, the missing column is one the registry gained without a step. The fix is the
+    /// step, not the registry: append one that carries existing stores, which bumps the version.
+    #[test]
+    fn every_column_the_registry_declares_survives_the_chain() {
+        for born in OLDEST_FROZEN_VERSION..=LATEST_VERSION {
+            let dir = scratch(&format!("registry-vs-chain-v{born}"));
+            let engine = store_at(&dir, born);
+
+            run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+            let mut missing: Vec<String> = Vec::new();
+            for d in schema::DATASETS {
+                let columns = {
+                    let conn = engine.conn();
+                    let mut stmt = conn.prepare("SELECT name FROM pragma_table_info(?1)").unwrap();
+                    let rows = stmt.query_map([d.table], |r| r.get::<_, String>(0)).unwrap();
+                    rows.filter_map(|r| r.ok()).collect::<Vec<_>>()
+                };
+                assert!(!columns.is_empty(), "a store born at v{born} has no `{}` table at all", d.table);
+                // Every missing column is collected, not just the first: they are usually one change's
+                // worth, and naming them together is what makes the one step to write obvious.
+                missing.extend(
+                    d.all_columns()
+                        .map(|c| c.name)
+                        .filter(|c| !columns.iter().any(|h| h == c))
+                        .map(|c| format!("{}.{c}", d.table)),
+                );
+            }
+            assert!(
+                missing.is_empty(),
+                "a store born at v{born} reaches v{LATEST_VERSION} without {} column(s) the registry \
+                 declares: {}. Append a step that adds them (which bumps the version) — a store already \
+                 on disk does not get them from the registry.",
+                missing.len(),
+                missing.join(", ")
+            );
+            std::fs::remove_dir_all(&dir).ok();
+        }
     }
 
     /// The shipped chain, run on the oldest store this build opens: it lands, and it carries the store to

@@ -63,15 +63,15 @@ rsync -a --exclude 'logs/' --exclude 'backups/' --exclude '*.amenbo-backup' "$PR
 # AMENBO_UPDATE_CHECK=0: this must not reach the network, and its cache is not AMENBO_HOME-scoped, so
 # a check here would write into the real one.
 #
-# AMENBO_ACTOR=human, and set here rather than inherited: this asks whether *the build* can open the
-# store people already have, which is the release operator's question, not an agent's. An AI's reach is
-# its folder's binding, so running the readback as `ai` makes the verdict turn on where the
+# --actor human, stated on every call rather than left to the caller: this asks whether *the build* can
+# open the store people already have, which is the release operator's question, not an agent's. An AI's
+# reach is its folder's binding, so running the readback as `ai` makes the verdict turn on where the
 # release happened to be invoked from — a bound repo passes, an unbound worktree fails with
 # `out_of_reach`, and the script reads that as a broken store and stops a healthy release. The gate
 # must judge the store, not the caller's CWD. (Nothing of the store's content is seen either way: the
 # readback's output goes to /dev/null.)
 run() {
-    AMENBO_HOME="$CLONE" AMENBO_UPDATE_CHECK=0 AMENBO_ACTOR=human "$CLI" "$@"
+    AMENBO_HOME="$CLONE" AMENBO_UPDATE_CHECK=0 "$CLI" "$@" --actor human
 }
 
 # Every CLI command takes the **write-path** open (`Store::open()`), so these three already exercise

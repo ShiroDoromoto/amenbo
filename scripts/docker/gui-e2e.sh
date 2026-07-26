@@ -27,7 +27,6 @@ norm() { tr '[:upper:]' '[:lower:]' | tr -c '[:alnum:]' ' ' | tr -s ' '; }
 NEEDLE="$(printf '%s' "$CARD" | norm)"
 
 export AMENBO_HOME=/root/amenbo-home   # a throwaway store; never the real app-data tree
-export AMENBO_ACTOR=ai
 export AMENBO_UPDATE_CHECK=0
 export DISPLAY=:99
 # No GPU in a container: keep WebKit off the compositing/dmabuf paths it can't take.
@@ -39,8 +38,8 @@ echo "== seed the store (CLI, before the GUI starts)"
 # `init` binds /work to a project, and that binding is what scopes every CLI call below: an AI does
 # not name a project, so the writes carry no --project.
 cd /work
-amenbo init --name Alice
-amenbo task add --title "SEED TASK BEFORE GUI"
+amenbo init --name Alice --actor ai
+amenbo task add --title "SEED TASK BEFORE GUI" --actor ai
 
 echo "== start Xvfb"
 Xvfb :99 -screen 0 1400x900x24 >/tmp/xvfb.log 2>&1 &
@@ -58,7 +57,7 @@ xwininfo -root -children -display :99 | grep -i webkit || { echo "✗ no webview
 import -display :99 -window root /out/1-before.png
 
 echo "== external write from a separate CLI process (the thing under test)"
-amenbo task add --title "$CARD"
+amenbo task add --title "$CARD" --actor ai
 sleep 6
 import -display :99 -window root /out/2-after.png
 

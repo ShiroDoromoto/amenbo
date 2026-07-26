@@ -147,3 +147,53 @@ steps:
     with:
       dir: elsewhere
       project: theirs
+
+  # ── The bytes the sweep reclaims ────────────────────────────────────────────────────────────
+  # The other half of `--fix`, and the half that raises no issue at all: attachment files nothing
+  # references any more. Removing an attachment already reclaims its blob — but only once the blob is
+  # past the hour that protects an attach in flight, so what a run creates is always spared, and the
+  # bytes sit there until this sweep comes for them. That is the state built here.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: hanging.txt
+      content: SCENARIO — bytes that outlive the row that named them
+
+  - type: action
+    domain: task
+    op: attach
+    with:
+      target: seed
+      file: hanging.txt
+    as: hanging
+
+  - type: action
+    domain: attachment
+    op: rm
+    with:
+      target: hanging
+
+  # The row is gone and the bytes are not: too young to collect, which is the whole reason the sweep
+  # has anything left to do.
+  - type: assert
+    domain: store
+    op: blobs
+    with:
+      count: 1
+
+  - type: action
+    domain: store
+    op: age-blobs
+
+  - type: action
+    domain: store
+    op: doctor-fix
+
+  # Nothing reports this one — no issue is raised for it and `--json` carries no count — so the bytes
+  # being gone is the only thing that can say the sweep ran.
+  - type: assert
+    domain: store
+    op: blobs
+    with:
+      count: 0

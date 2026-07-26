@@ -1256,7 +1256,7 @@ impl Driver {
             (Domain::Plugin, "ran") => {
                 let name = req_str(with, "name")?;
                 let present = opt_bool(with, "present").unwrap_or(true);
-                let v = self.run_json(&["plugin", "runs", name, "--json"])?;
+                let v = self.run_json(&["plugin", "log", name, "--json"])?;
                 // Newest first, so the run a step is asking about is the one at the head.
                 let newest = v["runs"].as_array().and_then(|rows| rows.first());
                 match with.get("outcome").and_then(|v| v.as_str()) {

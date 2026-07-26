@@ -7,7 +7,7 @@
 #
 # Removing a plugin takes its rows with it, and that is the last line here: an
 # execution log is one of the places a removed plugin can leave a trace behind.
-id: plugin-runs
+id: plugin-log
 title: Every call a plugin answers lands in the execution log, and removing the plugin takes its rows with it
 description: >
   Start from a machine where the plugin has never run, call its command face twice through a task's

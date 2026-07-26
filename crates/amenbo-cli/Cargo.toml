@@ -45,3 +45,9 @@ amenbo-scratch.workspace = true
 [[test]]
 name = "cli_e2e"
 required-features = ["e2e"]
+
+# The README demo's script, replayed against this build. It forks the binary once per line the film
+# types, so it sits behind the same gate for the same reason.
+[[test]]
+name = "demo_tape"
+required-features = ["e2e"]

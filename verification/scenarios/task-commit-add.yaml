@@ -1,0 +1,88 @@
+# A public commit carries no store-local reference, so the chain from history back to a task is one
+# amenbo keeps at its own end: the SHA is recorded on the task, and the task is found by the SHA.
+# Both directions are walked here, since a recorded SHA nothing can look up is a chain with one end.
+id: task-commit-add
+title: A task keeps the commit SHAs that carried it out, and is found by any one of them
+description: >
+  Record two commit SHAs on a task, look the task up by one of them, then forget that one and read
+  back what is left. amenbo stores a SHA as an opaque string — it never reads git — so what this
+  proves is the store's own round trip: recorded, listed, searchable, and removable one at a time.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — anchored to its history
+    as: seed
+
+  - type: action
+    domain: task
+    op: commit-add
+    with:
+      target: seed
+      sha: "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+
+  - type: assert
+    domain: task
+    op: commit
+    with:
+      target: seed
+      sha: "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      present: true
+
+  # The other direction: from a SHA in the log back to the task that recorded it.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "commit:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      target: seed
+      present: true
+
+  # One task takes many commits — the second does not displace the first.
+  - type: action
+    domain: task
+    op: commit-add
+    with:
+      target: seed
+      sha: "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+
+  - type: assert
+    domain: task
+    op: commit
+    with:
+      target: seed
+      sha: "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+      present: true
+
+  - type: action
+    domain: task
+    op: commit-rm
+    with:
+      target: seed
+      sha: "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+
+  - type: assert
+    domain: task
+    op: commit
+    with:
+      target: seed
+      sha: "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      present: false
+
+  # Forgetting one leaves the rest of the chain intact.
+  - type: assert
+    domain: task
+    op: commit
+    with:
+      target: seed
+      sha: "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "commit:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      target: seed
+      present: false

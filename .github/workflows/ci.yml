@@ -109,6 +109,11 @@ jobs:
               # The harness the app-rust job's network-FS step runs (it stands up the real NFS/SMB/9P
               # mounts): change it and nothing else, and the step that uses it would not re-run.
               - 'scripts/verify-network-watch.sh'
+              # The README demo's script and the transcript it is held to (crates/amenbo-cli's
+              # demo_tape suite reads both). CLI drift already opens this gate through crates/**;
+              # these entries cover the other direction — a tape edited on its own.
+              - 'assets/cli-demo.tape'
+              - 'assets/cli-demo.transcript.txt'
             # The pre-distribution verification harness is a third out-of-workspace cargo workspace,
             # so the `rust` job (default manifest = main workspace) never builds or tests it. This
             # gates its own clippy+test job below — the ONLY thing that compiles core/cli/gui in CI.

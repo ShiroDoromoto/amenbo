@@ -437,6 +437,9 @@ mod tests {
     struct Pass {
         cursor: i64,
         ran: Vec<Hook>,
+        /// Filled on every platform — but only the reply-path tests look at it, and those need a real
+        /// subprocess, so off unix it is written and never read.
+        #[cfg_attr(not(unix), allow(dead_code))]
         replies: Vec<Reply>,
         gapped: bool,
     }
@@ -913,11 +916,16 @@ mod tests {
 
     /// A resolver that fires one subscriber running `invocation` for the named event, with `reply` set as
     /// given — the seam for exercising the synchronous reply path against a real subprocess.
+    ///
+    /// Behind the same `unix` gate as every test that builds one: a real subprocess needs a shell, so on
+    /// windows this seam has no user and an ungated definition is dead code there.
+    #[cfg(unix)]
     struct Replying {
         event: &'static str,
         invocation: PluginInvocation,
         reply: bool,
     }
+    #[cfg(unix)]
     impl Subscribers for Replying {
         fn resolve(&self, event: &str, _project: Option<i64>, _face: Face) -> Vec<Subscriber> {
             if event == self.event {

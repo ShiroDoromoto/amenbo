@@ -43,7 +43,17 @@ struct Driver {
     /// namespace — the loader keeps it unique across both — and which of the two maps a name lands
     /// in follows from the op that bound it: nothing in the store is a path, and no archive is an id.
     artifacts: HashMap<String, std::path::PathBuf>,
+    /// Set while a step that declared `refused:` is running. It is read where a failed invocation
+    /// is judged, so the arm issuing the command never has to know it might be turned away —
+    /// [`Driver::refused`] puts it up and takes it back down around the one call.
+    refusal: Option<String>,
 }
+
+/// What an expected refusal travels back on. A refusal has to reach [`Driver::refused`] from
+/// wherever the command was issued, and the way out of an arm that every one of them already has is
+/// the `?` on its invocation — so it goes as an `Err`, and a byte no message of ours carries keeps
+/// it apart from a real failure. The code that came back is spliced on after it.
+const REFUSED: &str = "\u{1}refused:";
 
 impl Driver {
     /// Boot a fresh store: `init` creates it and hands back the project every `task add` needs.
@@ -54,6 +64,7 @@ impl Driver {
             project_id: 0,
             bindings: HashMap::new(),
             artifacts: HashMap::new(),
+            refusal: None,
         };
         let v = d.run_json(&["init", "--name", "verify", "--json"])?;
         d.project_id = v["identity"]["project_id"]
@@ -99,6 +110,9 @@ impl Driver {
     /// The same, from a chosen folder.
     fn run_json_in(&self, cwd: &Path, args: &[&str]) -> Result<serde_json::Value, String> {
         let out = self.invoke_in(cwd, args)?;
+        if let Some(code) = self.refused_code(&out) {
+            return Err(format!("{REFUSED}{code}"));
+        }
         let stdout = String::from_utf8_lossy(&out.stdout);
         let v = parse_json(args, &stdout)?;
         if !out.status.success() || v.get("error").is_some() {
@@ -126,6 +140,9 @@ impl Driver {
     /// is the whole signal. stderr carries the reason when it fails.
     fn run_bare(&self, args: &[&str]) -> Result<(), String> {
         let out = self.invoke(args)?;
+        if let Some(code) = self.refused_code(&out) {
+            return Err(format!("{REFUSED}{code}"));
+        }
         if !out.status.success() {
             return Err(format!(
                 "`amenbo {}` failed: {}",
@@ -148,14 +165,73 @@ impl Driver {
         Ok(self.session.cwd.join(p))
     }
 
-    /// Map one step to a binary call. Returns whether an assert passed (an action always passes
-    /// unless it errors), plus a human note.
+    /// The code a refusal came back with, but only while a step is expecting one. amenbo prints the
+    /// error object on **stderr** and leaves stdout empty, so a refusal is read off the stream it is
+    /// actually on rather than the one a result would come back on. `None` when no refusal is
+    /// expected, when the command succeeded, or when the failure carries no error object at all —
+    /// that last is a binary that could not run, and it stays an execution error.
+    fn refused_code(&self, out: &std::process::Output) -> Option<String> {
+        self.refusal.as_ref()?;
+        if out.status.success() {
+            return None;
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let v: serde_json::Value = serde_json::from_str(stderr.trim()).ok()?;
+        Some(v["error"]["code"].as_str()?.to_string())
+    }
+
+    /// Map one step to a binary call. Returns whether the step passed — an assert's verdict, or a
+    /// `refused:` action's — plus a human note. An action with nothing to prove passes unless it
+    /// errors.
     fn exec(&mut self, step: &Step) -> Result<Outcome, String> {
         match step {
-            Step::Action { domain, op, with, bind } => {
-                self.action(*domain, op, with, bind.as_deref())
-            }
+            Step::Action { domain, op, with, bind } => match with.get("refused") {
+                Some(code) => {
+                    let want = code
+                        .as_str()
+                        .ok_or("`refused` must be the error code the operation is expected to be rejected with")?
+                        .to_string();
+                    self.refused(*domain, op, with, &want)
+                }
+                None => self.action(*domain, op, with, bind.as_deref()),
+            },
             Step::Assert { domain, op, with } => self.assert(*domain, op, with),
+        }
+    }
+
+    /// Run an operation the step says amenbo will turn away, and judge the refusal — the guard in
+    /// front of an operation is only proven by meeting it, and a driver that reads every non-zero
+    /// exit as its own failure can never write that line down.
+    ///
+    /// The op arms are left exactly as they are: the invocation recognises the refusal and unwinds
+    /// the arm through the `?` it already has on its command, which lands back here. So the verdict
+    /// is: refused with the code the step named → pass; refused with another code → fail, since the
+    /// step is about *that* guard; went through → fail, which is the regression this exists to catch.
+    fn refused(&mut self, domain: Domain, op: &str, with: &Args, want: &str) -> Result<Outcome, String> {
+        self.refusal = Some(want.to_string());
+        // A refused op binds nothing, so no binding is offered to the arm (the loader refuses `as:`
+        // on one, and there would be no id to put under the name anyway).
+        let outcome = self.action(domain, op, with, None);
+        self.refusal = None;
+        match outcome {
+            Err(e) => match e.strip_prefix(REFUSED) {
+                Some(code) => Ok(Outcome::assert(
+                    code == want,
+                    format!(
+                        "`{op}` was refused with `{code}` ({})",
+                        if code == want {
+                            "as expected".to_string()
+                        } else {
+                            format!("expected `{want}`, MISMATCH")
+                        }
+                    ),
+                )),
+                None => Err(e), // it did not get as far as a refusal — an execution error as usual
+            },
+            Ok(done) => Ok(Outcome::assert(
+                false,
+                format!("`{op}` went through where `{want}` was expected to refuse it — {} (MISMATCH)", done.note),
+            )),
         }
     }
 
@@ -213,7 +289,8 @@ impl Driver {
                 let status = req_str(with, "status")?;
                 // The move is refused rather than silently ignored (a reserve that is not from todo
                 // comes back `already_reserved`), and `run_json` reads that non-zero exit as an
-                // execution error — so a scenario that walks the states out of order says so.
+                // execution error — so a scenario that walks the states out of order says so. A
+                // step that means to meet the guard declares it with `refused:` and is judged on it.
                 self.run_json(&["task", "status", &target.to_string(), status, "--json"])?;
                 Ok(Outcome::action(format!("moved task {target} to {status}")))
             }
@@ -1124,7 +1201,8 @@ impl Driver {
 
 /// The outcome of one step.
 struct Outcome {
-    /// An assert's verdict; an action is always `true` unless it errored out of `exec`.
+    /// An assert's verdict — and an action's, when it declared `refused:` and is judged on whether
+    /// it really was turned away. An ordinary action is `true` unless it errored out of `exec`.
     pass: bool,
     note: String,
 }
@@ -1337,6 +1415,10 @@ impl Report {
 
     fn push(&mut self, index: usize, step: &Step, outcome: Outcome) {
         let kind = match step {
+            // A step that declared `refused:` is an action in the schema, but it comes back with a
+            // verdict the way an assert does. Naming it apart says which, so a red line under
+            // `action` never reads as the driver having tripped over its own command.
+            Step::Action { with, .. } if with.contains_key("refused") => "refused",
             Step::Action { .. } => "action",
             Step::Assert { .. } => "assert",
         };
@@ -1364,12 +1446,14 @@ impl Report {
     pub fn print_human(&self) {
         println!("scenario: {} — {}", self.scenario_id, self.title);
         for l in &self.steps {
-            let mark = if l.kind == "action" {
-                "·"
-            } else if l.pass {
-                "✓"
-            } else {
+            // A step that carries no verdict of its own is marked apart, but a failure is a failure
+            // whichever kind it came from — an action can fail too, now that one can be judged.
+            let mark = if !l.pass {
                 "✗"
+            } else if l.kind == "action" {
+                "·"
+            } else {
+                "✓"
             };
             println!("  {mark} step {} [{}] {}", l.index + 1, l.kind, l.note);
         }

@@ -75,6 +75,10 @@ pub struct EventRow<'a> {
     /// reads it (`AMB-D-407`) — captured by the caller at the emit door, the last instant it exists.
     /// `None` on every other event: a record still there is read back by name, not carried.
     pub record: Option<&'a str>,
+    /// The id of the record the vanished one hung on — a removed comment's task (`AMB-D-407`), resolved
+    /// by the caller at the emit door while the row is still there. `None` when the event's record has no
+    /// parent, which is every event but a child's deletion.
+    pub parent: Option<i64>,
 }
 
 /// Append one semantic event to the outbox. Runs on the caller's transaction (a `&Transaction` deref-es
@@ -90,6 +94,7 @@ pub(super) fn append(conn: &Connection, ev: &EventRow<'_>) -> Result<()> {
         .set_opt(out.new_state, ev.new_state)
         .set_opt(out.project, ev.project)
         .set_opt(out.record, ev.record)
+        .set_opt(out.parent, ev.parent)
         .sql()
         .execute(conn)
         .map(|_| ())
@@ -117,6 +122,8 @@ pub struct OutboxRow {
     /// The vanished record's shape as JSON (`AMB-D-407`), as it was captured; `None` on an event whose
     /// record is still there to read, and on a deletion from before the column existed.
     pub record: Option<String>,
+    /// The id of the record the vanished one hung on (`AMB-D-407`); `None` when it had no parent.
+    pub parent: Option<i64>,
 }
 
 /// What a reader gets back when it asks the outbox for everything after its cursor.
@@ -155,7 +162,7 @@ pub fn events_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Outb
     let out = col::plugin_outbox::ALL;
     // One row past the page, so "is there more?" costs no second query.
     let mut sel = Select::new();
-    let (id, event, record_id, actor, at, new_state, project, record) = (
+    let (id, event, record_id, actor, at, new_state, project, record, parent) = (
         sel.col(out.id),
         sel.col(out.event),
         sel.col(out.record_id),
@@ -164,6 +171,7 @@ pub fn events_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Outb
         sel.col(out.new_state),
         sel.col(out.project),
         sel.col(out.record),
+        sel.col(out.parent),
     );
     let mut page = Sql::from(&sel, out.table);
     page.push_where(Some(&Pred::cmp(out.id, ">", after_id)))
@@ -181,6 +189,7 @@ pub fn events_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Outb
                 new_state: new_state.get(r)?,
                 project: project.get(r)?,
                 record: record.get(r)?,
+                parent: parent.get(r)?,
             })
         })
         .map_err(StoreEngineError::from)?
@@ -253,7 +262,7 @@ mod tests {
     }
 
     fn ev<'a>(event: &'a str, id: i64, new_state: Option<&'a str>) -> EventRow<'a> {
-        EventRow { event, record_id: id, actor: "ai", at: "2026-07-22T09:00:00Z", new_state, project: None, record: None }
+        EventRow { event, record_id: id, actor: "ai", at: "2026-07-22T09:00:00Z", new_state, project: None, record: None, parent: None }
     }
 
     /// The same event with a project stamped on it — what the emit door composes for a record that lives

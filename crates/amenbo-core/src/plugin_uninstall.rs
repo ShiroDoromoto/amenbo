@@ -202,6 +202,7 @@ mod tests {
             new_state: None,
             project: Some(project),
             record: None,
+            parent: None,
         })
         .unwrap();
         tx.claim_runner(plugin, "runner-1", "2999-01-01T00:00:00Z", "2026-07-25T09:00:00Z").unwrap();

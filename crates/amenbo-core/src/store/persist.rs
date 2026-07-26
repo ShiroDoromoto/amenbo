@@ -57,6 +57,7 @@ fn emit(
         new_state,
         project: project_of(tx, event, record_id)?,
         record: gone_record(tx, event, record_id)?.as_deref(),
+        parent: parent_of(tx, event, record_id)?,
     })?;
     Ok(())
 }
@@ -82,6 +83,21 @@ fn gone_record(tx: &WriteTx<'_>, event: &str, record_id: i64) -> Result<Option<S
         _ => None,
     };
     Ok(shape)
+}
+
+/// The record the event's record **hung on**, for a child whose deletion takes that relation with it
+/// (`AMB-D-407`) — a removed comment's task. Read at the same door, and for the same reason: after the
+/// `DELETE` there is no row left to ask which task the comment was on.
+///
+/// Only the deletions. A live child is read back by name (`AMB-D-406`) and says what it belongs to itself,
+/// so `comment.added` names no parent — the answer is one call away and cannot go stale on the way.
+fn parent_of(tx: &WriteTx<'_>, event: &str, record_id: i64) -> Result<Option<i64>> {
+    use crate::plugin_payload::name as ev;
+    use crate::store_engine::read;
+    match event {
+        ev::COMMENT_REMOVED => Ok(read::task_comment(tx.conn(), record_id)?.map(|c| c.task_id)),
+        _ => Ok(None),
+    }
 }
 
 /// One record as the JSON the payload carries, or `None` when it will not serialize. A shape that cannot

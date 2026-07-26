@@ -136,9 +136,16 @@ pub enum Domain {
     Decision,
     Comment,
     Project,
-    /// The store itself, rather than anything in it — what comes out of it (`export`), what is set
-    /// aside (`backup`), what goes back in (`restore`), and whether it is sound (`doctor`).
+    /// A classification axis and its values. The axis and its value are named by the words a user
+    /// types — a dimension is reached by name, not by an id an earlier step bound.
+    Dimension,
+    /// This device's amenbo itself, rather than anything filed in it: its configuration, the
+    /// identity it answers `whoami` with, the build in place — and the store as a whole, which is
+    /// what comes out of it (`export`), what is set aside (`backup`), what goes back in (`restore`)
+    /// and whether it is sound (`doctor`).
     Store,
+    /// A folder and the project its `.amenbo` pointer names — what an AI launched there may reach.
+    Folder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -187,7 +194,18 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "update", required: &["target"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "clear", required: &["target", "field"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "move", required: &["target"], refs: &["target", "project"], binds: false },
+    // A project's own life: its fields, where it sits in the list, and whether it is still in play.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "create", required: &["name"], refs: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Project, op: "update", required: &["target"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Project, op: "move", required: &["target", "position"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Project, op: "archive", required: &["target"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Project, op: "unarchive", required: &["target"], refs: &["target"], binds: false },
+    // A classification axis, its values, and the assignment that files a task under one. The axis and
+    // the value travel as names — that is how the CLI takes them, and how a person says them.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "create", required: &["name"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-add", required: &["dimension", "value"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "set", required: &["target", "dimension", "value"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "unset", required: &["target", "dimension", "value"], refs: &["target"], binds: false },
     // Ordering between two tasks, and the anchor back to the history that carried the work out.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "depend", required: &["target", "on"], refs: &["target", "on"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "undepend", required: &["target", "on"], refs: &["target", "on"], binds: false },
@@ -220,6 +238,16 @@ const REGISTRY: &[OpSpec] = &[
     // number and loses its body to the replacement text.
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "hard-erase", required: &["target"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "hard-erase", required: &["target", "body"], refs: &["target"], binds: false },
+    // The store's own settings, changed the one way a user can change them.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "config-set", required: &["key", "value"], refs: &[], binds: false },
+    // What a folder's binding is made of. A folder is named, not pointed at: `dir` is a plain name
+    // the driver places somewhere of its own, since a pointer is answered by where a folder sits.
+    // `init` raises a project of its own and binds it (hence the binding), `bind` points a folder at
+    // one that already exists — this run's, unless `project` names another.
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "init", required: &["dir"], refs: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "bind", required: &["dir"], refs: &["project"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "unbind", required: &["dir"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "sync-guide", required: &["dir"], refs: &[], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
@@ -246,6 +274,26 @@ const REGISTRY: &[OpSpec] = &[
     // of it; `validate` narrows to one object when a `target` is given.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "doctor", required: &["ok"], refs: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "validate", required: &["ok"], refs: &["target"], binds: false },
+    // A project as it is read back: one row's fields, and whether it is in the listing at all (and
+    // where). `archived: true` asks the listing that carries the archived ones.
+    OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "listed", required: &["target"], refs: &["target"], binds: false },
+    // An axis as it is read back, by name: is it defined, and does it carry the value named?
+    OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "listed", required: &["dimension"], refs: &[], binds: false },
+    // Which bucket of the "what to do now" view a task lands in (`overdue` / `due_today` /
+    // `in_progress`) — the view is assembled from days, so the bucket is not the task's status field.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "status-bucket", required: &["target", "bucket"], refs: &["target"], binds: false },
+    // The three faces the store shows of itself, each a dotted path into what that read prints:
+    // `config` its settings, `identity` the name and the hardware it was raised on, `update` what a
+    // check for a newer build comes back with.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "config", required: &["field", "equals"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "identity", required: &["field", "equals"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "update", required: &["field", "equals"], refs: &[], binds: false },
+    // Whether a folder is bound, asked from inside it — and, with `project`, which one it names.
+    // `resynced` asks the other half: whether the guidance block there is at this build's version,
+    // which is answered by a resync finding nothing left to write.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "bound", required: &["dir"], refs: &["project"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "resynced", required: &["dir"], refs: &[], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

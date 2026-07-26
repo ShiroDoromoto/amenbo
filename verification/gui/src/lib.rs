@@ -376,7 +376,9 @@ fn domain_str(d: Domain) -> &'static str {
         Domain::Decision => "decision",
         Domain::Comment => "comment",
         Domain::Project => "project",
+        Domain::Dimension => "dimension",
         Domain::Store => "store",
+        Domain::Folder => "folder",
     }
 }
 

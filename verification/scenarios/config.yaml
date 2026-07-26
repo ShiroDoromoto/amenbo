@@ -1,0 +1,126 @@
+# The settings a user changes, and the identity the store answers with. This is the floor every
+# other scenario stands on: the display names decide whose name lands on a write, the language
+# decides what the guidance in a bound folder tells an AI to speak, and the identity is how a store
+# says whether it is the one it was raised as or a copy carried onto another machine.
+id: config
+title: The store's settings are changed one key at a time, and it answers for who it is
+description: >
+  Read the shipped defaults back, then change the keys a user actually reaches for — the view a
+  store opens on, the language, and the display names of the two actors, which this is the only
+  command that can rename — reading each one back out of `config` afterwards. The identity is read
+  last: the human name a rename moved, and the hardware check that says this store is running where
+  it was raised rather than as a copy of somebody else's.
+steps:
+  # The defaults a fresh store ships with. A default that moves quietly moves for everyone who
+  # never set the key.
+  - type: assert
+    domain: store
+    op: config
+    with:
+      field: settings.default_view
+      equals: board
+
+  - type: assert
+    domain: store
+    op: config
+    with:
+      field: settings.language
+      equals: null
+
+  - type: action
+    domain: store
+    op: config-set
+    with:
+      key: default_view
+      value: list
+
+  - type: assert
+    domain: store
+    op: config
+    with:
+      field: settings.default_view
+      equals: list
+
+  # The language is not decoration: it is what the managed guidance block in every bound folder
+  # tells an AI to speak to the human in.
+  - type: action
+    domain: store
+    op: config-set
+    with:
+      key: language
+      value: ja
+
+  - type: assert
+    domain: store
+    op: config
+    with:
+      field: settings.language
+      equals: ja
+
+  # The two actors' display names — the only place either can be renamed.
+  - type: action
+    domain: store
+    op: config-set
+    with:
+      key: human_name
+      value: SCENARIO Operator
+
+  - type: assert
+    domain: store
+    op: config
+    with:
+      field: settings.human_display_name
+      equals: SCENARIO Operator
+
+  - type: action
+    domain: store
+    op: config-set
+    with:
+      key: ai_name
+      value: SCENARIO Agent
+
+  - type: assert
+    domain: store
+    op: config
+    with:
+      field: settings.ai_display_name
+      equals: SCENARIO Agent
+
+  # A guard rail a store ships with on, and the user's to turn off. Turning it off has to stick —
+  # a toggle that reads back on is one nobody can actually decline.
+  - type: assert
+    domain: store
+    op: config
+    with:
+      field: settings.startup_integrity_check
+      equals: true
+
+  - type: action
+    domain: store
+    op: config-set
+    with:
+      key: startup_integrity_check
+      value: "false"
+
+  - type: assert
+    domain: store
+    op: config
+    with:
+      field: settings.startup_integrity_check
+      equals: false
+
+  # And the identity: the rename reaches it, and the hardware check says this store is running
+  # where it was raised rather than as a copy carried onto another machine.
+  - type: assert
+    domain: store
+    op: identity
+    with:
+      field: human_name
+      equals: SCENARIO Operator
+
+  - type: assert
+    domain: store
+    op: identity
+    with:
+      field: hw_mismatch
+      equals: false

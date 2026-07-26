@@ -60,6 +60,18 @@ pub fn session(tag: &str, keep: bool) -> std::io::Result<Session> {
     Ok(Session { home, cwd, artifacts, keep, base })
 }
 
+impl Session {
+    /// A folder for a step that needs a **second** directory — one to bind, resync or unbind. It is
+    /// created beside [`Session::cwd`] rather than inside it, on purpose: a `.amenbo` pointer is
+    /// found by walking *up*, so a folder under the run's own bound CWD would read as bound before
+    /// anything bound it, and would still read as bound after it was unbound.
+    pub fn folder(&self, name: &str) -> std::io::Result<PathBuf> {
+        let dir = self.base.join("folders").join(name);
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
+}
+
 impl Drop for Session {
     fn drop(&mut self) {
         // Best-effort tidy on the way out; the start-of-run sweep is the real guarantee, so a
@@ -113,6 +125,23 @@ mod tests {
             drop(s); // keep=true, so the base stays for the human, but we tidy the selftest ones
             let _ = std::fs::remove_dir_all(base);
         }
+    }
+
+    /// A second folder lands beside the run's CWD, never under it — under it, the CWD's own pointer
+    /// would answer for it and every binding assert would read true before anything was bound.
+    #[test]
+    fn a_named_folder_sits_beside_the_cwd_and_answers_to_its_name() {
+        let s = session("selftest-folder", true).unwrap();
+        let dir = s.folder("shared").unwrap();
+        assert!(dir.is_dir(), "the folder is there to be bound");
+        assert!(!dir.starts_with(&s.cwd), "outside the run's own bound CWD");
+        assert!(dir.starts_with(&s.base), "under the session's own parent");
+        assert_eq!(dir, s.folder("shared").unwrap(), "one name, one folder");
+        assert_ne!(dir, s.folder("other").unwrap(), "two names, two folders");
+
+        let base = s.base.clone();
+        drop(s);
+        let _ = std::fs::remove_dir_all(base);
     }
 
     /// Age decides, and nothing else. Pointed at a parent of its own so it never reaches another

@@ -1,0 +1,34 @@
+id: status
+title: The what-to-do-now view sorts a task into overdue, due today or in progress by the days it carries
+description: >
+  The first screen a person reads. Its buckets are assembled from the days on a task, not from the
+  status field — in progress there means started and not yet due — so what proves the view is a task
+  moving between buckets as its days change, and leaving it altogether once it is done.
+steps:
+  # Past its day: overdue, and nowhere else.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — its day has gone }, as: late }
+  - { type: action, domain: task, op: update, with: { target: late, due: "2020-01-01" } }
+  - { type: assert, domain: task, op: status-bucket, with: { target: late, bucket: overdue, present: true } }
+  - { type: assert, domain: task, op: status-bucket, with: { target: late, bucket: due_today, present: false } }
+
+  # Due today: today's list, not the overdue one.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — due today }, as: today_task }
+  - { type: action, domain: task, op: update, with: { target: today_task, due: today } }
+  - { type: assert, domain: task, op: status-bucket, with: { target: today_task, bucket: due_today, present: true } }
+  - { type: assert, domain: task, op: status-bucket, with: { target: today_task, bucket: overdue, present: false } }
+
+  # Started and not yet due: in progress. A task carrying no day at all is in none of the three.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — started, not yet due }, as: running }
+  - { type: action, domain: task, op: update, with: { target: running, start: today } }
+  - { type: assert, domain: task, op: status-bucket, with: { target: running, bucket: in_progress, present: true } }
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — no day on it at all }, as: undated }
+  - { type: assert, domain: task, op: status-bucket, with: { target: undated, bucket: in_progress, present: false } }
+  - { type: assert, domain: task, op: status-bucket, with: { target: undated, bucket: due_today, present: false } }
+
+  # A day that moves moves the task with it: today's becomes tomorrow's, and leaves today's list.
+  - { type: action, domain: task, op: update, with: { target: today_task, due: "+1d" } }
+  - { type: assert, domain: task, op: status-bucket, with: { target: today_task, bucket: due_today, present: false } }
+
+  # Finished work leaves the view — what to do now is what is left to do.
+  - { type: action, domain: task, op: done, with: { target: late } }
+  - { type: assert, domain: task, op: status-bucket, with: { target: late, bucket: overdue, present: false } }

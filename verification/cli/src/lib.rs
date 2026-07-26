@@ -12,7 +12,7 @@
 pub mod scratch;
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use amenbo_scenario::{Args, Domain, Scenario, Step};
@@ -62,9 +62,12 @@ impl Driver {
         Ok(d)
     }
 
-    /// Spawn the shipped binary in the isolated store. Every call goes through here, so the
-    /// isolation is stated once and cannot be forgotten by an arm that builds its own command.
-    fn invoke(&self, args: &[&str]) -> Result<std::process::Output, String> {
+    /// Spawn the shipped binary in the isolated store, from a chosen folder. Every call goes
+    /// through here, so the isolation is stated once and cannot be forgotten by an arm that builds
+    /// its own command. Where the command stands is itself an input for anything to do with binding
+    /// — the pointer that decides what a run reaches is found by walking up from the CWD — so those
+    /// steps ask their question from inside the folder they are asking about.
+    fn invoke_in(&self, cwd: &Path, args: &[&str]) -> Result<std::process::Output, String> {
         // The facet goes on the command line, which is the one input amenbo is to take it by; a call
         // that names its own is left alone.
         let mut with_facet = args.to_vec();
@@ -73,7 +76,7 @@ impl Driver {
         }
         Command::new(&self.bin)
             .args(&with_facet)
-            .current_dir(&self.session.cwd)
+            .current_dir(cwd)
             .env("AMENBO_HOME", &self.session.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("NO_COLOR", "1")
@@ -81,11 +84,21 @@ impl Driver {
             .map_err(|e| format!("could not run `{}`: {e}", self.bin.display()))
     }
 
-    /// Run `amenbo <args>` and parse its `--json` output. An `Err` is an execution failure (spawn
-    /// failed, non-JSON output, non-zero exit, or an `error` object) — distinct from an assert that
-    /// ran cleanly and came out false.
+    /// The same, from the run's own CWD — where every step that is not asking about a folder stands.
+    fn invoke(&self, args: &[&str]) -> Result<std::process::Output, String> {
+        self.invoke_in(&self.session.cwd, args)
+    }
+
+    /// Run `amenbo <args>` in the isolated store and parse its `--json` output. An `Err` is an
+    /// execution failure (spawn failed, non-JSON output, non-zero exit, or an `error` object) —
+    /// distinct from an assert that ran cleanly and came out false.
     fn run_json(&self, args: &[&str]) -> Result<serde_json::Value, String> {
-        let out = self.invoke(args)?;
+        self.run_json_in(&self.session.cwd, args)
+    }
+
+    /// The same, from a chosen folder.
+    fn run_json_in(&self, cwd: &Path, args: &[&str]) -> Result<serde_json::Value, String> {
+        let out = self.invoke_in(cwd, args)?;
         let stdout = String::from_utf8_lossy(&out.stdout);
         let v = parse_json(args, &stdout)?;
         if !out.status.success() || v.get("error").is_some() {
@@ -266,6 +279,64 @@ impl Driver {
                 }
                 Ok(Outcome::action(format!("created project {id} `{name}`")))
             }
+            (Domain::Project, "update") => {
+                let target = self.resolve(with)?;
+                let id = target.to_string();
+                let mut args: Vec<String> = vec!["project".into(), "update".into(), id];
+                for key in ["name", "notes", "view"] {
+                    if let Some(v) = with.get(key) {
+                        let v = v.as_str().ok_or_else(|| format!("arg `{key}` must be a string"))?;
+                        args.push(format!("--{key}"));
+                        args.push(v.to_string());
+                    }
+                }
+                if args.len() == 3 {
+                    return Err("`update` names no field to set".to_string());
+                }
+                args.push("--json".into());
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!("updated project {target}")))
+            }
+            (Domain::Project, "move") => {
+                let target = self.resolve(with)?;
+                let pos = req_str(with, "position")?;
+                let flag = match pos {
+                    "top" | "bottom" => format!("--{pos}"),
+                    other => return Err(format!("`position: {other}` is not top or bottom")),
+                };
+                self.run_json(&["project", "move", &target.to_string(), &flag, "--json"])?;
+                Ok(Outcome::action(format!("moved project {target} to the {pos}")))
+            }
+            (Domain::Project, verb @ ("archive" | "unarchive")) => {
+                let target = self.resolve(with)?;
+                self.run_json(&["project", verb, &target.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("{verb}d project {target}")))
+            }
+            (Domain::Dimension, "create") => {
+                let name = req_str(with, "name")?;
+                let pid = self.project_id.to_string();
+                self.run_json(&["dimension", "add", "--name", name, "--project", &pid, "--json"])?;
+                Ok(Outcome::action(format!("defined the axis `{name}`")))
+            }
+            (Domain::Dimension, "value-add") => {
+                let dimension = req_str(with, "dimension")?;
+                let value = req_str(with, "value")?;
+                self.run_json(&["dimension", "value-add", dimension, "--name", value, "--json"])?;
+                Ok(Outcome::action(format!("added the value `{value}` to `{dimension}`")))
+            }
+            // Filing a task under an axis and taking it back off. The axis and value go by name, which
+            // is what the command takes — a bare number there would be read as a name, not an id.
+            (Domain::Dimension, verb @ ("set" | "unset")) => {
+                let target = self.resolve(with)?;
+                let dimension = req_str(with, "dimension")?;
+                let value = req_str(with, "value")?;
+                self.run_json(&["dimension", verb, &target.to_string(), dimension, value, "--json"])?;
+                let note = match verb {
+                    "set" => format!("filed task {target} under `{dimension}` = `{value}`"),
+                    _ => format!("took task {target} out of `{dimension}` = `{value}`"),
+                };
+                Ok(Outcome::action(note))
+            }
             (Domain::Task, "depend") => {
                 let target = self.resolve(with)?;
                 let on = self.resolve_key(with, "on")?;
@@ -398,6 +469,48 @@ impl Driver {
                 self.run_json(&["decision", "unlink", &target.to_string(), "--from", &other.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("decision {target} no longer points at decision {other}")))
             }
+            (Domain::Store, "config-set") => {
+                let key = req_str(with, "key")?;
+                let value = req_str(with, "value")?;
+                self.run_json(&["config", "set", key, value, "--json"])?;
+                Ok(Outcome::action(format!("set `{key}` to `{value}`")))
+            }
+            (Domain::Folder, "init") => {
+                let dir = self.folder(with)?;
+                // Run it *from inside* the folder: `init` binds where it stands, and the project it
+                // raises is named after that folder.
+                let v = self.run_json_in(&dir, &["init", "--json"])?;
+                let id = v["identity"]["project_id"].as_i64().ok_or("init did not report a project_id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
+                Ok(Outcome::action(format!("initialised {} as project {id}", dir.display())))
+            }
+            (Domain::Folder, "bind") => {
+                // Which project a folder is pointed at: this run's own unless the step names another.
+                let pid = match with.get("project") {
+                    Some(_) => self.resolve_key(with, "project")?,
+                    None => self.project_id,
+                };
+                let dir = self.folder(with)?;
+                let path = dir.to_string_lossy().into_owned();
+                self.run_json(&["bind", "--project", &pid.to_string(), "--dir", &path, "--json"])?;
+                Ok(Outcome::action(format!("bound {path} to project {pid}")))
+            }
+            (Domain::Folder, "unbind") => {
+                let dir = self.folder(with)?;
+                let path = dir.to_string_lossy().into_owned();
+                // Removing a pointer asks first; the driver is unattended, so it answers up front.
+                self.run_json(&["unbind", "--dir", &path, "--yes", "--json"])?;
+                Ok(Outcome::action(format!("unbound {path}")))
+            }
+            (Domain::Folder, "sync-guide") => {
+                let dir = self.folder(with)?;
+                let path = dir.to_string_lossy().into_owned();
+                let v = self.run_json(&["sync-guide", "--dir", &path, "--json"])?;
+                let rewritten = v["updated"].as_array().map_or(0, Vec::len);
+                Ok(Outcome::action(format!("resynced the guidance in {path} ({rewritten} file(s) rewritten)")))
+            }
             _ => Err(unmapped(domain, op)),
         }
     }
@@ -407,38 +520,83 @@ impl Driver {
             (Domain::Task, "listed") => {
                 let target = self.resolve(with)?;
                 let filter = req_str(with, "filter")?;
-                let present = opt_bool(with, "present").unwrap_or(true);
                 let v = self.run_json(&["task", "list", "--filter", filter, "--json"])?;
                 let rows = v["tasks"].as_array().map(Vec::as_slice).unwrap_or(&[]);
-                let at = rows.iter().position(|t| t["id"].as_i64() == Some(target));
-                let found = at.is_some();
-                // `position` asks where in the listing it sits, which is the only place a reorder is
-                // visible: order is the store's to keep, and the key it keeps it by is opaque.
-                if let Some(want) = with.get("position").and_then(|v| v.as_str()) {
-                    let last = rows.len().saturating_sub(1);
-                    let (pass, seen) = match (want, at) {
-                        ("first", Some(i)) => (i == 0, i),
-                        ("last", Some(i)) => (i == last, i),
-                        (other, Some(_)) => return Err(format!("`position: {other}` is not first or last")),
-                        (_, None) => (false, 0),
-                    };
-                    return Ok(Outcome::assert(
-                        pass,
-                        format!(
-                            "task {target} sits at {} of {} in `{filter}` (expected {want}, {})",
-                            if found { seen.to_string() } else { "nowhere".to_string() },
-                            rows.len(),
-                            if pass { "as expected" } else { "MISMATCH" }
-                        ),
-                    ));
+                judge_listing("task", target, &format!("`{filter}`"), rows, with)
+            }
+            (Domain::Project, "listed") => {
+                let target = self.resolve(with)?;
+                // The archived ones are a listing of their own: they leave the everyday list, which is
+                // what archiving is for, so proving one went means asking both.
+                let archived = opt_bool(with, "archived").unwrap_or(false);
+                let mut args = vec!["project", "list"];
+                if archived {
+                    args.push("--archived");
                 }
+                args.push("--json");
+                let v = self.run_json(&args)?;
+                let rows = v["projects"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+                let listing =
+                    if archived { "the listing that carries archived projects" } else { "the project listing" };
+                judge_listing("project", target, listing, rows, with)
+            }
+            (Domain::Project, "field") => {
+                let target = self.resolve(with)?;
+                let v = self.run_json(&["project", "show", &target.to_string(), "--json"])?;
+                judge_field(&format!("project {target}"), with, &v)
+            }
+            (Domain::Dimension, "listed") => {
+                let dimension = req_str(with, "dimension")?;
+                let value = with.get("value").and_then(|v| v.as_str());
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let v = self.run_json(&["dimension", "list", "--json"])?;
+                let axis = v["dimensions"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
+                    .iter()
+                    .find(|d| d["dimension"]["name"].as_str() == Some(dimension));
+                // Without a `value` the question is whether the axis is defined at all; with one it is
+                // whether the axis carries that value, since a value is only ever read through its axis.
+                let found = match (axis, value) {
+                    (None, _) => false,
+                    (Some(_), None) => true,
+                    (Some(a), Some(want)) => a["values"]
+                        .as_array()
+                        .map(|vs| vs.iter().any(|v| v["name"].as_str() == Some(want)))
+                        .unwrap_or(false),
+                };
                 let pass = found == present;
-                let word = if present { "present in" } else { "absent from" };
                 Ok(Outcome::assert(
                     pass,
                     format!(
-                        "task {target} {} `{filter}` (expected {word}, {})",
-                        if found { "is present in" } else { "is absent from" },
+                        "axis `{dimension}`{} {} defined (expected {}, {})",
+                        value.map(|v| format!(" value `{v}`")).unwrap_or_default(),
+                        if found { "is" } else { "is not" },
+                        if present { "defined" } else { "gone" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            (Domain::Task, "status-bucket") => {
+                let target = self.resolve(with)?;
+                let bucket = req_str(with, "bucket")?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let v = self.run_json(&["status", "--json"])?;
+                // A bucket the view does not print is a scenario bug, not an empty bucket: answering
+                // "absent" there would pass a line that asks about nothing.
+                let Some(rows) = v.get(bucket).and_then(|b| b.as_array()) else {
+                    return Err(format!("`bucket: {bucket}` is not a list the status view prints"));
+                };
+                let found = rows.iter().any(|t| t["id"].as_i64() == Some(target));
+                let pass = found == present;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "task {target} {} the `{bucket}` bucket of the status view ({} there, expected {}, {})",
+                        if found { "is in" } else { "is not in" },
+                        rows.len(),
+                        if present { "in it" } else { "out of it" },
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))
@@ -446,7 +604,7 @@ impl Driver {
             (Domain::Task, "field") => {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["task", "show", &target.to_string(), "--json"])?;
-                judge_field("task", target, with, &v)
+                judge_field(&format!("task {target}"), with, &v)
             }
             (Domain::Task, "commit") => {
                 let target = self.resolve(with)?;
@@ -495,7 +653,7 @@ impl Driver {
             (Domain::Decision, "field") => {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["decision", "show", &target.to_string(), "--json"])?;
-                judge_field("decision", target, with, &v)
+                judge_field(&format!("decision {target}"), with, &v)
             }
             (Domain::Decision, "listed") => {
                 let target = self.resolve(with)?;
@@ -587,6 +745,73 @@ impl Driver {
                     ),
                 ))
             }
+            (Domain::Store, "config") => {
+                let v = self.run_json(&["config", "--json"])?;
+                judge_field("this store's configuration", with, &v)
+            }
+            (Domain::Store, "identity") => {
+                let v = self.run_json(&["whoami", "--json"])?;
+                judge_field("this store's identity", with, &v)
+            }
+            (Domain::Store, "update") => {
+                // `--print` is the face that opens nothing, which is the only one a scenario may
+                // wear: a check is a read, and it must not launch a browser at whoever runs it.
+                let v = self.run_json(&["update", "--print", "--json"])?;
+                judge_field("the update check", with, &v)
+            }
+            (Domain::Folder, "bound") => {
+                let dir = self.folder(with)?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let want = match with.get("project") {
+                    Some(_) => Some(self.resolve_key(with, "project")?),
+                    None => None,
+                };
+                // Asked from inside the folder, which is the question an AI launched there asks.
+                let v = self.run_json_in(&dir, &["bind", "--json"])?;
+                let at = v["binding"]["project_id"].as_i64();
+                let found = match (at, want) {
+                    (Some(id), Some(named)) => id == named,
+                    (Some(_), None) => true,
+                    (None, _) => false,
+                };
+                let pass = found == present;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "{} {} (expected {}, {})",
+                        dir.display(),
+                        match at {
+                            Some(id) => format!("points at project {id}"),
+                            None => "points at no project".to_string(),
+                        },
+                        match (present, want) {
+                            (true, Some(named)) => format!("project {named}"),
+                            (true, None) => "a binding".to_string(),
+                            (false, _) => "none".to_string(),
+                        },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            (Domain::Folder, "resynced") => {
+                let dir = self.folder(with)?;
+                let path = dir.to_string_lossy().into_owned();
+                let changed = opt_bool(with, "changed").unwrap_or(false);
+                // A resync writes only what actually differs, so "nothing left to write" is how a
+                // folder says its block is already at this build's version — and it is the property
+                // that makes the command safe to point at every folder on the device.
+                let v = self.run_json(&["sync-guide", "--dir", &path, "--json"])?;
+                let rewritten = v["updated"].as_array().map_or(0, Vec::len);
+                let pass = (rewritten > 0) == changed;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "a resync of {path} rewrote {rewritten} file(s) (expected {}, {})",
+                        if changed { "a rewrite" } else { "nothing to do" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             _ => Err(unmapped(domain, op)),
         }
     }
@@ -660,6 +885,16 @@ impl Driver {
         })
     }
 
+    /// The folder a step names. A scenario says *which* folder, never where it is: the driver places
+    /// it, because a binding is answered by where a folder sits and only the driver knows where its
+    /// own isolated run lives.
+    fn folder(&self, with: &Args) -> Result<PathBuf, String> {
+        let name = req_str(with, "dir")?;
+        self.session
+            .folder(name)
+            .map_err(|e| format!("could not make the folder `{name}`: {e}"))
+    }
+
     /// Resolve a step's `target:` to the id an earlier action bound. The loader already proved
     /// the name resolves to an earlier `as:`, so a miss here is an internal error, not user input.
     fn resolve(&self, with: &Args) -> Result<i64, String> {
@@ -690,6 +925,51 @@ impl Outcome {
     fn assert(pass: bool, note: String) -> Outcome {
         Outcome { pass, note }
     }
+}
+
+/// Judge a listing assert: is the row in this listing, and — when the step names a `position` — is it
+/// where the order says it is. `position` is the only place a reorder shows: order is the store's to
+/// keep and the key it keeps it by is opaque, so where a row sits is all a reader can ask about.
+/// `listing` names the listing in the note, since a row can be absent from one and present in another
+/// (the archived projects being exactly that).
+fn judge_listing(
+    noun: &str,
+    id: i64,
+    listing: &str,
+    rows: &[serde_json::Value],
+    with: &Args,
+) -> Result<Outcome, String> {
+    let at = rows.iter().position(|r| r["id"].as_i64() == Some(id));
+    let found = at.is_some();
+    if let Some(want) = with.get("position").and_then(|v| v.as_str()) {
+        let last = rows.len().saturating_sub(1);
+        let (pass, seen) = match (want, at) {
+            ("first", Some(i)) => (i == 0, i),
+            ("last", Some(i)) => (i == last, i),
+            (other, Some(_)) => return Err(format!("`position: {other}` is not first or last")),
+            (_, None) => (false, 0),
+        };
+        return Ok(Outcome::assert(
+            pass,
+            format!(
+                "{noun} {id} sits at {} of {} in {listing} (expected {want}, {})",
+                if found { seen.to_string() } else { "nowhere".to_string() },
+                rows.len(),
+                if pass { "as expected" } else { "MISMATCH" }
+            ),
+        ));
+    }
+    let present = opt_bool(with, "present").unwrap_or(true);
+    let pass = found == present;
+    Ok(Outcome::assert(
+        pass,
+        format!(
+            "{noun} {id} {} {listing} (expected {}, {})",
+            if found { "is present in" } else { "is absent from" },
+            if present { "present" } else { "absent" },
+            if pass { "as expected" } else { "MISMATCH" }
+        ),
+    ))
 }
 
 /// Judge a timeline assert: does this stream of entries carry the wording the step names? With no
@@ -733,11 +1013,12 @@ fn dig<'a>(shown: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::V
     Some(here)
 }
 
-/// Judge a `field` assert against the object's own `show --json`. `equals` is any scalar (string /
-/// bool / number / null), compared structurally against the field's JSON value, so `status: todo`
-/// and `completed: false` both work — and a field the output does not carry at all is a mismatch,
-/// not an error, since a scenario naming one is asserting about the shipped output's shape too.
-fn judge_field(noun: &str, id: i64, with: &Args, shown: &serde_json::Value) -> Result<Outcome, String> {
+/// Judge a `field` assert against a read of the thing it is about — an object's `show --json`, or
+/// one of the reads the store answers about itself. `equals` is any scalar (string / bool / number /
+/// null), compared structurally against the field's JSON value, so `status: todo` and `completed:
+/// false` both work — and a field the output does not carry at all is a mismatch, not an error,
+/// since a scenario naming one is asserting about the shipped output's shape too.
+fn judge_field(subject: &str, with: &Args, shown: &serde_json::Value) -> Result<Outcome, String> {
     let field = req_str(with, "field")?;
     let expected = with.get("equals").ok_or("arg `equals` is required")?;
     let expected = serde_json::to_value(expected)
@@ -745,14 +1026,14 @@ fn judge_field(noun: &str, id: i64, with: &Args, shown: &serde_json::Value) -> R
     match dig(shown, field) {
         None => Ok(Outcome::assert(
             false,
-            format!("{noun} {id} has no field `{field}` in its show output (MISMATCH)"),
+            format!("{subject} has no field `{field}` in its output (MISMATCH)"),
         )),
         Some(actual) => {
             let pass = *actual == expected;
             Ok(Outcome::assert(
                 pass,
                 format!(
-                    "{noun} {id} field `{field}` = {actual} (expected {expected}, {})",
+                    "{subject} field `{field}` = {actual} (expected {expected}, {})",
                     if pass { "as expected" } else { "MISMATCH" }
                 ),
             ))

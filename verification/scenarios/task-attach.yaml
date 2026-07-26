@@ -1,0 +1,45 @@
+id: task-attach
+title: A file and a link hang on a task, a decision and a comment, and the bytes come back out unchanged
+description: >
+  The one place amenbo carries bytes. Ingesting a file resolves a path, writes a blob under the store
+  root and hands back a row pointing at it — a chain that build-time tests never walk, since it only
+  exists once there is an installed binary and a real store on disk. So the line ends by saving the
+  blob back out and comparing it to what went in. `attach open` is deliberately left out: it hands the
+  file to whatever the desktop opens it with, which is not something an unattended run should do.
+steps:
+  # A file the person already has lying in their folder.
+  - { type: action, domain: repo, op: write-file, with: { path: run.log, content: "line one\nline two\n" } }
+
+  # Ingested onto a task: the row says what it is, and the owner's list carries it.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task with evidence on it }, as: seed }
+  - { type: action, domain: task, op: attach, with: { target: seed, file: run.log, name: the run log }, as: log }
+  - { type: assert, domain: attachment, op: field, with: { target: log, field: kind, equals: blob } }
+  - { type: assert, domain: attachment, op: field, with: { target: log, field: filename, equals: the run log } }
+  - { type: assert, domain: attachment, op: field, with: { target: log, field: size_bytes, equals: 18 } }
+  - { type: assert, domain: attachment, op: field, with: { target: log, field: target_type, equals: task } }
+  - { type: assert, domain: attachment, op: listed, with: { target: log, owner: seed, owner_kind: task, present: true } }
+
+  # Out again, byte for byte — the round trip is the only proof the ingest kept them.
+  - { type: assert, domain: attachment, op: saved, with: { target: log, content: "line one\nline two\n" } }
+
+  # A link is the other kind: nothing is ingested, and the URL is what is kept.
+  - { type: action, domain: task, op: attach, with: { target: seed, url: "https://example.com/spec", name: the spec }, as: spec }
+  - { type: assert, domain: attachment, op: field, with: { target: spec, field: kind, equals: url } }
+  - { type: assert, domain: attachment, op: field, with: { target: spec, field: url, equals: "https://example.com/spec" } }
+  - { type: assert, domain: attachment, op: listed, with: { target: spec, owner: seed, owner_kind: task, present: true } }
+
+  # The same on a decision, and on a single comment — a comment's list is reached by its own flag,
+  # since the two comment tables number apart and a bare id would not say which one it is.
+  - { type: action, domain: decision, op: create, with: { title: SCENARIO DECISION — with a link on it }, as: call }
+  - { type: action, domain: decision, op: attach, with: { target: call, url: "https://example.com/why", name: the reasoning }, as: why }
+  - { type: assert, domain: attachment, op: field, with: { target: why, field: target_type, equals: decision } }
+  - { type: assert, domain: attachment, op: listed, with: { target: why, owner: call, owner_kind: decision, present: true } }
+  - { type: action, domain: task, op: comment, with: { target: seed, text: what the log shows }, as: note }
+  - { type: action, domain: comment, op: attach, with: { target: note, url: "https://example.com/minutes", name: the minutes }, as: minutes }
+  - { type: assert, domain: attachment, op: field, with: { target: minutes, field: target_type, equals: task_comment } }
+  - { type: assert, domain: attachment, op: listed, with: { target: minutes, owner: note, owner_kind: task-comment, present: true } }
+
+  # Removed for good: it leaves the owner's list, and the ones beside it stay.
+  - { type: action, domain: attachment, op: rm, with: { target: spec } }
+  - { type: assert, domain: attachment, op: listed, with: { target: spec, owner: seed, owner_kind: task, present: false } }
+  - { type: assert, domain: attachment, op: listed, with: { target: log, owner: seed, owner_kind: task, present: true } }

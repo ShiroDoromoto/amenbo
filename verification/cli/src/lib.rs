@@ -282,7 +282,10 @@ impl Driver {
             (Domain::Comment, "promote") => {
                 let target = self.resolve(with)?;
                 let title = req_str(with, "title")?;
-                let v = self.run_json(&["decision", "promote", &target.to_string(), "--title", title, "--json"])?;
+                // The two comment tables number independently, so a store holding both can have this id
+                // twice and a bare number is refused. This domain is the task side; say so in the ref.
+                let target_ref = format!("AMB-TC-{target}");
+                let v = self.run_json(&["decision", "promote", &target_ref, "--title", title, "--json"])?;
                 let id = v["decision"]["id"].as_i64().ok_or("decision promote did not report an id")?;
                 if let Some(name) = bind {
                     self.bindings.insert(name.to_string(), id);

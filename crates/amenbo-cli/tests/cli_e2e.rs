@@ -3171,6 +3171,67 @@ fn task_and_decision_comment_refs_are_spelled_apart() {
     assert_eq!(retired, 1, "AMB-C- is not accepted");
 }
 
+/// A decision's own thread raises records too, so `decision promote` is one door for both comment kinds
+/// and the ref says which table it came from. What differs is what is drawn afterwards: a task comment
+/// links the new record back to its task, a decision comment draws nothing at all — a question raised out
+/// of a decision's thread became its own, and an automatic edge would claim a relation nobody chose. A
+/// bare `<n>` naming a row in each table is refused, the way a bare number that is both a task and a
+/// decision is.
+#[test]
+fn a_decision_comment_promotes_into_a_record_that_stands_alone() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "昇格PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    let t = cli.json(&["task", "add", "--title", "作業", "--project", &pid, "--json"]);
+    let tid = id_str(&t["task"]["id"]);
+    let d = cli.json(&["decision", "add", "--project", &pid, "--title", "UTC で保存する", "--json"]);
+    let did = id_str(&d["decision"]["id"]);
+
+    let post_task = |text: &str| id_str(&cli.json(&["comment", "add", &tid, "--text", text, "--json"])["comment"]["id"]);
+    let post_decision =
+        |text: &str| id_str(&cli.json(&["decision", "comment", "add", &did, "--text", text, "--json"])["comment"]["id"]);
+    // The two tables number apart, so one key names a row in each — whichever side is behind posts until
+    // they meet there. That collision is what makes a bare number ambiguous, and the spelling the way through.
+    let mut tcid = post_task("タスク側");
+    let mut dcid = post_decision("表示の桁は別問題だ");
+    while tcid.parse::<i64>().unwrap() < dcid.parse::<i64>().unwrap() {
+        tcid = post_task("タスク側");
+    }
+    while dcid.parse::<i64>().unwrap() < tcid.parse::<i64>().unwrap() {
+        dcid = post_decision("表示の桁は別問題だ");
+    }
+    assert_eq!(tcid, dcid);
+
+    let (err, code) = cli.run_err(&["decision", "promote", &dcid, "--title", "桁を決める", "--json"]);
+    assert_eq!(code, 2, "a bare number naming a row in each table is refused: {err}");
+    assert!(err.contains(&format!("AMB-TC-{tcid}")) && err.contains(&format!("AMB-DC-{dcid}")), "it names both: {err}");
+
+    let (out, _, _) = cli.run_both(&["decision", "promote", &format!("AMB-DC-{dcid}"), "--title", "桁を決める"]);
+    assert!(out.contains(&format!("AMB-DC-{dcid}")), "the line says which comment was raised: {out}");
+
+    let promoted =
+        cli.json(&["decision", "promote", &format!("AMB-DC-{dcid}"), "--title", "桁を決める2", "--json"])["decision"]
+            .clone();
+    assert_eq!(promoted["body"], "表示の桁は別問題だ", "the comment's text is the new body");
+    assert_eq!(promoted["status"], "proposed", "it is a proposal, not a settled decision");
+    assert_eq!(id_str(&promoted["project"]["id"]), pid, "the home comes from the comment's decision");
+    for edge in ["linked_tasks", "builds_on", "supersedes", "amends"] {
+        assert!(promoted[edge].as_array().unwrap().is_empty(), "the new record draws no {edge}: {promoted}");
+    }
+
+    // …and the decision it was raised out of is untouched: nothing points back at it either.
+    let source = cli.json(&["decision", "show", &did, "--json"]);
+    for edge in ["built_on_by", "superseded_by", "amended_by"] {
+        assert!(source[edge].as_array().unwrap().is_empty(), "the source gained no {edge}: {source}");
+    }
+
+    // The task side is unchanged: its comment still promotes, and still links the decision to its task.
+    let from_task =
+        cli.json(&["decision", "promote", &format!("AMB-TC-{tcid}"), "--title", "作業の前提", "--json"])["decision"].clone();
+    assert_eq!(from_task["body"], "タスク側");
+    assert_eq!(from_task["linked_tasks"][0]["id"].to_string(), tid, "a task comment's decision is that task's premise");
+}
+
 /// A misposted comment is taken back with `comment rm` — a hard delete, attachments and all. Decision comments mirror it.
 #[test]
 fn comment_rm_deletes_the_comment_and_its_attachment() {

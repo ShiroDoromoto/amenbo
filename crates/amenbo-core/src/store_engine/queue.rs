@@ -158,6 +158,26 @@ pub fn queued_plugins(conn: &Connection) -> Result<Vec<String>> {
     Ok(rows)
 }
 
+/// Throw away what `plugin` has waiting, and say how many rows went — what a plugin being **stopped** costs
+/// its queue (`AMB-D-399`). `project` narrows it to the rows stamped with that project; `None` takes every
+/// row the plugin holds, whichever project each came from.
+///
+/// The narrowing is what a per-project switch needs: a project-scoped plugin can be on in one project and
+/// off in another (`AMB-D-379`), and turning it off in one is no statement about the other's events. `None`
+/// is the whole-plugin stop — a machine-wide switch closing, or an uninstall.
+///
+/// Dropping rather than keeping is the decision, not an optimisation: a disabled plugin's queue has no
+/// condition under which it would ever be worked, so held rows would grow for as long as the plugin is off
+/// and then arrive as a storm at a moment when the world they describe has moved on.
+pub fn drop_queued(conn: &Connection, plugin: &str, project: Option<i64>) -> Result<usize> {
+    let q = col::plugin_queue::ALL;
+    let mut filter = Pred::eq(q.plugin, plugin);
+    if let Some(project) = project {
+        filter = filter.and(Pred::eq(q.project, project));
+    }
+    Delete::from(q.table).filter(filter).sql().execute(conn).map_err(StoreEngineError::from)
+}
+
 /// Remove one queued row — what a runner does once the plugin it was handed to has replied (`AMB-D-399`).
 /// Returns whether a row was there to remove, so a double dequeue is visible rather than silent.
 pub fn dequeue(conn: &Connection, id: i64) -> Result<bool> {
@@ -223,6 +243,55 @@ mod tests {
         assert_eq!(r.at, "2026-07-25T09:00:00Z");
         assert_eq!(r.new_state.as_deref(), Some("in_progress"));
         assert_eq!(r.project, Some(3), "the project the event was stamped with rides the copy");
+    }
+
+    /// A plugin being stopped loses what it had waiting, and nobody else's rows go with it.
+    #[test]
+    fn dropping_a_queue_takes_that_plugins_rows_and_no_others() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        queue(&e, "slack", "task.created", 1);
+        queue(&e, "slack", "task.deleted", 2);
+        queue(&e, "mail", "task.created", 3);
+
+        let tx = e.write().unwrap();
+        assert_eq!(tx.drop_queued("slack", None).unwrap(), 2);
+        tx.commit().unwrap();
+
+        assert!(queued_for(e.conn(), "slack", 10).unwrap().is_empty());
+        assert_eq!(queued_for(e.conn(), "mail", 10).unwrap().len(), 1, "another plugin's queue stands");
+    }
+
+    /// Turning a plugin off in one project takes that project's rows only: the same plugin may still be on
+    /// in another (`AMB-D-379`), and its events there were never part of the answer that changed.
+    #[test]
+    fn dropping_one_projects_share_leaves_the_other_projects_rows() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        let queue_in = |project: Option<i64>, id: i64| {
+            let tx = e.write().unwrap();
+            tx.queue_event(&QueuedEvent {
+                plugin: "slack",
+                face: "cli",
+                event: "task.created",
+                record_id: id,
+                actor: "ai",
+                at: "2026-07-25T09:00:00Z",
+                new_state: None,
+                project,
+            })
+            .unwrap();
+            tx.commit().unwrap();
+        };
+        queue_in(Some(1), 1);
+        queue_in(Some(2), 2);
+        queue_in(None, 3);
+
+        let tx = e.write().unwrap();
+        assert_eq!(tx.drop_queued("slack", Some(1)).unwrap(), 1);
+        tx.commit().unwrap();
+
+        let left: Vec<_> =
+            queued_for(e.conn(), "slack", 10).unwrap().into_iter().map(|r| r.project).collect();
+        assert_eq!(left, [Some(2), None], "only the switched-off project's row went");
     }
 
     /// A row fanned out for an event that carries no project reads back as `NULL` — the answer a

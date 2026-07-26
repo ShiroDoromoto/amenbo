@@ -2,12 +2,13 @@
 //!
 //! `disable ≠ uninstall`, the mirror of `install ≠ enable`: [`plugin_trust::disable`](crate::plugin_trust::disable) stops a plugin
 //! firing and keeps everything (the binary, the settings, the consent) so re-enabling costs nothing.
-//! This is the other end — the plugin goes, and so does every trace it left in the five places one can
+//! This is the other end — the plugin goes, and so does every trace it left, wherever one can
 //! accumulate:
 //!
 //! | what | where | how it goes |
 //! |---|---|---|
 //! | the gate and the consent | `config.json` | [`Config::forget_plugin_trust`](crate::config::Config::forget_plugin_trust) |
+//! | the events queued for it, and the lease of whoever is running them | the store's `plugin_queue` / `plugin_runner` rows | [`Store::drop_plugin_delivery`](crate::store::Store::drop_plugin_delivery) (`AMB-D-399`) |
 //! | machine-default settings | `config.json` | [`Config::forget_plugin_config`](crate::config::Config::forget_plugin_config) |
 //! | secrets | the user-area secret file | [`Secrets::forget_plugin`](crate::plugin_secret::Secrets::forget_plugin) + save (**always**, `AMB-D-357`) |
 //! | per-project settings, every project | the store's `plugin_config` rows | [`Store::forget_plugin_config`](crate::store::Store::forget_plugin_config) |
@@ -20,11 +21,12 @@
 //!
 //! **The order is chosen for what a failure leaves.** No filesystem sequence is atomic, so the steps run
 //! from the most dangerous residue to the least: the gate closes and the consent goes *first* (an
-//! interrupted uninstall can never leave a plugin that still fires), the secrets are purged next (bytes
-//! that must not outlive the plugin), then the store rows, the binary, and the execution-log lines last —
-//! secret-free debugging text is the least dangerous residue of all. Stopping anywhere leaves at most an
-//! inert directory or a few stale log lines — the safe residue, and one a re-run of the same command
-//! finishes off, since every step is idempotent and none requires the plugin to still read as installed.
+//! interrupted uninstall can never leave a plugin that still fires), the waiting work goes with it, the
+//! secrets are purged next (bytes that must not outlive the plugin), then the store rows, the binary, and
+//! the execution-log lines last — secret-free debugging text is the least dangerous residue of all.
+//! Stopping anywhere leaves at most an inert directory or a few stale log lines — the safe residue, and one
+//! a re-run of the same command finishes off, since every step is idempotent and none requires the plugin
+//! to still read as installed.
 //!
 //! **Nothing points at a plugin from the backlog** (`AMB-D-357`): tasks and decisions do not reference
 //! plugins, so there is no dangling reference to repair and no cascade to run beyond this list.
@@ -46,6 +48,8 @@ pub struct Removed {
     pub machine_defaults: bool,
     /// Secrets existed in the secret file and have been purged.
     pub secrets: bool,
+    /// How many events were still queued for the plugin and were dropped (`AMB-D-399`).
+    pub queued: usize,
     /// How many per-project setting rows were deleted, across every project.
     pub project_overrides: usize,
     /// How many per-project gate answers were deleted, across every project (`AMB-D-350`'s upper tier).
@@ -63,6 +67,7 @@ impl Removed {
         self.consent
             || self.machine_defaults
             || self.secrets
+            || self.queued > 0
             || self.project_overrides > 0
             || self.project_gates > 0
             || self.directory
@@ -95,7 +100,14 @@ pub fn uninstall(store: &mut Store, plugin: &str) -> Result<Removed> {
     removed.machine_defaults = store.config.forget_plugin_config(plugin);
     store.save_config()?;
 
-    // 2. The secrets, purged unconditionally — the bytes that must not outlive the plugin.
+    // 2. What was queued for it, and the runner working that queue (`AMB-D-399`). Right after the gate,
+    //    because it is the same act: the plugin is not going to run again, so rows waiting for it have no
+    //    condition left under which they would ever be worked, and a lease standing for them would be a
+    //    claim nobody can release. Every project's rows go — the plugin is leaving the machine, not one
+    //    project.
+    removed.queued = store.drop_plugin_delivery(plugin, None)?;
+
+    // 3. The secrets, purged unconditionally — the bytes that must not outlive the plugin.
     let secrets_file = store.paths.plugin_secrets_file();
     let mut secrets = Secrets::load(&secrets_file)?;
     if secrets.forget_plugin(plugin) {
@@ -103,13 +115,13 @@ pub fn uninstall(store: &mut Store, plugin: &str) -> Result<Removed> {
         removed.secrets = true;
     }
 
-    // 3. Every project's settings and gate answers, in one pass each over the single device-wide store.
+    // 4. Every project's settings and gate answers, in one pass each over the single device-wide store.
     //    The gates go with them: a row left behind would be a project still saying "on here" when the
     //    plugin comes back under the same name, which is exactly the inheritance a re-install must not get.
     removed.project_overrides = store.forget_plugin_config(plugin)?;
     removed.project_gates = store.forget_plugin_enable(plugin)?;
 
-    // 4. The binary and its home: what is left if anything above failed is an inert directory.
+    // 5. The binary and its home: what is left if anything above failed is an inert directory.
     let home = store.paths.plugin_dir(plugin);
     match std::fs::remove_dir_all(&home) {
         Ok(()) => removed.directory = true,
@@ -117,7 +129,7 @@ pub fn uninstall(store: &mut Store, plugin: &str) -> Result<Removed> {
         Err(e) => return Err(Error::from(e)),
     }
 
-    // 5. The plugin's runs in the execution log, last and safest: secret-free debugging lines, machine-local
+    // 6. The plugin's runs in the execution log, last and safest: secret-free debugging lines, machine-local
     //    and outside the store. Its per-plugin ring never trims a removed plugin's lines out on its own
     //    (nothing of it runs again to push them), so uninstall clears them or they stay for good
     //    (`AMB-T-2098`). A failure here is a warn inside `forget`, never a failure of the uninstall.
@@ -178,7 +190,22 @@ mod tests {
             |_| true,
         )
         .unwrap();
-        // ...and a line in the execution log, the fifth trace an uninstall must clear (`AMB-T-2098`).
+        // ...and an event still waiting on its queue, which goes with the plugin (`AMB-D-399`).
+        let tx = store.read_model().write().unwrap();
+        tx.queue_event(&crate::store_engine::QueuedEvent {
+            plugin,
+            face: "cli",
+            event: "task.created",
+            record_id: 1,
+            actor: "ai",
+            at: "2026-07-25T09:00:00Z",
+            new_state: None,
+            project: Some(project),
+        })
+        .unwrap();
+        tx.claim_runner(plugin, "runner-1", "2999-01-01T00:00:00Z", "2026-07-25T09:00:00Z").unwrap();
+        tx.commit().unwrap();
+        // ...and a line in the execution log, a trace an uninstall must clear (`AMB-T-2098`).
         crate::plugin_log::record(
             &store.paths.plugin_log_file(),
             &crate::plugin_log::Run {
@@ -204,6 +231,15 @@ mod tests {
         assert!(removed.secrets && removed.directory && removed.runs_log);
         assert_eq!(removed.project_overrides, 1);
         assert_eq!(removed.project_gates, 1);
+        assert_eq!(removed.queued, 1, "what was waiting for it went with it (`AMB-D-399`)");
+        assert!(
+            crate::store_engine::queued_for(store.read_model().conn(), "slack", 10).unwrap().is_empty()
+        );
+        assert_eq!(
+            crate::store_engine::lease_of(store.read_model().conn(), "slack").unwrap(),
+            None,
+            "and no runner is left claiming a queue that is gone",
+        );
         assert!(
             crate::plugin_log::recent(&store.paths.plugin_log_file(), "slack").is_empty(),
             "the plugin's runs are purged from the execution log",

@@ -1090,6 +1090,38 @@ fn personal_mode_has_no_sharing_commands() {
     assert!(t["task"]["id"].is_number(), "id is an integer key");
 }
 
+/// The `status` view's in-progress section is the reservation, and nothing else (`AMB-D-118`). A start day
+/// that has come says the work *may* begin — one more thing than the calendar can say about who is on it —
+/// so reading the day for this section listed work nobody had picked up, and the count said the same. What
+/// the section answers is "what do I have my hands on", which only the status field knows.
+#[test]
+fn status_lists_the_reserved_as_in_progress_and_not_the_merely_startable() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.bound_project();
+
+    // Its day has come and nobody has taken it: startable, not started.
+    let startable = id_str(
+        &cli.json(&[
+            "task", "add", "--title", "開始日だけ来ている", "--project", &pid, "--start", "today",
+            "--json",
+        ])["task"]["id"],
+    );
+    // Reserved, and carrying no day at all — the case the old reading could not see.
+    let reserved = id_str(
+        &cli.json(&["task", "add", "--title", "予約済み", "--project", &pid, "--json"])["task"]
+            ["id"],
+    );
+    cli.json(&["task", "status", &reserved, "in_progress", "--json"]);
+
+    let s = cli.json(&["status", "--json"]);
+    let listed: Vec<String> =
+        s["in_progress"].as_array().unwrap().iter().map(|t| id_str(&t["id"])).collect();
+    assert_eq!(listed, vec![reserved], "only the reserved task is under way: {s}");
+    assert!(!listed.contains(&startable), "a day that has come is not a pair of hands: {s}");
+    assert_eq!(s["counts"]["in_progress"], 1, "the count reads the section, not a second rule: {s}");
+}
+
 /// Strict execution guard: in a bare directory with no `.amenbo` pointer and no AMENBO_HOME /
 /// AMENBO_PROJECT_DIR, the CLI does not quietly create a default root store — it stops and tells you to
 /// init. It covers every surface that opens a store (here, status); version and update open none, an

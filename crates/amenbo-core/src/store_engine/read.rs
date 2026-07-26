@@ -3051,7 +3051,9 @@ pub struct StatusBucketIds {
     pub due_today: Vec<i64>,
     /// `today <= due_on <= today+7` (includes today), ordered by `due_on` then id.
     pub due_week: Vec<i64>,
-    /// Not done, started (`start_on <= today`) and not yet due (`due_on` null or `> today`), id order.
+    /// Reserved — `status == in_progress` — in id order. The only bucket read off the status field
+    /// rather than off a day: what someone has their hands on is what they declared, not what the
+    /// calendar implies.
     pub in_progress: Vec<i64>,
     /// Not done with `today < due_on <= today+7` (excludes today; distinct from `due_week`).
     pub upcoming_7d: usize,
@@ -3135,14 +3137,10 @@ pub fn status_bucket_ids(
         vec![due(), id()],
     )?;
 
-    let in_progress = collect(
-        open()
-            .and(!Pred::is_blank(TA.start_on))
-            .and(Pred::cmp(TA.start_on, "<=", today_s.as_str()))
-            // Started and not yet due — an unwritten due date counts as not-yet-due.
-            .and(Pred::is_blank(TA.due_on).or(Pred::cmp(TA.due_on, ">", today_s.as_str()))),
-        vec![id()],
-    )?;
+    // Under way is a thing a person declares by reserving the task (`AMB-D-118`), so this bucket asks the
+    // status field and no day at all. A start day that has come says the work *may* begin, which is a
+    // different fact — reading it as this one filled the section with work nobody had picked up.
+    let in_progress = collect(Pred::eq(TA.status, "in_progress"), vec![id()])?;
 
     let upcoming_7d = count(
         open()

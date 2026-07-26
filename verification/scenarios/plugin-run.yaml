@@ -21,6 +21,12 @@ description: >
   promises — the way into the checkout — and the call that takes the checkout away again is read
   back off the execution log as having ended cleanly.
 steps:
+  # The plugin resolves everything it does from the repository it is called in, so there has to be
+  # one — the same shape the folder a person binds amenbo to has.
+  - type: action
+    domain: repo
+    op: git-init
+
   - type: action
     domain: task
     op: create

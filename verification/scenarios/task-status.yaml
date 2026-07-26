@@ -7,8 +7,10 @@ title: A task walks its progress states — reserved, commented on, blocked, han
 description: >
   Reserve a freshly registered task, leave a note on its timeline, park it on an external stall, hand
   it back, finish it, and reopen it — reading the state back after each move. The reserve is the
-  double-work guard, so it is checked twice over: the task's own status, and its disappearance from
-  the listing the next session picks fresh work out of.
+  double-work guard, so it is checked from both sides: the moves that go through (the task's own
+  status, and its disappearance from the listing the next session picks fresh work out of), and the
+  two the guard turns away — a second reserve of what is already held, and a reserve of a task whose
+  own declared premise is unmet.
 steps:
   - type: action
     domain: task
@@ -25,6 +27,26 @@ steps:
       target: seed
       status: in_progress
 
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: in_progress
+
+  # The guard's teeth: a second session's reserve of what is already held is turned away, by that
+  # name. A no-op here would let both sessions walk off believing they hold it.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: in_progress
+      refused: already_reserved
+
+  # And it leaves the holder holding it — a refused write that half-landed would be worse than one
+  # that went through.
   - type: assert
     domain: task
     op: field
@@ -142,3 +164,121 @@ steps:
       target: seed
       field: completed
       equals: false
+
+  # The other way a task ends. Something waiting on it is held back while it is open, which is what
+  # makes the terminal worth reading: a task decided against has to release its dependents exactly as
+  # a finished one does, or the work behind it stays stuck on a decision already taken.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — waiting on the one that was dropped
+    as: waiting
+
+  - type: action
+    domain: task
+    op: depend
+    with:
+      target: waiting
+      on: seed
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "ready:yes"
+      target: waiting
+      present: false
+
+  # The refusal that pulls the other way. Nobody holds this one — its own declared premise is unmet —
+  # and naming it by number rather than picking it out of a listing is the point: the guard sits in
+  # the write path, so filtering past it is not what keeps it from being started early.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: waiting
+      status: in_progress
+      refused: not_ready
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: waiting
+      field: status
+      equals: todo
+
+  - type: action
+    domain: task
+    op: reject
+    with:
+      target: seed
+      reason: SCENARIO — decided against, and here is why
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: rejected
+
+  # Closed, but not carried out — the whole point of splitting the two terminals.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: completed
+      equals: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "done:true"
+      target: seed
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo"
+      target: seed
+      present: false
+
+  # The reason is required by the command because it is what a later reader has instead of the work:
+  # it lands on the timeline, beside the note and the stall reason already there.
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — decided against, and here is why
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "ready:yes"
+      target: waiting
+      present: true
+
+  # And the premise settled, the same reserve goes through. What held it was the declaration, not a
+  # state the task was left stuck in — a guard that refused afterwards would strand the work.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: waiting
+      status: in_progress
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: waiting
+      field: status
+      equals: in_progress

@@ -3,8 +3,8 @@
 //!
 //! The pieces this joins already exist: ops write points append semantic events to the transactional
 //! [`outbox`](crate::store_engine::outbox) (`AMB-D-367`); [`Payload`] is the wire shape a plugin receives
-//! (`AMB-D-348`); [`plugin_hooks::fire`](crate::plugin_hooks::fire) launches each hook fire-and-forget,
-//! under a timeout, warning on anything but a clean exit (`AMB-D-352`). What sits between them is two
+//! (`AMB-D-348`); [`plugin_hooks::run_queued`](crate::plugin_hooks::run_queued) runs one hook and records
+//! it, warning on anything but a clean exit and failing nobody (`AMB-D-352`). What sits between them is two
 //! steps, not one:
 //!
 //! 1. **[`fan_out`] — from what happened to what is to do.** It drains the outbox past a cursor, asks a

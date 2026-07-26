@@ -43,7 +43,21 @@ struct Driver {
     /// and is deliberately kept out of the execution log, so this is the only place a later step can
     /// read it from — which is why the assert that reads it has to follow its call.
     last_run: Option<serde_json::Value>,
+    /// The files the `store` actions wrote, under the same names. A scenario has one binding
+    /// namespace — the loader keeps it unique across both — and which of the two maps a name lands
+    /// in follows from the op that bound it: nothing in the store is a path, and no archive is an id.
+    artifacts: HashMap<String, std::path::PathBuf>,
+    /// Set while a step that declared `refused:` is running. It is read where a failed invocation
+    /// is judged, so the arm issuing the command never has to know it might be turned away —
+    /// [`Driver::refused`] puts it up and takes it back down around the one call.
+    refusal: Option<String>,
 }
+
+/// What an expected refusal travels back on. A refusal has to reach [`Driver::refused`] from
+/// wherever the command was issued, and the way out of an arm that every one of them already has is
+/// the `?` on its invocation — so it goes as an `Err`, and a byte no message of ours carries keeps
+/// it apart from a real failure. The code that came back is spliced on after it.
+const REFUSED: &str = "\u{1}refused:";
 
 impl Driver {
     /// Boot a fresh store: `init` creates it and hands back the project every `task add` needs.
@@ -54,12 +68,41 @@ impl Driver {
             project_id: 0,
             bindings: HashMap::new(),
             last_run: None,
+            artifacts: HashMap::new(),
+            refusal: None,
         };
         let v = d.run_json(&["init", "--name", "verify", "--json"])?;
         d.project_id = v["identity"]["project_id"]
             .as_i64()
             .ok_or("init did not report a project_id")?;
         Ok(d)
+    }
+
+    /// Spawn the shipped binary in the isolated store, from a chosen folder. Every call goes
+    /// through here, so the isolation is stated once and cannot be forgotten by an arm that builds
+    /// its own command. Where the command stands is itself an input for anything to do with binding
+    /// — the pointer that decides what a run reaches is found by walking up from the CWD — so those
+    /// steps ask their question from inside the folder they are asking about.
+    fn invoke_in(&self, cwd: &Path, args: &[&str]) -> Result<std::process::Output, String> {
+        // The facet goes on the command line, which is the one input amenbo is to take it by; a call
+        // that names its own is left alone.
+        let mut with_facet = args.to_vec();
+        if !args.contains(&"--actor") {
+            with_facet.extend_from_slice(&["--actor", "human"]);
+        }
+        Command::new(&self.bin)
+            .args(&with_facet)
+            .current_dir(cwd)
+            .env("AMENBO_HOME", &self.session.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .env("NO_COLOR", "1")
+            .output()
+            .map_err(|e| format!("could not run `{}`: {e}", self.bin.display()))
+    }
+
+    /// The same, from the run's own CWD — where every step that is not asking about a folder stands.
+    fn invoke(&self, args: &[&str]) -> Result<std::process::Output, String> {
+        self.invoke_in(&self.session.cwd, args)
     }
 
     /// Run `amenbo <args>` in the isolated store and parse its `--json` output. An `Err` is an
@@ -69,42 +112,131 @@ impl Driver {
         self.run_json_in(&self.session.cwd, args)
     }
 
-    /// The same, from a chosen folder. Where the command stands is itself an input for anything to
-    /// do with binding — the pointer that decides what a run reaches is found by walking up from
-    /// the CWD — so those steps ask their question from inside the folder they are asking about.
+    /// The same, from a chosen folder.
     fn run_json_in(&self, cwd: &Path, args: &[&str]) -> Result<serde_json::Value, String> {
-        // The facet goes on the command line, which is the one input amenbo is to take it by; a call
-        // that names its own is left alone.
-        let mut with_facet = args.to_vec();
-        if !args.contains(&"--actor") {
-            with_facet.extend_from_slice(&["--actor", "human"]);
+        let out = self.invoke_in(cwd, args)?;
+        if let Some(code) = self.refused_code(&out) {
+            return Err(format!("{REFUSED}{code}"));
         }
-        let out = Command::new(&self.bin)
-            .args(&with_facet)
-            .current_dir(cwd)
-            .env("AMENBO_HOME", &self.session.home)
-            .env("AMENBO_UPDATE_CHECK", "0")
-            .env("NO_COLOR", "1")
-            .output()
-            .map_err(|e| format!("could not run `{}`: {e}", self.bin.display()))?;
         let stdout = String::from_utf8_lossy(&out.stdout);
-        let v: serde_json::Value = serde_json::from_str(stdout.trim()).map_err(|e| {
-            format!("`amenbo {}` did not print JSON ({e}); output was:\n{}", args.join(" "), stdout.trim())
-        })?;
+        let v = parse_json(args, &stdout)?;
         if !out.status.success() || v.get("error").is_some() {
             return Err(format!("`amenbo {}` failed: {}", args.join(" "), stdout.trim()));
         }
         Ok(v)
     }
 
-    /// Map one step to a binary call. Returns whether an assert passed (an action always passes
-    /// unless it errors), plus a human note.
+    /// The same, for a command whose exit code is its **verdict** rather than a report on whether
+    /// it ran: `doctor` and `validate` come back non-zero when what they found is bad news, and
+    /// that is a value to judge, not a driver failure. A command that could not run at all still
+    /// says so in an `error` object, which is an `Err` here as everywhere.
+    fn run_check(&self, args: &[&str]) -> Result<serde_json::Value, String> {
+        let out = self.invoke(args)?;
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let v = parse_json(args, &stdout)?;
+        if v.get("error").is_some() {
+            return Err(format!("`amenbo {}` failed: {}", args.join(" "), stdout.trim()));
+        }
+        Ok(v)
+    }
+
+    /// Run for the file it leaves behind rather than for what it prints — `export --out` answers
+    /// with a directory on disk and prose on stdout, so there is no JSON to read and the exit code
+    /// is the whole signal. stderr carries the reason when it fails.
+    fn run_bare(&self, args: &[&str]) -> Result<(), String> {
+        let out = self.invoke(args)?;
+        if let Some(code) = self.refused_code(&out) {
+            return Err(format!("{REFUSED}{code}"));
+        }
+        if !out.status.success() {
+            return Err(format!(
+                "`amenbo {}` failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(())
+    }
+
+    /// Resolve a path a step named against the session's own folder, refusing anything that would
+    /// reach outside it. A scenario writes and lints files in the throwaway CWD and nowhere else —
+    /// this driver is handed real machines to run on, so an absolute path or a `..` in a scenario is
+    /// refused rather than followed.
+    fn in_session(&self, path: &str) -> Result<std::path::PathBuf, String> {
+        let p = Path::new(path);
+        if p.is_absolute() || p.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            return Err(format!("`path: {path}` must stay inside the run's own folder"));
+        }
+        Ok(self.session.cwd.join(p))
+    }
+
+    /// The code a refusal came back with, but only while a step is expecting one. amenbo prints the
+    /// error object on **stderr** and leaves stdout empty, so a refusal is read off the stream it is
+    /// actually on rather than the one a result would come back on. `None` when no refusal is
+    /// expected, when the command succeeded, or when the failure carries no error object at all —
+    /// that last is a binary that could not run, and it stays an execution error.
+    fn refused_code(&self, out: &std::process::Output) -> Option<String> {
+        self.refusal.as_ref()?;
+        if out.status.success() {
+            return None;
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let v: serde_json::Value = serde_json::from_str(stderr.trim()).ok()?;
+        Some(v["error"]["code"].as_str()?.to_string())
+    }
+
+    /// Map one step to a binary call. Returns whether the step passed — an assert's verdict, or a
+    /// `refused:` action's — plus a human note. An action with nothing to prove passes unless it
+    /// errors.
     fn exec(&mut self, step: &Step) -> Result<Outcome, String> {
         match step {
-            Step::Action { domain, op, with, bind } => {
-                self.action(*domain, op, with, bind.as_deref())
-            }
+            Step::Action { domain, op, with, bind } => match with.get("refused") {
+                Some(code) => {
+                    let want = code
+                        .as_str()
+                        .ok_or("`refused` must be the error code the operation is expected to be rejected with")?
+                        .to_string();
+                    self.refused(*domain, op, with, &want)
+                }
+                None => self.action(*domain, op, with, bind.as_deref()),
+            },
             Step::Assert { domain, op, with } => self.assert(*domain, op, with),
+        }
+    }
+
+    /// Run an operation the step says amenbo will turn away, and judge the refusal — the guard in
+    /// front of an operation is only proven by meeting it, and a driver that reads every non-zero
+    /// exit as its own failure can never write that line down.
+    ///
+    /// The op arms are left exactly as they are: the invocation recognises the refusal and unwinds
+    /// the arm through the `?` it already has on its command, which lands back here. So the verdict
+    /// is: refused with the code the step named → pass; refused with another code → fail, since the
+    /// step is about *that* guard; went through → fail, which is the regression this exists to catch.
+    fn refused(&mut self, domain: Domain, op: &str, with: &Args, want: &str) -> Result<Outcome, String> {
+        self.refusal = Some(want.to_string());
+        // A refused op binds nothing, so no binding is offered to the arm (the loader refuses `as:`
+        // on one, and there would be no id to put under the name anyway).
+        let outcome = self.action(domain, op, with, None);
+        self.refusal = None;
+        match outcome {
+            Err(e) => match e.strip_prefix(REFUSED) {
+                Some(code) => Ok(Outcome::assert(
+                    code == want,
+                    format!(
+                        "`{op}` was refused with `{code}` ({})",
+                        if code == want {
+                            "as expected".to_string()
+                        } else {
+                            format!("expected `{want}`, MISMATCH")
+                        }
+                    ),
+                )),
+                None => Err(e), // it did not get as far as a refusal — an execution error as usual
+            },
+            Ok(done) => Ok(Outcome::assert(
+                false,
+                format!("`{op}` went through where `{want}` was expected to refuse it — {} (MISMATCH)", done.note),
+            )),
         }
     }
 
@@ -162,7 +294,8 @@ impl Driver {
                 let status = req_str(with, "status")?;
                 // The move is refused rather than silently ignored (a reserve that is not from todo
                 // comes back `already_reserved`), and `run_json` reads that non-zero exit as an
-                // execution error — so a scenario that walks the states out of order says so.
+                // execution error — so a scenario that walks the states out of order says so. A
+                // step that means to meet the guard declares it with `refused:` and is judged on it.
                 self.run_json(&["task", "status", &target.to_string(), status, "--json"])?;
                 Ok(Outcome::action(format!("moved task {target} to {status}")))
             }
@@ -170,6 +303,12 @@ impl Driver {
                 let target = self.resolve(with)?;
                 self.run_json(&["task", "done", &target.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("marked task {target} done")))
+            }
+            (Domain::Task, "reject") => {
+                let target = self.resolve(with)?;
+                let reason = req_str(with, "reason")?;
+                self.run_json(&["task", "reject", &target.to_string(), "--reason", reason, "--json"])?;
+                Ok(Outcome::action(format!("rejected task {target}: {reason}")))
             }
             (Domain::Task, "reopen") => {
                 let target = self.resolve(with)?;
@@ -344,6 +483,25 @@ impl Driver {
                 self.run_json(&["decision", "accept", &target.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("accepted decision {target}")))
             }
+            (Domain::Decision, "reject") => {
+                let target = self.resolve(with)?;
+                let id = target.to_string();
+                let mut args: Vec<String> =
+                    vec!["decision".into(), "reject".into(), id, "--yes".into(), "--json".into()];
+                // The reason is not a field of its own: it lands on the decision's timeline, which is
+                // where a later reader looks for why the proposal did not carry.
+                if let Some(reason) = with.get("reason").and_then(|v| v.as_str()) {
+                    args.push("--reason".into());
+                    args.push(reason.to_string());
+                }
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!("rejected decision {target}")))
+            }
+            (Domain::Decision, "reopen") => {
+                let target = self.resolve(with)?;
+                self.run_json(&["decision", "reopen", &target.to_string(), "--yes", "--json"])?;
+                Ok(Outcome::action(format!("returned decision {target} to discussion")))
+            }
             (Domain::Decision, "comment") => {
                 let target = self.resolve(with)?;
                 let text = req_str(with, "text")?;
@@ -365,6 +523,117 @@ impl Driver {
                 self.run_json(&["decision", "comment", "rm", &target.to_string(), "--yes", "--json"])?;
                 Ok(Outcome::action(format!("deleted decision comment {target}")))
             }
+            // Hanging bytes or a link on a record. The three owners differ only in the command that
+            // takes them, so one arm carries all three and the domain says which.
+            (Domain::Task | Domain::Decision | Domain::Comment, "attach") => {
+                let target = self.resolve(with)?;
+                let (noun, argv0): (&str, &[&str]) = match domain {
+                    Domain::Task => ("task", &["task", "attach"]),
+                    Domain::Decision => ("decision", &["decision", "attach"]),
+                    _ => ("comment", &["comment", "attach"]),
+                };
+                let id = target.to_string();
+                let mut args: Vec<String> = argv0.iter().map(|s| s.to_string()).collect();
+                args.push(id);
+                // A blob is ingested from a file the run wrote (`repo write-file`); a link is the
+                // URL itself. One or the other — an attach that names neither has nothing to hang.
+                match (with.get("file").and_then(|v| v.as_str()), with.get("url").and_then(|v| v.as_str())) {
+                    (Some(file), None) => {
+                        self.in_session(file)?; // refuse a path that reaches out of the run's folder
+                        args.push(file.to_string());
+                    }
+                    (None, Some(url)) => {
+                        args.push(url.to_string());
+                        args.push("--url".into());
+                    }
+                    _ => return Err("`attach` names either a `file` or a `url`, and exactly one".to_string()),
+                }
+                if let Some(name) = with.get("name").and_then(|v| v.as_str()) {
+                    args.push("--name".into());
+                    args.push(name.to_string());
+                }
+                args.push("--json".into());
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                let att = v["attachment"]["id"].as_i64().ok_or("attach did not report an id")?;
+                if let Some(b) = bind {
+                    self.bindings.insert(b.to_string(), att);
+                }
+                Ok(Outcome::action(format!("attached {att} to {noun} {target}")))
+            }
+            (Domain::Attachment, "rm") => {
+                let target = self.resolve(with)?;
+                self.run_json(&["attach", "rm", &target.to_string(), "--yes", "--json"])?;
+                Ok(Outcome::action(format!("removed attachment {target}")))
+            }
+            // The folder the run works in. `write-file` is a person already having a file there —
+            // what gets attached, and what the lint is pointed at.
+            (Domain::Repo, "write-file") => {
+                let path = req_str(with, "path")?;
+                let content = req_str(with, "content")?;
+                let full = self.in_session(path)?;
+                if let Some(dir) = full.parent() {
+                    std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+                }
+                std::fs::write(&full, content).map_err(|e| format!("could not write {path}: {e}"))?;
+                Ok(Outcome::action(format!("wrote {path} ({} bytes)", content.len())))
+            }
+            // The same, for text a scenario cannot hold itself. A file under `fixtures/` is where the
+            // reference form lives: this tree's prose rule keeps a bare ref out of every `.yaml`, and
+            // the lint has nothing to find unless something really carries one.
+            (Domain::Repo, "copy-fixture") => {
+                let from = req_str(with, "from")?;
+                let path = req_str(with, "path")?;
+                if Path::new(from).is_absolute()
+                    || Path::new(from).components().any(|c| matches!(c, std::path::Component::ParentDir))
+                {
+                    return Err(format!("`from: {from}` must name a file under fixtures/"));
+                }
+                let src = fixtures_dir().join(from);
+                let full = self.in_session(path)?;
+                let bytes = std::fs::read(&src)
+                    .map_err(|e| format!("could not read the fixture {}: {e}", src.display()))?;
+                std::fs::write(&full, &bytes).map_err(|e| format!("could not write {path}: {e}"))?;
+                Ok(Outcome::action(format!("copied the fixture {from} to {path} ({} bytes)", bytes.len())))
+            }
+            // The hooks are written into a git repository, so the scenario has to stand one up first.
+            // This is the one step that is not amenbo — everything it proves is about what amenbo
+            // then does to a repository that is really there.
+            //
+            // It leaves a `main` with one commit on it, rather than the branchless state a bare
+            // `init` leaves behind: a repository with no commit has no branch either, and the
+            // official `worktree` plugin needs one to cut a task's checkout from.
+            (Domain::Repo, "git-init") => {
+                let git = |args: &[&str]| -> Result<(), String> {
+                    let out = Command::new("git")
+                        .args(args)
+                        .current_dir(&self.session.cwd)
+                        .output()
+                        .map_err(|e| format!("could not run git: {e}"))?;
+                    if !out.status.success() {
+                        return Err(format!(
+                            "`git {}` failed: {}",
+                            args.join(" "),
+                            String::from_utf8_lossy(&out.stderr).trim()
+                        ));
+                    }
+                    Ok(())
+                };
+                git(&["init", "-q", "--initial-branch", "main"])?;
+                // Named on the command line rather than left to the machine's git config: a box with
+                // no identity set would fail here, and neither name belongs to anybody.
+                git(&[
+                    "-c", "user.name=verify",
+                    "-c", "user.email=verify@example.invalid",
+                    "commit", "--quiet", "--allow-empty",
+                    "-m", "the branch a scenario cuts from",
+                ])?;
+                Ok(Outcome::action("made the run's folder a git repository on `main`".to_string()))
+            }
+            (Domain::Repo, verb @ ("hooks-install" | "hooks-uninstall")) => {
+                let sub = verb.trim_start_matches("hooks-");
+                self.run_json(&["hooks", sub, "--yes", "--json"])?;
+                Ok(Outcome::action(format!("ran `hooks {sub}` on the run's repository")))
+            }
             (Domain::Decision, "link") => {
                 let target = self.resolve(with)?;
                 let task = self.resolve_key(with, "task")?;
@@ -384,6 +653,45 @@ impl Driver {
                 let base = self.resolve_key(with, "on")?;
                 self.run_json(&["decision", "builds-on", &target.to_string(), "--on", &base.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("decision {target} stands on decision {base}")))
+            }
+            (Domain::Store, "export") => {
+                let out = self.artifact(bind, "export", "");
+                // `--out` takes the attachment files along with the records, which is the shape a
+                // move to another tool is actually made in; it answers with prose, not JSON.
+                self.run_bare(&["export", "--out", path_str(&out)?])?;
+                self.remember(bind, "export", out.clone());
+                Ok(Outcome::action(format!("exported the store to {}", out.display())))
+            }
+            (Domain::Store, "backup") => {
+                let path = self.artifact(bind, "backup", ".amenbo-backup");
+                let v = self.run_json(&["backup", path_str(&path)?, "--json"])?;
+                let bytes = v["bytes"].as_i64().unwrap_or(0);
+                self.remember(bind, "backup", path.clone());
+                Ok(Outcome::action(format!("wrote a {bytes}-byte snapshot to {}", path.display())))
+            }
+            (Domain::Store, "restore") => {
+                let path = self.artifact_ref(with, "target")?;
+                // A destructive replace asks first; the driver is unattended, so it answers up front.
+                let v = self.run_json(&["restore", path_str(&path)?, "--yes", "--json"])?;
+                let saved = v["previous_saved_to"].as_str().unwrap_or("(not reported)");
+                Ok(Outcome::action(format!(
+                    "restored the store from {} (what it replaced was set aside at {saved})",
+                    path.display()
+                )))
+            }
+            (Domain::Comment, "hard-erase") => {
+                let target = self.resolve(with)?;
+                let v = self.run_json(&["hard-erase", "comment", &target.to_string(), "--yes", "--json"])?;
+                let safety = v["backup"]["path"].as_str().unwrap_or("(none reported)");
+                Ok(Outcome::action(format!(
+                    "erased comment {target} from the truth source (safety archive: {safety})"
+                )))
+            }
+            (Domain::Decision, "hard-erase") => {
+                let target = self.resolve(with)?;
+                let body = req_str(with, "body")?;
+                self.run_json(&["hard-erase", "decision", &target.to_string(), "--body", body, "--yes", "--json"])?;
+                Ok(Outcome::action(format!("redacted the body of decision {target}")))
             }
             (Domain::Decision, "unlink") => {
                 let target = self.resolve(with)?;
@@ -645,6 +953,49 @@ impl Driver {
                     ),
                 ))
             }
+            (Domain::Task, "exported") | (Domain::Decision, "exported") | (Domain::Comment, "exported") => {
+                self.judge_exported(domain, with)
+            }
+            (Domain::Store, "snapshot") => {
+                let path = self.artifact_ref(with, "target")?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                // An archive is a file with bytes in it. Whether those bytes put a store back is
+                // what `restore` answers — asking that here would only be guessing at the layout of
+                // something this driver is meant to treat as a black box.
+                let bytes = path.metadata().ok().filter(|m| m.is_file()).map(|m| m.len());
+                let found = bytes.is_some_and(|n| n > 0);
+                let pass = found == present;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "{} {} (expected {}, {})",
+                        path.display(),
+                        match bytes {
+                            Some(n) => format!("holds {n} bytes"),
+                            None => "is not a file on disk".to_string(),
+                        },
+                        if present { "an archive" } else { "nothing" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            (Domain::Store, "doctor") => {
+                let want = req_bool(with, "ok")?;
+                let v = self.run_check(&["doctor", "--json"])?;
+                Ok(judge_check("doctor", want, &v))
+            }
+            (Domain::Store, "validate") => {
+                let want = req_bool(with, "ok")?;
+                // With no target the whole store is checked, which is what a user typing it bare
+                // gets; naming one narrows it to that object.
+                let mut args: Vec<String> = vec!["validate".into()];
+                if with.contains_key("target") {
+                    args.push(self.resolve(with)?.to_string());
+                }
+                args.push("--json".into());
+                let v = self.run_check(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(judge_check("validate", want, &v))
+            }
             (Domain::Decision, "edge") => {
                 let target = self.resolve(with)?;
                 let other = self.resolve_key(with, "other")?;
@@ -776,6 +1127,88 @@ impl Driver {
                     ),
                 ))
             }
+            (Domain::Attachment, "field") => {
+                let target = self.resolve(with)?;
+                let v = self.run_json(&["attach", "show", &target.to_string(), "--json"])?;
+                judge_field(&format!("attachment {target}"), with, &v)
+            }
+            (Domain::Attachment, "listed") => {
+                let target = self.resolve(with)?;
+                let id = self.resolve_key(with, "owner")?;
+                // Which list to ask is not something the id can say. Tasks and decisions number in
+                // sibling spaces, so the same number can name one of each and a bare id is refused as
+                // ambiguous — the owner is named in full. A comment is reached by a flag instead: the
+                // two comment tables number apart, and there is no ref that says which one it is.
+                let kind = req_str(with, "owner_kind")?;
+                let owner = match kind {
+                    "decision" => format!("AMB-D-{id}"),
+                    "task" => format!("AMB-T-{id}"),
+                    _ => id.to_string(),
+                };
+                let args: Vec<&str> = match kind {
+                    "task" | "decision" => vec!["attach", "ls", &owner, "--json"],
+                    "task-comment" => vec!["attach", "ls", "--task-comment", &owner, "--json"],
+                    "decision-comment" => vec!["attach", "ls", "--decision-comment", &owner, "--json"],
+                    other => {
+                        return Err(format!(
+                            "`owner_kind: {other}` is not task / decision / task-comment / decision-comment"
+                        ))
+                    }
+                };
+                let v = self.run_json(&args)?;
+                let rows = v["attachments"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+                judge_listing("attachment", target, &format!("the {kind}'s attachments"), rows, with)
+            }
+            (Domain::Attachment, "saved") => {
+                let target = self.resolve(with)?;
+                let want = req_str(with, "content")?;
+                // Saving the bytes back out is the only thing that proves the ingest kept them: the
+                // row says how many bytes there were, the file says which ones.
+                let out = self.in_session(&format!("saved-{target}"))?;
+                let out_arg = out.to_string_lossy().to_string();
+                self.run_json(&[
+                    "attach", "save", &target.to_string(), "--out", &out_arg, "--force", "--json",
+                ])?;
+                let got = std::fs::read_to_string(&out)
+                    .map_err(|e| format!("could not read back {}: {e}", out.display()))?;
+                let pass = got == want;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "attachment {target} saved {} byte(s), {}",
+                        got.len(),
+                        if pass { "the bytes that went in" } else { "MISMATCH against what went in" }
+                    ),
+                ))
+            }
+            (Domain::Repo, "lint") => {
+                let path = req_str(with, "path")?;
+                self.in_session(path)?;
+                let want =
+                    with.get("hits").and_then(|v| v.as_u64()).ok_or("arg `hits` must be a number")?;
+                // Finding something is how the lint reports — exit code included — so a non-zero
+                // exit here is its verdict rather than a failure to run.
+                let v = self.run_check(&["lint", path, "--json"])?;
+                let hits = v["hits"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+                // A count alone would not say the report locates anything, and the ref itself cannot be
+                // written into a scenario (this tree's prose rule keeps a bare one out of every
+                // `.yaml`), so what a line asks for instead is the line number it was found on.
+                let at = with.get("line").and_then(|v| v.as_u64());
+                let located = match at {
+                    Some(n) => hits.iter().any(|h| h["line"].as_u64() == Some(n)),
+                    None => true,
+                };
+                let pass = hits.len() as u64 == want && located;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "lint reports {} ref(s) in {path}{} (expected {want}, {})",
+                        hits.len(),
+                        at.map(|n| format!(", one of them on line {n}")).unwrap_or_default(),
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             (Domain::Plugin, "ran") => {
                 let name = req_str(with, "name")?;
                 let present = opt_bool(with, "present").unwrap_or(true);
@@ -828,8 +1261,97 @@ impl Driver {
                     ),
                 ))
             }
+            (Domain::Repo, "hooks") => {
+                let hook = req_str(with, "hook")?;
+                let want = req_str(with, "state")?;
+                let v = self.run_json(&["hooks", "status", "--json"])?;
+                let slot = v["hooks"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
+                    .iter()
+                    .find(|h| h["hook"].as_str() == Some(hook));
+                let state = slot.and_then(|h| h["state"]["kind"].as_str()).unwrap_or("no slot");
+                let pass = state == want;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "hook `{hook}` is {state} (expected {want}, {})",
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             _ => Err(unmapped(domain, op)),
         }
+    }
+
+    /// Is the object an earlier step bound in the export written by another? The export is read off
+    /// disk as the document it is, because that document is the whole promise of the capability:
+    /// what another tool receives is this file, not what amenbo would say about it.
+    fn judge_exported(&self, domain: Domain, with: &Args) -> Result<Outcome, String> {
+        let target = self.resolve(with)?;
+        let dir = self.artifact_ref(with, "from")?;
+        let present = opt_bool(with, "present").unwrap_or(true);
+        let file = dir.join("export.json");
+        let text = std::fs::read_to_string(&file)
+            .map_err(|e| format!("could not read the export at {}: {e}", file.display()))?;
+        let v: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|e| format!("the export at {} is not JSON: {e}", file.display()))?;
+        // The tables an object of this domain lands in. A comment is looked for on both timelines:
+        // a bound comment id is whichever of the two the step that posted it made.
+        let (noun, tables): (&str, &[&str]) = match domain {
+            Domain::Task => ("task", &["task"]),
+            Domain::Decision => ("decision", &["decision"]),
+            Domain::Comment => ("comment", &["task_comment", "decision_comment"]),
+            other => return Err(format!("`exported` says nothing about domain `{other:?}`")),
+        };
+        let found = tables.iter().any(|t| {
+            v["tables"][t]
+                .as_array()
+                .is_some_and(|rows| rows.iter().any(|r| r["id"].as_i64() == Some(target)))
+        });
+        let pass = found == present;
+        Ok(Outcome::assert(
+            pass,
+            format!(
+                "{noun} {target} {} the export at {} under {} (expected {}, {})",
+                if found { "is in" } else { "is missing from" },
+                file.display(),
+                tables.join("/"),
+                if present { "carried out" } else { "left behind" },
+                if pass { "as expected" } else { "MISMATCH" }
+            ),
+        ))
+    }
+
+    /// Where a `store` action's file goes: under the session's own scratch space, named after the
+    /// binding that will name it back. A step that binds nothing still gets a slot of its own, so
+    /// two unnamed backups never collide on one path — which `backup` would refuse outright.
+    fn artifact(&self, bind: Option<&str>, kind: &str, ext: &str) -> std::path::PathBuf {
+        let stem = match bind {
+            Some(name) => name.to_string(),
+            None => format!("{kind}-{}", self.artifacts.len()),
+        };
+        self.session.artifacts.join(format!("{stem}{ext}"))
+    }
+
+    /// Record what an action wrote, under the name a later step will ask for it by.
+    fn remember(&mut self, bind: Option<&str>, kind: &str, path: std::path::PathBuf) {
+        let name = match bind {
+            Some(name) => name.to_string(),
+            None => format!("{kind}-{}", self.artifacts.len()),
+        };
+        self.artifacts.insert(name, path);
+    }
+
+    /// Resolve a name to the file an earlier `store` action wrote. The loader proved the name
+    /// resolves to an earlier `as:`, so what is left to catch here is a name bound by an op that
+    /// produced an object rather than a file.
+    fn artifact_ref(&self, with: &Args, key: &str) -> Result<std::path::PathBuf, String> {
+        let name = req_str(with, key)?;
+        self.artifacts.get(name).cloned().ok_or_else(|| {
+            format!("`{key}: {name}` names no file a `store` action wrote in this run")
+        })
     }
 
     /// The folder a step names. A scenario says *which* folder, never where it is: the driver places
@@ -860,7 +1382,8 @@ impl Driver {
 
 /// The outcome of one step.
 struct Outcome {
-    /// An assert's verdict; an action is always `true` unless it errored out of `exec`.
+    /// An assert's verdict — and an action's, when it declared `refused:` and is judged on whether
+    /// it really was turned away. An ordinary action is `true` unless it errored out of `exec`.
     pass: bool,
     note: String,
 }
@@ -872,6 +1395,13 @@ impl Outcome {
     fn assert(pass: bool, note: String) -> Outcome {
         Outcome { pass, note }
     }
+}
+
+/// Where the scenario fixtures live — `verification/fixtures/`, beside the scenarios that name them.
+/// Resolved from this crate's own location rather than from the CWD, so `verify-all` finds them
+/// wherever it is invoked from.
+fn fixtures_dir() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("fixtures")
 }
 
 /// Judge a listing assert: is the row in this listing, and — when the step names a `position` — is it
@@ -988,16 +1518,51 @@ fn judge_field(subject: &str, with: &Args, shown: &serde_json::Value) -> Result<
     }
 }
 
+/// Read a binary's stdout as JSON, naming the call in the failure so a command that printed prose
+/// (or nothing) is recognisable without re-running it by hand.
+fn parse_json(args: &[&str], stdout: &str) -> Result<serde_json::Value, String> {
+    serde_json::from_str(stdout.trim()).map_err(|e| {
+        format!("`amenbo {}` did not print JSON ({e}); output was:\n{}", args.join(" "), stdout.trim())
+    })
+}
+
 fn unmapped(domain: Domain, op: &str) -> String {
     format!(
         "op `{op}` for domain `{domain:?}` is in the scenario registry but not yet mapped in the CLI driver"
     )
 }
 
+/// Judge an integrity read: the check reports a verdict of its own, and the step says which one it
+/// expects. The issue count rides along in the note, since a red one is only useful with its list.
+fn judge_check(tool: &str, want: bool, v: &serde_json::Value) -> Outcome {
+    let ok = v["ok"].as_bool().unwrap_or(false);
+    let issues = v["issues"].as_array().map(Vec::len).unwrap_or(0);
+    Outcome::assert(
+        ok == want,
+        format!(
+            "`{tool}` reports {} over {issues} issue(s) (expected {}, {})",
+            if ok { "sound" } else { "problems" },
+            if want { "sound" } else { "problems" },
+            if ok == want { "as expected" } else { "MISMATCH" }
+        ),
+    )
+}
+
+/// A path as the binary takes it. Non-UTF-8 never comes up — these paths are the driver's own —
+/// but it is refused rather than mangled into one that names something else.
+fn path_str(path: &Path) -> Result<&str, String> {
+    path.to_str()
+        .ok_or_else(|| format!("path {} is not valid UTF-8", path.display()))
+}
+
 fn req_str<'a>(with: &'a Args, key: &str) -> Result<&'a str, String> {
     with.get(key)
         .and_then(|v| v.as_str())
         .ok_or_else(|| format!("arg `{key}` must be a string"))
+}
+
+fn req_bool(with: &Args, key: &str) -> Result<bool, String> {
+    opt_bool(with, key).ok_or_else(|| format!("arg `{key}` must be a boolean"))
 }
 
 fn opt_bool(with: &Args, key: &str) -> Option<bool> {
@@ -1031,6 +1596,10 @@ impl Report {
 
     fn push(&mut self, index: usize, step: &Step, outcome: Outcome) {
         let kind = match step {
+            // A step that declared `refused:` is an action in the schema, but it comes back with a
+            // verdict the way an assert does. Naming it apart says which, so a red line under
+            // `action` never reads as the driver having tripped over its own command.
+            Step::Action { with, .. } if with.contains_key("refused") => "refused",
             Step::Action { .. } => "action",
             Step::Assert { .. } => "assert",
         };
@@ -1058,12 +1627,14 @@ impl Report {
     pub fn print_human(&self) {
         println!("scenario: {} — {}", self.scenario_id, self.title);
         for l in &self.steps {
-            let mark = if l.kind == "action" {
-                "·"
-            } else if l.pass {
-                "✓"
-            } else {
+            // A step that carries no verdict of its own is marked apart, but a failure is a failure
+            // whichever kind it came from — an action can fail too, now that one can be judged.
+            let mark = if !l.pass {
                 "✗"
+            } else if l.kind == "action" {
+                "·"
+            } else {
+                "✓"
             };
             println!("  {mark} step {} [{}] {}", l.index + 1, l.kind, l.note);
         }

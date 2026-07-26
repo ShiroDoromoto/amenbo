@@ -78,12 +78,19 @@ fn cli_only() -> Vec<Driver> {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Step {
-    /// A domain operation that changes state.
+    /// A domain operation that changes state — or, with `refused:` among its args, one the
+    /// scenario says amenbo will turn away.
     Action {
         domain: Domain,
         op: String,
         /// Named arguments for the op. A string value under the key `target` is a
         /// reference to an earlier step's `as:` binding.
+        ///
+        /// One key is not the op's own: `refused: <error code>` says this operation is expected to
+        /// be **rejected**, and names the code it must be rejected with. Then the step is judged
+        /// like an assert — the refusal is what passes, going through is what fails, and a refusal
+        /// for some other reason fails too, since a guard that turns the operation away for the
+        /// wrong reason is not the guard under test.
         #[serde(default)]
         with: Args,
         /// Optional binding name so later steps can refer to what this produced.
@@ -124,7 +131,7 @@ impl Step {
 }
 
 /// Free-form named arguments. Values stay as YAML so a driver interprets them; the loader
-/// only inspects the few keys it validates (`target`, `present`).
+/// only inspects the few keys it validates (`target`, `present`, `ok`, `refused`).
 pub type Args = std::collections::BTreeMap<String, serde_yaml::Value>;
 
 /// The domain object a step touches. Kept small and closed on purpose — an unknown domain
@@ -140,10 +147,17 @@ pub enum Domain {
     /// types — a dimension is reached by name, not by an id an earlier step bound.
     Dimension,
     /// This device's amenbo itself, rather than anything filed in it: its configuration, the
-    /// identity it answers `whoami` with, and the build in place.
+    /// identity it answers `whoami` with, the build in place — and the store as a whole, which is
+    /// what comes out of it (`export`), what is set aside (`backup`), what goes back in (`restore`)
+    /// and whether it is sound (`doctor`).
     Store,
     /// A folder and the project its `.amenbo` pointer names — what an AI launched there may reach.
     Folder,
+    /// A file or a link hung on a task, a decision or a comment — the one place amenbo carries bytes.
+    Attachment,
+    /// The working folder amenbo is used from, rather than anything in the store: the files a person
+    /// has lying there, and the git repository the lint hooks stand in front of the commits of.
+    Repo,
     /// A plugin on this machine: what is installed, whose gate is open, what a call returned, and
     /// what the execution log kept. Named by the name it carries in the catalog, never by a binding.
     Plugin,
@@ -171,7 +185,8 @@ struct OpSpec {
     /// that joins two objects names both sides, and each has to be checked or a typo on the second
     /// one reaches the driver as a binding that was never produced.
     refs: &'static [&'static str],
-    /// Whether this op may carry an `as:` binding (true only for ops that produce an object).
+    /// Whether this op may carry an `as:` binding (true only for ops that produce something a
+    /// later step can name — an object in the store, or the file a `store` action writes beside it).
     binds: bool,
 }
 
@@ -188,6 +203,9 @@ const REGISTRY: &[OpSpec] = &[
     // (and the reserve), `done` / `reopen` / `block` are the three the CLI gives their own verb.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "status", required: &["target", "status"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "done", required: &["target"], refs: &["target"], binds: false },
+    // The other terminal. A reason is required by the command, so it is required here: what separates
+    // work decided against from work carried out is why, and it is recorded rather than remembered.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "reject", required: &["target", "reason"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "reopen", required: &["target"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "block", required: &["target", "reason"], refs: &["target"], binds: false },
     // Editing a task's own fields: `update` sets the ones it names, `clear` takes one back.
@@ -216,6 +234,10 @@ const REGISTRY: &[OpSpec] = &[
     // and the link is what makes it a task's premise.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "edit", required: &["target", "body"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "accept", required: &["target"], refs: &["target"], binds: false },
+    // The other two rulings a proposal can meet: turned down, and un-settled to be discussed again.
+    // A `reason` is optional here as it is on the command, and lands on the decision's timeline.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "reject", required: &["target"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "reopen", required: &["target"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "link", required: &["target", "task"], refs: &["target", "task"], binds: false },
     // The edges between decisions, each named from the newer one: `supersede` replaces an older
     // decision, `builds-on` names a premise to read first, and `unlink` takes an edge back. A pair
@@ -227,6 +249,17 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment", required: &["target", "text"], refs: &["target"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-edit", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-rm", required: &["target"], refs: &["target"], binds: false },
+    // The store as a whole. `export` and `backup` write a file the run keeps, and bind it by the
+    // same `as:` every other producing op uses — so `restore` names the archive it puts back the
+    // way a step names any other earlier result, and a mistyped name is caught here rather than in
+    // a driver.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "export", required: &[], refs: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "backup", required: &[], refs: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "restore", required: &["target"], refs: &["target"], binds: false },
+    // Erasing content from the truth source itself: a comment goes in full, a decision keeps its
+    // number and loses its body to the replacement text.
+    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "hard-erase", required: &["target"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "hard-erase", required: &["target", "body"], refs: &["target"], binds: false },
     // The store's own settings, changed the one way a user can change them.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "config-set", required: &["key", "value"], refs: &[], binds: false },
     // What a folder's binding is made of. A folder is named, not pointed at: `dir` is a plain name
@@ -237,6 +270,19 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "bind", required: &["dir"], refs: &["project"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "unbind", required: &["dir"], refs: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "sync-guide", required: &["dir"], refs: &[], binds: false },
+    // Hanging bytes or a link on a record. Each `attach` names either a `file` the run wrote or a
+    // `url`, and binds the attachment, since managing one afterwards means naming it.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "attach", required: &["target"], refs: &["target"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "attach", required: &["target"], refs: &["target"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "attach", required: &["target"], refs: &["target"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Attachment, op: "rm", required: &["target"], refs: &["target"], binds: false },
+    // The folder the run works in: the files a person already has there, the repository the hooks
+    // are written into, and the two hook commands themselves.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-uninstall", required: &[], refs: &[], binds: false },
     // A plugin's life on this machine. `install` fetches it from the catalog and `enable` opens its
     // gate — two separate acts on purpose, since an installed plugin that never fires is the normal
     // state. `run` calls the command face: `command` is the word the plugin's own face takes, `task`
@@ -261,6 +307,25 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "commented", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "commented", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "activity", required: &["target"], refs: &["target"], binds: false },
+    // What a `store` action left behind: the archive on disk, and whether an export carries the row
+    // for an object an earlier step made. `from` names the export the same way `target` names the
+    // object, so both sides are checked back to a binding.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "snapshot", required: &["target"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "exported", required: &["target", "from"], refs: &["target", "from"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "exported", required: &["target", "from"], refs: &["target", "from"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Comment, op: "exported", required: &["target", "from"], refs: &["target", "from"], binds: false },
+    // The two integrity reads, each by the command a user reaches for. `ok` is the verdict asked
+    // of it; `validate` narrows to one object when a `target` is given.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "doctor", required: &["ok"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "validate", required: &["ok"], refs: &["target"], binds: false },
+    // An attachment read back three ways: its own row, the owner's list it hangs in, and — for a
+    // blob — the bytes coming out again, which is the only proof the ingest kept them.
+    OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "listed", required: &["target", "owner", "owner_kind"], refs: &["target", "owner"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "saved", required: &["target", "content"], refs: &["target"], binds: false },
+    // The repository-side gates: what the lint found in a file, and what is in a hook slot.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "lint", required: &["path", "hits"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "hooks", required: &["hook", "state"], refs: &[], binds: false },
     // A project as it is read back: one row's fields, and whether it is in the listing at all (and
     // where). `archived: true` asks the listing that carries the archived ones.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
@@ -421,10 +486,29 @@ impl Scenario {
                 }
             }
 
-            // `present`, when given, is a boolean.
-            if let Some(v) = step.with().get("present") {
-                if v.as_bool().is_none() {
-                    errs.push(at(i, "`present` must be a boolean".to_string()));
+            // The two yes/no args are booleans wherever they appear: `present` asks whether
+            // something is there, `ok` asks what verdict a check is expected to come back with.
+            for key in ["present", "ok"] {
+                if let Some(v) = step.with().get(key) {
+                    if v.as_bool().is_none() {
+                        errs.push(at(i, format!("`{key}` must be a boolean")));
+                    }
+                }
+            }
+
+            // A step that says its operation will be turned away. It is an action's word — an
+            // assert already comes back with a verdict of its own — and what it names is the code
+            // the refusal has to carry, so a step written against one guard cannot pass on another
+            // guard's refusal.
+            if let Some(v) = step.with().get("refused") {
+                if step.kind() == Kind::Assert {
+                    errs.push(at(i, "`refused` belongs on an action — an assert already carries a verdict".to_string()));
+                } else if v.as_str().is_none() {
+                    errs.push(at(i, "`refused` must be the error code the operation is expected to be rejected with".to_string()));
+                }
+                // Nothing came of an operation that was turned away, so there is nothing to name.
+                if let Step::Action { bind: Some(name), .. } = step {
+                    errs.push(at(i, format!("a refused op produces nothing, so `as: {name}` is not allowed")));
                 }
             }
 
@@ -607,6 +691,139 @@ steps:
         let yaml = format!("drivers: []{GOOD}");
         let errs = load_str(&yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("no driver")));
+    }
+
+    /// The file a `store` action writes is named back through the one binding namespace every
+    /// other result uses, so an archive named at the wrong step is caught here and not by a driver
+    /// looking for a file nobody wrote.
+    #[test]
+    fn a_store_action_binds_the_file_it_wrote() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: action
+    domain: store
+    op: backup
+    as: snapshot
+  - type: action
+    domain: store
+    op: restore
+    with: { target: snapshot }
+  - type: assert
+    domain: store
+    op: snapshot
+    with: { target: snapshot, present: true }
+"#;
+        load_str(yaml).unwrap().validate().expect("valid");
+    }
+
+    #[test]
+    fn restoring_an_archive_nobody_wrote_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: action
+    domain: store
+    op: restore
+    with: { target: snapshot }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("does not resolve")));
+    }
+
+    /// `ok` is the verdict a check is expected to report, so a string that merely reads like one
+    /// ("true") is a scenario bug rather than something a driver should interpret.
+    #[test]
+    fn a_non_boolean_verdict_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: assert
+    domain: store
+    op: doctor
+    with: { ok: "yes" }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`ok` must be a boolean")));
+    }
+
+    /// The refusal vocabulary: an action may declare that amenbo will turn it away, and the code it
+    /// will be turned away with. The op and its args are the ordinary ones — what is under test is
+    /// the guard in front of them, not a second spelling of the command.
+    #[test]
+    fn an_action_may_declare_the_refusal_it_expects() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+    as: held
+  - type: action
+    domain: task
+    op: status
+    with: { target: held, status: in_progress }
+  - type: action
+    domain: task
+    op: status
+    with: { target: held, status: in_progress, refused: already_reserved }
+"#;
+        load_str(yaml).unwrap().validate().expect("valid");
+    }
+
+    /// The code is the whole of it: a refusal on some other ground is a different guard, so the
+    /// arg has to name one rather than merely saying that something went wrong.
+    #[test]
+    fn a_refusal_without_a_code_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T, refused: true }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("must be the error code")));
+    }
+
+    #[test]
+    fn a_refusal_declared_on_an_assert_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: assert
+    domain: store
+    op: doctor
+    with: { ok: true, refused: already_reserved }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("belongs on an action")));
+    }
+
+    /// A binding on a refused op would name something that was never made — and every later step
+    /// reading it would be asserting about a task the store does not hold.
+    #[test]
+    fn binding_a_refused_op_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T, refused: out_of_reach }
+    as: ghost
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("produces nothing")));
     }
 
     #[test]

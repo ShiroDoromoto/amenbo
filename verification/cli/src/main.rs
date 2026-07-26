@@ -17,7 +17,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use amenbo_verify_cli::{json_string, run_scenario};
+use amenbo_verify_cli::{anchor_bin, json_string, run_scenario};
 
 fn main() -> ExitCode {
     let opts = match Opts::parse(std::env::args().skip(1)) {
@@ -86,7 +86,7 @@ impl Opts {
         }
         Ok(Opts {
             scenario: scenario.ok_or("no scenario file given")?,
-            bin: bin.unwrap_or_else(|| PathBuf::from("amenbo")),
+            bin: anchor_bin(bin.unwrap_or_else(|| PathBuf::from("amenbo"))),
             json,
             keep,
         })

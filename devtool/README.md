@@ -71,6 +71,11 @@ So **verify a task in its own app**: with no hand reaching the shared bundle,
 two parallel sessions cannot install over each other, and the collision is gone
 by construction rather than by taking turns.
 
+What the instance opens on is the shared dev store as it was when the task
+started. Anything a screen needs *beyond* that is put there with
+[`task cli`](#devtool-task-cli-id---no-build----amenbo-args) below, in the
+instance's own store — never in the shared one, which no task may edit.
+
 devtool provisions and deletes the instance; the Makefile builds it. That split
 is deliberate — a bundle costs minutes to build and ~38MB on disk, so only the
 tasks that actually look at a GUI pay for one. Beyond seeding that instance's
@@ -121,6 +126,47 @@ yours to clear:
   behind. `devtool task finish <id>`.
 - **the reservation was rejected (`already_reserved`)** — another session reserved it
   first. The reservation is a compare-and-swap, so it only takes from `todo`.
+
+### `devtool task cli <id> [--no-build] -- <amenbo args…>`
+
+Runs an amenbo command against **the store the task's own dev GUI reads**, so a
+screen can be given something to show. A dev GUI shows what is in its store: a
+rejected task, a card with a due date, a plugin in some state all have to be
+*put there* before the screen that renders them can be looked at.
+
+```sh
+devtool task cli 696 -- --actor human --project myproj task add --title 'due today' --due today
+devtool task cli 696 -- --actor human --project myproj task reject 5 --reason 'out of scope'
+```
+
+The CLI is the **worktree's own** `target/debug/amenbo` — rebuilt first, unless
+`--no-build` — pointed at that store with `AMENBO_HOME`. Nothing is built per
+task that was not being built anyway: the app-data name is fixed at build time
+(`AMENBO_APP_NAME`), but what it selects is a *directory*, and `AMENBO_HOME`
+names the same one at run time — the seam `make verify` already isolates
+through. Before this existed the only way in was to rebuild the CLI with
+`AMENBO_APP_NAME=amenbo-dev-<id>`: two minutes, for a binary one task could use.
+
+Details worth knowing:
+
+- **Arguments go after `--`.** Without it a `--json` of amenbo's would be read
+  as a flag of devtool's.
+- **The exit code is amenbo's**, so a seeding step that failed fails visibly.
+- **It runs in the store's own directory.** Relative paths resolve there, and a
+  `bind` writes its `.amenbo` beside the store it points into — which teardown
+  reclaims with the rest of the instance. In the worktree that same pointer
+  would be a live one for *any* amenbo run there, the production binary
+  included, which is the reach the worktree is kept outside the repo to deny.
+- **The binary still introduces itself by its own channel** (it was not built
+  with `AMENBO_APP_NAME`), so what is keyed to the channel rather than the store
+  — the command name in guidance text, the perf log's default — reads as
+  production. It writes the right store; it says the wrong name doing it.
+- **It will migrate that store if the tree is ahead of it.** An isolated store
+  is an arm of the migration gate, and that is the wanted answer here: the
+  task's own GUI is built from the same tree and would carry it forward the
+  moment it opened.
+
+macOS only, like everything else about the per-task instance.
 
 ### `devtool task finish <id> [--base main] [--force] [--reset]`
 
@@ -285,3 +331,6 @@ against the real API stay.
 
 - `AMENBO_BIN` — backlog binary for `status`/`show` (default `amenbo`). Set to
   `amenbo-dev` to drive an isolated store in tests.
+- `AMENBO_HOME` — not read, **set**: `task cli` puts the task's own store there
+  for the CLI it runs. It is amenbo's own isolation seam, the same one
+  `make verify` points at a mktemp store.

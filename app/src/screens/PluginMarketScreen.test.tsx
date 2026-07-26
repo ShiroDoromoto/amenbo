@@ -62,7 +62,7 @@ const catalogOf = (n: number): PluginCatalog => ({
     listed: i < 4,
     featured: false,
   })),
-  sources: [{ url: "https://official", official: true, reachable: true, offered: n }],
+  sources: [{ url: "https://official", name: "amenbo", fingerprint: "6272CBB782CB57A0", official: true, reachable: true, offered: n }],
   dropped: 0,
 });
 
@@ -189,7 +189,7 @@ describe("PluginMarketScreen", () => {
   it("reports a catalog it could not reach instead of calling it empty", () => {
     hoisted.catalog = {
       entries: [],
-      sources: [{ url: "https://third", official: false, reachable: false, offered: 0 }],
+      sources: [{ url: "https://third", name: "third", fingerprint: null, official: false, reachable: false, offered: 0 }],
       dropped: 0,
     };
     render();
@@ -282,8 +282,8 @@ describe("PluginMarketScreen — the catalogs it merges", () => {
   const twoSources: PluginCatalog = {
     ...catalogOf(2),
     sources: [
-      { url: "https://official", official: true, reachable: true, offered: 2 },
-      { url: "https://third", official: false, reachable: false, offered: 0 },
+      { url: "https://official", name: "amenbo", fingerprint: "6272CBB782CB57A0", official: true, reachable: true, offered: 2 },
+      { url: "https://third", name: "third", fingerprint: null, official: false, reachable: false, offered: 0 },
     ],
   };
 

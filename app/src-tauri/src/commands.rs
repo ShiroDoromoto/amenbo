@@ -4330,6 +4330,11 @@ pub struct PluginEntryDto {
 #[serde(rename_all = "camelCase")]
 pub struct PluginCatalogSourceDto {
     url: String,
+    /// What to call it: the name given at registration, or amenbo's own for the official catalog.
+    name: String,
+    /// The fingerprint of the key this catalog's plugins are trusted on (`AMB-D-389`). `None` is a
+    /// catalog that published none — browsable, and nothing on it installs.
+    fingerprint: Option<String>,
     official: bool,
     /// Whether it answered at all — from the network or, failing that, its cache. `false` contributes
     /// nothing to the list, and is what the front end tells the user about rather than failing the view.
@@ -4389,6 +4394,8 @@ pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
                 .into_iter()
                 .map(|s| PluginCatalogSourceDto {
                     url: s.url,
+                    name: s.name,
+                    fingerprint: s.fingerprint,
                     official: s.official,
                     reachable: s.reachable,
                     offered: s.offered,
@@ -4401,20 +4408,26 @@ pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
     .map_err(|e| -> CmdError { format!("プラグインカタログの取得に失敗しました: {e}").into() })?
 }
 
-/// Register a third-party catalog so browsing shows what it offers (`AMB-D-347`). Returns `false` when
-/// the URL was already registered — idempotent, not an error.
+/// Register a third-party catalog so browsing shows what it offers (`AMB-D-347`), pinning the key it
+/// publishes (`AMB-D-389`). Returns `false` when the registration already said exactly this —
+/// idempotent, not an error.
 ///
-/// Registering widens **what the user sees**, never what an install accepts: an asset is trusted only
-/// by amenbo's own catalog key (`AMB-D-371`), and adding a source does not touch that door. Core
-/// refuses a URL that is not `http(s)://…`, and the official catalog's own URL (it is not a
-/// third-party source and is merged first anyway).
+/// Core refuses a URL that is not `http(s)://…`, the official catalog's own URL (it is not a
+/// third-party source and is merged first anyway), and a catalog that now publishes a **different**
+/// key than the one pinned: trusting a new key is unregistering and registering again.
 ///
-/// The caller browses again afterwards, which is what fetches the newly registered catalog — so this
-/// does no network I/O of its own and stays a quick write of one small file.
+/// **The fingerprint is not shown on screen yet** — the consent dialog that puts it in front of the
+/// user before the pin is its own change (`AMB-T-2269`), and this door registers the way the button
+/// already did. Nothing rests on the pin until an install resolves across catalogs (`AMB-T-2106`);
+/// the CLI's `plugin catalog add` shows and confirms the fingerprint today.
+///
+/// The key is fetched here (one small document beside the catalog); the entries themselves arrive when
+/// the caller browses again.
 #[tauri::command]
-pub fn plugin_catalog_add_source(url: String) -> Result<bool, CmdError> {
+pub fn plugin_catalog_add_source(url: String, name: Option<String>) -> Result<bool, CmdError> {
     let paths = amenbo_core::config::Paths::resolve()?;
-    amenbo_core::plugin_catalog::add_source(&paths, &url).map_err(CmdError::from)
+    let probe = amenbo_core::plugin_catalog::probe_source(&paths, &url).map_err(CmdError::from)?;
+    amenbo_core::plugin_catalog::add_source(&paths, &probe, name.as_deref()).map_err(CmdError::from)
 }
 
 /// Unregister a third-party catalog and drop its cached copy (`AMB-D-347`). Returns `false` when the

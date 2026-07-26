@@ -541,13 +541,20 @@ pub enum PluginCatalogCmd {
     /// catalog fresh on disk answers without a request.
     List,
 
-    /// Register a third-party catalog by the URL of its `catalog.json`. Idempotent: registering the same
-    /// URL twice is a no-op. Refuses a non-`http(s)` URL and the official catalog's own URL. The catalog is
-    /// fetched once here so the first browse is warm; an unreachable URL still registers (it will be
-    /// retried on the next browse).
+    /// Register a third-party catalog by the URL of its `catalog.json`, pinning the signing key it
+    /// publishes beside it. The fingerprint is shown and confirmed first: plugins installed from this
+    /// catalog are trusted on that key, so registering one is a trust decision (`--yes` to confirm
+    /// non-interactively). A catalog that publishes no key registers without a question and can only be
+    /// browsed. A catalog that has changed its key is refused — unregister it and register it again to
+    /// trust the new one. Idempotent, and refuses a non-`http(s)` URL and the official catalog's own URL.
+    /// The catalog is fetched once here so the first browse is warm; an unreachable URL still registers
+    /// (it will be retried on the next browse).
     Add {
         /// the URL of the third-party catalog's `catalog.json`
         url: String,
+        /// what to call this catalog on screen (default: the host of its URL)
+        #[arg(long)]
+        name: Option<String>,
     },
 
     /// Unregister a third-party catalog by its URL, and drop its cached copy. Idempotent: removing a URL

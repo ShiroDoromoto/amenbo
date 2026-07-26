@@ -21,6 +21,11 @@
 //! but never sign — the same shape as the updater public key in `tauri.conf.json`, and every TLS /
 //! OS-code-signing trust store.
 //!
+//! A registered third-party catalog is verified against **its own** key rather than this one
+//! (`AMB-D-389`), so the key is a parameter there and the two pieces that make one readable —
+//! [`read_public_key`] out of a published `.pub` file, and [`key_fingerprint`] for the human being
+//! asked to consent — live here too, beside the shape they both know.
+//!
 //! This module is verification only: it does not fetch, download, or store. The caller supplies the bytes
 //! (from the network at install, or from disk at run) and the manifest fields.
 
@@ -154,6 +159,55 @@ pub fn verify_asset(
 /// genuinely a parameter — a test signing its own fixtures.
 pub fn verify_catalog_asset(bytes: &[u8], signature: Option<&str>, checksum: &str) -> Result<()> {
     verify_asset(bytes, signature, checksum, CATALOG_PUBLIC_KEY)
+}
+
+/// The base64 public key out of a minisign `.pub` file — what a catalog publishes beside its
+/// `catalog.json` for a registration to pin (`AMB-D-389`).
+///
+/// minisign writes two lines, a comment then the key, but the file travels by copy and paste and comes
+/// back with a wrapped comment, a missing one, or a trailing blank line. So every line is tried and the
+/// first one that is a usable key is the key. Fail-closed: a document with no key line in it is an
+/// error, never "this catalog publishes no key" — that answer belongs to a catalog that serves nothing
+/// at the address at all, and reading a broken file as an absence would quietly drop a pin the
+/// publisher meant to offer.
+pub fn read_public_key(text: &str) -> Result<String> {
+    text.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && PublicKey::from_base64(line).is_ok())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            Error::invalid(
+                "no minisign public key in the document (expected the key line of a .pub file)",
+                "minisign 公開鍵が見つかりません（.pub ファイルの鍵の行が必要です）",
+            )
+        })
+}
+
+/// The fingerprint amenbo shows for a public key, and the handle the publisher can quote back: the
+/// minisign key id, 16 uppercase hex.
+///
+/// It is the id minisign itself writes into the `.pub` file's comment line
+/// (`untrusted comment: minisign public key 6272CBB782CB57A0`), which is why it is the fingerprint here
+/// — a publisher can read it off their own key file and put it in their README, and a user comparing
+/// the two is comparing the same string, not two encodings of one.
+///
+/// What the pin holds is the **whole key**, not this; the fingerprint is the short form a human is
+/// shown while consenting (`AMB-D-389`), and the comparison amenbo makes later is over the key itself.
+pub fn key_fingerprint(public_key: &str) -> Result<String> {
+    use base64::Engine as _;
+    // Parse first: the fingerprint is read out of raw bytes, so the key has to be a key before its
+    // bytes mean anything.
+    PublicKey::from_base64(public_key).map_err(|e| {
+        Error::invalid(
+            format!("invalid catalog public key: {e}"),
+            format!("カタログ公開鍵が不正です：{e}"),
+        )
+    })?;
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(public_key.trim())
+        .map_err(|e| Error::invalid(format!("public key is not base64: {e}"), format!("公開鍵が base64 ではありません：{e}")))?;
+    // `Ed` + an 8-byte little-endian key id + the 32-byte key; minisign prints the id big-endian.
+    Ok(raw[2..10].iter().rev().map(|b| format!("{b:02X}")).collect())
 }
 
 #[cfg(test)]
@@ -323,5 +377,47 @@ yO4MZq6nO8TD4ypgwfYImIKz9E1tM3szwA/S9CRXLrH30HP+gQHXcL12wngoJy9uCBgHuaIsrnRo17T3
     fn the_catalog_door_refuses_an_unsigned_asset() {
         let err = verify_catalog_asset(ASSET, None, ASSET_SHA256).unwrap_err();
         assert!(format!("{err:?}").contains("unsigned"), "the missing signature is the reason");
+    }
+
+    // ---- a published key, and the fingerprint shown for it (`AMB-D-389`) ----
+
+    /// What minisign writes: a comment line, then the key. Both are read off a real file, so the
+    /// fingerprint here is checked against the id minisign itself put in the comment.
+    const PUB_FILE: &str =
+        "untrusted comment: minisign public key 6272CBB782CB57A0\nRWSgV8uCt8tyYg74JbwBblWoE+g7bxSGvK8blkKW7gUo3EuBXaqy5oMR\n";
+
+    #[test]
+    fn the_key_line_is_read_out_of_a_published_pub_file() {
+        assert_eq!(read_public_key(PUB_FILE).unwrap(), CATALOG_PUBLIC_KEY);
+    }
+
+    /// The file travels by copy and paste: a missing comment, a blank line, trailing spaces. None of
+    /// those is a different key, so none of them may read as one.
+    #[test]
+    fn a_key_survives_the_wrapping_it_arrives_in() {
+        assert_eq!(read_public_key(CATALOG_PUBLIC_KEY).unwrap(), CATALOG_PUBLIC_KEY);
+        let messy = format!("\n  untrusted comment: whatever  \n  {CATALOG_PUBLIC_KEY}  \n\n");
+        assert_eq!(read_public_key(&messy).unwrap(), CATALOG_PUBLIC_KEY);
+    }
+
+    /// A document with no key in it is an error, not an absence — see [`read_public_key`].
+    #[test]
+    fn a_document_that_holds_no_key_is_refused() {
+        assert!(read_public_key("").is_err());
+        assert!(read_public_key("untrusted comment: minisign public key\nnot-a-key\n").is_err());
+        assert!(read_public_key("<!doctype html><title>404</title>").is_err(), "an error page is not a key");
+    }
+
+    /// The fingerprint is the id minisign prints, so a publisher quoting their own `.pub` comment and a
+    /// user reading amenbo's prompt are comparing one string.
+    #[test]
+    fn the_fingerprint_is_the_key_id_minisign_shows() {
+        assert_eq!(key_fingerprint(CATALOG_PUBLIC_KEY).unwrap(), "6272CBB782CB57A0");
+        assert_ne!(
+            key_fingerprint(TEST_PUBKEY).unwrap(),
+            key_fingerprint(CATALOG_PUBLIC_KEY).unwrap(),
+            "two keys, two fingerprints"
+        );
+        assert!(key_fingerprint("not-a-key").is_err());
     }
 }

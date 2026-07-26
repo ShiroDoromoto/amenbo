@@ -4716,13 +4716,163 @@ fn plugin_catalog_registers_lists_and_removes_a_third_party_source() {
     let sources = listed["sources"].as_array().unwrap();
     assert_eq!(sources.len(), 2, "official plus the one registered source");
     assert_eq!(sources[0]["official"], true, "official is first");
+    assert_eq!(
+        sources[0]["fingerprint"], "6272CBB782CB57A0",
+        "the official catalog's key is the one amenbo ships (`AMB-D-371`)"
+    );
     let third = sources.iter().find(|s| s["url"] == url).expect("the source is listed");
     assert_eq!(third["reachable"], false, "and marked unreachable");
+    assert_eq!(third["name"], "127.0.0.1:1", "named after its host, having been given no name");
+    assert!(third["fingerprint"].is_null(), "it published no key: browsable, installs nothing");
 
     let removed = cli.json(&["plugin", "catalog", "remove", url, "--json"]);
     assert_eq!(removed["removed"], true, "it was registered, so it is removed");
     let after = cli.json(&["plugin", "catalog", "list", "--json"]);
     assert_eq!(after["sources"].as_array().unwrap().len(), 1, "back to the official catalog alone");
+}
+
+/// A one-shot static host on the loopback, for a catalog that has to actually answer: registration
+/// fetches the key beside `catalog.json`, and no fixture on disk can stand in for a URL being fetched.
+/// It serves each path from the map until the test drops it, and it answers 404 for anything else,
+/// which is how "this catalog publishes no key" is expressed.
+struct StaticHost {
+    port: u16,
+    routes: std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl StaticHost {
+    fn serve(routes: Vec<(String, String)>) -> StaticHost {
+        use std::io::{Read as _, Write as _};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
+        let port = listener.local_addr().unwrap().port();
+        let routes = std::sync::Arc::new(std::sync::Mutex::new(routes));
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (served, flag) = (routes.clone(), stop.clone());
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                if flag.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+                let Ok(mut stream) = stream else { return };
+                let mut buf = [0u8; 1024];
+                let read = stream.read(&mut buf).unwrap_or(0);
+                let request = String::from_utf8_lossy(&buf[..read]).to_string();
+                let path = request.split_whitespace().nth(1).unwrap_or("/").to_string();
+                let body = served.lock().unwrap().iter().find(|(p, _)| *p == path).map(|(_, b)| b.clone());
+                let response = match body {
+                    Some(body) => format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    ),
+                    None => "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        .to_string(),
+                };
+                let _ = stream.write_all(response.as_bytes());
+            }
+        });
+        StaticHost { port, routes, stop }
+    }
+
+    fn url(&self, path: &str) -> String {
+        format!("http://127.0.0.1:{}{path}", self.port)
+    }
+
+    /// Replace what one path serves, the host keeping its port — how a publisher rotating their key
+    /// looks from the outside.
+    fn set(&self, path: &str, body: &str) {
+        let mut routes = self.routes.lock().unwrap();
+        routes.retain(|(p, _)| p != path);
+        routes.push((path.to_string(), body.to_string()));
+    }
+}
+
+impl Drop for StaticHost {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        // Unblock the accept loop so the thread sees the flag and returns.
+        let _ = std::net::TcpStream::connect(("127.0.0.1", self.port));
+    }
+}
+
+/// Registering a catalog that publishes a key is a trust decision, not a bookmark (`AMB-D-389`): the
+/// fingerprint is put in front of whoever is deciding, the key is pinned on their consent, and a catalog
+/// that later publishes a *different* key is refused rather than re-pinned.
+#[test]
+fn plugin_catalog_pins_the_key_a_catalog_publishes_and_refuses_a_changed_one() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    // Seed the official cache so the merge never reaches the real catalog over the network.
+    let registry = cli.home.join("plugins").join("registry");
+    std::fs::create_dir_all(&registry).unwrap();
+    std::fs::write(
+        registry.join("official.json"),
+        r#"{"catalog_v": 1, "generated_at": "2026-07-23T04:57:10Z", "plugins": []}"#,
+    )
+    .unwrap();
+
+    // Two real minisign public keys — the catalog key amenbo ships, and the throwaway test key beside it
+    // in `plugin_provenance`. Which key is which does not matter here; that they are two does.
+    const KEY_A: &str = "RWSgV8uCt8tyYg74JbwBblWoE+g7bxSGvK8blkKW7gUo3EuBXaqy5oMR";
+    const KEY_B: &str = "RWSw3wZ34b1PMyHu4KajlLhV0SdlMAgQGefo4pFIxv7MgRoWSVpCVXSE";
+    let catalog = r#"{"catalog_v": 1, "generated_at": "2026-07-23T04:57:10Z", "plugins": []}"#;
+
+    let host = StaticHost::serve(vec![
+        ("/works/catalog.json".to_string(), catalog.to_string()),
+        (
+            "/works/catalog-key.pub".to_string(),
+            format!("untrusted comment: minisign public key 6272CBB782CB57A0\n{KEY_A}\n"),
+        ),
+    ]);
+    let url = host.url("/works/catalog.json");
+
+    // A --json run is non-interactive, so the consent has to be declared: without --yes it is refused.
+    let (_out, code) = cli.run(&["plugin", "catalog", "add", &url, "--json"]);
+    assert_ne!(code, 0, "pinning a key non-interactively takes --yes");
+    let listed = cli.json(&["plugin", "catalog", "list", "--json"]);
+    assert_eq!(listed["sources"].as_array().unwrap().len(), 1, "and nothing was registered");
+
+    let added = cli.json(&["plugin", "catalog", "add", &url, "--name", "the works", "--yes", "--json"]);
+    assert_eq!(added["added"], true);
+    assert_eq!(added["fingerprint"], "6272CBB782CB57A0", "the fingerprint of what was pinned");
+    assert_eq!(added["name"], "the works", "registered under the name it was given");
+
+    let listed = cli.json(&["plugin", "catalog", "list", "--json"]);
+    let source = listed["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["url"] == serde_json::json!(url))
+        .expect("the source is listed")
+        .clone();
+    assert_eq!(source["fingerprint"], "6272CBB782CB57A0", "the pin is what the listing shows");
+    assert_eq!(source["reachable"], true, "and the catalog itself answered");
+
+    // The same key again is the ordinary case: no change, and no second question.
+    let again = cli.json(&["plugin", "catalog", "add", &url, "--name", "the works", "--yes", "--json"]);
+    assert_eq!(again["added"], false, "registering the same catalog again is a no-op");
+
+    // The publisher rotates their key, same URL. amenbo will not take the new one on the old consent.
+    host.set("/works/catalog-key.pub", &format!("{KEY_B}\n"));
+    let (_out, code) = cli.run(&["plugin", "catalog", "add", &url, "--yes"]);
+    assert_ne!(code, 0, "a different key is refused, not swallowed");
+
+    let listed = cli.json(&["plugin", "catalog", "list", "--json"]);
+    let still = listed["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["url"] == serde_json::json!(url))
+        .expect("still registered")
+        .clone();
+    assert_eq!(still["fingerprint"], "6272CBB782CB57A0", "the pin taken at registration stands");
+
+    // Unregistering is what lets go of a pin, so the new key can be consented to from scratch.
+    cli.json(&["plugin", "catalog", "remove", &url, "--json"]);
+    let re_added = cli.json(&["plugin", "catalog", "add", &url, "--yes", "--json"]);
+    assert_eq!(re_added["added"], true, "registering again is the way to trust the new key");
+    assert_ne!(re_added["fingerprint"], "6272CBB782CB57A0", "and it pins the key served now");
 }
 
 /// The JSON a **runner process** wrote at `path`, waited for (`AMB-T-2175`).

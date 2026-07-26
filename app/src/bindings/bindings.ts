@@ -454,7 +454,16 @@ dropped: number, };
  * One catalog that fed the merged list — the official one first, then each registered third-party
  * one in registration order.
  */
-export type PluginCatalogSourceDto = { url: string, official: boolean, 
+export type PluginCatalogSourceDto = { url: string, 
+/**
+ * What to call it: the name given at registration, or amenbo's own for the official catalog.
+ */
+name: string, 
+/**
+ * The fingerprint of the key this catalog's plugins are trusted on (`AMB-D-389`). `None` is a
+ * catalog that published none — browsable, and nothing on it installs.
+ */
+fingerprint: string | null, official: boolean, 
 /**
  * Whether it answered at all — from the network or, failing that, its cache. `false` contributes
  * nothing to the list, and is what the front end tells the user about rather than failing the view.

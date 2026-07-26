@@ -35,9 +35,9 @@
 //!
 //! Scope of install/update: the official catalog, one URL. **Third-party catalogs** register beside it and
 //! merge into a browsing view ([`discover`], `AMB-T-1980`) — which is why the cache is a **named file** in
-//! the registry directory, not the directory itself — but they never enter the install path: an asset is
-//! trusted only by amenbo's catalog key (`AMB-D-371`), so install and update read the official catalog
-//! alone.
+//! the registry directory, not the directory itself. A registration carries the key that catalog publishes,
+//! pinned on the user's consent (`AMB-D-389`, [`Source`]), which is what an install off it will verify
+//! against; teaching install and update to resolve across the merged view is its own change.
 
 use crate::config::Paths;
 use crate::error::{Error, Result};
@@ -60,6 +60,11 @@ pub const SUPPORTED_CATALOG_V: u32 = 1;
 /// The cached copy of the official catalog, under [`Paths::registry_dir`]. Named, not anonymous, because
 /// third-party catalogs land beside it (`AMB-T-1980`).
 pub const OFFICIAL_CACHE_FILE_NAME: &str = "official.json";
+
+/// What the official catalog is called where every catalog is named ([`DiscoveredSource`]). It is not
+/// registered and has no record to hold a name, but a list that names the others and leaves this one as a
+/// URL reads as though it were the odd one out.
+pub const OFFICIAL_CATALOG_NAME: &str = "amenbo";
 
 /// How long a catalog fetch may take before it is treated as a failure (and the cache answers instead).
 const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
@@ -390,40 +395,124 @@ fn read_detail(json: &str, entry: &ListEntry) -> Result<Detail> {
 //
 // A third-party catalog is a second index the same shape as the official one, at the author's own URL
 // (`AMB-D-347`, the "free" tier). The unit registered is the **catalog**, never the plugin: what grows is
-// the number of indexes (few), not per-plugin requests (many). The list of registered URLs is a small
-// file in the registry directory; each catalog is fetched and cached in its own named file beside the
+// the number of indexes (few), not per-plugin requests (many). The list of registrations is a small file
+// in the registry directory; each catalog is fetched and cached in its own named file beside the
 // official one, and `discover` merges them for browsing.
 //
-// **Discovery only.** A merged catalog is what a user browses (`AMB-T-1982`); it is *not* what an install
-// resolves against. Install and update keep reading the official catalog alone (`load`/`fresh`),
-// because an asset is trusted only by amenbo's catalog key (`AMB-D-371`): a third-party asset does not
-// verify and so cannot be installed regardless, and letting a third-party name shadow an official one in
-// the install path buys an attacker nothing but confusion. So the merge lives here, apart from the
-// install path, and official entries always win a name clash.
+// **Registering is a trust decision, not a bookmark** (`AMB-D-389`). A registration holds the key the
+// catalog published beside its `catalog.json`, taken once and pinned, with the fingerprint put in front
+// of the person agreeing to it (`probe_source` works out what is being agreed to; `add_source` writes
+// it). What that key is *for* is the install path: an asset off a registered catalog verifies against
+// **that catalog's** key rather than the one amenbo ships, so the trust root stays "the keeper of the
+// shelf vouched for what is on it" one shelf down. A catalog that publishes no key is browsable and
+// installs nothing.
+//
+// A pin is compared only where it can mean something: at registration, where a changed key is refused
+// rather than swallowed, and at install, over an asset's signature. The catalog document itself carries
+// no signature (see the module note), so re-fetching the key on every browse would cost a request per
+// catalog and prove nothing.
+//
+// Official entries always win a name clash in the merge, as they did when the merge was browsing only.
 
-/// The name, under [`Paths::registry_dir`], of the list of registered third-party catalog URLs.
+/// The name, under [`Paths::registry_dir`], of the list of registered third-party catalogs.
 pub const SOURCES_FILE_NAME: &str = "sources.json";
+
+/// What a catalog publishes its own public key under, beside its `catalog.json` (`AMB-D-389`) — the
+/// document a registration reads to pin.
+pub const CATALOG_KEY_FILE_NAME: &str = "catalog-key.pub";
 
 /// The registered-sources file, `<base>/plugins/registry/sources.json`.
 fn sources_file(paths: &Paths) -> PathBuf {
     paths.registry_dir().join(SOURCES_FILE_NAME)
 }
 
-/// The on-disk shape of the sources list — an envelope so a field can be added later without an older
-/// build misreading it, the same discipline as the catalog envelope.
-#[derive(Debug, Default, serde::Serialize, Deserialize)]
-struct SourcesFile {
-    #[serde(default)]
-    sources: Vec<String>,
+/// One registered catalog: where it is, what the user calls it, and the key its assets are verified
+/// against (`AMB-D-389`).
+///
+/// The key is what makes registering more than a bookmark. Trust for an official plugin rests on the key
+/// amenbo ships (`AMB-D-371`); for a registered catalog it rests on **that catalog's** key, taken at
+/// registration and pinned, so what installs later is what the same publisher signed. `key` of `None` is
+/// a catalog that published none: browsable, and nothing from it installs.
+///
+/// The fingerprint is not stored — it is [`Source::fingerprint`], read off the key. One truth on disk,
+/// and no way for a file to say two things about one key.
+#[derive(Clone, Debug, serde::Serialize, Deserialize)]
+pub struct Source {
+    /// The URL of this catalog's `catalog.json`.
+    pub url: String,
+    /// What to call it on screen. Given at registration; the host of its URL when nothing was given.
+    pub name: String,
+    /// The pinned minisign public key, or `None` for a catalog that published none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
 }
 
-/// The registered third-party catalog URLs, in the order they were added — an unreadable or absent file
+impl Source {
+    /// The short form of the pinned key, for a human comparing it with what the publisher says
+    /// ([`crate::plugin_provenance::key_fingerprint`]). `None` when nothing is pinned — and also when
+    /// what is pinned will not parse, which a face shows as "no fingerprint" rather than as a key.
+    pub fn fingerprint(&self) -> Option<String> {
+        self.key.as_deref().and_then(|k| crate::plugin_provenance::key_fingerprint(k).ok())
+    }
+}
+
+/// The on-disk shape of the sources list — an envelope so a field can be added later without an older
+/// build misreading it, the same discipline as the catalog envelope.
+#[derive(Debug, Default, Deserialize)]
+struct SourcesFile {
+    #[serde(default)]
+    sources: Vec<StoredSource>,
+}
+
+/// A record as the file may hold it. amenbo wrote a bare URL before a catalog was more than an address,
+/// and those registrations stay registered: they read as a source with no pinned key, which is exactly
+/// what they are — the user consented to seeing the catalog, never to a key. Pinning one is a new
+/// consent, taken the next time they register it.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum StoredSource {
+    Record {
+        url: String,
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        key: Option<String>,
+    },
+    Url(String),
+}
+
+impl From<StoredSource> for Source {
+    fn from(stored: StoredSource) -> Source {
+        match stored {
+            StoredSource::Record { url, name, key } => {
+                let name = name.filter(|n| !n.trim().is_empty()).unwrap_or_else(|| default_name(&url));
+                Source { url, name, key }
+            }
+            StoredSource::Url(url) => {
+                let name = default_name(&url);
+                Source { url, name, key: None }
+            }
+        }
+    }
+}
+
+/// What a catalog is called when the user names nothing: the host it is served from — the part of the
+/// URL they typed that says who is answering.
+fn default_name(url: &str) -> String {
+    url.split_once("://")
+        .and_then(|(_scheme, rest)| rest.split('/').next())
+        .filter(|host| !host.is_empty())
+        .unwrap_or(url)
+        .to_string()
+}
+
+/// The registered third-party catalogs, in the order they were added — an unreadable or absent file
 /// reads as none, never an error, the same way a missing cache does.
-pub fn sources(paths: &Paths) -> Vec<String> {
+pub fn sources(paths: &Paths) -> Vec<Source> {
     std::fs::read_to_string(sources_file(paths))
         .ok()
         .and_then(|json| serde_json::from_str::<SourcesFile>(&json).ok())
-        .map(|f| f.sources)
+        .map(|f| f.sources.into_iter().map(Source::from).collect())
         .unwrap_or_default()
 }
 
@@ -436,10 +525,49 @@ fn source_cache_file(paths: &Paths, url: &str) -> PathBuf {
     paths.registry_dir().join(format!("source-{short}.json"))
 }
 
-/// Register a third-party catalog URL. Returns `true` if it was added, `false` if it was already
-/// registered (idempotent). Refuses a URL that is not `http(s)://…`, and the official catalog's own URL —
-/// the official catalog is not a third-party source and is always merged first anyway.
-pub fn add_source(paths: &Paths, url: &str) -> Result<bool> {
+/// What registering a catalog would mean, worked out before anything is written — the material the
+/// consent is given against (`AMB-D-389`).
+///
+/// Registering is not a bookmark: it adds a trust root, and the fingerprint is what the person agreeing
+/// is agreeing to. So the key is fetched, the URL is judged, and an existing pin is compared, all in one
+/// place that writes nothing — a face shows this, asks, and only then calls [`add_source`].
+#[derive(Clone, Debug)]
+pub struct SourceProbe {
+    /// The URL, trimmed — the form that will be registered.
+    pub url: String,
+    /// What to call it if the user offers no name of their own.
+    pub suggested_name: String,
+    /// The key this catalog publishes, or `None` when it publishes none amenbo could fetch.
+    pub key: Option<String>,
+    /// The short form of [`key`](SourceProbe::key) to show while asking.
+    pub fingerprint: Option<String>,
+    /// Whether this URL is already registered — a second registration of the same catalog changes
+    /// nothing unless it is bringing a key the record does not have yet.
+    pub registered: bool,
+    /// What that record already pins, if anything. Never a *different* key from
+    /// [`key`](SourceProbe::key): [`probe_source`] refuses before it gets here.
+    pub pinned: Option<String>,
+}
+
+impl SourceProbe {
+    /// Whether registering this would pin a key that is not pinned yet — the one case that needs a
+    /// human's consent, because it is the one that adds a trust root.
+    pub fn pins_a_new_key(&self) -> bool {
+        self.key.is_some() && self.pinned.is_none()
+    }
+}
+
+/// Work out what registering `url` would mean, without writing anything (see [`SourceProbe`]).
+///
+/// Refuses a URL that is not `http(s)://…`, and the official catalog's own URL — the official catalog is
+/// not a third-party source and is always merged first anyway. Refuses, too, a catalog whose published
+/// key will not parse: a broken key document is a signal, not an absence.
+///
+/// **A key that changed is refused here, and that is the pin doing its job** (`AMB-D-389`). A publisher
+/// who rotates their key is asking for trust again, so amenbo will not swallow the new one on the
+/// strength of the old consent: the way through is to unregister and register again, which puts the new
+/// fingerprint in front of the person deciding.
+pub fn probe_source(paths: &Paths, url: &str) -> Result<SourceProbe> {
     let url = url.trim();
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err(Error::invalid(
@@ -453,22 +581,121 @@ pub fn add_source(paths: &Paths, url: &str) -> Result<bool> {
             "それは公式カタログの URL です——常に含まれるため、サードパーティカタログとして登録できません。".to_string(),
         ));
     }
-    let mut list = sources(paths);
-    if list.iter().any(|u| u == url) {
-        return Ok(false);
+    let existing = sources(paths).into_iter().find(|s| s.url == url);
+    let key = published_key(url)?;
+    check_pin(url, existing.as_ref().and_then(|s| s.key.as_deref()), key.as_deref())?;
+    let fingerprint = key.as_deref().and_then(|k| crate::plugin_provenance::key_fingerprint(k).ok());
+    Ok(SourceProbe {
+        suggested_name: existing.as_ref().map(|s| s.name.clone()).unwrap_or_else(|| default_name(url)),
+        pinned: existing.as_ref().and_then(|s| s.key.clone()),
+        registered: existing.is_some(),
+        url: url.to_string(),
+        key,
+        fingerprint,
+    })
+}
+
+/// Judge a served key against what is pinned — the whole fail-closed rule, in one place with no I/O
+/// (`AMB-D-389`).
+///
+/// - nothing pinned: anything is fine, and pinning it is the consent [`SourceProbe::pins_a_new_key`]
+///   asks for. This is the first-use half of trust-on-first-use.
+/// - pinned, and the same key came back: the ordinary case.
+/// - pinned, and **nothing** came back: the catalog is unreachable or has stopped publishing its key.
+///   The pin stands — it is what an install verifies against, and dropping it because a fetch failed
+///   would turn being offline into a downgrade.
+/// - pinned, and a **different** key came back: refused. That is the pin doing its job.
+fn check_pin(url: &str, pinned: Option<&str>, served: Option<&str>) -> Result<()> {
+    let (Some(pinned), Some(served)) = (pinned, served) else { return Ok(()) };
+    if pinned == served {
+        return Ok(());
     }
-    list.push(url.to_string());
+    let (was, now) = (fingerprint_of(pinned), fingerprint_of(served));
+    Err(Error::invalid(
+        format!(
+            "{url} now publishes a different key ({now}, pinned: {was}). amenbo will not accept it on the old consent — unregister the catalog and register it again to trust the new key."
+        ),
+        format!(
+            "{url} の鍵が登録時と変わっています（現在 {now} / 登録時 {was}）。以前の同意のままでは受け入れません——登録を解除し、登録し直して新しい鍵を信頼してください。"
+        ),
+    ))
+}
+
+/// A key's fingerprint for a message, falling back to the key itself when it will not parse — a refusal
+/// has to name what it is refusing even when the thing is malformed.
+fn fingerprint_of(key: &str) -> String {
+    crate::plugin_provenance::key_fingerprint(key).unwrap_or_else(|_| key.to_string())
+}
+
+/// The key a catalog publishes beside its `catalog.json`, or `None` when it publishes none.
+///
+/// Nothing served at that address is a state, not a failure: a catalog can be browsed without one, and
+/// being offline at registration lands in the same place. Only a document that is *there* and is not a
+/// key refuses — see [`probe_source`].
+fn published_key(catalog_url: &str) -> Result<Option<String>> {
+    match fetch(&key_url(catalog_url)) {
+        Ok(text) => crate::plugin_provenance::read_public_key(&text).map(Some).map_err(|e| {
+            Error::invalid(
+                format!("{}: {e}", key_url(catalog_url)),
+                format!("{}：{e}", key_url(catalog_url)),
+            )
+        }),
+        Err(_) => Ok(None),
+    }
+}
+
+/// Where a catalog publishes its key: beside its `catalog.json`, the same way a detail document sits
+/// under the same base — one address, one publisher.
+fn key_url(catalog_url: &str) -> String {
+    match catalog_url.rsplit_once('/') {
+        Some((base, _file)) => format!("{base}/{CATALOG_KEY_FILE_NAME}"),
+        None => CATALOG_KEY_FILE_NAME.to_string(),
+    }
+}
+
+/// Register a catalog the way [`probe_source`] found it, under `name` (its suggested name when `None`).
+///
+/// Returns `true` when the registration changed — a new catalog, or a key pinned onto a record that had
+/// none — and `false` when it was already registered exactly like this. Both are success: registering
+/// twice is a no-op, not an error.
+///
+/// The probe is the argument rather than the URL because the key belongs to the consent that was just
+/// given: taking a URL here would mean fetching the key a second time, which is a second chance for a
+/// different one to arrive between what was shown and what is pinned.
+pub fn add_source(paths: &Paths, probe: &SourceProbe, name: Option<&str>) -> Result<bool> {
+    let name = name
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| probe.suggested_name.clone());
+    let mut list = sources(paths);
+    match list.iter_mut().find(|s| s.url == probe.url) {
+        Some(existing) => {
+            // A record that never held a key takes the one the probe found; a pin already there stands,
+            // because a *different* key never reaches this point (`probe_source` refuses it).
+            let pinning = probe.key.is_some() && existing.key.is_none();
+            if !pinning && existing.name == name {
+                return Ok(false);
+            }
+            if pinning {
+                existing.key = probe.key.clone();
+            }
+            existing.name = name;
+        }
+        None => list.push(Source { url: probe.url.clone(), name, key: probe.key.clone() }),
+    }
     write_sources(paths, &list)?;
     Ok(true)
 }
 
 /// Unregister a third-party catalog URL, and remove its cached copy. Returns `true` if it was registered,
-/// `false` if it was not (idempotent).
+/// `false` if it was not (idempotent). This is also how a pinned key is let go of: the pin is part of the
+/// registration, so trusting a new one is registering again.
 pub fn remove_source(paths: &Paths, url: &str) -> Result<bool> {
     let url = url.trim();
     let mut list = sources(paths);
     let before = list.len();
-    list.retain(|u| u != url);
+    list.retain(|s| s.url != url);
     if list.len() == before {
         return Ok(false);
     }
@@ -480,12 +707,12 @@ pub fn remove_source(paths: &Paths, url: &str) -> Result<bool> {
 }
 
 /// Write the sources list atomically.
-fn write_sources(paths: &Paths, sources: &[String]) -> Result<()> {
+fn write_sources(paths: &Paths, sources: &[Source]) -> Result<()> {
     let dest = sources_file(paths);
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let json = serde_json::to_string_pretty(&SourcesFile { sources: sources.to_vec() })
+    let json = serde_json::to_string_pretty(&serde_json::json!({ "sources": sources }))
         .map_err(|e| Error::Io(std::io::Error::other(e)))?;
     let tmp = dest.with_extension("json.tmp");
     std::fs::write(&tmp, json)?;
@@ -498,6 +725,13 @@ fn write_sources(paths: &Paths, sources: &[String]) -> Result<()> {
 pub struct DiscoveredSource {
     /// The catalog's URL, or [`OFFICIAL_CATALOG_URL`] for the official one.
     pub url: String,
+    /// What to call it: the name given at registration, or [`OFFICIAL_CATALOG_NAME`] for the official
+    /// catalog.
+    pub name: String,
+    /// The fingerprint of the key this catalog's assets verify against (`AMB-D-389`) — pinned at
+    /// registration, or amenbo's own embedded key for the official catalog. `None` is a catalog that
+    /// published none: browsable, and nothing from it installs.
+    pub fingerprint: Option<String>,
     /// Whether this is the official catalog (always merged first, always wins a name clash).
     pub official: bool,
     /// Whether the catalog answered at all — from the network or, failing that, its cache. `false` is a
@@ -564,8 +798,12 @@ pub fn discover(paths: &Paths) -> Discovery {
     let mut dropped: Vec<Dropped> = Vec::new();
 
     let official_url = catalog_url();
-    let mut fold = |url: String, official: bool, catalog: Result<Catalog>| {
-        match catalog {
+    let mut fold = |url: String,
+                    name: String,
+                    fingerprint: Option<String>,
+                    official: bool,
+                    catalog: Result<Catalog>| {
+        let (reachable, offered) = match catalog {
             Ok(catalog) => {
                 let offered = catalog.entries.len();
                 dropped.extend(catalog.dropped);
@@ -581,18 +819,23 @@ pub fn discover(paths: &Paths) -> Discovery {
                         });
                     }
                 }
-                sources_meta.push(DiscoveredSource { url, official, reachable: true, offered });
+                (true, offered)
             }
-            Err(_) => {
-                sources_meta.push(DiscoveredSource { url, official, reachable: false, offered: 0 });
-            }
-        }
+            Err(_) => (false, 0),
+        };
+        sources_meta.push(DiscoveredSource { url, name, fingerprint, official, reachable, offered });
     };
 
-    fold(official_url.clone(), true, fresh_to(&official_url, &cache_file(paths)));
-    for url in sources(paths) {
-        let catalog = fresh_to(&url, &source_cache_file(paths, &url));
-        fold(url, false, catalog);
+    fold(
+        official_url.clone(),
+        OFFICIAL_CATALOG_NAME.to_string(),
+        crate::plugin_provenance::key_fingerprint(crate::plugin_provenance::CATALOG_PUBLIC_KEY).ok(),
+        true,
+        fresh_to(&official_url, &cache_file(paths)),
+    );
+    for source in sources(paths) {
+        let catalog = fresh_to(&source.url, &source_cache_file(paths, &source.url));
+        fold(source.url.clone(), source.name.clone(), source.fingerprint(), false, catalog);
     }
 
     Discovery { entries, sources: sources_meta, dropped }
@@ -942,19 +1185,47 @@ mod tests {
 
     // ---- registered third-party catalogs, and the merged discovery view (`AMB-T-1980`) ----
 
+    /// A minisign public key, real enough to have a fingerprint. Registration is what is under test
+    /// here, never a signature, so any two distinct keys do.
+    const KEY_A: &str = "RWSgV8uCt8tyYg74JbwBblWoE+g7bxSGvK8blkKW7gUo3EuBXaqy5oMR";
+    const KEY_B: &str = "RWSw3wZ34b1PMyHu4KajlLhV0SdlMAgQGefo4pFIxv7MgRoWSVpCVXSE";
+
+    /// A probe as [`probe_source`] would have built it, without the fetch. What the network does is its
+    /// own question ([`published_key`]); what a registration *writes* is this one, and a test of it has
+    /// no business resolving a hostname.
+    fn probe_for(url: &str, key: Option<&str>) -> SourceProbe {
+        SourceProbe {
+            url: url.to_string(),
+            suggested_name: default_name(url),
+            key: key.map(str::to_string),
+            fingerprint: key.and_then(|k| crate::plugin_provenance::key_fingerprint(k).ok()),
+            registered: false,
+            pinned: None,
+        }
+    }
+
+    /// Register as a face would: probe (here, without the network), then write.
+    fn register(paths: &Paths, url: &str, key: Option<&str>, name: Option<&str>) -> bool {
+        add_source(paths, &probe_for(url, key), name).unwrap()
+    }
+
+    fn urls(paths: &Paths) -> Vec<String> {
+        sources(paths).into_iter().map(|s| s.url).collect()
+    }
+
     #[test]
     fn sources_round_trip_and_are_idempotent() {
         let paths = paths_at("sources-round-trip");
         assert!(sources(&paths).is_empty(), "none registered yet");
 
-        assert!(add_source(&paths, "https://example.invalid/a/catalog.json").unwrap(), "added");
-        assert!(add_source(&paths, "https://example.invalid/b/catalog.json").unwrap(), "added");
+        assert!(register(&paths, "https://example.invalid/a/catalog.json", None, None), "added");
+        assert!(register(&paths, "https://example.invalid/b/catalog.json", None, None), "added");
         assert!(
-            !add_source(&paths, "https://example.invalid/a/catalog.json").unwrap(),
+            !register(&paths, "https://example.invalid/a/catalog.json", None, None),
             "a second add of the same URL is a no-op"
         );
         assert_eq!(
-            sources(&paths),
+            urls(&paths),
             vec![
                 "https://example.invalid/a/catalog.json".to_string(),
                 "https://example.invalid/b/catalog.json".to_string(),
@@ -967,23 +1238,104 @@ mod tests {
             !remove_source(&paths, "https://example.invalid/a/catalog.json").unwrap(),
             "removing what is not registered is a no-op"
         );
-        assert_eq!(sources(&paths), vec!["https://example.invalid/b/catalog.json".to_string()]);
+        assert_eq!(urls(&paths), vec!["https://example.invalid/b/catalog.json".to_string()]);
     }
 
     #[test]
-    fn add_source_refuses_a_non_http_url_and_the_official_catalog() {
+    fn probe_refuses_a_non_http_url_and_the_official_catalog() {
         let paths = paths_at("sources-refuse");
-        assert!(add_source(&paths, "ftp://example.invalid/catalog.json").is_err(), "not http(s)");
-        assert!(add_source(&paths, "just-a-name").is_err(), "not a URL");
-        assert!(add_source(&paths, OFFICIAL_CATALOG_URL).is_err(), "the official catalog is not a source");
+        // Refused on the URL alone, before anything is fetched — so these never touch the network.
+        assert!(probe_source(&paths, "ftp://example.invalid/catalog.json").is_err(), "not http(s)");
+        assert!(probe_source(&paths, "just-a-name").is_err(), "not a URL");
+        assert!(
+            probe_source(&paths, OFFICIAL_CATALOG_URL).is_err(),
+            "the official catalog is not a source"
+        );
         assert!(sources(&paths).is_empty(), "nothing refused was registered");
+    }
+
+    /// The pin is what a registration is *for* (`AMB-D-389`): the key travels onto the record, and the
+    /// fingerprint a face shows is read back off it rather than stored beside it.
+    #[test]
+    fn a_registration_pins_the_key_the_catalog_published() {
+        let paths = paths_at("sources-pin");
+        let url = "https://example.invalid/third/catalog.json";
+        register(&paths, url, Some(KEY_A), Some("社内カタログ"));
+
+        let source = sources(&paths).into_iter().find(|s| s.url == url).expect("registered");
+        assert_eq!(source.key.as_deref(), Some(KEY_A), "the whole key is what is pinned");
+        assert_eq!(source.name, "社内カタログ", "and the name it was registered under");
+        assert_eq!(source.fingerprint().as_deref(), Some("6272CBB782CB57A0"), "the short form is derived");
+    }
+
+    /// A catalog that publishes no key registers all the same — it is browsable, and nothing from it
+    /// installs. Registering it again once it does publish one is how the pin arrives, and that
+    /// registration is a change, not a no-op.
+    #[test]
+    fn a_catalog_with_no_key_registers_and_can_be_pinned_later() {
+        let paths = paths_at("sources-pin-later");
+        let url = "https://example.invalid/late/catalog.json";
+        assert!(register(&paths, url, None, None), "registered with nothing pinned");
+        assert!(sources(&paths)[0].key.is_none(), "browse-only");
+        assert_eq!(sources(&paths)[0].name, "example.invalid", "named after its host by default");
+
+        let mut probe = probe_for(url, Some(KEY_A));
+        probe.registered = true;
+        assert!(add_source(&paths, &probe, None).unwrap(), "pinning a key is a change");
+        assert_eq!(sources(&paths)[0].key.as_deref(), Some(KEY_A));
+        assert_eq!(sources(&paths).len(), 1, "still one registration, not two");
+    }
+
+    /// The fail-closed rule, as a truth table. A different key is the only refusal — and being offline
+    /// is not one, or a lost network would quietly cost a pin.
+    #[test]
+    fn a_changed_key_is_refused_and_nothing_else_is() {
+        let url = "https://example.invalid/third/catalog.json";
+        assert!(check_pin(url, None, None).is_ok(), "nothing pinned, nothing served");
+        assert!(check_pin(url, None, Some(KEY_A)).is_ok(), "first use pins");
+        assert!(check_pin(url, Some(KEY_A), Some(KEY_A)).is_ok(), "the same key is the ordinary case");
+        assert!(check_pin(url, Some(KEY_A), None).is_ok(), "unreachable does not drop the pin");
+
+        let err = check_pin(url, Some(KEY_A), Some(KEY_B)).unwrap_err();
+        let text = format!("{err:?}");
+        assert!(text.contains("6272CBB782CB57A0"), "the pinned fingerprint is named: {text}");
+        assert!(text.contains("register it again"), "and the way through is said: {text}");
+    }
+
+    /// A registration written before a catalog was more than an address still reads, as a source with
+    /// nothing pinned. Losing those on upgrade would silently empty a user's browsing view.
+    #[test]
+    fn a_bare_url_from_an_older_build_still_reads() {
+        let paths = paths_at("sources-legacy");
+        std::fs::create_dir_all(paths.registry_dir()).unwrap();
+        std::fs::write(
+            sources_file(&paths),
+            r#"{"sources": ["https://example.invalid/old/catalog.json"]}"#,
+        )
+        .unwrap();
+
+        let list = sources(&paths);
+        assert_eq!(list.len(), 1, "the old shape reads");
+        assert_eq!(list[0].url, "https://example.invalid/old/catalog.json");
+        assert!(list[0].key.is_none(), "it consented to a catalog, never to a key");
+        assert_eq!(list[0].name, "example.invalid", "and gets the host as its name");
+    }
+
+    /// Where a catalog's key is looked for: beside its own `catalog.json`, so one address is one
+    /// publisher (the same rule a detail document follows).
+    #[test]
+    fn a_catalogs_key_sits_beside_it() {
+        assert_eq!(
+            key_url("https://example.invalid/plugins/catalog.json"),
+            "https://example.invalid/plugins/catalog-key.pub"
+        );
     }
 
     #[test]
     fn removing_a_source_drops_its_cached_copy() {
         let paths = paths_at("sources-drop-cache");
         let url = "https://example.invalid/x/catalog.json";
-        add_source(&paths, url).unwrap();
+        register(&paths, url, None, None);
         write_cache_at(&source_cache_file(&paths, url), &catalog_json(vec![entry_json("x")])).unwrap();
         assert!(source_cache_file(&paths, url).exists());
         remove_source(&paths, url).unwrap();
@@ -1011,7 +1363,7 @@ mod tests {
         // Fresh caches so the merge reads from disk and never touches the network.
         write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
         let src = "https://example.invalid/third/catalog.json";
-        add_source(&paths, src).unwrap();
+        register(&paths, src, None, None);
         let mut impostor = entry_json("worktree");
         impostor["desc"] = serde_json::json!("a third-party impostor");
         write_cache_at(
@@ -1049,7 +1401,7 @@ mod tests {
         official["featured"] = serde_json::json!(true);
         write_cache_at(&cache_file(&paths), &catalog_json(vec![official])).unwrap();
         let src = "https://example.invalid/third/catalog.json";
-        add_source(&paths, src).unwrap();
+        register(&paths, src, None, None);
         let mut boasting = entry_json("extra");
         boasting["featured"] = serde_json::json!(true);
         write_cache_at(&source_cache_file(&paths, src), &catalog_json(vec![boasting])).unwrap();
@@ -1068,7 +1420,7 @@ mod tests {
     fn discover_marks_an_unreachable_source_without_losing_the_rest() {
         let paths = paths_at("discover-unreachable");
         write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
-        add_source(&paths, UNREACHABLE).unwrap();
+        register(&paths, UNREACHABLE, None, None);
 
         let discovery = discover(&paths);
         assert_eq!(discovery.entries.len(), 1, "the official catalog still answers");

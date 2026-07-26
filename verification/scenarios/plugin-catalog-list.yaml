@@ -1,9 +1,11 @@
 # Where a browse looks. The official catalog is always one of the sources; a third-party one is
 # registered by the URL of its catalog.json and joins the view beside it.
 #
-# The line that matters is what registering does *not* do. Widening discovery is not widening install:
-# an asset is trusted by amenbo's own catalog key alone, so a registered catalog is a second place to
-# look and never a second place to install from.
+# Registering one is a trust decision, not a bookmark: the key the catalog publishes beside its
+# catalog.json is pinned on the user's consent, and that key is what plugins from it are trusted on.
+# The catalog here publishes none, which is its own answer — it can be browsed, and nothing on it can
+# be installed. Standing up a catalog that serves a real key, and consenting to its fingerprint, is a
+# server this file cannot stand.
 #
 # The third-party URL here is deliberately one that answers nothing. A catalog that cannot be reached
 # still registers and is retried later — one dead source must not cost the view — and that is exactly

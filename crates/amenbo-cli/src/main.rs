@@ -821,7 +821,9 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         },
         PluginCmd::Catalog { sub } => match sub {
             PluginCatalogCmd::List => plugin_catalog_list_cmd(store, flags),
-            PluginCatalogCmd::Add { url } => plugin_catalog_add_cmd(store, flags, &url),
+            PluginCatalogCmd::Add { url, name } => {
+                plugin_catalog_add_cmd(store, flags, &url, name.as_deref())
+            }
             PluginCatalogCmd::Remove { url } => plugin_catalog_remove_cmd(store, flags, &url),
         },
     }
@@ -840,6 +842,8 @@ fn plugin_catalog_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError
             .map(|s| {
                 json!({
                     "url": s.url,
+                    "name": s.name,
+                    "fingerprint": s.fingerprint,
                     "official": s.official,
                     "reachable": s.reachable,
                     "offered": s.offered,
@@ -859,23 +863,54 @@ fn plugin_catalog_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError
             let tag = if s.official { "official" } else { "third-party" };
             let state =
                 if s.reachable { format!("{} plugins", s.offered) } else { "unreachable".to_string() };
-            human(flags, format!("  [{tag}] {} — {state}", s.url));
+            human(flags, format!("  [{tag}] {} ({}) — {state}", s.name, s.url));
+            // The key an asset off this catalog verifies against (`AMB-D-389`) — said on every line,
+            // because the one with nothing to say is the one worth noticing.
+            match &s.fingerprint {
+                Some(fp) => human(flags, format!("    key {fp}")),
+                None => human(flags, "    no key — nothing here can be installed"),
+            }
         }
     }
     Ok(0)
 }
 
 /// `plugin catalog add <url>` — register a third-party catalog and warm its cache so the first browse is
-/// ready (`AMB-T-1980`). Registering only widens what discovery *shows*, never what `install` accepts
-/// (`AMB-D-371`). An already-registered URL is a no-op; an unreachable one still registers and is retried
-/// on the next browse.
-fn plugin_catalog_add_cmd(store: &Store, flags: &Flags, url: &str) -> Result<i32, CliError> {
-    let added = amenbo_core::plugin_catalog::add_source(&store.paths, url).map_err(CliError::from)?;
-    if !added {
+/// ready (`AMB-T-1980`). An already-registered URL is a no-op; an unreachable one still registers and is
+/// retried on the next browse.
+///
+/// **Registering a catalog that publishes a key is consented to, not just done** (`AMB-D-389`): the key is
+/// what assets off this catalog will be verified against, so the fingerprint is shown and confirmed before
+/// anything is pinned. Nothing to pin — a catalog that publishes no key — is registered without a
+/// question, because nothing is being trusted: it can be browsed and nothing on it can be installed.
+///
+/// The confirmation is the ordinary one, so `--json` (or any non-interactive run) must carry `--yes`:
+/// a script that pins a trust root says so.
+fn plugin_catalog_add_cmd(
+    store: &Store,
+    flags: &Flags,
+    url: &str,
+    name: Option<&str>,
+) -> Result<i32, CliError> {
+    let probe =
+        amenbo_core::plugin_catalog::probe_source(&store.paths, url).map_err(CliError::from)?;
+    if probe.pins_a_new_key() {
+        let fingerprint = probe.fingerprint.clone().unwrap_or_default();
+        human(flags, format!("{} publishes a signing key:", probe.url));
+        human(flags, format!("  fingerprint {fingerprint}"));
+        human(flags, "  Plugins installed from this catalog will be trusted on this key.");
+        if !confirm(flags, &format!("trust {fingerprint} for {}", probe.url))? {
+            return Ok(1);
+        }
+    }
+    let changed = amenbo_core::plugin_catalog::add_source(&store.paths, &probe, name)
+        .map_err(CliError::from)?;
+    if !changed {
         human(flags, format!("Already registered: {url}"));
         if flags.json {
             print_json(&json!({
                 "ok": true, "action": "plugin.catalog.add", "url": url, "added": false,
+                "fingerprint": probe.fingerprint,
             }));
         }
         return Ok(0);
@@ -883,13 +918,17 @@ fn plugin_catalog_add_cmd(store: &Store, flags: &Flags, url: &str) -> Result<i32
     // Warm the cache and report what it holds — discovery fetches each source once, so the source we just
     // added is fetched here. Unreachable is not a failure: it stays registered.
     let discovery = amenbo_core::plugin_catalog::discover(&store.paths);
-    let (reachable, offered) = discovery
-        .sources
-        .iter()
-        .find(|s| s.url == url)
-        .map(|s| (s.reachable, s.offered))
-        .unwrap_or((false, 0));
-    human(flags, format!("Registered catalog: {url}"));
+    let source = discovery.sources.iter().find(|s| s.url == probe.url);
+    let (reachable, offered) = source.map(|s| (s.reachable, s.offered)).unwrap_or((false, 0));
+    let registered_name = source.map(|s| s.name.clone()).unwrap_or_else(|| probe.suggested_name.clone());
+    human(flags, format!("Registered catalog: {registered_name} ({url})"));
+    match &probe.fingerprint {
+        Some(fp) => human(flags, format!("  Key pinned: {fp}")),
+        None => human(
+            flags,
+            "  It publishes no key, so nothing from it can be installed — register it again once it does.",
+        ),
+    }
     if reachable {
         human(flags, format!("  {offered} plugins available to browse."));
     } else {
@@ -898,6 +937,7 @@ fn plugin_catalog_add_cmd(store: &Store, flags: &Flags, url: &str) -> Result<i32
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "plugin.catalog.add", "url": url, "added": true,
+            "name": registered_name, "fingerprint": probe.fingerprint,
             "reachable": reachable, "offered": offered,
         }));
     }

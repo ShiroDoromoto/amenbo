@@ -74,8 +74,8 @@ describe("unreachableSources", () => {
     const catalog = {
       entries: [],
       sources: [
-        { url: "https://official", official: true, reachable: true, offered: 3 },
-        { url: "https://third", official: false, reachable: false, offered: 0 },
+        { url: "https://official", name: "amenbo", fingerprint: "6272CBB782CB57A0", official: true, reachable: true, offered: 3 },
+        { url: "https://third", name: "third", fingerprint: null, official: false, reachable: false, offered: 0 },
       ],
       dropped: 0,
     };

@@ -39,13 +39,12 @@ func sizesFromJSON(doc []byte) (measurement, error) {
 // of the isolation (a throwaway AMENBO_HOME and a CWD with no .amenbo ancestor) —
 // reaching past it would risk measuring against the real store, whose size is not the
 // subject. -s is required rather than tidy: verify's build line is not @-silenced, so
-// make would staple a `cargo build …` line onto the front of the JSON. --actor human
-// overrides the AMENBO_ACTOR=ai a session exports, because an AI reaches only the
-// project its folder is bound to and verify's CWD is deliberately bound to nothing, so
-// the ai facet is refused with out_of_reach — and binding the CWD to dodge that would
-// hand the measurement a store to read. Fidelity costs nothing: the document is the
-// spec of the tool rather than a view of anyone's data, so it is byte-identical across
-// both facets, bound or not.
+// make would staple a `cargo build …` line onto the front of the JSON. The facet it
+// declares is human, because an AI reaches only the project its folder is bound to and
+// verify's CWD is deliberately bound to nothing, so the ai facet is refused with
+// out_of_reach — and binding the CWD to dodge that would hand the measurement a store
+// to read. Fidelity costs nothing: the document is the spec of the tool rather than a
+// view of anyone's data, so it is byte-identical across both facets, bound or not.
 func measure(tree string) (measurement, error) {
 	out, err := run(tree, "make", "-s", "verify", "ARGS=agent --json --actor human")
 	if err != nil {

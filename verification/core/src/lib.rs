@@ -266,6 +266,12 @@ const REGISTRY: &[OpSpec] = &[
     // It is an action and not an assert precisely because it writes — what it swept is read back by
     // asking the reading face again.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "doctor-fix", required: &[], refs: &[], binds: false },
+    // The bytes an attachment left behind, aged past the boundary that spares a young blob
+    // (`GC_MIN_AGE`, an hour). Removing an attachment reclaims its blob only if it is already old
+    // enough, so what a run creates is always too young to sweep — and the sweep that exists for
+    // exactly this would go unproven. Backdating is the only way to reach the state from a scenario,
+    // the way `folder legacy-pointer` reaches its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "age-blobs", required: &[], refs: &[], binds: false },
     // What a folder's binding is made of. A folder is named, not pointed at: `dir` is a plain name
     // the driver places somewhere of its own, since a pointer is answered by where a folder sits.
     // `init` raises a project of its own and binds it (hence the binding), `bind` points a folder at
@@ -347,6 +353,9 @@ const REGISTRY: &[OpSpec] = &[
     // a warning, and a warning leaves the verdict alone: without naming the kind there is no way to
     // say a problem appeared, or that a repair took it away.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "doctor", required: &["ok"], refs: &[], binds: false },
+    // How many blob files the store is holding. The sweep that reclaims them raises no issue and
+    // reports nothing a machine reads, so what says it ran is the count going down.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "blobs", required: &["count"], refs: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "validate", required: &["ok"], refs: &["target"], binds: false },
     // An attachment read back three ways: its own row, the owner's list it hangs in, and — for a
     // blob — the bytes coming out again, which is the only proof the ingest kept them.

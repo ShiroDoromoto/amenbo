@@ -381,6 +381,7 @@ fn domain_str(d: Domain) -> &'static str {
         Domain::Folder => "folder",
         Domain::Attachment => "attachment",
         Domain::Repo => "repo",
+        Domain::Plugin => "plugin",
     }
 }
 

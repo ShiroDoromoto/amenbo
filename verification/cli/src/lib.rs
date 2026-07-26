@@ -39,6 +39,10 @@ struct Driver {
     session: scratch::Session,
     project_id: i64,
     bindings: HashMap<String, i64>,
+    /// What the last `plugin run` came back with. A command face's return value is its own stdout
+    /// and is deliberately kept out of the execution log, so this is the only place a later step can
+    /// read it from — which is why the assert that reads it has to follow its call.
+    last_run: Option<serde_json::Value>,
     /// The files the `store` actions wrote, under the same names. A scenario has one binding
     /// namespace — the loader keeps it unique across both — and which of the two maps a name lands
     /// in follows from the op that bound it: nothing in the store is a path, and no archive is an id.
@@ -63,6 +67,7 @@ impl Driver {
             session,
             project_id: 0,
             bindings: HashMap::new(),
+            last_run: None,
             artifacts: HashMap::new(),
             refusal: None,
         };
@@ -593,16 +598,36 @@ impl Driver {
             // The hooks are written into a git repository, so the scenario has to stand one up first.
             // This is the one step that is not amenbo — everything it proves is about what amenbo
             // then does to a repository that is really there.
+            //
+            // It leaves a `main` with one commit on it, rather than the branchless state a bare
+            // `init` leaves behind: a repository with no commit has no branch either, and the
+            // official `worktree` plugin needs one to cut a task's checkout from.
             (Domain::Repo, "git-init") => {
-                let out = Command::new("git")
-                    .args(["init", "-q"])
-                    .current_dir(&self.session.cwd)
-                    .output()
-                    .map_err(|e| format!("could not run git: {e}"))?;
-                if !out.status.success() {
-                    return Err(format!("`git init` failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
-                }
-                Ok(Outcome::action("made the run's folder a git repository".to_string()))
+                let git = |args: &[&str]| -> Result<(), String> {
+                    let out = Command::new("git")
+                        .args(args)
+                        .current_dir(&self.session.cwd)
+                        .output()
+                        .map_err(|e| format!("could not run git: {e}"))?;
+                    if !out.status.success() {
+                        return Err(format!(
+                            "`git {}` failed: {}",
+                            args.join(" "),
+                            String::from_utf8_lossy(&out.stderr).trim()
+                        ));
+                    }
+                    Ok(())
+                };
+                git(&["init", "-q", "--initial-branch", "main"])?;
+                // Named on the command line rather than left to the machine's git config: a box with
+                // no identity set would fail here, and neither name belongs to anybody.
+                git(&[
+                    "-c", "user.name=verify",
+                    "-c", "user.email=verify@example.invalid",
+                    "commit", "--quiet", "--allow-empty",
+                    "-m", "the branch a scenario cuts from",
+                ])?;
+                Ok(Outcome::action("made the run's folder a git repository on `main`".to_string()))
             }
             (Domain::Repo, verb @ ("hooks-install" | "hooks-uninstall")) => {
                 let sub = verb.trim_start_matches("hooks-");
@@ -731,6 +756,54 @@ impl Driver {
                 std::fs::write(&pointer, br#"{"v":1,"project_id":"a-name-not-a-key"}"#)
                     .map_err(|e| format!("could not write {}: {e}", pointer.display()))?;
                 Ok(Outcome::action(format!("left {} pointing the way an older build did", dir.display())))
+            }
+            (Domain::Plugin, "install") => {
+                let name = req_str(with, "name")?;
+                let v = self.run_json(&["plugin", "install", name, "--json"])?;
+                let bytes = v["program_bytes"].as_i64().unwrap_or(0);
+                Ok(Outcome::action(format!("installed plugin `{name}` ({bytes} bytes of program)")))
+            }
+            (Domain::Plugin, "enable") => {
+                let name = req_str(with, "name")?;
+                let v = self.run_json(&["plugin", "enable", name, "--json"])?;
+                let level = v["level"].as_str().unwrap_or("?").to_string();
+                Ok(Outcome::action(format!("opened `{name}`'s gate ({level})")))
+            }
+            (Domain::Plugin, "disable") => {
+                let name = req_str(with, "name")?;
+                self.run_json(&["plugin", "disable", name, "--json"])?;
+                Ok(Outcome::action(format!("closed `{name}`'s gate")))
+            }
+            (Domain::Plugin, "uninstall") => {
+                let name = req_str(with, "name")?;
+                // Removing a plugin takes its settings, its consent and its log rows with it, so it
+                // asks first; the driver is unattended and answers up front.
+                self.run_json(&["plugin", "uninstall", name, "--yes", "--json"])?;
+                Ok(Outcome::action(format!("removed plugin `{name}`")))
+            }
+            (Domain::Plugin, "run") => {
+                let name = req_str(with, "name")?.to_string();
+                let command = req_str(with, "command")?.to_string();
+                // Everything after `plugin run <name>` belongs to the plugin, so amenbo's own flags
+                // have to be said before the subcommand — appended, they would reach the plugin as
+                // arguments and amenbo would see no facet at all.
+                let mut args: Vec<String> =
+                    vec!["--actor".into(), "human".into(), "--json".into(), "plugin".into(), "run".into()];
+                args.push(name.clone());
+                args.push(command.clone());
+                if with.contains_key("task") {
+                    args.push(self.resolve_key(with, "task")?.to_string());
+                }
+                for extra in with.get("args").and_then(|v| v.as_sequence()).unwrap_or(&Vec::new()) {
+                    let extra = extra.as_str().ok_or("every entry under `args` must be a string")?;
+                    args.push(extra.to_string());
+                }
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                let value = v["value"].as_str().unwrap_or_default().len();
+                self.last_run = Some(v);
+                Ok(Outcome::action(format!(
+                    "called `{name} {command}` — it returned {value} byte(s)"
+                )))
             }
             (Domain::Folder, "sync-guide") => {
                 let dir = self.folder(with)?;
@@ -1042,6 +1115,62 @@ impl Driver {
                     ),
                 ))
             }
+            (Domain::Plugin, "listed") => {
+                let name = req_str(with, "name")?;
+                let v = self.run_json(&["plugin", "list", "--json"])?;
+                let row = v["plugins"]
+                    .as_array()
+                    .and_then(|rows| rows.iter().find(|p| p["name"].as_str() == Some(name)));
+                // With `enabled` the question is the gate, and `install ≠ enable` is exactly what a
+                // reader gets wrong — so the two are asked apart, never rolled into one answer.
+                match opt_bool(with, "enabled") {
+                    Some(want) => {
+                        let got = row.and_then(|r| r["enabled"].as_bool());
+                        let pass = got == Some(want);
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "plugin `{name}` gate is {} (expected {want}, {})",
+                                match got {
+                                    Some(open) => open.to_string(),
+                                    None => "not installed at all".to_string(),
+                                },
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                    None => {
+                        let present = opt_bool(with, "present").unwrap_or(true);
+                        let pass = row.is_some() == present;
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "plugin `{name}` {} on this machine (expected {}, {})",
+                                if row.is_some() { "is installed" } else { "is not installed" },
+                                if present { "installed" } else { "gone" },
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                }
+            }
+            (Domain::Plugin, "returned") => {
+                let want = req_str(with, "contains")?;
+                let last = self
+                    .last_run
+                    .as_ref()
+                    .ok_or("no `plugin run` has been called yet, so there is no return value to read")?;
+                let value = last["value"].as_str().unwrap_or_default();
+                let pass = value.contains(want);
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "the call returned {:?} (expected it to carry `{want}`, {})",
+                        value,
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             (Domain::Attachment, "field") => {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["attach", "show", &target.to_string(), "--json"])?;
@@ -1123,6 +1252,39 @@ impl Driver {
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))
+            }
+            (Domain::Plugin, "ran") => {
+                let name = req_str(with, "name")?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let v = self.run_json(&["plugin", "runs", name, "--json"])?;
+                // Newest first, so the run a step is asking about is the one at the head.
+                let newest = v["runs"].as_array().and_then(|rows| rows.first());
+                match with.get("outcome").and_then(|v| v.as_str()) {
+                    Some(want) => {
+                        let got = newest.and_then(|r| r["outcome"].as_str());
+                        let pass = got == Some(want);
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "`{name}`'s last run ended {} (expected {want}, {})",
+                                got.unwrap_or("— it has no runs at all"),
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                    None => {
+                        let pass = newest.is_some() == present;
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "the log holds {} run(s) for `{name}` (expected {}, {})",
+                                v["count"].as_i64().unwrap_or(0),
+                                if present { "at least one" } else { "none" },
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                }
             }
             (Domain::Folder, "resynced") => {
                 let dir = self.folder(with)?;

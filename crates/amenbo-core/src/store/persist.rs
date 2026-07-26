@@ -81,8 +81,10 @@ fn project_of(tx: &WriteTx<'_>, event: &str, record_id: i64) -> Result<Option<i6
         | ev::TASK_MOVED
         | ev::TASK_DELETED => Ok(read::task_project_id(conn, record_id)?),
         ev::DECISION_ACCEPTED | ev::DECISION_REJECTED => Ok(read::decision_project_id(conn, record_id)?),
-        // A comment's project is its task's — the comment table holds no project of its own.
-        ev::COMMENT_ADDED => match read::task_comment(conn, record_id)? {
+        // A comment's project is its task's — the comment table holds no project of its own. For a
+        // removal that read only answers while the comment is still there, which is why the emit is
+        // placed ahead of the `DELETE` (`Store::remove_task_comment`).
+        ev::COMMENT_ADDED | ev::COMMENT_REMOVED => match read::task_comment(conn, record_id)? {
             Some(comment) => Ok(read::task_project_id(conn, comment.task_id)?),
             None => Ok(None),
         },
@@ -215,6 +217,23 @@ fn emit_comment_added(
 ) -> Result<()> {
     let at = comment.created_at.to_rfc3339_z();
     emit(tx, crate::plugin_payload::name::COMMENT_ADDED, comment.id, actor, &at, None)
+}
+
+/// `comment.removed`: a task comment was hard-deleted (`AMB-D-401`). `id` is the comment's own — the same
+/// axis `comment.added` reports on, so a subscriber can pair the two — and the actor is whoever deleted
+/// it, not the author who wrote it. The name is the whole state, so no `new`, and the caller passes the
+/// deletion's clock as `at` (the row's own timestamps describe the writing, not the taking back).
+///
+/// **Call this while the comment is still there** — before the `DELETE`, inside the same transaction —
+/// for the reason [`emit_task_deleted`] gives: the event is stamped with the project of the task the
+/// comment hung on, and that is read off the comment row (`AMB-D-405`).
+fn emit_comment_removed(
+    tx: &WriteTx<'_>,
+    id: i64,
+    actor: crate::model::ActorKind,
+    at: &str,
+) -> Result<()> {
+    emit(tx, crate::plugin_payload::name::COMMENT_REMOVED, id, actor, at, None)
 }
 
 impl Store {
@@ -792,9 +811,19 @@ impl Store {
     }
 
     /// Hard-delete a task comment (one operation = one transaction). If there is none, it is a no-op
-    /// and returns `false`.
-    pub fn remove_task_comment(&mut self, id: i64) -> Result<bool> {
-        self.write_one(&[WriteTarget::TaskComment(id)], |tx| crate::ops::comment::remove_comment(tx, id))
+    /// and returns `false`. `actor` is the facet doing the deleting — the comment row says who *wrote*
+    /// it, and that is a different person from whoever takes it back.
+    pub fn remove_task_comment(&mut self, id: i64, actor: crate::model::ActorKind) -> Result<bool> {
+        self.write_one(&[WriteTarget::TaskComment(id)], |tx| {
+            // Ahead of the delete, and only for a comment that is really there: a no-op is not a change
+            // to observe, and after the `DELETE` the event could no longer say which project it was in
+            // (`emit_comment_removed`).
+            if crate::store_engine::read::task_comment(tx.conn(), id)?.is_some() {
+                let at = crate::time::Timestamp::now().to_rfc3339_z();
+                emit_comment_removed(tx, id, actor, &at)?;
+            }
+            crate::ops::comment::remove_comment(tx, id)
+        })
     }
 
     /// Edit the body of a task comment (one operation = one transaction). Not found if there is none.

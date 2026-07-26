@@ -2055,7 +2055,7 @@ pub fn comment_add(task_id: i64, text: String) -> Result<WriteAck, CmdError> {
 #[tauri::command]
 pub fn comment_remove(id: i64, task_id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.remove_task_comment(id)?;
+        store.remove_task_comment(id, ActorKind::Human)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]).task(task_id))

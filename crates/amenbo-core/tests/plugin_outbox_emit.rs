@@ -1,5 +1,5 @@
 //! The outbox emit half of `AMB-D-367`: a write point appends the semantic event it alone can name —
-//! which of the nine v1 events happened, the actor that drove it, the new state — to the plugin outbox,
+//! which of the eleven v1 events happened, the actor that drove it, the new state — to the plugin outbox,
 //! **inside the mutation's own transaction**. These tests drive the events through the public `Store`
 //! wrappers (the one seam CLI and GUI share), read them back through `outbox::events_since`, and pin
 //! four things: the right event fires with the right `new_state`, the actor is stamped from the caller
@@ -157,6 +157,41 @@ fn adding_a_task_comment_fires_comment_added() {
     assert_eq!(ev.actor, "ai");
     assert_eq!(ev.new_state, None);
     assert_eq!(ev.project, Some(project), "a comment's project is the project of the task it hangs on");
+}
+
+/// Taking a task comment back fires `comment.removed` — the pair of `comment.added` (`AMB-D-401`), on the
+/// same id axis, stamped with the facet that deleted it rather than the author who wrote it. The project
+/// is still resolved, which is the whole reason the emit sits ahead of the delete: after the row goes,
+/// nothing can say which task the comment hung on, and a project-scoped subscriber would never hear of it.
+#[test]
+fn removing_a_task_comment_fires_comment_removed() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+    let comment = store.add_task_comment(task, ActorKind::Ai, "誤投稿").unwrap();
+
+    let h = head(&store);
+    assert!(store.remove_task_comment(comment.id, ActorKind::Human).unwrap());
+    let ev = only(&store, h);
+    assert_eq!(ev.event, "comment.removed");
+    assert_eq!(ev.record_id, comment.id, "the id is the comment's own — the axis `comment.added` used");
+    assert_eq!(ev.actor, "human", "the actor is who deleted it, not who wrote it");
+    assert_eq!(ev.new_state, None, "the name is the whole state");
+    assert_eq!(ev.project, Some(project), "read off the comment while it was still there");
+}
+
+/// Deleting a comment that is not there is a no-op, and a no-op is not a change to observe.
+#[test]
+fn removing_a_comment_that_is_gone_emits_nothing() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+    let comment = store.add_task_comment(task, ActorKind::Ai, "誤投稿").unwrap();
+    assert!(store.remove_task_comment(comment.id, ActorKind::Ai).unwrap());
+
+    let h = head(&store);
+    assert!(!store.remove_task_comment(comment.id, ActorKind::Ai).unwrap());
+    assert!(since(&store, h).is_empty(), "a second delete of the same comment fires nothing");
 }
 
 /// A decision comment is not a v1 event: its write point emits nothing (only a *task* comment does).

@@ -187,15 +187,28 @@ a human from the evidence, not by the exit code.
 A scenario is an `id`, a human `title`, an optional `description`, an optional `drivers`
 list, and an ordered list of `steps`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
-`comment` / `project` / `dimension` / `attachment` / `repo`) and an `op`, and carries named args
-under `with`. An action
-may bind its result with `as:`, and a later step refers back to it with `target:` — an op that joins
-two objects names the second under its own key (`decision link`'s `task:`), and every such key is
-checked back to an earlier binding, not just `target:`.
+`comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo`) and an `op`, and
+carries named args under `with`. An action may bind its result with `as:`, and a later step refers
+back to it with `target:` — an op that joins two objects names the second under its own key
+(`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just
+`target:`.
+
+The last three are not things filed in a store: `store` is this device's amenbo itself — its
+settings, the identity it answers `whoami` with, the build in place, and the store as a whole
+(`export`, `backup`, `restore`, the integrity reads) — `folder` is a directory and the project its
+`.amenbo` names, and `repo` is the folder the run works in as a place with files and a git history.
 
 Not every object is reached by a binding. A **dimension** travels as the words a person says — its
 axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what
-the command takes too; a bare number there would be read as a name, not an id.
+the command takes too; a bare number there would be read as a name, not an id. A **folder** travels
+as a plain name too (`dir: shared`), and for a different reason: a binding is answered by where a
+folder sits, so the driver is the one that places it — clear of the run's own bound CWD, which a
+pointer search would otherwise walk up into.
+
+A **`store` action that writes a file** binds it through the same `as:` an object is bound by, and
+what the name then holds is the file: `restore` names the archive it puts back the way any step names
+an earlier result, so a mistyped name is a lint failure and not a driver hunting for a file nobody
+wrote. The files land in the run's own throwaway space and go with it.
 
 One domain is not in the store at all. **`repo`** is the folder the run works in: `write-file` puts
 a file there (what an attachment ingests, what the lint is pointed at), `copy-fixture` puts one
@@ -221,8 +234,10 @@ The op vocabulary is a **closed registry** in `core/src/lib.rs`: an unknown op i
 so a typo never runs as a no-op. Drivers grow the registry (and their own op → driver
 mapping) as new ops are needed.
 
-A `field` assert names its value by a dotted path into the object's `show --json`, so what the
-output nests is reachable without a new op per corner: `placement.project.name` walks two objects,
+A `field` assert names its value by a dotted path into the read it is about — an object's `show
+--json`, or one of the reads the store answers about itself (`store`'s `config` / `identity` /
+`update`) — so what the output nests is reachable without a new op per corner:
+`placement.project.name` walks two objects,
 `blocked_by.0.name` indexes an array on the way, and a path that runs off the output is a mismatch
 rather than an error. A `listed` assert asks whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store

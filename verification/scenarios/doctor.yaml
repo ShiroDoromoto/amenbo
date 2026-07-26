@@ -1,0 +1,93 @@
+# The integrity reads. Both are asked of a store that has been used rather than a fresh one: an
+# emptiness check is sound by definition, and the references these commands look for — a dependency
+# edge, a decision's link to the work it drives, a comment hanging off a task — only exist once
+# something has drawn them.
+id: doctor
+title: A store carrying real work — edges, links and timelines — reports sound, in the sweep and on one task
+description: >
+  Build up the shape a real store has (two tasks with an edge between them, a decision linked to the
+  work it drives, a comment on the timeline) and then ask both integrity faces what they see: the
+  device-wide sweep, and the shape check narrowed to a single task. Both are side-effect-free reads,
+  so the store is asked twice over and asserted unchanged by the asking.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the work that waits
+    as: seed
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the blocker in front of it
+    as: blocker
+
+  - type: action
+    domain: task
+    op: depend
+    with:
+      target: seed
+      on: blocker
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — a timeline hanging off the task
+    as: note
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — the premise the work stands on
+    as: premise
+
+  - type: action
+    domain: decision
+    op: link
+    with:
+      target: premise
+      task: seed
+
+  # The device-wide sweep: orphaned references, broken ordering, stale bindings.
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true
+
+  # The shape check, over everything and then narrowed to one task — the same face a user reaches
+  # for when a single task looks wrong rather than the store.
+  - type: assert
+    domain: store
+    op: validate
+    with:
+      ok: true
+
+  - type: assert
+    domain: store
+    op: validate
+    with:
+      target: seed
+      ok: true
+
+  # Neither read moves anything: the premises that were declared still hold the work back.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: false
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — a timeline hanging off the task
+      present: true

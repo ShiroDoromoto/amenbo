@@ -7,7 +7,8 @@
 //! The isolation an amenbo run needs is two things, both required: `AMENBO_HOME` pointed at a
 //! throwaway dir (the ONLY thing that keeps a run out of the real app-data tree — an isolated
 //! CWD alone does not, since `init` with no `.amenbo` in sight creates a store under the real
-//! root), and a CWD with no `.amenbo` ancestor. One [`session`] hands back both.
+//! root), and a CWD with no `.amenbo` ancestor. One [`session`] hands back both, plus the
+//! scratch space a run's exports and archives are written into.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -25,11 +26,16 @@ fn root() -> PathBuf {
     std::env::temp_dir().join("amenbo-verify")
 }
 
-/// A fresh, isolated store for one run: an `AMENBO_HOME` and a `.amenbo`-free CWD, both under
-/// one throwaway parent. The parent is created; the caller runs the binary with these two.
+/// A fresh, isolated store for one run: an `AMENBO_HOME`, a `.amenbo`-free CWD and a scratch
+/// space for what the run writes out, all under one throwaway parent. The parent is created; the
+/// caller runs the binary with them.
 pub struct Session {
     pub home: PathBuf,
     pub cwd: PathBuf,
+    /// Where the files a run asks amenbo to write land — an export directory, a backup archive.
+    /// Beside the store rather than inside it: what `export` and `backup` produce is meant to be
+    /// carried away, and a scenario that wrote it into the store would be exporting its own export.
+    pub artifacts: PathBuf,
     keep: bool,
     base: PathBuf,
 }
@@ -47,9 +53,23 @@ pub fn session(tag: &str, keep: bool) -> std::io::Result<Session> {
     let base = root().join(format!("{tag}-{:x}-{nanos:x}-{n:x}", std::process::id()));
     let home = base.join("home");
     let cwd = base.join("cwd");
+    let artifacts = base.join("artifacts");
     std::fs::create_dir_all(&home)?;
     std::fs::create_dir_all(&cwd)?;
-    Ok(Session { home, cwd, keep, base })
+    std::fs::create_dir_all(&artifacts)?;
+    Ok(Session { home, cwd, artifacts, keep, base })
+}
+
+impl Session {
+    /// A folder for a step that needs a **second** directory — one to bind, resync or unbind. It is
+    /// created beside [`Session::cwd`] rather than inside it, on purpose: a `.amenbo` pointer is
+    /// found by walking *up*, so a folder under the run's own bound CWD would read as bound before
+    /// anything bound it, and would still read as bound after it was unbound.
+    pub fn folder(&self, name: &str) -> std::io::Result<PathBuf> {
+        let dir = self.base.join("folders").join(name);
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
 }
 
 impl Drop for Session {
@@ -94,8 +114,9 @@ mod tests {
         let homes: std::collections::HashSet<&PathBuf> = sessions.iter().map(|s| &s.home).collect();
         assert_eq!(homes.len(), sessions.len(), "no two sessions share a home");
         for s in &sessions {
-            assert!(s.home.is_dir() && s.cwd.is_dir(), "both dirs exist");
+            assert!(s.home.is_dir() && s.cwd.is_dir() && s.artifacts.is_dir(), "all three dirs exist");
             assert_ne!(s.home, s.cwd, "home and cwd are separate");
+            assert!(!s.artifacts.starts_with(&s.home), "what is exported lands outside the store");
             assert!(!s.cwd.join(".amenbo").exists(), "the cwd carries no .amenbo ancestor");
             assert_eq!(s.base.parent(), Some(root().as_path()), "under the one parent");
         }
@@ -104,6 +125,23 @@ mod tests {
             drop(s); // keep=true, so the base stays for the human, but we tidy the selftest ones
             let _ = std::fs::remove_dir_all(base);
         }
+    }
+
+    /// A second folder lands beside the run's CWD, never under it — under it, the CWD's own pointer
+    /// would answer for it and every binding assert would read true before anything was bound.
+    #[test]
+    fn a_named_folder_sits_beside_the_cwd_and_answers_to_its_name() {
+        let s = session("selftest-folder", true).unwrap();
+        let dir = s.folder("shared").unwrap();
+        assert!(dir.is_dir(), "the folder is there to be bound");
+        assert!(!dir.starts_with(&s.cwd), "outside the run's own bound CWD");
+        assert!(dir.starts_with(&s.base), "under the session's own parent");
+        assert_eq!(dir, s.folder("shared").unwrap(), "one name, one folder");
+        assert_ne!(dir, s.folder("other").unwrap(), "two names, two folders");
+
+        let base = s.base.clone();
+        drop(s);
+        let _ = std::fs::remove_dir_all(base);
     }
 
     /// Age decides, and nothing else. Pointed at a parent of its own so it never reaches another

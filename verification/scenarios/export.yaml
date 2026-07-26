@@ -1,0 +1,75 @@
+# Taking everything out. Export is the one-way door of data sovereignty: it is what a user leaves
+# with when they leave amenbo, so what matters is not that the command exits 0 but that the document
+# it wrote holds their work — records from every corner of the store, not just the one the export was
+# started from.
+id: export
+title: Everything on the device comes out in one document — the task, the decision and the timeline alike
+description: >
+  Seed a store the way real use fills it — a task, a decision, and a note on the task's timeline —
+  then take the whole thing out and read the written document back off disk. The document is what
+  another tool receives, so it is what is asserted against; asking amenbo what it exported would only
+  ask the store the same question twice. The last line holds the other half of "one way": the export
+  is a copy, and the store still has everything after it.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — carried out in the export
+    as: seed
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — why the store is left by the front door
+    as: why
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — the timeline goes with the work, not just the row it hangs on
+    as: note
+
+  # `--out` is the shape a move is made in: the records plus the attachment files beside them.
+  - type: action
+    domain: store
+    op: export
+    as: takeout
+
+  - type: assert
+    domain: task
+    op: exported
+    with:
+      target: seed
+      from: takeout
+      present: true
+
+  - type: assert
+    domain: decision
+    op: exported
+    with:
+      target: why
+      from: takeout
+      present: true
+
+  # The timeline is the part an export is easiest to write without: the rows read fine, and what
+  # people actually said is gone.
+  - type: assert
+    domain: comment
+    op: exported
+    with:
+      target: note
+      from: takeout
+      present: true
+
+  # Taking the data out is not taking it away — what was exported is still here to work with.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "done:false"
+      target: seed
+      present: true

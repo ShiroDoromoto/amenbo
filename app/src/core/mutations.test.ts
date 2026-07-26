@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addComment, deleteProject, deleteTask, setStatus } from "./mutations";
+import { addComment, deleteProject, deleteTask, rejectTask, setStatus } from "./mutations";
 import { tf } from "./i18n";
 import { applySnapshot, getSnapshot, type Snapshot } from "./snapshot";
 import type { TaskCard } from "../mock/types";
@@ -102,6 +102,41 @@ describe("setStatus (browser-loop mock)", () => {
     expect(waiting.ready).toBe(true);
     await setStatus(10, "in_progress"); // Now that it is ready, the reservation goes through
     expect(getSnapshot().tasks.find((t) => t.id === 10)!.status).toBe("in_progress");
+  });
+});
+
+describe("rejectTask (browser-loop mock)", () => {
+  it("keeps the reasoning as a comment, and carries no completion time (a terminal, not an achievement)", async () => {
+    seedTasks([full(10)]);
+    await rejectTask(10, "  測っても分岐が痩せていて何も変わらない  ");
+
+    const t = getSnapshot().tasks[0];
+    expect(t.status).toBe("rejected");
+    expect(t.completedAt).toBeNull();
+    expect(t.comments).toBe(1);
+    expect(getSnapshot().activity.some((a) => a.text === "測っても分岐が痩せていて何も変わらない")).toBe(true);
+  });
+
+  it("refuses an empty reason, and writes nothing (the reason is the point of the command)", async () => {
+    seedTasks([full(10)]);
+    await expect(rejectTask(10, "   ")).rejects.toMatchObject({ code: "invalid_value" });
+    expect(getSnapshot().tasks[0].status).toBe("todo");
+    expect(getSnapshot().activity).toEqual([]);
+  });
+
+  it("releases what was waiting on it — a blocker decided against is a blocker no longer", async () => {
+    seedTasks([full(9), full(10, { ready: false, blockedBy: [{ id: 9, name: "t9" }] })]);
+    await rejectTask(9, "やらない");
+
+    const waiting = getSnapshot().tasks.find((t) => t.id === 10)!;
+    expect(waiting.blockedBy).toEqual([]);
+    expect(waiting.ready).toBe(true);
+  });
+
+  it("does not pile the reason on a second time (re-rejecting changes nothing)", async () => {
+    seedTasks([full(10, { status: "rejected" })]);
+    await rejectTask(10, "また同じことを言う");
+    expect(getSnapshot().tasks[0].comments).toBe(0);
   });
 });
 

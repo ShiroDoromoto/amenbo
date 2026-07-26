@@ -1,0 +1,144 @@
+# The line a task walks between being registered and being finished: reserved, worked on, stalled,
+# handed back, finished, and reopened. Every state amenbo has for progress is entered here, by the
+# command a user actually reaches for — `status` for the explicit move, and the three verbs the CLI
+# gives their own name (`done` / `reopen` / `block`).
+id: task-status
+title: A task walks its progress states — reserved, commented on, blocked, handed back, done, reopened
+description: >
+  Reserve a freshly registered task, leave a note on its timeline, park it on an external stall, hand
+  it back, finish it, and reopen it — reading the state back after each move. The reserve is the
+  double-work guard, so it is checked twice over: the task's own status, and its disappearance from
+  the listing the next session picks fresh work out of.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — walked through its progress states
+    as: seed
+
+  # Reserve it: todo → in_progress, the compare-and-swap two sessions race on.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: in_progress
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: in_progress
+
+  # The other half of the guard: what is held is no longer offered as fresh work.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo"
+      target: seed
+      present: false
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — leaving the state of play on the timeline
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: num_comments
+      equals: 1
+
+  # An external stall — the one thing `blocked` is for. Its reason lands on the timeline as a
+  # comment, which is what the second count reads back.
+  - type: action
+    domain: task
+    op: block
+    with:
+      target: seed
+      reason: SCENARIO — waiting on a machine this session does not have
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: blocked
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: num_comments
+      equals: 2
+
+  # The stall cleared: hand it back, and it is offered as fresh work again.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: todo
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: seed
+      present: true
+
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: seed
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: done
+
+  # `completed` is the flag the listings filter on, and `done` has to move both.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: completed
+      equals: true
+
+  - type: action
+    domain: task
+    op: reopen
+    with:
+      target: seed
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: completed
+      equals: false

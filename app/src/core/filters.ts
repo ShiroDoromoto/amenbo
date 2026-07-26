@@ -11,8 +11,9 @@
 // (`parseRefQuery`). Dimensions the user defined are grown from the snapshot (see custom, below).
 import type { DimensionDto } from "../bindings/bindings";
 import { parseRef } from "./idref";
-import type { Priority, Status, TaskCard } from "../mock/types";
+import type { Priority, TaskCard } from "../mock/types";
 import { priorityLabel, statusLabel, t } from "./i18n";
+import { isClosed, STATUS_ALL } from "./status";
 
 /** One choice within a dimension. `value` matches the CLI's value; `label` is lazy so it follows the language. */
 export type FilterOption = {
@@ -33,8 +34,15 @@ export type FilterDimension = {
 /** The selection (dimension id to option value). A missing key or "" means the dimension does not filter. */
 export type FilterSelection = Record<string, string>;
 
-const STATUSES: Status[] = ["todo", "in_progress", "blocked", "done"];
 const PRIORITIES: Priority[] = ["high", "medium", "low"];
+
+/**
+ * The one status option that names more than one value: both terminals at once. It is spelled the way
+ * the CLI takes it (`status:` is comma-separated any-of, so `status:done,rejected` asks the same
+ * question there), which is what lets the board's closed column send "see all" here and land on
+ * exactly the set the column held.
+ */
+export const CLOSED_FILTER_VALUE = "done,rejected";
 
 /** Task to (dimension id to assigned value id). Dimension and value ids are integer keys. */
 export type DimAssignments = Record<string, Record<number, number>>;
@@ -57,11 +65,18 @@ export function filterDimensions(
       id: "status",
       label: () => t("filter.dim.status"),
       cliKey: "status:",
-      options: STATUSES.map((s) => ({
-        value: s,
-        label: () => statusLabel(s),
-        test: (task) => task.status === s,
-      })),
+      options: [
+        ...STATUS_ALL.map((s) => ({
+          value: s,
+          label: () => statusLabel(s),
+          test: (task: TaskCard) => task.status === s,
+        })),
+        {
+          value: CLOSED_FILTER_VALUE,
+          label: () => t("filter.opt.status.closed"),
+          test: (task: TaskCard) => isClosed(task.status),
+        },
+      ],
     },
     {
       id: "assignee",

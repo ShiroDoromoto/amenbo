@@ -6,6 +6,7 @@ import {
 } from "../core/calendar";
 import { currentLang, t, tf } from "../core/i18n";
 import { BlockedChips } from "../components/atoms";
+import { isClosed } from "../core/status";
 
 // How many tasks a single day cell will stack; the overflow becomes an "N more" line pointing at the
 // list/detail view. Keeps a month row from growing without bound.
@@ -75,7 +76,7 @@ export function CalendarView({ tasks, selectedTaskId, onSelectTask }: {
                     "cal__chip",
                     `cal__chip--${dueKind(day, today)}`,
                     tk.id === selectedTaskId ? "cal__chip--selected" : "",
-                    tk.status === "done" ? "cal__chip--done" : "",
+                    isClosed(tk.status) ? "cal__chip--closed" : "",
                   ].join(" ").trim()}
                   title={tk.title}
                   onClick={() => onSelectTask(tk.id)}

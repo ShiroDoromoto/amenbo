@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import type { Actor, Priority, Status, TaskCard } from "../mock/types";
 import type { PremiseChangeDto } from "../bindings/bindings";
 import { dueKind, todayStr } from "../core/calendar";
 import { currentLang, priorityLabel, statusLabel, t, tf } from "../core/i18n";
+import { isEnterSubmit } from "../core/keys";
 import { getSnapshot } from "../core/snapshot";
 import { pushNotice } from "../core/notice";
+import { STATUS_ALL } from "../core/status";
 import { taskRef } from "../core/idref";
 import { Identicon } from "./identicon";
 
@@ -73,21 +76,25 @@ export function FacetAvatar({ actor, showName }: { actor: Actor; showName?: bool
   );
 }
 
-/** The status axis in display order — the board's columns and the status control's options are the same four values. */
-export const STATUS_ORDER: Status[] = ["todo", "in_progress", "blocked", "done"];
-
 /**
  * The one control that changes a task's status. Every surface offering the change — board card, list row,
- * inbox row — mounts this, so all four values stay reachable everywhere and no surface can express the axis
+ * inbox row — mounts this, so every value stays reachable everywhere and no surface can express the axis
  * as a two-value toggle (a toggle has to pick a landing status for the user, and picking `todo` silently
  * discards an `in_progress` reservation). It shows the current status by being set to it, so a row carrying
- * this needs no separate StatusBadge. It stops propagation itself: it always sits inside a row or card whose
- * own click selects the task, and changing status must not double as selecting.
+ * this needs no separate StatusBadge — which is also how the two terminals tell themselves apart, both
+ * being struck through. It stops propagation itself: it always sits inside a row or card whose own click
+ * selects the task, and changing status must not double as selecting.
+ *
+ * `rejected` is the one option that does not write on being picked: it asks for the reason first
+ * ({@link RejectReasonModal}), and hands it on with the status. Cancelling writes nothing, and the
+ * control snaps back to the status it is set to.
  */
 export function StatusSelect({ id, status, onStatus, premiseChange, className = "inlineselect" }: {
   id: number;
   status: Status;
-  onStatus: (id: number, status: Status) => void;
+  // The reason rides along with the status because one status requires it: `rejected` is refused
+  // without it, both here and in the write layer (`AMB-D-397`). It is absent for every other value.
+  onStatus: (id: number, status: Status, reason?: string) => void;
   // The holder-side safety net of `AMB-D-366`: the premises pinned on after this task was reserved, if any.
   // Leaving `in_progress` (finishing, blocking) is the moment that must not be missed — so on that
   // transition, with a change present, a firm toast fires before the change is handed on. The transition is
@@ -97,25 +104,94 @@ export function StatusSelect({ id, status, onStatus, premiseChange, className = 
   // detail pane's action row — but it is one control, so the styling is the only thing a caller may vary.
   className?: string;
 }) {
-  const change = (next: Status) => {
+  const [rejecting, setRejecting] = useState(false);
+  const commit = (next: Status, reason?: string) => {
     if (status === "in_progress" && next !== "in_progress" && premiseChange) {
       pushNotice(tf("premise.warn", { detail: premiseChangeDetail(premiseChange) }));
     }
-    onStatus(id, next);
+    onStatus(id, next, reason);
+  };
+  // Picking `rejected` opens the question instead of writing: the toast above fires on the way to the
+  // write, so it must not go off for a rejection that is still being reconsidered.
+  const change = (next: Status) => {
+    if (next === "rejected") setRejecting(true);
+    else commit(next);
   };
   return (
-    <select
-      className={className}
-      value={status}
-      title={t("status.changeTip")}
+    <>
+      <select
+        className={className}
+        value={status}
+        title={t("status.changeTip")}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => { e.stopPropagation(); change(e.target.value as Status); }}
+      >
+        {STATUS_ALL.map((s) => (
+          <option key={s} value={s}>{statusLabel(s)}</option>
+        ))}
+      </select>
+      {rejecting && (
+        <RejectReasonModal
+          id={id}
+          onCancel={() => setRejecting(false)}
+          onReject={(reason) => { setRejecting(false); commit("rejected", reason); }}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * What the pull-down asks before a task is rejected: why it will not be done. The reason is **required**,
+ * and this is the surface that makes it so — the confirm button is dead until something is typed, so there
+ * is no path from the pull-down to `rejected` that skips it (`AMB-D-397`; the CLI's `--reason` is required
+ * for the same reason, and the command refuses an empty one whichever door it came through).
+ *
+ * It is a modal and not a native `prompt()`, which the Tauri webview does not implement (see `core/dialog`,
+ * where the confirmation dialog had to go native for the same reason — there is no native text prompt to
+ * delegate to). Esc and the cancel button both write nothing.
+ */
+function RejectReasonModal({ id, onCancel, onReject }: {
+  id: number;
+  onCancel: () => void;
+  onReject: (reason: string) => void;
+}) {
+  const [text, setText] = useState("");
+  const reason = text.trim();
+  const submit = () => { if (reason) onReject(reason); };
+  return createPortal(
+    <div
+      className="rejectask__overlay"
       onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => { e.stopPropagation(); change(e.target.value as Status); }}
+      onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onCancel(); }}
     >
-      {STATUS_ORDER.map((s) => (
-        <option key={s} value={s}>{statusLabel(s)}</option>
-      ))}
-    </select>
+      <div className="rejectask__modal" role="dialog" aria-modal="true" aria-labelledby="rejectask-title">
+        <div className="rejectask__title" id="rejectask-title">{tf("reject.title", { ref: taskRef(id) })}</div>
+        <div className="rejectask__why">{t("reject.why")}</div>
+        <textarea
+          className="rejectask__input"
+          autoFocus
+          rows={4}
+          value={text}
+          placeholder={t("reject.placeholder")}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            // ⌘/Ctrl+Enter submits, as every other multi-line body in the app does — a bare Enter is a
+            // newline, and a reason worth keeping is often more than one line.
+            if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
+            if (e.key === "Escape") onCancel();
+          }}
+        />
+        <div className="rejectask__actions">
+          <button className="rejectask__action rejectask__action--go" disabled={!reason} onClick={submit}>
+            {t("reject.confirm")}
+          </button>
+          <button className="rejectask__action" onClick={onCancel}>{t("reject.cancel")}</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

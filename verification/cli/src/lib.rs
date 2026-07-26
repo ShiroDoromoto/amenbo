@@ -674,6 +674,14 @@ impl Driver {
                 self.run_json(&["decision", "unlink", &target.to_string(), "--from", &other.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("decision {target} no longer points at decision {other}")))
             }
+            // The repairing face. `--yes` because the driver is unattended, and the verdict it comes
+            // back with is judged the way the reading face's is — a store still unsound after a
+            // repair is a value, not a driver failure.
+            (Domain::Store, "doctor-fix") => {
+                let v = self.run_check(&["doctor", "--fix", "--yes", "--json"])?;
+                let left = v["issues"].as_array().map_or(0, Vec::len);
+                Ok(Outcome::action(format!("swept the store ({left} issue(s) still standing after it)")))
+            }
             (Domain::Store, "config-set") => {
                 let key = req_str(with, "key")?;
                 let value = req_str(with, "value")?;
@@ -708,6 +716,21 @@ impl Driver {
                 // Removing a pointer asks first; the driver is unattended, so it answers up front.
                 self.run_json(&["unbind", "--dir", &path, "--yes", "--json"])?;
                 Ok(Outcome::action(format!("unbound {path}")))
+            }
+            // Leave the folder's pointer in the shape an older amenbo wrote: a `project_id` that is
+            // not the integer key. Nothing amenbo ships writes one any more, and that is the point —
+            // this is the state on disk that `doctor --fix` exists to put right, so the scenario has
+            // to make it, exactly as `repo write-file` makes the file a person already had.
+            //
+            // It is written from outside the folder rather than by running anything in it: amenbo
+            // heals the pointer of a folder it is run in, so a visit would undo this before the
+            // repair under test ever saw it.
+            (Domain::Folder, "legacy-pointer") => {
+                let dir = self.folder(with)?;
+                let pointer = dir.join(".amenbo");
+                std::fs::write(&pointer, br#"{"v":1,"project_id":"a-name-not-a-key"}"#)
+                    .map_err(|e| format!("could not write {}: {e}", pointer.display()))?;
+                Ok(Outcome::action(format!("left {} pointing the way an older build did", dir.display())))
             }
             (Domain::Folder, "sync-guide") => {
                 let dir = self.folder(with)?;
@@ -909,7 +932,28 @@ impl Driver {
             (Domain::Store, "doctor") => {
                 let want = req_bool(with, "ok")?;
                 let v = self.run_check(&["doctor", "--json"])?;
-                Ok(judge_check("doctor", want, &v))
+                // Naming a kind asks about the list rather than the verdict. Most of what doctor
+                // raises is a warning, which leaves `ok` alone — so a problem appearing, and a repair
+                // taking it away, are only visible from here.
+                match with.get("issue").and_then(|v| v.as_str()) {
+                    None => Ok(judge_check("doctor", want, &v)),
+                    Some(kind) => {
+                        let present = opt_bool(with, "present").unwrap_or(true);
+                        let found = v["issues"]
+                            .as_array()
+                            .is_some_and(|rows| rows.iter().any(|i| i["kind"].as_str() == Some(kind)));
+                        let pass = found == present && v["ok"].as_bool().unwrap_or(false) == want;
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "`doctor` {} `{kind}` issue (expected {}, {})",
+                                if found { "raises a" } else { "raises no" },
+                                if present { "raised" } else { "gone" },
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                }
             }
             (Domain::Store, "validate") => {
                 let want = req_bool(with, "ok")?;

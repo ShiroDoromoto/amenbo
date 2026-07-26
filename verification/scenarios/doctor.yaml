@@ -1,14 +1,19 @@
-# The integrity reads. Both are asked of a store that has been used rather than a fresh one: an
-# emptiness check is sound by definition, and the references these commands look for — a dependency
-# edge, a decision's link to the work it drives, a comment hanging off a task — only exist once
-# something has drawn them.
+# The integrity check, on both its faces. The reads are asked of a store that has been used rather
+# than a fresh one: an emptiness check is sound by definition, and the references these commands look
+# for — a dependency edge, a decision's link to the work it drives, a comment hanging off a task —
+# only exist once something has drawn them. Then the face that writes: something is put wrong, seen to
+# be reported, repaired, and seen to be gone.
 id: doctor
-title: A store carrying real work — edges, links and timelines — reports sound, in the sweep and on one task
+title: A store carrying real work reports sound — and what is left broken is reported, repaired, and gone
 description: >
   Build up the shape a real store has (two tasks with an edge between them, a decision linked to the
   work it drives, a comment on the timeline) and then ask both integrity faces what they see: the
   device-wide sweep, and the shape check narrowed to a single task. Both are side-effect-free reads,
   so the store is asked twice over and asserted unchanged by the asking.
+
+  The repair is walked separately, and it is walked end to end — a fix that sweeps nothing looks
+  exactly like a fix that works, so the problem is put there first and the same read that raised it
+  is what says it went.
 steps:
   - type: action
     domain: task
@@ -91,3 +96,54 @@ steps:
       target: seed
       text: SCENARIO — a timeline hanging off the task
       present: true
+
+  # ── The face that writes ────────────────────────────────────────────────────────────────────
+  # A folder bound by an older build: the binding is sound, and only the pointer left in the folder
+  # is in a shape this build no longer writes. Nothing amenbo does today produces one, which is why
+  # the repair is worth a line — the state it answers for is not reachable by using amenbo normally.
+  - type: action
+    domain: folder
+    op: init
+    with:
+      dir: elsewhere
+    as: theirs
+
+  - type: action
+    domain: folder
+    op: legacy-pointer
+    with:
+      dir: elsewhere
+
+  # It is reported — and reported as a warning, so the store's verdict is untouched. A repair that
+  # could only be seen through `ok` would be invisible here, which is most of what doctor raises.
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true
+      issue: legacy_pointer
+      present: true
+
+  - type: action
+    domain: store
+    op: doctor-fix
+
+  # The same read that raised it is what says it is gone. This is the whole gate: a repair that
+  # sweeps nothing is indistinguishable from one that works, until something it had to sweep is here.
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true
+      issue: legacy_pointer
+      present: false
+
+  # And what was written is the right thing: the folder still answers with the project it named all
+  # along, which a pointer rewritten to some other key would fail. Asking from inside a folder heals
+  # its pointer too, so this says nothing about whether the sweep ran — the read above is that gate.
+  - type: assert
+    domain: folder
+    op: bound
+    with:
+      dir: elsewhere
+      project: theirs

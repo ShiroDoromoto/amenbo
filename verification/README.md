@@ -216,6 +216,13 @@ there from `fixtures/`, and `git-init` makes the folder a git repository, which 
 hook slots are real enough to write into. All of it stays inside the run's own throwaway folder — a
 path that is absolute, or that climbs out with `..`, is refused.
 
+A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
+where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.
+`folder legacy-pointer` leaves a bound folder's `.amenbo` in the shape an older build wrote, which is
+what `store doctor-fix` puts right. They are the same idea as `repo write-file`: the state on disk a
+scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach for one only
+when the line under test is what amenbo does about that state.
+
 `fixtures/` is for text a scenario cannot hold itself. This tree's prose rule keeps a bare amenbo
 reference out of every `.yaml`, and the lint has nothing to find unless a file really carries one —
 so the file carries it and the scenario names the file.
@@ -239,7 +246,10 @@ A `field` assert names its value by a dotted path into the read it is about — 
 `update`) — so what the output nests is reachable without a new op per corner:
 `placement.project.name` walks two objects,
 `blocked_by.0.name` indexes an array on the way, and a path that runs off the output is a mismatch
-rather than an error. A `listed` assert asks whether the task is in the listing; give it
+rather than an error. The `store doctor` assert reads its verdict through `ok`, and takes an `issue`
+— a kind out of doctor's own list — when what is under test is a single problem appearing or going:
+most of what doctor raises is a warning, and a warning leaves `ok` alone. A `listed` assert asks
+whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible.
 

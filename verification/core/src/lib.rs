@@ -259,6 +259,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "hard-erase", required: &["target", "body"], refs: &["target"], binds: false },
     // The store's own settings, changed the one way a user can change them.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "config-set", required: &["key", "value"], refs: &[], binds: false },
+    // The other face of the integrity check: the one that puts right what the reading face reports.
+    // It is an action and not an assert precisely because it writes — what it swept is read back by
+    // asking the reading face again.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "doctor-fix", required: &[], refs: &[], binds: false },
     // What a folder's binding is made of. A folder is named, not pointed at: `dir` is a plain name
     // the driver places somewhere of its own, since a pointer is answered by where a folder sits.
     // `init` raises a project of its own and binds it (hence the binding), `bind` points a folder at
@@ -267,6 +271,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "bind", required: &["dir"], refs: &["project"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "unbind", required: &["dir"], refs: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "sync-guide", required: &["dir"], refs: &[], binds: false },
+    // A pointer left in the shape an older amenbo wrote, in a folder that is bound. Nothing amenbo
+    // does today writes one — it is the state a repair exists for, so a scenario about the repair has
+    // to put the folder in it, the way `repo write-file` puts a file a person already had.
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "legacy-pointer", required: &["dir"], refs: &[], binds: false },
     // Hanging bytes or a link on a record. Each `attach` names either a `file` the run wrote or a
     // `url`, and binds the attachment, since managing one afterwards means naming it.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "attach", required: &["target"], refs: &["target"], binds: true },
@@ -303,7 +311,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "exported", required: &["target", "from"], refs: &["target", "from"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Comment, op: "exported", required: &["target", "from"], refs: &["target", "from"], binds: false },
     // The two integrity reads, each by the command a user reaches for. `ok` is the verdict asked
-    // of it; `validate` narrows to one object when a `target` is given.
+    // of it; `validate` narrows to one object when a `target` is given. `doctor` also takes an
+    // `issue` — the kind of problem to look for in what it listed — since most of what it raises is
+    // a warning, and a warning leaves the verdict alone: without naming the kind there is no way to
+    // say a problem appeared, or that a repair took it away.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "doctor", required: &["ok"], refs: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "validate", required: &["ok"], refs: &["target"], binds: false },
     // An attachment read back three ways: its own row, the owner's list it hangs in, and — for a

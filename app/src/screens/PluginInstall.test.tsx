@@ -6,11 +6,13 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PluginCatalog } from "../core/pluginCatalog";
+import type { PluginCatalog, PluginDetail } from "../core/pluginCatalog";
 import type { PluginInstall } from "../core/pluginInstalls";
 
 const hoisted = vi.hoisted(() => ({
   catalog: { entries: [], sources: [], dropped: 0 } as PluginCatalog,
+  /** The catalog's detail document for the opened entry — `null` where the official index has none. */
+  detail: null as PluginDetail | null,
   installs: [] as PluginInstall[],
   installed: [] as string[],
   gated: [] as { name: string; projectId: number | null; enabled: boolean }[],
@@ -24,6 +26,7 @@ vi.mock("../core/pluginCatalog", async (importOriginal) => {
     ...orig,
     usePluginCatalog: () => ({ catalog: hoisted.catalog, loading: false, error: undefined }),
     usePluginRepoFacts: () => ({ facts: undefined, loading: false, error: undefined }),
+    usePluginDetail: () => ({ detail: hoisted.detail, loading: false, error: undefined }),
   };
 });
 
@@ -91,6 +94,7 @@ const open = (i: number) =>
 
 beforeEach(() => {
   hoisted.catalog = { entries: [entry("notify")], sources: [], dropped: 0 };
+  hoisted.detail = null;
   hoisted.installs = [];
   hoisted.installed = [];
   hoisted.gated = [];
@@ -224,5 +228,60 @@ describe("the one switch, at the level its author declared", () => {
     open(0);
     expect(detail()!.textContent).toContain("needs amenbo 9.0");
     expect(button(t("plugins.enable"))!.disabled).toBe(true);
+  });
+});
+
+// The catalog's second half (`AMB-D-385`): the list carries what a row draws, and what installing one
+// would actually mean is fetched for the one entry someone opened. It is read before an install, which is
+// the point — a plugin that will want a credential, or that this build cannot run, says so first.
+describe("what the opened entry says installing it would mean", () => {
+  const doc = (over: Partial<PluginDetail> = {}): PluginDetail => ({
+    scope: "machine",
+    events: [],
+    config: [],
+    compatible: true,
+    ...over,
+  });
+
+  it("names the switch it gets, what it watches, and what it will ask to be told", () => {
+    hoisted.detail = doc({
+      scope: "project",
+      events: ["task.created", "task.completed"],
+      config: [
+        { key: "webhook", label: "Webhook URL", secret: true, required: true },
+        { key: "events", label: "Which events", secret: false, required: false },
+      ],
+    });
+    render();
+    open(0);
+
+    expect(detail()!.textContent).toContain(t("plugins.want.perProject"));
+    expect(detail()!.textContent).toContain(
+      tf("plugins.want.events", { events: "task.created, task.completed" }),
+    );
+    expect(detail()!.textContent).toContain("Webhook URL");
+    // A secret is the line worth seeing before installing: it means handing over a credential.
+    expect(detail()!.textContent).toContain(t("plugins.want.secret"));
+    expect(detail()!.textContent).toContain(t("plugins.cfg.required"));
+  });
+
+  // Compatibility is enforced at the gate that fires the plugin, so this warns and leaves the choice.
+  it("says a build this amenbo cannot run, without taking the install away", () => {
+    hoisted.detail = doc({ compatible: false, incompatibleReason: "needs amenbo 9.0" });
+    render();
+    open(0);
+
+    expect(detail()!.textContent).toContain("needs amenbo 9.0");
+    expect(button(t("plugins.install"))!.disabled).toBe(false);
+  });
+
+  // An entry only a third-party index offers has no detail on the official one — and nothing to say.
+  it("draws the entry unchanged when the official catalog has no detail for it", () => {
+    hoisted.detail = null;
+    render();
+    open(0);
+
+    expect(detail()!.textContent).toContain("notify");
+    expect(detail()!.textContent).not.toContain(t("plugins.want.perDevice"));
   });
 });

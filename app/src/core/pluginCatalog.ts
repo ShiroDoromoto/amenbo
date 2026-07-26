@@ -8,10 +8,17 @@
 import { invoke } from "./ipc";
 import { inTauri } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
-import type { PluginCatalogDto, PluginEntryDto, PluginRepoFactsDto } from "../bindings/bindings";
+import type {
+  PluginCatalogDto,
+  PluginDetailDto,
+  PluginEntryDto,
+  PluginRepoFactsDto,
+} from "../bindings/bindings";
 
 /** One catalog entry as the market list draws it (generated DTO). */
 export type PluginEntry = PluginEntryDto;
+/** What the catalog's detail document says about one plugin (generated DTO). */
+export type PluginDetail = PluginDetailDto;
 /** The merged catalog: the entries, plus which catalogs answered (generated DTO). */
 export type PluginCatalog = PluginCatalogDto;
 
@@ -226,4 +233,31 @@ export function usePluginRepoFacts(
     fetchPluginRepoFacts(repo),
   );
   return { facts: data, loading, error };
+}
+
+/**
+ * Read the catalog's detail document for one plugin (Tauri: `plugin_detail`, `AMB-D-385`). The list
+ * carries what a row draws; this carries what installing one would mean — the switch it gets, what it
+ * watches, what it will ask to be told, and whether this build can run it.
+ *
+ * `null` is an answer, not a failure: the official catalog is what a detail is fetched from, so an entry
+ * only a third-party index offers has none here (and cannot be installed either). Outside Tauri there is
+ * no catalog to read, so the browser mock says the same.
+ */
+export async function fetchPluginDetail(name: string): Promise<PluginDetail | null> {
+  if (inTauri()) return invoke<PluginDetail | null>("plugin_detail", { name });
+  return null;
+}
+
+/**
+ * The opened entry's detail. Mounted by the detail view alone — the same rule the figures above follow,
+ * and the whole reason browsing a catalog of thousands stays one static file.
+ */
+export function usePluginDetail(
+  name: string,
+): { detail: PluginDetail | null | undefined; loading: boolean; error: unknown } {
+  const { data, loading, error } = useQuery<PluginDetail | null>(["plugin-detail", name], () =>
+    fetchPluginDetail(name),
+  );
+  return { detail: data, loading, error };
 }

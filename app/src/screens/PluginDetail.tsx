@@ -3,16 +3,24 @@ import { Markdown } from "../components/Markdown";
 import { PluginGate } from "../components/PluginGate";
 import { errText, t, tf } from "../core/i18n";
 import { openExternalUrl } from "../core/mutations";
-import { pluginLayer, repoLinkBase, repoUrl, usePluginRepoFacts, type PluginEntry } from "../core/pluginCatalog";
+import {
+  pluginLayer,
+  repoLinkBase,
+  repoUrl,
+  usePluginDetail,
+  usePluginRepoFacts,
+  type PluginDetail as PluginDetailDoc,
+  type PluginEntry,
+} from "../core/pluginCatalog";
 import { installPlugin, type PluginInstall } from "../core/pluginInstalls";
 
 // The one plugin a user opened (`AMB-D-347`).
 //
 // The market list is drawn from the catalog alone, and everything that costs a request lives here
-// instead: the stars, the current release's downloads and the README are per-repository, so they are
-// fetched when this opens and for this entry only. That asymmetry is the whole discovery design —
-// browsing a catalog of thousands stays one static file, and GitHub is asked about a plugin only when
-// someone actually wants to look at it.
+// instead: the stars, the current release's downloads and the README are per-repository, and the
+// catalog's own detail document is per-plugin (`AMB-D-385`), so all of it is fetched when this opens and
+// for this entry only. That asymmetry is the whole discovery design — browsing a catalog of thousands
+// stays one static file, and a plugin is asked about only when someone actually wants to look at it.
 //
 // The figures never gate anything. What may be installed is decided by the asset's signature against
 // amenbo's own key (`AMB-D-371`); a star count is a display figure, and a download count includes
@@ -30,6 +38,7 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
   onClose: () => void;
 }) {
   const { facts, loading, error } = usePluginRepoFacts(entry.repo);
+  const { detail } = usePluginDetail(entry.name);
   const layer = pluginLayer(entry);
 
   // Escape closes it, like every other modal here — the detail is a look, and looking must be cheap to
@@ -79,6 +88,8 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
           )}
         </div>
 
+        {detail && <WhatItWants detail={detail} />}
+
         {/* Everything below this line came from GitHub, not from the catalog. */}
         <div className="plugdet__figures">
           <button className="feed__action" onClick={() => void openExternalUrl(repoUrl(entry.repo))}>
@@ -108,6 +119,53 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
 
         <div className="plugdet__foot faint">{t("plugins.factsNote")}</div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What installing this plugin would mean, from the catalog's detail document (`AMB-D-385`).
+ *
+ * Everything here is the author's declaration, read **before** anything is installed: which switch turns
+ * it on, what it will be woken for, and what it will want to be told — a secret among those is the line
+ * worth seeing in advance, since it means handing over a credential. The one judgement is amenbo's own:
+ * a build this version cannot speak to says so here rather than at the enable that would refuse it.
+ *
+ * It does not block the install button. Compatibility is enforced at the gate that fires the plugin
+ * (`AMB-D-359`), and installing an inert plugin breaks nothing — so this warns and leaves the choice.
+ */
+function WhatItWants({ detail }: { detail: PluginDetailDoc }) {
+  return (
+    <div className="plugdet__wants">
+      <div className="plugdet__meta faint">
+        <span>{t(detail.scope === "project" ? "plugins.want.perProject" : "plugins.want.perDevice")}</span>
+        {detail.events.length > 0 && (
+          <>
+            <span>·</span>
+            <span>{tf("plugins.want.events", { events: detail.events.join(", ") })}</span>
+          </>
+        )}
+      </div>
+      {detail.config.length > 0 && (
+        <div className="plugdet__meta faint">
+          <span>{t("plugins.want.settings")}</span>
+          {/* Each setting is one item on the line, told apart the way the entry's own meta row does it:
+              a label can hold spaces, so the gap alone would not say where one ends. */}
+          {detail.config.map((f, i) => (
+            <span key={f.key}>
+              {i > 0 && <span className="faint">· </span>}
+              {f.label}
+              {f.required && ` (${t("plugins.cfg.required")})`}
+              {f.secret && ` (${t("plugins.want.secret")})`}
+            </span>
+          ))}
+        </div>
+      )}
+      {!detail.compatible && (
+        <div className="plugdet__note">
+          {detail.incompatibleReason ?? t("plugins.incompatible")}
+        </div>
+      )}
     </div>
   );
 }

@@ -4476,6 +4476,54 @@ pub async fn plugin_repo_facts(repo: String) -> Result<PluginRepoFactsDto, CmdEr
     .map_err(|e| -> CmdError { format!("GitHub の情報取得に失敗しました: {e}").into() })?
 }
 
+/// Read the detail document for the **one** plugin a user opened (`AMB-D-385`).
+///
+/// The list stays one static file for everyone; this is the second half of that bargain, fetched for a
+/// single entry and only when it is looked at — the same lazy shape, and the same place, as the stars and
+/// the README ([`plugin_repo_facts`]).
+///
+/// It resolves against the **official** catalog, which is what an install resolves against: a third-party
+/// index is for discovery alone (`AMB-D-371` — its asset cannot verify, so it cannot be installed), and
+/// answering from the official base for an entry the official index does not carry would describe some
+/// other plugin. A name it does not list therefore comes back as `null` — the entry exists, it simply has
+/// no detail here — rather than as a failure, so the market draws what it has instead of an error.
+///
+/// Off the main thread: it may fetch (core answers from its cache within the freshness window, and falls
+/// back to it when the network does not answer).
+#[tauri::command]
+pub async fn plugin_detail(name: String) -> Result<Option<PluginDetailDto>, CmdError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<Option<PluginDetailDto>, CmdError> {
+        let paths = amenbo_core::config::Paths::resolve()?;
+        let catalog = amenbo_core::plugin_catalog::load(&paths)?;
+        let Some(entry) = catalog.find(&name).cloned() else {
+            return Ok(None);
+        };
+        let detail = amenbo_core::plugin_catalog::detail(&paths, &entry)?;
+        // The compatibility gate reads a whole manifest, so the two halves are put back together once
+        // here rather than teaching the gate to read a document at a time.
+        let manifest = amenbo_core::plugin_wire::join(&entry, &detail);
+        let why = amenbo_core::plugin_compat::check(&manifest).err();
+        Ok(Some(PluginDetailDto {
+            scope: detail.scope.as_str().to_string(),
+            events: detail.events.iter().map(|e| e.event.clone()).collect(),
+            config: detail
+                .config
+                .iter()
+                .map(|f| PluginWantedSettingDto {
+                    key: f.key.clone(),
+                    label: f.label.clone(),
+                    secret: f.secret,
+                    required: f.required,
+                })
+                .collect(),
+            compatible: why.is_none(),
+            incompatible_reason: why.map(|why| why.to_string()),
+        }))
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("プラグインの詳細取得に失敗しました: {e}").into() })?
+}
+
 /// One setting a plugin's author declared, and what this machine currently holds for it
 /// (`AMB-D-356`) — everything the generic form needs to draw a row and nothing amenbo judges for
 /// itself.
@@ -4513,6 +4561,53 @@ pub struct PluginConfigFieldDto {
     /// Whether a secret is held for this key on this device. Always false for a text field, whose
     /// values say it themselves.
     secret_set: bool,
+}
+
+/// One setting a plugin will ask for, as the market names it **before** anything is installed
+/// (`AMB-D-385`). The author's declaration and nothing else: what a machine holds for a key is the
+/// installed plugin's business, and here there is no install to hold anything.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginWantedSettingDto {
+    /// The key the author declared, which is what a later `plugin config set` names.
+    key: String,
+    /// The author's label for it, which is what the form will caption.
+    label: String,
+    /// Whether it is a secret — worth knowing before installing, since it means a credential will have
+    /// to be handed over for the plugin to do anything.
+    secret: bool,
+    /// Whether an enable is refused until it is filled in (`AMB-D-356`).
+    required: bool,
+}
+
+/// What the catalog's **detail document** says about one plugin — the half of its entry that is fetched
+/// for the one plugin someone opened, never for the list (`AMB-D-385`).
+///
+/// It answers what a reader wants before installing and the list deliberately does not carry: which
+/// switch turns it on, what it will watch, what it will want to be told, and whether this build of
+/// amenbo can speak to it at all. The install coordinates in the same document — the URL, the checksum,
+/// the signature — are not here: they are the install path's, verified there over the bytes served
+/// (`AMB-D-371`), and a face that displayed them would invite reading them as the assurance they are not.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginDetailDto {
+    /// The level its one switch will sit at, as the author declared it (`AMB-D-379`).
+    #[ts(type = r#""project" | "machine""#)]
+    scope: String,
+    /// The observation events it subscribes to (`AMB-D-383`), by name — what installing it means it will
+    /// be woken for.
+    events: Vec<String>,
+    /// The settings it declares, in the author's order.
+    config: Vec<PluginWantedSettingDto>,
+    /// Whether this build of amenbo can run it (`AMB-D-359`). Asked here so the answer arrives before an
+    /// install rather than at the enable that would refuse.
+    compatible: bool,
+    /// Why not, when `compatible` is false — core's own sentence, the same one the installed screen shows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    incompatible_reason: Option<String>,
 }
 
 /// One plugin this machine holds, as the market draws its state on top of the catalog entry of the same
@@ -5326,6 +5421,76 @@ mod tests {
         assert_eq!(running.manifest.desc, "the build before the update", "the pair moved together");
         assert!(!row().rollback, "the one backup is consumed — there is nothing further back to go");
 
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// What the market reads for the one plugin someone opened (`AMB-D-385`): the detail document's own
+    /// fields — the switch, the events, the settings — plus the one judgement amenbo adds, whether this
+    /// build can run the thing at all. Driven off the caches, with the network pointed nowhere, because
+    /// falling back to them is how the market answers offline anyway.
+    #[test]
+    fn the_opened_entrys_detail_says_what_installing_would_mean() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("plugin-detail");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        std::env::set_var("AMENBO_PLUGIN_CATALOG_URL", "http://127.0.0.1:9/catalog.json");
+        let registry = amenbo_core::config::Paths::at(tmp.clone()).registry_dir();
+        std::fs::create_dir_all(&registry).unwrap();
+        std::fs::write(
+            registry.join("official.json"),
+            serde_json::json!({
+                "catalog_v": 1,
+                "generated_at": "2026-07-23T04:57:10Z",
+                "plugins": [{
+                    "name": "notify",
+                    "desc": "a plugin",
+                    "author": "amenbo",
+                    "repo": "ShiroDoromoto/amenbo",
+                    "os": ["macos", "linux", "windows"],
+                    "category": "workflow",
+                }],
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let write_detail = |payload_v: u32| {
+            std::fs::write(
+                registry.join("detail-notify.json"),
+                serde_json::json!({
+                    "name": "notify",
+                    "url": "https://example.com/notify.tar.gz",
+                    "checksum": "sha256:deadbeef",
+                    "scope": "project",
+                    "payload_v": payload_v,
+                    "config": [
+                        {"key": "webhook", "label": "Webhook URL", "secret": true, "required": true},
+                    ],
+                    "events": ["task.created", "task.completed"],
+                })
+                .to_string(),
+            )
+            .unwrap();
+        };
+
+        write_detail(amenbo_core::plugin_payload::VERSION);
+        let detail = tauri::async_runtime::block_on(plugin_detail("notify".into())).unwrap().unwrap();
+        assert_eq!(detail.scope, "project");
+        assert_eq!(detail.events, vec!["task.created".to_string(), "task.completed".to_string()]);
+        assert_eq!(detail.config.len(), 1);
+        assert!(detail.config[0].secret && detail.config[0].required);
+        assert_eq!(detail.config[0].label, "Webhook URL");
+        assert!(detail.compatible && detail.incompatible_reason.is_none());
+
+        // A build speaking another payload contract is answered before an install, not at the enable.
+        write_detail(amenbo_core::plugin_payload::VERSION + 1);
+        let other = tauri::async_runtime::block_on(plugin_detail("notify".into())).unwrap().unwrap();
+        assert!(!other.compatible);
+        assert!(other.incompatible_reason.is_some(), "core's own sentence, not a made-up one");
+
+        // A name the official catalog does not list has no detail here — an answer, not a failure.
+        assert!(tauri::async_runtime::block_on(plugin_detail("elsewhere".into())).unwrap().is_none());
+
+        std::env::remove_var("AMENBO_PLUGIN_CATALOG_URL");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

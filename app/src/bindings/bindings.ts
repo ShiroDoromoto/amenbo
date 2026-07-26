@@ -513,6 +513,40 @@ projectValue?: string,
 secretSet: boolean, };
 
 /**
+ * What the catalog's **detail document** says about one plugin — the half of its entry that is fetched
+ * for the one plugin someone opened, never for the list (`AMB-D-385`).
+ *
+ * It answers what a reader wants before installing and the list deliberately does not carry: which
+ * switch turns it on, what it will watch, what it will want to be told, and whether this build of
+ * amenbo can speak to it at all. The install coordinates in the same document — the URL, the checksum,
+ * the signature — are not here: they are the install path's, verified there over the bytes served
+ * (`AMB-D-371`), and a face that displayed them would invite reading them as the assurance they are not.
+ */
+export type PluginDetailDto = { 
+/**
+ * The level its one switch will sit at, as the author declared it (`AMB-D-379`).
+ */
+scope: "project" | "machine", 
+/**
+ * The observation events it subscribes to (`AMB-D-383`), by name — what installing it means it will
+ * be woken for.
+ */
+events: Array<string>, 
+/**
+ * The settings it declares, in the author's order.
+ */
+config: Array<PluginWantedSettingDto>, 
+/**
+ * Whether this build of amenbo can run it (`AMB-D-359`). Asked here so the answer arrives before an
+ * install rather than at the enable that would refuse.
+ */
+compatible: boolean, 
+/**
+ * Why not, when `compatible` is false — core's own sentence, the same one the installed screen shows.
+ */
+incompatibleReason?: string, };
+
+/**
  * One entry of the plugin market list. Only what the list draws: identity, the one-line
  * description, and the axes it is filtered on (`AMB-D-347`). Nothing an install needs — the
  * signature, the checksum and the asset map are the detail's, not the list's (`AMB-D-385`).
@@ -718,6 +752,30 @@ applied: boolean,
  * Why not, when it was not — core's own sentence, which is the one that knows the reason.
  */
 error?: string, };
+
+/**
+ * One setting a plugin will ask for, as the market names it **before** anything is installed
+ * (`AMB-D-385`). The author's declaration and nothing else: what a machine holds for a key is the
+ * installed plugin's business, and here there is no install to hold anything.
+ */
+export type PluginWantedSettingDto = { 
+/**
+ * The key the author declared, which is what a later `plugin config set` names.
+ */
+key: string, 
+/**
+ * The author's label for it, which is what the form will caption.
+ */
+label: string, 
+/**
+ * Whether it is a secret — worth knowing before installing, since it means a credential will have
+ * to be handed over for the plugin to do anything.
+ */
+secret: boolean, 
+/**
+ * Whether an enable is refused until it is filled in (`AMB-D-356`).
+ */
+required: boolean, };
 
 /**
  * What [`repair_pointers`] returns: how many folders were fixed, and how many were left waiting on

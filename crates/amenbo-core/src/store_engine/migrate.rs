@@ -570,11 +570,17 @@ mod tests {
     /// born from today's registry.
     ///
     /// This is the failure the chain exists to prevent and the only one it cannot notice by itself. A
-    /// column added to [`schema::DATASETS`] is there the instant a *new* store is created, so every test
-    /// that makes its own store passes; the store that breaks is the one already on someone's disk, which
-    /// no test and no reviewer ever sees — and "there is no step" is an absence, which does not show up in
+    /// column added to the registry is there the instant a *new* store is created, so every test that
+    /// makes its own store passes; the store that breaks is the one already on someone's disk, which no
+    /// test and no reviewer ever sees — and "there is no step" is an absence, which does not show up in
     /// a diff. It has happened (`AMB-D-374`): a column reached the registry alone and every existing store
     /// failed at the first read of a task with `no such column`, all the way to a release.
+    ///
+    /// **Both halves of the registry.** The record tables ([`schema::DATASETS`]) and the plain ones
+    /// ([`schema::PLAIN_TABLES`]) are laid down by the same genesis batch and so share the same hole:
+    /// `CREATE TABLE IF NOT EXISTS` creates a table that is absent and touches one that is present, which
+    /// is why a column added to either needs a step. The plain tables carry the outbox, the queue and the
+    /// runner lease — state a read fails on as readily as a task's.
     ///
     /// The starting shape must come from the frozen DDL and not from this build's registry-minus-the-
     /// declared-diff: the subtraction can only remove what a step *says* it added, so the column with no
@@ -590,6 +596,19 @@ mod tests {
     /// step, not the registry: append one that carries existing stores, which bumps the version.
     #[test]
     fn every_column_the_registry_declares_survives_the_chain() {
+        // The whole registry as one list of (table, the columns it declares). A record table's `id` is
+        // implicit and never written as a field, so `all_columns` is what it owes; a plain table declares
+        // every column it has, key included.
+        let declared: Vec<(&str, Vec<&str>)> = schema::DATASETS
+            .iter()
+            .map(|d| (d.table, d.all_columns().map(|c| c.name).collect()))
+            .chain(
+                schema::PLAIN_TABLES
+                    .iter()
+                    .map(|p| (p.name, p.columns.iter().map(|c| c.name).collect())),
+            )
+            .collect();
+
         for born in OLDEST_FROZEN_VERSION..=LATEST_VERSION {
             let dir = scratch(&format!("registry-vs-chain-v{born}"));
             let engine = store_at(&dir, born);
@@ -597,21 +616,20 @@ mod tests {
             run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
 
             let mut missing: Vec<String> = Vec::new();
-            for d in schema::DATASETS {
+            for (table, owed) in &declared {
                 let columns = {
                     let conn = engine.conn();
                     let mut stmt = conn.prepare("SELECT name FROM pragma_table_info(?1)").unwrap();
-                    let rows = stmt.query_map([d.table], |r| r.get::<_, String>(0)).unwrap();
+                    let rows = stmt.query_map([table], |r| r.get::<_, String>(0)).unwrap();
                     rows.filter_map(|r| r.ok()).collect::<Vec<_>>()
                 };
-                assert!(!columns.is_empty(), "a store born at v{born} has no `{}` table at all", d.table);
+                assert!(!columns.is_empty(), "a store born at v{born} has no `{table}` table at all");
                 // Every missing column is collected, not just the first: they are usually one change's
                 // worth, and naming them together is what makes the one step to write obvious.
                 missing.extend(
-                    d.all_columns()
-                        .map(|c| c.name)
-                        .filter(|c| !columns.iter().any(|h| h == c))
-                        .map(|c| format!("{}.{c}", d.table)),
+                    owed.iter()
+                        .filter(|c| !columns.iter().any(|h| h == *c))
+                        .map(|c| format!("{table}.{c}")),
                 );
             }
             assert!(

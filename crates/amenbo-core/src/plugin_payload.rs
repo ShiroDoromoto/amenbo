@@ -20,6 +20,8 @@
 //!   nothing left to read (`AMB-D-407`). A live record is read back by the plugin itself (`AMB-D-406`), so
 //!   only the unreadable half travels on the wire. This is `AMB-D-348`'s foreseen additive extension: a
 //!   *before* captured at the ops write point, for the events that need one.
+//! - **The parent** (`parent`) — what a vanished child hung on, by id (`AMB-D-407`): a removed comment
+//!   names its task. The one relation a deletion takes with it, so it travels beside the record.
 //! - **Version** `v` — a single integer for the whole contract, `1` today. Adding a field does **not**
 //!   bump it: a consumer ignores keys it does not know, so new fields are additive and silent. `v`
 //!   rises only on a breaking change to an existing field's meaning (see `AMB-D-349`).
@@ -120,13 +122,22 @@ pub struct Payload {
     /// be undone later.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub record: Option<serde_json::Value>,
+    /// The record the vanished one **hung on**, by id (`AMB-D-407`): a removed comment names the task it
+    /// was posted to. Absent on everything else.
+    ///
+    /// `id` names the record the event is about and nothing else, so a subscriber that hears only "comment
+    /// 5 is gone" cannot say where it was — and unlike every other relation, this one cannot be looked up
+    /// afterwards, because looking it up is exactly what the deletion removed. Named on its own rather than
+    /// left inside `record` so routing does not depend on knowing amenbo's field names.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<i64>,
 }
 
 impl Payload {
     /// The shared shell — the common four plus `v`, with no new state. The named constructors below add
     /// `new` where the event carries one.
     fn base(event: &'static str, id: i64, actor: ActorKind, at: Timestamp) -> Self {
-        Self { v: VERSION, event, id, actor, at, new: None, record: None }
+        Self { v: VERSION, event, id, actor, at, new: None, record: None, parent: None }
     }
 
     /// `task.created` — a task was created.
@@ -183,7 +194,9 @@ impl Payload {
     }
 
     /// `comment.removed` — a comment was taken back; `id` is the comment's id, the same axis
-    /// [`comment_added`](Self::comment_added) reports on, so a subscriber can pair the two.
+    /// [`comment_added`](Self::comment_added) reports on, so a subscriber can pair the two. The task it
+    /// hung on rides on `parent` and the comment itself on `record` when the emit point captured them
+    /// (`AMB-D-407`); this constructor builds the event without either.
     pub fn comment_removed(id: i64, actor: ActorKind, at: Timestamp) -> Self {
         Self::base(name::COMMENT_REMOVED, id, actor, at)
     }
@@ -207,6 +220,7 @@ impl Payload {
             &row.at,
             row.new_state.as_deref(),
             row.record.as_deref(),
+            row.parent,
         )
     }
 
@@ -221,6 +235,7 @@ impl Payload {
             &row.at,
             row.new_state.as_deref(),
             row.record.as_deref(),
+            row.parent,
         )
     }
 
@@ -233,6 +248,7 @@ impl Payload {
         at: &str,
         new: Option<&str>,
         record: Option<&str>,
+        parent: Option<i64>,
     ) -> Option<Self> {
         let event = V1_EVENTS.iter().copied().find(|name| *name == event)?;
         let actor = ActorKind::parse(actor)?;
@@ -248,6 +264,7 @@ impl Payload {
             // object on the wire, and half an answer in the shape of one is worse than the absence a
             // subscriber already has to handle (an older store's deletion carries none).
             record: record.and_then(|raw| serde_json::from_str(raw).ok()),
+            parent,
         })
     }
 }
@@ -341,6 +358,7 @@ mod tests {
             new_state: Some("in_progress".to_string()),
             project: Some(1),
             record: None,
+            parent: None,
         };
         let rebuilt = Payload::from_outbox_row(&row).unwrap();
         assert_eq!(
@@ -370,9 +388,11 @@ mod tests {
             new_state: None,
             project: Some(1),
             record: Some(r#"{"id":42,"title":"消えたタスク"}"#.to_string()),
+            parent: None,
         };
         let rebuilt = Payload::from_outbox_row(&row).unwrap();
         assert_eq!(rebuilt.record.as_ref().unwrap()["title"], "消えたタスク");
+        assert_eq!(rebuilt.parent, None, "a task hangs on no record this payload names");
         assert!(
             serde_json::to_string(&rebuilt).unwrap().contains(r#""record":{"#),
             "and it goes out as an object, not as a string holding JSON",
@@ -382,6 +402,28 @@ mod tests {
         // subscriber already handles, and half an answer in the shape of an object is not.
         let broken = OutboxRow { record: Some("{not json".to_string()), ..row };
         assert_eq!(Payload::from_outbox_row(&broken).unwrap().record, None);
+    }
+
+    /// A child's deletion rebuilds naming what it hung on (`AMB-D-407`), beside the shape that went with
+    /// it — the two halves of what the removal took away.
+    #[test]
+    fn a_childs_deletion_rebuilds_naming_what_it_hung_on() {
+        use crate::store_engine::OutboxRow;
+        let row = OutboxRow {
+            id: 9,
+            event: "comment.removed".to_string(),
+            record_id: 5,
+            actor: "human".to_string(),
+            at: "2026-07-22T09:00:00Z".to_string(),
+            new_state: None,
+            project: Some(1),
+            record: Some(r#"{"id":5,"task_id":42,"text":"誤投稿"}"#.to_string()),
+            parent: Some(42),
+        };
+        let rebuilt = Payload::from_outbox_row(&row).unwrap();
+        assert_eq!(rebuilt.parent, Some(42));
+        let wire = serde_json::to_string(&rebuilt).unwrap();
+        assert!(wire.contains(r#""parent":42"#), "it goes out as its own field: {wire}");
     }
 
     #[test]
@@ -396,6 +438,7 @@ mod tests {
             new_state: None,
             project: None,
             record: None,
+            parent: None,
         };
         assert!(Payload::from_outbox_row(&ok).is_some());
         // An event outside the v1 catalog, an unparseable actor, and a bad timestamp each yield None.

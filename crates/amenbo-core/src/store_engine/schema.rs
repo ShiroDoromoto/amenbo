@@ -809,6 +809,12 @@ plain_tables! {
     /// instant the row exists. The store does not interpret it, here or anywhere: what a subscriber needs
     /// out of a deleted record is the subscriber's to decide. `NULL` on every other event, and on a
     /// deletion from before this column existed.
+    ///
+    /// `parent` is the id of the record the vanished one **hung on** — the task a removed comment belonged
+    /// to (`AMB-D-407`). `record_id` names the row the event is about and nothing more, so a subscriber
+    /// that hears only "comment 5 is gone" cannot say where it was; this is the one relation a deletion
+    /// cannot be asked for afterwards. `NULL` on an event whose record has no parent, and on one from
+    /// before the column.
     plugin_outbox {
         id: integer("PRIMARY KEY AUTOINCREMENT"),
         event: text,
@@ -818,6 +824,7 @@ plain_tables! {
         new_state: text_opt,
         project: bigint_opt,
         record: text_opt,
+        parent: bigint_opt,
     }
 
     /// One plugin's **work queue**: the events fanned out to it and not yet run (`AMB-D-399`). Delivery is
@@ -842,9 +849,9 @@ plain_tables! {
     /// be gone. `NULL` means "in no project, or unknown", and a project-scoped subscription fires nothing
     /// for it.
     ///
-    /// `record` rides across the same way (`AMB-D-407`): the deleted record's shape was captured at the
-    /// append, and the runner builds the payload from this row alone. Copying it is what lets it: there is
-    /// nothing left to read it off.
+    /// `record` and `parent` ride across the same way (`AMB-D-407`): both were captured at the append, and
+    /// the runner builds the payload from this row alone. Copying them is what lets it — there is nothing
+    /// left to read either off.
     plugin_queue {
         id: integer("PRIMARY KEY AUTOINCREMENT"),
         plugin: text,
@@ -856,6 +863,7 @@ plain_tables! {
         new_state: text_opt,
         project: bigint_opt,
         record: text_opt,
+        parent: bigint_opt,
     }
 
     /// Who is **running** a plugin's queue right now — at most one row per plugin, and the whole of the

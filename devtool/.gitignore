@@ -1,0 +1,4 @@
+# Build output of the optional helper module: `go build ./...` here leaves the compiled binary beside
+# its source, named after the module. It is nine megabytes of build artifact, and nothing but a reader's
+# eye stood between it and a commit — `git add -A` stages it like any new file.
+/devtool

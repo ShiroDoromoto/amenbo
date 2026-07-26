@@ -186,17 +186,21 @@ a human from the evidence, not by the exit code.
 A scenario is an `id`, a human `title`, an optional `description`, an optional `drivers`
 list, and an ordered list of `steps`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
-`comment` / `project` / `store` / `folder`) and an `op`, and carries named args under `with`. An
-action may bind its result with `as:`, and a later step refers back to it with `target:` — an op
-that joins two objects names the second under its own key (`decision link`'s `task:`), and every
-such key is checked back to an earlier binding, not just `target:`.
+`comment` / `project` / `dimension` / `store` / `folder`) and an `op`, and carries named args under
+`with`. An action may bind its result with `as:`, and a later step refers back to it with `target:` —
+an op that joins two objects names the second under its own key (`decision link`'s `task:`), and
+every such key is checked back to an earlier binding, not just `target:`.
 
-The last two domains are not things filed in a store: `store` is this device's amenbo itself — its
-settings, the identity it answers `whoami` with, and the build in place — and `folder` is a
-directory and the project its `.amenbo` names. A `folder` step says **which** folder by name
-(`dir: shared`), never where it is: a binding is answered by where a folder sits, and only the
-driver knows where its own isolated run lives, so it places the folder and keeps it clear of the
-run's own bound CWD.
+The last two are not things filed in a store: `store` is this device's amenbo itself — its settings,
+the identity it answers `whoami` with, and the build in place — and `folder` is a directory and the
+project its `.amenbo` names.
+
+Not every object is reached by a binding. A **dimension** travels as the words a person says — its
+axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what
+the command takes too; a bare number there would be read as a name, not an id. A **folder** travels
+as a plain name too (`dir: shared`), and for a different reason: a binding is answered by where a
+folder sits, so the driver is the one that places it — clear of the run's own bound CWD, which a
+pointer search would otherwise walk up into.
 
 ```yaml
 id: task-assign

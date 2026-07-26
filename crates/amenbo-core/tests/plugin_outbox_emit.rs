@@ -149,6 +149,43 @@ fn removing_a_comment_carries_the_comment_that_is_gone() {
     assert_eq!(gone["text"], "誤投稿");
 }
 
+/// A removed comment names the task it hung on (`AMB-D-407`): `id` is the comment's own, so without this
+/// a subscriber hearing only the removal cannot say where it was — and the lookup that would answer is
+/// precisely what the deletion took away.
+#[test]
+fn removing_a_comment_names_the_task_it_hung_on() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+    let comment = store.add_task_comment(task, ActorKind::Ai, "誤投稿").unwrap();
+
+    let h = head(&store);
+    assert!(store.remove_task_comment(comment.id, ActorKind::Human).unwrap());
+    let ev = only(&store, h);
+    assert_eq!(ev.parent, Some(task), "the comment's own id is the event's; the task is the parent");
+}
+
+/// The same when the comment goes down with its task: each `comment.removed` the cascade fires names the
+/// task it hung on, so a subscriber mirroring the store knows what to drop it from — even though that task
+/// is going too.
+#[test]
+fn a_cascaded_comment_removal_names_its_task() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let task = store.add_task(new_task("コメント付きタスク", project)).unwrap().id;
+    store.add_task_comment(task, ActorKind::Ai, "1件目").unwrap();
+    store.add_task_comment(task, ActorKind::Ai, "2件目").unwrap();
+
+    let h = head(&store);
+    store.delete_task(task, ActorKind::Human).unwrap();
+    let rows = since(&store, h);
+    let removals: Vec<Option<i64>> =
+        rows.iter().filter(|r| r.event == "comment.removed").map(|r| r.parent).collect();
+    assert_eq!(removals, vec![Some(task), Some(task)], "every removal names the task it hung on");
+    let deletion = rows.iter().find(|r| r.event == "task.deleted").unwrap();
+    assert_eq!(deletion.parent, None, "the task itself hangs on no record this event names");
+}
+
 /// An event whose record is still there carries none: a live record is read back by name (`AMB-D-406`), and
 /// a copy on the event would go stale between the append and the run.
 #[test]
@@ -163,6 +200,14 @@ fn an_event_whose_record_survives_carries_no_shape() {
     let h = head(&store);
     store.set_task_status(task, TaskStatus::InProgress, ActorKind::Ai).unwrap();
     assert_eq!(only(&store, h).record, None, "nor does a status change");
+
+    // A comment that is still there says what it belongs to itself, one call away (`AMB-D-406`), so the
+    // event names no parent either — only the deletion, which takes that answer with it, does.
+    let h = head(&store);
+    store.add_task_comment(task, ActorKind::Ai, "残るコメント").unwrap();
+    let ev = only(&store, h);
+    assert_eq!(ev.event, "comment.added");
+    assert_eq!(ev.parent, None, "a live comment is asked, not told");
 }
 
 /// A task deleted with comments on it fires one `comment.removed` per comment and then its own

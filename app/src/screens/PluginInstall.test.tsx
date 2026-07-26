@@ -71,6 +71,7 @@ const entry = (name: string) => ({
   category: "workflow",
   official: false,
   listed: true,
+  featured: false,
 });
 
 const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => ({

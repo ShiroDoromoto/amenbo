@@ -86,6 +86,10 @@ pub struct Entry {
     /// for a catalog built before the CI wrote the field; it is the only source for a "new" sort, so a
     /// missing value means unknown, never "old".
     pub added_at: Option<String>,
+    /// Whether the index that served this entry recommends it — hand curation, the "featured" axis of
+    /// discovery (`AMB-D-347`). It is a claim the document makes, so it means something only from an index
+    /// whose curation a reader trusts; [`discover`] is where that is settled, before any face reads it.
+    pub featured: bool,
 }
 
 /// Why one entry did not make it into the catalog amenbo holds. Kept rather than discarded so a catalog
@@ -120,14 +124,16 @@ impl Catalog {
     }
 }
 
-/// A catalog entry on the wire: a manifest with the catalog's own `added_at` beside it. `signature` is
-/// part of the manifest already, so it needs no special handling here.
+/// A catalog entry on the wire: a manifest with the catalog's own `added_at` and `featured` beside it.
+/// `signature` is part of the manifest already, so it needs no special handling here.
 #[derive(Debug, Deserialize)]
 struct WireEntry {
     #[serde(flatten)]
     manifest: Manifest,
     #[serde(default)]
     added_at: Option<String>,
+    #[serde(default)]
+    featured: bool,
 }
 
 /// The URL to fetch: [`OFFICIAL_CATALOG_URL`], unless the environment overrides it.
@@ -180,7 +186,11 @@ pub fn parse(json: &str) -> Result<Catalog> {
             dropped.push(Dropped::Duplicate { name: wire.manifest.name });
             continue;
         }
-        entries.push(Entry { manifest: wire.manifest, added_at: wire.added_at });
+        entries.push(Entry {
+            manifest: wire.manifest,
+            added_at: wire.added_at,
+            featured: wire.featured,
+        });
     }
     Ok(Catalog { generated_at: envelope.generated_at, entries, dropped })
 }
@@ -461,6 +471,12 @@ pub struct Discovery {
 /// The official catalog is merged first and wins every name clash, so a third-party catalog cannot shadow
 /// an official plugin in what the user sees. Each entry keeps the catalog it came from
 /// ([`DiscoveredEntry`]), which the fold is the only place that still knows.
+///
+/// **A recommendation survives the merge only from the official index.** `featured` is hand curation
+/// (`AMB-D-347`), and the reader's question is "does the amenbo team recommend this?" — a catalog anyone
+/// can publish answering it for its own entries would mean self-promotion into the one ordering that is
+/// supposed to be a judgement. So the flag is cleared for every third-party entry here, once, rather than
+/// left for each face to remember: what a face reads is already the answer.
 pub fn discover(paths: &Paths) -> Discovery {
     let mut entries: Vec<DiscoveredEntry> = Vec::new();
     let mut sources_meta: Vec<DiscoveredSource> = Vec::new();
@@ -472,10 +488,11 @@ pub fn discover(paths: &Paths) -> Discovery {
             Ok(catalog) => {
                 let offered = catalog.entries.len();
                 dropped.extend(catalog.dropped);
-                for entry in catalog.entries {
+                for mut entry in catalog.entries {
                     if entries.iter().any(|e| e.entry.manifest.name == entry.manifest.name) {
                         dropped.push(Dropped::Duplicate { name: entry.manifest.name });
                     } else {
+                        entry.featured &= official;
                         entries.push(DiscoveredEntry {
                             entry,
                             source: url.clone(),
@@ -549,11 +566,22 @@ mod tests {
     }
 
     #[test]
-    fn an_entry_keeps_the_two_fields_only_the_catalog_supplies() {
-        let catalog = parse(&catalog_json(vec![entry_json("worktree")])).unwrap();
+    fn an_entry_keeps_the_fields_only_the_catalog_supplies() {
+        let mut json = entry_json("worktree");
+        json["featured"] = serde_json::json!(true);
+        let catalog = parse(&catalog_json(vec![json])).unwrap();
         let entry = catalog.find("worktree").expect("the entry is there");
         assert!(entry.manifest.signature.is_some(), "the CI's signature rides on the manifest");
         assert_eq!(entry.added_at.as_deref(), Some("2026-07-23T04:23:48Z"), "the 'new' axis");
+        assert!(entry.featured, "the 'featured' axis");
+    }
+
+    /// A catalog built before the field existed says nothing about it, and nothing is what that means:
+    /// an entry with no `featured` key is simply not recommended, not unreadable.
+    #[test]
+    fn an_entry_without_the_recommendation_reads_as_not_recommended() {
+        let catalog = parse(&catalog_json(vec![entry_json("worktree")])).unwrap();
+        assert!(!catalog.find("worktree").expect("the entry is there").featured);
     }
 
     #[test]
@@ -807,6 +835,28 @@ mod tests {
         assert_eq!(discovery.sources.len(), 2, "official plus the one source");
         assert!(discovery.sources[0].official && discovery.sources[0].reachable);
         assert_eq!(discovery.sources[1].offered, 2, "the source offered two before de-duplication");
+    }
+
+    /// A third-party catalog cannot recommend its own entries into the browse view: `featured` is the
+    /// official index's curation, so the merge keeps it only from there.
+    #[test]
+    fn discover_keeps_a_recommendation_only_from_the_official_catalog() {
+        let paths = paths_at("discover-featured");
+        let mut official = entry_json("worktree");
+        official["featured"] = serde_json::json!(true);
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![official])).unwrap();
+        let src = "https://example.invalid/third/catalog.json";
+        add_source(&paths, src).unwrap();
+        let mut boasting = entry_json("extra");
+        boasting["featured"] = serde_json::json!(true);
+        write_cache_at(&source_cache_file(&paths, src), &catalog_json(vec![boasting])).unwrap();
+
+        let discovery = discover(&paths);
+        assert!(discovery.entries[0].entry.featured, "the official index's curation stands");
+        assert!(
+            !discovery.entries[1].entry.featured,
+            "a catalog anyone can publish does not get to recommend itself"
+        );
     }
 
     /// A registered source that cannot be reached and holds no cache contributes nothing and is marked

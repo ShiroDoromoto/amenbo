@@ -4302,6 +4302,11 @@ pub struct PluginEntryDto {
     /// plugin is always listed, a listed one is written by anybody who passed review, and an entry
     /// from a third-party catalog is neither. Which catalog exactly is the `sources` list's business.
     listed: bool,
+    /// Whether the official index recommends it — hand curation (`AMB-D-347`), for the "featured"
+    /// ordering and the badge beside the trust layer. A third axis again: what a plugin is for, rather
+    /// than who wrote it or who reviewed it. Core has already discounted a third-party catalog's claim
+    /// on its own entries, so this is answered, not raw.
+    featured: bool,
     /// When the catalog first listed it (`YYYY-MM-DD…`), for the "new" ordering. Absent on a catalog
     /// that does not record it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -4366,6 +4371,7 @@ pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
                     category: e.entry.manifest.category,
                     official: e.entry.manifest.official,
                     listed: e.listed,
+                    featured: e.entry.featured,
                     added_at: e.entry.added_at,
                 })
                 .collect(),

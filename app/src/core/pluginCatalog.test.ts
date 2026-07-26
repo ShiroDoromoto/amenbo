@@ -12,6 +12,7 @@ const entry = (over: Partial<PluginEntry>): PluginEntry => ({
   category: "workflow",
   official: true,
   listed: true,
+  featured: false,
   ...over,
 });
 
@@ -111,5 +112,23 @@ describe("sortPlugins", () => {
   it("sorts by name on the other ordering, and never mutates its input", () => {
     expect(sortPlugins(dated, "name").map((e) => e.name)).toEqual(["new", "old", "undated"]);
     expect(dated.map((e) => e.name)).toEqual(["old", "undated", "new"]);
+  });
+
+  // The curation is a flag, not a ranking: it says which plugins are recommended and nothing about
+  // their order, so the recommended ones rise as a block and the "new" rule orders them inside it.
+  it("lifts the recommended entries as a block, newest first inside it", () => {
+    const mixed = [
+      entry({ name: "plain-new", addedAt: "2026-07-01T00:00:00Z" }),
+      entry({ name: "picked-old", addedAt: "2026-01-01T00:00:00Z", featured: true }),
+      entry({ name: "picked-new", addedAt: "2026-06-01T00:00:00Z", featured: true }),
+    ];
+    expect(sortPlugins(mixed, "featured").map((e) => e.name)).toEqual([
+      "picked-new", "picked-old", "plain-new",
+    ]);
+  });
+
+  // Nothing is hidden by the ordering: a plugin no one got round to recommending is still in the list.
+  it("keeps every entry when nothing is recommended, which is then just the newest ordering", () => {
+    expect(sortPlugins(dated, "featured").map((e) => e.name)).toEqual(["new", "old", "undated"]);
   });
 });

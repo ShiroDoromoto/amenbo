@@ -60,6 +60,7 @@ const catalogOf = (n: number): PluginCatalog => ({
     category: i % 2 === 0 ? "workflow" : "notify",
     official: i === 0,
     listed: i < 4,
+    featured: false,
   })),
   sources: [{ url: "https://official", official: true, reachable: true, offered: n }],
   dropped: 0,
@@ -147,6 +148,8 @@ describe("PluginMarketScreen", () => {
     expect(badges[5]).toBe(t("plugins.layer.third-party"));
   });
 
+  // The default ordering is the recommended one, which on a catalog that has curated nothing is
+  // exactly the newest ordering — so this covers both until there is something to recommend.
   it("orders by newest first, and by name when asked", () => {
     hoisted.catalog = {
       ...catalogOf(3),
@@ -162,6 +165,23 @@ describe("PluginMarketScreen", () => {
     const sort = (Array.from(container.querySelectorAll("select")) as HTMLSelectElement[])[3];
     act(() => select(sort, "name"));
     expect(names()).toEqual(["alpha", "zeta"]);
+  });
+
+  // The recommendation is the index's, and it wears its own chip beside the trust badge rather than
+  // on it: what a plugin is for is a different question from who wrote it.
+  it("lifts a recommended entry to the top and badges it", () => {
+    hoisted.catalog = {
+      ...catalogOf(3),
+      entries: [
+        { ...catalogOf(3).entries[0], name: "zeta", addedAt: "2026-07-01T00:00:00Z" },
+        { ...catalogOf(3).entries[1], name: "alpha", addedAt: "2026-01-01T00:00:00Z", featured: true },
+      ],
+    };
+    render();
+    const names = rows().map((r) => r.querySelector("strong")!.textContent);
+    expect(names).toEqual(["alpha", "zeta"]);
+    expect(rows()[0].textContent).toContain(t("plugins.featured"));
+    expect(rows()[1].textContent).not.toContain(t("plugins.featured"));
   });
 
   // An empty catalog and a catalog we could not read are different answers, and the screen must not show

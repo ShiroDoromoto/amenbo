@@ -709,8 +709,8 @@ fn cycles() -> Value {
         "worktree": {
             "when": "You are starting work on a task.",
             "backbone": [
-                backbone_step("Give each task a worktree of its own, whenever the work will produce commits. Reserving guards the task, not the files, so two sessions on two tasks still share one working tree. Work that lands no commit — a local-only edit under gitignore — needs none. Cutting one is the official `worktree` plugin's job, not amenbo's: `plugin install worktree`, `plugin enable worktree`, then `eval \"$(amenbo plugin run worktree start <id>)\"` to enter it and `plugin run worktree finish <id>` to take it away.", &["plugin install", "plugin enable", "plugin run"]),
-                backbone_step("Wherever it comes from, it belongs outside the project folder — which is where that plugin puts it. A worktree cut inside inherits that folder's `.amenbo` through the upward walk, and amenbo refuses to run there (`nested_worktree`).", &[]),
+                backbone_step("Cut a worktree per task, whenever the work will produce commits. Reserving guards the task, not the files, so two sessions on two tasks still share one working tree. Work that lands no commit — a local-only edit under gitignore — needs none.", &[]),
+                backbone_step("Cut it outside the project folder. A worktree cut inside inherits that folder's `.amenbo` through the upward walk, and amenbo refuses to run there (`nested_worktree`).", &[]),
                 backbone_step("Operate amenbo in the project folder itself. A worktree outside it carries no `.amenbo` and so reaches nothing — that is the intent, and binding this checkout is not the way around it.", &[]),
             ],
             "optional": []

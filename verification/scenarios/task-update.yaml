@@ -1,0 +1,131 @@
+# Everything a task carries besides its state: what it is called, what it says, when it is due, when
+# it may start, and how it ranks. Two of those are not decoration — a start day still ahead holds the
+# task unready, and priority is what the mailbox sorts on — so this reads each field back off the
+# store rather than trusting the write to have exited zero.
+id: task-update
+title: A task's fields are set, read back, and taken away again
+description: >
+  Set title, notes, due date and priority on a registered task and read each one back; declare a
+  start day still ahead and watch readiness go with it; then clear the start day and the priority
+  and read the absence back. Clearing is its own command, and a field that will not clear is a field
+  the user cannot take back.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — before editing
+    as: seed
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: seed
+      title: SCENARIO SEED — after editing
+      notes: SCENARIO — the note the task carries
+      due: "2099-12-31"
+      priority: high
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: title
+      equals: SCENARIO SEED — after editing
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: notes
+      equals: SCENARIO — the note the task carries
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: due_on
+      equals: "2099-12-31"
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: priority
+      equals: high
+
+  # A field that is set is a field that can be filtered on — the two have to agree.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "priority:high due:2099-12-31"
+      target: seed
+      present: true
+
+  # A start day is not a note to self: until it comes, the task is not ready and cannot be reserved.
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: seed
+      start: "2099-01-01"
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "start:future"
+      target: seed
+      present: true
+
+  - type: action
+    domain: task
+    op: clear
+    with:
+      target: seed
+      field: start
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: true
+
+  - type: action
+    domain: task
+    op: clear
+    with:
+      target: seed
+      field: priority
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: priority
+      equals: null
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "priority:none"
+      target: seed
+      present: true

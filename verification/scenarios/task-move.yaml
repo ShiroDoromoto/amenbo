@@ -1,0 +1,92 @@
+# A task belongs to exactly one project, and the same command that re-homes it decides where in that
+# project it lands. Order is the store's to keep and the key it keeps it by is opaque, so the only
+# honest way to read a reorder back is the listing itself.
+id: task-move
+title: A task re-homed to another project lands there, and moving it to the top puts it first
+description: >
+  Create a second project, move two tasks into it, and read back the project each one reports —
+  then send the second to the top and read the listing's order. Re-homing and reordering ride the
+  same command, and a build can carry one of them and lose the other.
+steps:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: scenario-other
+    as: other
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — moved first
+    as: first
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — moved second
+    as: second
+
+  - type: action
+    domain: task
+    op: move
+    with:
+      target: first
+      project: other
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: first
+      field: placement.project.name
+      equals: scenario-other
+
+  - type: action
+    domain: task
+    op: move
+    with:
+      target: second
+      project: other
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: second
+      field: placement.project.name
+      equals: scenario-other
+
+  # Both tasks now sit in the one project, so the listing's order is that project's order.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo"
+      target: first
+      position: first
+
+  - type: action
+    domain: task
+    op: move
+    with:
+      target: second
+      position: top
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo"
+      target: second
+      position: first
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo"
+      target: first
+      position: last

@@ -1,0 +1,148 @@
+# The listing is how anyone finds anything, so the filter is the surface everything else is reached
+# through: a filter that quietly matches nothing does not look broken, it looks like an empty
+# backlog. Each key here is checked twice over — the task it should match, and one it should not.
+id: task-list
+title: The filter finds the task it names and leaves the other one out
+description: >
+  Two tasks, told apart by priority, wording, state and assignee, are then looked for through each
+  of those keys in turn. Both halves are asserted every time: a filter that returns everything
+  passes a present-check as easily as a correct one does.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — alpha, the one being looked for
+    as: alpha
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — beta, the one left out
+    as: beta
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: alpha
+      priority: high
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: beta
+      priority: low
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "priority:high"
+      target: alpha
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "priority:high"
+      target: beta
+      present: false
+
+  # `text:` reads the wording, over title and notes and comment bodies alike.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "text:alpha"
+      target: alpha
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "text:alpha"
+      target: beta
+      present: false
+
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: alpha
+      status: in_progress
+
+  # `status:` is the one key that takes an any-of set, so the comma has to mean OR and not a name.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo,in_progress"
+      target: alpha
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo"
+      target: alpha
+      present: false
+
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: beta
+      assignee: me-ai
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "assignee:me-ai"
+      target: beta
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "assignee:none"
+      target: alpha
+      present: true
+
+  # Different keys combine with AND, which is where a filter that ignores one of them shows up.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "assignee:me-ai priority:high"
+      target: beta
+      present: false
+
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: alpha
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "done:true"
+      target: alpha
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "done:false"
+      target: alpha
+      present: false

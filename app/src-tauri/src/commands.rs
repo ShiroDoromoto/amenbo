@@ -2742,9 +2742,11 @@ fn provision_project(name: &str) -> Result<(Store, i64), CmdError> {
             trimmed.to_string()
         }
     };
+    // The GUI's creation screen asks for a name and nothing else, so the view a new project opens on
+    // is the configured `default_view` — the same answer the CLI gives when `--view` is omitted.
     let project = store.project_add(amenbo_core::ops::project::NewProject {
         name: pname,
-        view: amenbo_core::model::View::Board,
+        view: store.config.default_view,
         notes: String::new(),
         color: None,
     })?;
@@ -5092,6 +5094,31 @@ mod tests {
     /// The same plant for a plugin whose author declared no settings at all.
     fn plant_plugin(home: &std::path::Path, name: &str, scope: &str) {
         plant_plugin_with(home, name, scope, serde_json::json!([]));
+    }
+
+    /// The GUI's creation screen asks for a name and nothing else, so the view a new project opens on
+    /// has one source: the configured `default_view`. It is the same answer the CLI gives when `--view`
+    /// is omitted, and the reason the setting is a setting rather than a value nothing acts on.
+    #[test]
+    fn a_project_the_gui_creates_opens_on_the_configured_view() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("project-default-view");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        {
+            let mut store = Store::open().unwrap();
+            store.config.set("default_view", "timeline").unwrap();
+            store.save_config().unwrap();
+        }
+
+        let (_store, project_id) = provision_project("SCENARIO PJ").unwrap();
+
+        let store = Store::open().unwrap();
+        let detail = store.project_detail(project_id).unwrap();
+        assert_eq!(
+            detail.default_view,
+            amenbo_core::model::View::Timeline,
+            "the creation screen names no view, so the setting is what answered"
+        );
     }
 
     /// The GUI's gate commands are the CLI's `plugin enable/disable` through the same boundary, and the

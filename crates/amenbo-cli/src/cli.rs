@@ -640,8 +640,10 @@ pub enum ProjectCmd {
     Add {
         #[arg(long)]
         name: String,
-        #[arg(long, default_value = "board")]
-        view: String,
+        /// The view this project opens on: list | board | calendar | timeline. Omitted, the
+        /// configured `default_view` answers (`config set default_view <view>`).
+        #[arg(long)]
+        view: Option<String>,
         #[arg(long, default_value = "")]
         notes: String,
         #[arg(long)]

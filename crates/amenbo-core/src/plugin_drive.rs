@@ -226,6 +226,7 @@ mod tests {
             new_state: None,
             project: None,
             record: None,
+            parent: None,
         })
             .unwrap();
         tx.commit().unwrap();
@@ -256,6 +257,7 @@ mod tests {
             new_state: None,
             project: None,
             record: None,
+            parent: None,
         })
         .unwrap();
         tx.commit().unwrap();

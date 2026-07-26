@@ -295,6 +295,7 @@ mod tests {
             new_state: None,
             project,
             record: None,
+            parent: None,
         })
         .unwrap();
         tx.commit().unwrap();

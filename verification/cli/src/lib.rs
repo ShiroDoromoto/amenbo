@@ -710,6 +710,16 @@ impl Driver {
                 let left = v["issues"].as_array().map_or(0, Vec::len);
                 Ok(Outcome::action(format!("swept the store ({left} issue(s) still standing after it)")))
             }
+            // Age every blob the store is holding past `GC_MIN_AGE`, so the sweep will take the ones
+            // nothing references. A blob a run just wrote is always too young — removing its
+            // attachment spares it for the hour that protects an attach in flight — which leaves the
+            // reclaim unprovable from a scenario until its bytes are made old. The file's mtime is
+            // what the sweep reads, so that is what moves here; no row is touched.
+            (Domain::Store, "age-blobs") => {
+                let dir = self.session.home.join("blobs");
+                let aged = age_files_in(&dir)?;
+                Ok(Outcome::action(format!("aged {aged} blob file(s) past the collection boundary")))
+            }
             (Domain::Store, "config-set") => {
                 let key = req_str(with, "key")?;
                 let value = req_str(with, "value")?;
@@ -1092,6 +1102,19 @@ impl Driver {
                         },
                         if present { "an archive" } else { "nothing" },
                         if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            // What the sweep leaves behind. The reclaim raises no issue and says nothing a machine
+            // reads, so the count of files is the only place it is observable.
+            (Domain::Store, "blobs") => {
+                let expected = req_i64(with, "count")?;
+                let actual = count_files_in(&self.session.home.join("blobs"))? as i64;
+                Ok(Outcome::assert(
+                    actual == expected,
+                    format!(
+                        "the store holds {actual} blob file(s) (expected {expected}, {})",
+                        if actual == expected { "as expected" } else { "MISMATCH" }
                     ),
                 ))
             }
@@ -1837,6 +1860,51 @@ fn req_str<'a>(with: &'a Args, key: &str) -> Result<&'a str, String> {
     with.get(key)
         .and_then(|v| v.as_str())
         .ok_or_else(|| format!("arg `{key}` must be a string"))
+}
+
+/// Every blob file the store is holding — the flat hash-named files, and nothing else. `tmp/` is the
+/// staging area an ingest writes through, not stored bytes, so it is a directory and skipped by the
+/// same rule that skips any directory.
+fn blob_files(dir: &Path) -> Result<Vec<std::path::PathBuf>, String> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        // A store that has never held an attachment has no directory at all, which is zero blobs and
+        // not a failure to read.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("could not read {}: {e}", dir.display())),
+    };
+    let mut files = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("could not read {}: {e}", dir.display()))?;
+        if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            files.push(entry.path());
+        }
+    }
+    Ok(files)
+}
+
+fn count_files_in(dir: &Path) -> Result<usize, String> {
+    blob_files(dir).map(|f| f.len())
+}
+
+/// Backdate every blob file two hours, comfortably past the hour a young blob is spared for.
+fn age_files_in(dir: &Path) -> Result<usize, String> {
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 60 * 60);
+    let files = blob_files(dir)?;
+    for path in &files {
+        let f = std::fs::File::options()
+            .write(true)
+            .open(path)
+            .map_err(|e| format!("could not open {}: {e}", path.display()))?;
+        f.set_modified(old).map_err(|e| format!("could not age {}: {e}", path.display()))?;
+    }
+    Ok(files.len())
+}
+
+fn req_i64(with: &Args, key: &str) -> Result<i64, String> {
+    with.get(key)
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| format!("arg `{key}` must be a whole number"))
 }
 
 fn req_bool(with: &Args, key: &str) -> Result<bool, String> {

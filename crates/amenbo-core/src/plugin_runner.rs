@@ -62,7 +62,9 @@ use std::time::Duration;
 use crate::config::Paths;
 use crate::error::Result;
 use crate::plugin_dispatch::{hook_for, Subscribers};
-use crate::store_engine::{queued_for, queued_plugins, StoreEngine};
+use crate::store_engine::{
+    backlog, lease_of, queued_for, queued_plugins, Lease, QueueDepth, StoreEngine,
+};
 use crate::time::Timestamp;
 
 /// How many rows one pass reads from a plugin's queue at a time. A page is one query, and the runner keeps
@@ -233,6 +235,43 @@ pub fn start(engine: &StoreEngine, launcher: &dyn RunnerLauncher) -> Result<Vec<
         started.push(plugin);
     }
     Ok(started)
+}
+
+/// One plugin's queue as a diagnosis reads it: how much it owes, since when, and the lease standing for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Waiting {
+    /// How much is queued, and since when.
+    pub depth: QueueDepth,
+    /// The runner lease as it stands, expired or not — `None` when no runner has claimed this queue.
+    pub lease: Option<Lease>,
+}
+
+impl Waiting {
+    /// Whether a runner is still saying it is on this queue, as of `now`. A lease past its horizon is a
+    /// runner that died without releasing: the queue is not being worked, and the next drive takes it over.
+    pub fn is_running(&self, now: &str) -> bool {
+        self.lease.as_ref().is_some_and(|l| l.expires_at.as_str() > now)
+    }
+}
+
+/// Every queue that still owes something, the one that has waited longest first — the delivery layer's
+/// backlog, for a reader asking *why has nothing happened* (`AMB-D-399`).
+///
+/// The lease travels with the count because the count alone does not diagnose. Ten events with a live lease
+/// is one plugin taking its time; ten with none is a plugin nothing is running; ten with a lease past its
+/// horizon is a runner that died mid-queue. The three want different responses, and the execution log shows
+/// none of them — what never ran wrote no line.
+///
+/// A read, and only a read: the lease is returned as it stands, with no judgement about its horizon
+/// ([`Waiting::is_running`] is where a caller asks for one) and nothing claimed, released or started.
+pub fn waiting(engine: &StoreEngine) -> Result<Vec<Waiting>> {
+    backlog(engine.conn())?
+        .into_iter()
+        .map(|depth| {
+            let lease = lease_of(engine.conn(), &depth.plugin)?;
+            Ok(Waiting { depth, lease })
+        })
+        .collect()
 }
 
 /// Release the lease a launch was claimed for but never used, so the next drive can try again at once.
@@ -750,5 +789,32 @@ mod tests {
         // Which is to say the next drive is free to try again.
         let launcher = Launched::new();
         assert_eq!(start(&e, &launcher).unwrap().len(), 1);
+    }
+
+    /// The backlog carries the lease beside the count, which is the whole of its diagnostic value: a queue
+    /// nobody claimed and a queue being worked read the same as numbers, and want opposite responses.
+    #[test]
+    fn the_backlog_says_who_is_on_each_queue() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        assert!(waiting(&e).unwrap().is_empty(), "nothing queued, nothing owed");
+
+        queue(&e, "slack", 1);
+        queue(&e, "email", 2);
+        queue(&e, "slack", 3);
+        claim(&e, "slack", "r1");
+
+        let owed = waiting(&e).unwrap();
+        assert_eq!(owed.len(), 2);
+        let slack = owed.iter().find(|w| w.depth.plugin == "slack").unwrap();
+        assert_eq!(slack.depth.waiting, 2);
+        assert_eq!(slack.lease.as_ref().unwrap().owner, "r1");
+        assert!(slack.is_running(&Timestamp::now().to_rfc3339_z()), "the lease was just claimed");
+
+        let email = owed.iter().find(|w| w.depth.plugin == "email").unwrap();
+        assert_eq!((email.depth.waiting, &email.lease), (1, &None), "nobody claimed this queue");
+
+        // A horizon that has passed is a runner that died without releasing — still a lease on the row,
+        // and not a queue anyone is working.
+        assert!(!slack.is_running("2999-01-01T00:00:00Z"), "a lease past its horizon is nobody on it");
     }
 }

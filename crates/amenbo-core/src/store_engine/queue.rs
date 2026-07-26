@@ -151,14 +151,34 @@ pub fn queued_for(conn: &Connection, plugin: &str, limit: i64) -> Result<Vec<Que
     Ok(rows)
 }
 
-/// Which plugins have work waiting, oldest queue first. This is how a drive finds the runners to start
-/// without knowing what is installed: a queue exists because a fan-out put something on it, so the answer
-/// is the store's, not the plugins directory's — a plugin uninstalled since still has its rows named here
-/// (whoever runs them resolves it, or drops what no longer resolves).
-pub fn queued_plugins(conn: &Connection) -> Result<Vec<String>> {
+/// One plugin's queue, counted rather than read: how much it still owes, and since when.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueueDepth {
+    /// The plugin the rows are queued for.
+    pub plugin: String,
+    /// How many events are waiting on it.
+    pub waiting: i64,
+    /// When the oldest waiting event committed (RFC3339) — how long this queue has been stuck.
+    pub oldest: String,
+}
+
+/// What every plugin still owes, the one that has waited longest first — the queue layer's whole state,
+/// without reading a single event.
+///
+/// Two callers ask the same question for different reasons. A drive asks *who needs a runner*, and a queue
+/// exists because a fan-out put something on it, so the answer is the store's rather than the plugins
+/// directory's — a plugin uninstalled since still has its rows named here (whoever runs them resolves it,
+/// or drops what no longer resolves). A diagnosis asks *what is piling up and since when*: with a row now
+/// leaving only once its plugin has replied (`AMB-D-399`), a backlog is the only place a stopped plugin
+/// shows, and the ordering that serves the drive is the one a reader wants too.
+pub fn backlog(conn: &Connection) -> Result<Vec<QueueDepth>> {
     let q = col::plugin_queue::ALL;
     let mut sel = Select::new();
     let plugin = sel.col(q.plugin);
+    let waiting = sel.count_all();
+    // The oldest instant, not the instant of the oldest id: rows are queued in commit order, so the two
+    // agree — and `at` is fixed-width UTC, which orders as text exactly as it does as time.
+    let oldest = sel.expr::<String>(format!("MIN({})", q.at.to_sql()));
     let mut sql = Sql::from(&sel, q.table);
     // Grouped by plugin and ordered by each group's oldest row: whoever has been waiting longest is run
     // first. The clause is written out because it is an aggregate over the grouping, not a column of the
@@ -166,11 +186,23 @@ pub fn queued_plugins(conn: &Connection) -> Result<Vec<String>> {
     sql.push(format!(" GROUP BY {} ORDER BY MIN({}) ASC", q.plugin.to_sql(), q.id.to_sql()));
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let rows = stmt
-        .query_map(rusqlite::params_from_iter(sql.params()), |r| plugin.get(r))
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok(QueueDepth {
+                plugin: plugin.get(r)?,
+                waiting: waiting.get(r)?,
+                oldest: oldest.get(r)?,
+            })
+        })
         .map_err(StoreEngineError::from)?
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(StoreEngineError::from)?;
     Ok(rows)
+}
+
+/// Which plugins have work waiting, oldest queue first — [`backlog`] with the counts dropped, for the drive,
+/// which needs the names and nothing else.
+pub fn queued_plugins(conn: &Connection) -> Result<Vec<String>> {
+    Ok(backlog(conn)?.into_iter().map(|d| d.plugin).collect())
 }
 
 /// Throw away what `plugin` has waiting, and say how many rows went — what a plugin being **stopped** costs
@@ -390,5 +422,48 @@ mod tests {
             dequeue(e.conn(), row.id).unwrap();
         }
         assert_eq!(queued_plugins(e.conn()).unwrap(), vec!["slack"], "an emptied queue is nobody's work");
+    }
+
+    /// The backlog counts each queue and dates it by its oldest row — the two facts a diagnosis reads.
+    /// The oldest is the earliest instant still waiting, so working the head of a queue moves it forward.
+    #[test]
+    fn the_backlog_counts_each_queue_and_dates_it_by_its_oldest_row() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        assert!(backlog(e.conn()).unwrap().is_empty(), "an empty store owes nothing");
+
+        queue_at(&e, "email", 1, "2026-07-25T09:00:00Z");
+        queue_at(&e, "slack", 2, "2026-07-25T09:05:00Z");
+        queue_at(&e, "email", 3, "2026-07-25T09:10:00Z");
+
+        let depths = backlog(e.conn()).unwrap();
+        assert_eq!(depths.len(), 2);
+        assert_eq!(depths[0], QueueDepth { plugin: "email".into(), waiting: 2, oldest: "2026-07-25T09:00:00Z".into() });
+        assert_eq!(depths[1], QueueDepth { plugin: "slack".into(), waiting: 1, oldest: "2026-07-25T09:05:00Z".into() });
+
+        let head = queued_for(e.conn(), "email", 1).unwrap();
+        dequeue(e.conn(), head[0].id).unwrap();
+        let depths = backlog(e.conn()).unwrap();
+        assert_eq!(depths[0].plugin, "slack", "email waited less long than slack once its oldest row went");
+        let email = depths.iter().find(|d| d.plugin == "email").unwrap();
+        assert_eq!((email.waiting, email.oldest.as_str()), (1, "2026-07-25T09:10:00Z"));
+    }
+
+    /// Queue one event stamped with `at`, so a test can space a queue out in time.
+    fn queue_at(e: &StoreEngine, plugin: &str, id: i64, at: &str) {
+        let tx = e.write().unwrap();
+        tx.queue_event(&QueuedEvent {
+            plugin,
+            face: "cli",
+            event: "task.created",
+            record_id: id,
+            actor: "ai",
+            at,
+            new_state: None,
+            project: None,
+            record: None,
+            parent: None,
+        })
+        .unwrap();
+        tx.commit().unwrap();
     }
 }

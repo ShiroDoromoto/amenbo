@@ -1,0 +1,94 @@
+# The log that answers "did my plugin do anything?".
+#
+# It exists because a hook is fire-and-forget: nobody waits on it, and nothing fails
+# when it fails, so silence has no other explanation anywhere in amenbo. The log is machine-local
+# and deliberately kept out of the shared timeline — which means a release that
+# shipped it broken would look exactly like a release that shipped it working.
+#
+# Removing a plugin takes its rows with it, and that is the last line here: an
+# execution log is one of the places a removed plugin can leave a trace behind.
+id: plugin-runs
+title: Every call a plugin answers lands in the execution log, and removing the plugin takes its rows with it
+description: >
+  Start from a machine where the plugin has never run, call its command face twice through a task's
+  life — the checkout made, then taken away — and read each call back off the log as having ended
+  cleanly. Then remove the plugin and confirm the log no longer answers for it.
+steps:
+  # The plugin resolves everything it does from the repository it is called in, so there has to be
+  # one — the same shape the folder a person binds amenbo to has.
+  - type: action
+    domain: repo
+    op: git-init
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  # Installed and enabled, but nothing has been asked of it yet. An empty log is a real answer —
+  # "it never ran" and "it ran and said nothing" are different diagnoses.
+  - type: assert
+    domain: plugin
+    op: ran
+    with:
+      name: worktree
+      present: false
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its plugin calls are read back off the log
+    as: seed
+
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: start
+      task: seed
+
+  - type: assert
+    domain: plugin
+    op: ran
+    with:
+      name: worktree
+      outcome: ok
+
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: finish
+      task: seed
+
+  - type: assert
+    domain: plugin
+    op: ran
+    with:
+      name: worktree
+      outcome: ok
+
+  # And the log is part of what a removal clears. A plugin that is gone but still shows runs would
+  # read as one that is still there.
+  - type: action
+    domain: plugin
+    op: uninstall
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: ran
+    with:
+      name: worktree
+      present: false

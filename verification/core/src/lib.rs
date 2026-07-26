@@ -158,6 +158,9 @@ pub enum Domain {
     /// The working folder amenbo is used from, rather than anything in the store: the files a person
     /// has lying there, and the git repository the lint hooks stand in front of the commits of.
     Repo,
+    /// A plugin on this machine: what is installed, whose gate is open, what a call returned, and
+    /// what the execution log kept. Named by the name it carries in the catalog, never by a binding.
+    Plugin,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -280,6 +283,15 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-uninstall", required: &[], refs: &[], binds: false },
+    // A plugin's life on this machine. `install` fetches it from the catalog and `enable` opens its
+    // gate — two separate acts on purpose, since an installed plugin that never fires is the normal
+    // state. `run` calls the command face: `command` is the word the plugin's own face takes, `task`
+    // hands it the id of a task an earlier step created, and `args` carries anything else verbatim.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "install", required: &["name"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "enable", required: &["name"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "disable", required: &["name"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "uninstall", required: &["name"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "run", required: &["name", "command"], refs: &["task"], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
@@ -334,6 +346,12 @@ const REGISTRY: &[OpSpec] = &[
     // which is answered by a resync finding nothing left to write.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "bound", required: &["dir"], refs: &["project"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "resynced", required: &["dir"], refs: &[], binds: false },
+    // What is on this machine and whose gate is open (`enabled` asks the gate; without it the
+    // question is only whether the plugin is there at all), what the last call returned on its own
+    // stdout, and what the execution log kept of a run.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "listed", required: &["name"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "returned", required: &["contains"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "ran", required: &["name"], refs: &[], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

@@ -161,6 +161,49 @@ pub fn verify_catalog_asset(bytes: &[u8], signature: Option<&str>, checksum: &st
     verify_asset(bytes, signature, checksum, CATALOG_PUBLIC_KEY)
 }
 
+/// The key one asset is verified against: amenbo's own for the official catalog, or the key a registered
+/// catalog was pinned with (`AMB-D-389`).
+///
+/// It exists to keep "which key" out of a caller's hands now that there is more than one. There is no way
+/// to build one from a string outside this crate, and inside it only the catalog layer does — from the
+/// registration that was consented to, never from anything an install was told. So the widening
+/// (`AMB-D-371` had one root; there are now several) does not become "any key will do": a trust root
+/// still comes only from where trust was given.
+#[derive(Clone, Debug)]
+pub struct TrustRoot(String);
+
+impl TrustRoot {
+    /// The root amenbo ships — the official catalog's, and the only one that needs no registration.
+    pub fn official() -> TrustRoot {
+        TrustRoot(CATALOG_PUBLIC_KEY.to_string())
+    }
+
+    /// The root a registration pinned. Crate-private on purpose: the only caller is the catalog layer,
+    /// handing on a key a person agreed to (see the type's note).
+    pub(crate) fn pinned(public_key: String) -> TrustRoot {
+        TrustRoot(public_key)
+    }
+
+    /// This root's fingerprint, for saying *which* key an asset was checked against.
+    pub fn fingerprint(&self) -> Option<String> {
+        key_fingerprint(&self.0).ok()
+    }
+}
+
+/// Verify both halves of provenance against the root this asset's catalog answers for (`AMB-D-389`) —
+/// the door an install or an update calls once catalogs are more than one.
+///
+/// Same fail-closed rules as [`verify_asset`], and the same order; what a caller cannot do is choose the
+/// key, because a [`TrustRoot`] is not something it can make up.
+pub fn verify_against(
+    bytes: &[u8],
+    signature: Option<&str>,
+    checksum: &str,
+    root: &TrustRoot,
+) -> Result<()> {
+    verify_asset(bytes, signature, checksum, &root.0)
+}
+
 /// The base64 public key out of a minisign `.pub` file — what a catalog publishes beside its
 /// `catalog.json` for a registration to pin (`AMB-D-389`).
 ///

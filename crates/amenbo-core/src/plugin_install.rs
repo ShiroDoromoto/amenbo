@@ -4,9 +4,10 @@
 //! `plugin_installed` reads what is on disk and says how an install *lands*; this is the other half —
 //! how it gets there. One name in, five gates, then the layout that module defines:
 //!
-//! 1. **Resolve** the name against the catalog ([`crate::plugin_catalog`]) — the only source an install
-//!    reads. A name the catalog does not carry is not installable, and when intake *dropped* the entry
-//!    that name is reported with the reason rather than as a plain "no such plugin".
+//! 1. **Resolve** the name across every catalog ([`crate::plugin_catalog::for_install`], `AMB-D-389`):
+//!    the official one, then each catalog the user registered, official winning a name clash. A name no
+//!    catalog carries is not installable, and when intake *dropped* the entry that name is reported with
+//!    the reason rather than as a plain "no such plugin".
 //! 2. **Refuse to overwrite** (`AMB-D-360`): a name already installed is a conflict a person resolves
 //!    (`plugin uninstall`, or the update path of `AMB-D-359`), never a silent replacement. A half-written
 //!    home — no manifest, so [`plugin_installed::read`] reads it as absent —
@@ -19,11 +20,13 @@
 //! 4. **Refuse a platform the manifest does not claim**, and resolve this one's distributable
 //!    (`AMB-D-381`): a per-OS `assets` entry, or the single `url` of an entry that is one file everywhere.
 //!    An OS outside the declared set is a binary that was never built to run here.
-//! 5. **Verify provenance fail-closed** ([`crate::plugin_provenance::verify_catalog_asset`], `AMB-D-371`):
-//!    the minisign signature against the key amenbo ships, then that distributable's checksum, both over
-//!    the exact bytes the URL served. Unsigned, signed by another key, or a digest that does not match, and
-//!    nothing is written. The key is never a parameter here — a caller cannot install against another
-//!    trust root.
+//! 5. **Verify provenance fail-closed** ([`crate::plugin_provenance::verify_against`], `AMB-D-371`):
+//!    the minisign signature against **the key that catalog answers for** — amenbo's own for the official
+//!    index, the pinned key for a registered one (`AMB-D-389`) — then that distributable's checksum, both
+//!    over the exact bytes the URL served. Unsigned, signed by another key, or a digest that does not
+//!    match, and nothing is written. Which key is not a caller's to pick: the root travels with the
+//!    resolution ([`crate::plugin_provenance::TrustRoot`]), and a catalog that published none has no root
+//!    at all, so nothing installs from it.
 //!
 //! **What the asset may be.** The bytes are recognised by what they start with, not by the URL's
 //! extension, and there are three shapes: a gzip'd tar (the form the catalog's own example publishes),
@@ -46,12 +49,11 @@ use std::path::PathBuf;
 
 use crate::config::{is_reserved_plugin_name, Paths};
 use crate::error::{Error, Result};
-use crate::plugin_catalog::{self, Catalog, Dropped};
+use crate::plugin_catalog::{self, DiscoveredEntry, Discovery, Dropped};
 use crate::plugin_installed;
 use crate::plugin_manifest::{Manifest, Platform};
 use crate::plugin_provenance;
 use crate::plugin_validate::validate_manifest;
-use crate::plugin_wire::ListEntry;
 
 /// Cap on the asset download, and on what is read out of an archive entry — the second is what keeps a
 /// small gzip stream from expanding without bound. A plugin is one executable, so this ceiling is far
@@ -88,14 +90,15 @@ pub struct Installed {
 /// solely through this function, so an asset can never be written without having passed the door.
 /// Installing does **not** enable — the plugin is inert until `plugin enable` (`AMB-D-351`).
 pub fn install(paths: &Paths, name: &str) -> Result<Installed> {
-    // The current catalog when the network answers, the cached one when it does not: an install resolves
-    // against the freshest index available, and stays possible offline once a catalog has been fetched.
-    let catalog = plugin_catalog::load(paths)?;
-    let entry = resolve(&catalog, name)?;
+    // Every catalog, each read the way an install must read it — the network when it answers, the cache
+    // when it does not (`AMB-D-389`). An install resolves against the freshest index available, and stays
+    // possible offline once a catalog has been fetched.
+    let view = plugin_catalog::for_install(paths)?;
+    let found = resolve(&view, name)?;
     // Before the second fetch, so a name this machine already holds costs no request at all.
-    refuse_an_overwrite(paths, &entry.name)?;
-    let manifest = catalog_manifest(paths, entry)?;
-    let program = fetch_verified_program(&manifest)?;
+    refuse_an_overwrite(paths, &found.entry.name)?;
+    let manifest = catalog_manifest(paths, found)?;
+    let program = fetch_verified_program(&manifest, &found.trust_root()?)?;
     place(paths, &manifest, &program)
 }
 
@@ -110,8 +113,9 @@ pub fn install(paths: &Paths, name: &str) -> Result<Installed> {
 /// Validating the join is what keeps the split from loosening anything: a list entry cannot be asked for a
 /// checksum it does not carry, so the rules that live on the detail's fields are checked here, with both
 /// halves in hand, before a byte of the asset is fetched.
-pub(crate) fn catalog_manifest(paths: &Paths, entry: &ListEntry) -> Result<Manifest> {
-    let detail = plugin_catalog::detail(paths, entry)?;
+pub(crate) fn catalog_manifest(paths: &Paths, found: &DiscoveredEntry) -> Result<Manifest> {
+    let entry = &found.entry;
+    let detail = plugin_catalog::detail_of(paths, found)?;
     let manifest = crate::plugin_wire::join(entry, &detail);
     let problems = validate_manifest(&manifest);
     if let Some(first) = problems.first() {
@@ -131,16 +135,20 @@ pub(crate) fn catalog_manifest(paths: &Paths, entry: &ListEntry) -> Result<Manif
 /// with a partial chain: [`crate::plugin_update`] replaces an installed binary through exactly this
 /// function (`AMB-D-359` — an update re-verifies), and there is deliberately no entry point beside it
 /// that fetches without verifying. The key is never a parameter (see the module docs).
-pub(crate) fn fetch_verified_program(manifest: &Manifest) -> Result<Vec<u8>> {
+pub(crate) fn fetch_verified_program(
+    manifest: &Manifest,
+    root: &plugin_provenance::TrustRoot,
+) -> Result<Vec<u8>> {
     // What is fetched, what it must hash to and who signed it are all this platform's (`AMB-D-381`) —
     // one lookup, so provenance can never be checked against another OS's bytes.
     let here = refuse_another_platform(manifest)?;
     let published = published_for(manifest, here)?;
     let asset = download(&published.url)?;
-    plugin_provenance::verify_catalog_asset(
+    plugin_provenance::verify_against(
         &asset,
         published.signature.as_deref(),
         &published.checksum,
+        root,
     )?;
     unpack_program(&asset, &manifest.name)
 }
@@ -149,11 +157,11 @@ pub(crate) fn fetch_verified_program(manifest: &Manifest) -> Result<Vec<u8>> {
 /// intake dropped an entry under exactly that name, in which case the drop is the answer: "the catalog
 /// has it, and it did not pass the door" is a different problem from "no such plugin", and only one of
 /// them is the user's typo.
-fn resolve<'a>(catalog: &'a Catalog, name: &str) -> Result<&'a ListEntry> {
-    if let Some(entry) = catalog.find(name) {
-        return Ok(entry);
+fn resolve<'a>(view: &'a Discovery, name: &str) -> Result<&'a DiscoveredEntry> {
+    if let Some(found) = view.find(name) {
+        return Ok(found);
     }
-    for dropped in &catalog.dropped {
+    for dropped in &view.dropped {
         match dropped {
             Dropped::Invalid { name: dropped_name, problems } if dropped_name == name => {
                 let first = problems
@@ -461,12 +469,24 @@ mod tests {
         }
     }
 
-    /// A catalog holding these entries, built the way a real one is — through intake.
-    fn catalog_of(entries: Vec<serde_json::Value>) -> Catalog {
+    /// The merged view holding these entries, built the way a real one is — through intake, then the
+    /// fold. `official` says which catalog served them, which is what decides the trust root.
+    fn view_of(entries: Vec<serde_json::Value>) -> Discovery {
+        served_view(entries, true, None)
+    }
+
+    /// The same, from a registered catalog pinned with `key` (`None` = one that published none).
+    fn served_view(entries: Vec<serde_json::Value>, official: bool, key: Option<&str>) -> Discovery {
         let json =
             serde_json::json!({ "catalog_v": 1, "generated_at": "2026-07-23T04:57:10Z", "plugins": entries })
                 .to_string();
-        plugin_catalog::parse(&json).unwrap()
+        let catalog = plugin_catalog::parse(&json).unwrap();
+        let source = if official {
+            plugin_catalog::OFFICIAL_CATALOG_URL
+        } else {
+            "https://example.invalid/works/catalog.json"
+        };
+        Discovery::served_by(source, official, key, catalog)
     }
 
     /// One **list** entry, as `catalog.json` now serves it (`AMB-D-385`) — what an install resolves a
@@ -503,14 +523,43 @@ mod tests {
 
     #[test]
     fn a_listed_name_resolves_to_its_entry() {
-        let catalog = catalog_of(vec![entry_json("worktree"), entry_json("slack")]);
-        assert_eq!(resolve(&catalog, "slack").unwrap().desc, "a plugin");
+        let view = view_of(vec![entry_json("worktree"), entry_json("slack")]);
+        assert_eq!(resolve(&view, "slack").unwrap().entry.desc, "a plugin");
     }
 
     #[test]
     fn an_unlisted_name_is_not_found() {
-        let catalog = catalog_of(vec![entry_json("worktree")]);
-        assert_eq!(resolve(&catalog, "slack").unwrap_err().code(), "not_found");
+        let view = view_of(vec![entry_json("worktree")]);
+        assert_eq!(resolve(&view, "slack").unwrap_err().code(), "not_found");
+    }
+
+    /// The trust root follows the catalog the entry came from (`AMB-D-389`): amenbo's own key for the
+    /// official index, the catalog's pinned key for a registered one.
+    #[test]
+    fn an_entry_is_verified_against_its_own_catalogs_key() {
+        const PINNED: &str = "RWSw3wZ34b1PMyHu4KajlLhV0SdlMAgQGefo4pFIxv7MgRoWSVpCVXSE";
+        let official = view_of(vec![entry_json("worktree")]);
+        assert_eq!(
+            resolve(&official, "worktree").unwrap().trust_root().unwrap().fingerprint(),
+            plugin_provenance::TrustRoot::official().fingerprint(),
+        );
+
+        let third = served_view(vec![entry_json("worktree")], false, Some(PINNED));
+        assert_eq!(
+            resolve(&third, "worktree").unwrap().trust_root().unwrap().fingerprint().as_deref(),
+            Some("334FBDE17706DFB0"),
+            "the catalog's own key, not amenbo's"
+        );
+    }
+
+    /// A registered catalog that published no key has no root, and an install off it is refused rather
+    /// than falling back to amenbo's — that fallback would be an unsigned-by-anyone asset going in.
+    #[test]
+    fn a_catalog_with_no_pinned_key_cannot_be_installed_from() {
+        let view = served_view(vec![entry_json("worktree")], false, None);
+        let err = resolve(&view, "worktree").unwrap().trust_root().unwrap_err();
+        assert_eq!(err.code(), "invalid_value");
+        assert!(format!("{err:?}").contains("no signing key"), "the reason is said: {err:?}");
     }
 
     /// A name intake dropped answers with the drop, not with "no such plugin" — the catalog does carry
@@ -519,9 +568,9 @@ mod tests {
     fn a_name_the_catalog_dropped_is_reported_with_the_reason() {
         let mut invalid = entry_json("slack");
         invalid["repo"] = serde_json::json!("not-github-coordinates");
-        let catalog = catalog_of(vec![invalid]);
+        let view = view_of(vec![invalid]);
 
-        let err = resolve(&catalog, "slack").unwrap_err();
+        let err = resolve(&view, "slack").unwrap_err();
         assert_eq!(err.code(), "invalid_value");
         assert!(format!("{err:?}").contains("dropped"), "the drop is the answer: {err:?}");
     }

@@ -9,9 +9,17 @@
 //! account (`AMB-D-359` — the same explicit-consent posture as `install ≠ enable`).
 //!
 //! **Applying re-walks the install door, it does not shortcut it.** The bytes go through
-//! [`plugin_install::fetch_verified_program`], so the catalog signature and this OS's checksum are checked
-//! over the new asset exactly as they were the first time (`AMB-D-351`); there is no entry point here that
-//! fetches without verifying. What is written goes through [`plugin_install::place`], so the install order
+//! [`plugin_install::fetch_verified_program`], so the signature and this OS's checksum are checked over
+//! the new asset exactly as they were the first time (`AMB-D-351`); there is no entry point here that
+//! fetches without verifying. The key they are checked against is the one the catalog serving the new
+//! build answers for (`AMB-D-389`), taken from the same resolution — an update is not a way to install
+//! bytes from a catalog whose key nothing was pinned to.
+//!
+//! **What an update resolves against is the merged view, by name.** A plugin installed from a registered
+//! catalog is therefore updated from it, which is the point; the seam is that a name is all an installed
+//! plugin records, so should a catalog earlier in the order start publishing that same name, the update
+//! would come from there instead. Recording which catalog an install came from is what closes that, and
+//! it is its own change (`AMB-T-2281`). What is written goes through [`plugin_install::place`], so the install order
 //! holds — the executable first, `manifest.json` last.
 //!
 //! **What an update leaves alone is as much the contract as what it moves.** The enable gate, the config
@@ -66,7 +74,7 @@ use std::path::PathBuf;
 
 use crate::config::Paths;
 use crate::error::{Error, Result};
-use crate::plugin_catalog::{self, Catalog};
+use crate::plugin_catalog::{self, DiscoveredEntry, Discovery};
 use crate::plugin_manifest::{Manifest, Platform};
 use crate::plugin_subscribe::InstalledPlugin;
 use crate::plugin_wire::ListEntry;
@@ -99,8 +107,9 @@ pub struct Candidate {
     pub name: String,
     /// The manifest of what is installed on this machine right now.
     pub installed: Manifest,
-    /// The catalog's list entry for that name, whose digest is what did not match.
-    pub entry: ListEntry,
+    /// The catalog entry for that name, and which catalog it came from — the second half being what
+    /// says where the detail document is and whose key its asset must verify against (`AMB-D-389`).
+    pub found: DiscoveredEntry,
 }
 
 /// Whether the catalog lists a different detail document than the installed record was written from
@@ -136,15 +145,15 @@ pub fn differs(installed: &Manifest, available: &Manifest, here: Platform) -> bo
 /// Name-sorted, because [`plugin_installed::installed`] is: a listing and a check see the same order. A
 /// plugin the catalog does not list is passed over — it may have been installed by hand or delisted since,
 /// and neither is something this layer can offer to fix.
-pub fn compare(installed: &[InstalledPlugin], catalog: &Catalog) -> Vec<Candidate> {
+pub fn compare(installed: &[InstalledPlugin], view: &Discovery) -> Vec<Candidate> {
     installed
         .iter()
         .filter_map(|plugin| {
-            let entry = catalog.find(&plugin.name)?;
-            moved(&plugin.manifest, entry).then(|| Candidate {
+            let found = view.find(&plugin.name)?;
+            moved(&plugin.manifest, &found.entry).then(|| Candidate {
                 name: plugin.name.clone(),
                 installed: plugin.manifest.clone(),
-                entry: entry.clone(),
+                found: found.clone(),
             })
         })
         .collect()
@@ -161,7 +170,7 @@ pub fn compare(installed: &[InstalledPlugin], catalog: &Catalog) -> Vec<Candidat
 /// The detail goes through the install door's own validation ([`plugin_install::catalog_manifest`]), so an
 /// update is judged against exactly the manifest an install would have been.
 fn confirm(paths: &Paths, candidate: &Candidate, here: Platform) -> Result<Option<Update>> {
-    let available = plugin_install::catalog_manifest(paths, &candidate.entry)?;
+    let available = plugin_install::catalog_manifest(paths, &candidate.found)?;
     Ok(differs(&candidate.installed, &available, here).then(|| Update {
         name: candidate.name.clone(),
         installed: candidate.installed.clone(),
@@ -189,7 +198,7 @@ pub fn available(paths: &Paths) -> Result<Vec<Update>> {
     let Some((installed, here)) = worth_comparing(paths)? else {
         return Ok(Vec::new());
     };
-    Ok(compare(&installed, &plugin_catalog::fresh(paths)?)
+    Ok(compare(&installed, &plugin_catalog::discover(paths))
         .iter()
         .filter_map(|candidate| confirm(paths, candidate, here).ok().flatten())
         .collect())
@@ -209,12 +218,10 @@ pub fn available(paths: &Paths) -> Result<Vec<Update>> {
 /// "go look" costs nothing (`AMB-D-386`).
 #[must_use]
 pub fn available_cached(paths: &Paths) -> Vec<Candidate> {
-    let (Ok(installed), Some(catalog)) =
-        (plugin_installed::installed(paths), plugin_catalog::cached(paths))
-    else {
+    let Ok(installed) = plugin_installed::installed(paths) else {
         return Vec::new();
     };
-    compare(&installed, &catalog)
+    compare(&installed, &plugin_catalog::cached_view(paths))
 }
 
 /// What is installed and the platform to judge it on, or `None` when there is nothing to compare — no
@@ -319,22 +326,22 @@ pub fn apply(
             format!("プラグインの manifest は {} を名指せないので、ここでは '{name}' を更新できません", std::env::consts::OS),
         )
     })?;
-    let catalog = plugin_catalog::load(paths)?;
-    let entry = catalog.find(name).ok_or_else(|| {
+    let view = plugin_catalog::for_install(paths)?;
+    let found = view.find(name).ok_or_else(|| {
         Error::not_found(
-            format!("the catalog lists no plugin named '{name}', so there is no build to update to"),
-            format!("カタログにプラグイン '{name}' は無いので、更新先の版がありません"),
+            format!("no catalog lists a plugin named '{name}', so there is no build to update to"),
+            format!("プラグイン '{name}' はどのカタログにも無いので、更新先の版がありません"),
         )
     })?;
     // The list's answer first: unmoved there, and nothing about this plugin's install has changed at all,
     // so the second document need not be fetched to establish it.
-    if !moved(&installed.manifest, entry) {
+    if !moved(&installed.manifest, &found.entry) {
         return Ok(None);
     }
     let candidate = Candidate {
         name: name.to_string(),
         installed: installed.manifest,
-        entry: entry.clone(),
+        found: found.clone(),
     };
     let Some(update) = confirm(paths, &candidate, here)? else {
         return Ok(None);
@@ -342,7 +349,7 @@ pub fn apply(
     // The caller's gate on the new schema, before the download (see the module docs): a refusal keeps the
     // working build exactly as it was.
     approve(&update.available)?;
-    replace(paths, &update).map(Some)
+    replace(paths, &update, &candidate.found.trust_root()?).map(Some)
 }
 
 /// Apply every update the catalog holds, one plugin at a time.
@@ -365,14 +372,18 @@ pub fn apply_all(
     // The list the way an install reads it, not the way a check does: applying is the explicit act, so it
     // asks the network the way `plugin_catalog::load` does and falls back to the cache only when there is no
     // answer. Replacing a binary on what a cache said an hour ago would be acting on stale evidence.
-    let catalog = plugin_catalog::load(paths)?;
-    Ok(compare(&installed, &catalog)
+    let view = plugin_catalog::for_install(paths)?;
+    Ok(compare(&installed, &view)
         .iter()
         .filter_map(|candidate| match confirm(paths, candidate, here) {
             // This platform's bytes did not move: there was nothing to do, and nothing to report.
             Ok(None) => None,
             Ok(Some(update)) => Some(
-                match approve(&update.available).and_then(|()| replace(paths, &update)) {
+                match candidate
+                    .found
+                    .trust_root()
+                    .and_then(|root| approve(&update.available).and_then(|()| replace(paths, &update, &root)))
+                {
                     Ok(replaced) => Outcome::Replaced(Box::new(replaced)),
                     Err(error) => Outcome::Failed { name: update.name, error },
                 },
@@ -389,14 +400,14 @@ pub fn apply_all(
 /// The order is the safety story (see the module docs): the two gates that can refuse run before the
 /// network, and the network runs before anything on disk is touched, so a plugin that fails any of them
 /// is left exactly as it was.
-fn replace(paths: &Paths, update: &Update) -> Result<Replaced> {
+fn replace(paths: &Paths, update: &Update, root: &crate::plugin_provenance::TrustRoot) -> Result<Replaced> {
     // A build this amenbo cannot speak to is not an improvement. Refusing here keeps a working plugin
     // working — the alternative is replacing it with one that will be dropped at dispatch.
     if let Err(why) = plugin_compat::check(&update.available) {
         return Err(why.into_update_error(&update.name));
     }
     // Off the network and through the trust gates (`AMB-D-351`) — the same door the first install used.
-    let program = plugin_install::fetch_verified_program(&update.available)?;
+    let program = plugin_install::fetch_verified_program(&update.available, root)?;
     retain_and_place(paths, update, &program)
 }
 
@@ -557,14 +568,20 @@ mod tests {
         }
     }
 
-    /// The list half of these manifests, as a catalog fetch holds it (`AMB-D-385`) — each entry carrying
-    /// the digest of the detail document it was published with.
-    fn catalog(entries: Vec<Manifest>) -> Catalog {
-        Catalog {
-            generated_at: None,
-            entries: entries.iter().map(listed).collect(),
-            dropped: Vec::new(),
-        }
+    /// The list half of these manifests, as the merged view holds it (`AMB-D-385`/`AMB-D-389`) — each
+    /// entry carrying the digest of the detail document it was published with, and the official catalog
+    /// standing as the one that served them.
+    fn catalog(entries: Vec<Manifest>) -> Discovery {
+        Discovery::served_by(
+            plugin_catalog::OFFICIAL_CATALOG_URL,
+            true,
+            None,
+            crate::plugin_catalog::Catalog {
+                generated_at: None,
+                entries: entries.iter().map(listed).collect(),
+                dropped: Vec::new(),
+            },
+        )
     }
 
     /// One manifest's list entry, digest included — what the catalog serves for it.
@@ -584,7 +601,7 @@ mod tests {
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].name, "worktree");
         assert_eq!(candidates[0].installed.checksum, "sha256:aa");
-        assert_eq!(candidates[0].entry.detail_sum, manifest("worktree", "bb").detail_sum);
+        assert_eq!(candidates[0].found.entry.detail_sum, manifest("worktree", "bb").detail_sum);
     }
 
     /// The same detail document is the same install — everything a list draws may have been re-written by
@@ -842,7 +859,8 @@ mod tests {
         let mut after = manifest("worktree", "bb");
         after.min_amenbo = Some("99.0.0".to_string());
 
-        let err = replace(&paths, &update_of(before.clone(), after)).unwrap_err();
+        let err = replace(&paths, &update_of(before.clone(), after), &crate::plugin_provenance::TrustRoot::official())
+            .unwrap_err();
         assert_eq!(err.code(), "invalid_value");
         assert!(format!("{err:?}").contains("99.0.0"), "the floor is named: {err:?}");
 

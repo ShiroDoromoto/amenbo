@@ -241,8 +241,8 @@ where there is nothing to repair — and a sweep that sweeps nothing looks exact
 `folder legacy-pointer` leaves a bound folder's `.amenbo` in the shape an older build wrote, which is
 what `store doctor-fix` puts right. `plugin stale-manifest` leaves an installed plugin recording a
 build the catalog has moved past, which is what `plugin update` puts right — the catalog publishes one
-build, and an asset is trusted only by amenbo's own key, so there is no second build to install first
-and no way to sign one into existence. `plugin declare-secret` puts a secret setting into what an
+build, and an asset is trusted only by the key of the catalog that served it, so there is no second
+build to install first and no way to sign one into existence. `plugin declare-secret` puts a secret setting into what an
 installed plugin says it takes: what is secret is the author's word, amenbo never invents a field, and
 no plugin in the official catalog declares one — so the secret route, which fails silently and in plain
 text, would otherwise go unwalked until one does. They are the same idea as `repo write-file`: the

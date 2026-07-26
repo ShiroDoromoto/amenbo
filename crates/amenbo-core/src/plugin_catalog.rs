@@ -337,6 +337,29 @@ pub fn detail(paths: &Paths, entry: &ListEntry) -> Result<Detail> {
     detail_to(&catalog_url(), &detail_cache_file(paths, &entry.name), entry)
 }
 
+/// The detail document for one entry of the **merged** view — fetched from the catalog that served the
+/// entry, not from the official one (`AMB-D-389`).
+///
+/// The join is the address: a detail document lives beside its own `catalog.json`, so which catalog an
+/// entry came from is what says where its second half is. Asking the official catalog for a third-party
+/// plugin's detail would be asking the wrong publisher — a 404 at best, and at worst another plugin's
+/// document under a name that happened to match.
+pub fn detail_of(paths: &Paths, found: &DiscoveredEntry) -> Result<Detail> {
+    let cache = if found.listed {
+        detail_cache_file(paths, &found.entry.name)
+    } else {
+        source_detail_cache_file(paths, &found.source, &found.entry.name)
+    };
+    detail_to(&found.source, &cache, &found.entry)
+}
+
+/// Where a registered catalog's detail document is cached: named after both the catalog and the plugin,
+/// so two catalogs offering the same name do not overwrite each other's — and neither touches the
+/// official catalog's ([`detail_cache_file`]).
+fn source_detail_cache_file(paths: &Paths, source: &str, name: &str) -> PathBuf {
+    paths.registry_dir().join(format!("detail-{}-{name}.json", url_tag(source)))
+}
+
 /// [`detail`] against a named catalog URL and cache file — the seam a test drives, the same shape the
 /// list's [`load_to`] takes.
 fn detail_to(catalog_url: &str, cache_file: &std::path::Path, entry: &ListEntry) -> Result<Detail> {
@@ -519,10 +542,14 @@ pub fn sources(paths: &Paths) -> Vec<Source> {
 /// The named cache file for a third-party catalog, derived from its URL so the same URL always maps to the
 /// same file. Prefixed to sit beside — and never collide with — the official cache and the sources list.
 fn source_cache_file(paths: &Paths, url: &str) -> PathBuf {
+    paths.registry_dir().join(format!("source-{}.json", url_tag(url)))
+}
+
+/// A short, stable, file-name-safe tag for a URL — how a catalog's own files are told apart on disk
+/// without the URL itself having to be one.
+fn url_tag(url: &str) -> String {
     use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(url.as_bytes());
-    let short: String = digest.iter().take(8).map(|b| format!("{b:02x}")).collect();
-    paths.registry_dir().join(format!("source-{short}.json"))
+    Sha256::digest(url.as_bytes()).iter().take(8).map(|b| format!("{b:02x}")).collect()
 }
 
 /// What registering a catalog would mean, worked out before anything is written — the material the
@@ -751,16 +778,50 @@ pub struct DiscoveredSource {
 /// of them rides on the manifest. Whether the author is the amenbo team is
 /// [`Manifest::official`](crate::plugin_manifest::Manifest::official); whether an entry was reviewed
 /// into the official index is this.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiscoveredEntry {
     /// The entry as its catalog published it.
     pub entry: ListEntry,
     /// The URL of the catalog that served it.
     pub source: String,
+    /// What that catalog is called ([`DiscoveredSource::name`]) — carried on the entry so a refusal or a
+    /// receipt can name the publisher without the caller holding the source list open beside it.
+    pub source_name: String,
     /// Whether [`source`](DiscoveredEntry::source) is the official catalog — the entry passed review
     /// onto the official index. Said once here so no caller has to re-derive it by comparing URLs.
     /// An official plugin is always listed too; a listed one is not necessarily official.
     pub listed: bool,
+    /// The key this catalog's assets are verified against, when it has one. Private, because the point
+    /// of it is that nobody chooses it: it is reached through [`DiscoveredEntry::trust_root`].
+    key: Option<String>,
+}
+
+impl DiscoveredEntry {
+    /// The trust root this entry's asset must verify against (`AMB-D-389`): amenbo's own key for the
+    /// official catalog, the pinned key for a registered one.
+    ///
+    /// A registered catalog that published no key has no root, and that is a refusal rather than a
+    /// fallback to amenbo's — falling back would mean an asset nobody's key signed passing the door
+    /// (`AMB-D-351`). What such a catalog offers can be browsed and read about; installing from it takes
+    /// the publisher publishing a key, and the user registering it again.
+    pub fn trust_root(&self) -> Result<crate::plugin_provenance::TrustRoot> {
+        if self.listed {
+            return Ok(crate::plugin_provenance::TrustRoot::official());
+        }
+        match &self.key {
+            Some(key) => Ok(crate::plugin_provenance::TrustRoot::pinned(key.clone())),
+            None => Err(Error::invalid(
+                format!(
+                    "'{}' comes from {} ({}), which publishes no signing key — nothing from it can be installed. Ask its publisher for a catalog-key.pub, then register the catalog again.",
+                    self.entry.name, self.source_name, self.source
+                ),
+                format!(
+                    "'{}' の配布元 {}（{}）は署名鍵を公開していないため、そこからは install できません。配布元に catalog-key.pub の公開を求め、登録し直してください。",
+                    self.entry.name, self.source_name, self.source
+                ),
+            )),
+        }
+    }
 }
 
 /// The merged catalog a user browses: the official catalog plus every registered third-party one, folded
@@ -778,6 +839,43 @@ pub struct Discovery {
     pub dropped: Vec<Dropped>,
 }
 
+impl Discovery {
+    /// A view standing for what one catalog served — the seam the install and update tests build on,
+    /// since the fold that makes one in production needs a network.
+    ///
+    /// `key` is what that catalog is pinned with, and `None` on a third-party catalog is the one that
+    /// publishes none. The official catalog answers to its own root and ignores it.
+    #[cfg(test)]
+    pub(crate) fn served_by(source: &str, official: bool, key: Option<&str>, catalog: Catalog) -> Discovery {
+        Discovery {
+            entries: catalog
+                .entries
+                .into_iter()
+                .map(|entry| DiscoveredEntry {
+                    entry,
+                    source: source.to_string(),
+                    source_name: source.to_string(),
+                    listed: official,
+                    key: key.map(str::to_string),
+                })
+                .collect(),
+            sources: Vec::new(),
+            dropped: catalog.dropped,
+        }
+    }
+
+    /// Find one entry by plugin name across the merged view — what an install resolves against
+    /// (`AMB-D-389`).
+    ///
+    /// There is nothing to choose between here: the fold already put the official catalog first and the
+    /// registered ones in registration order, and dropped every repeat of a name it had seen. So the
+    /// first match *is* the winner, and a name the official catalog carries can never resolve to a
+    /// third-party entry.
+    pub fn find(&self, name: &str) -> Option<&DiscoveredEntry> {
+        self.entries.iter().find(|e| e.entry.name == name)
+    }
+}
+
 /// Merge the official catalog with every registered third-party catalog for browsing (`AMB-T-1980`).
 ///
 /// Each catalog is read the incidental way ([`fresh`]-style): a cache inside the freshness window answers
@@ -793,6 +891,49 @@ pub struct Discovery {
 /// supposed to be a judgement. So the flag is cleared for every third-party entry here, once, rather than
 /// left for each face to remember: what a face reads is already the answer.
 pub fn discover(paths: &Paths) -> Discovery {
+    merge(paths, fresh_to)
+}
+
+/// The same merged view, read the way an install must read it (`AMB-D-389`).
+///
+/// [`discover`] is for a browse, so it answers from a cache inside the freshness window; this asks each
+/// catalog the way [`load`] does — the network first, its cache when that fails. Installing is the
+/// explicit act, and fetching a binary on the strength of what a cache said an hour ago is acting on
+/// stale evidence.
+///
+/// Fails only when **no** catalog answered at all: nothing fetched and nothing cached anywhere. One
+/// unreachable catalog is not a failure — its entries are simply not among the ones that can be resolved,
+/// which is the same deal a browse gets.
+pub fn for_install(paths: &Paths) -> Result<Discovery> {
+    let merged = merge(paths, load_to);
+    if merged.sources.iter().any(|s| s.reachable) {
+        return Ok(merged);
+    }
+    Err(Error::Io(std::io::Error::other(
+        "no plugin catalog could be read: none answered, and none is cached",
+    )))
+}
+
+/// The merged view from what is already on disk — no network at all, and no failure either.
+///
+/// This is what a listing reads (`AMB-D-359`): a mark beside an installed plugin must cost nothing and
+/// must work offline, so a catalog with no cache simply contributes nothing rather than being fetched or
+/// reported. Every catalog is read this way, so a plugin installed from a registered catalog gets the
+/// same mark as an official one instead of quietly never being flagged.
+#[must_use]
+pub fn cached_view(paths: &Paths) -> Discovery {
+    merge(paths, |_url, cache| {
+        cached_at(cache).ok_or_else(|| Error::Io(std::io::Error::other("no cached catalog")))
+    })
+}
+
+/// Fold the official catalog and every registered one into a single view, each catalog read by `read`.
+///
+/// The two callers differ only in that function ([`fresh_to`] for a browse, [`load_to`] for an install),
+/// and in nothing else: same order, same official-wins rule, same clearing of `featured`. Keeping the
+/// fold in one place is what stops the view an install resolves against from drifting away from the one
+/// the user was looking at when they chose.
+fn merge(paths: &Paths, read: impl Fn(&str, &std::path::Path) -> Result<Catalog>) -> Discovery {
     let mut entries: Vec<DiscoveredEntry> = Vec::new();
     let mut sources_meta: Vec<DiscoveredSource> = Vec::new();
     let mut dropped: Vec<Dropped> = Vec::new();
@@ -801,6 +942,7 @@ pub fn discover(paths: &Paths) -> Discovery {
     let mut fold = |url: String,
                     name: String,
                     fingerprint: Option<String>,
+                    key: Option<String>,
                     official: bool,
                     catalog: Result<Catalog>| {
         let (reachable, offered) = match catalog {
@@ -815,7 +957,9 @@ pub fn discover(paths: &Paths) -> Discovery {
                         entries.push(DiscoveredEntry {
                             entry,
                             source: url.clone(),
+                            source_name: name.clone(),
                             listed: official,
+                            key: key.clone(),
                         });
                     }
                 }
@@ -830,12 +974,20 @@ pub fn discover(paths: &Paths) -> Discovery {
         official_url.clone(),
         OFFICIAL_CATALOG_NAME.to_string(),
         crate::plugin_provenance::key_fingerprint(crate::plugin_provenance::CATALOG_PUBLIC_KEY).ok(),
+        None, // the official root is the embedded key, and is never read off a record
         true,
-        fresh_to(&official_url, &cache_file(paths)),
+        read(&official_url, &cache_file(paths)),
     );
     for source in sources(paths) {
-        let catalog = fresh_to(&source.url, &source_cache_file(paths, &source.url));
-        fold(source.url.clone(), source.name.clone(), source.fingerprint(), false, catalog);
+        let catalog = read(&source.url, &source_cache_file(paths, &source.url));
+        fold(
+            source.url.clone(),
+            source.name.clone(),
+            source.fingerprint(),
+            source.key.clone(),
+            false,
+            catalog,
+        );
     }
 
     Discovery { entries, sources: sources_meta, dropped }
@@ -1181,6 +1333,16 @@ mod tests {
         assert_ne!(a, cache_file(&paths));
         assert_ne!(a, sources_file(&paths));
         assert_ne!(a, source_cache_file(&paths, "https://example.invalid/a/catalog.json"));
+
+        // Two catalogs may publish the same plugin name, and each one's detail document is its own
+        // (`AMB-D-389`) — filing them under one name would serve one catalog's document for the other's.
+        let (x, y) = (
+            source_detail_cache_file(&paths, "https://example.invalid/a/catalog.json", "worktree"),
+            source_detail_cache_file(&paths, "https://example.invalid/b/catalog.json", "worktree"),
+        );
+        assert_ne!(x, y, "same plugin, two catalogs, two caches");
+        assert_ne!(x, a, "and neither is the official catalog's");
+        assert_ne!(x, source_cache_file(&paths, "https://example.invalid/a/catalog.json"));
     }
 
     // ---- registered third-party catalogs, and the merged discovery view (`AMB-T-1980`) ----
@@ -1412,6 +1574,58 @@ mod tests {
             !discovery.entries[1].entry.featured,
             "a catalog anyone can publish does not get to recommend itself"
         );
+    }
+
+    /// What an install resolves against is the same fold a browse shows, so the entry a user chose is
+    /// the entry that gets installed — official first, then registration order, and the winner of a name
+    /// clash decided once (`AMB-D-389`).
+    #[test]
+    fn the_view_an_install_resolves_against_finds_the_official_entry_first() {
+        let paths = paths_at("install-view-order");
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
+        let src = "https://example.invalid/third/catalog.json";
+        register(&paths, src, Some(KEY_A), None);
+        let mut impostor = entry_json("worktree");
+        impostor["desc"] = serde_json::json!("a third-party impostor");
+        write_cache_at(
+            &source_cache_file(&paths, src),
+            &catalog_json(vec![impostor, entry_json("extra")]),
+        )
+        .unwrap();
+
+        let view = cached_view(&paths);
+        let worktree = view.find("worktree").expect("resolvable");
+        assert!(worktree.listed, "the official catalog's entry won the name");
+        assert_eq!(
+            worktree.trust_root().unwrap().fingerprint(),
+            crate::plugin_provenance::TrustRoot::official().fingerprint(),
+            "and it is checked against amenbo's own key"
+        );
+
+        let extra = view.find("extra").expect("the registered catalog's own entry resolves");
+        assert_eq!(extra.source, src);
+        assert_eq!(
+            extra.trust_root().unwrap().fingerprint().as_deref(),
+            Some("6272CBB782CB57A0"),
+            "checked against the key that catalog was pinned with"
+        );
+        assert!(view.find("nothing-here").is_none());
+    }
+
+    /// A listing reads every catalog's cache, not just the official one: a plugin installed from a
+    /// registered catalog is due the same "there is a newer build" mark as an official one.
+    #[test]
+    fn the_cached_view_reads_registered_catalogs_too() {
+        let paths = paths_at("cached-view");
+        let src = "https://example.invalid/third/catalog.json";
+        register(&paths, src, Some(KEY_A), None);
+        write_cache_at(&source_cache_file(&paths, src), &catalog_json(vec![entry_json("extra")]))
+            .unwrap();
+
+        // No official cache at all, and no network: the registered catalog still answers.
+        let view = cached_view(&paths);
+        assert!(view.find("extra").is_some(), "read from the registered catalog's cache");
+        assert!(view.sources.iter().any(|s| s.official && !s.reachable), "the official one had none");
     }
 
     /// A registered source that cannot be reached and holds no cache contributes nothing and is marked

@@ -369,9 +369,11 @@ pub enum PluginCmd {
     /// project's override where it declares one, the machine answer otherwise.
     List,
 
-    /// Install a plugin from the catalog: resolve the name, fetch its asset, verify its provenance
-    /// fail-closed (the catalog signature, then the checksum of the distributable published for this OS —
-    /// `AMB-D-371`/`AMB-D-351`/`AMB-D-381`), and lay it down under the app-data `plugins/` directory. **Installing never enables**: the plugin lands inert and
+    /// Install a plugin from the catalogs: resolve the name across the official catalog and every
+    /// registered one (official wins a clash), fetch its asset, verify its provenance fail-closed — the
+    /// signature against the key that catalog answers for, amenbo's own or the one pinned at registration
+    /// (`AMB-D-371`/`AMB-D-389`), then the checksum of the distributable published for this OS
+    /// (`AMB-D-351`/`AMB-D-381`) — and lay it down under the app-data `plugins/` directory. **Installing never enables**: the plugin lands inert and
     /// `plugin enable` is the separate act. A name already installed is refused rather than overwritten
     /// (`AMB-D-360`).
     Install {
@@ -521,12 +523,11 @@ pub enum PluginCmd {
         sub: PluginConfigCmd,
     },
 
-    /// Register the third-party catalogs to browse alongside the official one, and list what is registered
-    /// (`AMB-D-347`, the "free" tier). The unit is the **catalog**, not the plugin: what grows is the
-    /// number of indexes (few), never per-plugin requests. Registering a catalog only widens what
-    /// `discover` (and, later, the GUI browser) *shows* — it does **not** widen what `install` accepts. An
-    /// asset is trusted only by amenbo's catalog key (`AMB-D-371`), so a third-party plugin still cannot be
-    /// installed; this is discovery, not a second install root.
+    /// Register the third-party catalogs to browse and install from alongside the official one
+    /// (`AMB-D-347`, the "free" tier), and list what is registered. The unit is the **catalog**, not the
+    /// plugin: what grows is the number of indexes (few), never per-plugin requests. Registering one adds
+    /// a trust root — its plugins are verified against the key it publishes, pinned when you agree to the
+    /// fingerprint (`AMB-D-389`) — so a catalog that publishes no key can only be browsed.
     Catalog {
         #[command(subcommand)]
         sub: PluginCatalogCmd,

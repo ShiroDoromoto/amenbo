@@ -46,6 +46,23 @@ steps:
   - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — opened on the configured view }, as: configured }
   - { type: assert, domain: project, op: field, with: { target: configured, field: default_view, equals: list } }
 
+  # How dates are written is its own answer from the language that names them. It is normally unset,
+  # which means "whatever the language writes"; setting it is for the reader whose two answers differ.
+  # What the tag then *does* is the GUI's, so what is asked here is the door: it takes a tag, and an
+  # empty value takes the override away again rather than storing a blank.
+  - type: assert
+    domain: store
+    op: config
+    with:
+      field: settings.date_locale
+      equals: null
+
+  - { type: action, domain: store, op: config-set, with: { key: date_locale, value: sv-SE } }
+  - { type: assert, domain: store, op: config, with: { field: settings.date_locale, equals: sv-SE } }
+
+  - { type: action, domain: store, op: config-set, with: { key: date_locale, value: "" } }
+  - { type: assert, domain: store, op: config, with: { field: settings.date_locale, equals: null } }
+
   # The language is not decoration: it is what the managed guidance block in every bound folder
   # tells an AI to speak to the human in.
   - type: action

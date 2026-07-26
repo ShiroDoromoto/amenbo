@@ -348,7 +348,15 @@ pub struct Config {
     /// `amenbo init --language <code>`.
     #[serde(default)]
     pub language: Option<String>,
-    /// Date locale. Reserved; unused so far.
+    /// **How dates are written**, as a BCP-47 tag (`ja-JP` / `en-US` / `sv-SE` for the ISO form).
+    /// Unset means the one that goes with [`language`](Config::language), which is the answer that
+    /// fits most people — this exists for the reader whose two answers differ, wanting a Japanese UI
+    /// with ISO dates, or an English one with Japanese date order.
+    ///
+    /// **Only the GUI reads it** (`AMB-D-11`: the CLI is English-fixed, so a date it prints is part
+    /// of a contract, not a presentation). The tag is stored opaquely — what is a usable locale is
+    /// the formatter's judgement, and the GUI falls back to the language's when the platform does not
+    /// know the tag, rather than failing to draw a date.
     #[serde(default)]
     pub date_locale: Option<String>,
     /// Whether the AI (`--actor ai`) may perform destructive or concealing project operations
@@ -770,8 +778,11 @@ impl Config {
             "language" => {
                 self.language = Some(value.to_string());
             }
+            // An empty string clears it, restoring the language-linked default — the same "empty
+            // means take the override away" the display names and avatars below use.
             "date_locale" => {
-                self.date_locale = Some(value.to_string());
+                let trimmed = value.trim();
+                self.date_locale = if trimmed.is_empty() { None } else { Some(trimmed.to_string()) };
             }
             // Display names. An empty string clears the override, restoring the language-linked
             // default. Surrounding whitespace is trimmed.
@@ -956,6 +967,25 @@ mod tests {
         c.set("human_name", "   ").unwrap();
         assert!(c.human_name.is_none(), "empty clears the override");
         assert_eq!(c.human_display_name(), "人間", "back to language default");
+    }
+
+    /// `date_locale` is stored as written, and cleared by an empty value — the same "empty takes the
+    /// override away" the display names use. It is deliberately **not** judged here: whether a tag is
+    /// a usable locale is the formatter's answer, and the GUI falls back to the language's when the
+    /// platform does not know it. Refusing a tag this store cannot evaluate would only be guessing.
+    #[test]
+    fn date_locale_is_stored_as_written_and_cleared_by_an_empty_value() {
+        let mut c = Config::default();
+        assert!(c.date_locale.is_none(), "unset means the language's own locale");
+
+        c.set("date_locale", "  sv-SE  ").unwrap();
+        assert_eq!(c.date_locale.as_deref(), Some("sv-SE"), "stored trimmed");
+
+        c.set("date_locale", "").unwrap();
+        assert!(c.date_locale.is_none(), "empty clears it, back to following the language");
+
+        c.set("date_locale", "not a locale").expect("the store does not judge the tag");
+        assert_eq!(c.date_locale.as_deref(), Some("not a locale"));
     }
 
     /// A config persisted without the `human_name` / `ai_name` keys still loads, the fields defaulting to

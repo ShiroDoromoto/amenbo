@@ -881,6 +881,13 @@ export type Snapshot = {
  */
 language: string | null, 
 /**
+ * How dates are written (config.json, global) — a BCP-47 tag. Null means the one that goes
+ * with `language`, which is what most people want; a value is the reader whose two answers
+ * differ. Passed through as written: whether a tag is usable is the formatter's judgement, and
+ * the front end falls back to the language's rather than failing to draw a date.
+ */
+dateLocale: string | null, 
+/**
  * First-run setup completed (config.json). False makes the GUI show first-run setup.
  */
 onboarded: boolean, 

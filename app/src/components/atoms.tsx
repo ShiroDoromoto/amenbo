@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { Actor, Priority, Status, TaskCard } from "../mock/types";
 import type { PremiseChangeDto } from "../bindings/bindings";
 import { dueKind, todayStr } from "../core/calendar";
-import { currentLang, priorityLabel, statusLabel, t, tf } from "../core/i18n";
+import { dateLocale, priorityLabel, statusLabel, t, tf } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
 import { getSnapshot } from "../core/snapshot";
 import { pushNotice } from "../core/notice";
@@ -380,13 +380,14 @@ export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
 
 /**
  * Inbox only: the chip showing when the activity that put this in the inbox last happened. `at` is RFC3339 UTC; null
- * (time unknown) renders nothing. Formatted as month/day plus time, in the locale that matches the current language.
+ * (time unknown) renders nothing. Formatted as month/day plus time, in the locale dates are written
+ * in (`dateLocale`).
  */
 export function TriggeredAtChip({ at }: { at?: string | null }) {
   if (!at) return null;
   const d = new Date(at);
   if (Number.isNaN(d.getTime())) return null;
-  const locale = currentLang() === "ja" ? "ja-JP" : "en-US";
+  const locale = dateLocale();
   const label = new Intl.DateTimeFormat(locale, {
     month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(d);

@@ -277,6 +277,24 @@ pub enum Command {
         path: String,
     },
 
+    /// The entry point a **plugin runner** is launched through: it works one plugin's queue of observation
+    /// events to its end, in a process of its own, and exits (`AMB-D-399`, `AMB-T-2175`). Hidden because
+    /// amenbo launches it — never a hand. It is not a daemon: it is started only when there is a queue and a
+    /// free lease, and there is nothing to stop, since it ends when its queue is empty.
+    ///
+    /// It takes the store as an argument rather than resolving one: a runner must work the store the drive
+    /// that launched it drove. Its own output goes nowhere — what each run did is in the execution log
+    /// (`AMB-D-361`).
+    #[command(hide = true)]
+    PluginRunner {
+        /// the plugin whose queue to work
+        plugin: String,
+        /// the lease the launching drive took on this runner's behalf
+        owner: String,
+        /// the base directory of the store to work (app-data, or `AMENBO_HOME`)
+        store: String,
+    },
+
     /// Manage the git hooks that run `amenbo lint`: `pre-commit` for the staged diff, and `commit-msg`
     /// for the message, which is the only place git offers it. Installing writes into your git plumbing,
     /// which amenbo does not do unasked: it asks once — for the lint as a feature, on this device — and

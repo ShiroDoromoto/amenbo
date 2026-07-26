@@ -49,8 +49,6 @@
 //! caller's cursor, the lost span cannot be replayed — [`fan_out`] resyncs the cursor to the head and
 //! reports [`FannedOut::gapped`] rather than pretend nothing fired.
 
-use std::thread::JoinHandle;
-
 use rusqlite::Connection;
 
 use crate::error::Result;
@@ -174,29 +172,26 @@ impl Subscribers for NoSubscribers {
     }
 }
 
-/// The result of one delivery pass, as a caller sees it: how far the cursor advanced, the hooks it
+/// The result of one delivery pass, as a caller sees it: how far the cursor advanced, the runners it
 /// launched, the replies it gathered, and whether it hit a retention gap. Assembled by the mount
 /// ([`crate::plugin_drive`]) out of the two halves below.
 ///
-/// The `hooks` are the launched threads — **join them before a short-lived process exits** (so the hooks
-/// it started are not cut short), or **drop them to forget** (the true fire-and-forget a long-lived GUI
-/// wants). That choice is the caller's, exactly as [`plugin_hooks::fire`](crate::plugin_hooks::fire)
-/// hands it over.
-#[must_use = "wait for or drop `runners`, and surface `replies`"]
+/// **There is nothing here to wait for** (`AMB-T-2175`). A runner is a process of its own, so it is not cut
+/// short by the caller returning, and the caller has no say in it once it is launched — which is why the
+/// runners are named rather than handed over as handles. The one thing a caller does have to do with this is
+/// surface the [`replies`](Delivered::replies): those already ran, synchronously, and are the answer somebody
+/// is waiting on.
+#[must_use = "surface `replies`"]
 pub struct Delivered {
     /// The cursor the fan-out reached — the id of the last outbox event copied onto the queues, or the
     /// outbox head when a gap forced a resync. Never moves backwards.
     pub cursor: i64,
-    /// The runner threads this drive started — one per plugin whose lease it took (`AMB-D-399`), each
-    /// working that plugin's whole queue. A long-lived face drops them; a short-lived one waits for them
-    /// with [`wait_for_runners`](Delivered::wait_for_runners) rather than joining, so a plugin that never
-    /// returns cannot hold the process open. A `reply:true` hook is in neither — it ran synchronously and
-    /// its output is in [`replies`](Delivered::replies).
-    pub runners: Vec<JoinHandle<()>>,
-    /// Signalled once by each runner as it ends — the bounded half of the wait above. It is a channel and
-    /// not a join because a runner is not bounded by anything: waiting on one is a choice the caller can
-    /// stop making, which joining does not allow.
-    pub finished: std::sync::mpsc::Receiver<()>,
+    /// The plugins whose runner this drive launched — one per plugin whose lease it took (`AMB-D-399`), each
+    /// now working that plugin's whole queue in a process of its own. A plugin already being run is not
+    /// among them, and neither is a `reply:true` hook — that ran synchronously and its output is in
+    /// [`replies`](Delivered::replies). Nothing can be done to a runner from here; the names are what a
+    /// caller can report and a test can assert on.
+    pub runners: Vec<String>,
     /// The replies gathered from `reply:true` hooks, in fan-out order (`AMB-D-383`). Each ran synchronously
     /// under [`REPLY_TIMEOUT`], and carries the stderr the caller should surface. Empty on the GUI face,
     /// which never resolves a replying subscriber, and empty whenever no fired hook asked to reply.
@@ -205,27 +200,6 @@ pub struct Delivered {
     /// never queued. The cursor is resynced to the head. A caller may log this (`AMB-D-361`); delivery being
     /// best-effort, it is not an error (`AMB-D-352`).
     pub gapped: bool,
-}
-
-impl Delivered {
-    /// Wait up to `budget` for the runners this drive started, then walk away — what a **short-lived** face
-    /// does before it exits (`AMB-D-399`).
-    ///
-    /// A process about to end has to wait for something, or the runner it just started dies with it and the
-    /// events it queued sit until the store is next driven. But it must not wait for *ever*: a runner is
-    /// deliberately unbounded — a plugin is no longer killed for being slow — so joining would hand every
-    /// command's exit to the slowest plugin installed. The budget is the line between the two. What is still
-    /// running when it runs out is left running; the process ends, that runner dies with it, and its rows
-    /// stay queued behind a lease that expires — the next drive picks the queue up where this one left it.
-    pub fn wait_for_runners(self, budget: std::time::Duration) {
-        let deadline = std::time::Instant::now() + budget;
-        for _ in 0..self.runners.len() {
-            let left = deadline.saturating_duration_since(std::time::Instant::now());
-            if self.finished.recv_timeout(left).is_err() {
-                break; // the budget ran out, or every runner is already gone
-            }
-        }
-    }
 }
 
 /// What one [`fan_out`] pass moved: how far it read, how much it queued, the replying hooks it could not

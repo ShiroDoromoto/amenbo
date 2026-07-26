@@ -5,13 +5,12 @@
 //! queues and returns the one to store next, holding none of its own. This module is the caller
 //! `AMB-D-367` hands that cursor to — the mount. The dispatcher is single, and so is the cursor: both faces
 //! read and write the same persisted one ([`drive_persisted`]), and trim is measured against that one
-//! (`AMB-D-380`). Where they still differ is only in *what becomes of the fires*:
+//! (`AMB-D-380`).
 //!
-//! - A **short-lived CLI** waits for the runners it started, under a budget
-//!   ([`Delivered::wait_for_runners`]), so what it set going is not cut short by the process ending — and a
-//!   plugin that never returns does not hold the command open either (`AMB-D-399`).
-//! - A **long-lived GUI** **drops** them — true fire-and-forget (`AMB-D-352`). Its process outlives the
-//!   runs, so nothing is cut short.
+//! **Neither face waits for what it set going, and neither has to** (`AMB-T-2175`). A runner is a process of
+//! its own ([`crate::plugin_runner`]), so a short-lived CLI command exiting no longer cuts one short, and a
+//! long-lived GUI is not holding one open. What each face supplies is only how to launch itself as one
+//! ([`RunnerLauncher`]) — the drive is the same on both.
 //!
 //! One cursor is what makes an event reach a plugin exactly once across the two: a session cursor held in
 //! the GUI's memory left the events it delivered still standing in the outbox, so the next CLI run
@@ -31,7 +30,7 @@
 
 use crate::error::Result;
 use crate::plugin_dispatch::{fan_out, Delivered, FannedOut, Subscribers};
-use crate::plugin_runner::RunnerEnv;
+use crate::plugin_runner::RunnerLauncher;
 use crate::store_engine::StoreEngine;
 
 /// The `store_meta` key the dispatch cursor is persisted under — the id of the last outbox event a drive
@@ -84,17 +83,17 @@ pub fn persisted_cursor_face(engine: &StoreEngine) -> Result<Option<Face>> {
 /// runner reading it holds that plugin's lease, so there is only ever one (`AMB-D-399`).
 ///
 /// `face` selects which subscriptions resolve (`AMB-D-383`) and is stamped beside the cursor for diagnosis
-/// ([`CURSOR_FACE_META`]). `env` is what a runner opens its own store and resolver through
-/// ([`RunnerEnv`]); `None` starts no runner at all — the fan-out still happens and its rows wait on the
-/// queues, which is what a caller with no device store behind it (a test of the walk itself) wants. The
-/// returned [`Delivered`] carries the runner threads — the CLI waits for them under a budget, the GUI drops
-/// them — the replies to surface, and whether a retention gap was hit. `log` is the execution log every run
-/// and every gap is recorded in (`AMB-D-361`).
+/// ([`CURSOR_FACE_META`]). `launcher` is how this face starts a runner process ([`RunnerLauncher`]); `None`
+/// launches none at all — the fan-out still happens and its rows wait on the queues, which is what a caller
+/// with no executable to re-run behind it (a test of the walk itself) wants. The returned [`Delivered`]
+/// names the runners it launched, carries the replies to surface, and says whether a retention gap was hit;
+/// there is nothing in it to wait for (`AMB-T-2175`). `log` is the execution log every run and every gap is
+/// recorded in (`AMB-D-361`) — a runner finds it for itself, from the store it is pointed at.
 pub fn drive_persisted(
     engine: &StoreEngine,
     face: Face,
     subs: &dyn Subscribers,
-    env: Option<std::sync::Arc<dyn RunnerEnv>>,
+    launcher: Option<&dyn RunnerLauncher>,
     log: Option<&std::path::Path>,
 ) -> Result<Delivered> {
     let cursor = persisted_cursor(engine)?;
@@ -102,12 +101,11 @@ pub fn drive_persisted(
     // The transaction is closed by now, so the replying hooks can run: they are synchronous, and holding
     // the write lock across a subprocess is exactly what the queue exists to avoid.
     let replies = crate::plugin_dispatch::run_replies(fanned.replies, log);
-    let (sender, finished) = std::sync::mpsc::channel();
-    let runners = match env {
-        Some(env) => crate::plugin_runner::start(engine, env, log, &sender)?,
+    let runners = match launcher {
+        Some(launcher) => crate::plugin_runner::start(engine, launcher)?,
         None => Vec::new(),
     };
-    Ok(Delivered { cursor: fanned.cursor, runners, finished, replies, gapped: fanned.gapped })
+    Ok(Delivered { cursor: fanned.cursor, runners, replies, gapped: fanned.gapped })
 }
 
 /// The transactional half of a drive: fan the outbox out and store where the fan-out reached, on one

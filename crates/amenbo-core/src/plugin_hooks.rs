@@ -145,8 +145,8 @@ pub fn run_reply(hook: &Hook, timeout: Duration, log: Option<&Path>) -> Option<S
 /// Run one queued hook **on this thread, to its end**, and record it (`AMB-D-399`).
 ///
 /// This is the queue runner's path ([`crate::plugin_runner`]), and it differs from [`fire`] in both halves:
-/// it does not spawn a thread — the runner *is* the thread, and one plugin's events are run one at a time,
-/// in the order they were queued — and it names no timeout. The five-second kill exists to stop a hook the
+/// it spawns nothing of its own — a runner is a process working one plugin's events one at a time, in the
+/// order they were queued — and it names no timeout. The five-second kill exists to stop a hook the
 /// write path launched from leaking a process for good; a runner is not the write path, nothing waits
 /// behind it but the rest of its own plugin's queue, and a plugin killed mid-work is exactly the half-done
 /// outside effect the queue was split off to stop. So a slow plugin is waited on, and only a plugin that

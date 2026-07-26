@@ -112,8 +112,33 @@ impl Driver {
             (Domain::Task, "comment") => {
                 let target = self.resolve(with)?;
                 let text = req_str(with, "text")?;
-                self.run_json(&["comment", "add", &target.to_string(), "--text", text, "--json"])?;
+                let v = self.run_json(&["comment", "add", &target.to_string(), "--text", text, "--json"])?;
+                let id = v["comment"]["id"].as_i64().ok_or("comment add did not report an id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
                 Ok(Outcome::action(format!("commented on task {target}")))
+            }
+            (Domain::Comment, "edit") => {
+                let target = self.resolve(with)?;
+                let text = req_str(with, "text")?;
+                self.run_json(&["comment", "edit", &target.to_string(), "--text", text, "--json"])?;
+                Ok(Outcome::action(format!("rewrote comment {target}")))
+            }
+            (Domain::Comment, "rm") => {
+                let target = self.resolve(with)?;
+                self.run_json(&["comment", "rm", &target.to_string(), "--yes", "--json"])?;
+                Ok(Outcome::action(format!("deleted comment {target}")))
+            }
+            (Domain::Comment, "promote") => {
+                let target = self.resolve(with)?;
+                let title = req_str(with, "title")?;
+                let v = self.run_json(&["decision", "promote", &target.to_string(), "--title", title, "--json"])?;
+                let id = v["decision"]["id"].as_i64().ok_or("decision promote did not report an id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
+                Ok(Outcome::action(format!("promoted comment {target} into decision {id}")))
             }
             (Domain::Task, "status") => {
                 let target = self.resolve(with)?;
@@ -244,6 +269,27 @@ impl Driver {
                 self.run_json(&["decision", "accept", &target.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("accepted decision {target}")))
             }
+            (Domain::Decision, "comment") => {
+                let target = self.resolve(with)?;
+                let text = req_str(with, "text")?;
+                let v = self.run_json(&["decision", "comment", "add", &target.to_string(), "--text", text, "--json"])?;
+                let id = v["comment"]["id"].as_i64().ok_or("decision comment add did not report an id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
+                Ok(Outcome::action(format!("commented on decision {target}")))
+            }
+            (Domain::Decision, "comment-edit") => {
+                let target = self.resolve(with)?;
+                let text = req_str(with, "text")?;
+                self.run_json(&["decision", "comment", "edit", &target.to_string(), "--text", text, "--json"])?;
+                Ok(Outcome::action(format!("rewrote decision comment {target}")))
+            }
+            (Domain::Decision, "comment-rm") => {
+                let target = self.resolve(with)?;
+                self.run_json(&["decision", "comment", "rm", &target.to_string(), "--yes", "--json"])?;
+                Ok(Outcome::action(format!("deleted decision comment {target}")))
+            }
             (Domain::Decision, "link") => {
                 let target = self.resolve(with)?;
                 let task = self.resolve_key(with, "task")?;
@@ -320,6 +366,30 @@ impl Driver {
                     ),
                 ))
             }
+            (Domain::Task, "commented") => {
+                let target = self.resolve(with)?;
+                let v = self.run_json(&["comment", "list", &target.to_string(), "--json"])?;
+                judge_timeline("task", target, with, &v["comments"])
+            }
+            (Domain::Decision, "commented") => {
+                let target = self.resolve(with)?;
+                let v = self.run_json(&["decision", "comment", "list", &target.to_string(), "--json"])?;
+                judge_timeline("decision", target, with, &v["comments"])
+            }
+            (Domain::Task, "activity") => {
+                let target = self.resolve(with)?;
+                let id = target.to_string();
+                let mut args: Vec<String> =
+                    vec!["activity".into(), "--task".into(), id, "--json".into()];
+                // `kind` narrows the stream the way a reader does — the system events one way, what
+                // people wrote the other — so a scenario can ask which side an entry landed on.
+                if let Some(kind) = with.get("kind").and_then(|v| v.as_str()) {
+                    args.push("--kind".into());
+                    args.push(kind.to_string());
+                }
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                judge_timeline("task", target, with, &v["items"])
+            }
             (Domain::Decision, "field") => {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["decision", "show", &target.to_string(), "--json"])?;
@@ -359,6 +429,32 @@ impl Outcome {
     fn assert(pass: bool, note: String) -> Outcome {
         Outcome { pass, note }
     }
+}
+
+/// Judge a timeline assert: does this stream of entries carry the wording the step names? With no
+/// `text` the question is only whether the stream has anything in it at all, which is what a
+/// narrowed activity read (a `kind`) is asked. `present: false` is the same question in reverse —
+/// the proof a comment that was deleted is really gone.
+fn judge_timeline(noun: &str, id: i64, with: &Args, entries: &serde_json::Value) -> Result<Outcome, String> {
+    let want = with.get("text").and_then(|v| v.as_str());
+    let present = opt_bool(with, "present").unwrap_or(true);
+    let rows = entries.as_array().map(Vec::as_slice).unwrap_or(&[]);
+    let found = match want {
+        Some(text) => rows.iter().any(|c| c["text"].as_str() == Some(text)),
+        None => !rows.is_empty(),
+    };
+    let pass = found == present;
+    Ok(Outcome::assert(
+        pass,
+        format!(
+            "{noun} {id} timeline {} {} ({} entries, expected {}, {})",
+            if found { "carries" } else { "does not carry" },
+            want.map(|t| format!("`{t}`")).unwrap_or_else(|| "an entry".to_string()),
+            rows.len(),
+            if present { "carried" } else { "gone" },
+            if pass { "as expected" } else { "MISMATCH" }
+        ),
+    ))
 }
 
 /// Read a field out of a `show --json` object, following a dotted path into what the output nests:

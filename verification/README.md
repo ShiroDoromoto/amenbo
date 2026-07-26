@@ -238,9 +238,12 @@ where there is nothing to repair — and a sweep that sweeps nothing looks exact
 what `store doctor-fix` puts right. `plugin stale-manifest` leaves an installed plugin recording a
 build the catalog has moved past, which is what `plugin update` puts right — the catalog publishes one
 build, and an asset is trusted only by amenbo's own key, so there is no second build to install first
-and no way to sign one into existence. They are the same idea as `repo write-file`: the state on disk a
-scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach for one only
-when the line under test is what amenbo does about that state.
+and no way to sign one into existence. `plugin declare-secret` puts a secret setting into what an
+installed plugin says it takes: what is secret is the author's word, amenbo never invents a field, and
+no plugin in the official catalog declares one — so the secret route, which fails silently and in plain
+text, would otherwise go unwalked until one does. They are the same idea as `repo write-file`: the
+state on disk a scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach
+for one only when the line under test is what amenbo does about that state.
 
 `fixtures/` is for text a scenario cannot hold itself. This tree's prose rule keeps a bare amenbo
 reference out of every `.yaml`, and the lint has nothing to find unless a file really carries one —
@@ -274,7 +277,12 @@ A `field` assert names its value by a dotted path into the read it is about — 
 `blocked_by.0.name` indexes an array on the way, and a path that runs off the output is a mismatch
 rather than an error. The `store doctor` assert reads its verdict through `ok`, and takes an `issue`
 — a kind out of doctor's own list — when what is under test is a single problem appearing or going:
-most of what doctor raises is a warning, and a warning leaves `ok` alone. A `listed` assert asks
+most of what doctor raises is a warning, and a warning leaves `ok` alone. A `store snapshot` assert
+takes `absent: <text>` when what is under test is something that must **not** have left the store: what
+amenbo handed out is read as bytes — one file for a backup, the whole folder for an export — and the
+word is looked for verbatim, which needs no reading of the layout around it. A `plugin config` assert
+takes `secret: true` for the same kind of question one tier up: the read says the setting is a secret,
+and does not hand the value over with it. A `listed` assert asks
 whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible.

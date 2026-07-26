@@ -589,6 +589,25 @@ featured: boolean,
 addedAt?: string, };
 
 /**
+ * Where a gate ended up, and what closing it threw away (`AMB-D-399`) — what [`plugin_set_enabled`]
+ * answers with.
+ *
+ * The count is here because the discard is real and invisible: disabling a plugin drops whatever was
+ * waiting on its queue, and those events are not caught up on when it comes back. The CLI has said so
+ * since the drop existed; without this the switch on screen threw the same work away without a word.
+ */
+export type PluginGateMovedDto = { 
+/**
+ * Whether the plugin fires at that gate now.
+ */
+enabled: boolean, 
+/**
+ * How many queued events the disable dropped. Zero on an enable, and on a disable that found an
+ * empty queue — the ordinary case, which a face is meant to pass over in silence.
+ */
+droppedQueued: number, };
+
+/**
  * One plugin this machine holds, as the market draws its state on top of the catalog entry of the same
  * name (`AMB-D-351`). Installed and enabled are two facts, not one: an installed plugin that fires
  * nothing is the ordinary state.

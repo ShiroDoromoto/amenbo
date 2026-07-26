@@ -1,0 +1,101 @@
+# There are no subtasks: larger work is split into tasks and ordered with edges, and the edge has
+# teeth — while the blocker is open the dependent is not ready, so nobody starts the second half
+# first. This walks the edge both ways, because an edge that cannot be taken back is a trap: the
+# proof that it is gone is the blocker reopening without the dependent noticing.
+id: task-depend
+title: An open blocker holds its dependent unready, and dropping the edge releases it for good
+description: >
+  Register two tasks, make one wait on the other, and read the dependent's readiness as the blocker
+  is finished, the edge dropped, and the blocker reopened. Readiness is derived, never stored, so
+  what is checked here is the derivation the shipped build performs, not a flag someone set.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the half that has to come first
+    as: blocker
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the half that waits
+    as: dependent
+
+  - type: action
+    domain: task
+    op: depend
+    with:
+      target: dependent
+      on: blocker
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dependent
+      field: ready
+      equals: false
+
+  # Not ready means out of reach, not merely labelled: it is gone from where fresh work is taken.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: dependent
+      present: false
+
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: blocker
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dependent
+      field: ready
+      equals: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: dependent
+      present: true
+
+  - type: action
+    domain: task
+    op: undepend
+    with:
+      target: dependent
+      on: blocker
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dependent
+      field: blocked_by
+      equals: []
+
+  # The edge is gone, not just satisfied: reopening the blocker leaves the dependent ready. Were the
+  # undepend a no-op, this is the step that would say so.
+  - type: action
+    domain: task
+    op: reopen
+    with:
+      target: blocker
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dependent
+      field: ready
+      equals: true

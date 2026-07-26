@@ -140,6 +140,31 @@ impl Driver {
                 self.run_json(&["task", "block", &target.to_string(), "--reason", reason, "--json"])?;
                 Ok(Outcome::action(format!("blocked task {target}: {reason}")))
             }
+            (Domain::Task, "depend") => {
+                let target = self.resolve(with)?;
+                let on = self.resolve_key(with, "on")?;
+                self.run_json(&["task", "depend", &target.to_string(), "--on", &on.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("task {target} now waits on task {on}")))
+            }
+            (Domain::Task, "undepend") => {
+                let target = self.resolve(with)?;
+                let on = self.resolve_key(with, "on")?;
+                self.run_json(&["task", "undepend", &target.to_string(), "--on", &on.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("task {target} no longer waits on task {on}")))
+            }
+            (Domain::Task, "commit-add") => {
+                let target = self.resolve(with)?;
+                let sha = req_str(with, "sha")?;
+                self.run_json(&["task", "commit", "add", &target.to_string(), sha, "--json"])?;
+                Ok(Outcome::action(format!("recorded commit {sha} on task {target}")))
+            }
+            (Domain::Task, "commit-rm") => {
+                let target = self.resolve(with)?;
+                let sha = req_str(with, "sha")?;
+                // A hard delete asks first; the driver is unattended, so it answers up front.
+                self.run_json(&["task", "commit", "rm", &target.to_string(), sha, "--yes", "--json"])?;
+                Ok(Outcome::action(format!("forgot commit {sha} on task {target}")))
+            }
             (Domain::Decision, "create") => {
                 let title = req_str(with, "title")?;
                 let pid = self.project_id.to_string();
@@ -197,6 +222,26 @@ impl Driver {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["task", "show", &target.to_string(), "--json"])?;
                 judge_field("task", target, with, &v)
+            }
+            (Domain::Task, "commit") => {
+                let target = self.resolve(with)?;
+                let sha = req_str(with, "sha")?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let v = self.run_json(&["task", "commit", "list", &target.to_string(), "--json"])?;
+                let found = v["commits"]
+                    .as_array()
+                    .map(|a| a.iter().any(|c| c["sha"].as_str() == Some(sha)))
+                    .unwrap_or(false);
+                let pass = found == present;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "task {target} {} commit {sha} (expected {}, {})",
+                        if found { "records" } else { "does not record" },
+                        if present { "recorded" } else { "not recorded" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
             }
             (Domain::Decision, "field") => {
                 let target = self.resolve(with)?;

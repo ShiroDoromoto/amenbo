@@ -10,6 +10,9 @@
 //!   (`commands::with_store_mut`), so there is no long-lived store to hang a loop off. The dispatcher runs
 //!   once after each mutating command committed, on that command's own open store — the same shape the
 //!   CLI has at its write seam.
+//! - **And once as the app comes up** ([`resume`](crate::plugin_dispatch::resume), `AMB-D-399`), for what a previous run left half
+//!   delivered. That is the one thing the write seam cannot reach: a session spent reading makes no write
+//!   for it to ride.
 //! - **The runners are processes, and nothing here waits for one** (`AMB-T-2175`). A runner is this same
 //!   executable, re-run through [`RUNNER_FLAG`](crate::plugin_dispatch::RUNNER_FLAG) — so it works its
 //!   plugin's queue to the end whether the app is still up or the user has quit it, and a write never waits
@@ -17,7 +20,8 @@
 //!
 //! There is no session start to set, either: whatever sits past the stored cursor is undelivered, and a GUI
 //! launched today delivers it if no CLI run already did — one cursor is the only answer to how far this
-//! store has been delivered (`AMB-D-380`).
+//! store has been delivered (`AMB-D-380`). The startup kick is not a session position; it is the same drive
+//! from that same cursor, made at the moment a leftover would otherwise wait for a write.
 //!
 //! Nothing here fails a command. A store that will not answer, a plugins directory that will not read: the
 //! mutation is already committed, so the dispatcher warns and the next write tries again.
@@ -62,6 +66,37 @@ pub fn drive(store: &Store) {
     // already stored.
     if let Err(e) = store.drive_plugins_persisted(Face::Gui, &subscribers, RUNNER_ARGV) {
         log::warn!("could not dispatch the plugin observation hooks: {e}");
+    }
+}
+
+/// Pick up what a previous run left half-delivered, once, as the app comes up (`AMB-D-399`).
+///
+/// The write seam above cannot answer for those rows: it rides a mutation, and a session spent reading —
+/// the ordinary way this app is used — never makes one. So the app asks as it starts, and a fan-out or a
+/// runner cut short last time resumes here instead of waiting for somebody to type something.
+///
+/// It opens a store of its own because there is no long-lived one to borrow (`commands::with_store_mut`
+/// opens per action), which is also why this belongs on a background thread: neither the open nor the drive
+/// is the window's to wait for. A store that will not open is no reason to hold the app up — the rows keep,
+/// and the next write drives them.
+pub fn resume() {
+    let store = match Store::open() {
+        Ok(store) => store,
+        Err(e) => {
+            log::warn!("could not open the store to resume plugin delivery: {e}");
+            return;
+        }
+    };
+    let installed = match plugin_installed::installed(&store.paths) {
+        Ok(installed) => installed,
+        Err(e) => {
+            log::warn!("could not read the installed plugins, so none was dispatched: {e}");
+            return;
+        }
+    };
+    let subscribers = EnabledSubscribers::new(&installed, &store);
+    if let Err(e) = store.resume_plugin_delivery(Face::Gui, &subscribers, RUNNER_ARGV) {
+        log::warn!("could not resume the plugin observation hooks: {e}");
     }
 }
 

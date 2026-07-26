@@ -19,7 +19,8 @@ mod menu;
 mod migrate;
 mod perf;
 /// The long-lived mount of the plugin observation dispatcher: the drive the write seam runs after each
-/// mutating command, over the store's own cursor (`AMB-D-380`).
+/// mutating command, over the store's own cursor (`AMB-D-380`), and the one this app makes as it comes up
+/// for what a previous run left half delivered (`AMB-D-399`).
 mod plugin_dispatch;
 /// OS-specific file watching — the half that wakes `commands::watch_store`. It does not depend on
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three
@@ -53,6 +54,9 @@ fn start_store_threads(app: tauri::AppHandle) {
       log::warn!("gc_device_state failed: {e}");
     }
   });
+  // What a previous run left half-delivered (`AMB-D-399`). Started with the other store threads, and after
+  // a migration for the same reason they are: the store this reads is the migrated one or none at all.
+  std::thread::spawn(plugin_dispatch::resume);
 }
 
 /// The plugin runner this process was launched as, if it was (`AMB-T-2175`): the plugin whose queue to work,

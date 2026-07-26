@@ -19,6 +19,11 @@
 //! answer to "how far has this store been fanned out", and whatever sits past it is unqueued, whichever
 //! face launched when.
 //!
+//! **Two mounts, one drive.** [`drive_persisted`] is the write seam's — what just committed goes out behind
+//! it. [`resume_persisted`] is the one every face makes as it starts, for what a *previous* run left half
+//! delivered (`AMB-D-399`): the write seam cannot answer for that, since the write it would ride may never
+//! come.
+//!
 //! Because both faces drain, the advance is **contention-tolerant**: the cursor is re-read under the write
 //! lock and only ever moves forward, so a face that loses the race leaves the winner's position standing
 //! and picks up from it on its next drive. The fan-out, the outbox reclaim it authorises and the cursor
@@ -108,6 +113,48 @@ pub fn drive_persisted(
     Ok(Delivered { cursor: fanned.cursor, runners, replies, gapped: fanned.gapped })
 }
 
+/// Whether a previous run left delivery half-finished — **read-only, and asked of both layers**
+/// (`AMB-D-399`).
+///
+/// There are two places a run can be cut short, so there are two places to look. A fan-out that died leaves
+/// rows in the **outbox** with every queue empty; a runner that died leaves rows on a **queue** with the
+/// outbox already reclaimed. Asking only about the queues misses the first kind entirely — nothing is
+/// waiting on any queue, so nothing starts, and the events sit there until somebody happens to write.
+///
+/// An outbox row *is* leftover, without consulting the cursor: the fan-out reclaims what it delivered on the
+/// same transaction that queues it, so anything still standing there was never handed on.
+pub fn unfinished(engine: &StoreEngine) -> Result<bool> {
+    let conn = engine.conn();
+    Ok(crate::store_engine::outbox_head(conn)? > 0
+        || !crate::store_engine::queued_plugins(conn)?.is_empty())
+}
+
+/// Pick up what a previous run left behind, and only then — the **startup kick** both faces make
+/// (`AMB-D-399`).
+///
+/// Startup is the one moment amenbo can catch a delivery nobody is going to trigger again: a run cut short
+/// leaves its rows standing, and what would move them next is the next *write*, which may be days away or
+/// never — a day spent reading only would leave them there. Driving from here covers both layers at once,
+/// since a drive fans the outbox out and then starts a runner for every queue that has work
+/// ([`drive_persisted`]).
+///
+/// It is guarded rather than unconditional because every face reaches this on every start, including the
+/// commands that only read: a drive opens a write transaction, and taking the store's write lock to find
+/// nothing to do would put every read behind whatever holds it. [`unfinished`] answers from two reads, and
+/// `None` is that answer — nothing was pending, so nothing was driven.
+pub fn resume_persisted(
+    engine: &StoreEngine,
+    face: Face,
+    subs: &dyn Subscribers,
+    launcher: Option<&dyn RunnerLauncher>,
+    log: Option<&std::path::Path>,
+) -> Result<Option<Delivered>> {
+    if !unfinished(engine)? {
+        return Ok(None);
+    }
+    drive_persisted(engine, face, subs, launcher, log).map(Some)
+}
+
 /// The transactional half of a drive: fan the outbox out and store where the fan-out reached, on one
 /// transaction. Returns what it moved, the replying hooks included — those are the caller's to run once
 /// this has committed.
@@ -181,6 +228,89 @@ mod tests {
         })
             .unwrap();
         tx.commit().unwrap();
+    }
+
+    /// A launcher that makes no process and remembers who it was asked for — a start is what these tests
+    /// count, and a runner is not theirs to actually run.
+    #[derive(Default)]
+    struct Launched(std::sync::Mutex<Vec<String>>);
+    impl RunnerLauncher for Launched {
+        fn launch(&self, plugin: &str, _owner: &str) -> std::io::Result<()> {
+            self.0.lock().unwrap().push(plugin.to_string());
+            Ok(())
+        }
+    }
+
+    /// Put one row on a plugin's queue directly — a fan-out's leavings, from before the run that was cut
+    /// short.
+    fn queue(e: &StoreEngine, plugin: &str, record_id: i64) {
+        let tx = e.write().unwrap();
+        tx.queue_event(&crate::store_engine::QueuedEvent {
+            plugin,
+            face: "cli",
+            event: "task.created",
+            record_id,
+            actor: "ai",
+            at: "2026-07-23T09:00:00Z",
+            new_state: None,
+            project: None,
+        })
+        .unwrap();
+        tx.commit().unwrap();
+    }
+
+    /// A store with nothing standing on either layer is not driven at all: the startup kick every face makes
+    /// answers from reads and takes no write lock, so a read command pays for it and nothing else.
+    #[test]
+    fn a_start_with_nothing_pending_drives_nothing() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        assert!(!unfinished(&e).unwrap(), "a fresh store left nothing behind");
+
+        let launcher = Launched::default();
+        let resumed = resume_persisted(&e, Face::Cli, &NoSubscribers, Some(&launcher), None).unwrap();
+        assert!(resumed.is_none(), "nothing was pending, so nothing was driven");
+        assert_eq!(persisted_cursor(&e).unwrap(), 0, "and no cursor was written");
+    }
+
+    /// A fan-out cut short leaves the outbox standing with every queue empty. Looking only at the queues
+    /// would find nothing to do and leave those events until somebody happens to write — so the start looks
+    /// at the outbox too, and delivers them (`AMB-D-399`).
+    #[test]
+    fn a_start_resumes_an_outbox_a_previous_fan_out_left_standing() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, "task.created", 1);
+        emit(&e, "task.deleted", 2);
+        assert!(unfinished(&e).unwrap(), "the outbox is holding what was never handed on");
+
+        let subs = Fixed { events: vec!["task.created", "task.deleted"], invocation: bogus() };
+        let launcher = Launched::default();
+        let resumed = resume_persisted(&e, Face::Cli, &subs, Some(&launcher), None).unwrap();
+
+        assert!(resumed.is_some(), "the start drove");
+        assert_eq!(drained(&e, "fixed").len(), 2, "both leftover events reached the subscriber's queue");
+        assert_eq!(persisted_cursor(&e).unwrap(), 2, "and the cursor is stored at the head");
+    }
+
+    /// A runner cut short leaves its queue standing with the outbox already reclaimed — the other half of
+    /// `AMB-D-399`'s two layers. The start finds it by the queue alone and launches a runner for it.
+    #[test]
+    fn a_start_resumes_a_queue_a_previous_runner_left_standing() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        // Deliver everything first, so the outbox is empty and the queue is the only thing left standing.
+        emit(&e, "task.created", 1);
+        let _ = drive_persisted(&e, Face::Cli, &NoSubscribers, None, None).unwrap();
+        queue(&e, "stalled", 1);
+        assert!(unfinished(&e).unwrap(), "a queue with rows is unfinished delivery");
+
+        let launcher = Launched::default();
+        let resumed = resume_persisted(&e, Face::Cli, &NoSubscribers, Some(&launcher), None).unwrap();
+
+        assert!(resumed.is_some(), "the start drove");
+        assert_eq!(
+            launcher.0.lock().unwrap().as_slice(),
+            ["stalled"],
+            "a runner was launched for the queue nobody was working"
+        );
     }
 
     /// A store that never drove carries no cursor, read back as `0`.

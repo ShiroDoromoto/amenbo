@@ -1754,6 +1754,14 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         );
     }
 
+    // The startup kick (`AMB-D-399`), ahead of the command and of the network the update check does: a
+    // delivery a previous run left standing is picked up now, whatever this invocation was called to do.
+    // A plugin calling amenbo back is not a startup — it is a read from inside a run that was already
+    // driven — so it makes none.
+    if plugin_window.is_none() {
+        resume_dispatch(&store);
+    }
+
     // Ask the upstream (the published latest.json) for the newest version, once. Infrastructure traffic only:
     // no user data goes out. On by default, honours the `update_check` config, has a timeout, fails silently,
     // and is cached for 24h so not every command talks to the network. Fetched once here and reused by
@@ -2518,6 +2526,33 @@ fn with_dispatch(
     op: impl FnOnce(&mut Store) -> Result<i32, CliError>,
 ) -> Result<i32, CliError> {
     let code = op(store)?;
+    dispatch(store, |store, subs| {
+        store.drive_plugins_persisted(Face::Cli, subs, RUNNER_ARGV).map(Some)
+    });
+    Ok(code)
+}
+
+/// Pick up what a previous run left half-delivered, before this command does anything of its own
+/// (`AMB-D-399`). The CLI's whole life *is* a startup, so this is where a fan-out or a runner that was cut
+/// short is noticed — and it is noticed on a read as much as on a write, which is the point: the write that
+/// would otherwise carry those rows out may be days away.
+///
+/// It costs a command with nothing pending two reads and no write lock — the guard is core's
+/// ([`Store::resume_plugin_delivery`]), so both faces make the same judgement.
+fn resume_dispatch(store: &Store) {
+    dispatch(store, |store, subs| store.resume_plugin_delivery(Face::Cli, subs, RUNNER_ARGV));
+}
+
+/// The half both dispatch mounts share: resolve who is installed, hand the resolver to `drive`, and relay
+/// whatever came back. Never fails a command — a mutation behind it is already committed, and a startup
+/// kick has no command's outcome to speak for.
+fn dispatch(
+    store: &Store,
+    drive: impl FnOnce(
+        &Store,
+        &dyn amenbo_core::plugin_dispatch::Subscribers,
+    ) -> amenbo_core::Result<Option<amenbo_core::plugin_dispatch::Delivered>>,
+) {
     // A directory that will not read is not "nothing is installed": drive nothing rather than walk the
     // cursor past events no subscriber was ever offered. The events stay in the outbox, and the next run
     // reads the directory again and delivers them.
@@ -2525,23 +2560,24 @@ fn with_dispatch(
         Ok(installed) => installed,
         Err(e) => {
             eprintln!("warning: could not read the installed plugins, so none was dispatched: {e}");
-            return Ok(code);
+            return;
         }
     };
     let subscribers = EnabledSubscribers::new(&installed, store);
-    match store.drive_plugins_persisted(Face::Cli, &subscribers, RUNNER_ARGV) {
-        Ok(delivered) => {
-            // A `reply:true` hook (worktree advice, `AMB-D-383`) ran synchronously; relay its stderr to the
-            // caller — the AI reads it off this command's stderr and decides, named by the plugin that gave
-            // it. The queues are a runner's, and this command waits for none of it (`AMB-T-2175`): a runner
-            // is a process, so it is not cut short by this one returning.
+    match drive(store, &subscribers) {
+        // A `reply:true` hook (worktree advice, `AMB-D-383`) ran synchronously; relay its stderr to the
+        // caller — the AI reads it off this command's stderr and decides, named by the plugin that gave
+        // it. The queues are a runner's, and this command waits for none of it (`AMB-T-2175`): a runner
+        // is a process, so it is not cut short by this one returning.
+        Ok(Some(delivered)) => {
             for reply in &delivered.replies {
                 eprintln!("[{}] {}", reply.plugin, reply.stderr.trim_end());
             }
         }
+        // Nothing was pending, so nothing was driven.
+        Ok(None) => {}
         Err(e) => eprintln!("warning: could not dispatch plugin observation hooks: {e}"),
     }
-    Ok(code)
 }
 
 /// Emit a system event into the ledger, under our own facet. Call it after the mutation wrapper has

@@ -236,6 +236,30 @@ impl Store {
         )
     }
 
+    /// Drive the dispatcher **only if a previous run left delivery unfinished** — the startup kick both
+    /// faces make (`AMB-D-399`, [`plugin_drive::resume_persisted`](crate::plugin_drive::resume_persisted)).
+    ///
+    /// Same drive, same cursor, same runner entry point as the write seam above; what differs is when it is
+    /// worth making. A face reaches this on every start, reads included, so it asks first — two reads — and
+    /// returns `None` when there was nothing standing, taking no write lock at all. `Some` carries what the
+    /// drive moved, exactly as the write seam's does.
+    pub fn resume_plugin_delivery(
+        &self,
+        face: crate::plugin_drive::Face,
+        subs: &dyn crate::plugin_dispatch::Subscribers,
+        runner_argv: &[&str],
+    ) -> Result<Option<crate::plugin_dispatch::Delivered>> {
+        let launcher =
+            crate::plugin_runner::SelfRunner::new(runner_argv, self.paths.base_dir.clone());
+        crate::plugin_drive::resume_persisted(
+            &self.engine,
+            face,
+            subs,
+            Some(&launcher),
+            Some(&self.paths.plugin_log_file()),
+        )
+    }
+
     /// The inbox items archived (dismissed) on this machine, as task_ids.
     pub fn inbox_archive_ids(&self) -> Result<Vec<i64>> {
         crate::overview::inbox_archive_ids(&self.engine)

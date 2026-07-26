@@ -93,3 +93,43 @@ steps:
       target: seed
       field: linked_decisions.0.title
       equals: SCENARIO SEED — the premise this task rests on
+
+  # The page also says what the task is filed under. Classification is set on one screen and filtered
+  # on another, and until it appeared here the task's own page was the one place that never said it —
+  # so a reader had to run a filter and look for the task in the answer.
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: bucket
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: bucket
+      value: SCENARIO — the release this goes out in
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: seed
+      dimension: bucket
+      value: SCENARIO — the release this goes out in
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: dimensions.0.dimension
+      equals: bucket
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: dimensions.0.value
+      equals: SCENARIO — the release this goes out in

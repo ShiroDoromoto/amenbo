@@ -683,6 +683,44 @@ fn a_board_reads_only_its_own_project_and_only_the_axis_it_asked_for() {
     fs::remove_dir_all(&dir).ok();
 }
 
+/// A task's own page names what it is filed under, in words (`task_classification`). Two things have to
+/// hold for that to read straight: the pairs come back by **axis** order rather than by the order the
+/// filings happened in, and a filing whose value has since been deleted names nothing and so is not
+/// there at all.
+#[test]
+fn a_tasks_classification_reads_by_axis_and_drops_a_deleted_value() {
+    use crate::ops::dimension::NewDimension;
+
+    let (mut s, dir) = fresh_store("task-classification");
+    let p = s.project_add(project("PJ")).unwrap();
+    let first =
+        s.dimension_add(p.id, NewDimension { name: "リリース".into(), ..Default::default() }).unwrap();
+    let second =
+        s.dimension_add(p.id, NewDimension { name: "区分".into(), ..Default::default() }).unwrap();
+    let bucket = s.dimension_value_add(first.id, "第1弾", None).unwrap();
+    let kind = s.dimension_value_add(second.id, "バグ", None).unwrap();
+
+    let t = s.add_task(task("分類されたタスク", Some(p.id))).unwrap();
+    // Filed on the second axis first, so the order that comes back cannot be the order they were made.
+    s.set_task_dimension_value(t.id, kind.id).unwrap();
+    s.set_task_dimension_value(t.id, bucket.id).unwrap();
+
+    let named = |s: &Store| {
+        crate::store_engine::read::task_classification(s.engine.conn(), t.id).unwrap()
+    };
+    assert_eq!(
+        named(&s),
+        vec![("リリース".to_string(), "第1弾".to_string()), ("区分".to_string(), "バグ".to_string())],
+        "the axes read in their own order, not in the order the task was filed"
+    );
+
+    // A value deleted takes its filings with it: what is left names an axis and nothing on it, which is
+    // not a classification anyone can be shown.
+    s.dimension_value_delete(kind.id).unwrap();
+    assert_eq!(named(&s), vec![("リリース".to_string(), "第1弾".to_string())]);
+    fs::remove_dir_all(&dir).ok();
+}
+
 /// On create, a task looks at its project's time axis and defaults to whichever value's window covers
 /// today. This is a default, not a requirement: with no time axis, with no window covering today, or
 /// in the inbox, the task is simply created unassigned — creation is never refused. An axis that is

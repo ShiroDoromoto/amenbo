@@ -1848,6 +1848,11 @@ pub fn task_detail(
         row.blocks.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
 
     let status = TaskStatus::parse(&row.status).unwrap_or_default();
+    let dimensions = read::task_classification(conn, task_id)
+        .map_err(crate::error::engine_on(conn))?
+        .into_iter()
+        .map(|(dimension, value)| crate::view::ClassifiedAs { dimension, value })
+        .collect();
 
     Ok(crate::view::TaskDetail {
         r#ref: crate::idref::task(row.id),
@@ -1865,6 +1870,7 @@ pub fn task_detail(
         due_on: parse_date(&row.due_on),
         priority: row.priority.as_deref().and_then(Priority::parse),
         placement,
+        dimensions,
         blocked_by,
         blocked_by_decisions,
         not_started_until,

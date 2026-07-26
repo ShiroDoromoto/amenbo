@@ -4289,6 +4289,17 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                     None => human(flags, "project: (none)"),
                     Some(p) => human(flags, format!("project: {}", p.project.name)),
                 }
+                // What the task is classified as (`AMB-D-101`). Unlike the lines around it this one folds
+                // away when there is nothing to say: an axis is something a store opts into, so a
+                // `dimensions: (none)` would be printed forever in every store that classifies nothing,
+                // and an unclassified task is not a state anyone is stopped by. Written the way the filter
+                // takes it (`axis=value`), so a line read here pastes into `--filter "dim:…"`.
+                if !detail.dimensions.is_empty() {
+                    let classified = detail.dimensions.iter()
+                        .map(|d| format!("{}={}", d.dimension, d.value))
+                        .collect::<Vec<_>>().join(", ");
+                    human(flags, format!("dimensions: {classified}"));
+                }
                 // Empty means nothing blocks this task and it can be started; say `(none)`. Omitting the line
                 // would leave the reader unable to tell "no dependencies" from "dependencies not checked".
                 if detail.blocked_by.is_empty() {

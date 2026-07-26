@@ -324,6 +324,14 @@ const REGISTRY: &[OpSpec] = &[
     // be signed into existence to install first. So the driver writes the disagreement, and the real
     // catalog is the build that is moved to — the same idea as `folder legacy-pointer`.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "stale-manifest", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // An installed plugin declaring a setting its author marked secret. Which settings a plugin takes
+    // is the author's word and amenbo never invents one, so the only honest way to reach this state is
+    // for a plugin that declares one to be published — and no plugin in the official catalog does. The
+    // secret route (off the store, off every backup, injected as an environment variable) is the half
+    // of `plugin config` that fails silently and in plain text, so it is not left unwalked until one
+    // is: the driver writes the declaration onto the installed manifest, the way `stale-manifest`
+    // writes the disagreement it needs. Everything after it is amenbo's own doing.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-secret", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
     // What an installed plugin is told. `key` is a setting its author declared, and `scope` picks the
     // tier the value is written at (the machine default, or this project's override); an empty value
     // is how one is taken back, which is why it is a value here and not an op of its own.
@@ -349,8 +357,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "activity", required: &["target"], refs: &["target"], strings: &["text", "kind"], binds: false },
     // What a `store` action left behind: the archive on disk, and whether an export carries the row
     // for an object an earlier step made. `from` names the export the same way `target` names the
-    // object, so both sides are checked back to a binding.
-    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "snapshot", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // object, so both sides are checked back to a binding. `absent` asks the archive's bytes for a
+    // word that must not be in them — the one question about a file amenbo hands out that needs no
+    // reading of its layout, and the only way to say a secret really stayed out of it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "snapshot", required: &["target"], refs: &["target"], strings: &["absent"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Comment, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
@@ -404,7 +414,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "outdated", required: &["name", "present"], refs: &[], strings: &["name"], binds: false },
     // A setting read back at the tier it was written at — `equals` for the value, or `set: false` to
     // ask that the tier holds none. `scope` names the tier, since a read is per-tier and not the
-    // precedence a run would apply.
+    // precedence a run would apply. `secret: true` asks the other thing a read of a secret has to be
+    // true of: that it says so, and that the value does not come out with it.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "scope"], binds: false },
     // A catalog in the browsing view: whether it is a source at all (`present`), whether the browse
     // could reach it, and how many plugins it offers.

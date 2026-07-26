@@ -173,6 +173,17 @@ pub struct PlacementView {
     pub order_key: String,
 }
 
+/// One axis a task is classified on, and the value it holds there (`AMB-D-101`) — both by name, because
+/// this is what a reader is shown. There is nothing else to carry: an axis is single-select, so one axis
+/// is one value.
+#[derive(Clone, Debug, Serialize)]
+pub struct ClassifiedAs {
+    /// The axis's name, as the dimension is called.
+    pub dimension: String,
+    /// The value it holds on that axis.
+    pub value: String,
+}
+
 /// The full-field shape of a task, as returned by `task show`.
 #[derive(Clone, Debug, Serialize)]
 pub struct TaskDetail {
@@ -195,6 +206,10 @@ pub struct TaskDetail {
     pub r#ref: String,
     /// Where the task sits; absent when it is unplaced (inbox).
     pub placement: Option<PlacementView>,
+    /// What the task is classified as, axis by axis (`AMB-D-101`) — the words, not the ids, since this is
+    /// the shape a face shows. An axis the task holds no value on is not in the list, so an empty one
+    /// means unclassified rather than "no axes exist".
+    pub dimensions: Vec<ClassifiedAs>,
     /// Dependencies: blockers that are not done yet (id + title). Empty means nothing is in the way.
     pub blocked_by: Vec<TaskRef>,
     /// Premises: linked decisions that are not live grounds (id + title). Empty means the premises hold.

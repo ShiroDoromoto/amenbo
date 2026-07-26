@@ -890,6 +890,38 @@ impl Driver {
                     "left `{name}` recording a build the catalog has moved past ({digests} digest(s), and a detail document it no longer names)"
                 )))
             }
+            // Adding a secret setting to what an installed plugin says it takes. amenbo reads the
+            // schema off the installed manifest and never invents a field, so this is the author's
+            // declaration arriving the only way it can while no published plugin carries one (see
+            // the registry). What the scenario then walks — where the value is kept, what a read
+            // gives back, what a backup carries — is amenbo's own, untouched.
+            (Domain::Plugin, "declare-secret") => {
+                let name = req_str(with, "name")?;
+                let key = req_str(with, "key")?;
+                let label = with.get("label").and_then(|v| v.as_str()).unwrap_or(key);
+                let path = self.session.home.join("plugins").join(name).join("manifest.json");
+                let raw = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
+                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
+                // A plugin that takes no settings at all carries no list, which is a list to add to
+                // all the same — the schema is absent, not closed.
+                if manifest["config"].is_null() {
+                    manifest["config"] = serde_json::json!([]);
+                }
+                let fields = manifest["config"]
+                    .as_array_mut()
+                    .ok_or_else(|| format!("{}'s config schema is not a list of fields", path.display()))?;
+                if fields.iter().any(|f| f["key"].as_str() == Some(key)) {
+                    return Err(format!("`{name}` already declares a setting called `{key}`"));
+                }
+                fields.push(serde_json::json!({
+                    "key": key, "label": label, "secret": true, "required": false
+                }));
+                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                Ok(Outcome::action(format!("`{name}` now declares `{key}` as a secret setting")))
+            }
             // Filling in a setting the plugin's author declared. An empty value is the way one is
             // taken back, so it is passed through as written rather than being turned into an op of
             // its own — the command reads it the same way a person typing `""` does.
@@ -1102,6 +1134,25 @@ impl Driver {
             }
             (Domain::Store, "snapshot") => {
                 let path = self.artifact_ref(with, "target")?;
+                // A word that must not be in what amenbo handed out. Read as bytes and searched for
+                // verbatim: a value stored in the clear is in the clear whatever the layout around
+                // it is, and that is the whole question — no claim about what the archive *does*
+                // carry is made here.
+                if let Some(needle) = with.get("absent").and_then(|v| v.as_str()) {
+                    if needle.is_empty() {
+                        return Err("`absent` names nothing to look for".to_string());
+                    }
+                    let (carried, read) = carries_text(&path, needle)?;
+                    return Ok(Outcome::assert(
+                        !carried,
+                        format!(
+                            "{} ({read} bytes) {} `{needle}` ({})",
+                            path.display(),
+                            if carried { "carries" } else { "does not carry" },
+                            if carried { "MISMATCH" } else { "as expected" }
+                        ),
+                    ));
+                }
                 let present = opt_bool(with, "present").unwrap_or(true);
                 // An archive is a file with bytes in it. Whether those bytes put a store back is
                 // what `restore` answers — asking that here would only be guessing at the layout of
@@ -1342,6 +1393,26 @@ impl Driver {
                 args.push("--json".into());
                 let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
                 let tier = v["scope"].as_str().unwrap_or("?").to_string();
+                // Whether the read treats the setting as a secret — and, when it should, whether it
+                // kept the value to itself. Both halves are the same promise: a `get` that printed a
+                // token would put it in the terminal, the scrollback and the shell's history, so a
+                // read that says `secret` and hands the value over anyway is the failure this asks
+                // about.
+                if let Some(want) = opt_bool(with, "secret") {
+                    let declared = v["secret"].as_bool().unwrap_or(false);
+                    let leaked = v.get("value").is_some_and(|v| !v.is_null());
+                    let pass = declared == want && !(want && leaked);
+                    return Ok(Outcome::assert(
+                        pass,
+                        format!(
+                            "plugin `{name}` reads `{key}` back as {} at the {tier} tier{} (expected {}, {})",
+                            if declared { "a secret" } else { "an ordinary setting" },
+                            if leaked { ", value and all" } else { "" },
+                            if want { "a secret nobody echoes" } else { "an ordinary setting" },
+                            if pass { "as expected" } else { "MISMATCH" }
+                        ),
+                    ));
+                }
                 match with.get("equals") {
                     Some(want) => {
                         let want = serde_json::to_value(want)
@@ -1872,6 +1943,30 @@ fn judge_check(tool: &str, want: bool, v: &serde_json::Value) -> Outcome {
 fn path_str(path: &Path) -> Result<&str, String> {
     path.to_str()
         .ok_or_else(|| format!("path {} is not valid UTF-8", path.display()))
+}
+
+/// Whether what amenbo wrote at `path` carries `needle` anywhere in its bytes, and how many bytes
+/// were read to say so. What a `store` action hands out is one file for a backup and a whole folder
+/// for an export, so both shapes are walked — a value that leaked into any one file in there leaked.
+fn carries_text(path: &Path, needle: &str) -> Result<(bool, u64), String> {
+    let meta = std::fs::metadata(path)
+        .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    if meta.is_file() {
+        let bytes =
+            std::fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
+        let carried = bytes.windows(needle.len()).any(|w| w == needle.as_bytes());
+        return Ok((carried, bytes.len() as u64));
+    }
+    let entries = std::fs::read_dir(path)
+        .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    let (mut carried, mut read) = (false, 0);
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("could not read {}: {e}", path.display()))?;
+        let (found, n) = carries_text(&entry.path(), needle)?;
+        carried |= found;
+        read += n;
+    }
+    Ok((carried, read))
 }
 
 fn req_str<'a>(with: &'a Args, key: &str) -> Result<&'a str, String> {

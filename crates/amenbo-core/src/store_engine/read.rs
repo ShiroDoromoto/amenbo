@@ -2690,6 +2690,38 @@ pub fn task_dimension_assignments(conn: &Connection, task_id: i64) -> Result<Vec
     Ok(rows)
 }
 
+/// What one task is classified as, in words: `(dimension, value)` names, one pair per axis it sits on.
+///
+/// The same rows [`task_dimension_assignments`] serves by id, resolved here instead — for a face that
+/// prints rather than joins. The GUI already holds every axis and value in hand and needs only the ids;
+/// a CLI showing one task does not, and asking it to fetch the project's whole classification to name
+/// two values would be the join done the long way round.
+///
+/// Ordered by the **axis**, not by when the assignment was made, so two tasks classified in a different
+/// order still read down the same columns.
+pub fn task_classification(conn: &Connection, task_id: i64) -> Result<Vec<(String, String)>> {
+    const TV: col::task_dimension_value::Cols = col::task_dimension_value::of("tv");
+    const D: col::dimension::Cols = col::dimension::of("d");
+    const V: col::dimension_value::Cols = col::dimension_value::of("v");
+    let mut sel = Select::new();
+    let (dimension, value) = (sel.col(D.name), sel.col(V.name));
+    let mut sql = Sql::from(&sel, TV.table);
+    // Both joins are inner: an assignment whose axis or value is gone names nothing to print.
+    sql.join(D.table, same(D.id, TV.dimension_id))
+        .join(V.table, same(V.id, TV.value_id))
+        .push_where(Some(&Pred::eq(TV.task_id, task_id)))
+        .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((dimension.get(r)?, value.get(r)?))
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<(String, String)>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
 /// The `(task_id, value_id)` assignments for one dimension across a project — lets the GUI board group a
 /// project's tasks by a chosen dimension's values in one query. Live links to live values only, scoped to
 /// live tasks of the project.

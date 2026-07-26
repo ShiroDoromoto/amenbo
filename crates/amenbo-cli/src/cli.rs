@@ -446,7 +446,7 @@ pub enum PluginCmd {
     /// Reads one machine-local file and two store rows, and nothing else — no network. The log is bounded by
     /// construction (the last runs of each installed plugin), so there is no window to ask for and no
     /// deep history to page: a longer one is a logging plugin's business.
-    Runs {
+    Log {
         /// narrow to one plugin's runs; omit for every plugin's, newest first
         name: Option<String>,
     },

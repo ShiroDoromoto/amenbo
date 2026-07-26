@@ -4541,7 +4541,7 @@ fn wrote_json(path: &std::path::Path, want: impl Fn(&Value) -> bool) -> Value {
 #[cfg(unix)]
 fn logged_runs(cli: &Cli, count: i64) -> Value {
     for _ in 0..200 {
-        let runs = cli.json(&["plugin", "runs", "--json"]);
+        let runs = cli.json(&["plugin", "log", "--json"]);
         if runs["count"] == count {
             return runs;
         }
@@ -4604,20 +4604,20 @@ fn a_mutating_command_fires_the_enabled_plugin_that_subscribes_to_it() {
 /// lives, and the answer is the plugin's own stderr (`AMB-D-353`), which is why the human face carries it.
 #[cfg(unix)]
 #[test]
-fn plugin_runs_says_why_a_hook_did_nothing() {
+fn plugin_log_says_why_a_hook_did_nothing() {
     use std::os::unix::fs::PermissionsExt;
 
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
 
     // Nothing has fired on this machine yet: an absent log is an empty log, not a failure.
-    let empty = cli.json(&["plugin", "runs", "--json"]);
+    let empty = cli.json(&["plugin", "log", "--json"]);
     assert_eq!(empty["count"], 0);
     // And nothing has been *delivered* either, which is the other half of the same question (`AMB-D-380`):
     // an empty log alone cannot say whether the dispatcher ran and found no subscriber, or never ran.
     assert_eq!(empty["dispatch"]["cursor"], 0);
     assert!(empty["dispatch"]["cursor_face"].is_null(), "no face has advanced it: {empty}");
-    let (nothing, code) = cli.run(&["plugin", "runs"]);
+    let (nothing, code) = cli.run(&["plugin", "log"]);
     assert_eq!(code, 0, "an empty log is an answer, not an error");
     assert!(nothing.contains("No plugin runs recorded"), "{nothing}");
     assert!(nothing.contains("nothing has been delivered from this store yet"), "{nothing}");
@@ -4647,7 +4647,7 @@ fn plugin_runs_says_why_a_hook_did_nothing() {
 
     // The human face puts that diagnosis under the run. A reader who has to reach for --json to learn
     // why has not been answered.
-    let (out, code) = cli.run(&["plugin", "runs"]);
+    let (out, code) = cli.run(&["plugin", "log"]);
     assert_eq!(code, 0, "reading the log is not a verdict on what it holds");
     assert!(out.contains("logger") && out.contains("task.created"), "{out}");
     assert!(out.contains("failed") && out.contains("exit 3"), "{out}");
@@ -4655,10 +4655,10 @@ fn plugin_runs_says_why_a_hook_did_nothing() {
 
     // A name narrows it; one with nothing on file is an empty log rather than an error, because a run
     // outlives the install that made it.
-    let named = cli.json(&["plugin", "runs", "logger", "--json"]);
+    let named = cli.json(&["plugin", "log", "logger", "--json"]);
     assert_eq!(named["count"], 1);
     assert_eq!(named["plugin"], "logger");
-    let (other, code) = cli.run(&["plugin", "runs", "quiet"]);
+    let (other, code) = cli.run(&["plugin", "log", "quiet"]);
     assert_eq!(code, 0);
     assert!(other.contains("No runs recorded for plugin 'quiet'"), "{other}");
 

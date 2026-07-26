@@ -1,0 +1,90 @@
+# Where a browse looks. The official catalog is always one of the sources; a third-party one is
+# registered by the URL of its catalog.json and joins the view beside it.
+#
+# The line that matters is what registering does *not* do. Widening discovery is not widening install:
+# an asset is trusted by amenbo's own catalog key alone, so a registered catalog is a second place to
+# look and never a second place to install from.
+#
+# The third-party URL here is deliberately one that answers nothing. A catalog that cannot be reached
+# still registers and is retried later — one dead source must not cost the view — and that is exactly
+# the state a scenario can hold up without standing a server of its own.
+id: plugin-catalog-list
+title: A third-party catalog joins the browsing view beside the official one, unreachable and all, and can be taken back off
+description: >
+  Read the browsing view as it comes: the official catalog, alone and reached. Register a third-party
+  catalog and read it back as a source of its own — unreachable, which is reported rather than hidden
+  and does not take the view down with it. Register the same URL again and see nothing change.
+  Then take it off, and the view is back to the one catalog it started with.
+steps:
+  # What a machine browses before anybody widens anything: the official catalog, and it answers.
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      url: https://shirodoromoto.github.io/amenbo-plugins/catalog.json
+      reachable: true
+
+  - type: action
+    domain: plugin
+    op: catalog-add
+    with:
+      url: https://example.invalid/plugins/catalog.json
+
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      url: https://example.invalid/plugins/catalog.json
+      present: true
+
+  # A source that cannot be reached says so and stays in the view. Dropping it would quietly narrow
+  # what a person believes they are browsing.
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      url: https://example.invalid/plugins/catalog.json
+      reachable: false
+
+  # And the official one is untouched by the company it now keeps.
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      url: https://shirodoromoto.github.io/amenbo-plugins/catalog.json
+      reachable: true
+
+  # Registering the same URL twice is a no-op rather than a second source, so a browse never counts
+  # one catalog's plugins twice.
+  - type: action
+    domain: plugin
+    op: catalog-add
+    with:
+      url: https://example.invalid/plugins/catalog.json
+
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      url: https://example.invalid/plugins/catalog.json
+      present: true
+
+  - type: action
+    domain: plugin
+    op: catalog-remove
+    with:
+      url: https://example.invalid/plugins/catalog.json
+
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      url: https://example.invalid/plugins/catalog.json
+      present: false
+
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      url: https://shirodoromoto.github.io/amenbo-plugins/catalog.json
+      present: true

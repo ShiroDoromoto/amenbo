@@ -1,0 +1,75 @@
+# Most decisions are first said in passing, on the timeline of the task that provoked them. Promotion
+# is the path from there to a record: the comment's text becomes the body, and the new decision comes
+# out linked to the task it was said on — so the rationale and the work it governs arrive attached.
+id: decision-promote
+title: A comment promoted into a decision keeps its words and arrives linked to the task it was said on
+description: >
+  Say something on a task's timeline, promote that comment into a decision, and read back the body
+  it carries, the state it starts in, and the link it brought with it. Promotion crosses three
+  objects at once, which is exactly the shape a shipped build can half-carry.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the task the decision was made on
+    as: seed
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — the reasoning that turned out to be worth keeping
+    as: note
+
+  - type: action
+    domain: comment
+    op: promote
+    with:
+      target: note
+      title: SCENARIO SEED — promoted out of a comment
+    as: rec
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: title
+      equals: SCENARIO SEED — promoted out of a comment
+
+  # The words are carried over, not summarised: the comment's text is the body.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: body
+      equals: SCENARIO — the reasoning that turned out to be worth keeping
+
+  # Promotion proposes; it does not rule. The human still accepts or rejects.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: status
+      equals: proposed
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: linked_tasks.0.name
+      equals: SCENARIO SEED — the task the decision was made on
+
+  # And the link is a premise like any other, so the task waits on the ruling it just produced.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: false

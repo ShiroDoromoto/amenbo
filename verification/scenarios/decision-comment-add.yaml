@@ -1,0 +1,94 @@
+# A decision's body freezes when it is accepted; its timeline does not. That asymmetry is the whole
+# point of the decision timeline — it is where the reasoning for accepting, and everything said
+# afterwards, has to be able to land — so the line that matters is a comment posted after the
+# freeze.
+id: decision-comment-add
+title: A decision's timeline stays open after the body freezes, and its comments can be fixed or taken back
+description: >
+  Comment on a proposed decision, accept it, and comment again — then rewrite one comment and delete
+  the other, reading the timeline back each time. What is under test is that acceptance closes the
+  body and nothing else.
+steps:
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — a decision being discussed
+    as: rec
+
+  - type: action
+    domain: decision
+    op: comment
+    with:
+      target: rec
+      text: SCENARIO — the question raised while it was still a proposal
+    as: before
+
+  - type: assert
+    domain: decision
+    op: commented
+    with:
+      target: rec
+      text: SCENARIO — the question raised while it was still a proposal
+      present: true
+
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: rec
+
+  # The body is frozen from here on; the timeline is what discussion has left.
+  - type: action
+    domain: decision
+    op: comment
+    with:
+      target: rec
+      text: SCENARIO — what was learned after it was settled
+    as: after
+
+  - type: assert
+    domain: decision
+    op: commented
+    with:
+      target: rec
+      text: SCENARIO — what was learned after it was settled
+      present: true
+
+  - type: action
+    domain: decision
+    op: comment-edit
+    with:
+      target: after
+      text: SCENARIO — what was learned after it was settled, said better
+
+  - type: assert
+    domain: decision
+    op: commented
+    with:
+      target: rec
+      text: SCENARIO — what was learned after it was settled, said better
+      present: true
+
+  - type: action
+    domain: decision
+    op: comment-rm
+    with:
+      target: before
+
+  - type: assert
+    domain: decision
+    op: commented
+    with:
+      target: rec
+      text: SCENARIO — the question raised while it was still a proposal
+      present: false
+
+  # Removing one leaves the rest of the timeline standing.
+  - type: assert
+    domain: decision
+    op: commented
+    with:
+      target: rec
+      text: SCENARIO — what was learned after it was settled, said better
+      present: true

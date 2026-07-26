@@ -223,6 +223,64 @@ impl Driver {
                 }
                 Ok(Outcome::action(format!("created project {id} `{name}`")))
             }
+            (Domain::Project, "update") => {
+                let target = self.resolve(with)?;
+                let id = target.to_string();
+                let mut args: Vec<String> = vec!["project".into(), "update".into(), id];
+                for key in ["name", "notes", "view"] {
+                    if let Some(v) = with.get(key) {
+                        let v = v.as_str().ok_or_else(|| format!("arg `{key}` must be a string"))?;
+                        args.push(format!("--{key}"));
+                        args.push(v.to_string());
+                    }
+                }
+                if args.len() == 3 {
+                    return Err("`update` names no field to set".to_string());
+                }
+                args.push("--json".into());
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!("updated project {target}")))
+            }
+            (Domain::Project, "move") => {
+                let target = self.resolve(with)?;
+                let pos = req_str(with, "position")?;
+                let flag = match pos {
+                    "top" | "bottom" => format!("--{pos}"),
+                    other => return Err(format!("`position: {other}` is not top or bottom")),
+                };
+                self.run_json(&["project", "move", &target.to_string(), &flag, "--json"])?;
+                Ok(Outcome::action(format!("moved project {target} to the {pos}")))
+            }
+            (Domain::Project, verb @ ("archive" | "unarchive")) => {
+                let target = self.resolve(with)?;
+                self.run_json(&["project", verb, &target.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("{verb}d project {target}")))
+            }
+            (Domain::Dimension, "create") => {
+                let name = req_str(with, "name")?;
+                let pid = self.project_id.to_string();
+                self.run_json(&["dimension", "add", "--name", name, "--project", &pid, "--json"])?;
+                Ok(Outcome::action(format!("defined the axis `{name}`")))
+            }
+            (Domain::Dimension, "value-add") => {
+                let dimension = req_str(with, "dimension")?;
+                let value = req_str(with, "value")?;
+                self.run_json(&["dimension", "value-add", dimension, "--name", value, "--json"])?;
+                Ok(Outcome::action(format!("added the value `{value}` to `{dimension}`")))
+            }
+            // Filing a task under an axis and taking it back off. The axis and value go by name, which
+            // is what the command takes — a bare number there would be read as a name, not an id.
+            (Domain::Dimension, verb @ ("set" | "unset")) => {
+                let target = self.resolve(with)?;
+                let dimension = req_str(with, "dimension")?;
+                let value = req_str(with, "value")?;
+                self.run_json(&["dimension", verb, &target.to_string(), dimension, value, "--json"])?;
+                let note = match verb {
+                    "set" => format!("filed task {target} under `{dimension}` = `{value}`"),
+                    _ => format!("took task {target} out of `{dimension}` = `{value}`"),
+                };
+                Ok(Outcome::action(note))
+            }
             (Domain::Task, "depend") => {
                 let target = self.resolve(with)?;
                 let on = self.resolve_key(with, "on")?;
@@ -325,38 +383,83 @@ impl Driver {
             (Domain::Task, "listed") => {
                 let target = self.resolve(with)?;
                 let filter = req_str(with, "filter")?;
-                let present = opt_bool(with, "present").unwrap_or(true);
                 let v = self.run_json(&["task", "list", "--filter", filter, "--json"])?;
                 let rows = v["tasks"].as_array().map(Vec::as_slice).unwrap_or(&[]);
-                let at = rows.iter().position(|t| t["id"].as_i64() == Some(target));
-                let found = at.is_some();
-                // `position` asks where in the listing it sits, which is the only place a reorder is
-                // visible: order is the store's to keep, and the key it keeps it by is opaque.
-                if let Some(want) = with.get("position").and_then(|v| v.as_str()) {
-                    let last = rows.len().saturating_sub(1);
-                    let (pass, seen) = match (want, at) {
-                        ("first", Some(i)) => (i == 0, i),
-                        ("last", Some(i)) => (i == last, i),
-                        (other, Some(_)) => return Err(format!("`position: {other}` is not first or last")),
-                        (_, None) => (false, 0),
-                    };
-                    return Ok(Outcome::assert(
-                        pass,
-                        format!(
-                            "task {target} sits at {} of {} in `{filter}` (expected {want}, {})",
-                            if found { seen.to_string() } else { "nowhere".to_string() },
-                            rows.len(),
-                            if pass { "as expected" } else { "MISMATCH" }
-                        ),
-                    ));
+                judge_listing("task", target, &format!("`{filter}`"), rows, with)
+            }
+            (Domain::Project, "listed") => {
+                let target = self.resolve(with)?;
+                // The archived ones are a listing of their own: they leave the everyday list, which is
+                // what archiving is for, so proving one went means asking both.
+                let archived = opt_bool(with, "archived").unwrap_or(false);
+                let mut args = vec!["project", "list"];
+                if archived {
+                    args.push("--archived");
                 }
+                args.push("--json");
+                let v = self.run_json(&args)?;
+                let rows = v["projects"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+                let listing =
+                    if archived { "the listing that carries archived projects" } else { "the project listing" };
+                judge_listing("project", target, listing, rows, with)
+            }
+            (Domain::Project, "field") => {
+                let target = self.resolve(with)?;
+                let v = self.run_json(&["project", "show", &target.to_string(), "--json"])?;
+                judge_field("project", target, with, &v)
+            }
+            (Domain::Dimension, "listed") => {
+                let dimension = req_str(with, "dimension")?;
+                let value = with.get("value").and_then(|v| v.as_str());
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let v = self.run_json(&["dimension", "list", "--json"])?;
+                let axis = v["dimensions"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
+                    .iter()
+                    .find(|d| d["dimension"]["name"].as_str() == Some(dimension));
+                // Without a `value` the question is whether the axis is defined at all; with one it is
+                // whether the axis carries that value, since a value is only ever read through its axis.
+                let found = match (axis, value) {
+                    (None, _) => false,
+                    (Some(_), None) => true,
+                    (Some(a), Some(want)) => a["values"]
+                        .as_array()
+                        .map(|vs| vs.iter().any(|v| v["name"].as_str() == Some(want)))
+                        .unwrap_or(false),
+                };
                 let pass = found == present;
-                let word = if present { "present in" } else { "absent from" };
                 Ok(Outcome::assert(
                     pass,
                     format!(
-                        "task {target} {} `{filter}` (expected {word}, {})",
-                        if found { "is present in" } else { "is absent from" },
+                        "axis `{dimension}`{} {} defined (expected {}, {})",
+                        value.map(|v| format!(" value `{v}`")).unwrap_or_default(),
+                        if found { "is" } else { "is not" },
+                        if present { "defined" } else { "gone" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            (Domain::Task, "status-bucket") => {
+                let target = self.resolve(with)?;
+                let bucket = req_str(with, "bucket")?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let v = self.run_json(&["status", "--json"])?;
+                // A bucket the view does not print is a scenario bug, not an empty bucket: answering
+                // "absent" there would pass a line that asks about nothing.
+                let Some(rows) = v.get(bucket).and_then(|b| b.as_array()) else {
+                    return Err(format!("`bucket: {bucket}` is not a list the status view prints"));
+                };
+                let found = rows.iter().any(|t| t["id"].as_i64() == Some(target));
+                let pass = found == present;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "task {target} {} the `{bucket}` bucket of the status view ({} there, expected {}, {})",
+                        if found { "is in" } else { "is not in" },
+                        rows.len(),
+                        if present { "in it" } else { "out of it" },
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))
@@ -496,6 +599,51 @@ impl Outcome {
     fn assert(pass: bool, note: String) -> Outcome {
         Outcome { pass, note }
     }
+}
+
+/// Judge a listing assert: is the row in this listing, and — when the step names a `position` — is it
+/// where the order says it is. `position` is the only place a reorder shows: order is the store's to
+/// keep and the key it keeps it by is opaque, so where a row sits is all a reader can ask about.
+/// `listing` names the listing in the note, since a row can be absent from one and present in another
+/// (the archived projects being exactly that).
+fn judge_listing(
+    noun: &str,
+    id: i64,
+    listing: &str,
+    rows: &[serde_json::Value],
+    with: &Args,
+) -> Result<Outcome, String> {
+    let at = rows.iter().position(|r| r["id"].as_i64() == Some(id));
+    let found = at.is_some();
+    if let Some(want) = with.get("position").and_then(|v| v.as_str()) {
+        let last = rows.len().saturating_sub(1);
+        let (pass, seen) = match (want, at) {
+            ("first", Some(i)) => (i == 0, i),
+            ("last", Some(i)) => (i == last, i),
+            (other, Some(_)) => return Err(format!("`position: {other}` is not first or last")),
+            (_, None) => (false, 0),
+        };
+        return Ok(Outcome::assert(
+            pass,
+            format!(
+                "{noun} {id} sits at {} of {} in {listing} (expected {want}, {})",
+                if found { seen.to_string() } else { "nowhere".to_string() },
+                rows.len(),
+                if pass { "as expected" } else { "MISMATCH" }
+            ),
+        ));
+    }
+    let present = opt_bool(with, "present").unwrap_or(true);
+    let pass = found == present;
+    Ok(Outcome::assert(
+        pass,
+        format!(
+            "{noun} {id} {} {listing} (expected {}, {})",
+            if found { "is present in" } else { "is absent from" },
+            if present { "present" } else { "absent" },
+            if pass { "as expected" } else { "MISMATCH" }
+        ),
+    ))
 }
 
 /// Judge a timeline assert: does this stream of entries carry the wording the step names? With no

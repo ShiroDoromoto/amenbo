@@ -186,10 +186,14 @@ a human from the evidence, not by the exit code.
 A scenario is an `id`, a human `title`, an optional `description`, an optional `drivers`
 list, and an ordered list of `steps`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
-`comment` / `project`) and an `op`, and carries named args under `with`. An action may bind
-its result with `as:`, and a later step refers back to it with `target:` — an op that joins two
-objects names the second under its own key (`decision link`'s `task:`), and every such key is
+`comment` / `project` / `dimension`) and an `op`, and carries named args under `with`. An action
+may bind its result with `as:`, and a later step refers back to it with `target:` — an op that joins
+two objects names the second under its own key (`decision link`'s `task:`), and every such key is
 checked back to an earlier binding, not just `target:`.
+
+Not every object is reached by a binding. A **dimension** travels as the words a person says — its
+axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what
+the command takes too; a bare number there would be read as a name, not an id.
 
 ```yaml
 id: task-assign

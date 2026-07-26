@@ -8,6 +8,7 @@ import {
 import { Pager, PAGE_SIZE } from "../components/Pager";
 import { useSmartView } from "../core/reads";
 import { t } from "../core/i18n";
+import { isClosed } from "../core/status";
 
 // Shared list view for the list smart views (inbox / archive). They are saved filters — the same
 // query the AI uses via mailbox. Each view pulls only its current page via core/reads (server-side
@@ -121,7 +122,7 @@ const TaskRow = memo(function TaskRow({
   // Archive tab only: unarchive the row back into the inbox. undefined — and so hidden — everywhere else.
   onUnarchive?: (id: number) => void;
   onSelect: (id: number) => void;
-  onStatus: (id: number, status: Status) => void;
+  onStatus: (id: number, status: Status, reason?: string) => void;
 }) {
   const unread = showUnread && !!task.unread;
   return (
@@ -130,7 +131,7 @@ const TaskRow = memo(function TaskRow({
         {unread && <span className="row__unread-dot" role="img" aria-label={t("list.unread")} />}
       </span>
       <span className="row__status"><StatusSelect id={task.id} status={task.status} onStatus={onStatus} premiseChange={task.premiseChange} /></span>
-      <span className={`row__title ${task.status === "done" ? "row__title--done" : ""}`}>{task.title}</span>
+      <span className={`row__title ${isClosed(task.status) ? "row__title--closed" : ""}`}>{task.title}</span>
       <span className="row__spacer" />
       <TaskIdChip id={task.id} />
       <BlockedChips task={task} />

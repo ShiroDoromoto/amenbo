@@ -19,6 +19,7 @@ import { loadInboxArchived } from "./inboxArchive";
 import { invoke } from "./ipc";
 import { parseRef } from "./idref";
 import { currentLang, type Lang } from "./i18n";
+import { isClosed } from "./status";
 import type { TaskCard } from "../mock/types";
 import type { ArchivedProjectDto, AttachmentDto, DecisionCommentDto, TaskCommitDto, TaskPageDto, DecisionPageDto, RefTargetDto } from "../bindings/bindings";
 
@@ -398,8 +399,9 @@ async function fetchInboxTasks(): Promise<TaskCard[]> {
   ]);
   const archived = new Set(archivedIds);
   const unreadById = new Map(commentTasks.map((c) => [c.id, c.unread]));
-  // D: tasks with a comment addressed to me (they stay once read, and leave when done).
-  const dTasks = (await fetchTasksByIds(commentTasks.map((c) => c.id))).filter((t) => t.status !== "done");
+  // D: tasks with a comment addressed to me (they stay once read, and leave when the task closes — either
+  // terminal, since a task decided against has no more to say to me than a finished one).
+  const dTasks = (await fetchTasksByIds(commentTasks.map((c) => c.id))).filter((t) => !isClosed(t.status));
   const cTasks = cand.filter((t) => {
     // Mine = assigned to my human facet, handed over by an AI facet that created it (the AI→human hand-off).
     if (t.assignee?.kind !== "human") return false;
@@ -471,8 +473,10 @@ function mockMatches(t: TaskCard, q: TaskPageQuery): boolean {
   for (const token of (q.filter ?? "").split(/\s+/).filter(Boolean)) {
     const [key, value] = token.split(":");
     switch (key) {
-      case "status": if (t.status !== value) return false; break;
-      case "done": if ((t.status === "done") !== (value === "true")) return false; break;
+      // `status:` takes comma-separated any-of, as the CLI's grammar does (query.rs).
+      case "status": if (!value.split(",").includes(t.status)) return false; break;
+      // `done:` asks whether the task is **closed**, not whether it was carried out (`AMB-D-397`).
+      case "done": if (isClosed(t.status) !== (value === "true")) return false; break;
       case "due": if (value === "today" && t.due !== TODAY) return false; break;
       case "text": {
         const v = value.toLowerCase();

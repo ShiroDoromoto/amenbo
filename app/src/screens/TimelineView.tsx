@@ -2,6 +2,7 @@ import type { TaskCard } from "../mock/types";
 import { timelineModel, todayStr, relativeDays } from "../core/calendar";
 import { t, tf } from "../core/i18n";
 import { BlockedChips, PriorityDot } from "../components/atoms";
+import { isClosed } from "../core/status";
 
 // Cap on the chips laid out in the no-due bucket (kept in step with the calendar).
 const NODUE_CAP = 24;
@@ -71,7 +72,7 @@ export function TimelineView({ tasks, selectedTaskId, onSelectTask }: {
                     className={[
                       "tl__bar",
                       `tl__bar--${r.kind}`,
-                      r.task.status === "done" ? "tl__bar--done" : "",
+                      isClosed(r.task.status) ? "tl__bar--closed" : "",
                     ].join(" ").trim()}
                     style={{ left: `${r.leftPct}%`, width: `${r.widthPct}%` }}
                   />

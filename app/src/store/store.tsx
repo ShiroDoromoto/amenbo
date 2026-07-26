@@ -19,7 +19,11 @@ interface Store {
   listActivity(): ActivityItem[];
   // Returns the id of the task created, so the caller can open its detail right away. null on failure (a toast says so).
   addTask(projectId: number | null, title: string, notes?: string): Promise<number | null>;
-  setStatus(id: number, status: Status): void;
+  /**
+   * Move a task's status. `rejected` is the one value that carries a reason, and it is required — the
+   * pull-down collects it and this routes it to the write that keeps it (`AMB-D-397`).
+   */
+  setStatus(id: number, status: Status, reason?: string): void;
   setPriority(id: number, priority: Priority | null): void;
   setAssignee(id: number, kind: Facet | null): void;
   addComment(taskId: number, text: string): void;
@@ -108,7 +112,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     listActivity() { return activity; },
 
     addTask(projectId, title, notes) { return runResult(mut.addTask(projectId, title, notes)); },
-    setStatus(id, status) { run(mut.setStatus(id, status)); },
+    setStatus(id, status, reason) {
+      // The one fork on the way down: a rejection goes through the write that also keeps the reason, so
+      // no surface can reach `rejected` and leave the reasoning behind.
+      run(status === "rejected" ? mut.rejectTask(id, reason ?? "") : mut.setStatus(id, status));
+    },
     setPriority(id, priority) { run(mut.setPriority(id, priority)); },
     setAssignee(id, kind) { run(mut.setAssignee(id, kind)); },
     addComment(taskId, text) { run(mut.addComment(taskId, text)); },

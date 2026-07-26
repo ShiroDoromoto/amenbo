@@ -10,8 +10,8 @@
 # setup and the teardown are wrapped in Hide/Show, so the film shows the demo and nothing else.
 #
 # The scratch paths are fixed rather than mktemp so that what the terminal prints is the same on
-# every machine, and the facet is unset so the human half of the demo records as a human — this
-# terminal inherits whatever the recording developer's shell exports.
+# every machine, and every command declares its own facet with `--actor`, so each half records as the
+# facet it means to whatever the recording developer's shell exports.
 
 Output assets/cli-demo.gif
 
@@ -25,7 +25,7 @@ Set TypingSpeed 35ms
 Set Framerate 24
 
 Hide
-Type "export PATH=$PWD/target/debug:$PATH; unset AMENBO_ACTOR" Enter
+Type "export PATH=$PWD/target/debug:$PATH" Enter
 Type "export AMENBO_HOME=/tmp/amenbo-demo-home PS1='$ '" Enter
 Type "rm -rf /tmp/amenbo-demo /tmp/amenbo-demo-home; mkdir -p /tmp/amenbo-demo/website" Enter
 Type "cd /tmp/amenbo-demo/website; clear" Enter
@@ -36,14 +36,14 @@ Sleep 1s
 # The human's half: a folder becomes a project, and work is filed in it.
 Type "# a folder becomes a project — the store is one SQLite file on this machine" Sleep 400ms Enter
 Sleep 800ms
-Type "amenbo init --name Alex" Sleep 400ms Enter
+Type "amenbo init --name Alex --actor human" Sleep 400ms Enter
 Sleep 2.5s
 
-Type "amenbo task add --title 'Draft the launch note' --project website --due +3d" Sleep 400ms Enter
+Type "amenbo task add --title 'Draft the launch note' --project website --due +3d --actor human" Sleep 400ms Enter
 Sleep 1.5s
-Type "amenbo task add --title 'Ship the beta installer' --project website --to me-ai" Sleep 400ms Enter
+Type "amenbo task add --title 'Ship the installer' --project website --to me-ai --actor human" Sleep 400ms Enter
 Sleep 1.5s
-Type "amenbo task list" Sleep 400ms Enter
+Type "amenbo task list --actor human" Sleep 400ms Enter
 Sleep 3s
 
 Type "clear" Enter
@@ -52,11 +52,10 @@ Sleep 500ms
 # The AI's half: the same store, its own mailbox, and the spec it works from.
 Type "# the AI works the same store — this is its mailbox" Sleep 400ms Enter
 Sleep 800ms
-Type "export AMENBO_ACTOR=ai" Sleep 300ms Enter
-Type "amenbo task list --filter 'assignee:me-ai status:todo ready:yes'" Sleep 400ms Enter
+Type "amenbo task list --filter 'assignee:me-ai status:todo ready:yes' --actor ai" Sleep 400ms Enter
 Sleep 2.5s
 
-Type "amenbo task status 2 in_progress" Sleep 400ms Enter
+Type "amenbo task status 2 in_progress --actor ai" Sleep 400ms Enter
 Sleep 2s
 
 Type "# and the CLI hands the AI the spec for what it is about to run" Sleep 400ms Enter
@@ -64,7 +63,7 @@ Sleep 800ms
 Type "amenbo agent --command 'task done'" Sleep 400ms Enter
 Sleep 3.5s
 
-Type "amenbo task done 2" Sleep 400ms Enter
+Type "amenbo task done 2 --actor ai" Sleep 400ms Enter
 Sleep 3s
 
 Hide

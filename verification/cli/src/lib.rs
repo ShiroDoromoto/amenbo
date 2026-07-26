@@ -478,6 +478,25 @@ impl Driver {
                 self.run_json(&["decision", "accept", &target.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("accepted decision {target}")))
             }
+            (Domain::Decision, "reject") => {
+                let target = self.resolve(with)?;
+                let id = target.to_string();
+                let mut args: Vec<String> =
+                    vec!["decision".into(), "reject".into(), id, "--yes".into(), "--json".into()];
+                // The reason is not a field of its own: it lands on the decision's timeline, which is
+                // where a later reader looks for why the proposal did not carry.
+                if let Some(reason) = with.get("reason").and_then(|v| v.as_str()) {
+                    args.push("--reason".into());
+                    args.push(reason.to_string());
+                }
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!("rejected decision {target}")))
+            }
+            (Domain::Decision, "reopen") => {
+                let target = self.resolve(with)?;
+                self.run_json(&["decision", "reopen", &target.to_string(), "--yes", "--json"])?;
+                Ok(Outcome::action(format!("returned decision {target} to discussion")))
+            }
             (Domain::Decision, "comment") => {
                 let target = self.resolve(with)?;
                 let text = req_str(with, "text")?;

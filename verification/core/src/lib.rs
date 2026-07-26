@@ -231,6 +231,10 @@ const REGISTRY: &[OpSpec] = &[
     // and the link is what makes it a task's premise.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "edit", required: &["target", "body"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "accept", required: &["target"], refs: &["target"], binds: false },
+    // The other two rulings a proposal can meet: turned down, and un-settled to be discussed again.
+    // A `reason` is optional here as it is on the command, and lands on the decision's timeline.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "reject", required: &["target"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "reopen", required: &["target"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "link", required: &["target", "task"], refs: &["target", "task"], binds: false },
     // The edges between decisions, each named from the newer one: `supersede` replaces an older
     // decision, `builds-on` names a premise to read first, and `unlink` takes an edge back. A pair

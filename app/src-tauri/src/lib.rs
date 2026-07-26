@@ -53,6 +53,9 @@ fn start_store_threads(app: tauri::AppHandle) {
       log::warn!("gc_device_state failed: {e}");
     }
   });
+  // What a previous run left half-delivered (`AMB-D-399`). Started with the other store threads, and after
+  // a migration for the same reason they are: the store this reads is the migrated one or none at all.
+  std::thread::spawn(plugin_dispatch::resume);
 }
 
 /// The plugin runner this process was launched as, if it was (`AMB-T-2175`): the plugin whose queue to work,

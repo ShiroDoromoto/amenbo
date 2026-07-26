@@ -863,6 +863,11 @@ pub enum TaskCmd {
         /// with --to, delegate to "that person's AI" (assignee_kind=ai)
         #[arg(long)]
         ai: bool,
+        /// classify the new task as `<axis>=<value>` — the same resolution as `dimension set` (id, or
+        /// an exact name, case-insensitive). Repeatable for different axes; an axis is single-select,
+        /// so naming one twice is refused. What you name here wins over the time-axis default.
+        #[arg(long = "dim", value_name = "AXIS=VALUE")]
+        dim: Vec<String>,
     },
     List {
         #[arg(long)]

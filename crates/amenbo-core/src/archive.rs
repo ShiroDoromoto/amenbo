@@ -559,10 +559,31 @@ pub fn pre_erase_backup(
     stamp: &str,
     progress: &mut impl FnMut(&Progress) -> ControlFlow<()>,
 ) -> Result<PreEraseReport> {
-    let dest = dir.join(format!("{PRE_ERASE_PREFIX}{stamp}.{ARCHIVE_EXT}"));
+    let dest = free_pre_erase_path(dir, stamp);
     let backup = backup_from(source, &dest, progress)?;
     let superseded = sweep_superseded(dir, PRE_ERASE_PREFIX, &format!(".{ARCHIVE_EXT}"), &dest);
     Ok(PreEraseReport { backup, superseded })
+}
+
+/// Where the next pre-erase archive goes: `<dir>/pre-erase-<stamp>.amenbo-backup`, or the next free name
+/// beside it (`…-2`, `…-3`) when a file of that name is already there.
+///
+/// The stamp is to the second, and two erases in one second are ordinary maintenance — a comment and then
+/// a decision, typed as fast as anyone types. Without this the second one dies on
+/// [`backup_from`]'s refuse-to-overwrite, having destroyed nothing, and the user is left reading an error
+/// about an archive they did not ask for. Naming around it rather than deleting first is what keeps the
+/// window closed: the earlier archive still holds the content the earlier erase destroyed, and it goes
+/// only once the new rewind point is on disk ([`sweep_superseded`], which matches these names too).
+///
+/// The bound is a formality — it takes 99 archives in one second to reach it — and past it the plain name
+/// comes back, so the caller meets the overwrite guard's own honest error rather than a loop.
+fn free_pre_erase_path(dir: &Path, stamp: &str) -> PathBuf {
+    let at = |suffix: String| dir.join(format!("{PRE_ERASE_PREFIX}{stamp}{suffix}.{ARCHIVE_EXT}"));
+    let first = at(String::new());
+    if !first.exists() {
+        return first;
+    }
+    (2..100).map(|n| at(format!("-{n}"))).find(|p| !p.exists()).unwrap_or(first)
 }
 
 /// This device's store, read from the on-disk layout: **one database** (`<app-data>/store.sqlite`, or

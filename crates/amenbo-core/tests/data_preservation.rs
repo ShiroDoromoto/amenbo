@@ -195,6 +195,37 @@ fn backup_then_restore_preserves_every_record_across_a_reopen() {
     assert!(!task_exists(&reopened, "古いタスク"));
 }
 
+/// Two erases within one second each get their own rewind point. The stamp is to the second, and erasing
+/// a comment and then a decision is ordinary maintenance typed at ordinary speed — so the second archive is
+/// named around the first rather than refused (`AMB-T-2249`), and the first goes only once the new one is
+/// on disk, leaving exactly one rewind point behind.
+#[test]
+fn two_erases_in_one_second_each_get_their_own_rewind_point() {
+    let base = temp_base("pre-erase-same-second");
+    let paths = Paths::at(base.clone());
+    {
+        let mut store = Store::open_at(paths.clone()).unwrap();
+        add_task(&mut store, "消される前のタスク");
+    }
+    let source = archive::StoreSource { db_path: db_path(&paths), bindings: Vec::new() };
+    let stamp = "20260726T090000Z";
+
+    let first = archive::pre_erase_backup(&source, &base, stamp, &mut no_progress).unwrap();
+    assert!(first.superseded.is_empty(), "nothing preceded it");
+    assert!(Path::new(&first.backup.path).is_file());
+
+    let second = archive::pre_erase_backup(&source, &base, stamp, &mut no_progress)
+        .expect("a second erase in the same second still gets its rewind point");
+    assert_ne!(second.backup.path, first.backup.path, "it is named around the one already there");
+    assert!(Path::new(&second.backup.path).is_file());
+    assert_eq!(
+        second.superseded,
+        vec![first.backup.path.clone()],
+        "and the first is swept, because a rewind point older than this one leads nowhere",
+    );
+    assert!(!Path::new(&first.backup.path).exists(), "one rewind point per kind, the newest");
+}
+
 /// `restore` moves the pre-swap engine aside under a timestamped name. Even if the process is killed
 /// before the in-process rollback can run, that file is a **complete recovery point**: it passes the
 /// startup hydrate and holds the old data, so moving it back restores the store. Dying mid-restore

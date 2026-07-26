@@ -1,20 +1,19 @@
 # Erasing content from the truth source — the one place amenbo destroys something on purpose, so a
 # delete that quietly left the row behind is a break nothing else in the set would catch.
 #
-# The capability's other arm (redacting an accepted decision's body) is not here yet, and not because
-# it is uninteresting: writing it turned up a defect. Both arms take a safety archive named to the
-# second, and the second erase within one second is refused rather than rotating, so a line holding
-# the two together is red on a fast machine and green on a slow one. The registry op and its driver
-# mapping are in place; the arm goes in with the fix.
+# Both arms are here, and holding them in one line is deliberate: they each take a safety archive
+# named to the second, so a build that cannot write two in one second dies on the second arm — which
+# is exactly how the defect this line now guards was found (a fast machine failed, a slow one passed).
 id: hard-erase-comment
-title: A comment leaves the store in full, and what sat beside it stays
+title: A comment leaves the store in full, a decision's body is redacted in place, and what sat beside them stays
 description: >
   Post two comments and read them back, then erase one and read the same timeline again — the assert
   is the absence, which is the whole promise. What sat beside it is asserted as still there, since an
   erase that took the timeline with it would satisfy the first assert just as well. The store is
   asked whether it is sound afterwards, because this arm rewrites the file itself (VACUUM) rather
-  than just a row in it. Run as the human: this is human-gated maintenance and the AI actor is
-  refused.
+  than just a row in it. Then the other arm, back to back: an accepted decision's body is overwritten
+  in place, and the decision is read back to see that it kept its number and its status while losing
+  what was in it. Run as the human: this is human-gated maintenance and the AI actor is refused.
 steps:
   - type: action
     domain: task
@@ -80,6 +79,61 @@ steps:
 
   # The file itself is rewritten and VACUUMed under a live store, so it is asked whether it came
   # through — an erase that left the database inconsistent would still pass every assert above.
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true
+
+  # The other arm, and deliberately in the same breath as the first: a decision's body is replaced in
+  # place. Accepted first, because that is the state the redaction exists for — a frozen record that
+  # holds something it must not.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — the decision whose body must be redacted
+    as: record
+
+  - type: action
+    domain: decision
+    op: edit
+    with:
+      target: record
+      body: "SCENARIO — the paragraph that must be gone from the file"
+
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: record
+
+  - type: action
+    domain: decision
+    op: hard-erase
+    with:
+      target: record
+      body: "SCENARIO — redacted"
+
+  # What redaction promises is precisely this pair: the body is the new text, and the record itself is
+  # still the same accepted decision — the number, the status and the links a reader trusts survive
+  # the one section that went.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: record
+      field: body
+      equals: "SCENARIO — redacted"
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: record
+      field: status
+      equals: accepted
+
   - type: assert
     domain: store
     op: doctor

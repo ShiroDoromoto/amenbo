@@ -199,6 +199,19 @@ pub const STEPS: &[Step] = &[
         // short in any case — the outbox is trimmed as soon as the fan-out has copied a row.
         apply: Apply::Custom(add_outbox_project),
     },
+    Step {
+        to: 12,
+        name: "add plugin_queue.project, so a queued row carries the project it was fanned out for",
+        // `AMB-D-405`, the other half: the runner resolves the subscription a second time, and it can only
+        // answer a project-scoped plugin's gate with the project the event happened in. The fan-out has it
+        // (v11 put it on the outbox row) and now copies it forward, so nothing between the queue and the
+        // run reads the record back — which is the whole point on the row that has none left.
+        //
+        // **Unseeded, like v11's.** A row already on a queue was fanned out before anything wrote the
+        // project down; `NULL` is what it is, and a project-scoped subscription fires nothing for it. The
+        // window is a queue's depth, not a store's age.
+        apply: Apply::Custom(add_queue_project),
+    },
 ];
 
 /// v4: the lint-hook question stopped being one per project and became one for the device
@@ -316,6 +329,24 @@ fn add_outbox_project(ctx: &Ctx<'_>) -> Result<()> {
     if held == 0 {
         // Frozen text, like every step's: a nullable integer, whatever the registry names the kind later.
         ctx.tx.execute_batch("ALTER TABLE plugin_outbox ADD COLUMN project BIGINT;")?;
+    }
+    Ok(())
+}
+
+/// v12: give a queue row the project its event was fanned out for (`AMB-D-405`).
+///
+/// Probed rather than bare, for the same reason [`add_outbox_project`] is: the queue arrived after the
+/// baseline too, so the oldest stores are handed the table whole by genesis — `project` included — and a
+/// bare `ALTER TABLE … ADD COLUMN` would fail on exactly those with `duplicate column name`.
+fn add_queue_project(ctx: &Ctx<'_>) -> Result<()> {
+    let held: i64 = ctx.tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('plugin_queue') WHERE name = 'project'",
+        [],
+        |r| r.get(0),
+    )?;
+    if held == 0 {
+        // Frozen text, like every step's: a nullable integer, whatever the registry names the kind later.
+        ctx.tx.execute_batch("ALTER TABLE plugin_queue ADD COLUMN project BIGINT;")?;
     }
     Ok(())
 }
@@ -1095,6 +1126,48 @@ mod tests {
                 [],
             )
             .expect("what is emitted from here on can carry its project");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v12 in full, on the store shape v11 left behind: queues whose rows carry no project. The column
+    /// arrives, the rows waiting on a queue keep every field they had, and their project reads back as
+    /// `NULL` — they were fanned out before anyone wrote it down, and a project-scoped subscription fires
+    /// nothing for them rather than the fan-out's answer being invented here.
+    #[test]
+    fn the_queue_gains_a_project_column_and_leaves_the_rows_already_on_it_alone() {
+        let dir = scratch("queue-project");
+        let engine = store_at(&dir, 11);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO plugin_queue (id, plugin, face, event, record_id, actor, at, new_state)
+                     VALUES (1, 'slack', 'cli', 'task.deleted', 7, 'ai', '2026-07-26T09:00:00Z', NULL);",
+            )
+            .unwrap();
+
+        let run = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert!(run.applied.iter().any(|s| s.contains("plugin_queue.project")), "v12 ran: {:?}", run.applied);
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let row: (String, String, Option<i64>) = engine
+            .conn()
+            .query_row("SELECT plugin, event, project FROM plugin_queue", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })
+            .unwrap();
+        assert_eq!(
+            row,
+            ("slack".to_string(), "task.deleted".to_string(), None),
+            "the row that was already queued keeps its fields and gains an unstamped project",
+        );
+        engine
+            .conn()
+            .execute(
+                "INSERT INTO plugin_queue (plugin, face, event, record_id, actor, at, project)
+                     VALUES ('slack', 'cli', 'task.created', 9, 'ai', '2026-07-26T09:00:02Z', 3)",
+                [],
+            )
+            .expect("what is fanned out from here on can carry its project");
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -26,10 +26,10 @@ use super::engine::{Result, StoreEngineError};
 use super::schema::col;
 use super::sql::{Delete, Expr, Pred, Select, Sort, Sql};
 
-/// One event to place on a plugin's queue — an outbox row, addressed. The wire fields are the outbox's
-/// ([`EventRow`](super::outbox::EventRow)); what the fan-out adds is the two the split needs: whose queue
-/// the row goes on, and the face the subscription resolved on. Borrowed throughout: nothing is kept beyond
-/// the INSERT.
+/// One event to place on a plugin's queue — an outbox row, addressed. The event's own fields come from the
+/// outbox row unchanged ([`EventRow`](super::outbox::EventRow)): its wire fields, and the project it was
+/// stamped with. What the fan-out adds is the two the split needs: whose queue the row goes on, and the
+/// face the subscription resolved on. Borrowed throughout: nothing is kept beyond the INSERT.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QueuedEvent<'a> {
     /// The plugin whose queue this row joins, as the installed registry knows it.
@@ -48,6 +48,10 @@ pub struct QueuedEvent<'a> {
     pub at: &'a str,
     /// The record's new state, for the events an `update` disambiguates; `None` otherwise.
     pub new_state: Option<&'a str>,
+    /// The project the event was stamped with when it was appended (`AMB-D-405`), copied off the outbox row
+    /// as it stands. The runner resolves the subscription again and needs it to answer a project-scoped
+    /// plugin's gate; `None` is a real answer — a record in no project, or a row from before the column.
+    pub project: Option<i64>,
 }
 
 /// One queued row, as a runner reads it: the row's own id (what it passes to [`dequeue`] once the plugin
@@ -70,6 +74,8 @@ pub struct QueueRow {
     pub at: String,
     /// The new state the event carries, or `None`.
     pub new_state: Option<String>,
+    /// The project the event was stamped with (`AMB-D-405`), or `None` when it carries none.
+    pub project: Option<i64>,
 }
 
 /// Place one event on a plugin's queue. Runs on the caller's transaction — the fan-out's, the same one
@@ -85,6 +91,7 @@ pub(super) fn enqueue(conn: &Connection, ev: &QueuedEvent<'_>) -> Result<()> {
         .set(q.actor, ev.actor)
         .set(q.at, ev.at)
         .set_opt(q.new_state, ev.new_state)
+        .set_opt(q.project, ev.project)
         .sql()
         .execute(conn)
         .map(|_| ())
@@ -96,7 +103,7 @@ pub(super) fn enqueue(conn: &Connection, ev: &QueuedEvent<'_>) -> Result<()> {
 pub fn queued_for(conn: &Connection, plugin: &str, limit: i64) -> Result<Vec<QueueRow>> {
     let q = col::plugin_queue::ALL;
     let mut sel = Select::new();
-    let (id, face, event, record_id, actor, at, new_state) = (
+    let (id, face, event, record_id, actor, at, new_state, project) = (
         sel.col(q.id),
         sel.col(q.face),
         sel.col(q.event),
@@ -104,6 +111,7 @@ pub fn queued_for(conn: &Connection, plugin: &str, limit: i64) -> Result<Vec<Que
         sel.col(q.actor),
         sel.col(q.at),
         sel.col(q.new_state),
+        sel.col(q.project),
     );
     let mut sql = Sql::from(&sel, q.table);
     sql.push_where(Some(&Pred::eq(q.plugin, plugin))).order_by([Sort::by(q.id)]).limit(limit);
@@ -119,6 +127,7 @@ pub fn queued_for(conn: &Connection, plugin: &str, limit: i64) -> Result<Vec<Que
                 actor: actor.get(r)?,
                 at: at.get(r)?,
                 new_state: new_state.get(r)?,
+                project: project.get(r)?,
             })
         })
         .map_err(StoreEngineError::from)?
@@ -177,6 +186,7 @@ mod tests {
             actor: "ai",
             at: "2026-07-25T09:00:00Z",
             new_state: None,
+            project: None,
         })
         .unwrap();
         tx.commit().unwrap();
@@ -196,6 +206,7 @@ mod tests {
             actor: "ai",
             at: "2026-07-25T09:00:00Z",
             new_state: Some("in_progress"),
+            project: Some(3),
         })
         .unwrap();
         tx.commit().unwrap();
@@ -211,6 +222,16 @@ mod tests {
         assert_eq!(r.actor, "ai");
         assert_eq!(r.at, "2026-07-25T09:00:00Z");
         assert_eq!(r.new_state.as_deref(), Some("in_progress"));
+        assert_eq!(r.project, Some(3), "the project the event was stamped with rides the copy");
+    }
+
+    /// A row fanned out for an event that carries no project reads back as `NULL` — the answer a
+    /// project-scoped subscription fires nothing for, said rather than guessed (`AMB-D-405`).
+    #[test]
+    fn a_queued_event_from_no_project_round_trips_as_none() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        queue(&e, "slack", "task.deleted", 7);
+        assert_eq!(queued_for(e.conn(), "slack", 10).unwrap()[0].project, None);
     }
 
     /// A queue is one plugin's: a read sees its own rows, in the order they were fanned out, and nobody

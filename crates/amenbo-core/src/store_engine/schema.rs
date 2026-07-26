@@ -818,12 +818,20 @@ plain_tables! {
     /// outbox is then reclaimed independently of how fast any plugin runs, so one stalled plugin backs up
     /// only its own queue.
     ///
-    /// The columns are the outbox's wire fields (opaque here too — the store classifies nothing) plus the
-    /// two the split needs: `plugin` says whose queue the row is on, and `face` records the face the fan-out
-    /// resolved the subscription on (`AMB-D-383`), so the runner can rebuild that plugin's invocation for
-    /// this row whichever face gets to it. `id` is the queue's own order — a plugin's rows are run oldest
-    /// first, and a row is deleted once it has been run. Being a per-row table rather than a cursor is what
-    /// leaves room to record *this one failed*, which a position number has nowhere to say.
+    /// The columns are the outbox's wire fields (opaque here too — the store classifies nothing), the
+    /// project the event was stamped with, and the two the split needs: `plugin` says whose queue the row is
+    /// on, and `face` records the face the fan-out resolved the subscription on (`AMB-D-383`), so the runner
+    /// can rebuild that plugin's invocation for this row whichever face gets to it. `id` is the queue's own
+    /// order — a plugin's rows are run oldest first, and a row is deleted once it has been run. Being a
+    /// per-row table rather than a cursor is what leaves room to record *this one failed*, which a position
+    /// number has nowhere to say.
+    ///
+    /// `project` is copied off the outbox row as it stands (`AMB-D-405`), for the same reason the outbox
+    /// carries it: the runner resolves the subscription a second time, and a project-scoped plugin's gate
+    /// is only answerable with the project the event happened in. Re-reading it off the record at that
+    /// point is what this decision removed — by the time a queue is drained the record may have moved, or
+    /// be gone. `NULL` means "in no project, or unknown", and a project-scoped subscription fires nothing
+    /// for it.
     plugin_queue {
         id: integer("PRIMARY KEY AUTOINCREMENT"),
         plugin: text,
@@ -833,6 +841,7 @@ plain_tables! {
         actor: text,
         at: text,
         new_state: text_opt,
+        project: bigint_opt,
     }
 
     /// Who is **running** a plugin's queue right now — at most one row per plugin, and the whole of the

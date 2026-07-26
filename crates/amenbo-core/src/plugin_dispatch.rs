@@ -49,8 +49,6 @@
 //! caller's cursor, the lost span cannot be replayed — [`fan_out`] resyncs the cursor to the head and
 //! reports [`FannedOut::gapped`] rather than pretend nothing fired.
 
-use rusqlite::Connection;
-
 use crate::error::Result;
 use crate::plugin_exec::PluginInvocation;
 use crate::plugin_hooks::{Hook, REPLY_TIMEOUT};
@@ -126,9 +124,9 @@ pub struct Reply {
 /// observes.
 ///
 /// `project` is what makes a project-scoped plugin's switch answerable here (`AMB-D-379`): the dispatcher
-/// resolves it from the row it is holding ([`project_of_event`]). `None` means the event's record no longer
-/// says which project it belonged to — a deleted task is the ordinary case — and a resolver that needs a
-/// project must then fire nothing rather than guess one.
+/// reads it off the event, which was stamped with it when it was appended (`AMB-D-405`). `None` means the
+/// event happened in no project, or was appended before there was a column to say — and a resolver that
+/// needs a project must then fire nothing rather than guess one.
 ///
 /// `face` is the face the subscription is resolved on (`AMB-D-383`): a subscription fires only when its
 /// declared `faces` include it, so a `faces:[cli]` hook stays silent on a GUI drive and vice versa. It is
@@ -283,21 +281,13 @@ pub fn fan_out(
                         );
                         continue;
                     };
-                    // Which project the event happened in, read from the record it names — the outbox row
-                    // does not carry it (`AMB-D-379` needs it for a project-scoped plugin's gate). A read
-                    // that fails is treated as "unknown", the same as a record that has gone: this walk is
-                    // best-effort (`AMB-D-352`) and a resolver that needs a project fires nothing without
-                    // one.
-                    let project = project_of_event(conn, payload.event, payload.id).unwrap_or_else(|e| {
-                        tracing::warn!(
-                            event = %payload.event,
-                            id = payload.id,
-                            error = %e,
-                            "could not read the event's project"
-                        );
-                        None
-                    });
-                    for sub in subs.resolve(payload.event, project, face) {
+                    // Which project the event happened in, read off the row (`AMB-D-405`) — the emit door
+                    // stamped it, so nothing is looked up here. That is what makes a deletion routable at
+                    // all: the record it names is gone by now, and a task that has moved since would
+                    // otherwise route its older events to its new home. `None` is a real answer (a record
+                    // in no project, or a row from before the column), and a resolver that needs a project
+                    // fires nothing without one (`AMB-D-379`).
+                    for sub in subs.resolve(payload.event, row.project, face) {
                         if sub.reply {
                             // A replying hook (CLI-only, `AMB-D-383`) never joins a queue: its stderr is the
                             // advice the caller is waiting on, and a queue is for work that outlives this
@@ -312,8 +302,10 @@ pub fn fan_out(
                             ));
                             continue;
                         }
-                        // The row is copied as it stands — the store classifies none of these strings — with
-                        // the two things the queue adds: whose work it is, and the face it was resolved on.
+                        // The row is copied as it stands — the store classifies none of these strings, and
+                        // the project rides along so the runner never has to ask the record again
+                        // (`AMB-D-405`) — with the two things the queue adds: whose work it is, and the
+                        // face it was resolved on.
                         tx.queue_event(&queue::QueuedEvent {
                             plugin: &sub.plugin,
                             face: face.as_str(),
@@ -322,6 +314,7 @@ pub fn fan_out(
                             actor: &row.actor,
                             at: &row.at,
                             new_state: row.new_state.as_deref(),
+                            project: row.project,
                         })?;
                         queued += 1;
                     }
@@ -370,7 +363,11 @@ pub fn run_replies(hooks: Vec<Hook>, log: Option<&std::path::Path>) -> Vec<Reply
 /// `None` rather than a hook: what is on a queue is a claim about the past, and the gate is read now. Same
 /// for a row this build cannot rebuild (an unknown event or face): it is warned about and dropped, so a row
 /// nobody can run never blocks the ones behind it.
-pub fn hook_for(conn: &Connection, subs: &dyn Subscribers, row: &queue::QueueRow) -> Result<Option<Hook>> {
+///
+/// **The row is the whole input.** Nothing here reads the store: the event, the face and the project it
+/// happened in all ride on the row (`AMB-D-405`), and who the plugin is *now* is the resolver's to answer.
+/// A record that has been deleted or moved since the fan-out changes none of it.
+pub fn hook_for(subs: &dyn Subscribers, row: &queue::QueueRow) -> Result<Option<Hook>> {
     let (Some(payload), Some(face)) = (Payload::from_queue_row(row), Face::parse(&row.face)) else {
         tracing::warn!(
             plugin = %row.plugin,
@@ -380,19 +377,12 @@ pub fn hook_for(conn: &Connection, subs: &dyn Subscribers, row: &queue::QueueRow
         );
         return Ok(None);
     };
-    let project = project_of_event(conn, payload.event, payload.id).unwrap_or_else(|e| {
-        tracing::warn!(
-            event = %payload.event,
-            id = payload.id,
-            error = %e,
-            "could not read the event's project"
-        );
-        None
-    });
     // Who this plugin is *now*: its program, its config, and whether it still subscribes at all. A
     // subscriber that no longer resolves has been turned off since the fan-out, and a plugin that is off
-    // must not fire.
-    let Some(sub) = subs.resolve_one(&row.plugin, payload.event, project, face) else {
+    // must not fire. The project is the one thing read off the row rather than asked for again
+    // (`AMB-D-405`): it is a fact about when the event happened, and by now the record may have moved or be
+    // gone — which is exactly the case a project-scoped plugin was never reached in.
+    let Some(sub) = subs.resolve_one(&row.plugin, payload.event, row.project, face) else {
         tracing::debug!(
             plugin = %row.plugin,
             event = %payload.event,
@@ -409,38 +399,6 @@ pub fn hook_for(conn: &Connection, subs: &dyn Subscribers, row: &queue::QueueRow
     // between): there is no caller waiting on this row, so it is run and forgotten like the rest, and what
     // it says lands in the execution log.
     Ok(Some(Hook::new(sub.plugin, payload.event, sub.invocation.stdin_json(json))))
-}
-
-/// The project one drained event happened in, or `None` when nothing says so any more.
-///
-/// The outbox row carries the event's name and the record's id, never a project (`AMB-D-367` — it is a
-/// change feed, not a routing table), so the project is read back from the record the event names: a
-/// task's own, a decision's own, and for a comment the project of the task it hangs on. This is what lets
-/// the resolver answer a **project-scoped** plugin's switch (`AMB-D-379`).
-///
-/// `None` is a real answer, not a failure: a task that has been deleted takes its project with it, and a
-/// task that belongs to no project never had one. A caller that needs a project must fire nothing in that
-/// case — guessing a project would open a gate the user never opened there.
-pub fn project_of_event(conn: &Connection, event: &str, record_id: i64) -> Result<Option<i64>> {
-    use crate::plugin_payload::name as ev;
-    use crate::store_engine::read;
-    match event {
-        ev::TASK_CREATED
-        | ev::TASK_STATUS_CHANGED
-        | ev::TASK_DONE
-        | ev::TASK_ASSIGNED
-        | ev::TASK_MOVED
-        | ev::TASK_DELETED => Ok(read::task(conn, record_id)?.and_then(|t| t.project_id)),
-        ev::DECISION_ACCEPTED | ev::DECISION_REJECTED => {
-            Ok(read::decision(conn, record_id)?.map(|d| d.project_id))
-        }
-        // A comment's project is its task's — the comment table holds no project of its own.
-        ev::COMMENT_ADDED => match read::task_comment(conn, record_id)? {
-            Some(comment) => Ok(read::task(conn, comment.task_id)?.and_then(|t| t.project_id)),
-            None => Ok(None),
-        },
-        _ => Ok(None),
-    }
 }
 
 /// Fold a subscriber's non-secret config into the event payload under `config` (`AMB-D-356`), producing the
@@ -504,7 +462,7 @@ mod tests {
         for plugin in queue::queued_plugins(e.conn())? {
             for row in queue::queued_for(e.conn(), &plugin, 256)? {
                 queue::dequeue(e.conn(), row.id)?;
-                if let Some(hook) = hook_for(e.conn(), subs, &row)? {
+                if let Some(hook) = hook_for(subs, &row)? {
                     crate::plugin_hooks::run_queued(&hook, log);
                     ran.push(hook);
                 }
@@ -843,7 +801,7 @@ mod tests {
         // The same resolver, driven by nobody in particular: the row still resolves, because the face comes
         // from the row.
         assert!(
-            hook_for(e.conn(), &subs, &rows[0]).unwrap().is_some(),
+            hook_for(&subs, &rows[0]).unwrap().is_some(),
             "the CLI-only subscription runs from its queue"
         );
     }
@@ -860,69 +818,89 @@ mod tests {
         assert_eq!(queued_for(e.conn(), "fixed", 10).unwrap().len(), 1);
 
         let row = queued_for(e.conn(), "fixed", 10).unwrap().remove(0);
-        assert!(hook_for(e.conn(), &NoSubscribers, &row).unwrap().is_none(), "a plugin that is off does not fire");
+        assert!(hook_for(&NoSubscribers, &row).unwrap().is_none(), "a plugin that is off does not fire");
         // The runner takes the row off whether or not it came back as a hook, so it cannot block the rows
         // behind it — the drop is what this test is about, the taking is `plugin_runner`'s.
         assert!(queue::dequeue(e.conn(), row.id).unwrap());
         assert!(queued_for(e.conn(), "fixed", 10).unwrap().is_empty(), "and its row does not linger");
     }
 
-    // ───────────────────── where an event happened (`AMB-D-379`) ──────────────────────────────────
+    // ───────────────────── where an event happened (`AMB-D-379`, `AMB-D-405`) ─────────────────────
 
-    /// Every v1 event's project, read back from the record it names: a task's own, a comment's task's,
-    /// a decision's own. This is the only thing that can answer a project-scoped plugin's switch, since
-    /// the outbox row itself carries no project.
+    /// A resolver that answers only for one project — a project-scoped plugin's gate, as `AMB-D-379`
+    /// declares it. An event carrying no project resolves nothing here, which is what makes "did the
+    /// project survive the trip" a thing a test can see.
+    struct InProject {
+        project: i64,
+        invocation: PluginInvocation,
+    }
+    impl Subscribers for InProject {
+        fn resolve(&self, _event: &str, project: Option<i64>, _face: Face) -> Vec<Subscriber> {
+            if project == Some(self.project) {
+                vec![Subscriber::new("scoped", self.invocation.clone())]
+            } else {
+                Vec::new()
+            }
+        }
+    }
+
+    /// Emit an event stamped with the project it happened in — what the emit door composes (`AMB-D-405`).
+    fn emit_in(e: &StoreEngine, event: &str, id: i64, project: i64) {
+        let tx = e.write().unwrap();
+        tx.emit_event(&EventRow {
+            event,
+            record_id: id,
+            actor: "ai",
+            at: "2026-07-22T09:00:00Z",
+            new_state: None,
+            project: Some(project),
+        })
+        .unwrap();
+        tx.commit().unwrap();
+    }
+
+    /// A deletion reaches the plugins of the project the record was in — the whole of `AMB-T-2089`. There
+    /// is no record left to ask by the time anything is delivered, and the event is routed all the same
+    /// because the project was stamped on it when it was appended. Both halves have to read it for the
+    /// hook to run: the fan-out to pick the queue, and the runner to resolve the subscription again.
     #[test]
-    fn an_events_project_is_read_from_the_record_it_names() {
-        use crate::plugin_payload::name as ev;
+    fn a_deletion_reaches_the_project_its_record_was_in() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        // Record 999_999 exists nowhere — as a deleted task's does not.
+        emit_in(&e, "task.deleted", 999_999, 3);
 
-        let dir = amenbo_scratch::scratch("dispatch-event-project");
-        std::fs::create_dir_all(&dir).unwrap();
-        let mut store = crate::Store::open_at(crate::config::Paths::at(dir)).unwrap();
-        let project = store
-            .project_add(crate::ops::project::NewProject {
-                name: "p".into(),
-                view: crate::model::View::List,
-                notes: String::new(),
-                color: None,
-            })
-            .unwrap()
-            .id;
-        let task = store
-            .add_task(crate::ops::task::NewTask {
-                title: "t".into(),
-                project_id: Some(project),
-                due_on: None,
-                start_on: None,
-                priority: None,
-                notes: String::new(),
-                created_by_kind: Some(crate::model::ActorKind::Ai),
-            })
-            .unwrap()
-            .id;
-        let comment =
-            store.add_task_comment(task, crate::model::ActorKind::Ai, "c").unwrap().id;
-        let decision = store
-            .add_decision(crate::ops::decision::NewDecision {
-                title: "d".into(),
-                body: "b".into(),
-                project_id: project,
-            })
-            .unwrap()
-            .id;
+        let subs = InProject { project: 3, invocation: bogus() };
+        let d = deliver(&e, 0, &subs, Face::Cli, None).unwrap();
+        assert_eq!(d.ran.len(), 1, "the stamped project routed an event whose record is gone");
+    }
 
-        let conn = store.engine.conn();
-        assert_eq!(project_of_event(conn, ev::TASK_CREATED, task).unwrap(), Some(project));
-        assert_eq!(project_of_event(conn, ev::TASK_DONE, task).unwrap(), Some(project));
-        assert_eq!(project_of_event(conn, ev::COMMENT_ADDED, comment).unwrap(), Some(project));
-        assert_eq!(project_of_event(conn, ev::DECISION_ACCEPTED, decision).unwrap(), Some(project));
+    /// The stamped project rides onto the queue row, and it is the row's own answer the runner resolves
+    /// on — so an event stays with the project it happened in even if the record moves to another one
+    /// between the fan-out and the run.
+    #[test]
+    fn the_stamped_project_rides_from_the_outbox_onto_the_queue() {
+        use crate::store_engine::queued_for;
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit_in(&e, "task.created", 7, 3);
 
-        // A record that is gone says nothing — the `task.deleted` case, and the reason `None` is an
-        // answer rather than an error.
-        assert_eq!(project_of_event(conn, ev::TASK_DELETED, 999_999).unwrap(), None);
-        assert_eq!(project_of_event(conn, ev::COMMENT_ADDED, 999_999).unwrap(), None);
-        // An event outside the v1 catalog names no record kind at all.
-        assert_eq!(project_of_event(conn, "something.else", task).unwrap(), None);
+        let subs = InProject { project: 3, invocation: bogus() };
+        assert_eq!(fan(&e, 0, &subs, Face::Cli).queued, 1);
+        let rows = queued_for(e.conn(), "scoped", 10).unwrap();
+        assert_eq!(rows[0].project, Some(3), "the queue row carries the project it was fanned out for");
+        assert!(hook_for(&subs, &rows[0]).unwrap().is_some(), "and the runner resolves on it");
+    }
+
+    /// An event carrying no project — one from a record in none, or a row an older store appended before
+    /// the column existed — reaches a project-scoped plugin not at all. The gate is answered with what the
+    /// event says, and "unknown" is never turned into a project by guessing.
+    #[test]
+    fn an_event_with_no_project_reaches_no_project_scoped_plugin() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, "task.created", 7, None);
+
+        let d = deliver(&e, 0, &InProject { project: 3, invocation: bogus() }, Face::Cli, None).unwrap();
+        assert_eq!(d.cursor, 1, "the cursor still walks past it");
+        assert!(d.ran.is_empty(), "an unstamped event opens no project's gate");
     }
 
     // ───────────────────── the reply path (`AMB-D-383`) ────────────────────────────────────────────

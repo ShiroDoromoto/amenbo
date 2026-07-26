@@ -266,7 +266,7 @@ pub fn run_queue(
                 Ok(false) => return taken_over(plugin),
                 Err(e) => return warn_stop(plugin, &e.to_string()),
             }
-            match hook_for(engine.conn(), subs, row) {
+            match hook_for(subs, row) {
                 Ok(Some(hook)) => crate::plugin_hooks::run_queued(&hook, log),
                 Ok(None) => {}
                 Err(e) => tracing::warn!(
@@ -411,6 +411,7 @@ mod tests {
             actor: "ai",
             at: "2026-07-25T09:00:00Z",
             new_state: None,
+            project: None,
         })
         .unwrap();
         tx.commit().unwrap();

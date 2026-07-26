@@ -262,7 +262,14 @@ steps:
 
 The op vocabulary is a **closed registry** in `core/src/lib.rs`: an unknown op is rejected,
 so a typo never runs as a no-op. Drivers grow the registry (and their own op → driver
-mapping) as new ops are needed.
+mapping) as new ops are needed. Each op declares the args it takes as words, and the lint
+checks the value arrived as one: YAML types an unquoted scalar by its shape, so a SHA of
+nothing but digits parses as a number, and a driver would only meet it at the far end of a run.
+
+**Write sample values in the shape of the real thing** — a SHA that looks like a SHA, a title a
+person would type. An extreme value (an empty string, a single character, something enormous)
+belongs in a scenario only when the extreme is what the line is about, and then say so on the spot:
+nothing else can tell a value chosen on purpose from one chosen carelessly.
 
 A `field` assert names its value by a dotted path into the read it is about — an object's `show
 --json`, or one of the reads the store answers about itself (`store`'s `config` / `identity` /
@@ -309,8 +316,8 @@ list is refused — a scenario nothing runs rots while the set around it reports
 ## Lint
 
 The loader checks both layers — the YAML parses into the typed model (misspelled keys are
-caught), and the semantic pass (known ops, required args, every reference resolving to an
-earlier `as:`). Run it over the whole scenario set:
+caught), and the semantic pass (known ops, required args, each arg of the type its op takes,
+every reference resolving to an earlier `as:`). Run it over the whole scenario set:
 
 ```sh
 cd verification && cargo run -p amenbo-scenario --bin lint

@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use amenbo_scenario::Driver;
-use amenbo_verify_cli::{json_string, run_scenario, Report};
+use amenbo_verify_cli::{anchor_bin, json_string, run_scenario, Report};
 
 fn main() -> ExitCode {
     let opts = match Opts::parse(std::env::args().skip(1)) {
@@ -252,7 +252,7 @@ impl Opts {
         }
         Ok(Opts {
             inputs,
-            bin: bin.unwrap_or_else(|| PathBuf::from("amenbo")),
+            bin: anchor_bin(bin.unwrap_or_else(|| PathBuf::from("amenbo"))),
             json,
             keep,
         })

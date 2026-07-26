@@ -69,6 +69,10 @@ cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-assign.yaml --
 cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-assign.yaml --json
 ```
 
+`--bin` (and `$AMENBO_BIN`) takes a relative path as well — `--bin ../target/debug/amenbo` to point
+at your own build — read from where you run the command, not from the throwaway directory the
+scenario is driven in. A value with no separator in it (`--bin amenbo`) stays a `PATH` lookup.
+
 The run is isolated by `AMENBO_HOME` pointed at a throwaway store plus a `.amenbo`-free CWD;
 the real app-data is never touched, and `AMENBO_UPDATE_CHECK=0` keeps it off the
 network. Exit code is the machine signal — `0`
@@ -238,9 +242,12 @@ where there is nothing to repair — and a sweep that sweeps nothing looks exact
 what `store doctor-fix` puts right. `plugin stale-manifest` leaves an installed plugin recording a
 build the catalog has moved past, which is what `plugin update` puts right — the catalog publishes one
 build, and an asset is trusted only by amenbo's own key, so there is no second build to install first
-and no way to sign one into existence. They are the same idea as `repo write-file`: the state on disk a
-scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach for one only
-when the line under test is what amenbo does about that state.
+and no way to sign one into existence. `plugin declare-secret` puts a secret setting into what an
+installed plugin says it takes: what is secret is the author's word, amenbo never invents a field, and
+no plugin in the official catalog declares one — so the secret route, which fails silently and in plain
+text, would otherwise go unwalked until one does. They are the same idea as `repo write-file`: the
+state on disk a scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach
+for one only when the line under test is what amenbo does about that state.
 
 `fixtures/` is for text a scenario cannot hold itself. This tree's prose rule keeps a bare amenbo
 reference out of every `.yaml`, and the lint has nothing to find unless a file really carries one —
@@ -258,7 +265,14 @@ steps:
 
 The op vocabulary is a **closed registry** in `core/src/lib.rs`: an unknown op is rejected,
 so a typo never runs as a no-op. Drivers grow the registry (and their own op → driver
-mapping) as new ops are needed.
+mapping) as new ops are needed. Each op declares the args it takes as words, and the lint
+checks the value arrived as one: YAML types an unquoted scalar by its shape, so a SHA of
+nothing but digits parses as a number, and a driver would only meet it at the far end of a run.
+
+**Write sample values in the shape of the real thing** — a SHA that looks like a SHA, a title a
+person would type. An extreme value (an empty string, a single character, something enormous)
+belongs in a scenario only when the extreme is what the line is about, and then say so on the spot:
+nothing else can tell a value chosen on purpose from one chosen carelessly.
 
 A `field` assert names its value by a dotted path into the read it is about — an object's `show
 --json`, or one of the reads the store answers about itself (`store`'s `config` / `identity` /
@@ -267,7 +281,12 @@ A `field` assert names its value by a dotted path into the read it is about — 
 `blocked_by.0.name` indexes an array on the way, and a path that runs off the output is a mismatch
 rather than an error. The `store doctor` assert reads its verdict through `ok`, and takes an `issue`
 — a kind out of doctor's own list — when what is under test is a single problem appearing or going:
-most of what doctor raises is a warning, and a warning leaves `ok` alone. A `listed` assert asks
+most of what doctor raises is a warning, and a warning leaves `ok` alone. A `store snapshot` assert
+takes `absent: <text>` when what is under test is something that must **not** have left the store: what
+amenbo handed out is read as bytes — one file for a backup, the whole folder for an export — and the
+word is looked for verbatim, which needs no reading of the layout around it. A `plugin config` assert
+takes `secret: true` for the same kind of question one tier up: the read says the setting is a secret,
+and does not hand the value over with it. A `listed` assert asks
 whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible.
@@ -305,8 +324,8 @@ list is refused — a scenario nothing runs rots while the set around it reports
 ## Lint
 
 The loader checks both layers — the YAML parses into the typed model (misspelled keys are
-caught), and the semantic pass (known ops, required args, every reference resolving to an
-earlier `as:`). Run it over the whole scenario set:
+caught), and the semantic pass (known ops, required args, each arg of the type its op takes,
+every reference resolving to an earlier `as:`). Run it over the whole scenario set:
 
 ```sh
 cd verification && cargo run -p amenbo-scenario --bin lint

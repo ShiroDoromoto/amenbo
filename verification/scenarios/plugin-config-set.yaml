@@ -5,13 +5,15 @@
 # Like every line that installs a plugin, this one goes to the catalog over the network on purpose
 # (see `plugin-list.yaml`): the settings are a face of a plugin that is really there.
 id: plugin-config-set
-title: A plugin's setting is filled in at the machine tier, overridden for the project, taken back, and never invented
+title: A plugin's setting is filled in at the machine tier, overridden for the project, taken back, and never invented — and a secret one goes nowhere a reader can reach it
 description: >
   Install the official `worktree` plugin, fill in the setting its manifest declares, and read it back.
   Write a different value as this project's override and read that back at its own tier — the two are
   kept apart, and the machine's answer does not move. Take the override away and see the tier report
-  nothing while the machine still holds its own. Finally, a key the manifest never declared: it is
-  refused, because a plugin is told only what its author said it takes.
+  nothing while the machine still holds its own. Then a key the manifest never declared: it is
+  refused, because a plugin is told only what its author said it takes. Finally the other route a
+  value can take: a setting the author marked secret is filled in, and the read says it is set without
+  saying what it is — while neither the backup nor the export carries the value at all.
 steps:
   - type: action
     domain: plugin
@@ -104,6 +106,89 @@ steps:
       key: not-a-declared-setting
       value: x
       refused: invalid_value
+
+  # The other route a value can take. What is secret is the author's word — the flag on the field —
+  # and no plugin in the official catalog carries one, so the declaration is put onto the installed
+  # manifest here (see the op's own note). From this step on, everything is amenbo's own doing.
+  - type: action
+    domain: plugin
+    op: declare-secret
+    with:
+      name: worktree
+      key: token
+      label: API token
+
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: token
+      value: amb_scenario_secret_9f2c4b7e0d1a5f36
+
+  # A read of a secret says it is one and stops there. The value leaving through this door would put
+  # it in the terminal, the scrollback and the shell's history — injection at run time is the only
+  # thing that gets the value itself.
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: token
+      secret: true
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: token
+      set: true
+
+  # The promise that fails silently and in plain text: a secret is kept in the user area, outside the
+  # source of truth, so neither of the two files amenbo hands a user may carry it. Both are asked for
+  # the token verbatim — what a token looks like in an archive nobody has to know, only that it is
+  # not in there.
+  - type: action
+    domain: store
+    op: backup
+    as: after-the-secret
+
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: after-the-secret
+      absent: amb_scenario_secret_9f2c4b7e0d1a5f36
+
+  - type: action
+    domain: store
+    op: export
+    as: taken-out
+
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: taken-out
+      absent: amb_scenario_secret_9f2c4b7e0d1a5f36
+
+  # A secret is taken back the way any other setting is — the same door, an empty value.
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: token
+      value: ""
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: token
+      set: false
 
   - type: action
     domain: plugin

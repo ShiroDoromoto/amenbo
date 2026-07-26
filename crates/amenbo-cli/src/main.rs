@@ -77,19 +77,17 @@ fn real_main() -> i32 {
         Ok(c) => c,
         Err(e) => return handle_parse_error(e),
     };
-    // facet (actor kind): `--actor` wins, else the AMENBO_ACTOR env var, else human. But when a write that
-    // stamps a facet is run with no facet given and the call looks machine-made (`--json`, or a non-TTY
-    // pipe), do not quietly fall back to human — fail loud (`facet_required`). A silent fallback would
-    // pollute the activity log with writes attributed to a human who never made them. Pure reads and
-    // discovery (version/agent/list …) stamp no facet, so the human default is harmless there and machine
-    // reads are not blocked for nothing.
-    let require_facet =
-        (parsed.json || !std::io::stdout().is_terminal()) && stamps_facet(&parsed.command);
-    let actor = match decide_facet(parsed.actor.as_deref(), amenbo_core::env::actor().as_deref(), require_facet) {
+    // facet (actor kind): `--actor` and nothing else (`AMB-D-408`). An operation that uses the facet —
+    // stamping who acted, or drawing how far an AI reaches — must declare one, and gets `facet_required`
+    // when it does not. An operation that uses none passes without one and never touches a facet again.
+    // Nothing is inferred from the context of the call: an environment variable would propagate into
+    // every process amenbo starts, and a human default would let an undeclared AI write as a person and
+    // read past its binding.
+    let actor = match decide_facet(parsed.actor.as_deref(), uses_facet(&parsed.command)) {
         Ok(a) => a,
         Err(err) => {
             // No Flags yet, so render the error with a minimal set.
-            let probe = Flags { json: parsed.json, yes: false, quiet: false, no_color: false, actor: ActorKind::Human };
+            let probe = Flags { json: parsed.json, yes: false, quiet: false, no_color: false, actor: None };
             return render_error(&probe, &err);
         }
     };
@@ -106,83 +104,65 @@ fn real_main() -> i32 {
     }
 }
 
-/// Resolve the facet, as a pure function (`--actor` wins, else `AMENBO_ACTOR`, else human). An explicit
-/// value is taken as given; an invalid one is `invalid_value` (exit 2). With nothing given, `require`
-/// (a facet-stamping write in a machine context) fails loud with `facet_required` rather than quietly
-/// becoming human; otherwise human is the default. The caller folds "is this a machine context"
-/// (`--json` / non-TTY) and "does this stamp a facet" ([`stamps_facet`]) into `require`, which keeps this
-/// function side-effect free and unit-testable.
-fn decide_facet(flag: Option<&str>, env: Option<&str>, require: bool) -> Result<ActorKind, CliError> {
-    let raw = flag.or(env);
-    match raw {
+/// Resolve the facet, as a pure function over `--actor` alone. An explicit value is taken as given; an
+/// invalid one is `invalid_value` (exit 2). Nothing given is `None` — **the facet stays unspecified**
+/// rather than becoming a default — unless the command uses one ([`uses_facet`], folded into `require` by
+/// the caller), in which case it fails loud with `facet_required`. Keeping the judgement in the caller
+/// leaves this function side-effect free and unit-testable.
+fn decide_facet(flag: Option<&str>, require: bool) -> Result<Option<ActorKind>, CliError> {
+    match flag {
         None | Some("") => {
             if require {
                 Err(CliError::facet_required())
             } else {
-                Ok(ActorKind::Human)
+                Ok(None)
             }
         }
-        Some(s) => ActorKind::parse(s).ok_or_else(|| CliError {
+        Some(s) => ActorKind::parse(s).map(Some).ok_or_else(|| CliError {
             code: "invalid_value",
             message: format!("--actor value '{s}' is invalid (specify human or ai)"),
-            hint: Some("AI agents use --actor ai or AMENBO_ACTOR=ai.".to_string()),
+            hint: Some("AI agents use --actor ai.".to_string()),
             exit: 2,
         }),
     }
 }
 
-/// Does this command **stamp** a facet (human/ai) into created_by / assign / activity (comments)?
-/// Pure reads, discovery and local settings (version/agent/whoami/status/activity/list/show/config/bind/
-/// export/sync …) record no facet, so they are false — the human default is harmless for them even in a
-/// machine context. Writes default to true (**fail-closed**: if a variant is missed here, surfacing
-/// `facet_required` beats silently stamping it as human).
-fn stamps_facet(cmd: &Option<Command>) -> bool {
-    let Some(c) = cmd else { return false }; // no args = discover (a read)
+/// Does this command **use** the facet (human/ai)? There are two consumers, and either one counts
+/// (`AMB-D-408`):
+///
+/// - it **stamps** the facet — into created_by / assign / activity — which every write does;
+/// - it **draws the reach** from it — an `ai` facet is confined to the bound project, a human sees the
+///   device — which every read that surfaces store content does, `task list` / `show` / `activity` /
+///   `status` / `export` / `doctor` among them.
+///
+/// False is the narrow set that touches neither: the faces that answer about this build or this machine
+/// (version / update / agent / whoami / config), the ones that place the pointer or read text handed to
+/// them (bind / lint / the git hooks), and the two entry points amenbo starts itself with a store and a
+/// window already named (plugin-runner, `plugin validate`). Those never reach a facet, so there is
+/// nothing for an undeclared one to go wrong in. Everything else defaults to true (**fail-closed**: a
+/// variant missed here surfaces `facet_required`, which beats acting on a facet nobody declared).
+fn uses_facet(cmd: &Option<Command>) -> bool {
+    // No args = discover, which lists this project's work — store content, so it draws the reach.
+    let Some(c) = cmd else { return true };
     match c {
-        // Pure reads / discovery / local settings / transport (record no facet).
+        // Facts about this build and this machine's own settings; no store content either way.
         Command::Agent { .. }
         | Command::Version
+        | Command::Update { .. }
         | Command::Whoami
-        | Command::Status { .. }
-        | Command::Activity { .. }
-        | Command::Validate { .. }
-        | Command::Backup { .. } // reads the truth source into a snapshot file; records no facet or activity
-        | Command::Restore { .. } // replaces the truth source from a snapshot; maintenance op, records no facet or activity
-        | Command::HardErase { .. } // physically erases append-only content; maintenance op, records no facet or activity
-        | Command::Export { .. }
-        | Command::Lint { .. } // reads the text it is handed; no store, so nothing to stamp a facet onto
+        | Command::Config { .. } // settings live in the user layer, outside any project
+        | Command::Bind { .. } // only writes the `.amenbo` pointer
+        | Command::Lint { .. } // reads the text it is handed; no store to reach into
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
-        // A runner fires the hooks a facet's own writes already queued; it creates nothing and assigns
-        // nothing, so there is no author for it to stamp (`AMB-T-2175`).
+        // A runner fires the hooks a facet's own writes already queued: it creates nothing, assigns
+        // nothing, and was handed the store to work (`AMB-T-2175`). So was a plugin calling amenbo back,
+        // whose window comes from the gate it fired through rather than from a facet (`AMB-D-406`).
         | Command::PluginRunner { .. }
-        // `validate` reads a manifest file the author names and touches no store at all; the rest of the
-        // group moves this machine's plugin state — `config.json`, the secret file, and the plugin's own
-        // per-project rows (`plugin_config` settings, `plugin_enable` gates). Those are local settings
-        // like `config`: they carry no author and leave no activity to stamp a facet onto.
-        | Command::Plugin { .. }
-        | Command::Hooks { .. }
-        | Command::Config { .. } // settings live in the user layer and leave no activity behind
-        | Command::Bind { .. } => false, // only writes the `.amenbo` pointer (no facet recorded)
-        // Sub-command groups that are reads.
-        Command::Doctor { fix } => *fix, // only --fix writes
-        // Anything that is not a read (list/show) counts as a write.
-        Command::Project { sub } => !matches!(sub, ProjectCmd::List { .. } | ProjectCmd::Show { .. }),
-        Command::Dimension { sub } => !matches!(sub, DimensionCmd::List { .. } | DimensionCmd::Show { .. }),
-        Command::Task { sub } => match sub {
-            TaskCmd::List { .. } | TaskCmd::Show { .. } => false,
-            // The commit group nests: `task commit list` is a read, add/rm stamp a facet.
-            TaskCmd::Commit { sub } => !matches!(sub, TaskCommitCmd::List { .. }),
-            _ => true,
-        },
-        Command::Comment { sub } => !matches!(sub, CommentCmd::List { .. }),
-        Command::Decision { sub } => !matches!(
-            sub,
-            DecisionCmd::List { .. } | DecisionCmd::Show { .. } | DecisionCmd::Comment { sub: DecisionCommentCmd::List { .. } }
-        ),
-        // `attach` group: only `rm` writes; ls/show/open are reads. (Adds happen under task/decision attach.)
-        Command::Attach { sub } => matches!(sub, AttachCmd::Rm { .. }),
-        // The rest (Init …) stamp created_by and friends, so default to true (fail-closed).
+        // `validate` reads a manifest file the author names and touches no store at all — unlike the rest
+        // of the group, which moves this machine's plugin state and the plugin's own per-project rows.
+        | Command::Plugin { sub: PluginCmd::Validate { .. } } => false,
+        // Everything else — every write, and every read that surfaces store content.
         _ => true,
     }
 }
@@ -1809,8 +1789,8 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     }
 
     // Decide this surface's reach once, here — from what amenbo handed a plugin it launched (`plugin_window`,
-    // above), and otherwise from the facet and the binding. An AI (`--actor ai` /
-    // `AMENBO_ACTOR=ai`) is confined to the project the `.amenbo` points at; a human sees the whole device
+    // above), and otherwise from the facet and the binding. An AI (`--actor ai`) is confined to the project
+    // the `.amenbo` points at; a human sees the whole device
     // (the overview is the human's place). Reach is drawn from the binding alone — `--project` never widens
     // it: the resolution below is checked against exactly this reach, and naming an outside project is
     // rejected as out_of_reach. With no binding, an AI's reach is empty, so refuse here. A CWD with neither a
@@ -1826,11 +1806,15 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // cannot come from the binding either, since the folder a plugin runs in has none to read.
         Some(reach) => store.with_reach(reach),
         None => match flags.actor {
-            ActorKind::Ai => {
+            Some(ActorKind::Ai) => {
                 let reach = Reach::for_ai(binding_project(&store)).map_err(CliError::from)?;
                 store.with_reach(reach)
             }
-            ActorKind::Human => store,
+            // A human sees the device, which is the store's own reach — nothing to narrow. So is a command
+            // that declared no facet, and that arm is not a human default in disguise: `uses_facet` let
+            // through only the commands that surface no store content (version / agent / whoami / config /
+            // bind …), so the reach they keep is never consulted.
+            Some(ActorKind::Human) | None => store,
         },
     };
 
@@ -2332,7 +2316,7 @@ fn lint_hook_setup(store: &mut Store, flags: &Flags) {
     let Ok(cwd) = std::env::current_dir() else { return };
     let consent = store.config.hook_consent;
     let opted_out = store.hook_opted_out(project).unwrap_or(false);
-    let can_ask = !flags.json && flags.actor != ActorKind::Ai && std::io::stdin().is_terminal();
+    let can_ask = !flags.json && flags.actor != Some(ActorKind::Ai) && std::io::stdin().is_terminal();
     let states = hooks::probe(&cwd);
 
     let answered = offer_lint_hook(store, &cwd, states, consent, opted_out, can_ask);
@@ -2564,7 +2548,14 @@ fn with_dispatch(
 /// committed. Activity is not the system of record, so a failed write must not fail the command: warn and
 /// carry on, erring towards a missing line.
 fn emit_event(store: &mut Store, flags: &Flags, target_id: i64, event: serde_json::Value) {
-    if let Err(e) = store.add_system_event(flags.actor, target_id, event) {
+    // Every caller sits behind a mutation, and a mutation declared its facet — so there is always one to
+    // record the line under. With none there is no author to name, which this treats the way it treats a
+    // failed write: warn, and err towards the missing line.
+    let Ok(actor) = flags.facet() else {
+        eprintln!("warning: could not record the activity event: no facet was declared");
+        return;
+    };
+    if let Err(e) = store.add_system_event(actor, target_id, event) {
         eprintln!("warning: could not record the activity event: {e}");
     }
 }
@@ -2640,7 +2631,7 @@ fn warn_if_unsettled_under_reserved(did: i64, detail: &amenbo_core::view::Decisi
 /// the same asymmetry as gating delete but allowing add, gating hard-erase but never the way back, and
 /// letting an AI delete only tasks it created: the safe direction is always open.
 fn guard_ai_project_ops(store: &Store, flags: &Flags) -> Result<(), CliError> {
-    if flags.actor == ActorKind::Ai && !store.config.ai_allow_project_ops {
+    if flags.actor == Some(ActorKind::Ai) && !store.config.ai_allow_project_ops {
         return Err(CliError::ai_guardrail(
             "AI cannot archive or delete projects (destructive/hiding project ops) (E guardrail).",
         ));
@@ -2651,7 +2642,7 @@ fn guard_ai_project_ops(store: &Store, flags: &Flags) -> Result<(), CliError> {
 /// An AI may not hard-erase (physically destroy append-only content). It is an unrecoverable, destructive
 /// maintenance op, so it is human-gated — with no config setting to open it: the refusal is unconditional.
 fn guard_ai_hard_erase(flags: &Flags) -> Result<(), CliError> {
-    if flags.actor == ActorKind::Ai {
+    if flags.actor == Some(ActorKind::Ai) {
         return Err(CliError::ai_guardrail(
             "AI cannot hard-erase content: physically destroying store content is a human-gated maintenance op (E guardrail).",
         ));
@@ -2663,7 +2654,7 @@ fn guard_ai_hard_erase(flags: &Flags) -> Result<(), CliError> {
 /// refused. The facet is the only notion of actor there is, so "did the AI make this?" is exactly
 /// `created_by_kind == Ai`.
 fn guard_ai_task_delete(store: &Store, flags: &Flags, task_id: i64) -> Result<(), CliError> {
-    if flags.actor != ActorKind::Ai {
+    if flags.actor != Some(ActorKind::Ai) {
         return Ok(());
     }
     let self_made = store
@@ -3382,7 +3373,7 @@ fn project(store: &mut Store, flags: &Flags, sub: ProjectCmd) -> Result<i32, Cli
             if !confirm(flags, "delete project")? {
                 return Ok(0);
             }
-            store.project_delete(pid, flags.actor).map_err(CliError::from)?;
+            store.project_delete(pid, flags.facet()?).map_err(CliError::from)?;
             // Delete is destructive (the same shape as the GUI's `project_delete`). Release this project's
             // folder bindings: the `.amenbo` pointers, the managed blocks, the registry rows. The teardown is
             // best-effort — a failure there does not fail the delete.
@@ -3920,13 +3911,13 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let dimension_values = resolve_dim_pairs(store, project_id, &dim)?;
             let t = store.add_task_with_dimensions(ops::task::NewTask {
                 title, project_id: Some(project_id), due_on, start_on, priority, notes,
-                created_by_kind: Some(flags.actor),
+                created_by_kind: Some(flags.facet()?),
             }, &dimension_values).map_err(CliError::from)?;
             emit_event(store, flags, t.id, activity_log::event::task_created(&t.title));
             // With `--to`, hand it over here as well, folding create→assign into one command. They are two
             // logical operations and therefore two transactions, so the add survives a failing assign.
             if let Some(kind) = assignee_kind {
-                store.set_task_assignee(t.id, Some(kind), flags.actor).map_err(CliError::from)?;
+                store.set_task_assignee(t.id, Some(kind), flags.facet()?).map_err(CliError::from)?;
                 emit_event(store, flags, t.id, activity_log::event::task_assigned(Some(kind.as_str())));
             }
             let detail = store.task_detail(t.id).map_err(CliError::from)?;
@@ -4134,7 +4125,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let after = after.map(|a| resolve_task(store, &a)).transpose().map_err(CliError::from)?;
             let pos = pos_from_keys(top, bottom, before, after)?;
             let project_for_event = project_id.map(|pid| pid.to_string());
-            let t = store.move_task(tid, project_id, pos, flags.actor).map_err(CliError::from)?;
+            let t = store.move_task(tid, project_id, pos, flags.facet()?).map_err(CliError::from)?;
             emit_event(store, flags, tid, activity_log::event::task_moved(project_for_event.as_deref()));
             let detail = store.task_detail(t.id).map_err(CliError::from)?;
             write_envelope(flags, "task.move", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["placement".to_string()]), false, format!("✓ Moved task: {}", task_label(t.id)));
@@ -4142,7 +4133,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
         TaskCmd::Depend { id, on } => {
             let tid = resolve_task(store, &id).map_err(CliError::from)?;
             let bid = resolve_task(store, &on).map_err(CliError::from)?;
-            let (_edge, created) = store.depend_task(tid, bid, Some(flags.actor)).map_err(CliError::from)?;
+            let (_edge, created) = store.depend_task(tid, bid, Some(flags.facet()?)).map_err(CliError::from)?;
             if created {
                 warn_if_premise_added_to_reserved(store, tid, "you added a blocker it must be done after");
             }
@@ -4176,7 +4167,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let noop = store.task(tid).map_err(CliError::from)?
                 .is_some_and(|t| t.assignee_kind == Some(kind));
             if !noop {
-                store.set_task_assignee(tid, Some(kind), flags.actor).map_err(CliError::from)?;
+                store.set_task_assignee(tid, Some(kind), flags.facet()?).map_err(CliError::from)?;
                 emit_event(store, flags, tid, activity_log::event::task_assigned(Some(kind.as_str())));
             }
             let detail = store.task_detail(tid).map_err(CliError::from)?;
@@ -4188,7 +4179,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let tid = resolve_task(store, &id).map_err(CliError::from)?;
             let noop = store.task(tid).map_err(CliError::from)?.is_some_and(|t| t.assignee_kind.is_none());
             if !noop {
-                store.set_task_assignee(tid, None, flags.actor).map_err(CliError::from)?;
+                store.set_task_assignee(tid, None, flags.facet()?).map_err(CliError::from)?;
                 emit_event(store, flags, tid, activity_log::event::task_assigned(None));
             }
             let detail = store.task_detail(tid).map_err(CliError::from)?;
@@ -4202,7 +4193,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             }
             // Take the label before the delete — the row will not be there afterwards.
             let label = task_label(tid);
-            store.delete_task(tid, flags.actor).map_err(CliError::from)?;
+            store.delete_task(tid, flags.facet()?).map_err(CliError::from)?;
             write_envelope(flags, "task.delete", "task", json!({ "id": tid, "deleted": true }), None, false, format!("✓ Deleted task: {label}"));
         }
     }
@@ -4219,7 +4210,7 @@ fn task_commit(store: &mut Store, flags: &Flags, sub: TaskCommitCmd) -> Result<i
     match sub {
         TaskCommitCmd::Add { task, sha } => {
             let tid = resolve_task(store, &task).map_err(CliError::from)?;
-            let (row, created) = store.add_task_commit(tid, &sha, Some(flags.actor)).map_err(CliError::from)?;
+            let (row, created) = store.add_task_commit(tid, &sha, Some(flags.facet()?)).map_err(CliError::from)?;
             let msg = format!("✓ Recorded commit {} on {}", row.sha, task_label(tid));
             write_envelope(flags, "task.commit.add", "task_commit", serde_json::to_value(&row).unwrap(), None, !created, msg);
         }
@@ -4256,7 +4247,7 @@ fn comment(store: &mut Store, flags: &Flags, sub: CommentCmd) -> Result<i32, Cli
             let text = body_arg(text)?;
             let tid = resolve_task(store, &task).map_err(CliError::from)?;
             // The author is our own facet; add_comment's author argument is the trace string for the audit log.
-            let s = store.add_task_comment(tid, flags.actor, &text).map_err(CliError::from)?;
+            let s = store.add_task_comment(tid, flags.facet()?, &text).map_err(CliError::from)?;
             warn_body(&text); // non-blocking readability hint on write (stderr)
             write_envelope(flags, "comment.add", "comment", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Added comment: {}", task_label(tid)));
         }
@@ -4484,8 +4475,8 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
         DecisionCmd::Accept { id, reason } => {
             let reason = body_arg_opt(reason)?;
             let did = resolve_decision(store, &id).map_err(CliError::from)?;
-            let by = flags.actor.as_str().to_string();
-            let (d, changed) = store.accept_decision(did, Some(by), flags.actor).map_err(CliError::from)?;
+            let by = flags.facet()?.as_str().to_string();
+            let (d, changed) = store.accept_decision(did, Some(by), flags.facet()?).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             if changed {
                 // `--reason` is thin sugar for adding one comment with the reason (the same shape as
@@ -4505,7 +4496,7 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             // Read the blast radius (one hop) before rejecting. A reject leaves the edges in place, but
             // keeping the order the same gives all three verbs the same shape.
             let standing = standing_on(store, did);
-            let (d, changed) = store.reject_decision(did, flags.actor).map_err(CliError::from)?;
+            let (d, changed) = store.reject_decision(did, flags.facet()?).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             let mut resource = serde_json::to_value(&detail).unwrap();
             attach_revisit(&mut resource, &standing);
@@ -4540,7 +4531,7 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             if !confirm(flags, "delete decision")? {
                 return Ok(0);
             }
-            store.delete_decision(did, flags.actor).map_err(CliError::from)?;
+            store.delete_decision(did, flags.facet()?).map_err(CliError::from)?;
             let mut resource = json!({ "id": did, "deleted": true });
             attach_revisit(&mut resource, &standing);
             write_envelope(flags, "decision.delete", "decision", resource, None, false, format!("✓ Deleted decision: {label}"));
@@ -4552,8 +4543,8 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             // Read the blast radius before drawing the edge: read it afterwards and the supersedes edge just
             // drawn (new_id itself) turns up among the decisions said to want revisiting.
             let standing = standing_on(store, old_id);
-            let by = flags.actor.as_str().to_string();
-            let (d, changed) = store.supersede_decision(new_id, old_id, Some(by), flags.actor).map_err(CliError::from)?;
+            let by = flags.facet()?.as_str().to_string();
+            let (d, changed) = store.supersede_decision(new_id, old_id, Some(by), flags.facet()?).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             let mut resource = serde_json::to_value(&detail).unwrap();
             attach_revisit(&mut resource, &standing);
@@ -4655,7 +4646,7 @@ fn accepted_by_suffix(d: &amenbo_core::model::Decision) -> String {
 fn add_reason_comment(store: &mut Store, flags: &Flags, decision_id: i64, reason: Option<String>) -> Result<(), CliError> {
     if let Some(r) = reason.as_deref().map(str::trim).filter(|r| !r.is_empty()) {
         // The author is our own facet; the author argument is the trace string for the audit log.
-        store.add_decision_comment(decision_id, flags.actor, r).map_err(CliError::from)?;
+        store.add_decision_comment(decision_id, flags.facet()?, r).map_err(CliError::from)?;
     }
     Ok(())
 }
@@ -4667,7 +4658,7 @@ fn decision_comment(store: &mut Store, flags: &Flags, sub: DecisionCommentCmd) -
             let text = body_arg(text)?;
             let did = resolve_decision(store, &decision).map_err(CliError::from)?;
             // The author is our own facet; add_comment's author argument is the trace string for the audit log.
-            let c = store.add_decision_comment(did, flags.actor, &text).map_err(CliError::from)?;
+            let c = store.add_decision_comment(did, flags.facet()?, &text).map_err(CliError::from)?;
             warn_body(&text); // non-blocking readability hint on write (stderr)
             write_envelope(flags, "decision.comment.add", "comment", serde_json::to_value(&c).unwrap(), None, false, format!("✓ Added comment: {}", decision_label(did)));
         }
@@ -4769,7 +4760,7 @@ fn attach_add(
     name: Option<String>,
 ) -> Result<i32, CliError> {
     let a = if url {
-        store.attach_url(target_type, target_id, source, name.as_deref(), flags.actor)
+        store.attach_url(target_type, target_id, source, name.as_deref(), flags.facet()?)
             .map_err(CliError::from)?
     } else {
         let path = std::path::Path::new(source);
@@ -4790,7 +4781,7 @@ fn attach_add(
         // Check the per-file limit (which varies by type) before ingesting — it is what stops a runaway.
         store.config.attachment_limits.check_per_file(mime, meta.len()).map_err(CliError::from)?;
         let blob = store.blobs().ingest_path(path).map_err(CliError::from)?;
-        store.attach_blob(target_type, target_id, &blob.hash, &filename, mime, blob.size_bytes as i64, flags.actor)
+        store.attach_blob(target_type, target_id, &blob.hash, &filename, mime, blob.size_bytes as i64, flags.facet()?)
             .map_err(CliError::from)?
     };
     let what = if url { "link" } else { "file" };
@@ -5094,7 +5085,7 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) ->
     // Safety net (`AMB-D-366`): completing a reserved task is the moment not to miss — read the premises pinned on
     // after the reservation *before* the transition retires the in_progress clock they are measured against.
     let pc = premise_change_when(store, tid, completed && old == TaskStatus::InProgress);
-    let t = store.set_task_completed(tid, completed, flags.actor).map_err(CliError::from)?;
+    let t = store.set_task_completed(tid, completed, flags.facet()?).map_err(CliError::from)?;
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), t.status.as_str()));
     // Ending the task — carried out or decided against — may have made dependents ready; emit the
     // unblock signal if so.
@@ -5140,7 +5131,7 @@ fn task_set_status(store: &mut Store, flags: &Flags, id: &str, status: &str) -> 
         tid,
         old == TaskStatus::InProgress && (new_status.is_closed() || new_status == TaskStatus::Blocked),
     );
-    let t = store.set_task_status(tid, new_status, flags.actor).map_err(CliError::from)?;
+    let t = store.set_task_status(tid, new_status, flags.facet()?).map_err(CliError::from)?;
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), new_status.as_str()));
     // Ending the task — carried out or decided against — may have made dependents ready; emit the
     // unblock signal if so.
@@ -5162,14 +5153,14 @@ fn task_block(store: &mut Store, flags: &Flags, id: &str, reason: Option<String>
     // Safety net (`AMB-D-366`): interrupting a reserved task — read the premises acquired since the reservation
     // before the transition retires the in_progress clock.
     let pc = premise_change_when(store, tid, old == TaskStatus::InProgress);
-    let t = store.set_task_status(tid, TaskStatus::Blocked, flags.actor).map_err(CliError::from)?;
+    let t = store.set_task_status(tid, TaskStatus::Blocked, flags.facet()?).map_err(CliError::from)?;
     if old != TaskStatus::Blocked {
         emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), "blocked"));
     }
     // Keep the reason as a comment when there is one (under our own facet; the author argument is the trace
     // string for the audit log).
     if let Some(r) = reason.as_deref().map(str::trim).filter(|r| !r.is_empty()) {
-        store.add_task_comment(tid, flags.actor, r).map_err(CliError::from)?;
+        store.add_task_comment(tid, flags.facet()?, r).map_err(CliError::from)?;
     }
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
     let mut resource = serde_json::to_value(&detail).unwrap();
@@ -5210,11 +5201,11 @@ fn task_reject(store: &mut Store, flags: &Flags, id: &str, reason: String) -> Re
     // Safety net (`AMB-D-366`): ending a reserved task is the moment not to miss — read the premises pinned
     // on after the reservation before the transition retires the in_progress clock they are measured against.
     let pc = premise_change_when(store, tid, old == TaskStatus::InProgress);
-    let t = store.set_task_status(tid, TaskStatus::Rejected, flags.actor).map_err(CliError::from)?;
+    let t = store.set_task_status(tid, TaskStatus::Rejected, flags.facet()?).map_err(CliError::from)?;
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), t.status.as_str()));
     // A blocker decided against is a blocker no longer — dependents may have just become ready.
     emit_unblocks(store, flags, tid);
-    store.add_task_comment(tid, flags.actor, &reason).map_err(CliError::from)?;
+    store.add_task_comment(tid, flags.facet()?, &reason).map_err(CliError::from)?;
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
     let mut resource = serde_json::to_value(&detail).unwrap();
     attach_premise_change(&mut resource, &pc);
@@ -5258,11 +5249,11 @@ fn activity_cmd(
         Some(_) => (parse_date_opt(&since)?, None),
     };
     let cursor_mode = since_cursor.is_some();
-    // `--for`: the audience scope. `me` is this invocation's facet (AMENBO_ACTOR by default); human/ai name
-    // a facet outright.
+    // `--for`: the audience scope. `me` is this invocation's own facet (the one `--actor` declared);
+    // human/ai name a facet outright.
     let for_facet = match for_scope.as_deref() {
         None => None,
-        Some("me") => Some(flags.actor),
+        Some("me") => Some(flags.facet()?),
         Some(s) => Some(ActorKind::parse(s).ok_or_else(|| CliError {
             code: "invalid_value",
             message: format!("--for must be me / human / ai ('{s}' is invalid)"),
@@ -6144,45 +6135,52 @@ mod tests {
         }
     }
 
-    /// Facet resolution: an explicit facet is honoured, an unspecified one fails loud in a machine context,
-    /// and an interactive human gets the human default.
+    /// Facet resolution: `--actor` is the only input, an unspecified facet stays unspecified, and a command
+    /// that uses one gets `facet_required` rather than a default.
     #[test]
-    fn decide_facet_fails_loud_only_for_unspecified_machine_calls() {
-        // An explicit value (--actor / AMENBO_ACTOR) is honoured whether or not the call looks machine-made.
-        assert_eq!(decide_facet(Some("ai"), None, true).ok(), Some(ActorKind::Ai));
-        assert_eq!(decide_facet(Some("human"), None, true).ok(), Some(ActorKind::Human));
-        assert_eq!(decide_facet(None, Some("ai"), false).ok(), Some(ActorKind::Ai));
-        // --actor beats AMENBO_ACTOR.
-        assert_eq!(decide_facet(Some("human"), Some("ai"), true).ok(), Some(ActorKind::Human));
-        // Unspecified in a machine context (--json or a non-TTY): facet_required, never a silent human.
-        assert_eq!(decide_facet(None, None, true).err().map(|e| e.code), Some("facet_required"));
-        assert_eq!(decide_facet(None, Some(""), true).err().map(|e| e.code), Some("facet_required"));
-        // Unspecified by an interactive human (a TTY, no --json): human by default.
-        assert_eq!(decide_facet(None, None, false).ok(), Some(ActorKind::Human));
-        assert_eq!(decide_facet(None, Some(""), false).ok(), Some(ActorKind::Human));
-        // An invalid value is invalid_value, machine context or not.
-        assert_eq!(decide_facet(Some("robot"), None, false).err().map(|e| e.code), Some("invalid_value"));
+    fn decide_facet_reads_the_flag_alone_and_never_defaults() {
+        // An explicit value is honoured whether or not the command uses a facet.
+        assert_eq!(decide_facet(Some("ai"), true).ok(), Some(Some(ActorKind::Ai)));
+        assert_eq!(decide_facet(Some("human"), true).ok(), Some(Some(ActorKind::Human)));
+        assert_eq!(decide_facet(Some("ai"), false).ok(), Some(Some(ActorKind::Ai)));
+        // Unspecified where the facet is used: facet_required, never a silent human.
+        assert_eq!(decide_facet(None, true).err().map(|e| e.code), Some("facet_required"));
+        assert_eq!(decide_facet(Some(""), true).err().map(|e| e.code), Some("facet_required"));
+        // Unspecified where it is not used: it stays unspecified — there is no default to fall into.
+        assert_eq!(decide_facet(None, false).ok(), Some(None));
+        assert_eq!(decide_facet(Some(""), false).ok(), Some(None));
+        // An invalid value is invalid_value either way.
+        assert_eq!(decide_facet(Some("robot"), false).err().map(|e| e.code), Some("invalid_value"));
     }
 
-    /// Only facet-stamping writes are true; reads, discovery and settings are false. This is what keeps
-    /// fail-loud aimed at the writes alone.
+    /// The facet is used by the writes that stamp it **and** by the reads that draw an AI's reach from it;
+    /// false is the narrow set that touches neither. This line is what `--actor` is demanded by, so a read
+    /// that surfaces store content landing on the false side would be an AI reading past its binding.
     #[test]
-    fn stamps_facet_targets_writes_only() {
-        // Reads / discovery / local settings are false, so machine reads are never blocked.
-        assert!(!stamps_facet(&None)); // discover
-        assert!(!stamps_facet(&Some(Command::Agent { command: None, full: false })));
-        assert!(!stamps_facet(&Some(Command::Version)));
-        assert!(!stamps_facet(&Some(Command::Whoami)));
-        assert!(!stamps_facet(&Some(Command::Status { scope: "today".to_string() })));
-        assert!(!stamps_facet(&Some(Command::Task { sub: TaskCmd::List { project: None, filter: None, sort: "order".to_string(), limit: None, offset: None } })));
-        assert!(!stamps_facet(&Some(Command::Task { sub: TaskCmd::Show { id: "x".to_string() } })));
-        assert!(!stamps_facet(&Some(Command::Comment { sub: CommentCmd::List { task: "x".to_string(), limit: None, offset: None } })));
-        assert!(!stamps_facet(&Some(Command::Doctor { fix: false })));
-        // Facet-stamping writes are true — these are what fail-loud is for.
-        assert!(stamps_facet(&Some(Command::Task { sub: TaskCmd::Status { id: "x".to_string(), status: "in_progress".to_string() } })));
-        assert!(stamps_facet(&Some(Command::Task { sub: TaskCmd::Done { id: "x".to_string() } })));
-        assert!(stamps_facet(&Some(Command::Comment { sub: CommentCmd::Add { task: "x".to_string(), text: "t".to_string() } })));
-        assert!(stamps_facet(&Some(Command::Doctor { fix: true })));
+    fn uses_facet_covers_stamping_writes_and_reach_drawing_reads() {
+        // Facts about this build, this machine's settings, and text handed in — no facet either way.
+        assert!(!uses_facet(&Some(Command::Agent { command: None, full: false })));
+        assert!(!uses_facet(&Some(Command::Version)));
+        assert!(!uses_facet(&Some(Command::Whoami)));
+        assert!(!uses_facet(&Some(Command::Bind { project: None, dir: None, force: false })));
+        assert!(!uses_facet(&Some(Command::Lint { paths: Vec::new(), stdin: false })));
+        assert!(!uses_facet(&Some(Command::GithookPreCommit)));
+        assert!(!uses_facet(&Some(Command::Plugin { sub: PluginCmd::Validate { path: "p.yaml".to_string() } })));
+        // Reads that surface store content draw the reach, so they use the facet too.
+        assert!(uses_facet(&None)); // discover: this project's work
+        assert!(uses_facet(&Some(Command::Status { scope: "today".to_string() })));
+        assert!(uses_facet(&Some(Command::Task { sub: TaskCmd::List { project: None, filter: None, sort: "order".to_string(), limit: None, offset: None } })));
+        assert!(uses_facet(&Some(Command::Task { sub: TaskCmd::Show { id: "x".to_string() } })));
+        assert!(uses_facet(&Some(Command::Comment { sub: CommentCmd::List { task: "x".to_string(), limit: None, offset: None } })));
+        assert!(uses_facet(&Some(Command::Doctor { fix: false })));
+        // Writes stamp it.
+        assert!(uses_facet(&Some(Command::Task { sub: TaskCmd::Status { id: "x".to_string(), status: "in_progress".to_string() } })));
+        assert!(uses_facet(&Some(Command::Task { sub: TaskCmd::Done { id: "x".to_string() } })));
+        assert!(uses_facet(&Some(Command::Comment { sub: CommentCmd::Add { task: "x".to_string(), text: "t".to_string() } })));
+        assert!(uses_facet(&Some(Command::Doctor { fix: true })));
+        // The rest of the plugin group moves per-project rows, so only `validate` is outside.
+        assert!(uses_facet(&Some(Command::Plugin { sub: PluginCmd::List })));
+        assert!(uses_facet(&Some(Command::Plugin { sub: PluginCmd::Enable { name: "p".to_string() } })));
     }
 
     /// The only faces allowed through without a binding are the ones that never read the store. Loosen this

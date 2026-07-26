@@ -17,8 +17,20 @@ pub struct Flags {
     /// Reserved for colored output; nothing is colored yet.
     #[allow(dead_code)]
     pub no_color: bool,
-    /// The facet of this invocation (human / ai). From `--actor`, then `AMENBO_ACTOR`, defaulting to human.
-    pub actor: amenbo_core::model::ActorKind,
+    /// The facet of this invocation (human / ai), from `--actor` and nowhere else. `None` is **not a
+    /// default standing in for one**: it means this command declared no facet, which only a command that
+    /// never uses one can do (`uses_facet` refuses the rest at the door). Read it through [`Flags::facet`]
+    /// wherever the value is actually needed.
+    pub actor: Option<amenbo_core::model::ActorKind>,
+}
+
+impl Flags {
+    /// The facet to act as. Every caller is a path `uses_facet` declared as facet-using, so the door has
+    /// already refused an undeclared one; this restates that same refusal where the value is taken, so a
+    /// wrong line there fails loud instead of quietly stamping a facet nobody named.
+    pub fn facet(&self) -> Result<amenbo_core::model::ActorKind, CliError> {
+        self.actor.ok_or_else(CliError::facet_required)
+    }
 }
 
 /// The **typed registry** of CLI-specific error codes (English, fixed — they are contract). Shaped like
@@ -222,20 +234,18 @@ impl CliError {
         }
     }
 
-    /// No silent facet fallback. The facet (`--actor` / `AMENBO_ACTOR`) was left unset while the call
-    /// bears the **marks of a machine** (`--json`, or a non-TTY). Quietly defaulting to human would file
-    /// an AI session's status/comment/done under the human facet and rot the human/ai distinction in the
-    /// activity stream, so we refuse to default and demand the facet be stated (fail loud). An
-    /// interactive human (TTY, no `--json`) still gets the human default and is untouched.
+    /// No facet, and nothing to default it to. This operation **uses** the facet — it stamps who acted,
+    /// or draws how far an AI reaches — and `--actor` was not given (`AMB-D-408`). Quietly defaulting to
+    /// human would file an AI session's status/comment/done under the human facet, and let an AI that
+    /// declared nothing read past the project its folder is bound to. Neither is worth a default, so the
+    /// facet is demanded instead. The context of the call (`--json`, a TTY) does not enter into it: what
+    /// decides is only whether the operation uses a facet at all.
     pub fn facet_required() -> CliError {
         CliError {
             code: CliErrorCode::FacetRequired.as_str(),
-            message: "facet is unspecified in a machine context (--json or a non-TTY pipe). It is not defaulted to human here, to avoid silently recording AI actions as a human."
+            message: "facet is unspecified. This operation uses the facet (it stamps who acted, or draws how far an AI reaches), and it is never defaulted."
                 .to_string(),
-            hint: Some(
-                "Declare the facet explicitly: set AMENBO_ACTOR=ai (AI agents) or AMENBO_ACTOR=human, or pass --actor ai|human."
-                    .to_string(),
-            ),
+            hint: Some("Declare the facet: pass --actor ai (AI agents) or --actor human.".to_string()),
             exit: 2,
         }
     }
@@ -347,8 +357,13 @@ pub fn write_envelope(
     human_line: impl AsRef<str>,
 ) {
     if flags.json {
-        // State the effective facet, so a misconfiguration (meant ai, acted as human) is visible right in the output.
-        let mut obj = json!({ "ok": true, "action": action, "noop": noop, "acted_facet": flags.actor.as_str() });
+        // State the facet acted on, so a mis-set one (meant ai, acted as human) is visible right in the
+        // output. Every write declares one, so the key is always there; it is written from the declaration
+        // rather than filled in, so there is no facet here that nobody named.
+        let mut obj = json!({ "ok": true, "action": action, "noop": noop });
+        if let Some(facet) = flags.actor {
+            obj["acted_facet"] = json!(facet.as_str());
+        }
         if let Some(c) = changed {
             obj["changed"] = json!(c);
         }
@@ -356,7 +371,7 @@ pub fn write_envelope(
         print_json(&obj);
     } else {
         // Writes on the ai facet carry the effective facet in the human line too (so a mix-up shows); the interactive human gets no marker.
-        if flags.actor == ActorKind::Ai {
+        if flags.actor == Some(ActorKind::Ai) {
             human(flags, format!("{} · recorded as ai", human_line.as_ref()));
         } else {
             human(flags, human_line);

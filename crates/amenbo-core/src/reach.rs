@@ -8,8 +8,7 @@
 //! The type has exactly two values:
 //! - [`Reach::All`] — everything on this machine. **The default for a human** (the overview is the human's
 //!   place to stand), and what the GUI runs with.
-//! - [`Reach::Project`] — one bound project. This is where the **AI facet** (`--actor ai` /
-//!   `AMENBO_ACTOR=ai`) lands.
+//! - [`Reach::Project`] — one bound project. This is where the **AI facet** (`--actor ai`) lands.
 //!
 //! "An AI in an unbound folder" is not a third value but an **error** ([`Reach::for_ai`]). An empty reach
 //! lets no operation through at all, so refusing at the door is both more honest than carrying an empty

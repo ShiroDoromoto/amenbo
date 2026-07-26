@@ -139,6 +139,11 @@ pub enum Domain {
     /// A classification axis and its values. The axis and its value are named by the words a user
     /// types — a dimension is reached by name, not by an id an earlier step bound.
     Dimension,
+    /// A file or a link hung on a task, a decision or a comment — the one place amenbo carries bytes.
+    Attachment,
+    /// The working folder amenbo is used from, rather than anything in the store: the files a person
+    /// has lying there, and the git repository the lint hooks stand in front of the commits of.
+    Repo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -219,6 +224,19 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment", required: &["target", "text"], refs: &["target"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-edit", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-rm", required: &["target"], refs: &["target"], binds: false },
+    // Hanging bytes or a link on a record. Each `attach` names either a `file` the run wrote or a
+    // `url`, and binds the attachment, since managing one afterwards means naming it.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "attach", required: &["target"], refs: &["target"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "attach", required: &["target"], refs: &["target"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "attach", required: &["target"], refs: &["target"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Attachment, op: "rm", required: &["target"], refs: &["target"], binds: false },
+    // The folder the run works in: the files a person already has there, the repository the hooks
+    // are written into, and the two hook commands themselves.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-uninstall", required: &[], refs: &[], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
@@ -234,6 +252,14 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "commented", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "commented", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "activity", required: &["target"], refs: &["target"], binds: false },
+    // An attachment read back three ways: its own row, the owner's list it hangs in, and — for a
+    // blob — the bytes coming out again, which is the only proof the ingest kept them.
+    OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "listed", required: &["target", "owner", "owner_kind"], refs: &["target", "owner"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "saved", required: &["target", "content"], refs: &["target"], binds: false },
+    // The repository-side gates: what the lint found in a file, and what is in a hook slot.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "lint", required: &["path", "hits"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "hooks", required: &["hook", "state"], refs: &[], binds: false },
     // A project as it is read back: one row's fields, and whether it is in the listing at all (and
     // where). `archived: true` asks the listing that carries the archived ones.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },

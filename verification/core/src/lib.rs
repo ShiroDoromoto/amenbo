@@ -300,6 +300,17 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "disable", required: &["name"], refs: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "uninstall", required: &["name"], refs: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "run", required: &["name", "command"], refs: &["task"], binds: false },
+    // Moving an installed plugin onto the build the catalog publishes, and back off it again. `update`
+    // re-walks the install door over the new asset and retains the build it replaced; `rollback` puts
+    // that retained pair back, and consumes it, so a second one has nothing to return to.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "update", required: &["name"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "rollback", required: &["name"], refs: &[], binds: false },
+    // An installed plugin left recording a build the catalog has moved past. What amenbo calls an update
+    // is the installed manifest's checksum differing from the catalog's, and a scenario cannot reach that
+    // state by using amenbo: the catalog publishes one build, and the trust model means no other one can
+    // be signed into existence to install first. So the driver writes the disagreement, and the real
+    // catalog is the build that is moved to — the same idea as `folder legacy-pointer`.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "stale-manifest", required: &["name"], refs: &[], binds: false },
     // What an installed plugin is told. `key` is a setting its author declared, and `scope` picks the
     // tier the value is written at (the machine default, or this project's override); an empty value
     // is how one is taken back, which is why it is a value here and not an op of its own.
@@ -371,6 +382,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "listed", required: &["name"], refs: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "returned", required: &["contains"], refs: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "ran", required: &["name"], refs: &[], binds: false },
+    // Whether the catalog holds a different build of an installed plugin — the question `update --check`
+    // answers, and the only way to read from outside which build a machine is on (a manifest carries no
+    // version number, so there is no number to compare).
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "outdated", required: &["name", "present"], refs: &[], binds: false },
     // A setting read back at the tier it was written at — `equals` for the value, or `set: false` to
     // ask that the tier holds none. `scope` names the tier, since a read is per-tier and not the
     // precedence a run would apply.

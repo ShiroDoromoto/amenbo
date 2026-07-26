@@ -805,6 +805,54 @@ impl Driver {
                     "called `{name} {command}` — it returned {value} byte(s)"
                 )))
             }
+            (Domain::Plugin, "update") => {
+                let name = req_str(with, "name")?;
+                let v = self.run_json(&["plugin", "update", name, "--json"])?;
+                // `applied: false` is the honest answer for a plugin already on the catalog's build,
+                // and it is not a failure — so it is reported rather than judged here. What the line
+                // is about is judged by the asserts around it.
+                let applied = v["applied"].as_bool().unwrap_or(false);
+                Ok(Outcome::action(match applied {
+                    true => format!("updated plugin `{name}`, keeping the build it replaced"),
+                    false => format!("plugin `{name}` was already the build the catalog publishes"),
+                }))
+            }
+            (Domain::Plugin, "rollback") => {
+                let name = req_str(with, "name")?;
+                self.run_json(&["plugin", "rollback", name, "--json"])?;
+                Ok(Outcome::action(format!("put `{name}`'s retained build back")))
+            }
+            // Leaving an installed plugin recording a build the catalog has moved past — the state an
+            // update exists for, which no sequence of amenbo commands can arrive at (see the registry).
+            // Every distributable's digest goes, not this platform's alone: which one the machine
+            // running the scenario resolves to is not this driver's to work out, and a manifest whose
+            // digests all disagree with the catalog is outdated on any of them.
+            (Domain::Plugin, "stale-manifest") => {
+                let name = req_str(with, "name")?;
+                let path = self.session.home.join("plugins").join(name).join("manifest.json");
+                let raw = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
+                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
+                let stale = serde_json::Value::String(format!("sha256:{}", "0".repeat(64)));
+                let mut digests = 0;
+                if manifest["checksum"].is_string() {
+                    manifest["checksum"] = stale.clone();
+                    digests += 1;
+                }
+                for asset in manifest["assets"].as_object_mut().into_iter().flat_map(|m| m.values_mut()) {
+                    asset["checksum"] = stale.clone();
+                    digests += 1;
+                }
+                if digests == 0 {
+                    return Err(format!("{} publishes no distributable to age", path.display()));
+                }
+                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                Ok(Outcome::action(format!(
+                    "left `{name}` recording a build the catalog has moved past ({digests} digest(s))"
+                )))
+            }
             // Filling in a setting the plugin's author declared. An empty value is the way one is
             // taken back, so it is passed through as written rather than being turned into an op of
             // its own — the command reads it the same way a person typing `""` does.
@@ -1189,6 +1237,28 @@ impl Driver {
                         ))
                     }
                 }
+            }
+            (Domain::Plugin, "outdated") => {
+                let name = req_str(with, "name")?;
+                let present = req_bool(with, "present")?;
+                let v = self.run_json(&["plugin", "update", "--check", "--json"])?;
+                let offered = v["updates"]
+                    .as_array()
+                    .is_some_and(|rows| rows.iter().any(|u| u["name"].as_str() == Some(name)));
+                let pass = offered == present;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "for `{name}` the catalog {} (expected {}, {})",
+                        if offered {
+                            "holds a different build"
+                        } else {
+                            "holds nothing this machine is not already on"
+                        },
+                        if present { "one offered" } else { "none" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
             }
             (Domain::Plugin, "returned") => {
                 let want = req_str(with, "contains")?;

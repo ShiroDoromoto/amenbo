@@ -1,15 +1,17 @@
 //! Domain operations (CRUD, reordering, completion, rehoming).
 //!
-//! **Deletes are hard deletes** (`DELETE`). Two rules govern them:
+//! **Deletes are hard deletes** (`DELETE`). One rule governs them:
 //!
-//! 1. **A subtree of entities is removed explicitly by the delete op, children first** — never left to an
-//!    implicit schema `CASCADE`. `project delete` removes that project's tasks, decisions and dimensions
-//!    before the project row itself (the schema side is `RESTRICT`, so getting the order wrong fails loudly
-//!    instead of silently orphaning rows).
-//! 2. **Links and dependent content ride the schema's `CASCADE`** (dependency edges, comments, dimension
-//!    values, assignments). The exception is the polymorphic `attachment` (a reference discriminated by
-//!    `target_type`), which no constraint can cover — so the delete op sweeps its own with
-//!    [`sweep_polymorphic`].
+//! **A subtree is removed explicitly by the delete op, children first** — never left to an implicit schema
+//! `CASCADE`. That covers the entities (`project delete` removes that project's tasks, decisions and
+//! dimensions before the project row itself) and equally the rows hanging off them: comments, dependency
+//! edges, commit anchors, dimension values, assignments, decision links. Each of those is a row a person
+//! can point at, and a row deleted by a constraint is deleted where no code can see it — so what goes must
+//! go through an op that read its id first (`AMB-D-403`). Only amenbo's own per-project settings
+//! (`plugin_config` / `plugin_enable`) ride the schema, having nothing to tell.
+//!
+//! The polymorphic `attachment` (a reference discriminated by `target_type`) is the one child no constraint
+//! *could* cover; the delete op sweeps its own with [`sweep_polymorphic`], ahead of the row it hangs off.
 //!
 //! **Mutations issue SQL straight at the source of truth (the read-model).** Every mutator takes only the
 //! [`WriteTx`] (`BEGIN IMMEDIATE`) the caller opened, and reads both its `before` snapshot and any existence
@@ -247,6 +249,181 @@ mod cross_project_tests {
             // edges silently).
             super::dependency::remove(tx, ta, blocker).expect("detach the dependency");
             super::task::move_to(tx, ta, Some(b), super::Position::Bottom).expect("once detached, it moves");
+        });
+    }
+}
+
+/// A delete op takes its own children — every row that stands for a concept goes through code, and the
+/// database is left nothing to sweep behind it (`AMB-D-403`).
+#[cfg(test)]
+mod delete_children_tests {
+    use super::test_support::{mk_project, mk_task_in};
+    use crate::model::{ActorKind, DimensionCardinality, DimensionRole};
+    use crate::store_engine::{StoreEngine, WriteTx};
+
+    /// An engine with the `REFERENCES` unenforced, which is what makes these assertions mean anything:
+    /// the declarations still read `ON DELETE CASCADE`, so under enforcement the database would clear the
+    /// children whether or not the op did, and a test could not tell the two apart. With enforcement off
+    /// no cascade fires, and a child still gone is a child the op deleted.
+    fn unenforced_engine() -> StoreEngine {
+        StoreEngine::open_in_memory_unchecked().expect("in-memory engine")
+    }
+
+    /// Run `f` against one unenforced write transaction (never committed, as with `with_tx`).
+    fn with_unenforced_tx(f: impl FnOnce(&WriteTx<'_>)) {
+        let engine = unenforced_engine();
+        let tx = engine.write().expect("write transaction");
+        f(&tx);
+    }
+
+    /// One integer, straight off the source of truth — the tables are being counted for emptiness, which
+    /// is precisely what the read layer (built for live graphs) does not offer.
+    fn scalar(tx: &WriteTx<'_>, sql: &str) -> i64 {
+        tx.conn().query_row(sql, [], |r| r.get(0)).expect("count rows")
+    }
+
+    fn mk_decision(tx: &WriteTx<'_>, project_id: i64, title: &str) -> i64 {
+        super::decision::add(
+            tx,
+            super::decision::NewDecision { project_id, title: title.to_string(), body: String::new() },
+        )
+        .expect("add decision")
+        .id
+    }
+
+    fn mk_dimension(tx: &WriteTx<'_>, project_id: i64, name: &str) -> i64 {
+        super::dimension::add(
+            tx,
+            project_id,
+            super::dimension::NewDimension {
+                name: name.to_string(),
+                notes: String::new(),
+                cardinality: DimensionCardinality::Single,
+                ordered: false,
+                role: DimensionRole::None,
+            },
+        )
+        .expect("add dimension")
+        .id
+    }
+
+    /// A project with everything hanging off it: two tasks (one blocking the other), a comment, a commit
+    /// anchor and a classification on each, a decision linked to both, and a second decision naming the
+    /// first. Returns `(project, task, other_task, decision, dimension, value)`.
+    fn seed(tx: &WriteTx<'_>) -> (i64, i64, i64, i64, i64, i64) {
+        let p = mk_project(tx, "消えるPJ");
+        let t = mk_task_in(tx, "消えるタスク", Some(p));
+        let other = mk_task_in(tx, "並びのタスク", Some(p));
+        let d = mk_decision(tx, p, "この実装の根拠");
+        let d2 = mk_decision(tx, p, "その上に立つ決定");
+        let dim = mk_dimension(tx, p, "分類");
+        let value = super::dimension::value_add(tx, dim, "バグ").expect("add value").id;
+
+        super::comment::add_comment(tx, t, ActorKind::Ai, "作業メモ").expect("comment on the task");
+        super::decision::add_comment(tx, d, ActorKind::Ai, "裁定の理由").expect("comment on the decision");
+        super::dependency::add(tx, t, other, None).expect("a dependency edge");
+        super::commit::add(tx, t, &"a".repeat(40), None).expect("a commit anchor");
+        super::dimension::set(tx, t, value).expect("classify the task");
+        super::decision::link(tx, d, t).expect("link the decision to the task");
+        super::decision::link(tx, d, other).expect("and to the other task");
+        super::decision::builds_on(tx, d2, d).expect("an edge naming the decision");
+
+        (p, t, other, d, dim, value)
+    }
+
+    /// Deleting a task takes its comments, the edges at both of its ends, its commit anchors, its
+    /// classifications and its decision links — and touches nothing that belongs to another task.
+    #[test]
+    fn deleting_a_task_takes_its_own_children_only() {
+        with_unenforced_tx(|tx| {
+            let (_, t, other, _, _, _) = seed(tx);
+
+            super::task::delete(tx, t).expect("delete the task");
+
+            let left = scalar(tx, &format!(
+                "SELECT (SELECT COUNT(*) FROM task_comment WHERE task_id = {t})
+                      + (SELECT COUNT(*) FROM task_dependency WHERE task_id = {t} OR blocked_by_id = {t})
+                      + (SELECT COUNT(*) FROM task_commit WHERE task_id = {t})
+                      + (SELECT COUNT(*) FROM task_dimension_value WHERE task_id = {t})
+                      + (SELECT COUNT(*) FROM decision_task_link WHERE task_id = {t})"
+            ));
+            assert_eq!(left, 0, "no child of the deleted task is left behind");
+            assert_eq!(
+                scalar(tx, &format!("SELECT COUNT(*) FROM decision_task_link WHERE task_id = {other}")),
+                1,
+                "the other task's link to the same decision survives",
+            );
+        });
+    }
+
+    /// Deleting a decision takes its comments, the edges at both of its ends, and its task links.
+    #[test]
+    fn deleting_a_decision_takes_its_own_children() {
+        with_unenforced_tx(|tx| {
+            let (_, _, _, d, _, _) = seed(tx);
+
+            super::decision::delete(tx, d).expect("delete the decision");
+
+            let left = scalar(tx, &format!(
+                "SELECT (SELECT COUNT(*) FROM decision_comment WHERE decision_id = {d})
+                      + (SELECT COUNT(*) FROM decision_edge
+                         WHERE decision_id = {d} OR target_decision_id = {d})
+                      + (SELECT COUNT(*) FROM decision_task_link WHERE decision_id = {d})"
+            ));
+            assert_eq!(left, 0, "no child of the deleted decision is left behind");
+        });
+    }
+
+    /// Deleting a dimension takes its values, and each value the assignments naming it. Deleting one
+    /// value alone takes the same assignments — the axis-wide sweep is that step repeated.
+    #[test]
+    fn deleting_a_dimension_takes_its_values_and_their_assignments() {
+        with_unenforced_tx(|tx| {
+            let (_, _, _, _, dim, value) = seed(tx);
+
+            super::dimension::delete(tx, dim).expect("delete the dimension");
+
+            assert_eq!(
+                scalar(tx, &format!("SELECT COUNT(*) FROM dimension_value WHERE dimension_id = {dim}")),
+                0,
+                "the axis's values go with it",
+            );
+            assert_eq!(
+                scalar(tx, &format!("SELECT COUNT(*) FROM task_dimension_value WHERE value_id = {value}")),
+                0,
+                "and the classifications on them",
+            );
+        });
+    }
+
+    /// Deleting a project runs every one of those sweeps: nothing anywhere in the store still names a row
+    /// the delete took.
+    #[test]
+    fn deleting_a_project_leaves_no_child_row_anywhere() {
+        with_unenforced_tx(|tx| {
+            let (p, ..) = seed(tx);
+
+            super::project::delete(tx, p).expect("delete the project");
+
+            for table in [
+                "task",
+                "task_comment",
+                "task_dependency",
+                "task_commit",
+                "task_dimension_value",
+                "decision",
+                "decision_comment",
+                "decision_edge",
+                "decision_task_link",
+                "dimension",
+                "dimension_value",
+            ] {
+                assert_eq!(
+                    scalar(tx, &format!("SELECT COUNT(*) FROM {table}")),
+                    0,
+                    "{table} is empty once the project that owned every row is deleted",
+                );
+            }
         });
     }
 }

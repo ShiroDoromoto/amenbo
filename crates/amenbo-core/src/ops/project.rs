@@ -114,7 +114,7 @@ pub fn set_archived(tx: &WriteTx<'_>, id: i64, archived: bool) -> Result<Project
 /// of the delete only; the destructive teardown that follows — releasing the folders bound to the project,
 /// and reclaiming the attachment bytes nothing references any more — belongs to the layer above
 /// ([`crate::project_teardown::teardown_deleted_project`]). The subtree commits as one transaction: cut it
-/// halfway and live tasks are left stranded in a project that no longer exists. The cascade set is read
+/// halfway and live tasks are left stranded in a project that no longer exists. The subtree is read
 /// **inside that same transaction** too — read it outside and a task another writer added in between is
 /// missed.
 pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
@@ -126,10 +126,9 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     for decision_id in read::decision_ids_in_project(tx.conn(), id)? {
         orphaned.extend(crate::ops::decision::delete_subtree(tx, decision_id)?);
     }
-    // A dimension's values and assignments are carried off by the schema's `CASCADE` (it has no
-    // polymorphic children).
+    // A dimension has no polymorphic children; its own subtree is its values and the assignments on them.
     for dimension_id in read::dimension_ids_in_project(tx.conn(), id)? {
-        tx.delete_record("dimension", dimension_id)?;
+        crate::ops::dimension::delete_subtree(tx, dimension_id)?;
     }
     orphaned.extend(crate::ops::sweep_polymorphic(tx, "project", project_before.id)?);
     tx.delete_record("project", project_before.id)?;
@@ -162,7 +161,7 @@ mod tests {
             assert!(read::task(tx.conn(), t2).unwrap().is_none(), "member task 2 goes with it");
             // A task in another project does not live or die with this one.
             assert!(read::task_live(tx.conn(), survivor).unwrap(), "another project's task survives");
-            // The dependency edge goes too, via the schema's `ON DELETE CASCADE` — nothing dangles.
+            // The dependency edge goes with the tasks it names — nothing dangles.
             assert!(read::dependency_id(tx.conn(), t1, t2).unwrap().is_none());
         });
     }

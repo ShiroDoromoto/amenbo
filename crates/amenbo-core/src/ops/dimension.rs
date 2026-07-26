@@ -149,13 +149,24 @@ pub fn move_to(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Dimension> {
     Ok(after)
 }
 
-/// Hard-delete a dimension. Its values (`dimension_value` — dependent content that means anything
-/// only under its one parent) and the task assignments (`task_dimension_value` — links that mean
-/// nothing without their endpoints) are taken along by the schema's `ON DELETE CASCADE`. Dimensions
-/// are all user-editable alike, so deleting one is equally free.
+/// Hard-delete a dimension, its values (`dimension_value`) and the task assignments on them
+/// (`task_dimension_value`). Dimensions are all user-editable alike, so deleting one is equally free.
 pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let before = live_before(tx, id)?;
-    tx.delete_record("dimension", before.id)?;
+    delete_subtree(tx, before.id)
+}
+
+/// Hard-delete one dimension and its children (pass an id whose existence has already been checked).
+/// This is the body of [`delete`], and [`crate::ops::project::delete`] uses it to clear out a project's
+/// dimensions. The op deletes each child itself, child-first — an axis and the classification a task
+/// carries on it are both things a person can point at, so what goes has to go through code
+/// (`AMB-D-403`). Sweeping value by value covers the whole axis: an assignment names a value, and that
+/// value's axis is this one.
+pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<()> {
+    for value_id in read::dimension_value_ids(tx.conn(), id)? {
+        delete_value_subtree(tx, value_id)?;
+    }
+    tx.delete_record("dimension", id)?;
     Ok(())
 }
 
@@ -241,12 +252,20 @@ pub fn value_move(tx: &WriteTx<'_>, value_id: i64, pos: Position) -> Result<Dime
     Ok(after)
 }
 
-/// Hard-delete a dimension value. The task assignments to it are taken along by the
-/// `ON DELETE CASCADE` on `task_dimension_value.value_id`.
+/// Hard-delete a dimension value, and with it every task assignment naming it.
 pub fn value_delete(tx: &WriteTx<'_>, value_id: i64) -> Result<()> {
     let before = live_value_before(tx, value_id)?;
     live_before(tx, before.dimension_id)?;
-    tx.delete_record("dimension_value", before.id)?;
+    delete_value_subtree(tx, before.id)
+}
+
+/// Hard-delete one dimension value and the assignments on it (pass an id already checked to exist) —
+/// the body of [`value_delete`], and the per-value step [`delete_subtree`] repeats down an axis.
+pub(crate) fn delete_value_subtree(tx: &WriteTx<'_>, value_id: i64) -> Result<()> {
+    for assignment_id in read::assignment_ids_of_value(tx.conn(), value_id)? {
+        tx.delete_record("task_dimension_value", assignment_id)?;
+    }
+    tx.delete_record("dimension_value", value_id)?;
     Ok(())
 }
 
@@ -624,10 +643,9 @@ mod tests {
         assert!(value_add(tx, 999_999, "done").is_err());
     }
 
-    /// Deleting a value removes the row, and the task assignments to it go with it through the
-    /// schema's `ON DELETE CASCADE`.
+    /// Deleting a value removes the row, and the task assignments naming it go with it.
     #[test]
-    fn value_delete_cascades_assignments() {
+    fn value_delete_takes_the_assignments() {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let p = project_named(tx, "PJ");
@@ -637,7 +655,7 @@ mod tests {
         set(tx, t, v.id).unwrap();
         value_delete(tx, v.id).unwrap();
         assert!(val_opt(tx, v.id).is_none());
-        assert!(read::assignment_id(tx.conn(), t, v.id).unwrap().is_none(), "the assignments cascade away too");
+        assert!(read::assignment_id(tx.conn(), t, v.id).unwrap().is_none(), "the assignments go too");
     }
 
     #[test]
@@ -694,10 +712,9 @@ mod tests {
         assert!(set(tx, t, 999_999).is_err());
     }
 
-    /// Deleting a dimension takes its values (dependent content) and assignments (links) with it,
-    /// through the schema's `ON DELETE CASCADE`.
+    /// Deleting a dimension takes its values (dependent content) and assignments (links) with it.
     #[test]
-    fn delete_dimension_cascades_values_and_assignments() {
+    fn delete_dimension_takes_values_and_assignments() {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let p = project_named(tx, "PJ");
@@ -707,7 +724,7 @@ mod tests {
         set(tx, t, v.id).unwrap();
         delete(tx, d.id).unwrap();
         assert!(dim_opt(tx, d.id).is_none());
-        assert!(val_opt(tx, v.id).is_none(), "the values cascade away too");
-        assert!(read::assignment_id(tx.conn(), t, v.id).unwrap().is_none(), "the assignments cascade away too");
+        assert!(val_opt(tx, v.id).is_none(), "the values go too");
+        assert!(read::assignment_id(tx.conn(), t, v.id).unwrap().is_none(), "and the assignments on them");
     }
 }

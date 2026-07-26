@@ -1,8 +1,8 @@
 //! The change feed: what a committed transaction touched, as the GUI's invalidation source. These
 //! tests pin the two properties the design rests on — **nothing leaks** (every record row a mutation
-//! touches shows up in the feed, including the rows only SQLite knows about, the `ON DELETE CASCADE`
-//! children the ops layer never names; this is what a hand-written emit at each write site cannot
-//! promise, and why the collection is an `update_hook`) and **nothing lies** (the feed is written
+//! touches shows up in the feed, down to the last child of a subtree delete and the rows only SQLite
+//! knows about; this is what a hand-written emit at each write site cannot promise, and why the
+//! collection is an `update_hook`) and **nothing lies** (the feed is written
 //! inside the operation's own transaction, so a rolled-back batch leaves no rows behind, and no row
 //! appears for a change the truth source does not have). They exercise the feed through the **public
 //! ops** (`Store::…`), not by poking the engine: a mutation added tomorrow goes through the same seam,
@@ -73,13 +73,13 @@ fn a_committed_mutation_names_the_row_it_changed() {
     );
 }
 
-/// **The reason the collection is an `update_hook`.** Deleting a task deletes its comments, its
-/// dependency edges, its dimension assignments and its decision links — by `ON DELETE CASCADE`, inside
-/// SQLite. The ops layer issues one `delete_record("task", id)` and never learns the rest, so an emit
-/// written by hand at the call site would tell a reader "the task is gone" while leaving it showing a
-/// comment count that no longer exists. The hook reports what actually happened.
+/// **What the `update_hook` buys.** Deleting a task deletes its comments, its dependency edges, its
+/// dimension assignments and its decision links — many rows from one call. An emit written by hand at
+/// the call site would have to name each of them or tell a reader "the task is gone" while leaving it
+/// showing a comment count that no longer exists. The hook reports what the statement actually touched,
+/// so the feed cannot fall behind the sweep.
 #[test]
-fn a_cascade_delete_reports_the_children_the_ops_layer_never_names() {
+fn a_subtree_delete_reports_every_child_row() {
     let mut store = temp_store();
     let project = store.project_add(new_project("PJ")).unwrap().id;
     let task = store.add_task(new_task("消えるタスク", project)).unwrap().id;

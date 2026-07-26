@@ -313,16 +313,30 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 
 /// Hard-delete one task and its children (the id must already be known to exist). This is the body of
 /// [`delete`], and [`crate::ops::project::delete`] uses it to remove a project's tasks, so deleting a project
-/// runs the same sweep. The schema's `CASCADE` takes `task_comment`, `task_dependency` (both the `task_id`
-/// and the `blocked_by_id` side), `task_dimension_value` and `decision_task_link`. All the delete op sweeps
-/// itself is the polymorphic children no constraint can cover — the task's own attachments, plus the
-/// attachments hanging off the comments that `CASCADE` is about to remove (swept before those comments,
-/// because once the parent row is gone nobody can find them any more). Returns the blob hashes this subtree
-/// let go of — the candidates for reclamation after commit.
+/// runs the same sweep. Every child is deleted **by this op**, child-first: the comments, the dependency
+/// edges at either end, the commit anchors, the dimension assignments and the decision links, and only then
+/// the task row. Each of those rows stands for something a person can point at, so its deletion has to pass
+/// through code that can tell what went (`AMB-D-403`) rather than happen inside the database. The
+/// polymorphic children come first of all — the task's own attachments, plus the attachments hanging off
+/// each comment, swept before that comment goes, because once the parent row is gone nobody can find them
+/// any more. Returns the blob hashes this subtree let go of — the candidates for reclamation after commit.
 pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let mut orphaned = Vec::new();
     for comment_id in read::task_comment_ids(tx.conn(), id)? {
         orphaned.extend(crate::ops::sweep_polymorphic(tx, "task_comment", comment_id)?);
+        tx.delete_record("task_comment", comment_id)?;
+    }
+    for edge_id in read::task_dependency_ids(tx.conn(), id)? {
+        tx.delete_record("dependency", edge_id)?;
+    }
+    for commit_id in read::task_commit_ids(tx.conn(), id)? {
+        tx.delete_record("task_commit", commit_id)?;
+    }
+    for assignment_id in read::assignment_ids_of_task(tx.conn(), id)? {
+        tx.delete_record("task_dimension_value", assignment_id)?;
+    }
+    for link_id in read::decision_task_link_ids_of_task(tx.conn(), id)? {
+        tx.delete_record("decision_task_link", link_id)?;
     }
     orphaned.extend(crate::ops::sweep_polymorphic(tx, "task", id)?);
     tx.delete_record("task", id)?;
@@ -983,8 +997,8 @@ mod tests {
 
     #[test]
     fn delete_takes_the_tasks_comments_with_it() {
-        // Deletion is a hard delete. Comments go with the row via `ON DELETE CASCADE` on
-        // `task_comment.task_id` — not one orphan is left behind.
+        // Deletion is a hard delete, and the op takes the task's comments with it — not one orphan is
+        // left behind.
         with_tx(|tx| {
             let tid = mk_task(tx, "消えるタスク");
             crate::ops::comment::add_comment(tx, tid, ActorKind::Ai, "コメント").unwrap();
@@ -994,7 +1008,7 @@ mod tests {
             delete(tx, tid).unwrap();
 
             assert!(read::task(tx.conn(), tid).unwrap().is_none(), "the task's row itself goes");
-            assert!(read::comment_list(tx.conn(), tid).unwrap().is_empty(), "the comments go with it, by cascade");
+            assert!(read::comment_list(tx.conn(), tid).unwrap().is_empty(), "the comments go with it");
             // The surviving task's comment is untouched, and no orphaned row is left (that one row is all the
             // table holds).
             assert_eq!(read::comment_list(tx.conn(), survivor).unwrap().len(), 1);

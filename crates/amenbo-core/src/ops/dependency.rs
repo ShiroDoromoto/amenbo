@@ -4,9 +4,9 @@
 //! derived state (ready / blocked_by_open) is computed at read time, over in `view` — status is never
 //! rewritten on its behalf.
 //!
-//! Writes ride the same seam as `task` ([`crate::ops::emit_create`] / [`crate::ops::emit_update`]). With
-//! `ON DELETE CASCADE` on both ends, an edge dies in the **same statement** as the task it hangs off — there
-//! is no gap in which a dangling edge could be created.
+//! Writes ride the same seam as `task` ([`crate::ops::emit_create`] / [`crate::ops::emit_update`]). An edge
+//! dies with either of the tasks it names, in the same transaction: [`crate::ops::task::delete_subtree`]
+//! sweeps both ends before the task row goes, so there is no gap in which a dangling edge could exist.
 //!
 //! Everything the degenerate-case checks judge on (both ends alive, an existing edge, a cycle) is read from
 //! the source of truth **inside the same transaction**. Read the cycle check outside it and two concurrent
@@ -75,8 +75,8 @@ pub fn add(
 }
 
 /// Detach a dependency edge (a hard delete). An edge that is not there is a no-op (idempotent); the return
-/// value is `changed`. There is no cleanup here for task deletion: both `task_id` and `blocked_by_id` are
-/// `ON DELETE CASCADE`, so deleting a task lets the schema take the edge from either side.
+/// value is `changed`. Deleting a task is a separate path: [`crate::ops::task::delete_subtree`] sweeps the
+/// edges at both of its ends, so nothing here is called for that.
 pub fn remove(tx: &WriteTx<'_>, task_id: i64, blocked_by_id: i64) -> Result<bool> {
     let Some(id) = read::dependency_id(tx.conn(), task_id, blocked_by_id)? else {
         return Ok(false);
@@ -144,11 +144,10 @@ mod tests {
         });
     }
 
-    /// Delete a task and the schema's `ON DELETE CASCADE` (declared on both ends) takes the edges on either
-    /// side of it — the ones it depends on and the ones that depend on it. The ops layer needs no cleanup
-    /// code of its own.
+    /// Delete a task and the edges on either side of it go — the ones it depends on and the ones that
+    /// depend on it.
     #[test]
-    fn deleting_a_task_cascades_the_edges_on_both_ends() {
+    fn deleting_a_task_takes_the_edges_on_both_ends() {
         with_tx(|tx| {
             let a = mk_task(tx, "a");
             let b = mk_task(tx, "b");

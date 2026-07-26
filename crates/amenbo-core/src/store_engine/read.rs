@@ -3302,8 +3302,8 @@ pub fn current_time_axis_value(
         .map_err(StoreEngineError::from)
 }
 
-/// The live values of one dimension — the cascade set of [`crate::ops::dimension::delete`], which
-/// deletes a dimension's values along with it.
+/// The live values of one dimension — the subtree [`crate::ops::dimension::delete`] deletes
+/// child-first, each value taking the task assignments that name it.
 pub fn dimension_value_ids(conn: &Connection, dimension_id: i64) -> Result<Vec<i64>> {
     select_ids(conn, DVAL.id, Some(&Pred::eq(DVAL.dimension_id, dimension_id)))
 }
@@ -3426,31 +3426,89 @@ pub fn task_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64
 }
 
 /// The live decisions of one project — the rest of that subtree (`decision.project_id` is `RESTRICT`
-/// too, so `project delete` deletes them itself; each takes its comments and links via `CASCADE`).
+/// too, so `project delete` deletes them itself; each takes its own comments, edges and links along).
 pub fn decision_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {
     const D: col::decision::Cols = col::decision::ALL;
     select_ids(conn, D.id, Some(&Pred::eq(D.project_id, project_id)))
 }
 
 /// The live dimensions of one project — likewise `RESTRICT`, and deleting one takes its values and the
-/// task assignments on them via `CASCADE`.
+/// task assignments on them.
 pub fn dimension_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {
     select_ids(conn, DIM.id, Some(&Pred::eq(DIM.project_id, project_id)))
 }
 
-/// The live comments of one task. The comment rows themselves go with the task via `CASCADE`; the ids
-/// are what the delete op needs to sweep the **attachments** hanging off each comment, which are
-/// polymorphic and so carry no constraint.
+// ── The child sets a delete op sweeps itself (`AMB-D-403`) ──
+// A row that stands for a concept is deleted by the op, never by a constraint: the op reads the
+// children's ids and deletes them one by one, ahead of the parent. Reading the ids is the point —
+// it is what puts the deletion in reach of the code, so what goes can be told and not merely happen.
+// Each set is read **inside the deleting transaction**, or a child another writer added in between
+// is missed.
+
+/// The live comments of one task — deleted by the task's delete op, which also needs each id to sweep
+/// the **attachments** hanging off that comment (polymorphic, so no constraint can carry them).
 pub fn task_comment_ids(conn: &Connection, task_id: i64) -> Result<Vec<i64>> {
     const C: col::task_comment::Cols = col::task_comment::ALL;
     select_ids(conn, C.id, Some(&Pred::eq(C.task_id, task_id)))
 }
 
 /// The live comments of one decision — the `decision` twin of [`task_comment_ids`], for the same
-/// polymorphic-attachment sweep.
+/// delete and the same polymorphic-attachment sweep.
 pub fn decision_comment_ids(conn: &Connection, decision_id: i64) -> Result<Vec<i64>> {
     const C: col::decision_comment::Cols = col::decision_comment::ALL;
     select_ids(conn, C.id, Some(&Pred::eq(C.decision_id, decision_id)))
+}
+
+/// The live dependency edges one task is an endpoint of — **both** ends. An edge names a blocker and
+/// the task it blocks, and deleting either end leaves the edge pointing at nothing, so a task's delete
+/// op takes the edges into it as well as the edges out of it.
+pub fn task_dependency_ids(conn: &Connection, task_id: i64) -> Result<Vec<i64>> {
+    const D: col::task_dependency::Cols = col::task_dependency::ALL;
+    let pred = Pred::eq(D.task_id, task_id).or(Pred::eq(D.blocked_by_id, task_id));
+    select_ids(conn, D.id, Some(&pred))
+}
+
+/// The live commit anchors of one task — the SHAs it records, deleted with it.
+pub fn task_commit_ids(conn: &Connection, task_id: i64) -> Result<Vec<i64>> {
+    const TC: col::task_commit::Cols = col::task_commit::ALL;
+    select_ids(conn, TC.id, Some(&Pred::eq(TC.task_id, task_id)))
+}
+
+/// The live dimension assignments of one task — what the task is classified as, on every axis at once.
+pub fn assignment_ids_of_task(conn: &Connection, task_id: i64) -> Result<Vec<i64>> {
+    const TV: col::task_dimension_value::Cols = col::task_dimension_value::ALL;
+    select_ids(conn, TV.id, Some(&Pred::eq(TV.task_id, task_id)))
+}
+
+/// The live assignments naming one dimension value — the tasks classified as it. Sweeping a dimension
+/// value by value covers its axis as a whole: an assignment always names a value of the axis it names.
+pub fn assignment_ids_of_value(conn: &Connection, value_id: i64) -> Result<Vec<i64>> {
+    const TV: col::task_dimension_value::Cols = col::task_dimension_value::ALL;
+    select_ids(conn, TV.id, Some(&Pred::eq(TV.value_id, value_id)))
+}
+
+/// The live decision⇄task links of one task — the decisions it rests on, from the task's side.
+pub fn decision_task_link_ids_of_task(conn: &Connection, task_id: i64) -> Result<Vec<i64>> {
+    const L: col::decision_task_link::Cols = col::decision_task_link::ALL;
+    select_ids(conn, L.id, Some(&Pred::eq(L.task_id, task_id)))
+}
+
+/// The live decision⇄task links of one decision — the same edges from the decision's side.
+pub fn decision_task_link_ids_of_decision(
+    conn: &Connection,
+    decision_id: i64,
+) -> Result<Vec<i64>> {
+    const L: col::decision_task_link::Cols = col::decision_task_link::ALL;
+    select_ids(conn, L.id, Some(&Pred::eq(L.decision_id, decision_id)))
+}
+
+/// The live decision→decision edges one decision is an endpoint of — **both** ends, so the edges it
+/// drew and the edges naming it go together and nothing is left pointing at a decision that is gone.
+pub fn decision_edge_ids(conn: &Connection, decision_id: i64) -> Result<Vec<i64>> {
+    const E: col::decision_edge::Cols = col::decision_edge::ALL;
+    let pred =
+        Pred::eq(E.decision_id, decision_id).or(Pred::eq(E.target_decision_id, decision_id));
+    select_ids(conn, E.id, Some(&pred))
 }
 
 /// The live `(decision, task)` link, or `None` — what makes `ops::decision::link` idempotent and
@@ -4379,9 +4437,8 @@ mod tests {
     }
 
     /// The cycle guard: `dependency_reaches` walks the edges from a seed that is itself in the set and
-    /// terminates on an already-cyclic graph. Plus the natural-key edge lookup. (What a task delete does
-    /// to the edges touching it is the schema's job — `ON DELETE CASCADE` on both ends — so there is no
-    /// id set to read for it.)
+    /// terminates on an already-cyclic graph. Plus the natural-key edge lookup. (The id set a task delete
+    /// reads is [`task_dependency_ids`], covered with the rest of the delete's children in `ops`.)
     #[test]
     fn dependency_reachability_and_edge_sets() {
         let e = StoreEngine::open_in_memory_unchecked().unwrap();
@@ -4411,9 +4468,9 @@ mod tests {
         assert_eq!(dependency_id(conn, 3, 4).unwrap(), None, "an edge that is not there");
     }
 
-    /// The subtree `ops::project::delete` deletes child-first: a project's tasks, decisions and
-    /// dimensions. Everything else under them (links, comments, values, assignments) goes by schema
-    /// `CASCADE`, so it needs no id set — what the delete op still reads is exactly this.
+    /// The top of the subtree `ops::project::delete` deletes child-first: a project's tasks, decisions
+    /// and dimensions. Each of those then reads its own children (links, comments, values, assignments)
+    /// through the id sets beside these, and deletes them in turn.
     #[test]
     fn project_subtree_sets() {
         let e = StoreEngine::open_in_memory_unchecked().unwrap();

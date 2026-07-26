@@ -447,16 +447,23 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 
 /// Hard-delete one decision and its children (pass an id whose existence has already been checked).
 /// This is the body of [`delete`], and [`crate::ops::project::delete`] also uses it to clear out a
-/// project's decisions. The schema's `CASCADE` takes `decision_comment`, `decision_task_link` and
-/// `decision_edge` along (both endpoints cascade, so the edges this decision drew and the edges
-/// pointing at it go with it — nothing dangles). All the delete op has to sweep is the polymorphic
-/// children: the decision's own attachments, plus the attachments hanging off the comments that
-/// `CASCADE` removes. Returns the blob hashes this subtree let go of (candidates for collection
-/// after commit).
+/// project's decisions. Every child is deleted **by this op**, child-first: the comments, the edges at
+/// either end (the ones this decision drew and the ones naming it, so nothing dangles), the task links,
+/// and only then the decision row — each of them a row a person can point at, and so one whose deletion
+/// belongs in code rather than in a constraint (`AMB-D-403`). The polymorphic children come first: the
+/// decision's own attachments, plus the attachments hanging off each comment, swept before that comment
+/// goes. Returns the blob hashes this subtree let go of (candidates for collection after commit).
 pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let mut orphaned = Vec::new();
     for comment_id in read::decision_comment_ids(tx.conn(), id)? {
         orphaned.extend(crate::ops::sweep_polymorphic(tx, "decision_comment", comment_id)?);
+        tx.delete_record("decision_comment", comment_id)?;
+    }
+    for edge_id in read::decision_edge_ids(tx.conn(), id)? {
+        tx.delete_record("decision_edge", edge_id)?;
+    }
+    for link_id in read::decision_task_link_ids_of_decision(tx.conn(), id)? {
+        tx.delete_record("decision_task_link", link_id)?;
     }
     orphaned.extend(crate::ops::sweep_polymorphic(tx, "decision", id)?);
     tx.delete_record("decision", id)?;
@@ -1671,10 +1678,10 @@ mod tests {
 
         delete(tx, d.id).unwrap();
         assert!(read::decision(tx.conn(), d.id).unwrap().is_none(), "even an accepted decision goes away, row and all");
-        // The link goes with it through the schema's `ON DELETE CASCADE`, so nothing dangles.
+        // The delete op takes the link too, so nothing dangles.
         assert!(
             read::decision_task_link_id(tx.conn(), d.id, t).unwrap().is_none(),
-            "the link cascades away with it"
+            "the link goes away with it"
         );
         // It drops out of the reverse query as well.
         assert!(decisions_for_task(tx, t).is_empty());

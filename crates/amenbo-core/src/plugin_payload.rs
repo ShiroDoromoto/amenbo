@@ -32,17 +32,22 @@ use crate::time::Timestamp;
 /// change to an existing field — additive fields do not touch it (`AMB-D-349`).
 pub const VERSION: u32 = 1;
 
-/// The nine v1 event names — the one source of truth for the strings a plugin dispatches on, shared
-/// with the ops write points that emit them. Six are the events an `update` disambiguates (named
+/// The ten v1 event names — the one source of truth for the strings a plugin dispatches on, shared
+/// with the ops write points that emit them. Seven are the events an `update` disambiguates (named
 /// alongside the new state that tells them apart); the other three name themselves outright — a
 /// creation, a deletion, a comment. Together they are the v1 catalog ([`V1_EVENTS`]).
 pub mod name {
     /// A task was created. No `new` — the name is the whole state.
     pub const TASK_CREATED: &str = "task.created";
-    /// A task's status changed (to something other than `done`; see [`TASK_DONE`]). Carries `new`.
+    /// A task's status changed (to something other than a terminal; see [`TASK_DONE`] and
+    /// [`TASK_REJECTED`]). Carries `new`.
     pub const TASK_STATUS_CHANGED: &str = "task.status_changed";
     /// A task was completed — the `status → done` specialization of a status change. No `new`.
     pub const TASK_DONE: &str = "task.done";
+    /// A task was decided against — the `status → rejected` specialization, and the sibling of
+    /// [`TASK_DONE`]: the two terminals differ only in whether the work was carried out (`AMB-D-397`).
+    /// No `new`, and no reason either — that lands as a comment, so `comment.added` carries it.
+    pub const TASK_REJECTED: &str = "task.rejected";
     /// A task was assigned (or reassigned). Carries `new`: the assignee facet.
     pub const TASK_ASSIGNED: &str = "task.assigned";
     /// A task moved to another project. Carries `new`: the destination project's slug.
@@ -57,12 +62,13 @@ pub mod name {
     pub const COMMENT_ADDED: &str = "comment.added";
 }
 
-/// The complete v1 event catalog — all nine names in [`name`]. A plugin's subscription is checked
+/// The complete v1 event catalog — all ten names in [`name`]. A plugin's subscription is checked
 /// against this set.
-pub const V1_EVENTS: [&str; 9] = [
+pub const V1_EVENTS: [&str; 10] = [
     name::TASK_CREATED,
     name::TASK_STATUS_CHANGED,
     name::TASK_DONE,
+    name::TASK_REJECTED,
     name::TASK_ASSIGNED,
     name::TASK_MOVED,
     name::TASK_DELETED,
@@ -115,6 +121,11 @@ impl Payload {
     /// `task.done` — a task was completed.
     pub fn task_done(id: i64, actor: ActorKind, at: Timestamp) -> Self {
         Self::base(name::TASK_DONE, id, actor, at)
+    }
+
+    /// `task.rejected` — a task was decided against.
+    pub fn task_rejected(id: i64, actor: ActorKind, at: Timestamp) -> Self {
+        Self::base(name::TASK_REJECTED, id, actor, at)
     }
 
     /// `task.assigned` — a task was assigned to `new` (the assignee facet).
@@ -194,11 +205,11 @@ mod tests {
     }
 
     #[test]
-    fn the_catalog_holds_nine_distinct_names() {
+    fn the_catalog_holds_ten_distinct_names() {
         let mut seen = V1_EVENTS.to_vec();
         seen.sort_unstable();
         seen.dedup();
-        assert_eq!(seen.len(), 9, "the v1 catalog is nine distinct events");
+        assert_eq!(seen.len(), 10, "the v1 catalog is ten distinct events");
     }
 
     #[test]
@@ -207,6 +218,7 @@ mod tests {
             Payload::task_created(1, ActorKind::Human, at()),
             Payload::task_status_changed(1, ActorKind::Human, at(), TaskStatus::InProgress),
             Payload::task_done(1, ActorKind::Human, at()),
+            Payload::task_rejected(1, ActorKind::Human, at()),
             Payload::task_assigned(1, ActorKind::Human, at(), ActorKind::Ai),
             Payload::task_moved(1, ActorKind::Human, at(), "amenbo"),
             Payload::task_deleted(1, ActorKind::Human, at()),

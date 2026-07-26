@@ -34,10 +34,13 @@ fn mint_activity_id(tx: &WriteTx<'_>) -> Result<i64> {
 // same event fire whatever the surface. The rationale for a log kept separate from the change feed lives
 // in the decision log.
 
-/// `task.status_changed` / `task.done`: a task's status moved (`AMB-D-367`). A move to `done` is the
-/// `task.done` specialization (its name is the whole state, so no `new`); every other transition is
-/// `task.status_changed` carrying the new status. An idempotent re-set that did not move the status is
-/// not a change to observe, so it emits nothing.
+/// `task.status_changed` / `task.done` / `task.rejected`: a task's status moved (`AMB-D-367`). Each
+/// terminal is its own event — `task.done` for work carried out, `task.rejected` for work decided
+/// against (`AMB-D-397`) — and their names are the whole state, so neither carries `new`; every other
+/// transition is `task.status_changed` carrying the new status. Without the second specialization, an
+/// author subscribing to "the task closed" would have to take `task.done` and then string-match the
+/// catch-all for the other half. An idempotent re-set that did not move the status is not a change to
+/// observe, so it emits nothing.
 fn emit_task_status(
     tx: &WriteTx<'_>,
     task: &crate::model::Task,
@@ -48,10 +51,10 @@ fn emit_task_status(
         return Ok(());
     }
     let at = task.updated_at.to_rfc3339_z();
-    let (event, new_state) = if task.status == crate::model::TaskStatus::Done {
-        (crate::plugin_payload::name::TASK_DONE, None)
-    } else {
-        (crate::plugin_payload::name::TASK_STATUS_CHANGED, Some(task.status.as_str()))
+    let (event, new_state) = match task.status {
+        crate::model::TaskStatus::Done => (crate::plugin_payload::name::TASK_DONE, None),
+        crate::model::TaskStatus::Rejected => (crate::plugin_payload::name::TASK_REJECTED, None),
+        _ => (crate::plugin_payload::name::TASK_STATUS_CHANGED, Some(task.status.as_str())),
     };
     tx.emit_event(&crate::store_engine::outbox::EventRow {
         event,

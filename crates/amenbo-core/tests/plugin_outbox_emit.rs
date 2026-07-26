@@ -185,6 +185,24 @@ fn a_status_change_and_a_done_carry_the_actor_and_new_state() {
     assert_eq!(ev.new_state, None);
 }
 
+/// The other terminal is its own event too (`AMB-D-397`). Left in the catch-all, "the task closed" would
+/// be `task.done` plus a string match on `task.status_changed` — the asymmetry a plugin author would have
+/// to work around, and one the decision side never had (it names both `accepted` and `rejected`).
+#[test]
+fn rejecting_a_task_fires_its_own_event_and_not_the_catch_all() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let task = store.add_task(new_task("やらないと決めたタスク", project)).unwrap().id;
+
+    let h = head(&store);
+    store.set_task_status(task, TaskStatus::Rejected, ActorKind::Ai).unwrap();
+    let ev = only(&store, h);
+    assert_eq!(ev.event, "task.rejected", "the terminal has a name of its own");
+    assert_eq!(ev.record_id, task);
+    assert_eq!(ev.actor, "ai");
+    assert_eq!(ev.new_state, None, "the name is the whole state — and the reason rides `comment.added`");
+}
+
 /// A transition that does not move the status observes nothing — an idempotent re-set is not a change.
 #[test]
 fn an_idempotent_status_set_emits_nothing() {

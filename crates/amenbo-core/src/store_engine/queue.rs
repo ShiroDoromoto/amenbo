@@ -52,6 +52,9 @@ pub struct QueuedEvent<'a> {
     /// as it stands. The runner resolves the subscription again and needs it to answer a project-scoped
     /// plugin's gate; `None` is a real answer — a record in no project, or a row from before the column.
     pub project: Option<i64>,
+    /// The vanished record's shape as JSON, copied off the outbox row (`AMB-D-407`). The runner builds
+    /// the payload from this row alone, and for a deletion there is nothing left to read it off.
+    pub record: Option<&'a str>,
 }
 
 /// One queued row, as a runner reads it: the row's own id (what it passes to [`dequeue`] once the plugin
@@ -76,6 +79,8 @@ pub struct QueueRow {
     pub new_state: Option<String>,
     /// The project the event was stamped with (`AMB-D-405`), or `None` when it carries none.
     pub project: Option<i64>,
+    /// The vanished record's shape as JSON (`AMB-D-407`), or `None` on an event that carries none.
+    pub record: Option<String>,
 }
 
 /// Place one event on a plugin's queue. Runs on the caller's transaction — the fan-out's, the same one
@@ -92,6 +97,7 @@ pub(super) fn enqueue(conn: &Connection, ev: &QueuedEvent<'_>) -> Result<()> {
         .set(q.at, ev.at)
         .set_opt(q.new_state, ev.new_state)
         .set_opt(q.project, ev.project)
+        .set_opt(q.record, ev.record)
         .sql()
         .execute(conn)
         .map(|_| ())
@@ -103,7 +109,7 @@ pub(super) fn enqueue(conn: &Connection, ev: &QueuedEvent<'_>) -> Result<()> {
 pub fn queued_for(conn: &Connection, plugin: &str, limit: i64) -> Result<Vec<QueueRow>> {
     let q = col::plugin_queue::ALL;
     let mut sel = Select::new();
-    let (id, face, event, record_id, actor, at, new_state, project) = (
+    let (id, face, event, record_id, actor, at, new_state, project, record) = (
         sel.col(q.id),
         sel.col(q.face),
         sel.col(q.event),
@@ -112,6 +118,7 @@ pub fn queued_for(conn: &Connection, plugin: &str, limit: i64) -> Result<Vec<Que
         sel.col(q.at),
         sel.col(q.new_state),
         sel.col(q.project),
+        sel.col(q.record),
     );
     let mut sql = Sql::from(&sel, q.table);
     sql.push_where(Some(&Pred::eq(q.plugin, plugin))).order_by([Sort::by(q.id)]).limit(limit);
@@ -128,6 +135,7 @@ pub fn queued_for(conn: &Connection, plugin: &str, limit: i64) -> Result<Vec<Que
                 at: at.get(r)?,
                 new_state: new_state.get(r)?,
                 project: project.get(r)?,
+                record: record.get(r)?,
             })
         })
         .map_err(StoreEngineError::from)?
@@ -207,6 +215,7 @@ mod tests {
             at: "2026-07-25T09:00:00Z",
             new_state: None,
             project: None,
+            record: None,
         })
         .unwrap();
         tx.commit().unwrap();
@@ -227,6 +236,7 @@ mod tests {
             at: "2026-07-25T09:00:00Z",
             new_state: Some("in_progress"),
             project: Some(3),
+            record: None,
         })
         .unwrap();
         tx.commit().unwrap();
@@ -277,6 +287,7 @@ mod tests {
                 at: "2026-07-25T09:00:00Z",
                 new_state: None,
                 project,
+                record: None,
             })
             .unwrap();
             tx.commit().unwrap();

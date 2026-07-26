@@ -18,9 +18,19 @@ verification/
 ```
 
 `core/`, `cli/` and `gui/` are members of this cargo workspace, outside the main workspace, so
-they are never pulled into `make test`. Nothing in CI builds or tests them either (it only
-license/audit-scans their lockfile), so `cd verification && cargo clippy --all-targets && cargo
-test` is the gate — run it before you land a change here.
+they are never pulled into `make test`. CI has a job of its own for them, gated to changes under
+`verification/` (`.github/workflows/ci.yml`), and this is the line it runs — run the same one before
+you land a change here, so a red arrives at your terminal rather than at main:
+
+```sh
+cargo clippy --manifest-path verification/Cargo.toml --all-targets -- -D warnings -A clippy::disallowed_methods
+cargo test --manifest-path verification/Cargo.toml
+```
+
+`-A clippy::disallowed_methods` is not slack, it is the one rule that cannot apply here: this
+workspace black-box-drives the shipped binary, so it reads process env raw (`AMENBO_BIN`,
+`AMENBO_GUI_CAPTURE_BIN`) rather than through `amenbo_core::env`, which it has no dependency on.
+A plain `cargo clippy --all-targets` in this directory fails on those lines and on nothing else.
 
 ## One scenario file per capability
 

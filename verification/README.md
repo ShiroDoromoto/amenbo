@@ -12,7 +12,7 @@ Every driver reads the same scenario and maps it to its own world.
 verification/
   scenarios/   the single source of truth (YAML). Every driver reads these.
   core/        the scenario schema + validating loader (crate `amenbo-scenario`, `lint` + `emit` bins)
-  cli/         CLI driver + runner — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
+  cli/         CLI driver + runner + coverage count — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
   gui/         mac harness — scenario → screen checklist + screencapture + Vision OCR verdict (crate `amenbo-verify-gui`)
 ```
 
@@ -45,6 +45,9 @@ Adding a line to the set:
    the pile coming back.
 3. Only when no file answers for it — the capability itself is new — start one.
 4. When a feature goes, its file goes with it.
+
+What is covered and what is not is counted, not eyeballed — `verify-coverage` (below) reads the
+capability list out of the shipped binary and names every capability with no file to its name.
 
 One rule sits above all of that: **a line that needs an op the registry does not have is not written
 here at all.** Growing the registry means growing every driver's mapping with it, which is its own
@@ -97,6 +100,32 @@ The exit code is the roll-up — `0` when every scenario that ran is green, non-
 or errored — so a release gate reads it directly. The `--json` aggregate carries `total` / `passed`
 / `failed` / `skipped` / `green` plus each scenario's own report (or its error, or the drivers it
 was written for).
+
+## Coverage
+
+`verify-coverage` counts the scenario set against the capabilities amenbo declares. The denominator
+is not kept here: it is the `capabilities` list the **shipped binary** prints from `agent --json`, so
+it grows the moment amenbo does and the count notices with nobody remembering to update it. The
+numerator is the file names — one per capability, named after the command that capability leads with.
+
+```sh
+cd verification
+# what a release's stock-take reads, against a specific binary:
+cargo run -p amenbo-verify-cli --bin verify-coverage -- --bin /path/to/amenbo
+# the same inventory as JSON, for splitting the gaps into tasks:
+cargo run -p amenbo-verify-cli --bin verify-coverage -- --json
+```
+
+It reports three things: capabilities with no file (**uncovered**), files answering for no capability
+(**unowned** — a leftover from a capability that went, or a name that never matched one), and files
+whose `id` has drifted from their name (**misfiled** — the name is what the count matches on, the id
+is what a report prints, and a file where they disagree is filed as one capability and reported as
+another).
+
+**A gap is not a failure**: the exit code is 0 whether or not the set is complete. An uncovered line
+is work to file, not a reason to hold a release — a gate that blocked on it would only teach everyone
+to skip the gate. Non-zero means the count could not be taken at all (the binary would not run, the
+directory would not be read).
 
 ## GUI harness (mac)
 

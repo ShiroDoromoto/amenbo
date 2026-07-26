@@ -7,7 +7,9 @@
 //! and aggregates. Both call [`run_scenario`] and read a [`Report`]; the isolation, the driver
 //! and the reporting live here so the two share one contract.
 
-mod scratch;
+/// The throwaway store an amenbo run is given. Public because every bin in this crate needs it:
+/// asking the shipped binary anything at all means giving it a home that is not the user's.
+pub mod scratch;
 
 use std::collections::HashMap;
 use std::path::Path;

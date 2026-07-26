@@ -20,6 +20,10 @@ path = "src/main.rs"
 name = "verify-all"
 path = "src/bin/verify_all.rs"
 
+[[bin]]
+name = "verify-coverage"
+path = "src/bin/coverage.rs"
+
 [dependencies]
 amenbo-scenario = { path = "../core" }
 serde_json = "1"

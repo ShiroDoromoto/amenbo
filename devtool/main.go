@@ -68,6 +68,7 @@ func usage() {
 
 Usage:
   devtool task start  <id> [--base main] [--no-reserve] [--no-deps]
+  devtool task cli    <id> [--no-build] -- <amenbo args…>
   devtool task finish <id> [--base main] [--force] [--reset]
   devtool devgui pid       [<id>] [--front]
   devtool devgui sweep     [--yes]
@@ -83,6 +84,12 @@ task start   reserve <id> (todo→in_progress, prod amenbo from the main repo) a
              with 'make install-gui-dev AMB-T-ID=<id>'. Manage the backlog
              (comment/done) from the main repo; verify code there with
              'make verify'.
+task cli     run an amenbo command against the store the task's own dev GUI
+             reads, so a screen can be given something to show. The CLI is the
+             worktree's own build (rebuilt first unless --no-build) pointed at
+             that store with AMENBO_HOME, not a second CLI built for the task:
+             what the app-data name fixes at build time is a directory, and
+             that names the same one at run time. Arguments go after '--'.
 task finish  safely tear it down: refuse unless the worktree is clean and the
              branch is merged into --base (override with --force). Deletes the
              task's dev GUI too — the bundle and its app-data both.
@@ -172,6 +179,25 @@ func taskCmd(args []string) {
 			logf("devtool: %v", err)
 			os.Exit(1)
 		}
+	case "cli":
+		// The amenbo arguments are handed over after `--`, so a flag of theirs is never read as
+		// one of ours (see splitDoubleDash).
+		head, argv, ok := splitDoubleDash(rest)
+		if !ok {
+			logf("devtool: task cli passes its arguments to amenbo after `--`, e.g. `devtool task cli 696 -- task list`")
+			os.Exit(2)
+		}
+		fs := flag.NewFlagSet("task cli", flag.ExitOnError)
+		noBuild := fs.Bool("no-build", false, "run the CLI already built in the worktree, without rebuilding it")
+		id, extra := parseAroundID(fs, head)
+		refuseExtra(extra)
+		id = mustID(id)
+		code, err := taskCLI(id, *noBuild, argv)
+		if err != nil {
+			logf("devtool: %v", err)
+			os.Exit(1)
+		}
+		os.Exit(code)
 	case "finish":
 		fs := flag.NewFlagSet("task finish", flag.ExitOnError)
 		base := fs.String("base", "main", "branch the task must be merged into")

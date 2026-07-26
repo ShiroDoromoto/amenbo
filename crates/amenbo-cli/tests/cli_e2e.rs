@@ -57,6 +57,18 @@ fn signal_name(_status: &std::process::ExitStatus) -> String {
     "no exit code".to_string()
 }
 
+/// `args` with the facet declared on the command line — `--actor <facet>` appended, which is the one
+/// input amenbo is to take it by (`AMB-D-408`). A test that declares its own facet in `args` is left
+/// alone, so `--actor ai` in a call still means what it says. The flag beats anything the environment
+/// carries, so a run is the same whatever the shell the tests were started from had set.
+fn with_actor<'a>(args: &[&'a str], facet: &'a str) -> Vec<&'a str> {
+    let mut with = args.to_vec();
+    if !args.contains(&"--actor") {
+        with.extend_from_slice(&["--actor", facet]);
+    }
+    with
+}
+
 struct Cli {
     home: std::path::PathBuf,
 }
@@ -73,13 +85,12 @@ impl Cli {
     fn run(&self, args: &[&str]) -> (String, i32) {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &self.home)
-            // A write with no facet from a non-interactive caller (the test runner has no TTY) is refused with
-            // facet_required, so declare one here; tests that pass --actor ai override it themselves.
-            .env("AMENBO_ACTOR", "human")
             // No update check: the tests never reach GitHub and never touch the real OS cache (hermetic).
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&self.home)
-            .args(args)
+            // A write with no facet from a non-interactive caller (the test runner has no TTY) is refused
+            // with facet_required, so every call declares one; a test that names its own is left alone.
+            .args(with_actor(args, "human"))
             .output()
             .expect("failed to run the binary");
         (
@@ -93,10 +104,9 @@ impl Cli {
     fn json_from(&self, cwd: &std::path::Path, args: &[&str]) -> Value {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &self.home)
-            .env("AMENBO_ACTOR", "human")
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(cwd)
-            .args(args)
+            .args(with_actor(args, "human"))
             .output()
             .expect("failed to run the binary");
         let stdout = String::from_utf8_lossy(&out.stdout).to_string();
@@ -117,10 +127,9 @@ impl Cli {
         use std::io::Write;
         let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &self.home)
-            .env("AMENBO_ACTOR", "human")
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&self.home)
-            .args(args)
+            .args(with_actor(args, "human"))
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -139,10 +148,9 @@ impl Cli {
     fn run_both(&self, args: &[&str]) -> (String, String, i32) {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &self.home)
-            .env("AMENBO_ACTOR", "human")
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&self.home)
-            .args(args)
+            .args(with_actor(args, "human"))
             .output()
             .expect("failed to run the binary");
         (
@@ -156,13 +164,11 @@ impl Cli {
     fn run_err(&self, args: &[&str]) -> (String, i32) {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &self.home)
-            // A write with no facet from a non-interactive caller (the test runner has no TTY) is refused with
-            // facet_required, so declare one here; tests that pass --actor ai override it themselves.
-            .env("AMENBO_ACTOR", "human")
             // No update check: the tests never reach GitHub and never touch the real OS cache (hermetic).
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&self.home)
-            .args(args)
+            // The facet, declared the same way `run` declares it.
+            .args(with_actor(args, "human"))
             .output()
             .expect("failed to run the binary");
         (
@@ -846,9 +852,9 @@ fn concurrent_writers_all_land_without_a_file_lock() {
         handles.push(std::thread::spawn(move || {
             let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
                 .env("AMENBO_HOME", &home)
-                .env("AMENBO_ACTOR", "human") // non-interactive writes declare a facet
                 .env("AMENBO_UPDATE_CHECK", "0") // no update check (hermetic)
-                .args(["task", "add", "--title", &format!("t{i}"), "--project", &pid])
+                // A non-interactive write declares a facet.
+                .args(["task", "add", "--title", &format!("t{i}"), "--project", &pid, "--actor", "human"])
                 .output()
                 .expect("task add");
             assert!(
@@ -878,13 +884,13 @@ fn r6_clone_to_new_machine_rebinds_hardware() {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", home)
             .env("AMENBO_HW_ID", hw)
-            .env("AMENBO_ACTOR", "human") // writes such as init declare a facet
             .env("AMENBO_UPDATE_CHECK", "0") // no update check (hermetic)
             // Isolate the CWD into the temp home as well (as the other helpers do). Without it, init writes
             // `.amenbo`/AGENTS.md/CLAUDE.md into the test binary's CWD (crates/amenbo-cli) and dirties both the
             // source tree and the real app-data.
             .current_dir(home)
-            .args(args)
+            // Writes such as init declare a facet.
+            .args(with_actor(args, "human"))
             .output()
             .expect("run amenbo");
         (serde_json::from_slice(&out.stdout).unwrap_or(Value::Null), String::from_utf8_lossy(&out.stderr).into_owned())
@@ -1067,11 +1073,10 @@ fn execution_guard_requires_pointer_when_unbound() {
         .env_remove("AMENBO_HOME")
         .env_remove("AMENBO_PROJECT_DIR")
         .env("AMENBO_UPDATE_CHECK", "0") // no update check (hermetic)
-        // Declare the facet too: this watches the human-side guard. An inherited AMENBO_ACTOR=ai would instead
-        // trip the guard that cuts an AI off in an unbound CWD, which fires first.
-        .env("AMENBO_ACTOR", "human")
         .current_dir(&dir)
-        .args(["status", "--json"])
+        // Declare the facet too: this watches the human-side guard, and as `ai` the run would instead trip
+        // the guard that cuts an AI off in an unbound CWD, which fires first.
+        .args(["status", "--json", "--actor", "human"])
         .output()
         .expect("failed to run the binary");
     assert_eq!(out.status.code(), Some(1), "an unbound plain dir exits 1");
@@ -1092,9 +1097,9 @@ fn execution_guard_requires_pointer_when_unbound() {
         .env("AMENBO_HOME", &home)
         .env_remove("AMENBO_PROJECT_DIR")
         .env("AMENBO_UPDATE_CHECK", "0") // no update check (hermetic)
-        .env("AMENBO_ACTOR", "human") // as above (an AI would be cut off for want of a binding — a different guard)
         .current_dir(&dir)
-        .args(["status", "--json"])
+        // As above (an AI would be cut off for want of a binding — a different guard).
+        .args(["status", "--json", "--actor", "human"])
         .output()
         .expect("failed to run the binary");
     assert_eq!(out2.status.code(), Some(0), "an explicit AMENBO_HOME passes the guard exception");
@@ -1116,10 +1121,9 @@ fn nested_worktree_is_refused_but_a_subdirectory_and_a_submodule_are_not() {
     let run_args_in = |dir: &std::path::Path, args: &[&str]| {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
-            .env("AMENBO_ACTOR", "human")
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(dir)
-            .args(args)
+            .args(with_actor(args, "human"))
             .output()
             .expect("failed to run the binary");
         (out.status.code(), String::from_utf8_lossy(&out.stderr).to_string())
@@ -1238,9 +1242,8 @@ fn version_and_update_answer_without_a_pointer() {
             .env_remove("AMENBO_HOME")
             .env_remove("AMENBO_PROJECT_DIR")
             .env("AMENBO_UPDATE_CHECK", "0") // no upstream lookup (hermetic)
-            .env("AMENBO_ACTOR", "ai")
             .current_dir(&dir)
-            .args(args)
+            .args(with_actor(args, "ai"))
             .output()
             .expect("failed to run the binary");
         let stdout = String::from_utf8_lossy(&out.stdout).to_string();
@@ -1276,9 +1279,8 @@ fn update_apply_declines_gracefully_without_manifest() {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_amenbo"));
         cmd.env_remove("AMENBO_HOME")
             .env_remove("AMENBO_PROJECT_DIR")
-            .env("AMENBO_ACTOR", "ai")
             .current_dir(&dir)
-            .args(args);
+            .args(with_actor(args, "ai"));
         if check_off {
             cmd.env("AMENBO_UPDATE_CHECK", "0"); // no upstream lookup — the manifest is unreachable
         }
@@ -1311,10 +1313,9 @@ fn update_rollback_declines_gracefully_without_a_retained_binary() {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env_remove("AMENBO_HOME")
             .env_remove("AMENBO_PROJECT_DIR")
-            .env("AMENBO_ACTOR", "ai")
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&dir)
-            .args(args)
+            .args(with_actor(args, "ai"))
             .output()
             .expect("failed to run the binary");
         (out.status.code(), String::from_utf8_lossy(&out.stdout).to_string(), String::from_utf8_lossy(&out.stderr).to_string())
@@ -2292,7 +2293,7 @@ fn actor_facet_is_stamped_from_flag_and_defaults_to_human() {
     assert_eq!(ai["comment"]["author_kind"], "ai");
     assert_eq!(ai["acted_facet"], "ai");
 
-    // The default — the harness declares AMENBO_ACTOR=human — is human.
+    // The harness declares `--actor human`, so an undeclared call lands as human.
     let human = cli.json(&["comment", "add", &tid, "--text", "from human", "--json"]);
     assert_eq!(human["comment"]["author_kind"], "human");
     assert_eq!(human["acted_facet"], "human");
@@ -2315,7 +2316,9 @@ fn facet_required_fails_loud_on_unspecified_machine_writes_only() {
     cli.run(&["init", "--name", "tester"]);
     let pid = cli.a_project(); // somewhere for the explicit-facet task add below to land
 
-    // A machine call that declares no facet at all (the test process has no TTY); AMENBO_ACTOR is removed.
+    // A machine call that declares no facet at all (the test process has no TTY). The environment is
+    // stripped as well, because the build still reads `AMENBO_ACTOR`: an inherited one would declare the
+    // facet this test is here to withhold. The removal goes when that read does.
     let spawn = |args: &[&str]| -> (String, i32) {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
@@ -2538,9 +2541,8 @@ fn bind_refuses_nested_subdirectory_without_force() {
         args.extend_from_slice(extra);
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
-            .env("AMENBO_ACTOR", "human")
             .current_dir(cwd)
-            .args(&args)
+            .args(with_actor(&args, "human"))
             .output()
             .expect("run amenbo bind");
         (
@@ -3675,7 +3677,9 @@ fn lint(cwd: &std::path::Path, home: &std::path::Path, args: &[&str], stdin: Opt
     use std::io::Write;
     let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", home)
-        .env_remove("AMENBO_ACTOR") // a read stamps no facet, so `--json` here must not want one
+        // A read stamps no facet, so `--json` here must not want one — declared neither by flag nor,
+        // while the build still reads it, by an inherited environment.
+        .env_remove("AMENBO_ACTOR")
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(cwd)
         .arg("lint")
@@ -3841,11 +3845,10 @@ fn the_hook_probe_spawns_git_once_per_command_and_never_for_hooks_itself() {
         let _ = std::fs::remove_file(&log);
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
-            .env("AMENBO_ACTOR", "human")
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("PATH", &shim_dir)
             .current_dir(&cli.home)
-            .args(args)
+            .args(with_actor(args, "human"))
             .output()
             .expect("failed to run the binary");
         assert_eq!(exit_code(&out), 0, "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
@@ -3857,10 +3860,9 @@ fn the_hook_probe_spawns_git_once_per_command_and_never_for_hooks_itself() {
 
     Command::new(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &cli.home)
-        .env("AMENBO_ACTOR", "human")
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&cli.home)
-        .args(["hooks", "install"])
+        .args(["hooks", "install", "--actor", "human"])
         .output()
         .unwrap();
     let consent_before = cli.json(&["hooks", "status", "--json"])["consent"].clone();
@@ -4029,10 +4031,9 @@ fn a_closed_pipe_ends_the_run_without_a_panic() {
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &cli.home)
-        .env("AMENBO_ACTOR", "human")
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&cli.home)
-        .args(["agent", "--full"])
+        .args(["agent", "--full", "--actor", "human"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

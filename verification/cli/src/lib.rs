@@ -54,12 +54,17 @@ impl Driver {
     /// execution failure (spawn failed, non-JSON output, non-zero exit, or an `error` object) —
     /// distinct from an assert that ran cleanly and came out false.
     fn run_json(&self, args: &[&str]) -> Result<serde_json::Value, String> {
+        // The facet goes on the command line, which is the one input amenbo is to take it by; a call
+        // that names its own is left alone.
+        let mut with_facet = args.to_vec();
+        if !args.contains(&"--actor") {
+            with_facet.extend_from_slice(&["--actor", "human"]);
+        }
         let out = Command::new(&self.bin)
-            .args(args)
+            .args(&with_facet)
             .current_dir(&self.session.cwd)
             .env("AMENBO_HOME", &self.session.home)
             .env("AMENBO_UPDATE_CHECK", "0")
-            .env("AMENBO_ACTOR", "human")
             .env("NO_COLOR", "1")
             .output()
             .map_err(|e| format!("could not run `{}`: {e}", self.bin.display()))?;

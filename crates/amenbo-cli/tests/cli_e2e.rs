@@ -516,6 +516,25 @@ fn config_onboarded_flag_roundtrips() {
     assert_ne!(code, 0);
 }
 
+/// `config set default_view` decides the view a project **created without one** opens on. The setting
+/// is otherwise unobservable — reading it back out of `config` only proves it was stored — so what is
+/// asserted here is the project that came after it, which is the whole point of the key.
+#[test]
+fn the_configured_default_view_is_what_a_new_project_opens_on() {
+    let cli = Cli::new();
+    // The shipped default, on a project that names no view.
+    let shipped = cli.json(&["project", "add", "--name", "既定のまま", "--json"]);
+    assert_eq!(shipped["project"]["default_view"], "board");
+
+    cli.run(&["config", "set", "default_view", "list"]);
+    let configured = cli.json(&["project", "add", "--name", "設定に従う", "--json"]);
+    assert_eq!(configured["project"]["default_view"], "list", "the key is what answers now");
+
+    // And `--view` still wins: the setting is the answer when nobody gave one, not a ceiling.
+    let named = cli.json(&["project", "add", "--name", "明示する", "--view", "timeline", "--json"]);
+    assert_eq!(named["project"]["default_view"], "timeline");
+}
+
 /// `amenbo export` streams the whole single-DB store out as portable JSON (a thin wrapper over core's
 /// `export_json`). There is exactly one shape — no excerpts, no markdown/csv. The envelope carries an
 /// `amenbo_export` header, and its reader lives outside amenbo: nothing reads it back in.

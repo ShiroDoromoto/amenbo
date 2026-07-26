@@ -41,6 +41,11 @@ steps:
       field: settings.default_view
       equals: list
 
+  # Reading the value back only proves it was stored. What the key is *for* is the project created
+  # after it — one that names no view of its own — so that is what is asked here.
+  - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — opened on the configured view }, as: configured }
+  - { type: assert, domain: project, op: field, with: { target: configured, field: default_view, equals: list } }
+
   # The language is not decoration: it is what the managed guidance block in every bound folder
   # tells an AI to speak to the human in.
   - type: action

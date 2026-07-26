@@ -2826,7 +2826,7 @@ fn parse_view(s: &str) -> Result<View, CliError> {
         other => Err(CliError {
             code: "invalid_value",
             message: format!("--view value '{other}' is invalid."),
-            hint: Some("Specify one of: list | board.".to_string()),
+            hint: Some("Specify one of: list | board | calendar | timeline.".to_string()),
             exit: 2,
         }),
     }
@@ -3035,7 +3035,7 @@ fn init_cmd(flags: &Flags, name: Option<String>, language: Option<String>, force
     let project = store
         .project_add(amenbo_core::ops::project::NewProject {
             name: project_name,
-            view: amenbo_core::model::View::Board,
+            view: store.config.default_view,
             notes: String::new(),
             color: None,
         })
@@ -3405,7 +3405,13 @@ fn config(store: &mut Store, flags: &Flags, sub: Option<ConfigCmd>) -> Result<i3
 fn project(store: &mut Store, flags: &Flags, sub: ProjectCmd) -> Result<i32, CliError> {
     match sub {
         ProjectCmd::Add { name, view, notes, color } => {
-            let view = parse_view(&view)?;
+            // No `--view` is not "board": it is "whatever this store was configured to open a new
+            // project on". The setting exists to be the answer here, so reading it anywhere else —
+            // or defaulting past it — is what would leave it a value nothing acts on.
+            let view = match view {
+                Some(v) => parse_view(&v)?,
+                None => store.config.default_view,
+            };
             let p = store.project_add(ops::project::NewProject { name, view, notes, color }).map_err(CliError::from)?;
             let detail = store.project_detail(p.id).map_err(CliError::from)?;
             write_envelope(flags, "project.add", "project", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Created project: {} ({})", p.name, p.id));

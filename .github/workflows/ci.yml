@@ -506,6 +506,36 @@ jobs:
       - name: Doc links
         run: RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path app/src-tauri/Cargo.toml --no-deps --document-private-items
 
+  # The host crate's lockfile has to follow the workspace's. It is `exclude`d and carries a lock of
+  # its own, but it reaches core through a path dependency — so a workspace bump changes what that
+  # lock resolves to, while the commit that made the bump never opens the file. No cargo invocation
+  # in this workflow passes `--locked`, so the stale lock would stay green and drift; what finds it
+  # is the next person to build the app, as unrelated churn in their working tree.
+  #
+  # `cargo metadata` re-resolves and rewrites the lock without compiling anything, so this job needs
+  # neither the Tauri system libs nor a target dir — the whole verdict is the diff it leaves behind.
+  #
+  # Dependabot's own pull requests are exempt, because they are the ones that cause the drift and
+  # failing them would deadlock the auto-merge (a red run never reaches the merge workflow). Theirs
+  # is repaired ahead of the merge instead, by the lockstep job in dependabot-automerge.yml.
+  app-lock:
+    name: app crate lockfile follows the workspace
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' && github.actor != 'dependabot[bot]' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Re-resolve the host crate's lockfile
+        run: cargo metadata --manifest-path app/src-tauri/Cargo.toml --format-version 1 > /dev/null
+
+      - name: The lockfile must not have moved
+        run: |
+          if ! git diff --exit-code -- app/src-tauri/Cargo.lock; then
+            echo "::error file=app/src-tauri/Cargo.lock::behind the workspace — run 'make lock' and commit the result"
+            exit 1
+          fi
+
   # The comment guard. Where tree-guards below reads whole lines, this one reads the comments
   # themselves: where they sit, what shape they take, and the vocabulary they may not use — a
   # reference to this project's own tracker, and Japanese. The hook runs the same command, so this

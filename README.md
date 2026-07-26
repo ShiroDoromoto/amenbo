@@ -153,6 +153,13 @@ make shell-gate                        # the shell leg on its own (every tracked
 cargo nextest run --features scale,e2e # core/cli only, without the doctest + GUI legs
 ```
 
+The Tauri host crate sits outside the workspace with a lockfile of its own, but it reaches
+core through a path dependency — so a workspace bump moves what that lock resolves to
+without touching the file. CI's `app-lock` job fails a pull request whose copy is behind;
+`make lock` re-resolves it (seconds, nothing is compiled) and the result is yours to commit.
+Dependabot's own bumps are repaired for it, ahead of the merge, so the auto-merge keeps
+working — see `lockstep` in `.github/workflows/dependabot-automerge.yml`.
+
 The DB layer is [rusqlite](https://docs.rs/rusqlite) and nothing else: the change feed rides
 SQLite's update hook, which belongs to the connection, and reads are issued from inside the
 write transaction — both are lost the moment a second library opens a connection of its own.

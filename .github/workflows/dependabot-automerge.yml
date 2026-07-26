@@ -17,6 +17,10 @@ name: Dependabot auto-merge
 #
 # Merging is automatic. SHIPPING is not: releases stay an explicit human/AI step
 # (wharfy), so bumps accumulate on main until someone cuts one deliberately.
+#
+# The merge is preceded by one repair the bot cannot make for itself — completing
+# the bump in the lockfile that sits outside the workspace (see `lockstep`). That
+# is why this workflow writes as well as merges.
 on:
   workflow_run:
     workflows: [CI]
@@ -27,9 +31,69 @@ permissions:
   pull-requests: write
 
 jobs:
+  # The GUI shell crate is `exclude`d from the workspace and carries a lockfile of its own, but it
+  # reaches core through a path dependency: a workspace bump changes what that lock resolves to, and
+  # Dependabot's PR does not open the file. Merged as-is, main's copy points at a resolution that is
+  # no longer real, and the next person to build the app wears the churn.
+  #
+  # So the bump is completed here, before it lands: re-resolve, and push the result onto the same
+  # branch. `cargo metadata` rewrites the lock without compiling, so this costs seconds and needs
+  # none of the Tauri system libs.
+  #
+  # It runs ahead of the merge rather than as a CI job because CI's token is read-only on a
+  # Dependabot pull request — this workflow's `workflow_run` trigger is what carries a writable one.
+  # The push does not start another CI run (a GITHUB_TOKEN push never does), which is why the merge
+  # below can follow immediately: the run that went green and the tree being merged differ only by a
+  # lockfile cargo derived from the manifests CI already judged.
+  #
+  # A human's PR is held to the same contract by CI's `app-lock` job, which fails instead of pushing.
+  lockstep:
+    name: Bring the app crate's lockfile along
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    steps:
+      # workflow_run checks out the default branch unless told otherwise, and the branch (not the
+      # sha) is what a push needs to land on.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      # The same ownership check the merge job makes: the actor above says who triggered CI, this
+      # says who owns the branch about to be written to.
+      - name: Push the re-resolved lockfile if it moved
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          pr="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open \
+                  --json number,author --jq '.[0] | select(.author.login == "app/dependabot") | .number')"
+          if [ -z "$pr" ]; then
+            echo "no open Dependabot PR on ${BRANCH} — nothing to bring along"
+            exit 0
+          fi
+          cargo metadata --manifest-path app/src-tauri/Cargo.toml --format-version 1 > /dev/null
+          if git diff --quiet -- app/src-tauri/Cargo.lock; then
+            echo "app/src-tauri/Cargo.lock already follows the workspace"
+            exit 0
+          fi
+          # GitHub's documented identity for a commit an action authored. The leading number is the
+          # bot account's id, which is what ties the commit to it rather than to a stranger.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src-tauri/Cargo.lock
+          git commit -m "chore(deps): follow the workspace in the app crate's lockfile"
+          git push origin "HEAD:${BRANCH}"
+          echo "pushed the re-resolved lockfile onto ${BRANCH} (PR #${pr})"
+
   merge:
     name: Merge green Dependabot PRs
     runs-on: ubuntu-latest
+    needs: lockstep
     if: >-
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&

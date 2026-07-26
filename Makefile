@@ -111,7 +111,7 @@ LINUX_LINT_IMAGE  := amenbo-linux-lint:$(HOST_GUI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks verify lint-linux verify-gui-linux verify-network-linux verify-network-mac test doc-gate shell-gate comment-gate go-gate scopes-gate cli-name-gate sweep-stale dist-gui dist-gui-mac dist-gui-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac test doc-gate shell-gate comment-gate go-gate scopes-gate cli-name-gate sweep-stale dist-gui dist-gui-mac dist-gui-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -135,6 +135,7 @@ help:
 	@echo "make verify-existing-store - run the CLI bundled in the shipped .pkg against a clone of the prod store and check an existing store still opens and reads back (release runs this before publish)"
 	@echo "make release      - [pre-tag gate only] just runs make test. Build and distribution are both public CI (release.yml on tag push -> prerelease, the promote workflow does the promotion) = there is no command here that distributes"
 	@echo "make codesign-cert - one-time: create a stable self-signed certificate so install-dev/gui-dev stop re-prompting the keychain on every rebuild (macOS)"
+	@echo "make lock         - re-resolve app/src-tauri/Cargo.lock (the GUI shell is outside the workspace, so a workspace bump leaves its lock behind; CI fails a PR whose lock is stale)"
 	@echo "make hooks        - enable the git hooks (core.hooksPath=.githooks): pre-commit runs the tree guards over the staged diff, commit-msg holds the message to the same vocabulary"
 	@echo "make devtool      - build the optional parallel-development helper to ~/.cargo/bin/devtool (needs Go; amenbo itself builds and tests without it)"
 	@echo "make gui          - build the prod GUI (amenbo.app / work.amenbo.app)"
@@ -142,6 +143,17 @@ help:
 	@echo "make install-gui     - [retired] the prod GUI ships in the unified installer; release with make release"
 	@echo "make install-gui-dev - build the dev GUI and put it in $(APPS_DIR)/$(GUI_DEV_NAME).app"
 	@echo "                       AMB-T-ID=<id> builds that task's own throwaway instance (app-data work.amenbo.amenbo-dev-<id>) instead of the shared dev app; devtool task finish <id> deletes it"
+
+## Re-resolve the lockfile of the GUI shell crate. That crate sits outside the workspace but reaches
+## core through a path dependency, so a workspace bump changes what its lock resolves to — while the
+## commit that made the bump never touches the file. Left alone the two drift apart silently, and the
+## next person to build the app finds the churn in their working tree instead. `cargo metadata`
+## re-resolves and rewrites the lock without compiling anything, so this needs none of the Tauri
+## system libraries and takes seconds. CI runs the same command and fails if the file moves.
+lock:
+	cargo metadata --manifest-path app/src-tauri/Cargo.toml --format-version 1 >/dev/null
+	@git --no-pager diff --stat -- app/src-tauri/Cargo.lock
+	@echo "→ app/src-tauri/Cargo.lock re-resolved (commit it if it moved)"
 
 ## Tree guards: point the git hooks at .githooks.
 hooks:

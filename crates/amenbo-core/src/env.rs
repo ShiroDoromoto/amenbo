@@ -1,24 +1,19 @@
 //! The **one audited gate** through which the process environment is read.
 //!
 //! `disallowed-methods` in `clippy.toml` **bans `std::env::var` and `std::env::var_os` across every
-//! crate**, funnelling raw environment reads into this module. The point is to **mechanically**
-//! prevent a regression where the facet's entry point (`AMENBO_ACTOR`) creeps back in at some new
-//! call site, bypasses `decide_facet`, and silently falls back to the human facet. With every
-//! environment read gathered into a single module, which process inputs we depend on stays
-//! reviewable.
+//! crate**, funnelling raw environment reads into this module. An environment variable propagates
+//! across process boundaries on its own, so what a process inherits decides behaviour nobody at the
+//! call site declared. Gathering every read into a single module keeps the list of process inputs we
+//! depend on reviewable, and makes adding one a deliberate act rather than an incidental line.
+//!
+//! The facet is **not** among them (`AMB-D-408`): it is declared by `--actor` and nowhere else,
+//! precisely because it must not be inherited.
 //!
 //! Note that this is a speed bump, not a sandbox: a read reached through a function pointer slips
 //! past it. It holds only so long as `#[allow]` stays on the two functions below and no raw
 //! environment read exists anywhere else.
 
 use std::ffi::OsString;
-
-/// `AMENBO_ACTOR` — the facet performing this operation (`human` / `ai`); `decide_facet` consumes
-/// this value. It is **the entry point for stamping a facet onto a write**, so it must always come
-/// through this gate rather than a raw read.
-pub fn actor() -> Option<String> {
-    var("AMENBO_ACTOR")
-}
 
 /// The name of [`home`], for the surfaces that **set** it rather than read it — a plugin is handed the
 /// store this way ([`crate::plugin_callback`]), and a name that is written in two places is a name that can

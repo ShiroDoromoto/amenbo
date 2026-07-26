@@ -2316,22 +2316,21 @@ fn actor_facet_is_stamped_from_flag_and_defaults_to_human() {
     assert_eq!(code, 2);
 }
 
-/// A **write** with no facet from a machine context (--json, no TTY) does not quietly become a human write:
-/// it stops with facet_required (exit 2). Pure reads (version/list) record no facet, so they go through
-/// without one — a machine's reads are never blocked for nothing.
+/// An operation that **uses** the facet and does not declare one stops with facet_required (exit 2), and it
+/// stops whatever the call looks like — `--json` or not, TTY or not (`AMB-D-408`). That covers the writes
+/// that stamp the facet *and* the reads that draw an AI's reach from it, so `task list` is refused for the
+/// same reason `task add` is. Only the faces that never touch a facet (version …) pass without one.
 #[test]
-fn facet_required_fails_loud_on_unspecified_machine_writes_only() {
+fn facet_required_stops_every_operation_that_uses_the_facet() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
     let pid = cli.a_project(); // somewhere for the explicit-facet task add below to land
 
-    // A machine call that declares no facet at all (the test process has no TTY). The environment is
-    // stripped as well, because the build still reads `AMENBO_ACTOR`: an inherited one would declare the
-    // facet this test is here to withhold. The removal goes when that read does.
+    // A call that declares no facet at all. Nothing is stripped from the environment: the facet has no
+    // entry point there to inherit one from.
     let spawn = |args: &[&str]| -> (String, i32) {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
-            .env_remove("AMENBO_ACTOR")
             .current_dir(&cli.home)
             .args(args)
             .output()
@@ -2344,15 +2343,23 @@ fn facet_required_fails_loud_on_unspecified_machine_writes_only() {
     assert_eq!(code, 2, "a write with no facet specified must stop: {stderr}");
     assert!(stderr.contains("facet_required"), "should return facet_required: {stderr}");
 
-    // Reads (version / task list) record no facet, so they pass without one.
-    let (_e, code) = spawn(&["version", "--json"]);
-    assert_eq!(code, 0, "version is a read, so it passes without a facet");
-    let (_e, code) = spawn(&["task", "list", "--json"]);
-    assert_eq!(code, 0, "task list is a read, so it passes without a facet");
+    // So does a read that surfaces store content, and dropping `--json` changes nothing — the context of
+    // the call is not what decides.
+    let (stderr, code) = spawn(&["task", "list", "--json"]);
+    assert_eq!(code, 2, "a read that draws the reach must stop too: {stderr}");
+    assert!(stderr.contains("facet_required"), "should return facet_required: {stderr}");
+    let (stderr, code) = spawn(&["task", "list"]);
+    assert_eq!(code, 2, "and it stops without --json as well: {stderr}");
 
-    // With the facet spelled out (--actor human) the write goes through.
+    // A face that never touches a facet passes without one.
+    let (_e, code) = spawn(&["version", "--json"]);
+    assert_eq!(code, 0, "version uses no facet, so it passes without one");
+
+    // With the facet spelled out (--actor human) both go through.
     let (_e, code) = spawn(&["task", "add", "--title", "y", "--project", &pid, "--actor", "human", "--json"]);
     assert_eq!(code, 0, "a write with an explicit facet passes");
+    let (_e, code) = spawn(&["task", "list", "--actor", "human", "--json"]);
+    assert_eq!(code, 0, "a read with an explicit facet passes");
 }
 
 /// One lap around the dimension model on the CLI: add an axis, value-add, list/show by name, set/unset on a
@@ -3725,9 +3732,7 @@ fn lint(cwd: &std::path::Path, home: &std::path::Path, args: &[&str], stdin: Opt
     use std::io::Write;
     let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", home)
-        // A read stamps no facet, so `--json` here must not want one — declared neither by flag nor,
-        // while the build still reads it, by an inherited environment.
-        .env_remove("AMENBO_ACTOR")
+        // `lint` touches no facet, so it must run with none declared — and none is declared here.
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(cwd)
         .arg("lint")
@@ -4663,7 +4668,9 @@ fn a_plugin_reads_its_own_project_back_and_no_other() {
     let outside_id = id_str(&outside["task"]["id"]);
 
     // A project-scoped plugin whose whole body is two calls back into amenbo, each answer kept in a file so
-    // the test reads exactly what the plugin saw.
+    // the test reads exactly what the plugin saw. It declares its facet like any other caller (`AMB-D-408`)
+    // — and declares `human`, the facet that normally reaches the whole device, so what narrows these two
+    // calls can only be the window amenbo handed it.
     install_plugin(&cli, "reader", serde_json::json!([]));
     let answers = cli.home.join("answers");
     std::fs::create_dir_all(&answers).unwrap();
@@ -4672,8 +4679,8 @@ fn a_plugin_reads_its_own_project_back_and_no_other() {
         &program,
         format!(
             "#!/bin/sh\ncat >/dev/null\n\
-             '{bin}' task list --json > '{out}/list.json'\n\
-             '{bin}' task show {outside_id} --json > '{out}/show.out' 2> '{out}/show.err'\n\
+             '{bin}' task list --actor human --json > '{out}/list.json'\n\
+             '{bin}' task show {outside_id} --actor human --json > '{out}/show.out' 2> '{out}/show.err'\n\
              printf '%s' \"$?\" > '{out}/show.code'\n",
             bin = env!("CARGO_BIN_EXE_amenbo"),
             out = answers.display(),

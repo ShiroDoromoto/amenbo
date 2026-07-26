@@ -115,6 +115,31 @@ impl Driver {
                 self.run_json(&["comment", "add", &target.to_string(), "--text", text, "--json"])?;
                 Ok(Outcome::action(format!("commented on task {target}")))
             }
+            (Domain::Task, "status") => {
+                let target = self.resolve(with)?;
+                let status = req_str(with, "status")?;
+                // The move is refused rather than silently ignored (a reserve that is not from todo
+                // comes back `already_reserved`), and `run_json` reads that non-zero exit as an
+                // execution error — so a scenario that walks the states out of order says so.
+                self.run_json(&["task", "status", &target.to_string(), status, "--json"])?;
+                Ok(Outcome::action(format!("moved task {target} to {status}")))
+            }
+            (Domain::Task, "done") => {
+                let target = self.resolve(with)?;
+                self.run_json(&["task", "done", &target.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("marked task {target} done")))
+            }
+            (Domain::Task, "reopen") => {
+                let target = self.resolve(with)?;
+                self.run_json(&["task", "reopen", &target.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("reopened task {target}")))
+            }
+            (Domain::Task, "block") => {
+                let target = self.resolve(with)?;
+                let reason = req_str(with, "reason")?;
+                self.run_json(&["task", "block", &target.to_string(), "--reason", reason, "--json"])?;
+                Ok(Outcome::action(format!("blocked task {target}: {reason}")))
+            }
             (Domain::Decision, "create") => {
                 let title = req_str(with, "title")?;
                 let pid = self.project_id.to_string();

@@ -165,6 +165,12 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create", required: &["title"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "assign", required: &["target", "assignee"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "comment", required: &["target", "text"], binds: false },
+    // The progress states, each by the command a user reaches for: `status` is the explicit move
+    // (and the reserve), `done` / `reopen` / `block` are the three the CLI gives their own verb.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "status", required: &["target", "status"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "done", required: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "reopen", required: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "block", required: &["target", "reason"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], binds: true },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], binds: false },

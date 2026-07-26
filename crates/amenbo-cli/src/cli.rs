@@ -26,7 +26,8 @@ pub struct Cli {
     /// disable color
     #[arg(long, global = true)]
     pub no_color: bool,
-    /// facet of this operation (human / ai). AI agents pass ai. Defaults to the AMENBO_ACTOR env var, then human
+    /// facet of this operation (human / ai). AI agents pass ai. Required by every operation that uses the
+    /// facet — the writes that stamp it, and the reads that draw an AI's reach from it. Never defaulted
     #[arg(long, global = true)]
     pub actor: Option<String>,
 

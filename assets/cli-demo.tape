@@ -3,6 +3,12 @@
 # what the demo shows:
 #
 #     cargo build -p amenbo-cli && vhs assets/cli-demo.tape
+#     rm assets/cli-demo.transcript.txt && cargo test -p amenbo-cli --features e2e --test demo_tape
+#
+# The second line is not optional. A gif carries no diff, so what watches this film for rot is
+# assets/cli-demo.transcript.txt: the lines below, replayed and compared by tests/demo_tape.rs
+# (deleting it is how it is rewritten). Left behind, it either greens a stale picture or reddens a
+# fresh one.
 #
 # The recording is a throwaway store, and the two things that keep it one are the same two the
 # `make verify` script uses: AMENBO_HOME pointing at a scratch directory (the only thing that keeps

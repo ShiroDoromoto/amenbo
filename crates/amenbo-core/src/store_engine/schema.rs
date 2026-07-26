@@ -407,6 +407,7 @@ macro_rules! plain_decl {
     (integer, $c:literal) => { concat!("INTEGER ", $c, " NOT NULL") };
     (bigint)              => { "BIGINT NOT NULL" };
     (bigint, $c:literal)  => { concat!("BIGINT ", $c, " NOT NULL") };
+    (bigint_opt)          => { "BIGINT" };
 }
 
 /// The same line → the **type** of the column it declares, the way [`column_type!`] does for the
@@ -419,6 +420,7 @@ macro_rules! plain_type {
     (text_opt) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
     (integer) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
     (bigint)  => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
+    (bigint_opt) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int, $crate::store_engine::sql::Nullable> };
 }
 
 /// The plain tables, declared the way the registry declares a record's: one line per column, from which
@@ -784,6 +786,15 @@ plain_tables! {
     /// cursor. Retention is a separate policy from the feed's window-trim: an event must survive until it
     /// has been fanned out onto the queue of every plugin that observes it (`plugin_queue` below,
     /// `AMB-D-399`), so nothing here is trimmed on the "consumed or not" basis the feed uses.
+    ///
+    /// `project` is the one thing here the event did not carry on its own: the project the record was in
+    /// **at the moment the event was appended** (`AMB-D-405`), which is what the fan-out routes a
+    /// project-scoped plugin's subscription on. It is stamped rather than looked up later because the
+    /// record is not always still there to ask — a deletion's row is gone by the time anyone delivers —
+    /// and because a task that moves between the append and the delivery would otherwise route the older
+    /// event to its new home. `NULL` means "in no project, or from before this column existed". No foreign
+    /// key: an event outlives the record it is about, and a project delete must leave its tasks'
+    /// `task.deleted` events standing rather than cascade them away.
     plugin_outbox {
         id: integer("PRIMARY KEY AUTOINCREMENT"),
         event: text,
@@ -791,6 +802,7 @@ plain_tables! {
         actor: text,
         at: text,
         new_state: text_opt,
+        project: bigint_opt,
     }
 
     /// One plugin's **work queue**: the events fanned out to it and not yet run (`AMB-D-399`). Delivery is

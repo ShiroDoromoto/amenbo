@@ -175,6 +175,21 @@ pub const STEPS: &[Step] = &[
         // here — see the function.
         apply: Apply::Custom(admit_rejected_task_status),
     },
+    Step {
+        to: 10,
+        name: "add plugin_outbox.project, the project an event is stamped with when it is appended",
+        // `AMB-D-405`: the fan-out stopped reading the project back off the record and reads it off the
+        // event instead, so the outbox grew a column. A store already on disk has the table (the outbox
+        // predates this), and `CREATE TABLE IF NOT EXISTS` leaves a table that is present alone — without
+        // this step the first drain fails with `no such column`.
+        //
+        // **Unseeded, on purpose.** The rows an old store carries are events already appended, and the
+        // project they belong to is exactly what was never written down; reading it back off the record
+        // now is the guess this decision removed (the record may have moved, or be gone). `NULL` is the
+        // column's own word for "in no project, or unknown", which is what these rows are. The window is
+        // short in any case — the outbox is trimmed as soon as the fan-out has copied a row.
+        apply: Apply::Custom(add_outbox_project),
+    },
 ];
 
 /// v4: the lint-hook question stopped being one per project and became one for the device
@@ -271,6 +286,27 @@ fn add_task_status_clock(ctx: &Ctx<'_>) -> Result<()> {
             "ALTER TABLE task ADD COLUMN status_changed_at TEXT \
                  CHECK(status_changed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
         )?;
+    }
+    Ok(())
+}
+
+/// v10: give the outbox the project column the fan-out routes on (`AMB-D-405`).
+///
+/// **Why this is not one `ALTER TABLE`.** The outbox itself arrived after the baseline, so a store older
+/// than the table is handed it whole by genesis — built from today's registry, `project` included — and a
+/// bare `ALTER TABLE … ADD COLUMN` would then fail with `duplicate column name` on exactly the oldest
+/// stores. The probe is what makes one step serve both shapes: the store that has the column was born with
+/// it, and the store that does not is the one this step exists for. Same shape as v6's, for the same
+/// reason.
+fn add_outbox_project(ctx: &Ctx<'_>) -> Result<()> {
+    let held: i64 = ctx.tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('plugin_outbox') WHERE name = 'project'",
+        [],
+        |r| r.get(0),
+    )?;
+    if held == 0 {
+        // Frozen text, like every step's: a nullable integer, whatever the registry names the kind later.
+        ctx.tx.execute_batch("ALTER TABLE plugin_outbox ADD COLUMN project BIGINT;")?;
     }
     Ok(())
 }
@@ -832,6 +868,50 @@ mod tests {
 
         assert!(matches!(err, super::super::StoreEngineError::UnrecognisedDdl { table: "task", .. }), "{err}");
         assert_eq!(engine.format_version().unwrap(), 8, "the failed step left the version where it was");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v10 in full, on the store shape v9 left behind: an outbox whose rows carry no project. The column
+    /// arrives, the events already sitting there keep every field they had, and their project reads back
+    /// as `NULL` — the honest word for a routing fact nobody wrote down at the time. Filling it in now by
+    /// re-reading the record is exactly the guess `AMB-D-405` removed, and on the row that matters most (a
+    /// deletion) there is no record left to read.
+    #[test]
+    fn the_outbox_gains_a_project_column_and_leaves_the_events_already_in_it_alone() {
+        let dir = scratch("outbox-project");
+        let engine = store_at(&dir, 9);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO plugin_outbox (id, event, record_id, actor, at, new_state)
+                     VALUES (1, 'task.deleted', 7, 'ai', '2026-07-26T09:00:00Z', NULL),
+                            (2, 'task.status_changed', 8, 'human', '2026-07-26T09:00:01Z', 'in_progress');",
+            )
+            .unwrap();
+
+        let run = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert!(run.applied.iter().any(|s| s.contains("plugin_outbox.project")), "v10 ran: {:?}", run.applied);
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let rows: Vec<(i64, String, Option<i64>)> = {
+            let conn = engine.conn();
+            let mut stmt = conn.prepare("SELECT id, event, project FROM plugin_outbox ORDER BY id").unwrap();
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        assert_eq!(
+            rows,
+            vec![(1, "task.deleted".to_string(), None), (2, "task.status_changed".to_string(), None)],
+            "the events that were already there keep their fields and gain an unstamped project",
+        );
+        engine
+            .conn()
+            .execute(
+                "INSERT INTO plugin_outbox (event, record_id, actor, at, project)
+                     VALUES ('task.created', 9, 'ai', '2026-07-26T09:00:02Z', 3)",
+                [],
+            )
+            .expect("what is emitted from here on can carry its project");
         std::fs::remove_dir_all(&dir).ok();
     }
 

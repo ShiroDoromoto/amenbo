@@ -16,9 +16,11 @@
 //!   [`super::write::WriteTx::emit_event`], which appends the row **inside the same transaction**. So the
 //!   event lands with the write that caused it, or not at all — generation is leak-free, even though
 //!   *delivery* (the dispatcher firing hooks) is best-effort and after the fact (`AMB-D-352`).
-//! - **The store interprets none of it.** The columns are opaque strings and one id: this module writes
-//!   and reads them, and never classifies. Which event name a change is, and what its new state means,
-//!   are the caller's — the mapping that fills those in sits above this seam.
+//! - **The store interprets none of it.** The columns are opaque strings and ids: this module writes
+//!   and reads them, and never classifies. Which event name a change is, what its new state means, and
+//!   which project the record was in (`AMB-D-405`) are all the caller's — the mapping that fills those in
+//!   sits above this seam. The project is stamped here rather than read back at delivery because it is a
+//!   fact about the moment, not a classification: the record may have moved since, or be gone.
 //!
 //! The read half is [`events_since`] — a **pure query** with a cursor, the outbox's counterpart to
 //! [`super::read::changes_since`]. It is the one thing shared with the feed's shape and for the same
@@ -65,6 +67,10 @@ pub struct EventRow<'a> {
     /// The record's new state, for the events an `update` disambiguates (a status, an assignee facet, a
     /// destination slug); `None` for the events whose name is the whole state.
     pub new_state: Option<&'a str>,
+    /// The project the record was in when the event fired (`AMB-D-405`) — the material the fan-out routes
+    /// a project-scoped subscription on, resolved once by the caller at the emit door. `None` is a real
+    /// answer: a record in no project has none.
+    pub project: Option<i64>,
 }
 
 /// Append one semantic event to the outbox. Runs on the caller's transaction (a `&Transaction` deref-es
@@ -78,6 +84,7 @@ pub(super) fn append(conn: &Connection, ev: &EventRow<'_>) -> Result<()> {
         .set(out.actor, ev.actor)
         .set(out.at, ev.at)
         .set_opt(out.new_state, ev.new_state)
+        .set_opt(out.project, ev.project)
         .sql()
         .execute(conn)
         .map(|_| ())
@@ -99,6 +106,9 @@ pub struct OutboxRow {
     pub at: String,
     /// The new state the event carries, or `None`.
     pub new_state: Option<String>,
+    /// The project the record was in when the event fired, as it was stamped (`AMB-D-405`); `None` for a
+    /// record in no project, and for a row an older store appended before the column existed.
+    pub project: Option<i64>,
 }
 
 /// What a reader gets back when it asks the outbox for everything after its cursor.
@@ -137,13 +147,14 @@ pub fn events_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Outb
     let out = col::plugin_outbox::ALL;
     // One row past the page, so "is there more?" costs no second query.
     let mut sel = Select::new();
-    let (id, event, record_id, actor, at, new_state) = (
+    let (id, event, record_id, actor, at, new_state, project) = (
         sel.col(out.id),
         sel.col(out.event),
         sel.col(out.record_id),
         sel.col(out.actor),
         sel.col(out.at),
         sel.col(out.new_state),
+        sel.col(out.project),
     );
     let mut page = Sql::from(&sel, out.table);
     page.push_where(Some(&Pred::cmp(out.id, ">", after_id)))
@@ -159,6 +170,7 @@ pub fn events_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Outb
                 actor: actor.get(r)?,
                 at: at.get(r)?,
                 new_state: new_state.get(r)?,
+                project: project.get(r)?,
             })
         })
         .map_err(StoreEngineError::from)?
@@ -231,7 +243,13 @@ mod tests {
     }
 
     fn ev<'a>(event: &'a str, id: i64, new_state: Option<&'a str>) -> EventRow<'a> {
-        EventRow { event, record_id: id, actor: "ai", at: "2026-07-22T09:00:00Z", new_state }
+        EventRow { event, record_id: id, actor: "ai", at: "2026-07-22T09:00:00Z", new_state, project: None }
+    }
+
+    /// The same event with a project stamped on it — what the emit door composes for a record that lives
+    /// in one.
+    fn ev_in<'a>(event: &'a str, id: i64, project: i64) -> EventRow<'a> {
+        EventRow { project: Some(project), ..ev(event, id, None) }
     }
 
     fn drain_all(e: &StoreEngine) -> Vec<OutboxRow> {
@@ -260,6 +278,19 @@ mod tests {
         assert_eq!(r.at, "2026-07-22T09:00:00Z");
         assert_eq!(r.new_state.as_deref(), Some("in_progress"));
         assert_eq!(r.id, 1, "the cursor id is the outbox's own, monotonic from 1");
+    }
+
+    /// The project the caller stamped round-trips, and an event from no project reads back as `NULL` —
+    /// the column the fan-out routes on (`AMB-D-405`) is carried, not derived.
+    #[test]
+    fn the_stamped_project_round_trips() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, &ev_in("task.created", 7, 3));
+        emit(&e, &ev("task.created", 8, None));
+
+        let rows = drain_all(&e);
+        assert_eq!(rows[0].project, Some(3));
+        assert_eq!(rows[1].project, None, "a record in no project stamps none");
     }
 
     /// An event whose name is the whole state carries no `new_state`, and it round-trips as `NULL`.

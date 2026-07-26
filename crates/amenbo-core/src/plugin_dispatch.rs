@@ -546,7 +546,14 @@ mod tests {
 
     fn emit(e: &StoreEngine, event: &str, id: i64, new: Option<&str>) {
         let tx = e.write().unwrap();
-        tx.emit_event(&EventRow { event, record_id: id, actor: "ai", at: "2026-07-22T09:00:00Z", new_state: new })
+        tx.emit_event(&EventRow {
+            event,
+            record_id: id,
+            actor: "ai",
+            at: "2026-07-22T09:00:00Z",
+            new_state: new,
+            project: None,
+        })
             .unwrap();
         tx.commit().unwrap();
     }

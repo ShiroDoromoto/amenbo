@@ -34,6 +34,62 @@ fn mint_activity_id(tx: &WriteTx<'_>) -> Result<i64> {
 // same event fire whatever the surface. The rationale for a log kept separate from the change feed lives
 // in the decision log.
 
+/// **The one door every observation event goes through.** Each write wrapper's helper below composes the
+/// event it alone can name and hands it here; here is where the row is finished — with the project the
+/// event happened in ([`project_of`]) — and appended.
+///
+/// One door is the whole point (`AMB-D-405`): the project is a field no write point should have to
+/// remember, and a dozen call sites each stamping their own is a dozen chances to forget one, which reads
+/// downstream as "that plugin was not subscribed" rather than as a bug.
+fn emit(
+    tx: &WriteTx<'_>,
+    event: &str,
+    record_id: i64,
+    actor: crate::model::ActorKind,
+    at: &str,
+    new_state: Option<&str>,
+) -> Result<()> {
+    tx.emit_event(&crate::store_engine::outbox::EventRow {
+        event,
+        record_id,
+        actor: actor.as_str(),
+        at,
+        new_state,
+        project: project_of(tx, event, record_id)?,
+    })?;
+    Ok(())
+}
+
+/// The project the event's record is in, read **inside the emitting transaction, before the operation
+/// finishes** (`AMB-D-405`). A task's own, a decision's own, and for a comment the project of the task it
+/// hangs on; an event that names no record kind we route on has none.
+///
+/// Reading it here rather than at delivery is what makes deletions routable at all — the row is still
+/// there at this instant and gone by the time anyone delivers — and it is also what keeps a task that
+/// moves in between from sending its older events to its new home. `None` is a real answer: a record in no
+/// project has no project, and an event stamped `None` reaches only the plugins that are not scoped to one.
+fn project_of(tx: &WriteTx<'_>, event: &str, record_id: i64) -> Result<Option<i64>> {
+    use crate::plugin_payload::name as ev;
+    use crate::store_engine::read;
+    let conn = tx.conn();
+    match event {
+        ev::TASK_CREATED
+        | ev::TASK_STATUS_CHANGED
+        | ev::TASK_DONE
+        | ev::TASK_REJECTED
+        | ev::TASK_ASSIGNED
+        | ev::TASK_MOVED
+        | ev::TASK_DELETED => Ok(read::task_project_id(conn, record_id)?),
+        ev::DECISION_ACCEPTED | ev::DECISION_REJECTED => Ok(read::decision_project_id(conn, record_id)?),
+        // A comment's project is its task's — the comment table holds no project of its own.
+        ev::COMMENT_ADDED => match read::task_comment(conn, record_id)? {
+            Some(comment) => Ok(read::task_project_id(conn, comment.task_id)?),
+            None => Ok(None),
+        },
+        _ => Ok(None),
+    }
+}
+
 /// `task.status_changed` / `task.done` / `task.rejected`: a task's status moved (`AMB-D-367`). Each
 /// terminal is its own event — `task.done` for work carried out, `task.rejected` for work decided
 /// against (`AMB-D-397`) — and their names are the whole state, so neither carries `new`; every other
@@ -56,14 +112,7 @@ fn emit_task_status(
         crate::model::TaskStatus::Rejected => (crate::plugin_payload::name::TASK_REJECTED, None),
         _ => (crate::plugin_payload::name::TASK_STATUS_CHANGED, Some(task.status.as_str())),
     };
-    tx.emit_event(&crate::store_engine::outbox::EventRow {
-        event,
-        record_id: task.id,
-        actor: actor.as_str(),
-        at: &at,
-        new_state,
-    })?;
-    Ok(())
+    emit(tx, event, task.id, actor, &at, new_state)
 }
 
 /// `task.assigned`: a task gained or changed its assignee, carrying the new assignee facet as `new`.
@@ -80,14 +129,14 @@ fn emit_task_assigned(
         return Ok(());
     }
     let at = task.updated_at.to_rfc3339_z();
-    tx.emit_event(&crate::store_engine::outbox::EventRow {
-        event: crate::plugin_payload::name::TASK_ASSIGNED,
-        record_id: task.id,
-        actor: actor.as_str(),
-        at: &at,
-        new_state: Some(kind.as_str()),
-    })?;
-    Ok(())
+    emit(
+        tx,
+        crate::plugin_payload::name::TASK_ASSIGNED,
+        task.id,
+        actor,
+        &at,
+        Some(kind.as_str()),
+    )
 }
 
 /// `task.moved`: a task changed which project it belongs to, carrying the destination project's slug as
@@ -108,14 +157,7 @@ fn emit_task_moved(
         .and_then(|p| p.slug)
         .unwrap_or_default();
     let at = task.updated_at.to_rfc3339_z();
-    tx.emit_event(&crate::store_engine::outbox::EventRow {
-        event: crate::plugin_payload::name::TASK_MOVED,
-        record_id: task.id,
-        actor: actor.as_str(),
-        at: &at,
-        new_state: Some(&slug),
-    })?;
-    Ok(())
+    emit(tx, crate::plugin_payload::name::TASK_MOVED, task.id, actor, &at, Some(&slug))
 }
 
 /// A decision verdict event (`decision.accepted` / `decision.rejected`). The name is the whole state, so
@@ -128,14 +170,7 @@ fn emit_decision_verdict(
     actor: crate::model::ActorKind,
 ) -> Result<()> {
     let at = decision.updated_at.to_rfc3339_z();
-    tx.emit_event(&crate::store_engine::outbox::EventRow {
-        event,
-        record_id: decision.id,
-        actor: actor.as_str(),
-        at: &at,
-        new_state: None,
-    })?;
-    Ok(())
+    emit(tx, event, decision.id, actor, &at, None)
 }
 
 /// `task.created`: a task was created (`AMB-D-367`). The name is the whole state, so it carries no
@@ -147,14 +182,7 @@ fn emit_task_created(
     actor: crate::model::ActorKind,
 ) -> Result<()> {
     let at = task.created_at.to_rfc3339_z();
-    tx.emit_event(&crate::store_engine::outbox::EventRow {
-        event: crate::plugin_payload::name::TASK_CREATED,
-        record_id: task.id,
-        actor: actor.as_str(),
-        at: &at,
-        new_state: None,
-    })?;
-    Ok(())
+    emit(tx, crate::plugin_payload::name::TASK_CREATED, task.id, actor, &at, None)
 }
 
 /// `task.deleted`: a task was hard-deleted (`AMB-D-367`). The name is the whole state (no `new`) and
@@ -163,20 +191,18 @@ fn emit_task_created(
 /// only the task is observed; a **project** delete, which takes down tasks, calls this once per task it
 /// carried off (`Store::project_delete`). The caller passes the deletion's clock as `at`, shared with the
 /// ledger line.
+///
+/// **Call this while the task is still there** — before the `DELETE`, inside the same transaction. The
+/// event is stamped with the project the task was in (`AMB-D-405`), and a deleted task can no longer say
+/// which that was; emitted after the row went, the deletion would reach no project-scoped plugin at all,
+/// which is the very failure that decision exists to end.
 fn emit_task_deleted(
     tx: &WriteTx<'_>,
     id: i64,
     actor: crate::model::ActorKind,
     at: &str,
 ) -> Result<()> {
-    tx.emit_event(&crate::store_engine::outbox::EventRow {
-        event: crate::plugin_payload::name::TASK_DELETED,
-        record_id: id,
-        actor: actor.as_str(),
-        at,
-        new_state: None,
-    })?;
-    Ok(())
+    emit(tx, crate::plugin_payload::name::TASK_DELETED, id, actor, at, None)
 }
 
 /// `comment.added`: a comment was added to a task (`AMB-D-367`). `id` is the comment's own id and the
@@ -188,14 +214,7 @@ fn emit_comment_added(
     actor: crate::model::ActorKind,
 ) -> Result<()> {
     let at = comment.created_at.to_rfc3339_z();
-    tx.emit_event(&crate::store_engine::outbox::EventRow {
-        event: crate::plugin_payload::name::COMMENT_ADDED,
-        record_id: comment.id,
-        actor: actor.as_str(),
-        at: &at,
-        new_state: None,
-    })?;
-    Ok(())
+    emit(tx, crate::plugin_payload::name::COMMENT_ADDED, comment.id, actor, &at, None)
 }
 
 impl Store {
@@ -326,10 +345,12 @@ impl Store {
             let title = crate::store_engine::read::task_title(tx.conn(), id)?;
             let project = crate::store_engine::read::task_project_id(tx.conn(), id)?;
             let activity_id = mint_activity_id(tx)?;
-            let orphaned = crate::ops::task::delete(tx, id)?;
             // One clock for the deletion — the plugin event and the ledger line record the same instant.
             let now = crate::time::Timestamp::now();
+            // Before the delete: the event is stamped with the task's project, which only a task that is
+            // still there can say (`AMB-D-405`).
             emit_task_deleted(tx, id, actor, &now.to_rfc3339_z())?;
+            let orphaned = crate::ops::task::delete(tx, id)?;
             let entry = crate::activity_log::Entry {
                 id: activity_id,
                 at: now,
@@ -538,13 +559,15 @@ impl Store {
             let tasks = read::task_ids_in_project(tx.conn(), id)?;
             let decisions = read::decision_ids_in_project(tx.conn(), id)?.len();
             let activity_id = mint_activity_id(tx)?;
-            let orphaned = crate::ops::project::delete(tx, id)?;
             // One clock for the whole deletion — every cascaded event and the ledger line share it.
             let now = crate::time::Timestamp::now();
             let at = now.to_rfc3339_z();
+            // Before the cascade, for the reason the single delete emits before its own: a task carried
+            // off by its project can no longer name the project it was in (`AMB-D-405`).
             for task_id in &tasks {
                 emit_task_deleted(tx, *task_id, actor, &at)?;
             }
+            let orphaned = crate::ops::project::delete(tx, id)?;
             let entry = crate::activity_log::Entry {
                 id: activity_id,
                 at: now,

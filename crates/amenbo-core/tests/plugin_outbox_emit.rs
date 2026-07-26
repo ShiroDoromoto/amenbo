@@ -2,9 +2,10 @@
 //! which of the nine v1 events happened, the actor that drove it, the new state — to the plugin outbox,
 //! **inside the mutation's own transaction**. These tests drive the events through the public `Store`
 //! wrappers (the one seam CLI and GUI share), read them back through `outbox::events_since`, and pin
-//! three things: the right event fires with the right `new_state`, the actor is stamped from the caller
-//! (only the write point holds it), and a change that did not happen — an idempotent re-set, a
-//! re-accept, a same-project reorder — emits nothing.
+//! four things: the right event fires with the right `new_state`, the actor is stamped from the caller
+//! (only the write point holds it), the **project** the record was in is stamped as the event is appended
+//! (`AMB-D-405` — resolved once at the emit door, so no write point has to remember it), and a change that
+//! did not happen — an idempotent re-set, a re-accept, a same-project reorder — emits nothing.
 
 use amenbo_core::config::Paths;
 use amenbo_core::model::{ActorKind, TaskStatus};
@@ -80,6 +81,7 @@ fn creating_a_task_fires_created_with_the_creator_facet() {
     assert_eq!(ev.record_id, task);
     assert_eq!(ev.actor, "ai", "the actor is the creator facet the task was made with");
     assert_eq!(ev.new_state, None, "the name is the whole state");
+    assert_eq!(ev.project, Some(project), "the event is stamped with the task's project");
 }
 
 /// Deleting a task fires `task.deleted`: id the task's own, actor the caller's, no `new`. The cascade
@@ -97,6 +99,11 @@ fn deleting_a_task_fires_deleted() {
     assert_eq!(ev.record_id, task);
     assert_eq!(ev.actor, "human", "the actor is who deleted it");
     assert_eq!(ev.new_state, None);
+    assert_eq!(
+        ev.project,
+        Some(project),
+        "the project is read while the task is still there — after the delete nothing could say it",
+    );
 }
 
 /// Deleting a project fires one `task.deleted` per task the cascade carried off — a task that vanished
@@ -122,6 +129,10 @@ fn deleting_a_project_fires_deleted_for_every_task_it_carried_off() {
         rows.iter().all(|r| r.event == "task.deleted" && r.actor == "human" && r.new_state.is_none()),
         "every event the cascade emits is a `task.deleted` stamped with who deleted the project: {rows:?}",
     );
+    assert!(
+        rows.iter().all(|r| r.project == Some(doomed)),
+        "each carries the project it was carried off by, read before the cascade removed it: {rows:?}",
+    );
     let mut deleted: Vec<i64> = rows.iter().map(|r| r.record_id).collect();
     deleted.sort_unstable();
     let mut expected = vec![t1, t2];
@@ -145,6 +156,7 @@ fn adding_a_task_comment_fires_comment_added() {
     assert_eq!(ev.record_id, comment.id, "the id is the comment's own, not the task's");
     assert_eq!(ev.actor, "ai");
     assert_eq!(ev.new_state, None);
+    assert_eq!(ev.project, Some(project), "a comment's project is the project of the task it hangs on");
 }
 
 /// A decision comment is not a v1 event: its write point emits nothing (only a *task* comment does).
@@ -174,6 +186,7 @@ fn a_status_change_and_a_done_carry_the_actor_and_new_state() {
     assert_eq!(ev.record_id, task);
     assert_eq!(ev.actor, "ai");
     assert_eq!(ev.new_state.as_deref(), Some("in_progress"));
+    assert_eq!(ev.project, Some(project));
 
     // `→ done` is its own event, and its name is the whole state (no `new`). The actor is whoever the
     // caller declared — here the human.
@@ -183,6 +196,7 @@ fn a_status_change_and_a_done_carry_the_actor_and_new_state() {
     assert_eq!(ev.event, "task.done");
     assert_eq!(ev.actor, "human");
     assert_eq!(ev.new_state, None);
+    assert_eq!(ev.project, Some(project));
 }
 
 /// The other terminal is its own event too (`AMB-D-397`). Left in the catch-all, "the task closed" would
@@ -201,6 +215,7 @@ fn rejecting_a_task_fires_its_own_event_and_not_the_catch_all() {
     assert_eq!(ev.record_id, task);
     assert_eq!(ev.actor, "ai");
     assert_eq!(ev.new_state, None, "the name is the whole state — and the reason rides `comment.added`");
+    assert_eq!(ev.project, Some(project));
 }
 
 /// A transition that does not move the status observes nothing — an idempotent re-set is not a change.
@@ -231,6 +246,7 @@ fn assigning_emits_the_facet_but_clearing_and_re_assigning_do_not() {
     assert_eq!(ev.event, "task.assigned");
     assert_eq!(ev.actor, "human", "the actor is who assigned");
     assert_eq!(ev.new_state.as_deref(), Some("ai"), "the new state is the assignee facet");
+    assert_eq!(ev.project, Some(project));
 
     // Re-assigning the same facet changes nothing.
     let h = head(&store);
@@ -259,6 +275,11 @@ fn moving_between_projects_carries_the_slug_but_a_reorder_does_not() {
     assert_eq!(ev.actor, "ai");
     assert_eq!(ev.new_state.as_deref(), beta.slug.as_deref(), "the new state is the destination slug");
     assert!(ev.new_state.is_some(), "a real project always has a slug");
+    assert_eq!(
+        ev.project,
+        Some(beta.id),
+        "a move is stamped where the task now lives — the destination is who observes it arriving",
+    );
 
     // A reorder that keeps the project (target `None` = stay put) is not a move.
     let h = head(&store);
@@ -281,6 +302,7 @@ fn decision_verdicts_fire_once_on_the_real_transition() {
     assert_eq!(ev.record_id, accepted);
     assert_eq!(ev.actor, "human");
     assert_eq!(ev.new_state, None, "the name is the whole state");
+    assert_eq!(ev.project, Some(project), "a decision carries its own project");
 
     // Re-accepting an already-accepted decision reports changed=false, so nothing fires.
     let h = head(&store);
@@ -294,6 +316,7 @@ fn decision_verdicts_fire_once_on_the_real_transition() {
     assert_eq!(ev.event, "decision.rejected");
     assert_eq!(ev.actor, "ai");
     assert_eq!(ev.new_state, None);
+    assert_eq!(ev.project, Some(project));
 }
 
 /// Superseding with a still-`Proposed` decision promotes it to `Accepted` on the way, and that promotion
@@ -315,6 +338,7 @@ fn a_supersede_that_promotes_the_new_side_fires_decision_accepted_once() {
     assert_eq!(ev.event, "decision.accepted");
     assert_eq!(ev.record_id, new, "the promotion is the new side's acceptance");
     assert_eq!(ev.actor, "ai");
+    assert_eq!(ev.project, Some(project));
     assert_eq!(ev.new_state, None, "the name is the whole state");
 
     // Re-superseding the same pair promotes nothing (the new side is already accepted), so nothing fires.
@@ -338,4 +362,43 @@ fn a_supersede_over_an_already_accepted_side_emits_nothing() {
     let h = head(&store);
     store.supersede_decision(new, old, Some("user".to_string()), ActorKind::Human).unwrap();
     assert!(since(&store, h).is_empty(), "drawing the edge over an accepted side promotes nothing");
+}
+
+/// **The stamp is a fact about the moment, not a lookup.** An event fired while the task was in one
+/// project keeps that project after the task moves away — which is the misrouting `AMB-D-405` removes:
+/// delivery is asynchronous, so a project read back at delivery time would hand a task's older events to
+/// whichever project it had wandered into by then.
+#[test]
+fn an_event_keeps_the_project_it_fired_in_after_the_task_moves() {
+    let mut store = temp_store();
+    let alpha = store.project_add(new_project("Alpha")).unwrap().id;
+    let beta = store.project_add(new_project("Beta")).unwrap().id;
+
+    let h = head(&store);
+    let task = store.add_task(new_task("引っ越すタスク", alpha)).unwrap().id;
+    store.move_task(task, Some(beta), Position::Bottom, ActorKind::Ai).unwrap();
+
+    let rows = since(&store, h);
+    let created = rows.iter().find(|r| r.event == "task.created").expect("the creation fired");
+    assert_eq!(created.project, Some(alpha), "the creation still names where it happened");
+    let moved = rows.iter().find(|r| r.event == "task.moved").expect("the move fired");
+    assert_eq!(moved.project, Some(beta));
+}
+
+/// A task in no project stamps no project: `None` is a real answer, and the fan-out reads it as "this
+/// reaches nobody scoped to a project" rather than guessing one.
+#[test]
+fn a_task_outside_every_project_stamps_no_project() {
+    let mut store = temp_store();
+    let mut input = new_task("どのPJにも属さないタスク", 0);
+    input.project_id = None;
+
+    let h = head(&store);
+    let task = store.add_task(input).unwrap().id;
+    assert_eq!(only(&store, h).project, None, "a task with no project has none to stamp");
+
+    // And the same holds for the event nobody could re-derive afterwards.
+    let h = head(&store);
+    store.delete_task(task, ActorKind::Ai).unwrap();
+    assert_eq!(only(&store, h).project, None);
 }

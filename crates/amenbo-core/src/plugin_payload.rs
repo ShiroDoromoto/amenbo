@@ -282,6 +282,7 @@ mod tests {
             actor: "ai".to_string(),
             at: "2026-07-22T09:00:00Z".to_string(),
             new_state: Some("in_progress".to_string()),
+            project: Some(1),
         };
         let rebuilt = Payload::from_outbox_row(&row).unwrap();
         assert_eq!(
@@ -307,6 +308,7 @@ mod tests {
             actor: "human".to_string(),
             at: "2026-07-22T09:00:00Z".to_string(),
             new_state: None,
+            project: None,
         };
         assert!(Payload::from_outbox_row(&ok).is_some());
         // An event outside the v1 catalog, an unparseable actor, and a bad timestamp each yield None.

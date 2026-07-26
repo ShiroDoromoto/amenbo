@@ -50,8 +50,8 @@ pub struct QueuedEvent<'a> {
     pub new_state: Option<&'a str>,
 }
 
-/// One queued row, as a runner reads it: the row's own id (what it passes to [`dequeue`] once the event has
-/// been run) and the event to run.
+/// One queued row, as a runner reads it: the row's own id (what it passes to [`dequeue`] once the plugin
+/// has replied for the event) and the event to run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueueRow {
     /// The queue row's id — the order within a plugin's queue, and the handle [`dequeue`] takes.
@@ -149,8 +149,8 @@ pub fn queued_plugins(conn: &Connection) -> Result<Vec<String>> {
     Ok(rows)
 }
 
-/// Remove one queued row — what a runner does once the event has been handed to its plugin. Returns
-/// whether a row was there to remove, so a double dequeue is visible rather than silent.
+/// Remove one queued row — what a runner does once the plugin it was handed to has replied (`AMB-D-399`).
+/// Returns whether a row was there to remove, so a double dequeue is visible rather than silent.
 pub fn dequeue(conn: &Connection, id: i64) -> Result<bool> {
     let q = col::plugin_queue::ALL;
     Delete::from(q.table)

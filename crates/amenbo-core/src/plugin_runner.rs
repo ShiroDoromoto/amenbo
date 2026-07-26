@@ -26,10 +26,21 @@
 //! hands it, rather than borrowing the connection it was started from. That is also what makes the resolver
 //! a runner reads *its own*: who is enabled is read again in the runner, not carried over from the drive.
 //!
-//! **A row is taken off the queue as it is handed on**, which is the delivery contract as it stands
-//! (`AMB-D-352`): a hook that will not launch or exits non-zero is a warning and nothing more, so a row that
-//! has been run is done with either way. (Removing it on the plugin's *reply* instead — so a run cut short
-//! is retried — is the next step of `AMB-D-399`, and needs a reply channel that does not exist yet.)
+//! **A row leaves the queue once its plugin has replied, and the reply is the child returning**
+//! (`AMB-D-399`). A plugin that ran to its own end has answered for that event, and the row goes whichever
+//! end it reached — a clean exit and a failing one both mean the plugin had it, and a failed event is
+//! dropped rather than retried (`AMB-D-352`). A hook that would not launch, and a row that resolves to
+//! nobody, go the same way: nothing is coming to answer for those, and a row held back would block the ones
+//! behind it for good.
+//!
+//! What that leaves standing is the one case worth keeping — **nothing answered at all**. A runner killed
+//! with its process, or a machine that lost power, never reaches the transaction that removes the row, so
+//! the row is still there for the next runner rather than lost with the process that was carrying it.
+//!
+//! The price is the window between the child returning and that transaction committing: a crash inside it
+//! re-delivers an event that already ran. There is no acknowledgement a plugin could write to close it,
+//! because amenbo cannot see what the other side did with the event either way (`AMB-D-399`) — which is why
+//! the contract asks a plugin to be safe to run twice, rather than asking amenbo to be sure.
 
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -145,11 +156,14 @@ pub fn start(
 
 /// Work one plugin's queue to its end, holding `owner`'s lease throughout — the runner's whole body.
 ///
-/// Rows are taken one at a time, oldest first, each on its own transaction that also pushes the lease's
-/// horizon out; the hook is then run to completion before the next row is taken. The loop ends where the
-/// queue does: [`leave`] re-reads it under the write lock and releases the lease only if it is still empty,
-/// so an event queued a moment earlier is either seen by that read (and this runner stays for it) or lands
-/// after the release (and the drive that queued it starts the next runner).
+/// Rows are worked one at a time, oldest first, each bracketed by two transactions of its own: [`hold`]
+/// before the plugin runs, and [`settle`] once it has returned. Both push the lease's horizon out and both
+/// stop the runner when the lease is no longer its — the first so a runner already taken over does not fire
+/// an event that is its successor's, the second because taking a row off a queue that is no longer this
+/// runner's would be removing its successor's work. The loop ends where the queue does: [`leave`] re-reads
+/// it under the write lock and releases the lease only if it is still empty, so an event queued a moment
+/// earlier is either seen by that read (and this runner stays for it) or lands after the release (and the
+/// drive that queued it starts the next runner).
 ///
 /// A store error stops the runner where it stands, without releasing: warning is all there is to do, and the
 /// lease's horizon is what brings the queue back rather than a lease held by a runner that is no longer
@@ -168,12 +182,9 @@ pub fn run_queue(
             Err(e) => return warn_stop(plugin, &e.to_string()),
         };
         for row in &rows {
-            match take(engine, plugin, owner, row.id) {
+            match hold(engine, plugin, owner) {
                 Ok(true) => {}
-                Ok(false) => {
-                    tracing::debug!(plugin = %plugin, "this runner's lease was taken over; stopping");
-                    return;
-                }
+                Ok(false) => return taken_over(plugin),
                 Err(e) => return warn_stop(plugin, &e.to_string()),
             }
             match hook_for(engine.conn(), subs, row) {
@@ -186,6 +197,11 @@ pub fn run_queue(
                     "a queued event could not be turned into a run; dropped"
                 ),
             }
+            match settle(engine, plugin, owner, row.id) {
+                Ok(true) => {}
+                Ok(false) => return taken_over(plugin),
+                Err(e) => return warn_stop(plugin, &e.to_string()),
+            }
         }
         match leave(engine, plugin, owner) {
             Ok(true) => return,
@@ -195,9 +211,23 @@ pub fn run_queue(
     }
 }
 
-/// Take one row off the queue and push the lease out, on one transaction. `false` when the lease is no
-/// longer this runner's — nothing is taken then, and the row is left for whoever holds it now.
-fn take(engine: &StoreEngine, plugin: &str, owner: &str, row: i64) -> Result<bool> {
+/// Push the lease out before a row is run, and say whether it is still this runner's to push. `false` means
+/// the queue has been taken over past this runner's horizon: the row is its successor's to run, and firing
+/// it here would be a delivery nobody asked for on top of the one the successor is making.
+fn hold(engine: &StoreEngine, plugin: &str, owner: &str) -> Result<bool> {
+    let tx = engine.write()?;
+    if !tx.extend_runner(plugin, owner, &horizon(Timestamp::now()))? {
+        return Ok(false);
+    }
+    tx.commit()?;
+    Ok(true)
+}
+
+/// Take one row off the queue now that its plugin has replied, and push the lease out, on one transaction —
+/// the reply being the child having returned, whichever end it reached (`AMB-D-399`). `false` when the lease
+/// is no longer this runner's: the row then stays, because removing it would be answering for a run its
+/// successor has not made yet.
+fn settle(engine: &StoreEngine, plugin: &str, owner: &str, row: i64) -> Result<bool> {
     let tx = engine.write()?;
     if !tx.extend_runner(plugin, owner, &horizon(Timestamp::now()))? {
         return Ok(false);
@@ -221,6 +251,12 @@ fn leave(engine: &StoreEngine, plugin: &str, owner: &str) -> Result<bool> {
         tracing::debug!(plugin = %plugin, "the lease this runner would have given up is already someone else's");
     }
     Ok(true)
+}
+
+/// A runner stopping because its queue is somebody else's now. Nothing is released: the lease it would give
+/// up is the successor's, and so is the row it was on.
+fn taken_over(plugin: &str) {
+    tracing::debug!(plugin = %plugin, "this runner's lease was taken over; stopping");
 }
 
 /// A runner stopping on a store it cannot read or write. Nothing is released — the lease's horizon is what
@@ -308,8 +344,62 @@ mod tests {
         tx.commit().unwrap();
     }
 
+    /// A resolver that looks at the queue at the moment it is asked *how do I run this row* — after the
+    /// runner has taken the row up, and before the plugin runs. What it records is how many rows were
+    /// standing then, which is where the reply-shaped dequeue shows itself: the row being run is still one
+    /// of them, because nothing has replied for it yet (`AMB-D-399`).
+    struct Peeking<'a> {
+        engine: &'a StoreEngine,
+        plugin: &'static str,
+        queued_while_running: Mutex<Vec<usize>>,
+    }
+    impl Subscribers for Peeking<'_> {
+        fn resolve(&self, _event: &str, _project: Option<i64>, _face: Face) -> Vec<Subscriber> {
+            vec![Subscriber::new(self.plugin, PluginInvocation::new("/nonexistent/amenbo-runner-test"))]
+        }
+        fn resolve_one(
+            &self,
+            plugin: &str,
+            event: &str,
+            project: Option<i64>,
+            face: Face,
+        ) -> Option<Subscriber> {
+            let standing = queued_for(self.engine.conn(), plugin, 10).unwrap().len();
+            self.queued_while_running.lock().unwrap().push(standing);
+            self.resolve(event, project, face).into_iter().find(|s| s.plugin == plugin)
+        }
+    }
+
+    /// A resolver that hands the queue to a successor while the runner is being asked how to run its row —
+    /// a takeover past the horizon landing in the middle of a row rather than between two.
+    struct Stealing<'a> {
+        engine: &'a StoreEngine,
+        from: &'static str,
+    }
+    impl Subscribers for Stealing<'_> {
+        fn resolve(&self, _event: &str, _project: Option<i64>, _face: Face) -> Vec<Subscriber> {
+            vec![Subscriber::new("slack", PluginInvocation::new("/nonexistent/amenbo-runner-test"))]
+        }
+        fn resolve_one(
+            &self,
+            plugin: &str,
+            event: &str,
+            project: Option<i64>,
+            face: Face,
+        ) -> Option<Subscriber> {
+            let tx = self.engine.write().unwrap();
+            tx.release_runner(plugin, self.from).unwrap();
+            let now = Timestamp::now();
+            assert!(tx.claim_runner(plugin, "successor", &horizon(now), &now.to_rfc3339_z()).unwrap());
+            tx.commit().unwrap();
+            self.resolve(event, project, face).into_iter().find(|s| s.plugin == plugin)
+        }
+    }
+
     /// The runner's whole shape in one: it takes its plugin's rows oldest first, and leaves by giving the
-    /// lease up on the transaction that finds the queue empty.
+    /// lease up on the transaction that finds the queue empty. The program these rows resolve to does not
+    /// exist, so every one of them failed — and every one of them still left the queue, which is the
+    /// contract (`AMB-D-399`): a failed event is dropped, never retried.
     #[test]
     fn a_runner_works_its_queue_from_the_head_and_gives_the_lease_up() {
         let e = StoreEngine::open_in_memory().unwrap();
@@ -349,6 +439,55 @@ mod tests {
             crate::store_engine::lease_of(e.conn(), "slack").unwrap().unwrap().owner,
             "successor",
             "the successor's lease stands"
+        );
+    }
+
+    /// A row is still on its queue while its plugin runs, and leaves only once the plugin has returned
+    /// (`AMB-D-399`). Two rows make both halves visible at once: the first is asked about with both
+    /// standing, and the second with one — its own — because the first has been answered for by then.
+    #[test]
+    fn a_row_stays_on_the_queue_until_its_plugin_has_replied() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        queue(&e, "slack", 1);
+        queue(&e, "slack", 2);
+        claim(&e, "slack", "mine");
+
+        let subs =
+            Peeking { engine: &e, plugin: "slack", queued_while_running: Mutex::new(Vec::new()) };
+        run_queue(&e, &subs, "slack", "mine", None);
+
+        assert_eq!(
+            *subs.queued_while_running.lock().unwrap(),
+            vec![2, 1],
+            "each row is still queued while its own plugin runs"
+        );
+        assert!(
+            queued_for(e.conn(), "slack", 10).unwrap().is_empty(),
+            "and each is gone once that run returned"
+        );
+    }
+
+    /// A runner taken over *while a row is running* leaves that row where it is: answering for it would be
+    /// answering for a run its successor has not made. The event is delivered twice as a result — once here
+    /// and once by the successor — which is the double delivery the contract admits (`AMB-D-399`).
+    #[test]
+    fn a_runner_taken_over_mid_row_leaves_that_row_for_its_successor() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        queue(&e, "slack", 1);
+        queue(&e, "slack", 2);
+        claim(&e, "slack", "mine");
+
+        run_queue(&e, &Stealing { engine: &e, from: "mine" }, "slack", "mine", None);
+
+        assert_eq!(
+            queued_for(e.conn(), "slack", 10).unwrap().len(),
+            2,
+            "the row it was on is not its to answer for, and neither is the one behind it"
+        );
+        assert_eq!(
+            crate::store_engine::lease_of(e.conn(), "slack").unwrap().unwrap().owner,
+            "successor",
+            "and the successor's lease is left standing"
         );
     }
 

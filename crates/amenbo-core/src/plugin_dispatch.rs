@@ -12,8 +12,8 @@
 //!    [queue](crate::store_engine::queue::QueueRow) of every plugin that does, and deletes the outbox rows it copied
 //!    — all on the caller's transaction, so nothing is copied twice and nothing is reclaimed uncopied.
 //! 2. **The runners — from what is to do to what ran.** One per plugin ([`crate::plugin_runner`]) reads its
-//!    own queue from the head and takes each row off it; [`hook_for`] is the half that lives here, turning
-//!    one row back into that plugin's invocation.
+//!    own queue from the head and takes each row off it once the plugin has replied; [`hook_for`] is the
+//!    half that lives here, turning one row back into that plugin's invocation.
 //!
 //! The split is what keeps the outbox clear of the slowest plugin: reclaiming it waits on the fan-out,
 //! which runs at the store's speed, rather than on whether some plugin's subprocess has run yet. A stalled

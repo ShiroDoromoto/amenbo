@@ -1087,12 +1087,13 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 
     let installed =
         amenbo_core::plugin_installed::installed(&store.paths).map_err(CliError::from)?;
-    // Which installs the cached catalog offers a different build of — best-effort, no network: an absent
-    // or unreadable cache is simply no marks, and `plugin update --check` is the surface that refreshes it.
+    // Which installs the cached catalog's list says something has moved about — best-effort, no network:
+    // an absent or unreadable cache is simply no marks, and `plugin update --check` is the surface that
+    // refreshes it and reads what actually moved.
     let updatable: std::collections::HashSet<String> =
         amenbo_core::plugin_update::available_cached(&store.paths)
             .into_iter()
-            .map(|u| u.name)
+            .map(|c| c.name)
             .collect();
     let here = bound_project(store);
     // `None` = this plugin's switch cannot be answered from where we stand (a project-scoped plugin, and

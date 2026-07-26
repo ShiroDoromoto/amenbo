@@ -160,20 +160,43 @@ func TestFixtureEnvNamesWhatTheAppReads(t *testing.T) {
 	}
 }
 
-// TestCatalogRepos pins that the capture follows the catalog: whatever repositories it names are the
-// ones fetched, so a list kept by hand beside it cannot go stale.
-func TestCatalogRepos(t *testing.T) {
-	repos := catalogRepos([]byte(`{"catalog_v":1,"plugins":[
+// TestCatalogEntries pins that the capture follows the catalog: whatever it names — the plugins
+// whose detail documents are taken, and the repositories fetched — is what is captured, so a list
+// kept by hand beside it cannot go stale.
+func TestCatalogEntries(t *testing.T) {
+	entries := catalogEntries([]byte(`{"catalog_v":1,"plugins":[
 		{"name":"a","repo":"owner/a"},
 		{"name":"b"},
 		{"name":"c","repo":"owner/c","unknown_field":true}]}`))
-	if len(repos) != 2 || repos[0] != "owner/a" || repos[1] != "owner/c" {
-		t.Errorf("catalogRepos = %v, want [owner/a owner/c]", repos)
+	if len(entries) != 3 {
+		t.Fatalf("catalogEntries = %v, want three entries", entries)
+	}
+	if entries[0].Name != "a" || entries[0].Repo != "owner/a" {
+		t.Errorf("entries[0] = %v, want {a owner/a}", entries[0])
+	}
+	if entries[1].Name != "b" || entries[1].Repo != "" {
+		t.Errorf("entries[1] = %v, want {b } — an entry with no repository is still a plugin", entries[1])
+	}
+	if entries[2].Name != "c" || entries[2].Repo != "owner/c" {
+		t.Errorf("entries[2] = %v, want {c owner/c}", entries[2])
 	}
 
-	// An envelope this build cannot read costs the repositories, not the run: the catalog is the
+	// An envelope this build cannot read costs the capture, not the run: the catalog is the
 	// producer's to grow, and a capture that refuses to run is a capture nobody takes.
-	if repos := catalogRepos([]byte("not json")); repos != nil {
-		t.Errorf("catalogRepos(garbage) = %v, want nil", repos)
+	if entries := catalogEntries([]byte("not json")); entries != nil {
+		t.Errorf("catalogEntries(garbage) = %v, want nil", entries)
+	}
+}
+
+// TestDetailSource pins where the second document is taken from: beside the list it was named in,
+// whether that list is the published one or a checkout of the catalog repository.
+func TestDetailSource(t *testing.T) {
+	if got := detailSource("https://example.invalid/amenbo-plugins/catalog.json", "worktree"); got !=
+		"https://example.invalid/amenbo-plugins/plugins/worktree.json" {
+		t.Errorf("detailSource(url) = %q", got)
+	}
+	if got := detailSource("/checkout/site/catalog.json", "worktree"); got !=
+		"/checkout/site/plugins/worktree.json" {
+		t.Errorf("detailSource(path) = %q", got)
 	}
 }

@@ -4358,13 +4358,13 @@ pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
                 .entries
                 .into_iter()
                 .map(|e| PluginEntryDto {
-                    name: e.entry.manifest.name,
-                    desc: e.entry.manifest.desc,
-                    author: e.entry.manifest.author,
-                    repo: e.entry.manifest.repo,
-                    os: e.entry.manifest.os.iter().map(|o| o.as_str().to_string()).collect(),
-                    category: e.entry.manifest.category,
-                    official: e.entry.manifest.official,
+                    name: e.entry.name,
+                    desc: e.entry.desc,
+                    author: e.entry.author,
+                    repo: e.entry.repo,
+                    os: e.entry.os.iter().map(|o| o.as_str().to_string()).collect(),
+                    category: e.entry.category,
+                    official: e.entry.official,
                     listed: e.listed,
                     added_at: e.entry.added_at,
                 })

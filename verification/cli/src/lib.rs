@@ -850,10 +850,16 @@ impl Driver {
                 if digests == 0 {
                     return Err(format!("{} publishes no distributable to age", path.display()));
                 }
+                // The digests are a document away from the list now, so a check compares the list's
+                // own digest first and only fetches that document when it moved. Ageing the
+                // distributables alone would leave the check answering "current" from a list that
+                // still matches. Written rather than only replaced: a record that has none is still
+                // one a moved list has to be able to move past.
+                manifest["detail_sum"] = stale;
                 std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 Ok(Outcome::action(format!(
-                    "left `{name}` recording a build the catalog has moved past ({digests} digest(s))"
+                    "left `{name}` recording a build the catalog has moved past ({digests} digest(s), and a detail document it no longer names)"
                 )))
             }
             // Filling in a setting the plugin's author declared. An empty value is the way one is

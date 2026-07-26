@@ -238,6 +238,7 @@ mod tests {
             signature: None,
             assets: Default::default(),
             official: false,
+            detail_sum: None,
             scope: crate::plugin_manifest::Scope::Machine,
             // The contract this build speaks: the compatibility gate reads this one, so it tracks
             // `VERSION` rather than sitting on a literal that a bump would turn into a false failure.

@@ -2,7 +2,7 @@
 //! (`AMB-D-347`/`AMB-D-351`/`AMB-D-360`).
 //!
 //! `plugin_installed` reads what is on disk and says how an install *lands*; this is the other half —
-//! how it gets there. One name in, four gates, then the layout that module defines:
+//! how it gets there. One name in, five gates, then the layout that module defines:
 //!
 //! 1. **Resolve** the name against the catalog ([`crate::plugin_catalog`]) — the only source an install
 //!    reads. A name the catalog does not carry is not installable, and when intake *dropped* the entry
@@ -11,10 +11,15 @@
 //!    (`plugin uninstall`, or the update path of `AMB-D-359`), never a silent replacement. A half-written
 //!    home — no manifest, so [`plugin_installed::read`] reads it as absent —
 //!    is not an install and is written over, which is what makes a failed install retryable.
-//! 3. **Refuse a platform the manifest does not claim**, and resolve this one's distributable
+//! 3. **Fetch the detail and validate the whole entry** (`AMB-D-385`, `AMB-D-354`): the list carries what
+//!    a browse view draws, so where to fetch this plugin from is a second document, taken for this one
+//!    plugin ([`crate::plugin_catalog::detail`]) and joined with the entry ([`crate::plugin_wire::join`]).
+//!    The join is untrusted delivery like everything else on this path, so it goes through the validator
+//!    before a byte is fetched — that is where the rules a list entry could not answer for are answered.
+//! 4. **Refuse a platform the manifest does not claim**, and resolve this one's distributable
 //!    (`AMB-D-381`): a per-OS `assets` entry, or the single `url` of an entry that is one file everywhere.
 //!    An OS outside the declared set is a binary that was never built to run here.
-//! 4. **Verify provenance fail-closed** ([`crate::plugin_provenance::verify_catalog_asset`], `AMB-D-371`):
+//! 5. **Verify provenance fail-closed** ([`crate::plugin_provenance::verify_catalog_asset`], `AMB-D-371`):
 //!    the minisign signature against the key amenbo ships, then that distributable's checksum, both over
 //!    the exact bytes the URL served. Unsigned, signed by another key, or a digest that does not match, and
 //!    nothing is written. The key is never a parameter here — a caller cannot install against another
@@ -41,10 +46,12 @@ use std::path::PathBuf;
 
 use crate::config::{is_reserved_plugin_name, Paths};
 use crate::error::{Error, Result};
-use crate::plugin_catalog::{self, Catalog, Dropped, Entry};
+use crate::plugin_catalog::{self, Catalog, Dropped};
 use crate::plugin_installed;
 use crate::plugin_manifest::{Manifest, Platform};
 use crate::plugin_provenance;
+use crate::plugin_validate::validate_manifest;
+use crate::plugin_wire::ListEntry;
 
 /// Cap on the asset download, and on what is read out of an archive entry — the second is what keeps a
 /// small gzip stream from expanding without bound. A plugin is one executable, so this ceiling is far
@@ -85,10 +92,36 @@ pub fn install(paths: &Paths, name: &str) -> Result<Installed> {
     // against the freshest index available, and stays possible offline once a catalog has been fetched.
     let catalog = plugin_catalog::load(paths)?;
     let entry = resolve(&catalog, name)?;
-    let manifest = entry.manifest.clone();
-    refuse_an_overwrite(paths, &manifest.name)?;
+    // Before the second fetch, so a name this machine already holds costs no request at all.
+    refuse_an_overwrite(paths, &entry.name)?;
+    let manifest = catalog_manifest(paths, entry)?;
     let program = fetch_verified_program(&manifest)?;
     place(paths, &manifest, &program)
+}
+
+/// The whole catalog entry for one listed plugin: the list half already in hand, joined with the detail
+/// document fetched for this one plugin (`AMB-D-385`) and put through the validator (`AMB-D-354`).
+///
+/// The one place the two halves become a manifest. An update goes through it too
+/// ([`crate::plugin_update`]), because "what the catalog publishes for this plugin" is the same question
+/// whether it is being installed for the first time or replacing a build — and answering it in two places
+/// is how one of them ends up skipping the door.
+///
+/// Validating the join is what keeps the split from loosening anything: a list entry cannot be asked for a
+/// checksum it does not carry, so the rules that live on the detail's fields are checked here, with both
+/// halves in hand, before a byte of the asset is fetched.
+pub(crate) fn catalog_manifest(paths: &Paths, entry: &ListEntry) -> Result<Manifest> {
+    let detail = plugin_catalog::detail(paths, entry)?;
+    let manifest = crate::plugin_wire::join(entry, &detail);
+    let problems = validate_manifest(&manifest);
+    if let Some(first) = problems.first() {
+        let first = format!("{}: {}", first.location, first.message.en());
+        return Err(Error::invalid(
+            format!("the catalog's entry for '{}' is not valid ({first})", entry.name),
+            format!("カタログの '{}' は検証に通りません（{first}）", entry.name),
+        ));
+    }
+    Ok(manifest)
 }
 
 /// The plugin's executable, off the network and through the trust gates — the *only* way bytes named by a
@@ -116,7 +149,7 @@ pub(crate) fn fetch_verified_program(manifest: &Manifest) -> Result<Vec<u8>> {
 /// intake dropped an entry under exactly that name, in which case the drop is the answer: "the catalog
 /// has it, and it did not pass the door" is a different problem from "no such plugin", and only one of
 /// them is the user's typo.
-fn resolve<'a>(catalog: &'a Catalog, name: &str) -> Result<&'a Entry> {
+fn resolve<'a>(catalog: &'a Catalog, name: &str) -> Result<&'a ListEntry> {
     if let Some(entry) = catalog.find(name) {
         return Ok(entry);
     }
@@ -419,6 +452,7 @@ mod tests {
             signature: Some("sig".to_string()),
             assets: Default::default(),
             official: false,
+            detail_sum: None,
             scope: crate::plugin_manifest::Scope::Project,
             payload_v: 1,
             min_amenbo: None,
@@ -435,6 +469,8 @@ mod tests {
         plugin_catalog::parse(&json).unwrap()
     }
 
+    /// One **list** entry, as `catalog.json` now serves it (`AMB-D-385`) — what an install resolves a
+    /// name against before it fetches anything.
     fn entry_json(name: &str) -> serde_json::Value {
         serde_json::json!({
             "name": name,
@@ -443,9 +479,7 @@ mod tests {
             "repo": "ShiroDoromoto/amenbo",
             "os": ["macos", "linux", "windows"],
             "category": "workflow",
-            "url": "https://example.invalid/x.tar.gz",
-            "checksum": format!("sha256:{}", "a".repeat(64)),
-            "signature": "untrusted comment: x\nsig\ntrusted comment: y\nglobal\n",
+            "detail_sum": format!("sha256:{}", "a".repeat(64)),
         })
     }
 
@@ -470,7 +504,7 @@ mod tests {
     #[test]
     fn a_listed_name_resolves_to_its_entry() {
         let catalog = catalog_of(vec![entry_json("worktree"), entry_json("slack")]);
-        assert_eq!(resolve(&catalog, "slack").unwrap().manifest.desc, "a plugin");
+        assert_eq!(resolve(&catalog, "slack").unwrap().desc, "a plugin");
     }
 
     #[test]
@@ -484,7 +518,7 @@ mod tests {
     #[test]
     fn a_name_the_catalog_dropped_is_reported_with_the_reason() {
         let mut invalid = entry_json("slack");
-        invalid["url"] = serde_json::json!("http://example.invalid/x.tar.gz"); // not https
+        invalid["repo"] = serde_json::json!("not-github-coordinates");
         let catalog = catalog_of(vec![invalid]);
 
         let err = resolve(&catalog, "slack").unwrap_err();

@@ -156,6 +156,45 @@ describe("Settings > Integrity (doctor surface)", () => {
     expect(hoisted.fixes).toBe(1);
     expect(container.textContent).toContain(t("settings.doctorClean"));
   });
+
+  // A real store held 411 of one kind. Drawing them all is what made this panel unreadable, and the
+  // count is what the reader actually needs once the first few have said what the problem is.
+  it("names the first few of a kind and counts the rest, with the hint said once", async () => {
+    const many = Array.from({ length: 30 }, (_, i) =>
+      issue({
+        kind: "dead_ref",
+        severity: "warning",
+        target: `AMB-T-${i}`,
+        params: { at: `AMB-T-${i}`, refs: "AMB-T-9999" },
+      }));
+    hoisted.reports = [report({ warnings: 30, issues: many })];
+    await render();
+
+    const drawn = many.filter((i) => container.textContent!.includes(doctorText(i).message)).length;
+    expect(drawn).toBe(10);
+    expect(container.textContent).toContain(tf("settings.doctorMore", { count: 20 }));
+
+    // One hint for the kind, not one per row: it was the same sentence 30 times.
+    const hint = doctorText(many[0]).fixHint;
+    expect(container.textContent!.split(hint).length - 1).toBe(1);
+  });
+
+  // The sweep's own subject, said where it is: it does not repair what the list is showing, and being
+  // read as the button that clears the count is exactly what went wrong before.
+  it("says so when nothing in the list is repairable from here", async () => {
+    hoisted.reports = [report({
+      warnings: 1,
+      issues: [issue({ kind: "dead_ref", params: { at: "AMB-T-1", refs: "AMB-T-9999" } })],
+    })];
+    await render();
+    expect(container.textContent).toContain(t("settings.doctorNoneRepairable"));
+  });
+
+  it("stays quiet about that when a row does carry a repair", async () => {
+    hoisted.reports = [report({ warnings: 1, issues: [issue({ kind: "stale_managed_block" })] })];
+    await render();
+    expect(container.textContent).not.toContain(t("settings.doctorNoneRepairable"));
+  });
 });
 
 describe("Settings > Integrity (per-row repair; buttons appear only on rows whose fix is uniquely determined)", () => {

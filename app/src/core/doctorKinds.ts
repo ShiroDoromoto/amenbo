@@ -31,8 +31,8 @@ export function isDoctorIssueKind(s: string): s is DoctorIssueKind {
   return (DOCTOR_ISSUE_KINDS as readonly string[]).includes(s);
 }
 
-/** A repair the doctor surface can drive from the row alone. Core's cleanup entry point ("repair" = orphan comment
- *  rows, blobs, leftover folder rows) does not fix the binding-shaped issues, so those go straight from the issue's
+/** A repair the doctor surface can drive from the row alone. Core's cleanup entry point ("repair" = unreferenced
+ *  blobs and leftover folder rows) does not fix the binding-shaped issues, so those go straight from the issue's
  *  params to bind / resync. */
 export type DoctorRepair =
   | { action: "rebind"; dir: string; project: number }
@@ -59,4 +59,51 @@ export function doctorRepair(issue: { kind: string; params: Record<string, strin
     default:
       return null;
   }
+}
+
+/**
+ * How many issues of one kind the screen names one by one before it stops.
+ *
+ * The same cap, and the same reason, as the terminal's (`HUMAN_LIST_CAP` in `doctor_text.rs`): a real
+ * store measured 411 dead refs, and a panel that long is not read — it just makes the settings screen
+ * look like a disaster. Per kind, so a rare issue is never crowded out by a common one.
+ */
+export const DOCTOR_LIST_CAP = 10;
+
+/** One kind's issues, as the screen draws them: the ones it names, and how many it did not. */
+export type DoctorGroup<I> = {
+  kind: string;
+  /** The issues to draw, in arrival order — every repairable one, then messages up to the cap. */
+  shown: I[];
+  /** How many of this kind were left unnamed. Zero means the group is complete. */
+  withheld: number;
+};
+
+/**
+ * Fold the report into what the screen draws: **grouped by kind, capped, in the contract's order**.
+ *
+ * **The cap withholds messages, never actions.** An issue carrying a one-click repair is always drawn,
+ * however many of its kind there are — hiding a button behind "… and 400 more" would take away the
+ * only way to act on it, which is a different thing from sparing the reader a wall of text.
+ *
+ * A kind with no issues is not in the result, so the caller draws groups and nothing else.
+ */
+export function groupDoctorIssues<I extends { kind: string; params: Record<string, string> }>(
+  issues: I[],
+  cap: number = DOCTOR_LIST_CAP,
+): DoctorGroup<I>[] {
+  const groups: DoctorGroup<I>[] = [];
+  for (const kind of DOCTOR_ISSUE_KINDS) {
+    const ofKind = issues.filter((i) => i.kind === kind);
+    if (ofKind.length === 0) continue;
+    let budget = cap;
+    const shown = ofKind.filter((i) => {
+      if (doctorRepair(i)) return true;
+      if (budget <= 0) return false;
+      budget -= 1;
+      return true;
+    });
+    groups.push({ kind, shown, withheld: ofKind.length - shown.length });
+  }
+  return groups;
 }

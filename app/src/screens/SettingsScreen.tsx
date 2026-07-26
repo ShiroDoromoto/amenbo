@@ -6,7 +6,7 @@ import {
   openLogsDir, pickBackupPath, pickExportPath, pickRestoreArchive, resyncManagedBlocks, runBackup, runDoctorFix,
   runExport, runRestore, setFacetNames, setLanguage, setFacetAvatar, setPerfLog, setUpdateCheck,
 } from "../core/mutations";
-import { doctorRepair, type DoctorRepair } from "../core/doctorKinds";
+import { doctorRepair, groupDoctorIssues, type DoctorRepair } from "../core/doctorKinds";
 import { confirmDialog } from "../core/dialog";
 import type { DoctorReportDto, StoreLocationsDto, DataProgressDto } from "../bindings/bindings";
 import { perfMode } from "../core/ipc";
@@ -428,6 +428,11 @@ function DoctorSetting() {
     }
   };
 
+  // What the panel draws, and whether anything it is showing can be acted on from here — the
+  // sweep below fixes neither of the two commonest kinds (a dead ref, a duplicate order key).
+  const groups = groupDoctorIssues(report?.issues ?? []);
+  const anyRepairable = (report?.issues ?? []).some((iss) => doctorRepair(iss) !== null);
+
   const fix = async () => {
     if (!report) return;
     setBusy(true); setMsg(null); setError(null);
@@ -453,9 +458,6 @@ function DoctorSetting() {
           <button className="btn" disabled={busy} onClick={() => void check()}>
             {busy && !report ? t("settings.doctorChecking") : t("settings.doctorRecheck")}
           </button>
-          <button className="btn" disabled={busy || !report} onClick={() => void fix()}>
-            {busy && report ? t("settings.doctorFixing") : t("settings.doctorFix")}
-          </button>
           {report && (
             <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
               {report.issues.length === 0
@@ -464,27 +466,51 @@ function DoctorSetting() {
             </span>
           )}
         </div>
-        {report && report.issues.map((iss, i) => {
-          const { message, fixHint } = doctorText(iss);
-          const repair = doctorRepair(iss);
+        {/* One block per kind, not one per issue: the fix hint belongs to the kind, and a real store
+            can hold hundreds of a single kind — 411 dead refs, measured — which is a panel nobody
+            reads. The same fold the terminal already does (`print_grouped`). */}
+        {groups.map((group) => {
+          const { fixHint } = doctorText(group.shown[0]);
           return (
-            <div key={i} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "var(--fs-xs)" }}>
-              <span style={{ color: iss.severity === "error" ? "var(--c-blocked)" : undefined }}>
-                {iss.severity === "error" ? "✕" : "⚠"} {message}
-              </span>
-              <span className="faint">{fixHint}</span>
-              {repair && (
-                <span>
-                  <button className="btn" disabled={busy} onClick={() => void repairOne(repair)}>
-                    {busy ? t("settings.doctorRepairing")
-                      : repair.action === "rebind" ? t("settings.doctorRebind") : t("managedBlock.resync")}
-                  </button>
-                </span>
+            <div key={group.kind} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "var(--fs-xs)" }}>
+              {group.shown.map((iss, i) => {
+                const { message } = doctorText(iss);
+                const repair = doctorRepair(iss);
+                return (
+                  <span key={i} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ color: iss.severity === "error" ? "var(--c-blocked)" : undefined }}>
+                      {iss.severity === "error" ? "✕" : "⚠"} {message}
+                    </span>
+                    {repair && (
+                      <span>
+                        <button className="btn" disabled={busy} onClick={() => void repairOne(repair)}>
+                          {busy ? t("settings.doctorRepairing")
+                            : repair.action === "rebind" ? t("settings.doctorRebind") : t("managedBlock.resync")}
+                        </button>
+                      </span>
+                    )}
+                  </span>
+                );
+              })}
+              {group.withheld > 0 && (
+                <span className="faint">{tf("settings.doctorMore", { count: group.withheld })}</span>
               )}
+              <span className="faint">{fixHint}</span>
             </div>
           );
         })}
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.doctorNote")}</span>
+        {/* The sweep is its own act, set apart from the counts above on purpose: it does not repair
+            what the list is showing, and standing next to "0 errors / 412 warnings" is exactly how it
+            got read as the button that clears them. Its label names what it sweeps instead. */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
+          <button className="btn" disabled={busy || !report} onClick={() => void fix()}>
+            {busy && report ? t("settings.doctorFixing") : t("settings.doctorFix")}
+          </button>
+          {report && report.issues.length > 0 && !anyRepairable && (
+            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.doctorNoneRepairable")}</span>
+          )}
+        </div>
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.doctorFixNote")}</span>
         {msg && <span className="faint" style={{ color: "var(--c-ok, #2e9e6b)" }}>{msg}</span>}
         {error && <span className="faint" style={{ color: "var(--c-blocked)" }}>⚠ {error}</span>}

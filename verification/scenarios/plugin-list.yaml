@@ -12,14 +12,20 @@
 # That is the trade: the signature path cannot be proven any other way, and faking it would leave
 # the count reading "covered" over the very thing this exists to catch.
 #
-# `plugin update` / `plugin rollback` are not here: both need a build to move to, which only the
-# catalog can offer and only when it has actually moved past this one.
+# Moving to another build is here too, and it is the one thing on this line the catalog cannot supply:
+# it publishes one build, and the trust model means no second one can be signed into existence to
+# install first. So the machine is left recording a build the catalog has moved past, and the build it
+# moves to is the real, signed, published one — the door an update walks is the install door, and that
+# is what this proves is wired.
 id: plugin-list
-title: A plugin is fetched from the catalog, sits there with its gate shut, is opened and shut again, and leaves nothing behind
+title: A plugin is fetched from the catalog, sits there with its gate shut, is opened and shut again, moves onto the published build and back off it, and leaves nothing behind
 description: >
   Install the official `worktree` plugin from the catalog and read it back off the listing — present,
   and **not** enabled, which is the normal state and the one people misread. Open its gate, read it
-  open, shut it again, and then remove the plugin and confirm the machine is back where it started.
+  open, shut it again. Then age what the machine records so the catalog's build is a different one,
+  update onto it, and roll back — reading after each that the catalog does, then does not, then does
+  again hold a build this machine is not on. Finally remove the plugin and confirm the machine is back
+  where it started.
 steps:
   - type: action
     domain: plugin
@@ -70,6 +76,69 @@ steps:
     with:
       name: worktree
       enabled: false
+
+  # Nothing is offered while the machine is on the published build — the check has to be able to say
+  # "nothing to do", or the line below would pass over a check that always says yes.
+  - type: assert
+    domain: plugin
+    op: outdated
+    with:
+      name: worktree
+      present: false
+
+  # Age what the machine records. Everything after this is the real thing: the catalog is fetched, the
+  # asset's signature is checked against the key in the binary, and this platform's digest is checked
+  # against the bytes that arrived.
+  - type: action
+    domain: plugin
+    op: stale-manifest
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: outdated
+    with:
+      name: worktree
+      present: true
+
+  - type: action
+    domain: plugin
+    op: update
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: outdated
+    with:
+      name: worktree
+      present: false
+
+  # An update kept the build it replaced, and a rollback puts that pair back — which is visible from
+  # outside precisely as the check going back to offering an update, since what returned is the
+  # manifest recording the build the catalog has moved past.
+  - type: action
+    domain: plugin
+    op: rollback
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: outdated
+    with:
+      name: worktree
+      present: true
+
+  # One build back, and only one: the retained pair was consumed by the rollback that used it, so a
+  # second one has nothing to return to and says so rather than half-restoring anything.
+  - type: action
+    domain: plugin
+    op: rollback
+    with:
+      name: worktree
+      refused: not_found
 
   # Removal takes everything the plugin left — its directory, its settings, the consent it was
   # given — so the listing is the machine's own answer that nothing is left over.

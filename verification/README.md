@@ -235,7 +235,10 @@ path that is absolute, or that climbs out with `..`, is refused.
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.
 `folder legacy-pointer` leaves a bound folder's `.amenbo` in the shape an older build wrote, which is
-what `store doctor-fix` puts right. They are the same idea as `repo write-file`: the state on disk a
+what `store doctor-fix` puts right. `plugin stale-manifest` leaves an installed plugin recording a
+build the catalog has moved past, which is what `plugin update` puts right — the catalog publishes one
+build, and an asset is trusted only by amenbo's own key, so there is no second build to install first
+and no way to sign one into existence. They are the same idea as `repo write-file`: the state on disk a
 scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach for one only
 when the line under test is what amenbo does about that state.
 

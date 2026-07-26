@@ -186,10 +186,17 @@ a human from the evidence, not by the exit code.
 A scenario is an `id`, a human `title`, an optional `description`, an optional `drivers`
 list, and an ordered list of `steps`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
-`comment` / `project`) and an `op`, and carries named args under `with`. An action may bind
-its result with `as:`, and a later step refers back to it with `target:` — an op that joins two
-objects names the second under its own key (`decision link`'s `task:`), and every such key is
-checked back to an earlier binding, not just `target:`.
+`comment` / `project` / `store` / `folder`) and an `op`, and carries named args under `with`. An
+action may bind its result with `as:`, and a later step refers back to it with `target:` — an op
+that joins two objects names the second under its own key (`decision link`'s `task:`), and every
+such key is checked back to an earlier binding, not just `target:`.
+
+The last two domains are not things filed in a store: `store` is this device's amenbo itself — its
+settings, the identity it answers `whoami` with, and the build in place — and `folder` is a
+directory and the project its `.amenbo` names. A `folder` step says **which** folder by name
+(`dir: shared`), never where it is: a binding is answered by where a folder sits, and only the
+driver knows where its own isolated run lives, so it places the folder and keeps it clear of the
+run's own bound CWD.
 
 ```yaml
 id: task-assign
@@ -205,8 +212,10 @@ The op vocabulary is a **closed registry** in `core/src/lib.rs`: an unknown op i
 so a typo never runs as a no-op. Drivers grow the registry (and their own op → driver
 mapping) as new ops are needed.
 
-A `field` assert names its value by a dotted path into the object's `show --json`, so what the
-output nests is reachable without a new op per corner: `placement.project.name` walks two objects,
+A `field` assert names its value by a dotted path into the read it is about — an object's `show
+--json`, or one of the reads the store answers about itself (`store`'s `config` / `identity` /
+`update`) — so what the output nests is reachable without a new op per corner:
+`placement.project.name` walks two objects,
 `blocked_by.0.name` indexes an array on the way, and a path that runs off the output is a mismatch
 rather than an error. A `listed` assert asks whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store

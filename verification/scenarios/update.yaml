@@ -1,0 +1,48 @@
+# How a user is told there is a newer amenbo, and how they are sent to get it. The check is the one
+# capability whose subject is the shipped build itself, so it is also the one that cannot be
+# exercised anywhere but on a shipped build.
+#
+# The check is all of it. `--apply` downloads a new CLI and swaps the running binary, and `--rollback`
+# puts the kept one back: both replace a real file on the machine running the gate, whichever store
+# they are pointed at, so neither belongs in an unattended run.
+id: update
+title: Asking about an update reports this build and hands back an installer address without opening anything
+description: >
+  The run is hermetic — `AMENBO_UPDATE_CHECK=0` keeps the release manifest off the network — so what
+  this proves is the answer with nothing upstream to find: the check falls back to the releases page
+  rather than to an empty offer, reports no newer version instead of guessing at one, and opens
+  nothing. That last one is the point of `--print`, and the reason a gate can run this at all: a
+  check that launched a browser would take over the screen of whoever ran it.
+steps:
+  # Nothing was opened. `--print` is the headless face of the command, and it has to stay one.
+  - type: assert
+    domain: store
+    op: update
+    with:
+      field: opened
+      equals: false
+
+  # Nothing upstream was reachable, so nothing is claimed about a newer build — an unreachable
+  # manifest must not read as "you are up to date" any more than as "there is an update".
+  - type: assert
+    domain: store
+    op: update
+    with:
+      field: latest_version
+      equals: null
+
+  - type: assert
+    domain: store
+    op: update
+    with:
+      field: update_available
+      equals: false
+
+  # And the fallback address: with no manifest to resolve this platform's installer from, the user
+  # is still sent somewhere they can get one.
+  - type: assert
+    domain: store
+    op: update
+    with:
+      field: url
+      equals: https://github.com/ShiroDoromoto/amenbo/releases/latest

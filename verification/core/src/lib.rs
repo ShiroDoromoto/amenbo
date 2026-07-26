@@ -136,6 +136,11 @@ pub enum Domain {
     Decision,
     Comment,
     Project,
+    /// This device's amenbo itself, rather than anything filed in it: its configuration, the
+    /// identity it answers `whoami` with, and the build in place.
+    Store,
+    /// A folder and the project its `.amenbo` pointer names — what an AI launched there may reach.
+    Folder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -205,6 +210,16 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment", required: &["target", "text"], refs: &["target"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-edit", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-rm", required: &["target"], refs: &["target"], binds: false },
+    // The store's own settings, changed the one way a user can change them.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "config-set", required: &["key", "value"], refs: &[], binds: false },
+    // What a folder's binding is made of. A folder is named, not pointed at: `dir` is a plain name
+    // the driver places somewhere of its own, since a pointer is answered by where a folder sits.
+    // `init` raises a project of its own and binds it (hence the binding), `bind` points a folder at
+    // one that already exists — this run's, unless `project` names another.
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "init", required: &["dir"], refs: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "bind", required: &["dir"], refs: &["project"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "unbind", required: &["dir"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "sync-guide", required: &["dir"], refs: &[], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
@@ -220,6 +235,17 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "commented", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "commented", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "activity", required: &["target"], refs: &["target"], binds: false },
+    // The three faces the store shows of itself, each a dotted path into what that read prints:
+    // `config` its settings, `identity` the name and the hardware it was raised on, `update` what a
+    // check for a newer build comes back with.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "config", required: &["field", "equals"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "identity", required: &["field", "equals"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "update", required: &["field", "equals"], refs: &[], binds: false },
+    // Whether a folder is bound, asked from inside it — and, with `project`, which one it names.
+    // `resynced` asks the other half: whether the guidance block there is at this build's version,
+    // which is answered by a resync finding nothing left to write.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "bound", required: &["dir"], refs: &["project"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "resynced", required: &["dir"], refs: &[], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

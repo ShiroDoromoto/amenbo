@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { PluginConfigForm } from "../components/PluginConfigForm";
 import { PluginGate } from "../components/PluginGate";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
@@ -120,6 +121,17 @@ function removedParts(r: PluginRemoved): string {
 }
 
 /**
+ * How many settings the author marked `required` this machine holds no value for — the count an enable
+ * is refused over (`AMB-D-356`). A text setting is held by either tier, since a project with no
+ * override of its own runs on the machine default.
+ */
+function requiredUnset(install: PluginInstall): number {
+  return install.config.filter(
+    (f) => f.required && (f.secret ? !f.secretSet : f.machineValue == null && f.projectValue == null),
+  ).length;
+}
+
+/**
  * One installed plugin: its name, which switch it has, and that switch.
  *
  * Installed and enabled are two facts (`AMB-D-351`), and a plugin that is here but fires nothing is the
@@ -130,6 +142,10 @@ function removedParts(r: PluginRemoved): string {
  * to — a payload contract that is not ours, a version floor above us — is handed no event, whatever its
  * switch says. So an incompatible row wears that instead of the plain "enabled", and the gate below it
  * carries core's own reason: an enabled plugin sitting silent is exactly the state a badge has to name.
+ *
+ * The settings sit under the switch, and only for a plugin whose author declared any: a `required`
+ * setting with no value is what an enable is refused for (`AMB-D-356`), so the way to fill it in belongs
+ * beside the switch that will say no.
  */
 function InstalledRow({ install, projects, projectId, onProject, onRemoved }: {
   install: PluginInstall;
@@ -141,6 +157,7 @@ function InstalledRow({ install, projects, projectId, onProject, onRemoved }: {
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settings, setSettings] = useState(false);
 
   // The question names what goes beyond the binary (`AMB-D-357`): the settings in every project, the
   // secrets and the consent are the part nobody pictures, and they do not come back with a re-install.
@@ -186,6 +203,28 @@ function InstalledRow({ install, projects, projectId, onProject, onRemoved }: {
           projectId={projectId}
           onProject={onProject}
         />
+        {install.config.length > 0 && (
+          <div className="pluggate">
+            <button className="feed__action" onClick={() => setSettings((s) => !s)}>
+              {settings ? t("plugins.cfg.hide") : t("plugins.cfg.open")}
+            </button>
+            {/* Said on the closed row too: this is why an enable is refused, and the row is where
+                anyone looking at that refusal is standing. */}
+            {requiredUnset(install) > 0 && (
+              <span className="chip chip--warn">
+                {tf("plugins.cfg.requiredUnset", { count: requiredUnset(install) })}
+              </span>
+            )}
+          </div>
+        )}
+        {settings && (
+          <PluginConfigForm
+            install={install}
+            projects={projects}
+            projectId={projectId}
+            onProject={onProject}
+          />
+        )}
         {/* Set apart from the gate: disabling is a switch that can be flicked back, this is not
             (`AMB-D-357`). */}
         <div className="pluggate">

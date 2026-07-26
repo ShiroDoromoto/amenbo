@@ -466,6 +466,53 @@ reachable: boolean,
 offered: number, };
 
 /**
+ * One setting a plugin's author declared, and what this machine currently holds for it
+ * (`AMB-D-356`) — everything the generic form needs to draw a row and nothing amenbo judges for
+ * itself.
+ *
+ * The two text tiers are carried separately rather than resolved into one effective value, because
+ * the form edits a tier: a project override that is absent has to read as absent, with the machine
+ * default it falls back to shown beside it.
+ *
+ * **A secret's value is never here.** The author's flag is what routes it to the user-area secret
+ * file, and a value read back into a webview would be a copy of it in a place `AMB-D-356` keeps it
+ * out of — so a secret carries whether it is held, and that is all a form needs to mask it.
+ */
+export type PluginConfigFieldDto = { 
+/**
+ * The key the author declared — what a write names, and what a refusal quotes back.
+ */
+key: string, 
+/**
+ * The author's own label for the field, drawn as the form's caption.
+ */
+label: string, 
+/**
+ * Whether the author marked it secret. The form masks it and stores it once for the device; a
+ * text field gets the two tiers instead.
+ */
+secret: boolean, 
+/**
+ * Whether the author marked it required. An enable is refused while one of these has no value,
+ * so the form says which before the switch does.
+ */
+required: boolean, 
+/**
+ * The text machine default, as stored — absent when unset, and always absent for a secret.
+ */
+machineValue?: string, 
+/**
+ * The text override held by the project the request named — absent when unset, when no project
+ * was named, and always for a secret.
+ */
+projectValue?: string, 
+/**
+ * Whether a secret is held for this key on this device. Always false for a text field, whose
+ * values say it themselves.
+ */
+secretSet: boolean, };
+
+/**
  * One entry of the plugin market list. Only what the list draws: identity, the one-line
  * description, and the axes it is filtered on (`AMB-D-347`). Nothing an install needs — the
  * signature, the checksum and the asset map are the detail's, not the list's (`AMB-D-385`).
@@ -533,7 +580,13 @@ compatible: boolean,
 /**
  * Why not, when `compatible` is false — the mismatch named, rather than left to the log.
  */
-incompatibleReason?: string, };
+incompatibleReason?: string, 
+/**
+ * The settings the author declared, in that order, each with what this machine holds for it
+ * (`AMB-D-356`). Empty for a plugin that declares none, which is the form's own answer to
+ * whether there is anything to configure.
+ */
+config: Array<PluginConfigFieldDto>, };
 
 /**
  * What an uninstall actually found and removed (`AMB-D-357`) — the receipt the face reports from.

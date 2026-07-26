@@ -7,9 +7,15 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginConfigField, PluginInstall } from "../core/pluginInstalls";
+import type { PluginUpdate } from "../core/pluginUpdates";
 
 const hoisted = vi.hoisted(() => ({
   installs: [] as PluginInstall[],
+  /** What the catalog holds beyond what is installed — the offer each row draws from. */
+  updates: [] as PluginUpdate[],
+  /** Which plugins had an update applied, and which were put back a build. */
+  applied: [] as string[],
+  rolledBack: [] as string[],
   loading: false,
   error: undefined as unknown,
   gated: [] as { name: string; projectId: number | null; enabled: boolean }[],
@@ -49,6 +55,24 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
   };
 });
 
+// The detection seam, replaced whole: what is offered, and what the two build moves were called with.
+vi.mock("../core/pluginUpdates", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../core/pluginUpdates")>();
+  return {
+    ...orig,
+    usePluginUpdates: () => ({ updates: hoisted.updates, loading: false, error: undefined }),
+    refreshPluginUpdates: () => {},
+    applyPluginUpdate: (name: string) => {
+      hoisted.applied.push(name);
+      return Promise.resolve(true);
+    },
+    rollbackPlugin: (name: string) => {
+      hoisted.rolledBack.push(name);
+      return Promise.resolve("the build before the update");
+    },
+  };
+});
+
 vi.mock("../core/dialog", () => ({
   confirmDialog: (message: string) => {
     hoisted.asked.push(message);
@@ -78,6 +102,14 @@ const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => 
   consented: false,
   compatible: true,
   config: [],
+  rollback: false,
+  ...over,
+});
+
+/** One waiting build, offered with nothing in the way until a test puts something there. */
+const offer = (over: Partial<PluginUpdate> & { name: string }): PluginUpdate => ({
+  desc: `${over.name} does a thing`,
+  missing: [],
   ...over,
 });
 
@@ -116,6 +148,9 @@ beforeEach(() => {
   hoisted.projects = [];
   hoisted.removed = [];
   hoisted.wrote = [];
+  hoisted.updates = [];
+  hoisted.applied = [];
+  hoisted.rolledBack = [];
   hoisted.asked = [];
   hoisted.confirm = true;
   hoisted.receipt = {
@@ -331,6 +366,74 @@ describe("the settings form", () => {
     await act(async () => { button(t("plugins.cfg.clear"))!.click(); });
     expect(hoisted.wrote).toEqual([{ name: "notify", key: "events", value: "", projectId: null }]);
     expect(container.textContent).toContain(t("plugins.cfg.cleared"));
+  });
+});
+
+// The other half of the update offer (`AMB-D-359`): the banner takes them in bulk, and the row takes one.
+// What needs a decision is named rather than offered as a button that would only be refused, and the way
+// back from an update this face applied is on the same row.
+describe("moving one plugin's build from its row", () => {
+  it("offers the waiting build, and applies just that one", async () => {
+    hoisted.installs = [row({ name: "notify" }), row({ name: "worktree" })];
+    hoisted.updates = [offer({ name: "notify", desc: "now with sounds" })];
+    render();
+
+    expect(container.textContent).toContain(t("plugins.updates.waiting"));
+    expect(container.textContent).toContain("now with sounds");
+
+    await act(async () => { button(t("plugins.updates.apply"))!.click(); });
+    expect(hoisted.applied).toEqual(["notify"]);
+    expect(container.textContent).toContain(tf("plugins.updates.applied", { count: 1 }));
+  });
+
+  // A hold is not a button: the settings the new schema wants are opened from this same row, which is why
+  // the offer is named here rather than sending anyone elsewhere.
+  it("names an offer that needs a decision instead of offering it", () => {
+    hoisted.installs = [row({ name: "notify", config: [field({ key: "token", required: true })] })];
+    hoisted.updates = [offer({ name: "notify", hold: "settings", missing: ["token"] })];
+    render();
+
+    expect(container.textContent).toContain(
+      tf("plugins.updates.holdSettings", { name: "notify", keys: "token" }),
+    );
+    expect(button(t("plugins.updates.apply"))).toBeUndefined();
+    expect(button(t("plugins.cfg.open"))).toBeTruthy();
+  });
+
+  it("says why an incompatible build is not offered", () => {
+    hoisted.installs = [row({ name: "notify" })];
+    hoisted.updates = [offer({ name: "notify", hold: "incompatible" })];
+    render();
+
+    expect(container.textContent).toContain(tf("plugins.updates.holdIncompatible", { name: "notify" }));
+    expect(button(t("plugins.updates.apply"))).toBeUndefined();
+  });
+
+  // Going back is offered only where there is a build to go back to, and it asks first: the retained build
+  // is the only one there is, and going back uses it up.
+  it("offers the way back only when a build is retained, and asks before taking it", async () => {
+    hoisted.installs = [row({ name: "notify" })];
+    render();
+    expect(button(t("plugins.updates.rollback"))).toBeUndefined();
+
+    hoisted.installs = [row({ name: "notify", rollback: true })];
+    render();
+    await act(async () => { button(t("plugins.updates.rollback"))!.click(); });
+
+    expect(hoisted.asked).toEqual([tf("plugins.updates.rollbackConfirm", { name: "notify" })]);
+    expect(hoisted.rolledBack).toEqual(["notify"]);
+    expect(container.textContent).toContain(
+      tf("plugins.updates.rolledBack", { desc: "the build before the update" }),
+    );
+  });
+
+  it("goes back nowhere when the question is declined", async () => {
+    hoisted.confirm = false;
+    hoisted.installs = [row({ name: "notify", rollback: true })];
+    render();
+
+    await act(async () => { button(t("plugins.updates.rollback"))!.click(); });
+    expect(hoisted.rolledBack).toEqual([]);
   });
 });
 

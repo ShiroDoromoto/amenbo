@@ -593,7 +593,13 @@ incompatibleReason?: string,
  * (`AMB-D-356`). Empty for a plugin that declares none, which is the form's own answer to
  * whether there is anything to configure.
  */
-config: Array<PluginConfigFieldDto>, };
+config: Array<PluginConfigFieldDto>, 
+/**
+ * Whether the build the last update replaced is still retained beside this one, so a rollback
+ * has somewhere to go (`AMB-D-359`). An update retains exactly one build and a rollback consumes
+ * it, so this is false for a plugin that was never updated and false again once it is used.
+ */
+rollback: boolean, };
 
 /**
  * What an uninstall actually found and removed (`AMB-D-357`) — the receipt the face reports from.

@@ -10,9 +10,12 @@ import {
   type PluginRemoved,
 } from "../core/pluginInstalls";
 import {
+  applyPluginUpdate,
   clearDismissedPluginUpdates,
   refreshPluginUpdates,
+  rollbackPlugin,
   usePluginUpdates,
+  type PluginUpdate,
 } from "../core/pluginUpdates";
 import { getSnapshot, subscribe } from "../core/snapshot";
 
@@ -91,6 +94,7 @@ export function PluginInstalledScreen() {
           <InstalledRow
             key={install.name}
             install={install}
+            update={updates.find((u) => u.name === install.name)}
             projects={projects}
             projectId={gateProject}
             onProject={setPickedProject}
@@ -146,9 +150,16 @@ function requiredUnset(install: PluginInstall): number {
  * The settings sit under the switch, and only for a plugin whose author declared any: a `required`
  * setting with no value is what an enable is refused for (`AMB-D-356`), so the way to fill it in belongs
  * beside the switch that will say no.
+ *
+ * **The build moves from here too** (`AMB-D-359`). The banner takes updates in bulk for whoever just wants
+ * them; this row is the other half of the same offer, for choosing one plugin at a time — and it is where
+ * an offer that needs a decision is actually resolvable, since the settings the new schema wants are one
+ * button away. The way back is here for the same reason: this face applies updates, so it owes the undo.
  */
-function InstalledRow({ install, projects, projectId, onProject, onRemoved }: {
+function InstalledRow({ install, update, projects, projectId, onProject, onRemoved }: {
   install: PluginInstall;
+  /** The build the catalog holds for this plugin, when it is not the one installed. */
+  update?: PluginUpdate;
   projects: { id: number; name: string }[];
   projectId: number | null;
   onProject: (id: number | null) => void;
@@ -158,6 +169,37 @@ function InstalledRow({ install, projects, projectId, onProject, onRemoved }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
+  // What the last build move did, said on the row it was about — the offer is gone by the time it is drawn.
+  const [moved, setMoved] = useState<string | null>(null);
+
+  const run = async (op: () => Promise<string | null>) => {
+    setBusy(true);
+    setError(null);
+    setMoved(null);
+    try {
+      setMoved(await op());
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Taking an update needs no question: core re-verifies the asset, keeps the gate, the settings and the
+  // secrets, and retains the build being replaced — which is what the roll-back beside it goes to.
+  const onUpdate = () =>
+    run(async () =>
+      (await applyPluginUpdate(install.name)) ? tf("plugins.updates.applied", { count: 1 }) : null,
+    );
+
+  // Going back does need one: the retained build is the only one there is, and this consumes it.
+  const onRollback = async () => {
+    if (!(await confirmDialog(tf("plugins.updates.rollbackConfirm", { name: install.name })))) return;
+    await run(async () => {
+      const restored = await rollbackPlugin(install.name);
+      return restored == null ? null : tf("plugins.updates.rolledBack", { desc: restored });
+    });
+  };
 
   // The question names what goes beyond the binary (`AMB-D-357`): the settings in every project, the
   // secrets and the consent are the part nobody pictures, and they do not come back with a re-install.
@@ -224,6 +266,40 @@ function InstalledRow({ install, projects, projectId, onProject, onRemoved }: {
             projectId={projectId}
             onProject={onProject}
           />
+        )}
+        {(update || install.rollback || moved) && (
+          <div className="pluggate">
+            {/* An offer that needs a decision is named instead of offered as a button that would only be
+                refused — and the settings it is short of are opened from this same row. */}
+            {update?.hold ? (
+              <span className="pluggate__note">
+                {update.hold === "incompatible"
+                  ? tf("plugins.updates.holdIncompatible", { name: update.name })
+                  : tf("plugins.updates.holdSettings", {
+                      name: update.name,
+                      keys: update.missing.join(t("common.listSeparator")),
+                    })}
+              </span>
+            ) : (
+              update && (
+                <>
+                  <span className="chip">{t("plugins.updates.waiting")}</span>
+                  <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{update.desc}</span>
+                  <button className="btn" disabled={busy} onClick={() => void onUpdate()}>
+                    {busy ? t("plugins.updates.applying") : t("plugins.updates.apply")}
+                  </button>
+                </>
+              )
+            )}
+            {install.rollback && (
+              <button className="feed__action" disabled={busy} onClick={() => void onRollback()}>
+                {t("plugins.updates.rollback")}
+              </button>
+            )}
+            {moved && !busy && (
+              <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{moved}</span>
+            )}
+          </div>
         )}
         {/* Set apart from the gate: disabling is a switch that can be flicked back, this is not
             (`AMB-D-357`). */}

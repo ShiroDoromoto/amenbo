@@ -90,6 +90,22 @@ export async function applyAllPluginUpdates(): Promise<PluginUpdateOutcome[]> {
 }
 
 /**
+ * Put back the build the last update replaced (Tauri: `plugin_rollback`, `AMB-D-359`), and answer what is
+ * running again.
+ *
+ * The way back from an update this app applied: it restores the retained executable and the manifest that
+ * describes it together, and leaves the gate, the settings and the secrets alone. One build back and no
+ * further — applying an update retains exactly one, and this consumes it — so a refusal ("nothing retained")
+ * is a message to show, not a state to guess at.
+ */
+export async function rollbackPlugin(name: string): Promise<string | null> {
+  if (!inTauri()) return null;
+  const restored = await invoke<string>("plugin_rollback", { name });
+  reloadAfterApply();
+  return restored;
+}
+
+/**
  * The identity a dismissal is keyed by: the plugin **and** the build offered for it. The digest is what
  * detection itself compared, so a catalog that moves the entry again mints a new id and the offer returns.
  */

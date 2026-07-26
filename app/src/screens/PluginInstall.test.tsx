@@ -79,6 +79,7 @@ const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => 
   consented: false,
   compatible: true,
   config: [],
+  rollback: false,
   ...over,
 });
 

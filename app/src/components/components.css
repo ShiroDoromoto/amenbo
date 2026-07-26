@@ -241,7 +241,15 @@
 /* The index's recommendation, which sits beside the trust badge rather than on its ladder. Outlined
    in the accent instead of filled with it, so the two read as different kinds of claim at a glance
    and the solid one stays the rarer, stronger of the pair. */
-.chip--featured { color: var(--c-accent); border: 1px solid var(--c-accent); background: transparent; }
+/* The border is taken out of the padding rather than added to the box: this chip sits directly beside
+   the filled trust badge, which has no border, and a badge one pixel taller on each side reads as a
+   mistake rather than as a distinction. */
+.chip--featured {
+  color: var(--c-accent);
+  border: 1px solid var(--c-accent);
+  background: transparent;
+  padding: 0 calc(var(--s-2) - 1px);
+}
 /* A chip that reports a state the user did not choose and would want to act on — an installed plugin
    this build cannot speak to, which is handed no event however its switch stands (`AMB-D-359`). Warn
    coloured, not error: nothing is broken, it simply does not fire. */

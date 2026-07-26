@@ -78,8 +78,9 @@ directly. `--keep` leaves the throwaway store in place for inspection.
 **One thing does leave the box.** `plugin install` resolves the official catalog over the network,
 picks this platform's asset and verifies its signature against the key built into the binary — a
 layer that exists only in a shipped build, and one no local fixture can stand in for without the
-count reading "covered" over the very thing it exists to catch. The scenarios that install a plugin
-therefore need the network and an intact catalog, and are the only ones that do.
+count reading "covered" over the very thing it exists to catch. The plugin scenarios therefore need
+the network and an intact catalog — the ones that install one, and the one that reads the browsing
+view back — and they are the only ones that do.
 
 Each op the driver maps is a `(domain, op)` arm in `cli/src/lib.rs`; an op that is in the
 scenario registry but not yet mapped fails loudly rather than passing silently.

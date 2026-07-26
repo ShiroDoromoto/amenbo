@@ -805,6 +805,42 @@ impl Driver {
                     "called `{name} {command}` — it returned {value} byte(s)"
                 )))
             }
+            // Filling in a setting the plugin's author declared. An empty value is the way one is
+            // taken back, so it is passed through as written rather than being turned into an op of
+            // its own — the command reads it the same way a person typing `""` does.
+            (Domain::Plugin, "config-set") => {
+                let name = req_str(with, "name")?;
+                let key = req_str(with, "key")?;
+                let value = req_str(with, "value")?;
+                let mut args: Vec<String> =
+                    vec!["plugin".into(), "config".into(), "set".into(), name.into(), key.into(), value.into()];
+                if let Some(scope) = with.get("scope").and_then(|v| v.as_str()) {
+                    args.push("--scope".into());
+                    args.push(scope.to_string());
+                }
+                args.push("--json".into());
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                let scope = v["scope"].as_str().unwrap_or("?");
+                Ok(Outcome::action(match v["cleared"].as_bool() {
+                    Some(true) => format!("took `{key}` back off `{name}` at the {scope} tier"),
+                    _ => format!("told `{name}` its `{key}` at the {scope} tier"),
+                }))
+            }
+            (Domain::Plugin, verb @ ("catalog-add" | "catalog-remove")) => {
+                let url = req_str(with, "url")?;
+                let sub = verb.trim_start_matches("catalog-");
+                let v = self.run_json(&["plugin", "catalog", sub, url, "--json"])?;
+                // Adding fetches the catalog once, so the count it comes back with is what a first
+                // browse would have found — and the reachability, which is the half a bad URL shows.
+                Ok(Outcome::action(match sub {
+                    "add" => format!(
+                        "registered {url} ({} plugin(s), {})",
+                        v["offered"].as_i64().unwrap_or(0),
+                        if v["reachable"].as_bool().unwrap_or(false) { "reached" } else { "unreachable" }
+                    ),
+                    _ => format!("dropped {url} from the browsing view"),
+                }))
+            }
             (Domain::Folder, "sync-guide") => {
                 let dir = self.folder(with)?;
                 let path = dir.to_string_lossy().into_owned();
@@ -1167,6 +1203,125 @@ impl Driver {
                     format!(
                         "the call returned {:?} (expected it to carry `{want}`, {})",
                         value,
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            // A setting read back at the tier it was written at. Reading is per-tier on purpose (it
+            // is not the precedence a run would apply), so the scope the step names goes to the read
+            // as well as to the write.
+            (Domain::Plugin, "config") => {
+                let name = req_str(with, "name")?;
+                let key = req_str(with, "key")?;
+                let mut args: Vec<String> =
+                    vec!["plugin".into(), "config".into(), "get".into(), name.into(), key.into()];
+                if let Some(scope) = with.get("scope").and_then(|v| v.as_str()) {
+                    args.push("--scope".into());
+                    args.push(scope.to_string());
+                }
+                args.push("--json".into());
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                let tier = v["scope"].as_str().unwrap_or("?").to_string();
+                match with.get("equals") {
+                    Some(want) => {
+                        let want = serde_json::to_value(want)
+                            .map_err(|e| format!("arg `equals` is not a valid value: {e}"))?;
+                        let pass = v["value"] == want;
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "plugin `{name}` reads `{key}` back as {} at the {tier} tier (expected {want}, {})",
+                                v["value"],
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                    // With no value named, the question is whether the tier holds one at all — which
+                    // is how a setting taken back is told apart from one that was never given.
+                    None => {
+                        let want = opt_bool(with, "set").unwrap_or(true);
+                        let got = v["set"].as_bool().unwrap_or(false);
+                        Ok(Outcome::assert(
+                            got == want,
+                            format!(
+                                "plugin `{name}` {} `{key}` at the {tier} tier (expected {}, {})",
+                                if got { "holds a" } else { "holds no" },
+                                if want { "set" } else { "unset" },
+                                if got == want { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                }
+            }
+            // A catalog as the browsing view sees it: whether it is a source at all, and — the half
+            // that matters for a third-party one — whether the browse could reach it.
+            (Domain::Plugin, "catalog") => {
+                let url = req_str(with, "url")?;
+                let v = self.run_json(&["plugin", "catalog", "list", "--json"])?;
+                let row = v["sources"]
+                    .as_array()
+                    .and_then(|rows| rows.iter().find(|s| s["url"].as_str() == Some(url)));
+                match opt_bool(with, "reachable") {
+                    Some(want) => {
+                        let got = row.and_then(|r| r["reachable"].as_bool());
+                        let pass = got == Some(want);
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "{url} is {} (expected {}, {})",
+                                match got {
+                                    Some(true) => "reachable".to_string(),
+                                    Some(false) => "unreachable".to_string(),
+                                    None => "not a source at all".to_string(),
+                                },
+                                if want { "reachable" } else { "unreachable" },
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                    None => {
+                        let present = opt_bool(with, "present").unwrap_or(true);
+                        let pass = row.is_some() == present;
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "{url} {} the browsing view (expected {}, {})",
+                                if row.is_some() { "is a source in" } else { "is absent from" },
+                                if present { "registered" } else { "gone" },
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                }
+            }
+            // The author's door. Its exit code is the verdict — an invalid manifest is a value to
+            // judge and not a driver failure — so it is read the way the integrity checks are.
+            (Domain::Plugin, "validated") => {
+                let path = req_str(with, "path")?;
+                let want = req_bool(with, "ok")?;
+                let full = self.in_session(path)?;
+                let v = self.run_check(&["plugin", "validate", path_str(&full)?, "--json"])?;
+                let ok = v["ok"].as_bool().unwrap_or(false);
+                let codes: Vec<&str> = v["problems"]
+                    .as_array()
+                    .map(|rows| rows.iter().filter_map(|p| p["code"].as_str()).collect())
+                    .unwrap_or_default();
+                // Naming a code asks what it was turned down *for*: a manifest can be wrong in more
+                // ways than one, and a line that passes on the wrong reason proves nothing.
+                let named = with.get("problem").and_then(|v| v.as_str());
+                let pass = ok == want && named.is_none_or(|c| codes.contains(&c));
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "`{path}` reads as {} ({}) (expected {}{}, {})",
+                        if ok { "valid" } else { "invalid" },
+                        if codes.is_empty() {
+                            v["parse_error"].as_str().unwrap_or("no problems").to_string()
+                        } else {
+                            codes.join(", ")
+                        },
+                        if want { "valid" } else { "invalid" },
+                        named.map(|c| format!(" for `{c}`")).unwrap_or_default(),
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))

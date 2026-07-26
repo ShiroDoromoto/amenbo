@@ -300,6 +300,14 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "disable", required: &["name"], refs: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "uninstall", required: &["name"], refs: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "run", required: &["name", "command"], refs: &["task"], binds: false },
+    // What an installed plugin is told. `key` is a setting its author declared, and `scope` picks the
+    // tier the value is written at (the machine default, or this project's override); an empty value
+    // is how one is taken back, which is why it is a value here and not an op of its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-set", required: &["name", "key", "value"], refs: &[], binds: false },
+    // The catalogs a browse reads. A third-party one is named by the URL of its `catalog.json`, and
+    // that URL is the handle for taking it back off again — there is nothing else to name it by.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-add", required: &["url"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-remove", required: &["url"], refs: &[], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
@@ -363,6 +371,17 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "listed", required: &["name"], refs: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "returned", required: &["contains"], refs: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "ran", required: &["name"], refs: &[], binds: false },
+    // A setting read back at the tier it was written at — `equals` for the value, or `set: false` to
+    // ask that the tier holds none. `scope` names the tier, since a read is per-tier and not the
+    // precedence a run would apply.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], binds: false },
+    // A catalog in the browsing view: whether it is a source at all (`present`), whether the browse
+    // could reach it, and how many plugins it offers.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "catalog", required: &["url"], refs: &[], binds: false },
+    // The author's own door, before anything is installed anywhere: a manifest file is held up to the
+    // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
+    // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "validated", required: &["path", "ok"], refs: &[], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

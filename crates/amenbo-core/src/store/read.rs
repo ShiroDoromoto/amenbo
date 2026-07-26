@@ -252,8 +252,8 @@ impl Store {
     }
 
     /// The bodies pointing at refs that resolve to nothing. Kept off [`Store::doctor`] — and so off
-    /// the startup check and the GUI's per-tick snapshot — because it reads and parses every body on the
-    /// device; [`crate::doctor::report`] is what runs it, when a reader has actually asked.
+    /// the startup check and the GUI's per-tick snapshot — because it reads and parses every body still
+    /// open to a reader; [`crate::doctor::report`] is what runs it, when a reader has actually asked.
     pub fn dead_refs(&self) -> Result<Vec<crate::doctor::DoctorIssue>> {
         crate::validate::dead_ref_issues(self.engine.conn(), self.reach)
             .map_err(crate::error::engine_on(self.engine.conn()))

@@ -1654,6 +1654,15 @@ fn doctor_reports_a_body_pointing_at_a_ref_that_resolves_to_nothing() {
         "the body is left exactly as it was",
     );
     assert_eq!(cli.json(&["doctor", "--json"])["ok"], true, "a dead ref does not fail the store");
+
+    // Once the work has ended, that same body stops being an entrance: nobody is arriving through a finished
+    // task's notes, and the number it names is history rather than a broken pointer. The body is untouched —
+    // only the question doctor asks of it has gone away.
+    cli.run(&["task", "done", &live]);
+    assert!(
+        dead(&cli.json(&["doctor", "--json"])).is_empty(),
+        "a finished task's notes are frozen prose, so the ref that died in them is not raised",
+    );
 }
 
 /// What doctor covers is the folders automatic follow-up never reaches — bound folders you are not in —

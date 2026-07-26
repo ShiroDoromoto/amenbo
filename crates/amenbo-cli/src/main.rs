@@ -31,7 +31,7 @@ use amenbo_core::{activity_log, ops, query, time, Store};
 use cli::*;
 use output::{
     confirm, human, print_json, render_error, set_setup_report, warn_body, write_envelope,
-    CliError, Flags,
+    CliError, CliErrorCode, Flags,
 };
 
 /// The effective project id picked by an explicit override (`--project`). It is a process-wide setting
@@ -88,7 +88,7 @@ fn real_main() -> i32 {
         Err(err) => {
             // No Flags yet, so render the error with a minimal set.
             let probe = Flags { json: parsed.json, yes: false, quiet: false, no_color: false, actor: None };
-            return render_error(&probe, &err);
+            return render_error(&probe, &misplaced_flags_hint(&parsed.command, err));
         }
     };
     let flags = Flags {
@@ -125,6 +125,77 @@ fn decide_facet(flag: Option<&str>, require: bool) -> Result<Option<ActorKind>, 
             exit: 2,
         }),
     }
+}
+
+/// amenbo's own flags, as they are spelled on a command line. After `plugin run <name>` these are not
+/// amenbo's any more — every word there is the plugin's (`AMB-D-346`) — which is what the hint below
+/// exists to say out loud.
+const OWN_FLAGS: &[&str] = &["--actor", "--json", "--quiet", "--yes", "--no-color"];
+
+/// The flag that takes a value; the rest stand alone. It is also the only one whose misplacement
+/// **explains** a failure, which is why it is what the hint triggers on.
+const FACET_FLAG: &str = "--actor";
+
+/// Say where a flag went, when that is the answer to the failure a person is looking at.
+///
+/// Everywhere else in amenbo `--json` goes on the end, so that is the habit people bring to `plugin
+/// run` — where the end belongs to the plugin. The `--actor` they typed is then sitting in the
+/// plugin's argv, amenbo never saw a facet, and what comes back is "facet is unspecified", which
+/// says nothing about the words they actually wrote. This adds the missing half to the hint: the flag
+/// went to the plugin, and here is the same command with amenbo's flags where amenbo can see them.
+///
+/// It fires on that pairing alone. A plugin is entitled to a `--json` of its own, so a flag amenbo
+/// happens to share a spelling with is not a mistake — only a facet that was typed and never arrived
+/// is, and that is the one this can be sure about.
+fn misplaced_flags_hint(cmd: &Option<Command>, err: CliError) -> CliError {
+    if err.code != CliErrorCode::FacetRequired.as_str() {
+        return err;
+    }
+    let Some(Command::Plugin { sub: PluginCmd::Run { name, args } }) = cmd else { return err };
+    let (own, plugins) = split_own_flags(args);
+    if !own.iter().any(|f| f.starts_with(FACET_FLAG)) {
+        return err;
+    }
+    // Every one of amenbo's flags found is hoisted, not just the facet: leaving a `--json` behind
+    // would hand back a corrected line that still does not answer in JSON.
+    let corrected = [
+        vec![Paths::command_name().to_string()],
+        own.clone(),
+        vec!["plugin".to_string(), "run".to_string(), name.clone()],
+        plugins,
+    ]
+    .concat()
+    .join(" ");
+    CliError {
+        hint: Some(format!(
+            "`{}` went to the plugin, not to amenbo — after `plugin run {name}` every word is the plugin's. Put amenbo's flags before it:\n  {corrected}",
+            own.join(" ")
+        )),
+        ..err
+    }
+}
+
+/// Split what was handed to the plugin into amenbo's own flags (with the value `--actor` carries) and
+/// everything else, each in the order it was written. `--actor=ai` counts as one word, and a bare
+/// `--actor` at the very end counts as itself — a person who wrote either meant amenbo to read it.
+fn split_own_flags(args: &[String]) -> (Vec<String>, Vec<String>) {
+    let (mut own, mut rest) = (Vec::new(), Vec::new());
+    let mut it = args.iter().peekable();
+    while let Some(arg) = it.next() {
+        let head = arg.split_once('=').map_or(arg.as_str(), |(k, _)| k);
+        if !OWN_FLAGS.contains(&head) {
+            rest.push(arg.clone());
+            continue;
+        }
+        own.push(arg.clone());
+        // `--actor ai` is two words unless it was written as one; the value follows it.
+        if head == FACET_FLAG && !arg.contains('=') {
+            if let Some(value) = it.next_if(|v| !v.starts_with('-')) {
+                own.push(value.clone());
+            }
+        }
+    }
+    (own, rest)
 }
 
 /// Does this command **use** the facet (human/ai)? There are two consumers, and either one counts
@@ -6203,6 +6274,67 @@ mod tests {
         assert_eq!(decide_facet(Some(""), false).ok(), Some(None));
         // An invalid value is invalid_value either way.
         assert_eq!(decide_facet(Some("robot"), false).err().map(|e| e.code), Some("invalid_value"));
+    }
+
+    /// Amenbo's flags are told from the plugin's by their spelling, in the order they were written, and
+    /// `--actor` keeps the value that follows it — the corrected line has to be one a person can paste,
+    /// which means it carries the value too.
+    #[test]
+    fn amenbo_flags_are_picked_out_of_what_was_handed_to_the_plugin() {
+        let split = |args: &[&str]| {
+            let owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+            let (own, rest) = split_own_flags(&owned);
+            (own.join(" "), rest.join(" "))
+        };
+        assert_eq!(split(&["start", "1", "--actor", "ai"]), ("--actor ai".into(), "start 1".into()));
+        assert_eq!(split(&["start", "--actor=ai"]), ("--actor=ai".into(), "start".into()));
+        assert_eq!(
+            split(&["start", "--json", "--actor", "ai", "--yes"]),
+            ("--json --actor ai --yes".into(), "start".into())
+        );
+        // A flag amenbo does not answer for is the plugin's, whatever it looks like.
+        assert_eq!(split(&["start", "--branch", "main"]), (String::new(), "start --branch main".into()));
+        // A bare `--actor` at the end takes no value with it, and the next flag is not eaten as one.
+        assert_eq!(split(&["--actor", "--json"]), ("--actor --json".into(), String::new()));
+    }
+
+    /// The hint fires on one pairing: a facet that was typed, went to the plugin, and so never arrived.
+    /// A plugin is entitled to a `--json` of its own, so a shared spelling alone is not a mistake — and
+    /// no other failure is explained by where the flag was written.
+    #[test]
+    fn the_misplaced_flag_hint_fires_only_where_it_is_the_explanation() {
+        let run = |args: &[&str]| {
+            Some(Command::Plugin {
+                sub: PluginCmd::Run {
+                    name: "worktree".to_string(),
+                    args: args.iter().map(|s| s.to_string()).collect(),
+                },
+            })
+        };
+        let hint = |cmd: &Option<Command>, err: CliError| {
+            misplaced_flags_hint(cmd, err).hint.unwrap_or_default()
+        };
+
+        // The facet went to the plugin: the hint says so, and hands back the line to paste.
+        let told = hint(&run(&["start", "1", "--actor", "ai"]), CliError::facet_required());
+        assert!(told.contains("went to the plugin"), "{told}");
+        assert!(told.contains("plugin run worktree start 1"), "the corrected line is complete: {told}");
+        assert!(told.contains("--actor ai plugin run"), "the flag is hoisted in front: {told}");
+
+        // No facet among them: the failure is that none was declared, not where one was written.
+        let plain = hint(&run(&["start", "--json"]), CliError::facet_required());
+        assert!(!plain.contains("went to the plugin"), "{plain}");
+
+        // Another command's facet_required is not about a plugin's argv at all.
+        let elsewhere = hint(&Some(Command::Version), CliError::facet_required());
+        assert!(!elsewhere.contains("went to the plugin"), "{elsewhere}");
+
+        // And another failure of the same command is left as it was — this explains one thing.
+        let other = misplaced_flags_hint(
+            &run(&["start", "--actor", "ai"]),
+            CliError { code: "not_found", message: "x".into(), hint: None, exit: 1 },
+        );
+        assert!(other.hint.is_none(), "only the failure it explains is touched");
     }
 
     /// The facet is used by the writes that stamp it **and** by the reads that draw an AI's reach from it;

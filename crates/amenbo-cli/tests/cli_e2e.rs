@@ -2391,6 +2391,51 @@ fn facet_required_stops_every_operation_that_uses_the_facet() {
     assert_eq!(code, 0, "a read with an explicit facet passes");
 }
 
+/// `plugin run` hands everything after the plugin's name to the plugin, dashes and all — so a facet
+/// written where every other amenbo command takes it, on the end, never reaches amenbo. The failure is
+/// `facet_required`, and on its own it says nothing about the `--actor ai` the person can see they typed.
+/// The hint closes that gap, and closes it only there: a plugin may carry a flag of amenbo's spelling
+/// for reasons of its own, so what fires this is a facet that was written and did not arrive.
+#[test]
+fn a_facet_written_after_plugin_run_is_named_where_the_call_failed() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    // Nothing is added to these calls: what a person typed is the whole input.
+    let spawn = |args: &[&str]| -> (String, i32) {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &cli.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&cli.home)
+            .args(args)
+            .output()
+            .expect("run amenbo");
+        (String::from_utf8_lossy(&out.stderr).to_string(), exit_code(&out))
+    };
+
+    // The habit every other command teaches: flags on the end. Here they are the plugin's.
+    let (stderr, code) = spawn(&["plugin", "run", "worktree", "start", "1", "--actor", "ai"]);
+    assert_eq!(code, 2, "the facet never reached amenbo, so the call stops: {stderr}");
+    assert!(stderr.contains("facet is unspecified"), "it is still the same failure: {stderr}");
+    assert!(stderr.contains("went to the plugin"), "the hint names where it went: {stderr}");
+    assert!(
+        stderr.contains("--actor ai plugin run worktree start 1"),
+        "and hands back the same call with the flag where amenbo can see it: {stderr}"
+    );
+
+    // Nothing of amenbo's among what the plugin was handed: no facet was written anywhere, so the
+    // plugin's argv is not the explanation and is not pointed at.
+    let (stderr, code) = spawn(&["plugin", "run", "worktree", "start", "--branch", "main"]);
+    assert_eq!(code, 2, "still refused, for the plain reason: {stderr}");
+    assert!(!stderr.contains("went to the plugin"), "nothing to name here: {stderr}");
+
+    // And with the facet where amenbo reads it, the call gets as far as the plugin — which is not
+    // installed here, and that is a different failure entirely.
+    let (stderr, code) = spawn(&["--actor", "ai", "plugin", "run", "worktree", "start", "1"]);
+    assert_ne!(code, 0, "the plugin is not installed: {stderr}");
+    assert!(!stderr.contains("facet is unspecified"), "the facet arrived: {stderr}");
+}
+
 /// One lap around the dimension model on the CLI: add an axis, value-add, list/show by name, set/unset on a
 /// task (single-select replacement, and a cross-process no-op proving it persisted), rename, cascading rm.
 #[test]

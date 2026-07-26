@@ -468,7 +468,7 @@ mod tests {
             for row in queue::queued_for(e.conn(), &plugin, 256)? {
                 queue::dequeue(e.conn(), row.id)?;
                 if let Some(hook) = hook_for(subs, &row)? {
-                    crate::plugin_hooks::run_queued(&hook, log);
+                    crate::plugin_hooks::run_queued(&hook, log, None);
                     ran.push(hook);
                 }
             }

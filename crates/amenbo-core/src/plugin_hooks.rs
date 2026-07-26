@@ -77,7 +77,7 @@ impl Hook {
 /// stdout. A timeout (`AMB-D-383`: overrun is dropped) or a failure to launch produces no reply — nothing
 /// useful was said — while the log still carries the warning [`execute`] emitted.
 pub fn run_reply(hook: &Hook, timeout: Duration, log: Option<&Path>) -> Option<String> {
-    let recorded = execute(hook, Some(timeout));
+    let recorded = execute(hook, Some(timeout), None);
     if let Some(path) = log {
         plugin_log::record(path, &recorded);
     }
@@ -87,16 +87,32 @@ pub fn run_reply(hook: &Hook, timeout: Duration, log: Option<&Path>) -> Option<S
     }
 }
 
+/// What a caller wants done at intervals while its hook runs, and how often (`AMB-T-2174`).
+///
+/// The queue runner's, and the reason this path takes anything besides a hook: a runner holds its plugin's
+/// lease while it works, and a run longer than that lease's horizon would otherwise have its queue taken
+/// over mid-run. `beat` is called on the waiting thread, so it must return promptly — it is not a place to
+/// do work, only to say *still here*.
+#[derive(Clone, Copy)]
+pub struct Heartbeat<'a> {
+    /// How long between calls, measured from the spawn.
+    pub every: Duration,
+    /// What to do at each of them.
+    pub beat: &'a dyn Fn(),
+}
+
 /// Run one queued hook **on this thread, to its end**, and record it (`AMB-D-399`).
 ///
 /// This is the queue runner's path ([`crate::plugin_runner`]): it spawns nothing of its own — a runner is
 /// a process working one plugin's events one at a time, in the order they were queued — and it names no
 /// timeout. Nothing waits behind it but the rest of its own plugin's queue, and a plugin killed mid-work is
-/// exactly the half-done outside effect the queue was split off to stop. So a slow plugin is waited on, and
-/// only a plugin that never returns holds its own queue — which its lease's horizon then hands to the next
-/// runner.
-pub fn run_queued(hook: &Hook, log: Option<&Path>) {
-    let recorded = execute(hook, None);
+/// exactly the half-done outside effect the queue was split off to stop. So a slow plugin is waited on for
+/// as long as it takes, and what a plugin that never returns holds is its own queue.
+///
+/// `heartbeat` is what the caller does while that wait goes on ([`Heartbeat`]). A caller with nothing to do
+/// meanwhile passes `None` and the wait is a plain blocking one.
+pub fn run_queued(hook: &Hook, log: Option<&Path>, heartbeat: Option<Heartbeat<'_>>) {
+    let recorded = execute(hook, None, heartbeat);
     if let Some(path) = log {
         plugin_log::record(path, &recorded);
     }
@@ -107,10 +123,13 @@ pub fn run_queued(hook: &Hook, log: Option<&Path>) {
 /// difference between them is what becomes of the result — logged and dropped, or logged and returned — so
 /// the running, the end-arms, and the warnings all live here, once.
 ///
-/// `None` waits for the plugin to finish, however long it takes. That is the queue runner's bound, because
-/// a queue runner has no one to keep waiting: nothing is behind it but the rest of its own plugin's queue
-/// (`AMB-D-399`). A bound is what a reply needs — a caller is waiting on it.
-fn execute(hook: &Hook, bound: Option<Duration>) -> Run {
+/// A `bound` of `None` waits for the plugin to finish, however long it takes. That is the queue runner's
+/// bound, because a queue runner has no one to keep waiting: nothing is behind it but the rest of its own
+/// plugin's queue (`AMB-D-399`). A bound is what a reply needs — a caller is waiting on it.
+///
+/// The two never come together: a `heartbeat` is for the unbounded wait, where a caller has to keep saying
+/// it is still there for as long as that takes, and a bound already caps how long that is.
+fn execute(hook: &Hook, bound: Option<Duration>, heartbeat: Option<Heartbeat<'_>>) -> Run {
     let program = hook.invocation.program.display().to_string();
     let run = |outcome, code, elapsed, stderr: &str| Run {
         plugin: hook.plugin.clone(),
@@ -122,9 +141,10 @@ fn execute(hook: &Hook, bound: Option<Duration>) -> Run {
     };
     // Only these fields ever reach the log: the invocation — whose env carries the plugin's injected
     // secrets (`AMB-D-356`) — stays in this function.
-    let waited = hook.invocation.spawn().and_then(|running| match bound {
-        Some(timeout) => running.wait_timeout(timeout),
-        None => running.wait().map(Some),
+    let waited = hook.invocation.spawn().and_then(|running| match (bound, heartbeat) {
+        (Some(timeout), _) => running.wait_timeout(timeout),
+        (None, Some(hb)) => running.wait_watched(hb.every, hb.beat).map(Some),
+        (None, None) => running.wait().map(Some),
     });
     let recorded = match waited {
         Ok(Some(output)) if output.succeeded() => {

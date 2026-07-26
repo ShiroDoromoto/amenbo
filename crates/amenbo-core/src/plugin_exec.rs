@@ -11,9 +11,10 @@
 //! This is the common ground under both plugin faces. The asynchronous, fire-and-forget hook runner and
 //! the synchronous command caller each build their own policy — a timeout, what stdout *means*, whether
 //! a non-zero exit is fatal — on top of this substrate. This layer holds none of that: it spawns, feeds,
-//! waits, and reports. It offers the wait two ways — [`RunningPlugin::wait`] blocks until the child exits,
-//! [`RunningPlugin::wait_timeout`] gives up and kills it after a bound the *caller* names — but it never
-//! decides how long that bound is, nor what the output means.
+//! waits, and reports. It offers the wait three ways — [`RunningPlugin::wait`] blocks until the child exits,
+//! [`RunningPlugin::wait_timeout`] gives up and kills it after a bound the *caller* names, and
+//! [`RunningPlugin::wait_watched`] waits as long as the first while handing the caller the thread at an
+//! interval — but it never decides how long a bound is, what an interval is for, nor what the output means.
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -130,9 +131,10 @@ impl PluginInvocation {
 }
 
 /// A spawned plugin, its stdin fed and its stdout/stderr draining on background threads. Wait for it to
-/// finish — [`wait`](Self::wait) for as long as it takes, [`wait_timeout`](Self::wait_timeout) up to a
-/// bound — and collect what it left. Either wait reaps the child and joins the drain threads, so there is
-/// no way to hold one of these without eventually reaping the process.
+/// finish — [`wait`](Self::wait) for as long as it takes, [`wait_watched`](Self::wait_watched) for as long
+/// with the thread lent back at an interval, [`wait_timeout`](Self::wait_timeout) up to a bound — and
+/// collect what it left. Every wait reaps the child and joins the drain threads, so there is no way to hold
+/// one of these without eventually reaping the process.
 pub struct RunningPlugin {
     child: Child,
     writer: JoinHandle<()>,
@@ -144,8 +146,9 @@ pub struct RunningPlugin {
     started: Instant,
 }
 
-/// How often the bounded wait re-checks a still-running child. Small enough that a hook's kill is prompt,
-/// large enough that a slow plugin does not spin a core while we wait it out.
+/// How often the polling waits re-check a still-running child. Small enough that a hook's kill, and a
+/// watched wait's return, are prompt; large enough that a slow plugin does not spin a core while we wait it
+/// out.
 const POLL: Duration = Duration::from_millis(20);
 
 impl RunningPlugin {
@@ -154,6 +157,35 @@ impl RunningPlugin {
         let RunningPlugin { mut child, writer, stdout, stderr, started } = self;
         let status = child.wait()?;
         Ok(finish(writer, stdout, stderr, status.code(), started.elapsed()))
+    }
+
+    /// Wait exactly as [`wait`](Self::wait) does — however long the child takes, and it is never killed —
+    /// but hand the waiting thread back to `tick` every `every` while it runs (`AMB-T-2174`).
+    ///
+    /// The queue runner's wait. What it waits on is a plugin with no bound at all, and what it has to do
+    /// meanwhile is push its lease out, which is a matter of a short transaction on the connection it
+    /// already holds ([`plugin_runner`](crate::plugin_runner)). That is why this is an interval and not a
+    /// thread: the caller is doing nothing but waiting, so it can be lent its own thread periodically and
+    /// needs no second connection to reach the store from.
+    ///
+    /// `tick` is therefore expected to return promptly — it is the wait, and a long one delays noticing
+    /// that the child has exited by however long it takes. The interval is measured the way the bound is,
+    /// from the **spawn**, so the first call lands one interval into the run and not at its start.
+    pub fn wait_watched(self, every: Duration, tick: &dyn Fn()) -> std::io::Result<PluginOutput> {
+        let RunningPlugin { mut child, writer, stdout, stderr, started } = self;
+        let mut next = every;
+        loop {
+            if let Some(status) = child.try_wait()? {
+                return Ok(finish(writer, stdout, stderr, status.code(), started.elapsed()));
+            }
+            if started.elapsed() >= next {
+                tick();
+                // Measured from where the tick left off, so a slow one drops beats rather than queuing
+                // them up to be made back-to-back.
+                next = started.elapsed() + every;
+            }
+            std::thread::sleep(POLL);
+        }
     }
 
     /// Wait up to `timeout` for the child to exit; if it overruns, **kill it** and report the timeout.

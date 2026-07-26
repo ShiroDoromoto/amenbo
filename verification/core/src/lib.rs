@@ -156,25 +156,35 @@ struct OpSpec {
     op: &'static str,
     /// `with` keys that must be present.
     required: &'static [&'static str],
+    /// `with` keys whose value names an earlier `as:` binding. `target` is the usual one, but an op
+    /// that joins two objects names both sides, and each has to be checked or a typo on the second
+    /// one reaches the driver as a binding that was never produced.
+    refs: &'static [&'static str],
     /// Whether this op may carry an `as:` binding (true only for ops that produce an object).
     binds: bool,
 }
 
 const REGISTRY: &[OpSpec] = &[
     // Actions
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create", required: &["title"], binds: true },
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "assign", required: &["target", "assignee"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "comment", required: &["target", "text"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create", required: &["title"], refs: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "assign", required: &["target", "assignee"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "comment", required: &["target", "text"], refs: &["target"], binds: false },
     // The progress states, each by the command a user reaches for: `status` is the explicit move
     // (and the reserve), `done` / `reopen` / `block` are the three the CLI gives their own verb.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "status", required: &["target", "status"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "done", required: &["target"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "reopen", required: &["target"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "block", required: &["target", "reason"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "status", required: &["target", "status"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "done", required: &["target"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "reopen", required: &["target"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "block", required: &["target", "reason"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], refs: &[], binds: true },
+    // A decision's own life: the body is edited while it is still proposed, accepting freezes it,
+    // and the link is what makes it a task's premise.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "edit", required: &["target", "body"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "accept", required: &["target"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "link", required: &["target", "task"], refs: &["target", "task"], binds: false },
     // Asserts
-    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], binds: false },
-    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {
@@ -295,15 +305,17 @@ impl Scenario {
                 }
             }
 
-            // A `target:` must name a binding introduced by an earlier action's `as:`.
-            if let Some(v) = step.with().get("target") {
+            // Every reference key this op declares must name a binding introduced by an earlier
+            // action's `as:`.
+            for key in spec.refs {
+                let Some(v) = step.with().get(*key) else { continue };
                 match v.as_str() {
                     Some(name) if bound.contains(name) => {}
                     Some(name) => errs.push(at(
                         i,
-                        format!("`target: {name}` does not resolve to an earlier `as:` binding"),
+                        format!("`{key}: {name}` does not resolve to an earlier `as:` binding"),
                     )),
-                    None => errs.push(at(i, "`target` must be a string binding name".to_string())),
+                    None => errs.push(at(i, format!("`{key}` must be a string binding name"))),
                 }
             }
 
@@ -405,6 +417,28 @@ steps:
 "#;
         let errs = load_str(yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("does not resolve")));
+    }
+
+    /// An op that joins two objects is checked on both sides: the second reference is as easy to
+    /// mistype as the first, and a driver would only meet it as a binding that was never produced.
+    #[test]
+    fn a_dangling_second_reference_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: action
+    domain: decision
+    op: create
+    with: { title: D }
+    as: rec
+  - type: action
+    domain: decision
+    op: link
+    with: { target: rec, task: ghost }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`task: ghost` does not resolve")));
     }
 
     #[test]

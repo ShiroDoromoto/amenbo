@@ -4525,6 +4525,7 @@ fn plugin_validate_json_carries_the_read_manifest_only_when_it_passes() {
     assert_eq!(out["ok"], false);
     assert!(out["count"].as_u64().unwrap() >= 1, "it names the problem");
     assert!(out.get("manifest").is_none(), "a manifest that did not pass carries no body");
+    assert!(out.get("entry").is_none() && out.get("detail").is_none(), "nor either document");
 
     // A manifest that does not even parse: nothing was read, so likewise no body.
     let junk = cli.home.join("junk.json");
@@ -4535,6 +4536,64 @@ fn plugin_validate_json_carries_the_read_manifest_only_when_it_passes() {
     assert_eq!(out["ok"], false);
     assert!(out["parse_error"].is_string(), "a parse failure is reported as such");
     assert!(out.get("manifest").is_none(), "and there is no manifest to carry");
+    assert!(out.get("entry").is_none() && out.get("detail").is_none(), "nor either document");
+}
+
+/// The same reading, split into the two documents the catalog serves (`AMB-D-385`): an `entry` small enough
+/// that everyone can fetch every one of them to draw a list, and a `detail` fetched for the one plugin being
+/// opened or installed. The split is amenbo's, so the aggregator holds no idea of which half a field belongs
+/// in — an idea it could hold only by naming fields, and so fail to name. The entry's `added_at` and `detail_sum`
+/// (`AMB-D-386`) come back as empty slots: neither can be known from a manifest, so the catalog fills them.
+#[test]
+fn plugin_validate_json_splits_the_manifest_into_the_two_documents_the_catalog_serves() {
+    let cli = Cli::new();
+
+    let path = cli.home.join("worktree.json");
+    let manifest = serde_json::json!({
+        "name": "worktree",
+        "desc": "Isolate each task in its own git worktree",
+        "author": "amenbo",
+        "repo": "alice/amenbo-plugin-worktree",
+        "os": ["macos"],
+        "category": "workflow",
+        "url": "https://example.com/worktree-v1.tar.gz",
+        "checksum": format!("sha256:{}", "a".repeat(64)),
+        "official": true,
+        "scope": "machine",
+        "events": ["task.done"],
+        "config": [{ "key": "base", "label": "Base branch" }],
+        "min_amenbo": "1.8.0",
+    });
+    std::fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+
+    let out = cli.json(&["plugin", "validate", path.to_str().unwrap(), "--json"]);
+    assert_eq!(out["ok"], true);
+    let (entry, detail) = (&out["entry"], &out["detail"]);
+
+    // What a list draws, and nothing an install needs.
+    assert_eq!(entry["name"], "worktree");
+    assert_eq!(entry["desc"], "Isolate each task in its own git worktree");
+    assert_eq!(entry["os"], serde_json::json!(["macos"]));
+    assert_eq!(entry["official"], true, "the badge is drawn in the list");
+    for install_only in ["url", "checksum", "signature", "assets", "scope", "events", "config"] {
+        assert!(entry.get(install_only).is_none(), "{install_only} does not ride in the list");
+    }
+    assert!(entry["added_at"].is_null(), "the catalog's slot, emitted empty");
+    assert!(entry["detail_sum"].is_null(), "and the digest the catalog computes over the detail");
+
+    // What an install needs, joined back to its entry by name.
+    assert_eq!(detail["name"], "worktree", "the join between the two documents");
+    assert_eq!(detail["url"], "https://example.com/worktree-v1.tar.gz");
+    assert_eq!(detail["checksum"], format!("sha256:{}", "a".repeat(64)));
+    assert_eq!(detail["scope"], "machine");
+    assert_eq!(detail["events"], serde_json::json!(["task.done"]));
+    assert_eq!(detail["config"][0]["key"], "base");
+    assert_eq!(detail["min_amenbo"], "1.8.0");
+    assert_eq!(detail["payload_v"], 1, "the contract version the author relied on is stated");
+    for list_only in ["desc", "author", "repo", "os", "category", "official"] {
+        assert!(detail.get(list_only).is_none(), "{list_only} is drawn from the list, not fetched again");
+    }
+    assert!(detail.get("assets").is_none(), "an absent optional field stays absent here too");
 }
 
 /// `plugin catalog add/list/remove` registers third-party catalogs for the browsing view (`AMB-T-1980`):

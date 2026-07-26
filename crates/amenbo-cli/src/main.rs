@@ -672,10 +672,12 @@ const STDIN_LABEL: &str = "<stdin>";
 /// required field is the shape half of the door — so it is reported as a problem, not surfaced as a crash.
 /// Exits non-zero when the manifest is invalid, dropping cleanly into a pre-submit check.
 ///
-/// On `--json` a passing manifest also carries a `manifest` field — the whole serde shape amenbo read
-/// (`AMB-T-2109`) — so the catalog aggregator builds install entries from it rather than from its own list
-/// of fields to copy, which silently drops a field amenbo later adds. It rides back only when the manifest
-/// passes: a parse error read nothing, and a rule-breaking manifest is refused at the door.
+/// On `--json` a passing manifest also carries the manifest amenbo read, in three shapes: `manifest`, the
+/// whole serde body (`AMB-T-2109`), and `entry` / `detail`, that same body split into the two documents the
+/// catalog serves (`AMB-D-385`). Either way the catalog aggregator publishes what amenbo hands it rather
+/// than keeping its own list of fields to copy, which silently drops a field amenbo later adds. All three
+/// ride back only when the manifest passes: a parse error read nothing, and a rule-breaking manifest is
+/// refused at the door.
 fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
     let text = std::fs::read_to_string(&path).map_err(|e| CliError {
         code: "io_error",
@@ -725,6 +727,15 @@ fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
         // what the author wrote.
         if problems.is_empty() {
             out["manifest"] = serde_json::to_value(&manifest).unwrap();
+            // …and the same manifest split into the two documents the catalog serves (`AMB-D-385`): the
+            // `entry` everyone fetches to draw the list, and the `detail` fetched for one plugin at a time.
+            // The split is amenbo's (`amenbo_core::plugin_wire`) for the same reason the body above is —
+            // an aggregator that decided which half a field belongs to would be keeping the list of fields
+            // all over again. `entry` carries `added_at` and `detail_sum` as empty slots the catalog CI
+            // fills; neither is knowable from a manifest alone.
+            let (entry, detail) = amenbo_core::plugin_wire::split(&manifest);
+            out["entry"] = serde_json::to_value(&entry).unwrap();
+            out["detail"] = serde_json::to_value(&detail).unwrap();
         }
         print_json(&out);
     } else if problems.is_empty() {

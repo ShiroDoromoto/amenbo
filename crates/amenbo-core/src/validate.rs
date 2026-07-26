@@ -292,17 +292,28 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
 ///
 /// **Not part of [`doctor`], deliberately** — [`crate::doctor::report`] chains it in alongside the
 /// environment checks instead. `doctor` is the cheap always-on half: it runs at every write open
-/// (`compute_startup_health`) and, in the GUI, on every store-changed tick. This check reads every body on
-/// the device and parses each as Markdown, which is the same reason the environment's filesystem walk is
-/// kept out of that path. It also answers a different question: `doctor`'s checks say a row is broken, and
-/// this one says a *sentence* has rotted while every row around it is intact.
+/// (`compute_startup_health`) and, in the GUI, on every store-changed tick. This check reads the bodies of
+/// every outstanding task and proposed decision on the device and parses each as Markdown, which is the same
+/// reason the environment's filesystem walk is kept out of that path. It also answers a different question:
+/// `doctor`'s checks say a row is broken, and this one says a *sentence* has rotted while every row around it
+/// is intact.
 ///
 /// Unlike its neighbours it is not a predicate SQL can hold: whether `AMB-D-79` in a body is a pointer or a
 /// specimen is a question about Markdown ([`crate::refscan`]), so the bodies are read out and scanned here.
-/// Four surfaces carry prose — a task's notes, a decision's body, and the comments on each — and each is
-/// folded to **one issue per body**: a body is what a person opens and edits, so three dead refs in one note
-/// are one thing to go and fix, not three. (The same folding `duplicate_order_key` does, for the same
-/// reason.)
+/// Each body that is scanned is folded to **one issue per body**: a body is what a person opens and edits, so
+/// three dead refs in one note are one thing to go and fix, not three. (The same folding
+/// `duplicate_order_key` does, for the same reason.)
+///
+/// **Only a body that still sends someone somewhere is scanned** (`AMB-D-402`). Four surfaces carry prose,
+/// and two of them are read: a task's notes while the task is still work, and a decision's body while it is
+/// still proposed. A finished task's notes, a settled decision's body, and every comment are frozen — the
+/// number they name was live when it was written, and the reading it belongs to is history, not an entrance.
+/// The question this check answers is whether a reader arriving *now* is sent somewhere empty, so a body
+/// nobody is arriving through has no answer to give. The practical half is that the two frozen surfaces are
+/// also the two nobody can repair: an accepted decision's body is frozen against editing outright, and a
+/// comment recording that `AMB-T-833` was deleted is *correct* to keep naming it. Counting them would grow a
+/// warning list that can only ever grow — deletion is physical (`AMB-D-166`), so the gone numbers never come
+/// back.
 ///
 /// **Reach narrows what is read, never what resolves.** Which bodies are scanned is the binding's business,
 /// as everywhere else. But a ref is dead when the number exists *nowhere*, so the liveness sets are the whole
@@ -318,40 +329,42 @@ pub fn dead_ref_issues(conn: &Connection, reach: Reach) -> StoreEngineResult<Vec
 
     let mut issues = Vec::new();
 
-    // A task's notes. `project_id` is nullable, so a closed reach leaves the inbox out — the same reading
-    // every other check here gives it.
+    // A task's notes, while the task is still work. `project_id` is nullable, so a closed reach leaves the
+    // inbox out — the same reading every other check here gives it. The status clause is a second, separate
+    // narrowing: the reach says whose bodies may be read, and this says which of them still point anyone
+    // anywhere. `still_open` is the store's one definition of a task that has not ended, so a terminal added
+    // later stops being scanned without this check being told.
     let mut sel = Select::new();
     let (id, body) = (sel.col(T.id), sel.col(T.notes));
     let mut sql = Sql::from(&sel, T.table);
-    sql.push_where(reach_pred(reach, T).as_ref());
+    sql.push_where(
+        Pred::all(
+            [Some(crate::store_engine::read::still_open(T.status)), reach_pred(reach, T)]
+                .into_iter()
+                .flatten(),
+        )
+        .as_ref(),
+    );
     issues.extend(scan_bodies(conn, &sql, "task", &id, &body, &live_tasks, &live_decisions)?);
 
-    // A comment on a task. It carries no project of its own, so the reach is read off the task it hangs on.
-    const TC: col::task_comment::Cols = col::task_comment::of("c");
-    const CT: col::task::Cols = col::task::of("t");
-    let mut sel = Select::new();
-    let (id, body) = (sel.col(TC.id), sel.col(TC.text));
-    let mut sql = Sql::from(&sel, TC.table);
-    sql.join(CT.table, same(CT.id, TC.task_id));
-    sql.push_where(reach_pred(reach, CT).as_ref());
-    issues.extend(scan_bodies(conn, &sql, "task_comment", &id, &body, &live_tasks, &live_decisions)?);
-
-    // A decision's body. `decision.project_id` is NOT NULL, so a closed reach narrows it outright.
+    // A decision's body, while it is still proposed — the one decision status whose body is still open to
+    // editing, and the one still waiting on a reader. `decision.project_id` is NOT NULL, so a closed reach
+    // narrows it outright.
     let mut sel = Select::new();
     let (id, body) = (sel.col(DEC.id), sel.col(DEC.body));
     let mut sql = Sql::from(&sel, DEC.table);
-    sql.push_where(reach.project().map(|p| Pred::eq(DEC.project_id, p)).as_ref());
+    sql.push_where(
+        Pred::all(
+            [
+                Some(Pred::eq(DEC.status, crate::model::DecisionStatus::Proposed.as_str())),
+                reach.project().map(|p| Pred::eq(DEC.project_id, p)),
+            ]
+            .into_iter()
+            .flatten(),
+        )
+        .as_ref(),
+    );
     issues.extend(scan_bodies(conn, &sql, "decision", &id, &body, &live_tasks, &live_decisions)?);
-
-    // A comment on a decision — the mirror of a task comment, reached through its decision.
-    const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
-    const CD: col::decision::Cols = col::decision::of("d");
-    let mut sel = Select::new();
-    let (id, body) = (sel.col(DC.id), sel.col(DC.text));
-    let mut sql = Sql::from(&sel, DC.table);
-    sql.join(CD.table, same(CD.id, DC.decision_id));
-    sql.push_where(reach.project().map(|p| Pred::eq(CD.project_id, p)).as_ref());
-    issues.extend(scan_bodies(conn, &sql, "decision_comment", &id, &body, &live_tasks, &live_decisions)?);
 
     Ok(issues)
 }
@@ -595,8 +608,9 @@ mod tests {
 
     // ─────────────────────── dead refs ───────────────────────
 
-    /// A store with prose on all four body surfaces. Live: task 1 and 2, decision 5. Everything else a body
-    /// names is a number nothing was ever issued under.
+    /// A store with prose on all four body surfaces, every one of them in the state that *is* scanned (an
+    /// outstanding task, a proposed decision). Live: task 1 and 2, decision 5. Everything else a body names
+    /// is a number nothing was ever issued under.
     fn bodies() -> StoreEngine {
         let e = StoreEngine::open_in_memory_unchecked().unwrap();
         for (pid, name) in [(7, "Alpha"), (8, "Beta")] {
@@ -612,6 +626,7 @@ mod tests {
                 &[
                     ("title", text("t")),
                     ("notes", text(notes)),
+                    ("status", text("todo")),
                     ("project_id", Value::Integer(pid)),
                     ("order_key", text("m")),
                 ],
@@ -624,6 +639,7 @@ mod tests {
             &[
                 ("project_id", Value::Integer(7)),
                 ("title", text("d")),
+                ("status", text("proposed")),
                 ("body", text("supersedes AMB-D-4")),
             ],
         )
@@ -655,15 +671,17 @@ mod tests {
         t
     }
 
-    /// Every body surface is read, and a ref whose number was never issued is raised against the body that
-    /// writes it.
+    /// A ref whose number was never issued is raised against the body that writes it — on the two surfaces
+    /// that are still an entrance, and only those. The comments in the fixture are dead-ref prose too, and
+    /// they are read past in silence.
     #[test]
-    fn a_ref_into_nothing_is_raised_on_every_body_surface() {
+    fn a_ref_into_nothing_is_raised_on_the_bodies_that_still_send_someone_somewhere() {
         let issues = dead(&bodies(), Reach::All);
 
         assert_eq!(
             dead_targets(&issues),
-            vec!["decision:5", "decision_comment:40", "task:1", "task:2", "task_comment:30"],
+            vec!["decision:5", "task:1", "task:2"],
+            "a comment is history — it is not scanned even when its task and its decision are live",
         );
         let issue = issues.iter().find(|i| i.target == "task:1").unwrap();
         assert_eq!(issue.params["refs"], "AMB-D-9");
@@ -680,6 +698,7 @@ mod tests {
             3,
             &[
                 ("title", text("t")),
+                ("status", text("todo")),
                 ("notes", text("read AMB-D-5 and AMB-T-1 first")),
                 ("project_id", Value::Integer(7)),
                 ("order_key", text("z")),
@@ -700,7 +719,7 @@ mod tests {
 
         assert_eq!(
             dead_targets(&issues),
-            vec!["decision:5", "decision_comment:40", "task:1", "task_comment:30"],
+            vec!["decision:5", "task:1"],
             "task:2 is project 8's body, so it is not read at all",
         );
     }
@@ -716,6 +735,7 @@ mod tests {
             3,
             &[
                 ("title", text("t")),
+                ("status", text("todo")),
                 ("notes", text("blocked on AMB-T-2")),
                 ("project_id", Value::Integer(7)),
                 ("order_key", text("z")),
@@ -741,6 +761,7 @@ mod tests {
             3,
             &[
                 ("title", text("t")),
+                ("status", text("todo")),
                 ("notes", text("AMB-D-9, then AMB-T-99, then AMB-D-9 again")),
                 ("project_id", Value::Integer(7)),
                 ("order_key", text("z")),
@@ -765,6 +786,7 @@ mod tests {
             3,
             &[
                 ("title", text("t")),
+                ("status", text("todo")),
                 ("notes", text("the form is `AMB-D-9`\n\n```\nAMB-T-99\n```")),
                 ("project_id", Value::Integer(7)),
                 ("order_key", text("z")),
@@ -775,6 +797,76 @@ mod tests {
         let issues = dead(&e, Reach::All);
 
         assert!(!dead_targets(&issues).contains(&"task:3"), "{issues:?}");
+    }
+
+    /// The whole truth table of `AMB-D-402`, both ways round: every one of the four surfaces, in every state
+    /// it can be in, carrying the same dead ref. What is raised is exactly the bodies a reader can still
+    /// arrive through — an outstanding task's notes and a proposed decision's body — and every frozen body is
+    /// silent. Both directions matter: a state that stopped being scanned would pass a test that only listed
+    /// what stays.
+    #[test]
+    fn only_a_body_that_is_still_an_entrance_is_scanned() {
+        let e = StoreEngine::open_in_memory_unchecked().unwrap();
+        e.put_record("project", 7, &[("name", text("Alpha")), ("order_key", text("a"))]).unwrap();
+
+        // One task per status, each with the same dead ref in its notes, plus a comment on each — a comment's
+        // own state is its task's, and neither state gets it scanned.
+        for (id, status) in [
+            (1, "todo"),
+            (2, "in_progress"),
+            (3, "blocked"),
+            (4, "done"),
+            (5, "rejected"),
+        ] {
+            e.put_record(
+                "task",
+                id,
+                &[
+                    ("title", text("t")),
+                    ("status", text(status)),
+                    ("notes", text("read AMB-D-9 first")),
+                    ("project_id", Value::Integer(7)),
+                    ("order_key", text(status)),
+                ],
+            )
+            .unwrap();
+            e.put_record(
+                "task_comment",
+                100 + id,
+                &[("task_id", Value::Integer(id)), ("text", text("see AMB-T-99"))],
+            )
+            .unwrap();
+        }
+
+        // The same, per decision status, each with a comment of its own.
+        for (id, status) in [(11, "proposed"), (12, "accepted"), (13, "rejected")] {
+            e.put_record(
+                "decision",
+                id,
+                &[
+                    ("project_id", Value::Integer(7)),
+                    ("title", text("d")),
+                    ("status", text(status)),
+                    ("body", text("supersedes AMB-D-9")),
+                ],
+            )
+            .unwrap();
+            e.put_record(
+                "decision_comment",
+                200 + id,
+                &[("decision_id", Value::Integer(id)), ("text", text("see AMB-T-99"))],
+            )
+            .unwrap();
+        }
+
+        let issues = dead(&e, Reach::All);
+
+        assert_eq!(
+            dead_targets(&issues),
+            vec!["decision:11", "task:1", "task:2", "task:3"],
+            "outstanding notes and a proposed body are raised; a task that has ended, a settled decision \
+             and every comment are history: {issues:?}",
+        );
     }
 
     /// It is not part of `doctor`, and that is load-bearing: `doctor` runs at every write open and on every

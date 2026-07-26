@@ -189,8 +189,9 @@ pub fn report(store: &Store) -> crate::error::Result<DoctorResult> {
     // has rotted while every row around it stands.
     //
     // These are also the checks too expensive to run anywhere but here — a filesystem walk per bound folder,
-    // and a Markdown parse of every body on the device — which is why they are chained onto the report rather
-    // than living in `validate::doctor`, the half that runs at every write open and on every GUI tick.
+    // and a Markdown parse of every body still open to a reader — which is why they are chained onto the
+    // report rather than living in `validate::doctor`, the half that runs at every write open and on every
+    // GUI tick.
     let env = stale_managed_block_issues(store)
         .into_iter()
         .chain(pointer_issues(store))

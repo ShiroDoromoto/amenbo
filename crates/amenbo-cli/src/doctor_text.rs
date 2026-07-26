@@ -98,9 +98,10 @@ pub fn fix_hint(issue: &DoctorIssue) -> String {
             "`{cmd} doctor --fix` forgets it from the index (neither the folder nor its `.amenbo` is touched)."
         ),
         DoctorIssueKind::DeadRef => format!(
-            "Open the body (`{cmd} task show` / `decision show` / `comment list`) and edit it: drop the \
-             ref, or point it at what stands in its place. Nothing rewrites a body on your behalf - \
-             only a person knows what it meant to say."
+            "Edit the body it names - `{cmd} task update <task> --notes` for a task's notes, \
+             `{cmd} decision edit <decision> --body` for a proposed decision - and drop the ref, or point \
+             it at what stands in its place. Nothing rewrites a body on your behalf - only a person knows \
+             what it meant to say."
         ),
         DoctorIssueKind::StartAfterDue => format!(
             "Correct whichever of the two declarations is wrong: `{cmd} task update <task> --start <date>` \
@@ -165,7 +166,7 @@ mod tests {
         assert!(out.contains("[error] self_dependency (1):"), "the rare kind survives the flood: {out}");
         assert!(out.contains("… and 20 more"), "the remainder is named: {out}");
         assert_eq!(
-            lines.iter().filter(|l| l.contains("Open the body")).count(),
+            lines.iter().filter(|l| l.contains("Edit the body it names")).count(),
             1,
             "the fix hint belongs to the kind, so it is written once: {out}",
         );

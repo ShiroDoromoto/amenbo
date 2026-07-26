@@ -1,9 +1,10 @@
 id: status
-title: The what-to-do-now view sorts a task into overdue, due today or in progress by the days it carries
+title: The what-to-do-now view sorts a task by the days it carries, and calls under way only what was reserved
 description: >
-  The first screen a person reads. Its buckets are assembled from the days on a task, not from the
-  status field — in progress there means started and not yet due — so what proves the view is a task
-  moving between buckets as its days change, and leaving it altogether once it is done.
+  The first screen a person reads. Overdue and due today are assembled from the days on a task, while
+  in progress is the reservation — something a person declares, and no day can imply. So what proves
+  the view is a task moving between the dated buckets as its days change, a reserved task standing in
+  the in-progress section with no day on it at all, and everything leaving once it is done.
 steps:
   # Past its day: overdue, and nowhere else.
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — its day has gone }, as: late }
@@ -17,10 +18,17 @@ steps:
   - { type: assert, domain: task, op: status-bucket, with: { target: today_task, bucket: due_today, present: true } }
   - { type: assert, domain: task, op: status-bucket, with: { target: today_task, bucket: overdue, present: false } }
 
-  # Started and not yet due: in progress. A task carrying no day at all is in none of the three.
-  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — started, not yet due }, as: running }
-  - { type: action, domain: task, op: update, with: { target: running, start: today } }
+  # Reserved: in progress, with no day on it to put it there.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — reserved, and dateless }, as: running }
+  - { type: action, domain: task, op: status, with: { target: running, status: in_progress } }
   - { type: assert, domain: task, op: status-bucket, with: { target: running, bucket: in_progress, present: true } }
+
+  # A start day that has come says the work may begin, which is not the same as someone being on it.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — its start day has come }, as: startable }
+  - { type: action, domain: task, op: update, with: { target: startable, start: today } }
+  - { type: assert, domain: task, op: status-bucket, with: { target: startable, bucket: in_progress, present: false } }
+
+  # A task carrying no day at all, and untouched, is in none of the three.
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — no day on it at all }, as: undated }
   - { type: assert, domain: task, op: status-bucket, with: { target: undated, bucket: in_progress, present: false } }
   - { type: assert, domain: task, op: status-bucket, with: { target: undated, bucket: due_today, present: false } }

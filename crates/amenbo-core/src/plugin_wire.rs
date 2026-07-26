@@ -18,11 +18,12 @@
 //! is what refuses to let it be forgotten: it reads the serialized manifest's own keys and fails unless each
 //! one appears in exactly one face.
 //!
-//! **Two values on [`ListEntry`] are the catalog's, not the author's**, and amenbo emits them as empty slots
-//! for the CI to fill: `added_at`, which is knowable only from the catalog repository's git history, and
-//! `detail_sum`, the digest of the detail document (`AMB-D-386`). With the checksums a document away,
-//! `detail_sum` is what keeps update detection on the one list fetch everyone already makes. Carrying the
-//! slots here is what keeps the CI from naming its own fields after all.
+//! **Three values on [`ListEntry`] are the catalog's, not the author's**, and amenbo emits them as empty
+//! slots for the CI to fill: `added_at`, which is knowable only from the catalog repository's git history;
+//! `detail_sum`, the digest of the detail document (`AMB-D-386`); and `featured`, the index's hand
+//! curation (`AMB-D-347`). With the checksums a document away, `detail_sum` is what keeps update detection
+//! on the one list fetch everyone already makes. Carrying the slots here is what keeps the CI from naming
+//! its own fields after all.
 
 use std::collections::BTreeMap;
 
@@ -53,6 +54,13 @@ pub struct ListEntry {
     /// manifest takes — the badge is a claim a reader must find, never one it assumes.
     #[serde(default)]
     pub official: bool,
+    /// **The catalog's slot, emitted unset**: the recommendation, hand-curated on the official index
+    /// (`AMB-D-347`). Unlike `official` — a fact about who wrote the plugin, which the CI can read off the
+    /// repository — this is a judgement about the plugin itself, so nothing in a manifest can imply it and
+    /// no owner test can grant it. It is the curator's, written beside the reviewed manifests rather than
+    /// inside one, and a submitter therefore has no field to tick.
+    #[serde(default)]
+    pub featured: bool,
     /// **The catalog's slot, emitted empty**: the day this manifest first appeared in the index, from the
     /// catalog repository's git history. A client holds no such history, so the CI is the only thing that
     /// can answer, and a missing value means unknown rather than old.
@@ -126,6 +134,7 @@ pub fn split(manifest: &Manifest) -> (ListEntry, Detail) {
         os: manifest.os.clone(),
         category: manifest.category.clone(),
         official: manifest.official,
+        featured: false,
         added_at: None,
         detail_sum: None,
     };
@@ -242,16 +251,17 @@ mod tests {
             assert!(!(in_entry && in_detail), "manifest field {field:?} reaches both — only `name` joins them");
         }
 
-        // And nothing is invented on the way out beyond the two slots the catalog fills.
+        // And nothing is invented on the way out beyond the slots the catalog fills.
         for field in entry_keys.iter().chain(detail_keys.iter()) {
             assert!(
-                manifest_keys.contains(field) || ["added_at", "detail_sum"].contains(&field.as_str()),
+                manifest_keys.contains(field)
+                    || ["featured", "added_at", "detail_sum"].contains(&field.as_str()),
                 "published field {field:?} is neither a manifest field nor a catalog slot",
             );
         }
     }
 
-    /// The values land where they belong, and the catalog's two slots come out empty for the CI to fill.
+    /// The values land where they belong, and the catalog's own slots come out empty for the CI to fill.
     #[test]
     fn the_list_entry_draws_and_the_detail_installs() {
         let (entry, detail) = split(&full());
@@ -260,6 +270,7 @@ mod tests {
         assert_eq!(entry.desc, "Isolate each task in its own git worktree");
         assert_eq!(entry.os, vec![Os::Macos, Os::Linux]);
         assert!(entry.official, "the badge rides in the list, where the badge is drawn");
+        assert!(!entry.featured, "the catalog's, curated by hand — never claimed by a manifest");
         assert_eq!(entry.added_at, None, "the catalog's, from git history");
         assert_eq!(
             entry.detail_sum, None,
@@ -330,5 +341,21 @@ mod tests {
         let entry_json = serde_json::to_value(&entry).unwrap();
         assert!(entry_json["added_at"].is_null(), "the slot is present and empty");
         assert!(entry_json["detail_sum"].is_null());
+        assert_eq!(entry_json["featured"], false, "the slot is present and unset");
+    }
+
+    /// **The curation cannot be self-granted.** A submitter who writes `featured: true` into their own
+    /// manifest is writing a key amenbo does not read, so the entry the catalog publishes still says
+    /// `false` — the recommendation is the curator's, and there is no field on this path for anyone else
+    /// to set. `official` needs the CI to refuse a claim because the manifest carries it; this one is
+    /// unreachable from a manifest at all.
+    #[test]
+    fn a_manifest_claiming_the_recommendation_is_published_without_it() {
+        let mut claimed = serde_json::to_value(full()).unwrap();
+        claimed["featured"] = serde_json::json!(true);
+        let manifest: Manifest = serde_json::from_value(claimed).expect("unknown keys are ignored");
+
+        let (entry, _) = split(&manifest);
+        assert!(!entry.featured, "what the author wrote never reached the entry");
     }
 }

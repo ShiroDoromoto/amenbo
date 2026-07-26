@@ -552,6 +552,12 @@ pub struct Discovery {
 /// The official catalog is merged first and wins every name clash, so a third-party catalog cannot shadow
 /// an official plugin in what the user sees. Each entry keeps the catalog it came from
 /// ([`DiscoveredEntry`]), which the fold is the only place that still knows.
+///
+/// **A recommendation survives the merge only from the official index.** `featured` is hand curation
+/// (`AMB-D-347`), and the reader's question is "does the amenbo team recommend this?" — a catalog anyone
+/// can publish answering it for its own entries would mean self-promotion into the one ordering that is
+/// supposed to be a judgement. So the flag is cleared for every third-party entry here, once, rather than
+/// left for each face to remember: what a face reads is already the answer.
 pub fn discover(paths: &Paths) -> Discovery {
     let mut entries: Vec<DiscoveredEntry> = Vec::new();
     let mut sources_meta: Vec<DiscoveredSource> = Vec::new();
@@ -563,10 +569,11 @@ pub fn discover(paths: &Paths) -> Discovery {
             Ok(catalog) => {
                 let offered = catalog.entries.len();
                 dropped.extend(catalog.dropped);
-                for entry in catalog.entries {
+                for mut entry in catalog.entries {
                     if entries.iter().any(|e| e.entry.name == entry.name) {
                         dropped.push(Dropped::Duplicate { name: entry.name });
                     } else {
+                        entry.featured &= official;
                         entries.push(DiscoveredEntry {
                             entry,
                             source: url.clone(),
@@ -637,11 +644,13 @@ mod tests {
         assert_eq!(catalog.generated_at.as_deref(), Some("2026-07-23T04:57:10Z"));
     }
 
-    /// The two values on an entry that no author writes: the day it entered the index, and the digest of
-    /// the document an install goes on to fetch (`AMB-D-386`).
+    /// The values on an entry that no author writes: the day it entered the index, the digest of the
+    /// document an install goes on to fetch (`AMB-D-386`), and the index's own recommendation.
     #[test]
-    fn an_entry_keeps_the_two_fields_only_the_catalog_supplies() {
-        let catalog = parse(&catalog_json(vec![entry_json("worktree")])).unwrap();
+    fn an_entry_keeps_the_fields_only_the_catalog_supplies() {
+        let mut json = entry_json("worktree");
+        json["featured"] = serde_json::json!(true);
+        let catalog = parse(&catalog_json(vec![json])).unwrap();
         let entry = catalog.find("worktree").expect("the entry is there");
         assert_eq!(entry.added_at.as_deref(), Some("2026-07-23T04:23:48Z"), "the 'new' axis");
         assert_eq!(
@@ -649,6 +658,7 @@ mod tests {
             Some(format!("sha256:{}", "a".repeat(64))),
             "the comparison material update detection is left with"
         );
+        assert!(entry.featured, "the 'featured' axis");
     }
 
     /// An entry carries nothing an install needs, and intake does not ask it for any: a list entry with
@@ -674,6 +684,14 @@ mod tests {
             "the field is named: {:?}",
             catalog.dropped
         );
+    }
+
+    /// A catalog built before the field existed says nothing about it, and nothing is what that means:
+    /// an entry with no `featured` key is simply not recommended, not unreadable.
+    #[test]
+    fn an_entry_without_the_recommendation_reads_as_not_recommended() {
+        let catalog = parse(&catalog_json(vec![entry_json("worktree")])).unwrap();
+        assert!(!catalog.find("worktree").expect("the entry is there").featured);
     }
 
     #[test]
@@ -1020,6 +1038,28 @@ mod tests {
         assert_eq!(discovery.sources.len(), 2, "official plus the one source");
         assert!(discovery.sources[0].official && discovery.sources[0].reachable);
         assert_eq!(discovery.sources[1].offered, 2, "the source offered two before de-duplication");
+    }
+
+    /// A third-party catalog cannot recommend its own entries into the browse view: `featured` is the
+    /// official index's curation, so the merge keeps it only from there.
+    #[test]
+    fn discover_keeps_a_recommendation_only_from_the_official_catalog() {
+        let paths = paths_at("discover-featured");
+        let mut official = entry_json("worktree");
+        official["featured"] = serde_json::json!(true);
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![official])).unwrap();
+        let src = "https://example.invalid/third/catalog.json";
+        add_source(&paths, src).unwrap();
+        let mut boasting = entry_json("extra");
+        boasting["featured"] = serde_json::json!(true);
+        write_cache_at(&source_cache_file(&paths, src), &catalog_json(vec![boasting])).unwrap();
+
+        let discovery = discover(&paths);
+        assert!(discovery.entries[0].entry.featured, "the official index's curation stands");
+        assert!(
+            !discovery.entries[1].entry.featured,
+            "a catalog anyone can publish does not get to recommend itself"
+        );
     }
 
     /// A registered source that cannot be reached and holds no cache contributes nothing and is marked

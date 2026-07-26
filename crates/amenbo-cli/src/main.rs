@@ -731,8 +731,8 @@ fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
             // `entry` everyone fetches to draw the list, and the `detail` fetched for one plugin at a time.
             // The split is amenbo's (`amenbo_core::plugin_wire`) for the same reason the body above is —
             // an aggregator that decided which half a field belongs to would be keeping the list of fields
-            // all over again. `entry` carries `added_at` and `detail_sum` as empty slots the catalog CI
-            // fills; neither is knowable from a manifest alone.
+            // all over again. `entry` carries `added_at`, `detail_sum` and `featured` as empty slots the
+            // catalog CI fills; none of them is knowable from a manifest alone.
             let (entry, detail) = amenbo_core::plugin_wire::split(&manifest);
             out["entry"] = serde_json::to_value(&entry).unwrap();
             out["detail"] = serde_json::to_value(&detail).unwrap();

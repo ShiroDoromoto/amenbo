@@ -541,6 +541,11 @@ pub struct Snapshot {
     /// The user's language (config.json, global). Decides how the GUI localizes its UI labels. Null
     /// when unset.
     language: Option<String>,
+    /// How dates are written (config.json, global) — a BCP-47 tag. Null means the one that goes
+    /// with `language`, which is what most people want; a value is the reader whose two answers
+    /// differ. Passed through as written: whether a tag is usable is the formatter's judgement, and
+    /// the front end falls back to the language's rather than failing to draw a date.
+    date_locale: Option<String>,
     /// First-run setup completed (config.json). False makes the GUI show first-run setup.
     onboarded: bool,
     /// This person's roster — the two facets that come from config (human / ai). It is the one
@@ -1069,6 +1074,7 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
         .map(|p| amenbo_core::config::Config::load(&p.config_file))
         .unwrap_or_default();
     let language = config.language.clone();
+    let date_locale = config.date_locale.clone();
     let onboarded = config.onboarded;
     let lang = lang_code(&language);
 
@@ -1091,6 +1097,7 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
 
     Ok(Snapshot {
         language,
+        date_locale,
         onboarded,
         roster: config
             .roster()

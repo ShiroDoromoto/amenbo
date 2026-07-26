@@ -3,7 +3,7 @@ import { type Decision, type DecisionStatus } from "../core/snapshot";
 import { addDecision } from "../core/mutations";
 import { useDecisionPage, useDecisionSearchIds } from "../core/reads";
 import { Pager, usePager } from "../components/Pager";
-import { currentLang, errText, t } from "../core/i18n";
+import { dateLocale, errText, t } from "../core/i18n";
 import { parseRefQuery } from "../core/filters";
 
 // The list of decision records. A decision is a first-class entity that keeps "why we went with X"
@@ -145,12 +145,13 @@ function statusColor(s: DecisionStatus): string {
   }
 }
 
-// Format the decision date (decidedAt, else createdAt) as a calendar date in the current language's locale. An invalid value formats as empty.
+// Format the decision date (decidedAt, else createdAt) as a calendar date, in the locale dates are
+// written in (`dateLocale`). An invalid value formats as empty.
 function decidedLabel(d: Decision): string {
   const at = d.decidedAt ?? d.createdAt;
   const dt = new Date(at);
   if (Number.isNaN(dt.getTime())) return "";
-  const locale = currentLang() === "ja" ? "ja-JP" : "en-US";
+  const locale = dateLocale();
   return new Intl.DateTimeFormat(locale, { year: "numeric", month: "numeric", day: "numeric" }).format(dt);
 }
 

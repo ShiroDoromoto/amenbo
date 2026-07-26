@@ -153,6 +153,9 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         | Command::Lint { .. } // reads the text it is handed; no store, so nothing to stamp a facet onto
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
+        // A runner fires the hooks a facet's own writes already queued; it creates nothing and assigns
+        // nothing, so there is no author for it to stamp (`AMB-T-2175`).
+        | Command::PluginRunner { .. }
         // `validate` reads a manifest file the author names and touches no store at all; the rest of the
         // group moves this machine's plugin state — `config.json`, the secret file, and the plugin's own
         // per-project rows (`plugin_config` settings, `plugin_enable` gates). Those are local settings
@@ -241,7 +244,9 @@ fn requires_pointer(cmd: &Option<Command>) -> bool {
 /// Out of reach are the commands that place no pointer and read no store (`version` / `update` / `lint`),
 /// and `unbind` — the way *out*. Refusing that one would strand a pointer an older build wrote, leaving a
 /// text editor as the only way to remove it, and its single store write forgets this folder's registration:
-/// that cleans the binding up rather than driving the backlog with it.
+/// that cleans the binding up rather than driving the backlog with it. So is `plugin-runner`: it is handed
+/// the store to work and inherits only its launcher's directory, so the walk this guard makes would answer
+/// about a folder it never consulted — and refusing it would stall that queue over where a command was typed.
 fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
     match cmd {
         Some(Command::Version)
@@ -249,6 +254,7 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         | Some(Command::Lint { .. })
         | Some(Command::GithookPreCommit)
         | Some(Command::GithookCommitMsg { .. })
+        | Some(Command::PluginRunner { .. })
         | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
         | Some(Command::Unbind { .. }) => None,
         Some(Command::Bind { dir: Some(d), .. }) => {
@@ -1681,6 +1687,13 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // diff (no paths), `commit-msg` lints the message file git hands over.
         Some(Command::GithookPreCommit) => return lint_cmd(flags, Vec::new(), false),
         Some(Command::GithookCommitMsg { path }) => return lint_cmd(flags, vec![path.clone()], false),
+        // A plugin runner: amenbo launched this process to work one queue (`AMB-T-2175`). It opens the store
+        // it was handed, so it sits ahead of every guard that asks about *this* directory — its own is
+        // whatever its launcher happened to be in, and it was never asked to answer for it.
+        Some(Command::PluginRunner { plugin, owner, store }) => {
+            amenbo_core::plugin_runner::run_process(store.into(), plugin, owner);
+            return Ok(0);
+        }
         // `plugin validate` reads a manifest file the author points at — no store, no binding, no facet, on
         // the same store-free footing as `lint`. It sits ahead of the exec guard so an author can run it in
         // any directory (their plugin's, a CI checkout), not only a bound one.
@@ -1969,6 +1982,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             unreachable!("handled before open")
         }
         Command::GithookPreCommit | Command::GithookCommitMsg { .. } => {
+            unreachable!("handled before open")
+        }
+        Command::PluginRunner { .. } => {
             unreachable!("handled before open")
         }
         Command::Plugin { sub } => return plugin_cmd(&mut store, flags, sub),
@@ -2476,10 +2492,16 @@ fn parse_date_opt(s: &Option<String>) -> Result<Option<NaiveDate>, CliError> {
     }
 }
 
+/// How this face re-runs itself as a plugin runner (`AMB-T-2175`): the hidden `plugin-runner` command, which
+/// core follows with the plugin, the lease's owner and the store to work. The CLI's own spelling of the
+/// entry point, named where it is dispatched.
+const RUNNER_ARGV: &[&str] = &["plugin-runner"];
+
 /// Run a mutating command group, then drive the plugin observation dispatcher once at the short-lived
 /// CLI's write seam (`AMB-T-2033`). After the command committed, drain the outbox from the persisted
-/// cursor, fire the subscribers, persist where it advanced, and **join** the fires before the process
-/// exits so none is cut short (`AMB-D-367` / `AMB-D-352`). Only on success: if the command errored its
+/// cursor onto the subscribed plugins' queues, persist where it advanced, and launch a runner process for
+/// each queue nobody is already working — waiting for none of them, because a runner is not this process's
+/// to cut short (`AMB-D-367` / `AMB-D-399` / `AMB-T-2175`). Only on success: if the command errored its
 /// mutation rolled back, so there is nothing new to dispatch.
 ///
 /// Who fires is [`EnabledSubscribers`]'s answer, over the plugins installed on this machine
@@ -2488,15 +2510,6 @@ fn parse_date_opt(s: &Option<String>) -> Result<Option<NaiveDate>, CliError> {
 /// and the cursor still walks and persists, so a plugin installed later starts from what fires *next*, not
 /// the whole backlog. A dispatch failure is a warning, never the command's exit: the mutation is already
 /// committed.
-/// How long a command waits for the plugin runners it started before it exits (`AMB-D-399`).
-///
-/// A short-lived process has to wait for something — the runner it just started dies with it, and what it
-/// was running would sit until the store is next driven. But the wait has to end: the plugin itself is no
-/// longer killed for being slow, so this is what keeps a slow one from being felt as a slow `amenbo`. It is
-/// where the old per-hook timeout sat, moved from the plugin's side to ours: what runs long is left running,
-/// not cut off.
-const RUNNER_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
-
 fn with_dispatch(
     store: &mut Store,
     op: impl FnOnce(&mut Store) -> Result<i32, CliError>,
@@ -2513,19 +2526,15 @@ fn with_dispatch(
         }
     };
     let subscribers = EnabledSubscribers::new(&installed, store);
-    match store.drive_plugins_persisted(Face::Cli, &subscribers) {
+    match store.drive_plugins_persisted(Face::Cli, &subscribers, RUNNER_ARGV) {
         Ok(delivered) => {
             // A `reply:true` hook (worktree advice, `AMB-D-383`) ran synchronously; relay its stderr to the
-            // caller — the AI reads it off this command's stderr and decides. Surface it before joining the
-            // fire-and-forget hooks so the advice lands promptly, named by the plugin that gave it.
+            // caller — the AI reads it off this command's stderr and decides, named by the plugin that gave
+            // it. The queues are a runner's, and this command waits for none of it (`AMB-T-2175`): a runner
+            // is a process, so it is not cut short by this one returning.
             for reply in &delivered.replies {
                 eprintln!("[{}] {}", reply.plugin, reply.stderr.trim_end());
             }
-            // Wait for the runners this command started, but not for ever: a runner is unbounded on
-            // purpose (`AMB-D-399` took the five-second kill off this path), so joining would hand this
-            // command's exit to the slowest plugin installed. What is still running when the budget runs
-            // out dies with the process, and its rows stay queued for the next drive to pick up.
-            delivered.wait_for_runners(RUNNER_WAIT);
         }
         Err(e) => eprintln!("warning: could not dispatch plugin observation hooks: {e}"),
     }

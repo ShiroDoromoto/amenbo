@@ -10,9 +10,10 @@
 //!   (`commands::with_store_mut`), so there is no long-lived store to hang a loop off. The dispatcher runs
 //!   once after each mutating command committed, on that command's own open store — the same shape the
 //!   CLI has at its write seam.
-//! - **The runners are dropped, not waited on.** Dropping the handles is true fire-and-forget
-//!   (`AMB-D-352`): this process is not about to exit, so a runner it started works its plugin's queue to
-//!   the end on its own. Waiting would make every write wait on a subprocess.
+//! - **The runners are processes, and nothing here waits for one** (`AMB-T-2175`). A runner is this same
+//!   executable, re-run through [`RUNNER_FLAG`](crate::plugin_dispatch::RUNNER_FLAG) — so it works its
+//!   plugin's queue to the end whether the app is still up or the user has quit it, and a write never waits
+//!   on a subprocess (`AMB-D-352`).
 //!
 //! There is no session start to set, either: whatever sits past the stored cursor is undelivered, and a GUI
 //! launched today delivers it if no CLI run already did — one cursor is the only answer to how far this
@@ -24,6 +25,22 @@
 use amenbo_core::plugin_drive::Face;
 use amenbo_core::plugin_subscribe::EnabledSubscribers;
 use amenbo_core::{plugin_installed, Store};
+
+/// The flag that names the app's plugin-runner entry point (`AMB-T-2175`). The app is not a command-line
+/// tool, so what it answers is a flag, checked by its `main` ahead of everything else, rather than a
+/// subcommand.
+///
+/// It is deliberately not something a user would land on: an app started this way puts up no window, and the
+/// only caller is amenbo itself.
+pub const RUNNER_FLAG: &str = "--plugin-runner";
+
+/// The argv prefix core re-runs this executable through — the flag, and nothing else. Core follows it with
+/// [`RUNNER_ARGS`] arguments of its own.
+pub const RUNNER_ARGV: &[&str] = &[RUNNER_FLAG];
+
+/// The three arguments core appends after [`RUNNER_ARGV`] — the plugin, the lease's owner, the store's base
+/// directory. Named here because [`crate::runner_argv`] reads them back off `argv` in that order.
+pub const RUNNER_ARGS: usize = 3;
 
 /// Drive the dispatcher once over everything committed since the store's cursor, and store where it
 /// advanced to. Call it after a mutating command committed, on that command's still-open store.
@@ -40,9 +57,10 @@ pub fn drive(store: &Store) {
         }
     };
     let subscribers = EnabledSubscribers::new(&installed, store);
-    // The returned `Delivered` is dropped here, and with it the runners' handles: fire-and-forget
-    // (`AMB-D-352`). The cursor it advanced to is already stored.
-    if let Err(e) = store.drive_plugins_persisted(Face::Gui, &subscribers) {
+    // The returned `Delivered` is dropped here: the runners it names are processes of their own, and this
+    // face never had a `reply:true` subscriber to surface (`AMB-D-383`). The cursor it advanced to is
+    // already stored.
+    if let Err(e) = store.drive_plugins_persisted(Face::Gui, &subscribers, RUNNER_ARGV) {
         log::warn!("could not dispatch the plugin observation hooks: {e}");
     }
 }

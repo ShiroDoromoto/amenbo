@@ -55,6 +55,37 @@ fn start_store_threads(app: tauri::AppHandle) {
   });
 }
 
+/// The plugin runner this process was launched as, if it was (`AMB-T-2175`): the plugin whose queue to work,
+/// the lease taken on its behalf, and the store to work — read off `argv` in the order core appends them,
+/// behind [`plugin_dispatch::RUNNER_FLAG`].
+///
+/// The match is exact and positional (the flag first, then exactly [`plugin_dispatch::RUNNER_ARGS`]
+/// arguments), so nothing an operating system adds of its own — macOS's `-psn_…` on a launched app, say —
+/// can be mistaken for it.
+fn runner_argv() -> Option<(String, String, String)> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 + plugin_dispatch::RUNNER_ARGS || args[1] != plugin_dispatch::RUNNER_FLAG {
+        return None;
+    }
+    Some((args[2].clone(), args[3].clone(), args[4].clone()))
+}
+
+/// Work one plugin's observation-event queue and return, instead of starting the app — what this executable
+/// does when amenbo launched it as a runner (`AMB-D-399`, `AMB-T-2175`). `true` when that is what happened,
+/// which is the caller's signal to start nothing else: no window, no watcher, no migration screen.
+///
+/// The app is the runner for the events it queued itself, because a runner is *this same executable, re-run*:
+/// one binary per face, and no second one to ship or to keep in step. Nothing is drawn and nothing is
+/// reported — what each run did lands in the plugin execution log (`AMB-D-361`).
+#[must_use = "start the app only when this says the process was not launched as a runner"]
+pub fn run_plugin_runner() -> bool {
+    let Some((plugin, owner, store)) = runner_argv() else {
+        return false;
+    };
+    amenbo_core::plugin_runner::run_process(store.into(), &plugin, &owner);
+    true
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()

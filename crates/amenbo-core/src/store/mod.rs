@@ -210,24 +210,28 @@ impl Store {
     /// Drive the plugin observation dispatcher once from the **persisted** cursor — the mount both faces
     /// use (`AMB-D-380`). Reads the stored cursor, fans everything committed since onto the queues of the
     /// plugins that observe it, persists where it got to so the next drive — in either face — continues
-    /// past it, and then runs the queues (`AMB-D-399`). `face` selects which subscriptions resolve and is
-    /// recorded beside the cursor for diagnosis. The returned
-    /// [`Delivered`](crate::plugin_dispatch::Delivered) carries the launched hooks — the short-lived face
-    /// **joins** them before the process exits, the long-lived one drops them — and whether a retention gap
-    /// was hit. The cursor is already stored on return. Every run, and a gap, land in this machine's
-    /// execution log (`AMB-D-361`) — the store knows where that file is, so no face has to name it.
+    /// past it, and then launches the runners (`AMB-D-399`). `face` selects which subscriptions resolve and
+    /// is recorded beside the cursor for diagnosis. `runner_argv` is how **this face** re-runs itself as a
+    /// runner process (`AMB-T-2175`) — the face owns the spelling of its own entry point, and this hands it
+    /// the store to work. The returned [`Delivered`](crate::plugin_dispatch::Delivered) names the runners it
+    /// launched, carries the replies to surface, and says whether a retention gap was hit; there is nothing
+    /// in it to wait for. The cursor is already stored on return. Every run, and a gap, land in this
+    /// machine's execution log (`AMB-D-361`) — the store knows where that file is, so no face has to name it.
     pub fn drive_plugins_persisted(
         &self,
         face: crate::plugin_drive::Face,
         subs: &dyn crate::plugin_dispatch::Subscribers,
+        runner_argv: &[&str],
     ) -> Result<crate::plugin_dispatch::Delivered> {
+        // A runner opens the store at this base directory for itself: it is a process of its own, and this
+        // `Store` is the caller's, closed when the command that opened it returns (`AMB-D-399`).
+        let launcher =
+            crate::plugin_runner::SelfRunner::new(runner_argv, self.paths.base_dir.clone());
         crate::plugin_drive::drive_persisted(
             &self.engine,
             face,
             subs,
-            // The runners open their own store from these same paths: they outlive this drive, and this
-            // `Store` is the caller's, closed when the command that opened it returns (`AMB-D-399`).
-            Some(std::sync::Arc::new(crate::plugin_runner::device_env(self.paths.clone()))),
+            Some(&launcher),
             Some(&self.paths.plugin_log_file()),
         )
     }

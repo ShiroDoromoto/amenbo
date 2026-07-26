@@ -20,11 +20,23 @@
 //!   this layer exists to stop. What a plugin that never returns holds is its own queue, and only until its
 //!   lease's horizon hands it to the next runner.
 //!
-//! **A runner outlives the drive that started it, so it works on its own store.** The drive is a moment on
-//! the caller's connection — a CLI command about to exit, a GUI action already answered — and a runner may
-//! still be running long after. It therefore opens what it needs itself, through the [`RunnerEnv`] the face
-//! hands it, rather than borrowing the connection it was started from. That is also what makes the resolver
-//! a runner reads *its own*: who is enabled is read again in the runner, not carried over from the drive.
+//! **A runner is a process of its own, and the drive does not wait for it** (`AMB-T-2175`). A runner started
+//! as a thread of the driving process was only ever as long-lived as that process: a CLI command that
+//! returned took the runner's pipes with it, so the plugin holding them died of `SIGPIPE` mid-work, with the
+//! row already answered for and nothing in the log to say what happened — the half-done outside effect this
+//! layer exists to stop, arriving by the back door. So a runner is launched as a **separate process**
+//! ([`RunnerLauncher`]), and the drive returns the moment it is launched. Nothing has to be waited for,
+//! because nothing the parent does can cut the runner short any more.
+//!
+//! It is not a daemon (`AMB-D-399` keeps that): it is started only when there is a queue to work and a lease
+//! to take, and it ends when its own queue is empty. What it is, is **this same executable, re-run** — every
+//! face already ships as one binary, so a runner needs no second one, and the entry point it re-runs itself
+//! through is the face's own ([`SelfRunner`]).
+//!
+//! Because it is a process, it opens what it needs itself — its store, and the resolver over it
+//! ([`run_process`]) — rather than borrowing the connection it was started from. That is also what makes the
+//! resolver a runner reads *its own*: who is enabled is read again in the runner, not carried over from the
+//! drive.
 //!
 //! **A row leaves the queue once its plugin has replied, and the reply is the child returning**
 //! (`AMB-D-399`). A plugin that ran to its own end has answered for that event, and the row goes whichever
@@ -42,10 +54,8 @@
 //! because amenbo cannot see what the other side did with the event either way (`AMB-D-399`) — which is why
 //! the contract asks a plugin to be safe to run twice, rather than asking amenbo to be sure.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::Sender;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crate::config::Paths;
@@ -73,68 +83,126 @@ const RUN_PAGE: i64 = 256;
 /// delivery the contract already admits, but systematically rather than rarely, for a plugin that slow.
 pub const LEASE_TTL: Duration = Duration::from_secs(60);
 
-/// What a runner thread works with: **its own** store, and a resolver over it.
+/// How a face launches a runner — a **process**, and one it never waits for (`AMB-T-2175`).
 ///
-/// A runner outlives the drive that started it, so it cannot borrow that drive's connection or its resolver
-/// (see the note at the top). This is the seam it opens them through: the face's implementation opens the
-/// device's store and builds the enabled-subscriber resolver over it, hands both to `f`, and closes them
-/// when `f` returns. [`device_env`] is that implementation; a test supplies its own.
-pub trait RunnerEnv: Send + Sync + 'static {
-    /// Open a store and a resolver over it, and hand both to `f`. A failure to open is the implementation's
-    /// to report — `f` is simply not called, and the runner's lease then expires on its own.
-    fn with_store(&self, f: &mut dyn FnMut(&StoreEngine, &dyn Subscribers));
+/// The drive's whole part is to launch it: the lease is already taken by then, and what the runner does with
+/// the queue behind it is its own business, outliving whatever started it. So this seam answers one question
+/// and returns — *start a runner for `plugin`, holding `owner`'s lease*. [`SelfRunner`] is what a real face
+/// hands over; a test hands its own, because a test wants the launch counted, not made.
+///
+/// An `Err` means no runner exists: the caller gives the lease straight back, so the queue is not held for
+/// its horizon by a process that never started ([`start`]).
+pub trait RunnerLauncher {
+    /// Launch a runner for `plugin` under `owner`'s lease, and return without waiting for it.
+    fn launch(&self, plugin: &str, owner: &str) -> std::io::Result<()>;
 }
 
-/// The [`RunnerEnv`] a real face hands its runners: this device's store at `paths`, with the enabled
-/// subscribers resolved over the plugins installed on it. Both are opened inside the runner thread, so what
-/// it reads is the state at the time it runs — a plugin disabled since the drive is not fired.
-pub fn device_env(paths: Paths) -> impl RunnerEnv {
-    DeviceEnv { paths }
+/// The launcher a real face hands a drive: **this same executable, re-run** as a runner process
+/// (`AMB-T-2175`).
+///
+/// Every face ships as a single binary — the CLI is one, and so is the app — so a runner needs no second
+/// one. What differs between faces is only how each names its own runner entry point, which is what `argv`
+/// carries: whatever the face puts there is followed by the three things a runner needs, in this order —
+/// **the plugin, the lease's owner, and the store's base directory**. The store is named rather than
+/// resolved because a runner must work the store its parent drove, not whichever one its own environment
+/// would resolve to.
+///
+/// The child is launched with **no stdio at all**. Nothing reads a runner's own output: a plugin's output is
+/// captured per run into the execution log (`AMB-D-361`), which is where a diagnosis looks, and a pipe held
+/// open to a parent that is about to exit is exactly what made a runner a thread's problem in the first
+/// place.
+pub struct SelfRunner {
+    argv: Vec<String>,
+    base_dir: PathBuf,
 }
 
-struct DeviceEnv {
-    paths: Paths,
-}
-
-impl RunnerEnv for DeviceEnv {
-    fn with_store(&self, f: &mut dyn FnMut(&StoreEngine, &dyn Subscribers)) {
-        let store = match crate::Store::open_at(self.paths.clone()) {
-            Ok(store) => store,
-            Err(e) => {
-                tracing::warn!(error = %e, "a plugin runner could not open the store; its queue waits");
-                return;
-            }
-        };
-        // A directory that will not read is not "nothing is installed": run nothing rather than drop a
-        // plugin's queue on the floor. The rows stay, and the next drive starts a runner again.
-        let installed = match crate::plugin_installed::installed(&store.paths) {
-            Ok(installed) => installed,
-            Err(e) => {
-                tracing::warn!(error = %e, "a plugin runner could not read the installed plugins; its queue waits");
-                return;
-            }
-        };
-        let subs = crate::plugin_subscribe::EnabledSubscribers::new(&installed, &store);
-        f(store.read_model(), &subs);
+impl SelfRunner {
+    /// A launcher that re-runs this executable through `argv` — the face's own runner entry point — over the
+    /// store at `base_dir`.
+    pub fn new(argv: &[&str], base_dir: PathBuf) -> Self {
+        Self { argv: argv.iter().map(|a| (*a).to_string()).collect(), base_dir }
     }
 }
 
-/// Start a runner for every plugin with work waiting that nobody is already running (`AMB-D-399`).
+impl RunnerLauncher for SelfRunner {
+    fn launch(&self, plugin: &str, owner: &str) -> std::io::Result<()> {
+        use std::process::Stdio;
+        let child = std::process::Command::new(std::env::current_exe()?)
+            .args(&self.argv)
+            .arg(plugin)
+            .arg(owner)
+            .arg(&self.base_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+        reap(child);
+        Ok(())
+    }
+}
+
+/// Collect `child` on a thread of its own — a launcher's only reason to hold a thread at all.
+///
+/// A parent that never waits leaves a zombie behind on Unix for as long as *it* lives, and a long-lived face
+/// drives on every write, so they would pile up. This waits instead of the caller: it blocks in `waitpid` and
+/// nothing else, holds no store and no lock, and if the parent exits first (the short-lived face's ordinary
+/// case) it goes with it and the runner is reparented, still running. What it is emphatically not is a wait
+/// the *drive* makes — that is the whole of what `AMB-T-2175` removes.
+fn reap(mut child: std::process::Child) {
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+}
+
+/// Work one plugin's queue **in this process**, having been launched as its runner (`AMB-T-2175`) — the body
+/// behind each face's runner entry point.
+///
+/// It opens the store at `base_dir` and resolves the enabled subscribers over the plugins installed beside
+/// it, both here rather than in the drive that launched this process: what a runner reads is the state at the
+/// time it runs, so a plugin disabled since the fan-out is not fired. `owner` is the lease the launching
+/// drive took on this runner's behalf — it is held, extended and given up under that name
+/// ([`run_queue`]), which is what makes the launch and the work one runner rather than two.
+///
+/// A store or a plugins directory that will not read ends the runner without touching the queue: the rows
+/// stay, the lease expires on its own horizon, and the next drive starts a runner again. Nothing here is
+/// reported to a caller — there is none — so the one trace is the execution log every run lands in
+/// (`AMB-D-361`).
+pub fn run_process(base_dir: PathBuf, plugin: &str, owner: &str) {
+    let paths = Paths::at(base_dir);
+    let log = paths.plugin_log_file();
+    let store = match crate::Store::open_at(paths) {
+        Ok(store) => store,
+        Err(e) => {
+            tracing::warn!(error = %e, "a plugin runner could not open the store; its queue waits");
+            return;
+        }
+    };
+    // A directory that will not read is not "nothing is installed": run nothing rather than drop a plugin's
+    // queue on the floor. The rows stay, and the next drive starts a runner again.
+    let installed = match crate::plugin_installed::installed(&store.paths) {
+        Ok(installed) => installed,
+        Err(e) => {
+            tracing::warn!(error = %e, "a plugin runner could not read the installed plugins; its queue waits");
+            return;
+        }
+    };
+    let subs = crate::plugin_subscribe::EnabledSubscribers::new(&installed, &store);
+    run_queue(store.read_model(), &subs, plugin, owner, Some(&log));
+}
+
+/// Start a runner for every plugin with work waiting that nobody is already running (`AMB-D-399`), and
+/// return the plugins whose runner this drive launched.
 ///
 /// Called after the fan-out committed, on the drive's own connection: for each plugin named on the queue
-/// table, the lease is claimed on a transaction of its own, and a thread is started only for the plugins
+/// table, the lease is claimed on a transaction of its own, and a runner is launched only for the plugins
 /// whose lease this drive took. A plugin already being run is left alone — the runner holding it will see
 /// the rows this drive queued before it leaves, because the transaction it leaves on reads the same queue.
 ///
-/// `finished` is signalled once per runner as it ends, which is how a short-lived caller waits for the work
-/// it started **without** waiting on it for ever ([`Delivered::wait_for_runners`](crate::plugin_dispatch::Delivered::wait_for_runners)).
-/// The returned handles are the runner threads: a long-lived face drops them, and nothing is cut short.
-pub fn start(
-    engine: &StoreEngine,
-    env: std::sync::Arc<dyn RunnerEnv>,
-    log: Option<&Path>,
-    finished: &Sender<()>,
-) -> Result<Vec<JoinHandle<()>>> {
+/// The launch is a process ([`RunnerLauncher`]) and there is nothing to wait for, so what comes back is the
+/// names and not a handle: a caller can say which queues it set going, and can do nothing else to them. A
+/// launch that fails gives the lease straight back — waiting out its horizon would hold that queue for a
+/// minute on account of a runner that never existed.
+pub fn start(engine: &StoreEngine, launcher: &dyn RunnerLauncher) -> Result<Vec<String>> {
     let mut started = Vec::new();
     for plugin in queued_plugins(engine.conn())? {
         let owner = new_owner();
@@ -145,13 +213,24 @@ pub fn start(
         if !claimed {
             continue;
         }
-        let (env, log, finished) = (env.clone(), log.map(Path::to_path_buf), finished.clone());
-        started.push(std::thread::spawn(move || {
-            env.with_store(&mut |engine, subs| run_queue(engine, subs, &plugin, &owner, log.as_deref()));
-            let _ = finished.send(());
-        }));
+        if let Err(e) = launcher.launch(&plugin, &owner) {
+            tracing::warn!(plugin = %plugin, error = %e, "a plugin runner would not start; its queue waits");
+            if let Err(e) = give_back(engine, &plugin, &owner) {
+                tracing::warn!(plugin = %plugin, error = %e, "and its lease could not be given back");
+            }
+            continue;
+        }
+        started.push(plugin);
     }
     Ok(started)
+}
+
+/// Release the lease a launch was claimed for but never used, so the next drive can try again at once.
+fn give_back(engine: &StoreEngine, plugin: &str, owner: &str) -> Result<()> {
+    let tx = engine.write()?;
+    tx.release_runner(plugin, owner)?;
+    tx.commit()?;
+    Ok(())
 }
 
 /// Work one plugin's queue to its end, holding `owner`'s lease throughout — the runner's whole body.
@@ -504,32 +583,86 @@ mod tests {
         assert_eq!(crate::store_engine::lease_of(e.conn(), "gone").unwrap(), None);
     }
 
-    /// An env that opens nothing: the runner thread it is handed to ends at once, which is all these tests
-    /// need — what a runner does once it *has* a store is [`run_queue`]'s, tested above.
-    struct NoEnv;
-    impl RunnerEnv for NoEnv {
-        fn with_store(&self, _f: &mut dyn FnMut(&StoreEngine, &dyn Subscribers)) {}
+    /// A launcher that starts no process and records what it was asked to start — what these tests are
+    /// about is the gate in front of the launch, not the process behind it (that is [`run_process`]'s, and
+    /// what it then does is [`run_queue`]'s, tested above).
+    struct Launched {
+        asked: Mutex<Vec<(String, String)>>,
+        fails: bool,
+    }
+    impl Launched {
+        fn new() -> Self {
+            Self { asked: Mutex::new(Vec::new()), fails: false }
+        }
+        fn failing() -> Self {
+            Self { asked: Mutex::new(Vec::new()), fails: true }
+        }
+    }
+    impl RunnerLauncher for Launched {
+        fn launch(&self, plugin: &str, owner: &str) -> std::io::Result<()> {
+            self.asked.lock().unwrap().push((plugin.to_string(), owner.to_string()));
+            if self.fails {
+                return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "no such runner"));
+            }
+            Ok(())
+        }
     }
 
     /// Starting is gated by the lease, which is the whole of "one runner per plugin": the first drive takes
-    /// it and starts a runner, and a drive while it stands starts nobody.
+    /// it and launches a runner, and a drive while it stands launches nobody. The launch is a process and
+    /// nobody waits for it, so what comes back is the plugin's name.
     #[test]
     fn a_drive_starts_a_runner_only_for_a_queue_nobody_is_running() {
         let e = StoreEngine::open_in_memory().unwrap();
         queue(&e, "slack", 1);
-        let (tx, _rx) = std::sync::mpsc::channel();
-        let env = std::sync::Arc::new(NoEnv);
+        let launcher = Launched::new();
 
-        let first = start(&e, env.clone(), None, &tx).unwrap();
-        assert_eq!(first.len(), 1, "the queue was unheld, so a runner starts");
+        let first = start(&e, &launcher).unwrap();
+        assert_eq!(first, vec!["slack".to_string()], "the queue was unheld, so a runner is launched");
 
-        // The lease taken above is still standing (this env's runner never reached `leave`), so a second
+        // The lease taken above is still standing (nothing ran, so nothing reached `leave`), so a second
         // drive over the same queue leaves the work to whoever holds it.
         queue(&e, "slack", 2);
-        let second = start(&e, env, None, &tx).unwrap();
+        let second = start(&e, &launcher).unwrap();
         assert!(second.is_empty(), "a plugin already being run is left alone");
-        for h in first {
-            h.join().unwrap();
-        }
+        assert_eq!(launcher.asked.lock().unwrap().len(), 1, "and no second runner was launched");
+    }
+
+    /// The launch carries the lease this drive took, so the runner extends and gives up the very lease that
+    /// gated its start — the two are one runner, not two.
+    #[test]
+    fn the_launch_carries_the_lease_the_drive_took() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        queue(&e, "slack", 1);
+        let launcher = Launched::new();
+
+        start(&e, &launcher).unwrap();
+        let asked = launcher.asked.lock().unwrap();
+        assert_eq!(asked[0].0, "slack");
+        assert_eq!(
+            asked[0].1,
+            crate::store_engine::lease_of(e.conn(), "slack").unwrap().unwrap().owner,
+            "the owner handed to the runner is the one standing on the lease"
+        );
+    }
+
+    /// A runner that would not start gives its lease straight back, so the next drive tries again at once
+    /// rather than leaving the queue held for the lease's horizon by a process that never existed.
+    #[test]
+    fn a_runner_that_would_not_start_gives_its_lease_back() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        queue(&e, "slack", 1);
+
+        let started = start(&e, &Launched::failing()).unwrap();
+        assert!(started.is_empty(), "nothing was started, so nothing is reported as started");
+        assert_eq!(
+            crate::store_engine::lease_of(e.conn(), "slack").unwrap(),
+            None,
+            "and the queue is not held by the runner that never was"
+        );
+
+        // Which is to say the next drive is free to try again.
+        let launcher = Launched::new();
+        assert_eq!(start(&e, &launcher).unwrap().len(), 1);
     }
 }

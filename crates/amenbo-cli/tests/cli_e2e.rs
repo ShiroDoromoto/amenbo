@@ -4391,9 +4391,48 @@ fn plugin_catalog_registers_lists_and_removes_a_third_party_source() {
     assert_eq!(after["sources"].as_array().unwrap().len(), 1, "back to the official catalog alone");
 }
 
+/// The JSON a **runner process** wrote at `path`, waited for (`AMB-T-2175`).
+///
+/// A runner is launched by the command that queued the event and outlives it, so what the plugin writes
+/// lands *after* that command has returned — there is nothing for a caller to join any more. `want` picks
+/// the value being waited for, which is what tells a second run from the one already on disk rather than
+/// racing it.
+#[cfg(unix)]
+fn wrote_json(path: &std::path::Path, want: impl Fn(&Value) -> bool) -> Value {
+    for _ in 0..200 {
+        if let Ok(v) = std::fs::read_to_string(path).map_err(|_| ()).and_then(|t| {
+            serde_json::from_str::<Value>(&t).map_err(|_| ())
+        }) {
+            if want(&v) {
+                return v;
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    panic!("no runner wrote the payload waited for at {} within ten seconds", path.display());
+}
+
+/// The execution log once it holds `count` runs, waited for the same way and for the same reason: the run is
+/// recorded by the runner process, not by the command that launched it (`AMB-T-2175`).
+#[cfg(unix)]
+fn logged_runs(cli: &Cli, count: i64) -> Value {
+    for _ in 0..200 {
+        let runs = cli.json(&["plugin", "runs", "--json"]);
+        if runs["count"] == count {
+            return runs;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    panic!("the execution log did not reach {count} run(s) within ten seconds");
+}
+
 /// The mutating CLI drives the observation dispatcher over what is *installed and enabled*: a subscribed
-/// plugin is actually run, with the event payload on its stdin, before the command's process exits
-/// (`AMB-D-367`). Its neighbours are left alone — a plugin that subscribes to nothing never runs.
+/// plugin is actually run, with the event payload on its stdin (`AMB-D-367`). Its neighbours are left alone —
+/// a plugin that subscribes to nothing never runs.
+///
+/// The run lands **after** the command returned, because the runner working the queue is a process of its own
+/// (`AMB-T-2175`): the command launches it and exits, so this waits for the payload rather than expecting it
+/// to be there already.
 #[cfg(unix)]
 #[test]
 fn a_mutating_command_fires_the_enabled_plugin_that_subscribes_to_it() {
@@ -4419,21 +4458,20 @@ fn a_mutating_command_fires_the_enabled_plugin_that_subscribes_to_it() {
     cli.json(&["plugin", "enable", "logger", "--json"]);
     cli.json(&["plugin", "enable", "quiet", "--json"]);
 
-    // A task add commits, the dispatcher drains what it appended, and the CLI joins the fire before it
-    // exits — so the payload is already on disk when the command returns.
+    // A task add commits, the dispatcher fans what it appended onto the plugin's queue, and launches the
+    // runner that works it. The command is gone by then, so the payload is waited for.
     let pid = cli.bound_project();
     let added = cli.json(&["task", "add", "--title", "発火の確認", "--project", &pid, "--json"]);
     let id = id_str(&added["task"]["id"]);
 
-    let payload: Value =
-        serde_json::from_str(&std::fs::read_to_string(&capture).expect("the plugin was run")).unwrap();
+    let payload = wrote_json(&capture, |v| !v["id"].is_null());
     assert_eq!(payload["event"], "task.created");
     assert_eq!(id_str(&payload["id"]), id, "the payload names the task that was created");
     assert_eq!(payload["actor"], "human");
 
     // The cursor advanced with it: a second mutation delivers only its own event, never the first again.
     cli.json(&["task", "add", "--title", "二件目", "--project", &pid, "--json"]);
-    let second: Value = serde_json::from_str(&std::fs::read_to_string(&capture).unwrap()).unwrap();
+    let second = wrote_json(&capture, |v| v["id"] != payload["id"]);
     assert_ne!(second["id"], payload["id"], "the second run fired for the second task");
 }
 
@@ -4470,8 +4508,9 @@ fn plugin_runs_says_why_a_hook_did_nothing() {
     let pid = cli.bound_project();
     cli.json(&["task", "add", "--title", "発火の確認", "--project", &pid, "--json"]);
 
-    let runs = cli.json(&["plugin", "runs", "--json"]);
-    assert_eq!(runs["count"], 1, "one hook fired, so one run is on file");
+    // Waited for: the runner that fired it is a process of its own, so the line lands after `task add`
+    // returned (`AMB-T-2175`).
+    let runs = logged_runs(&cli, 1);
     let run = &runs["runs"][0];
     assert_eq!(run["plugin"], "logger");
     assert_eq!(run["event"], "task.created");

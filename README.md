@@ -296,6 +296,7 @@ amenbo task reject <n> --reason "measured it — too thin to be worth the change
 amenbo dimension add --project "Website refresh" --name "Area" --ordered
 amenbo dimension value-add Area --name "Design"
 amenbo dimension set 12 Area Design           # assign a task a value on the axis
+amenbo task add --title "Palette" --project "Website refresh" --dim "Area=Design"  # or file it as you create it
 # On a time-axis, each value spans a period; an open end means it is ongoing.
 # A new task starts on whichever value covers today — never forced, always yours
 # to change with `dimension set` / `unset`.

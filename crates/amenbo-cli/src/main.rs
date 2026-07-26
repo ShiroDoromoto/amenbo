@@ -3701,6 +3701,41 @@ fn project_required(store: &Store) -> CliError {
     ))
 }
 
+/// Resolve `--dim <axis>=<value>` pairs into the value ids to file a new task under, in the order given.
+/// The axis is looked up **inside the task's own project** — axes are per-project, so a name two projects
+/// share must not resolve to the neighbour's — and the value inside that axis, the same rules `dimension
+/// set` uses.
+///
+/// Two refusals, both before anything is written:
+/// - a pair that is not `<axis>=<value>` (split on the first `=`, so a value may contain one);
+/// - the same axis named twice. An axis holds one value, so the second would silently replace the first,
+///   and which one the caller meant is not ours to pick.
+///
+/// `=none` is not accepted here, unlike the `dim:` filter: there it selects the tasks with no value on
+/// that axis, and clearing an axis that was never set is what a new task already is.
+fn resolve_dim_pairs(store: &Store, project_id: i64, pairs: &[String]) -> Result<Vec<i64>, CliError> {
+    let mut value_ids = Vec::with_capacity(pairs.len());
+    let mut axes: Vec<i64> = Vec::new();
+    for pair in pairs {
+        let Some((axis, value)) = pair.split_once('=') else {
+            return Err(CliError::from(amenbo_core::Error::invalid(
+                format!("--dim takes <axis>=<value> (e.g. --dim \"Category=bug\"), got `{pair}`"),
+                format!("--dim は <軸>=<値> の形式です（例: --dim \"カテゴリー=バグ\"）。受け取った値: `{pair}`"),
+            )));
+        };
+        let dimension_id = store.resolve_dimension(Some(project_id), axis).map_err(CliError::from)?;
+        if axes.contains(&dimension_id) {
+            return Err(CliError::from(amenbo_core::Error::invalid(
+                format!("--dim names the axis `{axis}` twice — an axis holds one value, so pass it once"),
+                format!("--dim で軸「{axis}」を2度指定しています。軸は単一選択なので1度だけ指定してください"),
+            )));
+        }
+        axes.push(dimension_id);
+        value_ids.push(store.resolve_dimension_value(dimension_id, value).map_err(CliError::from)?);
+    }
+    Ok(value_ids)
+}
+
 /// The live project this CWD's `.amenbo` points at — the binding itself, with no override folded in. An AI
 /// facet's reach is drawn from here: if `--project` could widen it, the binding would decay into decoration
 /// that merely says which store to open.
@@ -3850,7 +3885,7 @@ fn resolve_task(store: &Store, id: &str) -> amenbo_core::Result<i64> {
 
 fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError> {
     match sub {
-        TaskCmd::Add { title, project, due, start, priority, notes, to, ai } => {
+        TaskCmd::Add { title, project, due, start, priority, notes, to, ai, dim } => {
             if ai && to.is_none() {
                 return Err(CliError::from(amenbo_core::Error::invalid(
                     "--ai requires --to",
@@ -3880,10 +3915,13 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let due_on = parse_date_opt(&due)?;
             let start_on = parse_date_opt(&start)?;
             let priority = match priority { Some(p) => Some(parse_priority(&p)?), None => None };
-            let t = store.add_task(ops::task::NewTask {
+            // Resolved before the create, like `--to` above: a misspelled axis or value is an error with
+            // no task left behind to go and classify by hand.
+            let dimension_values = resolve_dim_pairs(store, project_id, &dim)?;
+            let t = store.add_task_with_dimensions(ops::task::NewTask {
                 title, project_id: Some(project_id), due_on, start_on, priority, notes,
                 created_by_kind: Some(flags.actor),
-            }).map_err(CliError::from)?;
+            }, &dimension_values).map_err(CliError::from)?;
             emit_event(store, flags, t.id, activity_log::event::task_created(&t.title));
             // With `--to`, hand it over here as well, folding create→assign into one command. They are two
             // logical operations and therefore two transactions, so the add survives a failing assign.

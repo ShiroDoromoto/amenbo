@@ -2408,6 +2408,45 @@ fn dimension_lifecycle_axis_values_and_assignment() {
     assert_eq!(cli.json(&["dimension", "list", "--project", &pid, "--json"])["count"], 0);
 }
 
+/// `task add --dim <axis>=<value>` files the task under an axis as it is created, saving the
+/// create→`dimension set` round trip that is easy to walk away from half-done. What it refuses is refused
+/// **before the task exists**: a mistyped name or an axis named twice leaves nothing behind to go and
+/// classify by hand.
+#[test]
+fn task_add_files_the_new_task_under_the_axes_it_names() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "分類PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "区分", "--json"]);
+    cli.json(&["dimension", "value-add", "区分", "--name", "バグ", "--json"]);
+    cli.json(&["dimension", "value-add", "区分", "--name", "設計", "--json"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "エリア", "--json"]);
+    cli.json(&["dimension", "value-add", "エリア", "--name", "コア", "--json"]);
+
+    // Two axes at once. The filter reads it back from another process, so the assignment persisted.
+    let t = cli.json(&[
+        "task", "add", "--title", "分類つき", "--project", &pid,
+        "--dim", "区分=バグ", "--dim", "エリア=コア", "--json",
+    ]);
+    let tid = id_str(&t["task"]["id"]);
+    let filed = cli.json(&["task", "list", "--project", &pid, "--filter", "dim:区分=バグ dim:エリア=コア", "--json"]);
+    assert_eq!(filed["count"], 1, "both axes were filed at creation: {filed}");
+    assert_eq!(id_str(&filed["tasks"][0]["id"]), tid);
+
+    // An axis holds one value, so naming it twice is refused rather than quietly taking the last —
+    // and the task is not created.
+    let (out, code) = cli.run(&["task", "add", "--title", "二重", "--project", &pid, "--dim", "区分=バグ", "--dim", "区分=設計", "--json"]);
+    assert_ne!(code, 0, "the same axis twice is refused: {out}");
+    // A value that names nothing is refused the same way, at the same moment.
+    let (bad, bad_code) = cli.run(&["task", "add", "--title", "誤記", "--project", &pid, "--dim", "区分=無い値", "--json"]);
+    assert_ne!(bad_code, 0, "an unresolvable value is refused: {bad}");
+    let (shape, shape_code) = cli.run(&["task", "add", "--title", "形", "--project", &pid, "--dim", "区分", "--json"]);
+    assert_ne!(shape_code, 0, "`<axis>=<value>` is the shape: {shape}");
+
+    let all = cli.json(&["task", "list", "--project", &pid, "--json"]);
+    assert_eq!(all["count"], 1, "a refused create leaves no unclassified task behind: {all}");
+}
+
 /// Only values on a time axis (role: time_axis) carry a period `[start_on, end_on]`. value-add /
 /// value-update write it, list / show print it for humans, and dates on any other axis are turned away by
 /// the CLI gatekeeper (core just writes the columns) — all across processes, so persistence is included.

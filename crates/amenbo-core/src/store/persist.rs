@@ -251,19 +251,49 @@ impl Store {
     /// later with `dimension set` / `unset`. Both CLI and GUI funnel their creation paths through
     /// here, so this one place is where the default takes effect. The assignment rides in the **same
     /// transaction** as the task row, so a task that should have the default can never commit
-    /// without it.
+    /// without it. To classify at creation, call [`Self::add_task_with_dimensions`] — this is that,
+    /// with nothing named.
     pub fn add_task(&mut self, input: crate::ops::task::NewTask) -> Result<crate::model::Task> {
+        self.add_task_with_dimensions(input, &[])
+    }
+
+    /// [`Self::add_task`], with classification the caller already decided on — the values ride in the
+    /// **same transaction** as the task row, so a task filed under an axis can never commit without it,
+    /// and a create that fails leaves no half-classified task behind. The ids are resolved by the
+    /// surface (a value is named by the axis it lives on, and that resolution belongs where the names
+    /// are); here they are applied in the order given.
+    ///
+    /// **What the caller names wins over the default.** The time-axis default fills the axis nobody
+    /// named — assign it first and the explicit value would land as a *replacement*, writing a period
+    /// the task never belonged to and then deleting it, inside the transaction anyone watching the store
+    /// is reading. So the caller's values go on first, and the default is offered only to an axis they
+    /// left alone.
+    pub fn add_task_with_dimensions(
+        &mut self,
+        input: crate::ops::task::NewTask,
+        value_ids: &[i64],
+    ) -> Result<crate::model::Task> {
         let today = crate::time::today();
         // The creator's facet, read before `input` is moved into the op — the actor of `task.created`.
         let actor = input.created_by_kind.unwrap_or_default();
         let home = WriteTarget::NewIn(input.project_id);
         self.write_one(&[home], |tx| {
             let task = crate::ops::task::add(tx, input)?;
+            // An axis is single-select, so naming one twice is last-wins rather than two rows; the
+            // surface is where that is refused, with the names to say which axis was named twice.
+            let mut named_axes: Vec<i64> = Vec::with_capacity(value_ids.len());
+            for &value_id in value_ids {
+                let (tv, _) = crate::ops::dimension::set(tx, task.id, value_id)?;
+                named_axes.push(tv.dimension_id);
+            }
             if let Some(project_id) = task.project_id {
                 let value_id =
                     crate::store_engine::read::current_time_axis_value(tx.conn(), project_id, today)?;
                 if let Some(value_id) = value_id {
-                    crate::ops::dimension::set(tx, task.id, value_id)?;
+                    let axis = crate::store_engine::read::dimension_id_of_value(tx.conn(), value_id)?;
+                    if !axis.is_some_and(|axis| named_axes.contains(&axis)) {
+                        crate::ops::dimension::set(tx, task.id, value_id)?;
+                    }
                 }
             }
             emit_task_created(tx, &task, actor)?;

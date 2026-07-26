@@ -759,6 +759,65 @@ fn add_task_defaults_to_the_time_axis_value_covering_today() {
     fs::remove_dir_all(&dir).ok();
 }
 
+/// Classification named at creation lands with the task, in one transaction — and it **wins over the
+/// time-axis default**: the axis the caller named is theirs, and the default fills only the axis they
+/// left alone. Naming the time axis itself is the case that matters, because the default would otherwise
+/// have written a period the task never belonged to and then replaced it.
+#[test]
+fn a_value_named_at_creation_lands_with_the_task_and_beats_the_default() {
+    use crate::model::DimensionRole;
+    use crate::ops::dimension::NewDimension;
+
+    let (mut s, dir) = fresh_store("create-with-dimensions");
+    let proj = s.project_add(project("PJ")).unwrap();
+
+    let assigned = |s: &Store, task_id: i64| -> Vec<i64> {
+        let mut ids: Vec<i64> =
+            crate::store_engine::read::task_dimension_assignments(s.engine.conn(), task_id)
+                .unwrap()
+                .into_iter()
+                .map(|(_dimension_id, value_id)| value_id)
+                .collect();
+        ids.sort_unstable();
+        ids
+    };
+
+    let category = s
+        .dimension_add(proj.id, NewDimension { name: "カテゴリー".into(), ..NewDimension::default() })
+        .unwrap();
+    let bug = s.dimension_value_add(category.id, "バグ", None).unwrap();
+    let area = s
+        .dimension_add(proj.id, NewDimension { name: "領域".into(), ..NewDimension::default() })
+        .unwrap();
+    let core = s.dimension_value_add(area.id, "コア", None).unwrap();
+    let axis = s
+        .dimension_add(
+            proj.id,
+            NewDimension { name: "時代".into(), role: DimensionRole::TimeAxis, ordered: true, ..NewDimension::default() },
+        )
+        .unwrap();
+    let past = s.dimension_value_add(axis.id, "開発期", Some((None, Some(crate::time::today().pred_opt().unwrap())))).unwrap();
+    let current = s.dimension_value_add(axis.id, "運用第1期", Some((Some(crate::time::today()), None))).unwrap();
+
+    // Two axes at once, neither of them the time axis: both land, and the default still fills the era.
+    let filed = s.add_task_with_dimensions(task("分類つき", Some(proj.id)), &[bug.id, core.id]).unwrap();
+    let mut want = vec![bug.id, core.id, current.id];
+    want.sort_unstable();
+    assert_eq!(assigned(&s, filed.id), want, "what was named, plus the default on the axis nobody named");
+
+    // The time axis, named outright: the past era stands and today's is never written.
+    let backdated = s.add_task_with_dimensions(task("過去の時代", Some(proj.id)), &[past.id]).unwrap();
+    assert_eq!(assigned(&s, backdated.id), vec![past.id], "the named era wins; the default does not overwrite it");
+
+    // It commits with the task, per operation — reopen as another process would and read it back.
+    drop(s);
+    let reopened = Store::open_at(Paths::at(dir.clone())).unwrap();
+    assert_eq!(assigned(&reopened, backdated.id), vec![past.id]);
+    assert_eq!(assigned(&reopened, filed.id), want);
+
+    fs::remove_dir_all(&dir).ok();
+}
+
 fn new_decision(title: &str, project_id: i64) -> crate::ops::decision::NewDecision {
     crate::ops::decision::NewDecision { title: title.into(), body: String::new(), project_id }
 }

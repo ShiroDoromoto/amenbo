@@ -750,7 +750,7 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         PluginCmd::Disable { name } => plugin_disable_cmd(store, flags, &name),
         PluginCmd::Uninstall { name } => plugin_uninstall_cmd(store, flags, &name),
         PluginCmd::Run { name, args } => plugin_run_cmd(store, flags, &name, &args),
-        PluginCmd::Runs { name } => plugin_runs_cmd(store, flags, name.as_deref()),
+        PluginCmd::Log { name } => plugin_log_cmd(store, flags, name.as_deref()),
         PluginCmd::Update { name, check, all } => {
             plugin_update_cmd(store, flags, name.as_deref(), check, all)
         }
@@ -1150,7 +1150,7 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     Ok(0)
 }
 
-/// `plugin runs` — the execution log, read back (`AMB-D-361`).
+/// `plugin log` — the execution log, read back (`AMB-D-361`).
 ///
 /// The write side has been landing runs since the dispatcher started firing; this is the first thing that
 /// reads them. It exists because a hook is fire-and-forget (`AMB-D-352`): nobody waits on it and nothing
@@ -1167,7 +1167,7 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 /// apart would leave a reader correlating two commands by hand — so this one reads the store's two meta rows
 /// as well as the machine-local file. The face is a stamp for that correlation and nothing else: it names
 /// who delivered a span, never whose turn is next.
-fn plugin_runs_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i32, CliError> {
+fn plugin_log_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i32, CliError> {
     use amenbo_core::plugin_log::{self, Outcome};
 
     let path = store.paths.plugin_log_file();
@@ -1252,7 +1252,7 @@ fn plugin_runs_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i
     Ok(0)
 }
 
-/// The dispatch-cursor line `plugin runs` leads with: how far this store's outbox has been fanned out onto
+/// The dispatch-cursor line `plugin log` leads with: how far this store's outbox has been fanned out onto
 /// the plugins' queues, and which face took it there (`AMB-D-380`, `AMB-D-399`).
 ///
 /// A cursor of `0` with no face is a store nothing has ever been handed out from, which is a different fact

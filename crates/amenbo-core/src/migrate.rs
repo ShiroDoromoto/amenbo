@@ -84,12 +84,25 @@ const TAR_ENTRY_OVERHEAD: u64 = 1024;
 /// The tar end-of-archive marker (two zero blocks) plus the manifest's own entry.
 const TAR_FIXED_OVERHEAD: u64 = 2 * TAR_ENTRY_OVERHEAD;
 
-/// Where a pre-migration backup lands: `<app-data>/pre-migrate-<stamp>.amenbo-backup`. `stamp` is the
-/// caller's timestamp, so repeated migrations never collide and [`archive::backup_from`]'s
-/// refuse-to-overwrite stays a real guard rather than a nuisance. Under `AMENBO_HOME` the app-data root
-/// *is* that directory, so an isolated store's backup stays isolated too.
+/// Where a pre-migration backup lands: `<app-data>/pre-migrate-<stamp>.amenbo-backup`, or the next free
+/// name beside it ([`archive::free_archive_path`]) when one of that name is already there.
+///
+/// `stamp` is the caller's timestamp, which separates migrations run apart — but not a migration that
+/// fails and is retried right away, which on a small store happens inside the same second. That retry is
+/// the path the capture exists for, so it must not be the one that dies on [`archive::backup_from`]'s
+/// refuse-to-overwrite: there is no "migrate without a backup" branch, so a refused archive is a version
+/// that cannot move. Naming around it keeps the guard a real one.
+///
+/// Under `AMENBO_HOME` the app-data root *is* that directory, so an isolated store's backup stays
+/// isolated too.
 pub fn pre_migration_backup_path(stamp: &str) -> PathBuf {
-    Paths::data_root().join(format!("{PRE_MIGRATE_PREFIX}{stamp}.{ARCHIVE_EXT}"))
+    pre_migration_backup_path_in(&Paths::data_root(), stamp)
+}
+
+/// [`pre_migration_backup_path`] with the directory named rather than read from the OS layout — the app-data
+/// root is process-global, and a test that has to set it cannot run beside its neighbours.
+fn pre_migration_backup_path_in(dir: &Path, stamp: &str) -> PathBuf {
+    archive::free_archive_path(dir, PRE_MIGRATE_PREFIX, stamp)
 }
 
 /// The disk budget of a pre-migration backup, computed from file sizes alone — no snapshot is taken, so
@@ -646,6 +659,44 @@ mod tests {
             chain::BASELINE_VERSION,
             "and so is its version — the one it carried before the run"
         );
+        std::fs::remove_dir_all(&home).ok();
+    }
+
+    /// The path a stamp to the second cannot separate: a migration fails, is rolled back, and is retried
+    /// at once — and a store small enough to fail fast is small enough for the retry to land in the same
+    /// second, asking for the name the first run already took. It takes the next free one instead of dying
+    /// on the overwrite guard, because there is no migrating without a capture: a refused archive is a
+    /// version that cannot move. The first archive goes only once the new rewind point is on disk, so
+    /// "the newest one only" is unchanged.
+    #[test]
+    fn a_retry_in_the_same_second_still_gets_its_rewind_point() {
+        let home = scratch("retry-same-second");
+        let source = store_with_a_row(&home);
+        let stamp = "20260727T000000Z";
+
+        let first = pre_migration_backup_path_in(&home, stamp);
+        migrate_into(&source, &home, &first, stamp, FAILS, &mut announce_ignore, &mut crate::progress::ignore)
+            .unwrap_err();
+        assert!(first.is_file(), "the failed run keeps the archive it rolled back from");
+
+        // The retry, inside the same second: the stamp is the same, so the name is what has to move.
+        let second = pre_migration_backup_path_in(&home, stamp);
+        assert_ne!(second, first, "it is named around the archive already there");
+        let report = migrate_into(
+            &source,
+            &home,
+            &second,
+            stamp,
+            RENAME_CANARY,
+            &mut announce_ignore,
+            &mut crate::progress::ignore,
+        )
+        .expect("a retry in the same second still gets its rewind point");
+
+        assert_eq!(canary(&source.db_path).as_deref(), Some("after"), "the retry carried the store forward");
+        assert!(second.is_file(), "the retry's rewind point is on disk");
+        assert_eq!(report.superseded, vec![first.display().to_string()], "and the earlier archive was swept");
+        assert!(!first.exists(), "one rewind point per kind, the newest");
         std::fs::remove_dir_all(&home).ok();
     }
 

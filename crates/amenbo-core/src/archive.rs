@@ -559,26 +559,28 @@ pub fn pre_erase_backup(
     stamp: &str,
     progress: &mut impl FnMut(&Progress) -> ControlFlow<()>,
 ) -> Result<PreEraseReport> {
-    let dest = free_pre_erase_path(dir, stamp);
+    let dest = free_archive_path(dir, PRE_ERASE_PREFIX, stamp);
     let backup = backup_from(source, &dest, progress)?;
     let superseded = sweep_superseded(dir, PRE_ERASE_PREFIX, &format!(".{ARCHIVE_EXT}"), &dest);
     Ok(PreEraseReport { backup, superseded })
 }
 
-/// Where the next pre-erase archive goes: `<dir>/pre-erase-<stamp>.amenbo-backup`, or the next free name
-/// beside it (`…-2`, `…-3`) when a file of that name is already there.
+/// Where the next rewind point of one kind goes: `<dir>/<prefix><stamp>.amenbo-backup`, or the next free
+/// name beside it (`…-2`, `…-3`) when a file of that name is already there.
 ///
-/// The stamp is to the second, and two erases in one second are ordinary maintenance — a comment and then
-/// a decision, typed as fast as anyone types. Without this the second one dies on
-/// [`backup_from`]'s refuse-to-overwrite, having destroyed nothing, and the user is left reading an error
-/// about an archive they did not ask for. Naming around it rather than deleting first is what keeps the
-/// window closed: the earlier archive still holds the content the earlier erase destroyed, and it goes
-/// only once the new rewind point is on disk ([`sweep_superseded`], which matches these names too).
+/// The stamp is to the second, and a second archive of the same kind inside one second is ordinary use,
+/// not an edge: a comment erased and then a decision, typed as fast as anyone types (`pre-erase-`), or a
+/// migration that fails and is retried at once, which a small store finishes well inside the second
+/// (`pre-migrate-`). Without this the second one dies on [`backup_from`]'s refuse-to-overwrite, having
+/// done nothing it was asked to do, and the user is left reading an error about an archive they never
+/// asked for. Naming around the one already there rather than deleting it first is what keeps the window
+/// closed: it is still the only way back to what came before, and it goes only once the new rewind point
+/// is on disk ([`sweep_superseded`], which matches these names too, so "the newest one only" holds).
 ///
 /// The bound is a formality — it takes 99 archives in one second to reach it — and past it the plain name
 /// comes back, so the caller meets the overwrite guard's own honest error rather than a loop.
-fn free_pre_erase_path(dir: &Path, stamp: &str) -> PathBuf {
-    let at = |suffix: String| dir.join(format!("{PRE_ERASE_PREFIX}{stamp}{suffix}.{ARCHIVE_EXT}"));
+pub(crate) fn free_archive_path(dir: &Path, prefix: &str, stamp: &str) -> PathBuf {
+    let at = |suffix: String| dir.join(format!("{prefix}{stamp}{suffix}.{ARCHIVE_EXT}"));
     let first = at(String::new());
     if !first.exists() {
         return first;

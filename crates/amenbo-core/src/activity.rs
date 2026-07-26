@@ -479,9 +479,10 @@ fn decision_comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> 
         sel.col(C.edited_at),
     );
     let mut sql = Sql::from(&sel, C.table);
-    // An inner join drops nothing here: `decision_id` is an FK with `CASCADE`, so a comment whose decision
-    // is gone went with it. That is also why these rows are always `target_live` — unlike a ledger line,
-    // a comment cannot outlive what it hangs on.
+    // An inner join drops nothing here: a decision's comments are deleted with it, by the delete op and
+    // ahead of the row they hang on (`AMB-D-403`), so there is no comment left whose decision is gone.
+    // That is also why these rows are always `target_live` — unlike a ledger line, a comment cannot
+    // outlive what it hangs on.
     sql.join(D.table, same(D.id, C.decision_id));
     let newest_first = !f.oldest_first;
     sql.push_where(pred.as_ref())

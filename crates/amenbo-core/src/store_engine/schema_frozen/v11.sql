@@ -169,7 +169,8 @@ CREATE TABLE IF NOT EXISTS plugin_outbox (
     record_id BIGINT NOT NULL,
     actor     TEXT NOT NULL,
     at        TEXT NOT NULL,
-    new_state TEXT
+    new_state TEXT,
+    project   BIGINT
 );
 CREATE TABLE IF NOT EXISTS plugin_queue (
     id        INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

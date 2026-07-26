@@ -3141,8 +3141,8 @@ pub fn dimension_move(id: i64, before: Option<i64>, after: Option<i64>) -> Resul
     Ok(WriteAck::new(&["tasks"]))
 }
 
-/// Delete a dimension permanently (its values and the task assignments on them go with it by the
-/// schema's `ON DELETE CASCADE` — same shape as the CLI's `dimension rm`).
+/// Delete a dimension permanently (the delete op takes its values and the task assignments on them
+/// first, children before the row they hang on — same shape as the CLI's `dimension rm`).
 #[tauri::command]
 pub fn dimension_rm(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
@@ -3235,8 +3235,8 @@ pub fn dimension_value_move(value_id: i64, before: Option<i64>, after: Option<i6
     Ok(WriteAck::new(&["tasks"]))
 }
 
-/// Delete a dimension value permanently (the task assignments on it go with it by the schema's
-/// `ON DELETE CASCADE` — same shape as the CLI's `dimension value-rm`).
+/// Delete a dimension value permanently (the delete op takes the task assignments on it first — same
+/// shape as the CLI's `dimension value-rm`).
 #[tauri::command]
 pub fn dimension_value_rm(value_id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
@@ -6686,9 +6686,9 @@ mod tests {
     /// The GUI can read the feed forward by cursor: **only the changes after the store was read**
     /// come back, and what has been read never comes back again. Let that slip and either
     /// invalidations go missing and the screen freezes on stale data, or everything comes back every
-    /// time and it degrades into refetching the world. Also pins that rows swept along by `CASCADE`
-    /// are caught: deleting a task deletes its comment rows too, and the ops layer knows nothing
-    /// about those rows — only `update_hook` sees them.
+    /// time and it degrades into refetching the world. Also pins that the rows a delete takes with it
+    /// are caught: deleting a task deletes its comment rows too, and the feed learns of those from
+    /// `update_hook` rather than from anything the ops layer says.
     #[test]
     fn changes_since_advances_with_the_cursor() {
         let _env = env_guard();

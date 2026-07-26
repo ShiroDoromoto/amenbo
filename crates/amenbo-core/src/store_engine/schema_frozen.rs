@@ -31,8 +31,9 @@
 //! | v6 | `2a0d731` | byte-identical to v5 — v6's step carries a column the registry already had |
 //! | v7 | `afc5396` | |
 //! | v8 | `c71e87a` | |
-//! | v9 | `980c764` | |
-//! | v10 | — | held equal to the live registry by the test below |
+//! | v9 | `7db6826` | |
+//! | v10 | `17e3897` | |
+//! | v11 | this commit | held equal to the live registry by the test below |
 //!
 //! [`super::migrate::BASELINE_VERSION`] itself is **not** here: this repository's history begins with the
 //! chain already at [`OLDEST_FROZEN_VERSION`], so no build in it ever emitted a v2 store and there is no
@@ -64,6 +65,7 @@ pub fn frozen(version: i64) -> Option<&'static str> {
         8 => include_str!("schema_frozen/v8.sql"),
         9 => include_str!("schema_frozen/v9.sql"),
         10 => include_str!("schema_frozen/v10.sql"),
+        11 => include_str!("schema_frozen/v11.sql"),
         _ => return None,
     })
 }

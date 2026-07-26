@@ -261,10 +261,10 @@ mod delete_children_tests {
     use crate::model::{ActorKind, DimensionCardinality, DimensionRole};
     use crate::store_engine::{StoreEngine, WriteTx};
 
-    /// An engine with the `REFERENCES` unenforced, which is what makes these assertions mean anything:
-    /// the declarations still read `ON DELETE CASCADE`, so under enforcement the database would clear the
-    /// children whether or not the op did, and a test could not tell the two apart. With enforcement off
-    /// no cascade fires, and a child still gone is a child the op deleted.
+    /// An engine with the `REFERENCES` unenforced, which is what keeps these assertions about the *op*.
+    /// With no constraint acting, a child that is gone is a child the op deleted, and a child the op forgot
+    /// is a row left behind here — rather than a parent `DELETE` the database refused, which is what the
+    /// declarations do (`AMB-D-403`) and what the constraints' own tests are for.
     fn unenforced_engine() -> StoreEngine {
         StoreEngine::open_in_memory_unchecked().expect("in-memory engine")
     }

@@ -4,8 +4,9 @@ import { dataAdapter } from "../mock/adapter";
 import { useStore } from "../store/store";
 import type { Status, TaskCard } from "../mock/types";
 import {
-  BlockedChips, DueChip, FacetAvatar, PremiseChangedChip, PriorityDot, STATUS_ORDER, StatusSelect, TaskIdChip,
+  BlockedChips, DueChip, FacetAvatar, PremiseChangedChip, PriorityDot, StatusSelect, TaskIdChip,
 } from "../components/atoms";
+import { isClosed, STATUS_COLUMNS } from "../core/status";
 import { Pager, usePager } from "../components/Pager";
 import { useTaskPage } from "../core/reads";
 import { isEnterSubmit } from "../core/keys";
@@ -14,7 +15,7 @@ import { CalendarView } from "./CalendarView";
 import { TimelineView } from "./TimelineView";
 import { statusLabel, t, tf, viewLabel } from "../core/i18n";
 import type { ComposeTarget } from "../shell/AppShell";
-import { filterDimensions, parseRefQuery, passesFilters, selectionKey, type FilterSelection } from "../core/filters";
+import { CLOSED_FILTER_VALUE, filterDimensions, parseRefQuery, passesFilters, selectionKey, type FilterSelection } from "../core/filters";
 import { fetchProjectDimensionAssignments } from "../core/mutations";
 import { DimensionManager } from "./DimensionManager";
 import { BOARD_FLIP, useBoardFlip } from "./boardFlip";
@@ -27,8 +28,8 @@ const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
 // of one of the project's dimensions, which splits the board into one column per value of that dimension.
 const STATUS_GROUP = "status";
 
-// Order of the done column: most recently completed first (RFC3339 sorts lexicographically = chronologically).
-// Tasks with no completion time sink to the bottom.
+// Order of the closed column: most recently completed first (RFC3339 sorts lexicographically = chronologically).
+// Tasks with no completion time sink to the bottom — which is where the rejected land, having none by definition.
 function byCompletedDesc(a: TaskCard, b: TaskCard): number {
   const av = a.completedAt ?? "";
   const bv = b.completedAt ?? "";
@@ -37,11 +38,11 @@ function byCompletedDesc(a: TaskCard, b: TaskCard): number {
   if (!bv) return -1;
   return av < bv ? 1 : -1;
 }
-// How many cards the done column stacks. Done grows without bound as time passes, so the column carries only
-// the most recent N and sends the rest to the list view through the "see completed in list" affordance.
+// How many cards the closed column stacks. What has ended grows without bound as time passes, so the column
+// carries only the most recent N and sends the rest to the list view through the "see closed in list" affordance.
 const DONE_COLUMN_CAP = 20;
 
-// The other columns must not grow the DOM without bound either: the same cap-plus-affordance the done column
+// The other columns must not grow the DOM without bound either: the same cap-plus-affordance the closed column
 // uses keeps every task from being mounted (see BOARD_COLUMN_CAP in ./boardLayout).
 
 /**
@@ -93,9 +94,9 @@ export function BoardScreen({
   const armMove = useBoardFlip(boardRef, draggingId);
   // The status pull-down on a card is a local move we do want to animate (unlike a drag): arm the flourish just
   // before the write, so the card slides to its new column. A stable ref, to keep the cards' memo intact.
-  const setStatusAnimated = useCallback((id: number, status: Status) => {
+  const setStatusAnimated = useCallback((id: number, status: Status, reason?: string) => {
     armMove();
-    store.setStatus(id, status);
+    store.setStatus(id, status, reason);
   }, [armMove, store]);
   const project = dataAdapter.getProject(projectId);
   const rawQ = search.trim();
@@ -268,19 +269,32 @@ export function BoardScreen({
 
       {view === "board" && !groupingDim && (
         <div className="board" ref={boardRef}>
-          {STATUS_ORDER.map((st) => {
-            const colTasks = tasks.filter((t) => t.status === st);
+          {STATUS_COLUMNS.map((st) => {
+            // The done column is the *closed* column: a rejection folds in here rather than growing a
+            // fifth one (`AMB-D-397`). It keeps the "done" heading and count — a rejected task is not an
+            // achievement and must not be counted as one — and says how many rejected ride along beside it.
             const isDone = st === "done";
+            const colTasks = tasks.filter((t) => (isDone ? isClosed(t.status) : t.status === st));
+            // Newest completion first; a rejection has no completion time at all, so the rejected sink
+            // below the done — which is the order to read them in anyway.
             const sorted = isDone ? colTasks.slice().sort(byCompletedDesc) : colTasks;
             const cards = isDone ? sorted.slice(0, DONE_COLUMN_CAP) : sorted;
+            const rejected = isDone ? colTasks.filter((t) => t.status === "rejected").length : 0;
             const overflow = isDone && sorted.length > DONE_COLUMN_CAP
-              ? { total: sorted.length, onSeeAll: () => { setSel((s) => ({ ...s, status: "done" })); setView("list"); } }
+              ? {
+                  total: sorted.length,
+                  // The list narrowed to what this column holds — both terminals, as the CLI would ask
+                  // for them (`status:done,rejected`).
+                  onSeeAll: () => { setSel((s) => ({ ...s, status: CLOSED_FILTER_VALUE })); setView("list"); },
+                }
               : undefined;
             return (
               <Column
                 key={st}
                 name={statusLabel(st)}
                 cards={cards}
+                count={isDone ? colTasks.length - rejected : undefined}
+                note={rejected > 0 ? tf("board.rejectedCount", { n: rejected }) : undefined}
                 overflow={overflow}
                 selectedTaskId={selectedTaskId}
                 onSelectTask={onSelectTask}
@@ -356,7 +370,7 @@ export function BoardScreen({
             {listPager.pageItems.map((t) => (
               <div key={t.id} className={`row ${t.id === selectedTaskId ? "row--selected" : ""}`} onClick={() => onSelectTask(t.id)} role="button" data-pane-select>
                 <span className="row__status"><StatusSelect id={t.id} status={t.status} onStatus={store.setStatus} premiseChange={t.premiseChange} /></span>
-                <span className={`row__title ${t.status === "done" ? "row__title--done" : ""}`}>{t.title}</span>
+                <span className={`row__title ${isClosed(t.status) ? "row__title--closed" : ""}`}>{t.title}</span>
                 <span className="row__spacer" />
                 <BlockedChips task={t} />
                 <PremiseChangedChip task={t} />
@@ -436,18 +450,25 @@ function AddDimensionValue({ onAdd }: { onAdd: (name: string) => void }) {
 // the cards whose props are unchanged. The column itself usually does re-render (the card array and the drop
 // handlers are fresh each render); what matters is that a change of selection stops before the sibling cards.
 const Column = memo(function Column({
-  name, cards, overflow, onSeeAllList, selectedTaskId, onSelectTask, onStatus, onAdd,
+  name, cards, count, note, overflow, onSeeAllList, selectedTaskId, onSelectTask, onStatus, onAdd,
   droppable, draggingId, onDropTask, onCardDragStart, onCardDragEnd,
 }: {
   name: string;
   cards: TaskCard[];
-  /** The done column past its cap: the true total, and the "see completed in list" affordance. */
+  /**
+   * What the head counts, where that is not simply what the column holds. The closed column needs it:
+   * it holds both terminals, and the figure under a "done" heading must count only the done.
+   */
+  count?: number;
+  /** A muted figure beside the count, for what the column holds and the count deliberately leaves out. */
+  note?: string;
+  /** The done column past its cap: the true total, and the "see closed in list" affordance. */
   overflow?: { total: number; onSeeAll: () => void };
   // Where a non-done column past its cap sends the overflow (a switch to list view). Columns without it are uncapped.
   onSeeAllList?: () => void;
   selectedTaskId: number | null;
   onSelectTask: (id: number) => void;
-  onStatus: (id: number, status: Status) => void;
+  onStatus: (id: number, status: Status, reason?: string) => void;
   onAdd?: () => void;
   // Drag and drop (the status board only). Cards can be grabbed from a droppable column, and a drop sets status.
   droppable?: boolean;
@@ -482,7 +503,8 @@ const Column = memo(function Column({
     >
       <div className="column__head">
         <span className="column__name">{name}</span>
-        <span className="column__count">{overflow ? overflow.total : cards.length}</span>
+        <span className="column__count">{count ?? (overflow ? overflow.total : cards.length)}</span>
+        {note && <span className="column__note">{note}</span>}
         {onAdd && (
           <button className="column__addbtn" title={t("card.addTaskTip")} onClick={onAdd}>＋</button>
         )}
@@ -502,7 +524,7 @@ const Column = memo(function Column({
       ))}
       {overflow ? (
         <button className="column__seeall" onClick={overflow.onSeeAll}>
-          {tf("board.seeCompletedInList", { n: overflow.total })}
+          {tf("board.seeClosedInList", { n: overflow.total })}
         </button>
       ) : hiddenCount > 0 ? (
         <button className="column__seeall" onClick={onSeeAllList}>
@@ -527,14 +549,16 @@ const TaskCardView = memo(function TaskCardView({
   onBeginDrag?: (id: number) => void;
   onEndDrag?: () => void;
   onSelect: (id: number) => void;
-  onStatus: (id: number, status: Status) => void;
+  onStatus: (id: number, status: Status, reason?: string) => void;
 }) {
   return (
     <div
       className={[
         "card",
         selected ? "card--selected" : "",
-        task.status === "done" ? "card--done" : "",
+        // Struck through once it has ended, either way it ended. Which terminal it reached is the
+        // pull-down's to say (it sits in the footer, set to `done` or `rejected`).
+        isClosed(task.status) ? "card--closed" : "",
         draggable ? "card--draggable" : "",
         dragging ? "card--dragging" : "",
       ].join(" ")}

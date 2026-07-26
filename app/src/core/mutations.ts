@@ -13,6 +13,7 @@ import { applyPerfConfig, invoke } from "./ipc";
 import { invalidateAllQueries, invalidateQueries, type QueryKey } from "./query";
 import { type AttachTargetType } from "./reads";
 import { t, tf, type CmdError } from "./i18n";
+import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
 import type { ActivityTargetDto, BoundFolderDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
@@ -198,18 +199,45 @@ export async function setStatus(id: number, status: Status): Promise<void> {
       );
     }
   }
-  // Status is the single source of truth for completion; `completedAt` only carries a value while a task is done (`ops::task::set_status`).
+  // Status is the single source of truth for completion; `completedAt` only carries a value while a task is done
+  // (`ops::task::set_status`) — a rejection is a terminal but not an achievement, so it leaves the field unset.
   const completedAt = status === "done" ? new Date().toISOString() : null;
   const text = status === "done" ? tf("act.completed", { title: t.title })
-    : t.status === "done" ? tf("act.reopened", { title: t.title })
+    : isClosed(t.status) ? tf("act.reopened", { title: t.title })
     : tf("act.statusChanged", { title: t.title });
   mockMutate((s) => ({
     ...s,
-    // A task that becomes done drops out of the blockers of everything waiting on it (core's `blocked_by` derivation).
-    tasks: (status === "done" ? unblock(s.tasks, id) : s.tasks)
+    // A task that closes — either terminal — drops out of the blockers of everything waiting on it (core's
+    // `blocked_by` derivation asks `is_closed`, so a rejection releases its dependents just as a completion does).
+    tasks: (isClosed(status) ? unblock(s.tasks, id) : s.tasks)
       .map((x) => (x.id === id ? { ...x, status, completedAt } : x)),
     activity: [sysItem(id, t.title, "task.status_changed", text), ...s.activity],
   }));
+}
+
+/**
+ * End a task that will not be done, with the reasoning kept (`AMB-D-397`) — the write behind the pull-down's
+ * `rejected`. The reason is **required**: this is what `setStatus` cannot ask for, and the whole point of the
+ * separate door (the CLI draws the same line, `task reject --reason` beside `task status`). It lands as a
+ * comment on the timeline, so free text keeps its one home.
+ */
+export async function rejectTask(id: number, reason: string): Promise<void> {
+  if (inTauri()) return invokeAck("task_reject", { id, reason });
+  // The mock trims and refuses as the command does, so browser iteration is not the one place a task
+  // can be rejected with nothing said about why.
+  const text = reason.trim();
+  if (!text) {
+    throw mockErr(
+      "invalid_value",
+      "却下の理由は必須です（なぜやらないと決めたのかを書く）",
+      "a rejection needs its reason — say why the task will not be done",
+    );
+  }
+  const t = getSnapshot().tasks.find((x) => x.id === id);
+  if (!t) return;
+  if (t.status === "rejected") return; // Idempotent, and the reason is not piled on a second time.
+  await setStatus(id, "rejected");
+  await addComment(id, text);
 }
 
 /**

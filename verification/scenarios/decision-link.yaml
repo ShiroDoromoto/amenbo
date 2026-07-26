@@ -1,0 +1,80 @@
+# The edge from a decision to the work it drove is a precondition, not a cross-reference: while the
+# premise is unsettled the task is not ready, and accepting the decision is what releases it. That
+# is one rule enforced across two objects, so a shipped build can break it in the gap between them —
+# which is exactly what no build-time test of either half would see.
+id: decision-link
+title: A task linked to a proposed decision is held back until that decision is accepted
+description: >
+  Register a task, record the decision it rests on, and link them — then read the task's readiness
+  before and after the ruling. A linked task is unreservable while its premise is open, so this line
+  is the one that proves the gate exists at all rather than only being described.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — waiting on its premise
+    as: seed
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — the premise the work rests on
+    as: premise
+
+  - type: action
+    domain: decision
+    op: link
+    with:
+      target: premise
+      task: seed
+
+  # The edge alone holds the work back: the premise is still a proposal, so the task is not ready.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: false
+
+  # And it is held where it matters — out of the listing a session takes its next task from.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: seed
+      present: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "ready:no"
+      target: seed
+      present: true
+
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: premise
+
+  # Ruled on, the premise stops holding anything: the same task is ready, with nothing else changed.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: seed
+      present: true

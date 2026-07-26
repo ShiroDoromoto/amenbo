@@ -370,7 +370,7 @@ pub struct LinkedTaskRefDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     r#ref: Option<String>,
-    #[ts(type = "\"todo\" | \"in_progress\" | \"done\" | \"blocked\"")]
+    #[ts(type = "\"todo\" | \"in_progress\" | \"done\" | \"blocked\" | \"rejected\"")]
     status: String,
 }
 
@@ -432,7 +432,7 @@ pub struct TaskCardDto {
     notes: String,
     #[ts(type = "number | null")]
     project_id: Option<i64>,
-    #[ts(type = "\"todo\" | \"in_progress\" | \"done\" | \"blocked\"")]
+    #[ts(type = "\"todo\" | \"in_progress\" | \"done\" | \"blocked\" | \"rejected\"")]
     status: &'static str,
     assignee: Option<ActorDto>,
     #[ts(type = "\"high\" | \"medium\" | \"low\" | null")]
@@ -758,6 +758,8 @@ fn render_event(ev: &serde_json::Value, title: &str, lang: &str) -> EventDto {
             ("done", true) => "Done",
             ("blocked", false) => "ブロック",
             ("blocked", true) => "Blocked",
+            ("rejected", false) => "却下",
+            ("rejected", true) => "Rejected",
             (other, _) => other,
         }
         .to_string()
@@ -1980,13 +1982,46 @@ pub fn task_add(
 pub fn task_status(id: i64, status: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         let new_status = TaskStatus::parse(&status)
-            .ok_or_else(|| format!("status '{status}' は不正です（todo / in_progress / done / blocked）"))?;
+            .ok_or_else(|| format!("status '{status}' は不正です（todo / in_progress / done / blocked / rejected）"))?;
         let current = store.task(id)?.map(|t| t.status);
         if current != Some(new_status) || new_status == TaskStatus::InProgress {
             let old = current.unwrap_or_default();
             store.set_task_status(id, new_status, ActorKind::Human)?;
             emit(store, id, amenbo_core::activity_log::event::task_status_changed(old.as_str(), new_status.as_str()));
         }
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]).task(id))
+}
+
+/// End a task that will not be done, with the reasoning kept (`AMB-D-397`) — the same shape as the
+/// CLI's `task reject <id> --reason <why>`. `task_status` above can reach `rejected` too, and this
+/// exists for what that path cannot ask for: **the reason, which is required**. It is the part worth
+/// keeping when a task is closed unfinished, and it lands as a comment on the timeline rather than a
+/// field of its own — free text keeps its one home, exactly as the CLI has it.
+///
+/// The pull-down is the GUI's only door to this status, and it collects the reason before it calls,
+/// so an empty one is a slip rather than a choice: it is refused here as well, and nothing is written.
+#[tauri::command]
+pub fn task_reject(id: i64, reason: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        let reason = reason.trim();
+        if reason.is_empty() {
+            return Err(amenbo_core::Error::invalid(
+                "a rejection needs its reason — say why the task will not be done",
+                "却下の理由は必須です（なぜやらないと決めたのかを書く）",
+            )
+            .into());
+        }
+        let old = store.task(id)?.map(|t| t.status).unwrap_or_default();
+        if old == TaskStatus::Rejected {
+            // Idempotent, and the reason is not piled on: a re-reject changes nothing, so it has
+            // nothing new to explain (the CLI's `task reject` and `decision reject` behave the same).
+            return Ok(());
+        }
+        store.set_task_status(id, TaskStatus::Rejected, ActorKind::Human)?;
+        emit(store, id, amenbo_core::activity_log::event::task_status_changed(old.as_str(), TaskStatus::Rejected.as_str()));
+        store.add_task_comment(id, ActorKind::Human, reason)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]).task(id))
@@ -5299,6 +5334,53 @@ mod tests {
         assert!(c.blocked_by_decisions.is_empty(), "a settled premise no longer holds it back");
         assert_eq!(c.linked_decisions.len(), 1, "the link itself remains (traceability)");
         task_status(task, "in_progress".into()).expect("reservation succeeds once the premise settles");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// `task_reject` exists for the one thing `task_status` cannot ask for — the reason — so what is
+    /// under test is that the reason is **kept and required**: it lands on the timeline, an empty one
+    /// is refused with nothing written, and re-rejecting does not pile a second copy on.
+    #[test]
+    fn task_reject_keeps_the_reason_and_refuses_an_empty_one() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("reject");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "テストPJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        let task = task_add(Some(project_id), "やらないと決めた作業".into(), None).unwrap().tasks[0];
+        let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
+
+        let err = task_reject(task, "   ".into()).err().expect("an empty reason must be refused");
+        assert_eq!(err.code, "invalid_value", "the refusal carries core's code, not a GUI-local one");
+        assert_eq!(card(task).status, "todo", "and nothing was written — the status did not move");
+        assert_eq!(card(task).comments, 0, "nor was a blank comment left behind");
+
+        let ack = task_reject(task, "  測っても何も変わらなかった  ".into()).unwrap();
+        assert_eq!(ack.tasks, vec![task], "the reject acks its task");
+        let c = card(task);
+        assert_eq!(c.status, "rejected");
+        assert!(c.completed_at.is_none(), "a terminal, but not an achievement — no completion time");
+        assert_eq!(c.comments, 1, "the reasoning is kept, as a comment");
+        let body = {
+            let store = Store::open().unwrap();
+            store.comment_list(task, None, None).unwrap().comments[0].text.clone()
+        };
+        assert_eq!(body, "測っても何も変わらなかった", "trimmed, and otherwise as it was given");
+
+        task_reject(task, "同じことを繰り返す".into()).unwrap();
+        assert_eq!(card(task).comments, 1, "re-rejecting changes nothing, so it explains nothing twice");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

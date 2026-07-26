@@ -187,7 +187,9 @@ A scenario is an `id`, a human `title`, an optional `description`, an optional `
 list, and an ordered list of `steps`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
 `comment` / `project`) and an `op`, and carries named args under `with`. An action may bind
-its result with `as:`, and a later step refers back to it with `target:`.
+its result with `as:`, and a later step refers back to it with `target:` — an op that joins two
+objects names the second under its own key (`decision link`'s `task:`), and every such key is
+checked back to an earlier binding, not just `target:`.
 
 ```yaml
 id: task-assign
@@ -219,7 +221,7 @@ list is refused — a scenario nothing runs rots while the set around it reports
 ## Lint
 
 The loader checks both layers — the YAML parses into the typed model (misspelled keys are
-caught), and the semantic pass (known ops, required args, every `target:` resolving to an
+caught), and the semantic pass (known ops, required args, every reference resolving to an
 earlier `as:`). Run it over the whole scenario set:
 
 ```sh

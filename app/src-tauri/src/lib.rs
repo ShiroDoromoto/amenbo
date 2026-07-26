@@ -159,6 +159,7 @@ pub fn run() {
       commands::resolve_ref,
       commands::task_add,
       commands::task_status,
+      commands::task_reject,
       commands::task_delete,
       commands::comment_add,
       commands::comment_remove,

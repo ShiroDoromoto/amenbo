@@ -20,8 +20,8 @@ export function currentLang(): Lang {
 }
 
 const STATUS: Record<Lang, Record<Status, string>> = {
-  ja: { todo: "未着手", in_progress: "進行中", done: "完了", blocked: "ブロック" },
-  en: { todo: "To do", in_progress: "In progress", done: "Done", blocked: "Blocked" },
+  ja: { todo: "未着手", in_progress: "進行中", done: "完了", blocked: "ブロック", rejected: "却下" },
+  en: { todo: "To do", in_progress: "In progress", done: "Done", blocked: "Blocked", rejected: "Rejected" },
 };
 
 const PRIORITY: Record<Lang, Record<Priority, string>> = {
@@ -112,6 +112,8 @@ const UI: Record<Lang, Record<string, string>> = {
     "filter.dim.status": "ステータス", "filter.dim.assignee": "担当", "filter.dim.priority": "優先度",
     "filter.opt.all": "すべて",
     "filter.opt.assignee.none": "未割り当て", "filter.opt.assignee.me": "自分", "filter.opt.assignee.meAi": "自分の AI",
+    // The compound status option: both terminals, whichever way the task ended.
+    "filter.opt.status.closed": "閉じた（完了・却下）",
     "board.searchPh": "タイトル・概要・コメント・AMB-T-<n> を検索",
     "board.addDimension": "分類", "board.dimensionNamePh": "分類名（Enter で追加）",
     "board.addDimensionValue": "値", "board.dimensionValuePh": "値名（Enter で追加）",
@@ -132,7 +134,10 @@ const UI: Record<Lang, Record<string, string>> = {
     "dimmgr.current": "現在", "dimmgr.currentHint": "今日がこの期間に入っています",
     "dimmgr.confirmRemoveDim": "分類「{name}」を削除しますか？値とタスクへの割り当ても外れます。",
     "dimmgr.confirmRemoveValue": "値「{name}」を削除しますか？この値のタスク割り当ても外れます。",
-    "board.seeCompletedInList": "完了をリストで見る（全 {n} 件）",
+    // The column holds both terminals, so the affordance names them together — and the count beside the
+    // heading stays the completed one alone, with the rejected said separately and never added in.
+    "board.seeClosedInList": "閉じたものをリストで見る（全 {n} 件）",
+    "board.rejectedCount": "却下 {n}",
     "board.seeMoreInList": "他 {n} 件をリストで見る",
     "board.notFound": "プロジェクトが見つかりません",
     "cal.today": "今日", "cal.prevMonth": "前の月", "cal.nextMonth": "次の月",
@@ -445,6 +450,12 @@ const UI: Record<Lang, Record<string, string>> = {
     "list.unarchive": "戻す", "list.unarchiveTitle": "受信箱へ戻す",
     // board / detail tooltips
     "status.changeTip": "ステータスを変更",
+    // What the pull-down asks before a rejection. The wording says what is being kept — the reasoning —
+    // rather than warning about the state change, which is undoable; the reason, once unwritten, is not.
+    "reject.title": "{ref} を却下する",
+    "reject.why": "やらないと決めた理由を残します（必須）。理由はタイムラインにコメントとして積まれます。",
+    "reject.placeholder": "なぜやらないと決めたのか",
+    "reject.confirm": "却下する", "reject.cancel": "やめる",
     "card.addTaskTip": "タスクを追加", "card.assigneeTip": "担当（任せた相手）",
     "block.deps": "着手不可（依存）: {names} の完了待ち",
     "block.decisions": "着手不可（根拠が未確定）: {refs}",
@@ -533,6 +544,7 @@ const UI: Record<Lang, Record<string, string>> = {
     "filter.dim.status": "Status", "filter.dim.assignee": "Assignee", "filter.dim.priority": "Priority",
     "filter.opt.all": "All",
     "filter.opt.assignee.none": "Unassigned", "filter.opt.assignee.me": "Me", "filter.opt.assignee.meAi": "My AI",
+    "filter.opt.status.closed": "Closed (done or rejected)",
     "board.searchPh": "Search title / notes / comments / AMB-T-<n>",
     "board.addDimension": "Category", "board.dimensionNamePh": "Category name (Enter to add)",
     "board.addDimensionValue": "Value", "board.dimensionValuePh": "Value name (Enter to add)",
@@ -553,7 +565,8 @@ const UI: Record<Lang, Record<string, string>> = {
     "dimmgr.current": "Current", "dimmgr.currentHint": "Today falls inside this period",
     "dimmgr.confirmRemoveDim": "Delete the category \"{name}\"? Its values and task assignments are removed too.",
     "dimmgr.confirmRemoveValue": "Delete the value \"{name}\"? Task assignments to this value are removed too.",
-    "board.seeCompletedInList": "See all {n} completed in a list",
+    "board.seeClosedInList": "See all {n} closed in a list",
+    "board.rejectedCount": "{n} rejected",
     "board.seeMoreInList": "See {n} more in a list",
     "board.notFound": "Project not found",
     "cal.today": "Today", "cal.prevMonth": "Previous month", "cal.nextMonth": "Next month",
@@ -867,6 +880,10 @@ const UI: Record<Lang, Record<string, string>> = {
     "list.unarchive": "Restore", "list.unarchiveTitle": "Restore to inbox",
     // board / detail tooltips
     "status.changeTip": "Change status",
+    "reject.title": "Reject {ref}",
+    "reject.why": "The reasoning is kept (required). It lands as a comment on the timeline.",
+    "reject.placeholder": "Why this will not be done",
+    "reject.confirm": "Reject", "reject.cancel": "Cancel",
     "card.addTaskTip": "Add a task", "card.assigneeTip": "Assignee (whom it's delegated to)",
     "block.deps": "Cannot start (dependency): waiting on {names}",
     "block.decisions": "Cannot start (premise not settled): {refs}",

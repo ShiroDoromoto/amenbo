@@ -150,6 +150,23 @@ impl Driver {
                 }
                 Ok(Outcome::action(format!("created decision {id} `{title}`")))
             }
+            (Domain::Decision, "edit") => {
+                let target = self.resolve(with)?;
+                let body = req_str(with, "body")?;
+                self.run_json(&["decision", "edit", &target.to_string(), "--body", body, "--json"])?;
+                Ok(Outcome::action(format!("edited the body of decision {target}")))
+            }
+            (Domain::Decision, "accept") => {
+                let target = self.resolve(with)?;
+                self.run_json(&["decision", "accept", &target.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("accepted decision {target}")))
+            }
+            (Domain::Decision, "link") => {
+                let target = self.resolve(with)?;
+                let task = self.resolve_key(with, "task")?;
+                self.run_json(&["decision", "link", &target.to_string(), &task.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("linked decision {target} to task {task}")))
+            }
             _ => Err(unmapped(domain, op)),
         }
     }
@@ -178,29 +195,13 @@ impl Driver {
             }
             (Domain::Task, "field") => {
                 let target = self.resolve(with)?;
-                let field = req_str(with, "field")?;
-                // `equals` is any scalar (string / bool / number / null); compare it structurally
-                // against the field's JSON value, so `status: todo` and `completed: false` both work.
-                let expected = with.get("equals").ok_or("arg `equals` is required")?;
-                let expected = serde_json::to_value(expected)
-                    .map_err(|e| format!("arg `equals` is not a valid value: {e}"))?;
                 let v = self.run_json(&["task", "show", &target.to_string(), "--json"])?;
-                match v.get(field) {
-                    None => Ok(Outcome::assert(
-                        false,
-                        format!("task {target} has no field `{field}` in its show output (MISMATCH)"),
-                    )),
-                    Some(actual) => {
-                        let pass = *actual == expected;
-                        Ok(Outcome::assert(
-                            pass,
-                            format!(
-                                "task {target} field `{field}` = {actual} (expected {expected}, {})",
-                                if pass { "as expected" } else { "MISMATCH" }
-                            ),
-                        ))
-                    }
-                }
+                judge_field("task", target, with, &v)
+            }
+            (Domain::Decision, "field") => {
+                let target = self.resolve(with)?;
+                let v = self.run_json(&["decision", "show", &target.to_string(), "--json"])?;
+                judge_field("decision", target, with, &v)
             }
             _ => Err(unmapped(domain, op)),
         }
@@ -209,7 +210,12 @@ impl Driver {
     /// Resolve a step's `target:` to the id an earlier action bound. The loader already proved
     /// the name resolves to an earlier `as:`, so a miss here is an internal error, not user input.
     fn resolve(&self, with: &Args) -> Result<i64, String> {
-        let name = req_str(with, "target")?;
+        self.resolve_key(with, "target")
+    }
+
+    /// The same, for an op that names a second object under its own key (`decision link`'s `task`).
+    fn resolve_key(&self, with: &Args, key: &str) -> Result<i64, String> {
+        let name = req_str(with, key)?;
         self.bindings
             .get(name)
             .copied()
@@ -230,6 +236,33 @@ impl Outcome {
     }
     fn assert(pass: bool, note: String) -> Outcome {
         Outcome { pass, note }
+    }
+}
+
+/// Judge a `field` assert against the object's own `show --json`. `equals` is any scalar (string /
+/// bool / number / null), compared structurally against the field's JSON value, so `status: todo`
+/// and `completed: false` both work — and a field the output does not carry at all is a mismatch,
+/// not an error, since a scenario naming one is asserting about the shipped output's shape too.
+fn judge_field(noun: &str, id: i64, with: &Args, shown: &serde_json::Value) -> Result<Outcome, String> {
+    let field = req_str(with, "field")?;
+    let expected = with.get("equals").ok_or("arg `equals` is required")?;
+    let expected = serde_json::to_value(expected)
+        .map_err(|e| format!("arg `equals` is not a valid value: {e}"))?;
+    match shown.get(field) {
+        None => Ok(Outcome::assert(
+            false,
+            format!("{noun} {id} has no field `{field}` in its show output (MISMATCH)"),
+        )),
+        Some(actual) => {
+            let pass = *actual == expected;
+            Ok(Outcome::assert(
+                pass,
+                format!(
+                    "{noun} {id} field `{field}` = {actual} (expected {expected}, {})",
+                    if pass { "as expected" } else { "MISMATCH" }
+                ),
+            ))
+        }
     }
 }
 

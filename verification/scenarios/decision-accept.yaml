@@ -1,0 +1,67 @@
+# A decision's own lifecycle: it is written down as a proposal, worked on while it is still one,
+# and then accepted — the move that freezes it. What the shipped build has to get right is the
+# order: the body is editable up to acceptance, and the status the store keeps afterwards is what
+# every reader downstream trusts.
+id: decision-accept
+title: A recorded decision is proposed, its body edited, and accepting it freezes what was decided
+description: >
+  Record a decision, read back the state it starts in, edit its body, and accept it — checking the
+  body the store kept and the status after the move. Acceptance is what other work waits on, so the
+  status this line reads is the one a task's readiness is derived from.
+steps:
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — a decision to be ruled on
+    as: rec
+
+  # A recorded decision is a proposal, never a settled one: the human rules on it.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: status
+      equals: proposed
+
+  - type: action
+    domain: decision
+    op: edit
+    with:
+      target: rec
+      body: "SCENARIO — the rationale, as it stands before the ruling."
+
+  # The body is what a decision is for, so it is read back off the store rather than assumed from
+  # the edit having exited zero.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: body
+      equals: "SCENARIO — the rationale, as it stands before the ruling."
+
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: rec
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: status
+      equals: accepted
+
+  # An accepted decision nothing has replaced is the current one — the flag a reader goes by when
+  # asking whether this is still what holds.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: current
+      equals: true

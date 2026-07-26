@@ -19,7 +19,8 @@ mod menu;
 mod migrate;
 mod perf;
 /// The long-lived mount of the plugin observation dispatcher: the drive the write seam runs after each
-/// mutating command, over the store's own cursor (`AMB-D-380`).
+/// mutating command, over the store's own cursor (`AMB-D-380`), and the one this app makes as it comes up
+/// for what a previous run left half delivered (`AMB-D-399`).
 mod plugin_dispatch;
 /// OS-specific file watching — the half that wakes `commands::watch_store`. It does not depend on
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three

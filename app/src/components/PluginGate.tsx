@@ -27,15 +27,21 @@ export function PluginGate({ install, projects, projectId, onProject, lead }: {
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What the last disable threw away, until the switch is moved again. Zero is not a state worth a line:
+  // an empty queue is the ordinary case, and saying so every time would train the eye past the one time
+  // it matters — the same silence the CLI keeps.
+  const [dropped, setDropped] = useState(0);
   // Open only while the consent question is on screen. Not a stored answer: what is remembered lives on
   // the device (`consented`), and this is just the asking.
   const [asking, setAsking] = useState(false);
 
-  const run = async (op: () => Promise<unknown>) => {
+  const move = async (next: boolean) => {
     setBusy(true);
     setError(null);
+    setDropped(0);
     try {
-      await op();
+      const moved = await setPluginEnabled(install.name, projectId, next);
+      setDropped(moved.droppedQueued);
     } catch (e) {
       setError(errText(e));
     } finally {
@@ -49,7 +55,6 @@ export function PluginGate({ install, projects, projectId, onProject, lead }: {
   // A project-scoped gate with no project named has no answer to move — the picker is the way out, so the
   // buttons wait for it rather than acting on some default project nobody chose.
   const unanswered = perProject && projectId == null;
-  const move = (next: boolean) => run(() => setPluginEnabled(install.name, projectId, next));
 
   return (
     <div className="pluggate">
@@ -92,6 +97,11 @@ export function PluginGate({ install, projects, projectId, onProject, lead }: {
         </div>
       )}
       {unanswered && <div className="pluggate__note faint">{t("plugins.pickProjectNote")}</div>}
+      {/* The one thing a disable does that cannot be undone: those events are not delivered late, and
+          re-enabling starts from now (`AMB-D-399`). The CLI has always said it; this is the same line. */}
+      {dropped > 0 && (
+        <div className="pluggate__note">{tf("plugins.droppedQueued", { count: dropped })}</div>
+      )}
       {asking && (
         <div className="pluggate__consent">
           <div>{tf("plugins.consentAsk", { name: install.name })}</div>

@@ -4771,17 +4771,18 @@ pub async fn plugin_install(
 /// ([`amenbo_core::plugin_config::satisfied_keys`], `AMB-D-356`).
 ///
 /// **Calling this to enable is the consent** (`AMB-D-351`) — the face asks first, once per device, and
-/// core records the answer. Returns where the gate ended up.
+/// core records the answer. Returns where the gate ended up, and what closing it threw away.
 #[tauri::command]
 pub fn plugin_set_enabled(
     name: String,
     project_id: Option<i64>,
     enabled: bool,
-) -> Result<bool, CmdError> {
+) -> Result<PluginGateMovedDto, CmdError> {
     use amenbo_core::plugin_trust::{disable, effective_enabled_in, enable, gate_for, Gate};
     with_store_mut(|store| {
         let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
         let gate = gate_for(installed.manifest.scope, project_id)?;
+        let mut dropped_queued = 0;
         if enabled {
             amenbo_core::plugin_compat::check(&installed.manifest)
                 .map_err(|incompatible| CmdError::from(incompatible.into_error(&name)))?;
@@ -4794,10 +4795,28 @@ pub fn plugin_set_enabled(
                 amenbo_core::plugin_config::satisfied_keys(store, &name, &fields, tier)?;
             enable(store, &name, gate, &fields, |f| satisfied.iter().any(|k| k == &f.key))?;
         } else {
-            disable(store, &name, gate)?;
+            dropped_queued = disable(store, &name, gate)?.queued;
         }
-        Ok(effective_enabled_in(store, &name, gate)?)
+        Ok(PluginGateMovedDto { enabled: effective_enabled_in(store, &name, gate)?, dropped_queued })
     })
+}
+
+/// Where a gate ended up, and what closing it threw away (`AMB-D-399`) — what [`plugin_set_enabled`]
+/// answers with.
+///
+/// The count is here because the discard is real and invisible: disabling a plugin drops whatever was
+/// waiting on its queue, and those events are not caught up on when it comes back. The CLI has said so
+/// since the drop existed; without this the switch on screen threw the same work away without a word.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginGateMovedDto {
+    /// Whether the plugin fires at that gate now.
+    enabled: bool,
+    /// How many queued events the disable dropped. Zero on an enable, and on a disable that found an
+    /// empty queue — the ordinary case, which a face is meant to pass over in silence.
+    #[ts(type = "number")]
+    dropped_queued: usize,
 }
 
 /// Write one plugin setting — the GUI form's half of `plugin config set`, through the one write
@@ -5274,7 +5293,7 @@ mod tests {
         assert_eq!(rows.len(), 2, "both plants read as installed");
         assert!(rows.iter().all(|r| r.enabled == Some(false) && !r.consented));
 
-        assert!(plugin_set_enabled("device-wide".into(), Some(project_id), true).unwrap());
+        assert!(plugin_set_enabled("device-wide".into(), Some(project_id), true).unwrap().enabled);
         let row = |name: &str, project: Option<i64>| {
             plugin_installs(project).unwrap().into_iter().find(|r| r.name == name).unwrap()
         };
@@ -5283,7 +5302,9 @@ mod tests {
         assert!(on.consented, "enabling is what records the consent");
 
         // Disabling closes the gate and keeps the consent (`disable ≠ uninstall`).
-        assert!(!plugin_set_enabled("device-wide".into(), Some(project_id), false).unwrap());
+        let off_gate = plugin_set_enabled("device-wide".into(), Some(project_id), false).unwrap();
+        assert!(!off_gate.enabled);
+        assert_eq!(off_gate.dropped_queued, 0, "nothing was queued, so nothing was thrown away");
         let off = row("device-wide", Some(project_id));
         assert_eq!(off.enabled, Some(false));
         assert!(off.consented, "the device's answer survives a disable");
@@ -5294,11 +5315,50 @@ mod tests {
             plugin_set_enabled("per-project".into(), None, true).is_err(),
             "there is no device-wide answer for a project-scoped gate to fall back on"
         );
-        assert!(plugin_set_enabled("per-project".into(), Some(project_id), true).unwrap());
+        assert!(plugin_set_enabled("per-project".into(), Some(project_id), true).unwrap().enabled);
         assert_eq!(row("per-project", Some(project_id)).enabled, Some(true));
         assert_eq!(row("per-project", None).enabled, None, "unanswered, not off");
         // The device-wide plugin ignores the project entirely, whichever way it is asked.
         assert_eq!(row("device-wide", None).enabled, Some(false));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Turning a plugin off hands back what that threw away (`AMB-D-399`), so the switch on screen can
+    /// say it. The events are gone for good — a disabled plugin is not caught up on afterwards — and
+    /// the number is the only trace of them there will ever be.
+    #[test]
+    fn disabling_reports_the_queued_events_it_dropped() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("plugin-gate-dropped");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        plant_plugin(&tmp, "device-wide", "machine");
+        assert!(plugin_set_enabled("device-wide".into(), None, true).unwrap().enabled);
+
+        {
+            let store = Store::open().unwrap();
+            let tx = store.read_model().write().unwrap();
+            for record_id in 1..=2 {
+                tx.queue_event(&amenbo_core::store_engine::QueuedEvent {
+                    plugin: "device-wide",
+                    face: "gui",
+                    event: "task.created",
+                    record_id,
+                    actor: "human",
+                    at: "2026-07-26T09:00:00Z",
+                    new_state: None,
+                    project: None,
+                    record: None,
+                    parent: None,
+                })
+                .unwrap();
+            }
+            tx.commit().unwrap();
+        }
+
+        let off = plugin_set_enabled("device-wide".into(), None, false).unwrap();
+        assert!(!off.enabled);
+        assert_eq!(off.dropped_queued, 2, "both waiting events went, and the count came back");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

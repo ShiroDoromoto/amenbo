@@ -19,6 +19,8 @@ const hoisted = vi.hoisted(() => ({
   loading: false,
   error: undefined as unknown,
   gated: [] as { name: string; projectId: number | null; enabled: boolean }[],
+  /** What a disable answers it threw away — zero unless a test is about the discard. */
+  droppedQueued: 0,
   projects: [] as { id: number; name: string }[],
   removed: [] as string[],
   /** Every setting written, in order — the tier included, since that is what the switch chooses. */
@@ -42,7 +44,7 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
     }),
     setPluginEnabled: (name: string, projectId: number | null, enabled: boolean) => {
       hoisted.gated.push({ name, projectId, enabled });
-      return Promise.resolve(enabled);
+      return Promise.resolve({ enabled, droppedQueued: hoisted.droppedQueued });
     },
     uninstallPlugin: (name: string) => {
       hoisted.removed.push(name);
@@ -145,6 +147,7 @@ beforeEach(() => {
   hoisted.loading = false;
   hoisted.error = undefined;
   hoisted.gated = [];
+  hoisted.droppedQueued = 0;
   hoisted.projects = [];
   hoisted.removed = [];
   hoisted.wrote = [];
@@ -221,6 +224,22 @@ describe("moving a gate from the list", () => {
     render();
     await act(async () => { button(t("plugins.disable"))!.click(); });
     expect(hoisted.gated).toEqual([{ name: "notify", projectId: null, enabled: false }]);
+  });
+
+  // The discard a disable makes is real and there is no other trace of it: those events are not
+  // delivered late, and re-enabling starts from now (`AMB-D-399`). An empty queue says nothing at all —
+  // a line every time would train the eye past the one time it matters, which is the CLI's line too.
+  it("says how many waiting events a disable threw away, and stays quiet when none did", async () => {
+    hoisted.installs = [row({ name: "notify", consented: true, enabled: true })];
+    hoisted.droppedQueued = 3;
+    render();
+    await act(async () => { button(t("plugins.disable"))!.click(); });
+    expect(container.textContent).toContain(tf("plugins.droppedQueued", { count: 3 }));
+
+    hoisted.droppedQueued = 0;
+    render();
+    await act(async () => { button(t("plugins.disable"))!.click(); });
+    expect(container.textContent).not.toContain(tf("plugins.droppedQueued", { count: 0 }));
   });
 
   // A project-scoped gate has no device-wide answer to fall back on, so this screen names the project too.

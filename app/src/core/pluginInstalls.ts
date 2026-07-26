@@ -15,6 +15,7 @@ import { inTauri } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
 import type {
   PluginConfigFieldDto,
+  PluginGateMovedDto,
   PluginInstallDto,
   PluginRemovedDto,
 } from "../bindings/bindings";
@@ -25,6 +26,8 @@ export type PluginInstall = PluginInstallDto;
 export type PluginConfigField = PluginConfigFieldDto;
 /** What an uninstall found and removed (generated DTO). */
 export type PluginRemoved = PluginRemovedDto;
+/** Where a moved gate ended up, and what closing it dropped (generated DTO). */
+export type PluginGateMoved = PluginGateMovedDto;
 
 const NONE: PluginInstall[] = [];
 
@@ -74,20 +77,24 @@ export async function installPlugin(
 }
 
 /**
- * Move one plugin's gate (Tauri: `plugin_set_enabled`), and answer where it ended up. Enabling is
- * fail-closed in core on compatibility and on the author's `required` settings, so a refusal here is a
- * message to show, not a state to guess at.
+ * Move one plugin's gate (Tauri: `plugin_set_enabled`), and answer where it ended up **and what closing
+ * it threw away**. Enabling is fail-closed in core on compatibility and on the author's `required`
+ * settings, so a refusal here is a message to show, not a state to guess at.
  *
  * Calling it to enable **is** the consent (`AMB-D-351`): ask before calling, and only the first time —
  * `consented` on the row is what says whether this device has already answered.
+ *
+ * `droppedQueued` is the discard a disable makes (`AMB-D-399`): whatever was waiting on that plugin's
+ * queue is gone, and it is not caught up on when the plugin comes back. The caller is expected to say so
+ * — the count is the only trace those events leave.
  */
 export async function setPluginEnabled(
   name: string,
   projectId: number | null,
   enabled: boolean,
-): Promise<boolean> {
-  if (!inTauri()) return false;
-  const now = await invoke<boolean>("plugin_set_enabled", { name, projectId, enabled });
+): Promise<PluginGateMoved> {
+  if (!inTauri()) return { enabled: false, droppedQueued: 0 };
+  const now = await invoke<PluginGateMoved>("plugin_set_enabled", { name, projectId, enabled });
   reloadInstalls();
   return now;
 }

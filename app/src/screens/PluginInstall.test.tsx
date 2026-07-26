@@ -16,6 +16,8 @@ const hoisted = vi.hoisted(() => ({
   installs: [] as PluginInstall[],
   installed: [] as string[],
   gated: [] as { name: string; projectId: number | null; enabled: boolean }[],
+  /** What a disable answers it threw away — zero unless a test is about the discard. */
+  droppedQueued: 0,
   enableFails: null as string | null,
   projects: [] as { id: number; name: string }[],
 }));
@@ -43,7 +45,7 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
     setPluginEnabled: (name: string, projectId: number | null, enabled: boolean) => {
       if (hoisted.enableFails) return Promise.reject(hoisted.enableFails);
       hoisted.gated.push({ name, projectId, enabled });
-      return Promise.resolve(enabled);
+      return Promise.resolve({ enabled, droppedQueued: hoisted.droppedQueued });
     },
   };
 });

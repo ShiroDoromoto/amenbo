@@ -412,6 +412,8 @@ mod tests {
             at: "2026-07-25T09:00:00Z",
             new_state: None,
             project: None,
+            record: None,
+            parent: None,
         })
         .unwrap();
         tx.commit().unwrap();

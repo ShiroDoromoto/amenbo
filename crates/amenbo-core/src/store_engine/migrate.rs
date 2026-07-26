@@ -212,6 +212,31 @@ pub const STEPS: &[Step] = &[
         // window is a queue's depth, not a store's age.
         apply: Apply::Custom(add_queue_project),
     },
+    Step {
+        to: 13,
+        name: "add plugin_outbox.record and plugin_queue.record, so a deletion carries the record that is gone",
+        // `AMB-D-407`: a live record is read back by name (`AMB-D-406`), so only what cannot be read is
+        // carried — and that is the deleted record's own shape, captured at the append and copied onto
+        // every queue it is fanned out to. Both tables in one step because they are one path: a column on
+        // the outbox alone would be dropped at the fan-out, and one on the queue alone would have nothing
+        // to copy.
+        //
+        // **Unseeded, like v11's and v12's.** The rows an old store carries describe records that are
+        // already gone, and their shape is exactly what was never written down; `NULL` is what they are,
+        // and a subscriber reads it as an event from a build that did not carry one.
+        apply: Apply::Custom(add_gone_record),
+    },
+    Step {
+        to: 14,
+        name: "add plugin_outbox.parent and plugin_queue.parent, so a child's deletion names what it hung on",
+        // `AMB-D-407`, the other half of what a deletion cannot be asked for afterwards: `record_id` names
+        // the row the event is about, so a subscriber that hears only "comment 5 is gone" cannot say which
+        // task it was on. Both tables again, for the reason v13 gives — the two are one path.
+        //
+        // **Unseeded.** The rows an old store carries describe records already gone, and what they hung on
+        // is exactly what was never written down.
+        apply: Apply::Custom(add_parent),
+    },
 ];
 
 /// v4: the lint-hook question stopped being one per project and became one for the device
@@ -347,6 +372,47 @@ fn add_queue_project(ctx: &Ctx<'_>) -> Result<()> {
     if held == 0 {
         // Frozen text, like every step's: a nullable integer, whatever the registry names the kind later.
         ctx.tx.execute_batch("ALTER TABLE plugin_queue ADD COLUMN project BIGINT;")?;
+    }
+    Ok(())
+}
+
+/// v13: carry the vanished record's shape on the two tables a deletion travels through (`AMB-D-407`).
+///
+/// Probed rather than bare, for the reason [`add_outbox_project`] gives: both tables arrived after the
+/// baseline, so the oldest stores are handed them whole by genesis — `record` included — and a bare
+/// `ALTER TABLE … ADD COLUMN` would fail on exactly those with `duplicate column name`.
+fn add_gone_record(ctx: &Ctx<'_>) -> Result<()> {
+    for table in ["plugin_outbox", "plugin_queue"] {
+        let held: i64 = ctx.tx.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = 'record'",
+            [table],
+            |r| r.get(0),
+        )?;
+        if held == 0 {
+            // Frozen text, like every step's: a nullable text column, whatever the registry names the
+            // kind later.
+            ctx.tx.execute(&format!("ALTER TABLE {table} ADD COLUMN record TEXT"), [])?;
+        }
+    }
+    Ok(())
+}
+
+/// v14: name the record a vanished child hung on, on the two tables a deletion travels through
+/// (`AMB-D-407`).
+///
+/// Probed rather than bare, for the reason [`add_outbox_project`] gives.
+fn add_parent(ctx: &Ctx<'_>) -> Result<()> {
+    for table in ["plugin_outbox", "plugin_queue"] {
+        let held: i64 = ctx.tx.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = 'parent'",
+            [table],
+            |r| r.get(0),
+        )?;
+        if held == 0 {
+            // Frozen text, like every step's: a nullable integer, whatever the registry names the kind
+            // later.
+            ctx.tx.execute(&format!("ALTER TABLE {table} ADD COLUMN parent BIGINT"), [])?;
+        }
     }
     Ok(())
 }

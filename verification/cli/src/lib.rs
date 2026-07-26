@@ -354,6 +354,26 @@ impl Driver {
                 self.run_json(&["decision", "link", &target.to_string(), &task.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("linked decision {target} to task {task}")))
             }
+            (Domain::Decision, "supersede") => {
+                let target = self.resolve(with)?;
+                let old = self.resolve_key(with, "replaces")?;
+                // The command accepts the new decision on the way, so a scenario that supersedes
+                // does not accept it first — it would be refused as already settled.
+                self.run_json(&["decision", "supersede", &target.to_string(), "--replaces", &old.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("decision {target} replaces decision {old}")))
+            }
+            (Domain::Decision, "builds-on") => {
+                let target = self.resolve(with)?;
+                let base = self.resolve_key(with, "on")?;
+                self.run_json(&["decision", "builds-on", &target.to_string(), "--on", &base.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("decision {target} stands on decision {base}")))
+            }
+            (Domain::Decision, "unlink") => {
+                let target = self.resolve(with)?;
+                let other = self.resolve_key(with, "from")?;
+                self.run_json(&["decision", "unlink", &target.to_string(), "--from", &other.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("decision {target} no longer points at decision {other}")))
+            }
             _ => Err(unmapped(domain, op)),
         }
     }
@@ -497,6 +517,53 @@ impl Driver {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["decision", "show", &target.to_string(), "--json"])?;
                 judge_field("decision", target, with, &v)
+            }
+            (Domain::Decision, "listed") => {
+                let target = self.resolve(with)?;
+                let filter = req_str(with, "filter")?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let v = self.run_json(&["decision", "list", "--filter", filter, "--json"])?;
+                let found = v["decisions"]
+                    .as_array()
+                    .map(|rows| rows.iter().any(|d| d["id"].as_i64() == Some(target)))
+                    .unwrap_or(false);
+                let pass = found == present;
+                let word = if present { "present in" } else { "absent from" };
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "decision {target} {} `{filter}` (expected {word}, {})",
+                        if found { "is present in" } else { "is absent from" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            (Domain::Decision, "edge") => {
+                let target = self.resolve(with)?;
+                let other = self.resolve_key(with, "other")?;
+                let kind = req_str(with, "kind")?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let v = self.run_json(&["decision", "show", &target.to_string(), "--json"])?;
+                // A named side that the output does not carry is a mismatch rather than an error,
+                // for the reason a `field` path that runs off it is: the scenario is asserting about
+                // the shape of the shipped output as much as about what it holds.
+                let Some(rows) = v[kind].as_array() else {
+                    return Ok(Outcome::assert(
+                        false,
+                        format!("decision {target} has no `{kind}` side in its show output (MISMATCH)"),
+                    ));
+                };
+                let found = rows.iter().any(|d| d["id"].as_i64() == Some(other));
+                let pass = found == present;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "decision {target} {} decision {other} under `{kind}` (expected {}, {})",
+                        if found { "points at" } else { "does not point at" },
+                        if present { "an edge" } else { "none" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
             }
             _ => Err(unmapped(domain, op)),
         }

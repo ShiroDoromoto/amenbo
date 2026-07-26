@@ -315,6 +315,8 @@ pub fn fan_out(
                             at: &row.at,
                             new_state: row.new_state.as_deref(),
                             project: row.project,
+                            record: row.record.as_deref(),
+                            parent: row.parent,
                         })?;
                         queued += 1;
                     }
@@ -511,6 +513,8 @@ mod tests {
             at: "2026-07-22T09:00:00Z",
             new_state: new,
             project: None,
+            record: None,
+            parent: None,
         })
             .unwrap();
         tx.commit().unwrap();
@@ -854,6 +858,8 @@ mod tests {
             at: "2026-07-22T09:00:00Z",
             new_state: None,
             project: Some(project),
+            record: None,
+            parent: None,
         })
         .unwrap();
         tx.commit().unwrap();

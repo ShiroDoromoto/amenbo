@@ -156,8 +156,10 @@ fn emit_task_created(
 
 /// `task.deleted`: a task was hard-deleted (`AMB-D-367`). The name is the whole state (no `new`) and
 /// `id` is the task's own — the row is gone after the delete, but the outbox is a separate table, so the
-/// event outlives it. Only the task itself is observed; the cascade children the delete takes with it are
-/// not v1 events. The caller passes the deletion's clock as `at`, shared with the ledger line.
+/// event outlives it. What the task takes down with it — its comments, its edges — is not a v1 event, so
+/// only the task is observed; a **project** delete, which takes down tasks, calls this once per task it
+/// carried off (`Store::project_delete`). The caller passes the deletion's clock as `at`, shared with the
+/// ledger line.
 fn emit_task_deleted(
     tx: &WriteTx<'_>,
     id: i64,
@@ -517,22 +519,41 @@ impl Store {
     /// for being too young). The ledger gets one line per project ([`Self::log_deletion`]), and the
     /// tasks and decisions taken down with it are recorded **as counts only** — a line each would
     /// have a single delete bury thousands of lines in the ledger and wash every other story away.
+    ///
+    /// **The plugin outbox is the opposite**: it gets one `task.deleted` per task the cascade carried
+    /// off. A deletion is the one event a plugin cannot recover by re-reading (there is no row left to
+    /// read), so a task that vanished inside a project delete has to be as observable as one deleted on
+    /// its own — leaving it silent is a generation gap, which `AMB-D-367` does not allow. The count of
+    /// events is bounded by what was deleted and they are appended in the deleting transaction; running
+    /// them costs one runner per plugin however many there are (`AMB-D-399`).
     pub fn project_delete(&mut self, id: i64, actor: crate::model::ActorKind) -> Result<()> {
         let (orphaned, entry) = self.write_one(&[WriteTarget::Project(id)], |tx| {
             use crate::store_engine::read;
             let name = read::project_name(tx.conn(), id)?;
-            let tasks = read::task_ids_in_project(tx.conn(), id)?.len();
+            // Read the cascade set **before** the delete: afterwards there is no row left to name, and
+            // the tasks are what the plugin events are built from — not just what the ledger counts.
+            let tasks = read::task_ids_in_project(tx.conn(), id)?;
             let decisions = read::decision_ids_in_project(tx.conn(), id)?.len();
             let activity_id = mint_activity_id(tx)?;
             let orphaned = crate::ops::project::delete(tx, id)?;
+            // One clock for the whole deletion — every cascaded event and the ledger line share it.
+            let now = crate::time::Timestamp::now();
+            let at = now.to_rfc3339_z();
+            for task_id in &tasks {
+                emit_task_deleted(tx, *task_id, actor, &at)?;
+            }
             let entry = crate::activity_log::Entry {
                 id: activity_id,
-                at: crate::time::Timestamp::now(),
+                at: now,
                 actor: Some(actor),
                 project: Some(id),
                 task: None,
                 decision: None,
-                event: crate::activity_log::event::project_deleted(name.as_deref(), tasks, decisions),
+                event: crate::activity_log::event::project_deleted(
+                    name.as_deref(),
+                    tasks.len(),
+                    decisions,
+                ),
             };
             Ok((orphaned, entry))
         })?;

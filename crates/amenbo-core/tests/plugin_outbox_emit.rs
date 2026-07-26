@@ -99,6 +99,37 @@ fn deleting_a_task_fires_deleted() {
     assert_eq!(ev.new_state, None);
 }
 
+/// Deleting a project fires one `task.deleted` per task the cascade carried off — a task that vanished
+/// inside a project delete is as observable as one deleted on its own (there is no row left to re-read,
+/// so a silent cascade would lose it for good). Only the tasks are observed: the decisions and the
+/// comments that go with them are not v1 events. Another project's task is untouched and unobserved.
+#[test]
+fn deleting_a_project_fires_deleted_for_every_task_it_carried_off() {
+    let mut store = temp_store();
+    let doomed = store.project_add(new_project("消えるPJ")).unwrap().id;
+    let other = store.project_add(new_project("残るPJ")).unwrap().id;
+    let t1 = store.add_task(new_task("属タスク1", doomed)).unwrap().id;
+    let t2 = store.add_task(new_task("属タスク2", doomed)).unwrap().id;
+    let survivor = store.add_task(new_task("別PJのタスク", other)).unwrap().id;
+    // A comment and a decision ride along in the cascade; neither is a v1 event.
+    store.add_task_comment(t1, ActorKind::Ai, "コメント").unwrap();
+    store.add_decision(new_decision("案", doomed)).unwrap();
+
+    let h = head(&store);
+    store.project_delete(doomed, ActorKind::Human).unwrap();
+    let rows = since(&store, h);
+    assert!(
+        rows.iter().all(|r| r.event == "task.deleted" && r.actor == "human" && r.new_state.is_none()),
+        "every event the cascade emits is a `task.deleted` stamped with who deleted the project: {rows:?}",
+    );
+    let mut deleted: Vec<i64> = rows.iter().map(|r| r.record_id).collect();
+    deleted.sort_unstable();
+    let mut expected = vec![t1, t2];
+    expected.sort_unstable();
+    assert_eq!(deleted, expected, "one event per member task, and nothing else");
+    assert!(!deleted.contains(&survivor), "another project's task is not observed");
+}
+
 /// Adding a task comment fires `comment.added`: `id` is the comment's own (not the task's), actor its
 /// author, no `new`.
 #[test]

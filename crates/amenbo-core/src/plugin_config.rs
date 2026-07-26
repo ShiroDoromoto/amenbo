@@ -176,46 +176,65 @@ pub fn satisfied_keys(
     Ok(satisfied)
 }
 
-/// The `required` settings a **candidate** build would leave unset, judged where the plugin is enabled
-/// right now (`AMB-D-359`) — the resolution behind an update's `approve` gate, so a face only has to word
-/// the refusal it already knows how to word.
+/// The `required` settings a **candidate** build would leave unset, judged at **every** gate the plugin is
+/// enabled at right now (`AMB-D-359`) — the resolution behind an update's `approve` gate, so a face only has
+/// to word the refusal it already knows how to word.
 ///
 /// [`plugin_update`](crate::plugin_update) owns the timing (after "is it a different build", before the
 /// network) and deliberately leaves the values and the enabled state to its caller; this is that caller's
 /// half, shared so the CLI's `plugin update` and the GUI's cannot drift on *which* build is held back — only
 /// on how they say so. Empty means nothing is in the way.
 ///
+/// **Where the caller happens to be standing is not part of the judgement.** A project-scoped plugin has one
+/// gate per project (`AMB-D-379`), and an update replaces the build for all of them at once, so asking only
+/// about the project on screen would let a schema through that leaves some *other* project's enabled plugin
+/// without a value its author marked `required` — and the GUI can be asked from screens that are in no
+/// project at all. A field counts as held only when every enabled gate holds it; the keys come back in the
+/// author's declared order, once each, whichever gates want them.
+///
 /// It answers empty, letting the update through, in every case where there is nothing to break: a build this
 /// amenbo cannot run anyway (the write path refuses it with its own wording), a plugin that is not installed,
-/// a project-scoped plugin with no project in context, and — the common case — a disabled plugin, which fires
-/// nothing and whose own enable gate will catch an empty `required` when it is next turned on.
+/// and — the common case — a plugin enabled nowhere, which fires nothing and whose own enable gate will catch
+/// an empty `required` when it is next turned on.
 pub fn required_unset_for_update(
     store: &Store,
-    project: Option<i64>,
     available: &crate::plugin_manifest::Manifest,
 ) -> Result<Vec<String>> {
     let name = available.name.as_str();
     if crate::plugin_compat::check(available).is_err() {
         return Ok(Vec::new());
     }
-    // Where the plugin is enabled now is keyed by the *installed* scope; the new schema is what we re-judge
+    // Which gates the plugin has is keyed by the *installed* scope; the new schema is what we re-judge
     // against.
     let Ok(installed) = crate::plugin_installed::read(&store.paths, name) else {
         return Ok(Vec::new());
     };
-    let Ok(gate) = crate::plugin_trust::gate_for(installed.manifest.scope, project) else {
-        return Ok(Vec::new());
+    let gates: Vec<crate::plugin_trust::Gate> = match installed.manifest.scope {
+        crate::plugin_manifest::Scope::Machine => vec![crate::plugin_trust::Gate::Machine],
+        crate::plugin_manifest::Scope::Project => store
+            .projects_with_plugin_enabled(name)?
+            .into_iter()
+            .map(crate::plugin_trust::Gate::Project)
+            .collect(),
     };
-    if !crate::plugin_trust::effective_enabled_in(store, name, gate)? {
+    // One satisfied set per gate that actually fires: a project's overrides sit on top of the machine
+    // defaults, so two projects can hold different halves of the same schema.
+    let mut per_gate = Vec::new();
+    for gate in gates {
+        if !crate::plugin_trust::effective_enabled_in(store, name, gate)? {
+            continue;
+        }
+        let tier = match gate {
+            crate::plugin_trust::Gate::Machine => Scope::MachineDefault,
+            crate::plugin_trust::Gate::Project(id) => Scope::Project(id),
+        };
+        per_gate.push(satisfied_keys(store, name, &available.config, tier)?);
+    }
+    if per_gate.is_empty() {
         return Ok(Vec::new());
     }
-    let tier = match gate {
-        crate::plugin_trust::Gate::Machine => Scope::MachineDefault,
-        crate::plugin_trust::Gate::Project(id) => Scope::Project(id),
-    };
-    let satisfied = satisfied_keys(store, name, &available.config, tier)?;
     Ok(crate::plugin_trust::missing_required(&available.config, |f| {
-        satisfied.iter().any(|k| k == &f.key)
+        per_gate.iter().all(|satisfied| satisfied.iter().any(|k| k == &f.key))
     })
     .into_iter()
     .map(str::to_string)
@@ -227,6 +246,7 @@ mod tests {
     use super::*;
     use crate::config::Paths;
     use crate::plugin_manifest::ConfigField;
+    use crate::plugin_manifest::Scope::{Machine, Project as ProjectScope};
 
     fn text_field(key: &str) -> ConfigField {
         ConfigField { key: key.to_string(), label: key.to_string(), secret: false, required: false }
@@ -316,8 +336,14 @@ mod tests {
         );
     }
 
-    /// A machine-scoped install on disk, with the manifest an update would be judged against.
-    fn install_machine_plugin(paths: &Paths, name: &str, config: Vec<ConfigField>) -> crate::plugin_manifest::Manifest {
+    /// An install on disk at the scope its author declared, with the manifest an update would be judged
+    /// against.
+    fn install_plugin(
+        paths: &Paths,
+        name: &str,
+        config: Vec<ConfigField>,
+        scope: crate::plugin_manifest::Scope,
+    ) -> crate::plugin_manifest::Manifest {
         let manifest = crate::plugin_manifest::Manifest {
             name: name.to_string(),
             desc: "a test plugin".to_string(),
@@ -330,7 +356,7 @@ mod tests {
             signature: None,
             assets: Default::default(),
             official: false,
-            scope: crate::plugin_manifest::Scope::Machine,
+            scope,
             payload_v: 1,
             min_amenbo: None,
             config,
@@ -356,7 +382,7 @@ mod tests {
     #[test]
     fn a_new_required_setting_with_no_value_holds_an_enabled_plugin_back() {
         let (mut store, _dir) = store_at("update-required");
-        install_machine_plugin(&store.paths.clone(), "slack", Vec::new());
+        install_plugin(&store.paths.clone(), "slack", Vec::new(), Machine);
         crate::plugin_trust::enable(
             &mut store,
             "slack",
@@ -365,21 +391,22 @@ mod tests {
             |_| true,
         )
         .unwrap();
-        let available = install_machine_plugin(
+        let available = install_plugin(
             &store.paths.clone(),
             "slack",
             vec![required_field("webhook_url")],
+            Machine,
         );
 
         assert_eq!(
-            required_unset_for_update(&store, None, &available).unwrap(),
+            required_unset_for_update(&store, &available).unwrap(),
             vec!["webhook_url".to_string()],
         );
 
         // Set it, and the same build goes through: presence is all this judges (`AMB-D-356`).
         set(&mut store, &required_field("webhook_url"), "slack", "https://hooks/x", Scope::MachineDefault)
             .unwrap();
-        assert!(required_unset_for_update(&store, None, &available).unwrap().is_empty());
+        assert!(required_unset_for_update(&store, &available).unwrap().is_empty());
     }
 
     /// A **disabled** plugin fires nothing, so there is nothing to keep working: its own enable gate is
@@ -388,9 +415,9 @@ mod tests {
     fn a_disabled_plugin_is_never_held_back() {
         let (store, _dir) = store_at("update-disabled");
         let available =
-            install_machine_plugin(&store.paths.clone(), "slack", vec![required_field("webhook_url")]);
+            install_plugin(&store.paths.clone(), "slack", vec![required_field("webhook_url")], Machine);
 
-        assert!(required_unset_for_update(&store, None, &available).unwrap().is_empty());
+        assert!(required_unset_for_update(&store, &available).unwrap().is_empty());
     }
 
     /// Nothing installed under that name is not this gate's business — `plugin update` refuses it upstream,
@@ -401,9 +428,72 @@ mod tests {
         let elsewhere = amenbo_scratch::scratch("plugin-config-update-absent-src");
         std::fs::create_dir_all(&elsewhere).unwrap();
         let available =
-            install_machine_plugin(&Paths::at(elsewhere), "slack", vec![required_field("webhook_url")]);
+            install_plugin(&Paths::at(elsewhere), "slack", vec![required_field("webhook_url")], Machine);
 
-        assert!(required_unset_for_update(&store, None, &available).unwrap().is_empty());
+        assert!(required_unset_for_update(&store, &available).unwrap().is_empty());
+    }
+
+    /// The whole point of judging every gate (`AMB-D-379`): a project-scoped plugin is enabled in two
+    /// projects, only one of which set the new `required` field as an override. The update is held back —
+    /// nobody had to be standing in the project that is short of a value for it to count.
+    #[test]
+    fn a_project_that_is_short_of_a_value_holds_the_build_back_from_anywhere() {
+        let (mut store, _dir) = store_at("update-across-projects");
+        let mut project = |name: &str| {
+            store
+                .project_add(crate::ops::project::NewProject {
+                    name: name.into(),
+                    view: crate::model::View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        let (set_up, short) = (project("set-up"), project("short"));
+
+        install_plugin(&store.paths.clone(), "slack", Vec::new(), ProjectScope);
+        for id in [set_up, short] {
+            crate::plugin_trust::enable(
+                &mut store,
+                "slack",
+                crate::plugin_trust::Gate::Project(id),
+                &[],
+                |_| true,
+            )
+            .unwrap();
+        }
+        let available = install_plugin(
+            &store.paths.clone(),
+            "slack",
+            vec![required_field("webhook_url")],
+            ProjectScope,
+        );
+        set(
+            &mut store,
+            &required_field("webhook_url"),
+            "slack",
+            "https://hooks/x",
+            Scope::Project(set_up),
+        )
+        .unwrap();
+
+        assert_eq!(
+            required_unset_for_update(&store, &available).unwrap(),
+            vec!["webhook_url".to_string()],
+            "the project still short of the value is judged too",
+        );
+
+        // The last gate that wanted it is satisfied, so the same build goes through.
+        set(
+            &mut store,
+            &required_field("webhook_url"),
+            "slack",
+            "https://hooks/y",
+            Scope::Project(short),
+        )
+        .unwrap();
+        assert!(required_unset_for_update(&store, &available).unwrap().is_empty());
     }
 
     #[test]

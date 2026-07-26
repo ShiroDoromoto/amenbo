@@ -29,13 +29,11 @@ import { subscribeOutsideStore } from "../core/snapshot";
  * The ✕ dismisses the **builds** currently offered, persisted (`core/pluginUpdates`): the same offer stays
  * quiet across launches, and a plugin whose catalog entry moves again comes back on its own.
  */
-export function PluginUpdateBanner({ projectId, onOpenInstalled }: {
-  /** Which project the "needs a decision" judgement is made in (`AMB-D-379`); `null` when in none. */
-  projectId: number | null;
+export function PluginUpdateBanner({ onOpenInstalled }: {
   /** Take the user to the installed screen — offered only when something has to be resolved there. */
   onOpenInstalled: () => void;
 }) {
-  const { updates } = usePluginUpdates(projectId);
+  const { updates } = usePluginUpdates();
   // Held outside the component: an explicit "check for updates" clears the dismissal, and this has to obey it.
   const dismissed = useSyncExternalStore(subscribeDismissedPluginUpdates, getDismissedPluginUpdates);
   const [busy, setBusy] = useState(false);
@@ -74,11 +72,11 @@ export function PluginUpdateBanner({ projectId, onOpenInstalled }: {
   };
 
   const onApplyOne = (name: string) =>
-    run(async () => ({ applied: (await applyPluginUpdate(name, projectId)) ? 1 : 0, failed: [] }));
+    run(async () => ({ applied: (await applyPluginUpdate(name)) ? 1 : 0, failed: [] }));
 
   const onApplyAll = () =>
     run(async () => {
-      const outcomes = await applyAllPluginUpdates(projectId);
+      const outcomes = await applyAllPluginUpdates();
       return {
         applied: outcomes.filter((o) => o.applied).length,
         failed: outcomes.filter((o) => !o.applied).map((o) => `${o.name}: ${o.error ?? ""}`),

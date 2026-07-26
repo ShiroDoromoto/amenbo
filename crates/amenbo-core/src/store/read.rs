@@ -304,6 +304,24 @@ impl Store {
         )?)
     }
 
+    /// Every project holding a plugin's gate open (`AMB-D-379`), whether or not the caller is standing in
+    /// one of them — the twin of [`Self::plugin_enabled_in_project`] for the judgements that are about the
+    /// plugin rather than about a screen, such as the `required` re-check an update runs
+    /// ([`crate::plugin_config::required_unset_for_update`]).
+    ///
+    /// The device's consent is not read here; a caller that needs the effective answer asks
+    /// [`crate::plugin_trust::effective_enabled_in`] per project, as that resolution is machine-local.
+    pub fn projects_with_plugin_enabled(&self, plugin: &str) -> Result<Vec<i64>> {
+        let conn = self.engine.conn();
+        let mut projects = Vec::new();
+        for id in crate::store_engine::read::plugin_enable_row_ids(conn, plugin)? {
+            if let Some(row) = crate::store_engine::read::plugin_enable_row_by_id(conn, id)? {
+                projects.push(row.project_id);
+            }
+        }
+        Ok(projects)
+    }
+
     /// A single task comment; `None` if there is none (a row exists ⇒ it is live). The id is a comment id, which
     /// is not a conversational ref, so this is itself a reach entry point — it is the path
     /// `decision promote <comment id>` takes to read the body.

@@ -4710,11 +4710,12 @@ pub struct PluginUpdateOutcomeDto {
 /// a focus return, on opening the plugin screens and on an explicit "check now" without a resident timer.
 /// Nothing installed costs no read at all.
 ///
-/// `project_id` is which project the `settings` judgment is made in: a project-scoped plugin's gate is one
-/// project's (`AMB-D-379`), so asking without one holds nothing back for it — the same answer the CLI gives
-/// outside a bound folder. Off the main thread, because past the boundary this fetches.
+/// The `settings` judgment takes no project: a project-scoped plugin has a gate per project (`AMB-D-379`)
+/// and an update replaces the build for all of them, so every gate it is enabled at is judged. That is what
+/// lets the banner be answered the same way from the screens that are in no project at all. Off the main
+/// thread, because past the boundary this fetches.
 #[tauri::command]
-pub async fn plugin_updates(project_id: Option<i64>) -> Result<Vec<PluginUpdateDto>, CmdError> {
+pub async fn plugin_updates() -> Result<Vec<PluginUpdateDto>, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<PluginUpdateDto>, CmdError> {
         let paths = amenbo_core::config::Paths::resolve()?;
         let updates = amenbo_core::plugin_update::available(&paths)?;
@@ -4732,11 +4733,8 @@ pub async fn plugin_updates(project_id: Option<i64>) -> Result<Vec<PluginUpdateD
                 let (hold, missing) = if amenbo_core::plugin_compat::check(&u.available).is_err() {
                     (Some("incompatible".to_string()), Vec::new())
                 } else {
-                    let missing = amenbo_core::plugin_config::required_unset_for_update(
-                        &store,
-                        project_id,
-                        &u.available,
-                    )?;
+                    let missing =
+                        amenbo_core::plugin_config::required_unset_for_update(&store, &u.available)?;
                     ((!missing.is_empty()).then(|| "settings".to_string()), missing)
                 };
                 Ok(PluginUpdateDto {
@@ -4762,17 +4760,18 @@ pub async fn plugin_updates(project_id: Option<i64>) -> Result<Vec<PluginUpdateD
 /// catalog key and its checksum, the previous build is retained as a `.bak`, and the gate, settings and
 /// secrets are carried over untouched. The one gate this side adds is the config re-check
 /// ([`amenbo_core::plugin_config::required_unset_for_update`], the same one the CLI runs) — a new schema
-/// that would leave an *enabled* plugin missing a `required` value keeps the working build and says so.
+/// that would leave a plugin missing a `required` value at any gate it is enabled at keeps the working build
+/// and says so.
 ///
 /// `false` means there was nothing to apply: the catalog publishes the build already installed. Off the
 /// main thread — it downloads.
 #[tauri::command]
-pub async fn plugin_update_apply(name: String, project_id: Option<i64>) -> Result<bool, CmdError> {
+pub async fn plugin_update_apply(name: String) -> Result<bool, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<bool, CmdError> {
         let paths = amenbo_core::config::Paths::resolve()?;
         let store = open_store_read()?;
         let applied = amenbo_core::plugin_update::apply(&paths, &name, |available| {
-            refuse_update_leaving_required_unset(&store, project_id, available)
+            refuse_update_leaving_required_unset(&store, available)
         })?;
         Ok(applied.is_some())
     })
@@ -4786,15 +4785,13 @@ pub async fn plugin_update_apply(name: String, project_id: Option<i64>) -> Resul
 /// is still attempted, so one asset that will not verify cannot hold back every other update. The refusals
 /// come back as rows rather than as an error, because the caller has to report both halves of a mixed run.
 #[tauri::command]
-pub async fn plugin_update_apply_all(
-    project_id: Option<i64>,
-) -> Result<Vec<PluginUpdateOutcomeDto>, CmdError> {
+pub async fn plugin_update_apply_all() -> Result<Vec<PluginUpdateOutcomeDto>, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<PluginUpdateOutcomeDto>, CmdError> {
         use amenbo_core::plugin_update::Outcome;
         let paths = amenbo_core::config::Paths::resolve()?;
         let store = open_store_read()?;
         let outcomes = amenbo_core::plugin_update::apply_all(&paths, |available| {
-            refuse_update_leaving_required_unset(&store, project_id, available)
+            refuse_update_leaving_required_unset(&store, available)
         })?;
         Ok(outcomes
             .into_iter()
@@ -4820,11 +4817,9 @@ pub async fn plugin_update_apply_all(
 /// plugin's settings and not a shell command.
 fn refuse_update_leaving_required_unset(
     store: &Store,
-    project_id: Option<i64>,
     available: &amenbo_core::plugin_manifest::Manifest,
 ) -> amenbo_core::error::Result<()> {
-    let missing =
-        amenbo_core::plugin_config::required_unset_for_update(store, project_id, available)?;
+    let missing = amenbo_core::plugin_config::required_unset_for_update(store, available)?;
     if missing.is_empty() {
         return Ok(());
     }

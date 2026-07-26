@@ -28,27 +28,29 @@ const NONE: PluginUpdate[] = [];
 const KEY = "amenbo.pluginUpdatesDismissed";
 
 /**
- * Ask core which installed plugins have a newer build waiting (Tauri: `plugin_updates`), judging the
- * "needs a decision first" gates in `projectId`'s context.
+ * Ask core which installed plugins have a newer build waiting (Tauri: `plugin_updates`), with the "needs a
+ * decision first" gates judged wherever the plugin is enabled — no project is passed, because an update
+ * replaces the build for every project at once (`AMB-D-379`), and this is asked from screens that are in no
+ * project.
  *
  * Outside Tauri — `npm run dev` in a browser — there is no plugins directory and no catalog cache, so the
  * mock says nothing is waiting rather than inventing an offer.
  */
-export async function fetchPluginUpdates(projectId: number | null): Promise<PluginUpdate[]> {
+export async function fetchPluginUpdates(): Promise<PluginUpdate[]> {
   if (!inTauri()) return NONE;
-  return invoke<PluginUpdate[]>("plugin_updates", { projectId });
+  return invoke<PluginUpdate[]>("plugin_updates", {});
 }
 
 /**
  * The updates waiting, for the banner. One live query for the whole app: the banner is mounted once, and
  * every trigger is an invalidation of this key rather than a second reader.
  */
-export function usePluginUpdates(
-  projectId: number | null,
-): { updates: PluginUpdate[]; loading: boolean; error: unknown } {
-  const { data, loading, error } = useQuery<PluginUpdate[]>(["plugin-updates", projectId], () =>
-    fetchPluginUpdates(projectId),
-  );
+export function usePluginUpdates(): {
+  updates: PluginUpdate[];
+  loading: boolean;
+  error: unknown;
+} {
+  const { data, loading, error } = useQuery<PluginUpdate[]>(["plugin-updates"], fetchPluginUpdates);
   return { updates: data ?? NONE, loading, error };
 }
 
@@ -69,9 +71,9 @@ function reloadAfterApply(): void {
  *
  * `false` means there was nothing to apply: the catalog publishes the build already installed.
  */
-export async function applyPluginUpdate(name: string, projectId: number | null): Promise<boolean> {
+export async function applyPluginUpdate(name: string): Promise<boolean> {
   if (!inTauri()) return false;
-  const applied = await invoke<boolean>("plugin_update_apply", { name, projectId });
+  const applied = await invoke<boolean>("plugin_update_apply", { name });
   reloadAfterApply();
   return applied;
 }
@@ -80,11 +82,9 @@ export async function applyPluginUpdate(name: string, projectId: number | null):
  * Apply every waiting update (Tauri: `plugin_update_apply_all`). Best-effort across plugins: one that fails
  * is left exactly as it was and comes back as a row saying why, so a mixed run reports both halves.
  */
-export async function applyAllPluginUpdates(
-  projectId: number | null,
-): Promise<PluginUpdateOutcome[]> {
+export async function applyAllPluginUpdates(): Promise<PluginUpdateOutcome[]> {
   if (!inTauri()) return [];
-  const outcomes = await invoke<PluginUpdateOutcome[]>("plugin_update_apply_all", { projectId });
+  const outcomes = await invoke<PluginUpdateOutcome[]>("plugin_update_apply_all", {});
   reloadAfterApply();
   return outcomes;
 }

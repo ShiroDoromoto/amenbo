@@ -37,7 +37,7 @@ export function PluginInstalledScreen() {
   // Opening this screen is one of the update triggers (`AMB-D-359`) — core answers from the catalog's
   // freshness window, so arriving here inside the hour costs nothing. The offer itself is the shell's banner;
   // what this screen reads it for is the "nothing is waiting" the banner has no reason to say.
-  const { updates, loading: checking } = usePluginUpdates(gateProject);
+  const { updates, loading: checking } = usePluginUpdates();
   const [checked, setChecked] = useState(false);
   useEffect(() => { refreshPluginUpdates(); }, []);
   // What the last uninstall took, kept here because the row that did it is gone by the time it is drawn.

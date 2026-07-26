@@ -465,8 +465,11 @@ pub enum PluginCmd {
     /// OS's checksum (`AMB-D-351`) — and retains the build it replaced beside the new one, so there is
     /// something to go back to. It **keeps** the plugin's gate, its settings and its secrets: an update is
     /// not a re-install, and wiping those is `uninstall`'s job (`AMB-D-357`). Any step that refuses —
-    /// a build this amenbo cannot speak to, an asset that will not verify — leaves the working plugin
-    /// exactly as it was.
+    /// a build this amenbo cannot speak to, an asset that will not verify, a new schema whose `required`
+    /// settings have no value where the plugin is enabled — leaves the working plugin exactly as it was.
+    /// That last check is asked of **every** gate the plugin is enabled at, not of the folder you happen to
+    /// be in (`AMB-D-379`): one update replaces the build for all of them, so a project short of a value
+    /// holds it back from anywhere. `plugin config set` is the way past it.
     ///
     /// `--check` is cheap on purpose: with nothing installed no catalog is read at all, and otherwise a
     /// cached catalog younger than an hour answers with no request. Applying always asks for the current

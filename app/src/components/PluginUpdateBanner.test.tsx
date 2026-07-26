@@ -74,7 +74,7 @@ afterEach(() => {
 const render = () =>
   act(() =>
     root.render(
-      createElement(PluginUpdateBanner, { projectId: null, onOpenInstalled: () => { opened++; } }),
+      createElement(PluginUpdateBanner, { onOpenInstalled: () => { opened++; } }),
     ),
   );
 

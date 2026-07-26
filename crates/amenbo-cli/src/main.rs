@@ -1494,11 +1494,14 @@ fn plugin_value_tier(gate: amenbo_core::plugin_trust::Gate) -> amenbo_core::plug
 
 /// The config re-check an update runs before it replaces a build (`AMB-D-359`), handed to
 /// [`amenbo_core::plugin_update::apply`] / `apply_all` as their `approve` gate. It re-judges the **new**
-/// manifest's `required` settings the same way `plugin enable` does (`AMB-D-351`/`AMB-D-356`): if the
-/// plugin is enabled at the gate this command can see, and the new schema declares a `required` field this
-/// machine holds no value for, the update is held back and the working build stays — the reason names the
-/// fields to set first. Aligned with the apply side's fail-before-write posture: the safe reading is to
-/// refuse the replacement, not to leave an enabled plugin missing a value its own author marked required.
+/// manifest's `required` settings the same way `plugin enable` does (`AMB-D-351`/`AMB-D-356`): if the new
+/// schema declares a `required` field that no value answers at a gate the plugin is enabled at, the update
+/// is held back and the working build stays — the reason names the fields to set first. Aligned with the
+/// apply side's fail-before-write posture: the safe reading is to refuse the replacement, not to leave an
+/// enabled plugin missing a value its own author marked required.
+///
+/// The folder this ran in is not part of that: an update replaces the build for every project at once, so
+/// the gates judged are all of them (`AMB-D-379`), bound folder or not.
 ///
 /// Which build is held back is [`amenbo_core::plugin_config::required_unset_for_update`]'s call, shared
 /// with the GUI's gate; what a terminal is told about it is this command's — hence the `amenbo plugin
@@ -1508,11 +1511,7 @@ fn refuse_update_leaving_required_unset(
     available: &amenbo_core::plugin_manifest::Manifest,
 ) -> amenbo_core::error::Result<()> {
     let name = available.name.as_str();
-    let missing = amenbo_core::plugin_config::required_unset_for_update(
-        store,
-        bound_project(store),
-        available,
-    )?;
+    let missing = amenbo_core::plugin_config::required_unset_for_update(store, available)?;
     if missing.is_empty() {
         return Ok(());
     }

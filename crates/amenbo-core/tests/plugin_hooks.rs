@@ -1,9 +1,9 @@
-//! The observation-hook runner, driven against real child processes. These pin the fire-and-forget
-//! promises: a clean hook runs to completion, several hooks run independently of one another, and [`fire`]
-//! returns to the caller before a slow hook is anywhere near done — the write path is never held up.
+//! The observation-hook runner, driven against real child processes: what a hook's run leaves behind, and
+//! what is written down about it. A queued hook is run to its end and recorded whatever became of it
+//! (`AMB-D-399`), and a `reply:true` hook's stderr comes back to the caller under a bound (`AMB-D-383`).
 //!
 //! The kill-on-timeout mechanism itself is pinned on the substrate (`plugin_exec`'s bounded wait); here we
-//! only need to know the runner reaches it. The scripts make these `#[cfg(unix)]`.
+//! only need to know the reply path reaches it. The scripts make these `#[cfg(unix)]`.
 
 #![cfg(unix)]
 
@@ -12,12 +12,13 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use amenbo_core::plugin_exec::PluginInvocation;
-use amenbo_core::plugin_hooks::{fire_with_timeout, run_reply, Hook};
+use amenbo_core::plugin_hooks::{run_queued, run_reply, Hook};
 
-/// A per-hook bound generous enough that even a fork-storm-saturated machine (the whole `make test`
-/// gate running in parallel) reaps a trivial hook well inside it — so these tests never invert on the
-/// kill-on-timeout path they are not testing. The real [`HOOK_TIMEOUT`](amenbo_core::plugin_hooks::HOOK_TIMEOUT)
-/// policy default is exercised where it matters (the kill itself lives in `plugin_exec`'s bounded wait).
+/// A reply bound generous enough that even a fork-storm-saturated machine (the whole `make test` gate
+/// running in parallel) reaps a trivial hook well inside it — so the tests that are not about the overrun
+/// never invert on it. The real
+/// [`REPLY_TIMEOUT`](amenbo_core::plugin_hooks::REPLY_TIMEOUT) is exercised where it matters (the kill
+/// itself lives in `plugin_exec`'s bounded wait).
 const GENEROUS: Duration = Duration::from_secs(60);
 
 /// Write `body` as an executable script and return its path.
@@ -41,56 +42,27 @@ fn hook_for(plugin: &str, program: &PathBuf) -> Hook {
     Hook::new(plugin, "task.created", PluginInvocation::new(program))
 }
 
-/// A hook that exits cleanly runs to completion — its side effect (a marker file) is there once the
-/// launched thread joins.
+/// A queued hook is run to its end on the runner's own thread — its side effect (a marker file) is there
+/// by the time the call returns, with nothing to join and nothing to wait out.
 #[test]
-fn a_clean_hook_runs_to_completion() {
+fn a_queued_hook_runs_to_completion() {
     let done = marker("clean.marker");
     let hook = script("clean.sh", &format!("#!/bin/sh\ntouch '{}'\n", done.display()));
 
-    for handle in fire_with_timeout(vec![hook_for("clean", &hook)], GENEROUS, None) {
-        handle.join().unwrap();
-    }
-    assert!(done.exists(), "the clean hook's side effect landed");
+    run_queued(&hook_for("clean", &hook), None);
+    assert!(done.exists(), "the hook's side effect landed");
 }
 
-/// Every plugin passed for one event is launched, each on its own thread — one firing drives them all,
-/// and both markers are there once the threads join.
+/// A slow plugin is waited out rather than killed (`AMB-D-399`): nothing is behind a runner but the rest of
+/// its own plugin's queue, and a plugin cut off mid-work is the half-done outside effect the queue exists
+/// to prevent. The sleep is longer than the reply path's bound, which is the one this path does not have.
 #[test]
-fn fire_launches_every_plugin_independently() {
-    let a = marker("indep-a.marker");
-    let b = marker("indep-b.marker");
-    let hook_a = script("indep-a.sh", &format!("#!/bin/sh\ntouch '{}'\n", a.display()));
-    let hook_b = script("indep-b.sh", &format!("#!/bin/sh\ntouch '{}'\n", b.display()));
+fn a_slow_queued_hook_is_waited_out_not_killed() {
+    let done = marker("slow-queued.marker");
+    let hook = script("slow-queued.sh", &format!("#!/bin/sh\nsleep 3\ntouch '{}'\n", done.display()));
 
-    for handle in fire_with_timeout(vec![hook_for("a", &hook_a), hook_for("b", &hook_b)], GENEROUS, None) {
-        handle.join().unwrap();
-    }
-    assert!(a.exists() && b.exists(), "both hooks ran");
-}
-
-/// `fire` is fire-and-forget: it hands back the moment the threads are launched, long before a hook that
-/// takes seconds is done. The write path calling it is never blocked on plugin work. We still join the
-/// handle afterwards, so the child is reaped cleanly (it finishes well inside the generous bound).
-///
-/// The return-promptness bound (1s) and the hook's delay (3s) are spread apart on purpose: under gate-load
-/// saturation `fire`'s thread launch can be slow and the `sleep` still holds, so the ordering the test
-/// pins — fire returns *before* the hook finishes — survives without the bound and the delay ever crossing.
-#[test]
-fn fire_returns_before_a_hook_finishes() {
-    let done = marker("slow.marker");
-    let hook = script("slow.sh", &format!("#!/bin/sh\nsleep 3\ntouch '{}'\n", done.display()));
-
-    let start = Instant::now();
-    let handles = fire_with_timeout(vec![hook_for("slow", &hook)], GENEROUS, None);
-    let launched = start.elapsed();
-    assert!(launched < Duration::from_secs(1), "fire returned promptly, not after the hook: {launched:?}");
-    assert!(!done.exists(), "the slow hook has not finished yet when fire returns");
-
-    for handle in handles {
-        handle.join().unwrap();
-    }
-    assert!(done.exists(), "the hook did finish once we waited it out");
+    run_queued(&hook_for("slow", &hook), None);
+    assert!(done.exists(), "the plugin finished its work instead of being cut off");
 }
 
 /// The runner records what it ran (`AMB-D-361`): a clean hook and a failing one both land in the
@@ -105,11 +77,8 @@ fn every_run_lands_in_the_execution_log_with_its_diagnosis() {
 
     let good = script("logged-ok.sh", "#!/bin/sh\nexit 0\n");
     let bad = script("logged-bad.sh", "#!/bin/sh\necho 'no such channel' >&2\nexit 3\n");
-    let hooks = vec![hook_for("good", &good), hook_for("bad", &bad)];
-
-    for handle in fire_with_timeout(hooks, GENEROUS, Some(&log)) {
-        handle.join().unwrap();
-    }
+    run_queued(&hook_for("good", &good), Some(&log));
+    run_queued(&hook_for("bad", &bad), Some(&log));
 
     let lines = plugin_log::read(&log);
     assert_eq!(lines.len(), 2, "both runs are recorded, the clean one included");
@@ -136,9 +105,7 @@ fn a_hook_that_cannot_launch_is_recorded_as_such() {
     let _ = std::fs::remove_file(&log);
 
     let missing = PathBuf::from("/nonexistent/amenbo-hook-that-is-not-there");
-    for handle in fire_with_timeout(vec![hook_for("ghost", &missing)], GENEROUS, Some(&log)) {
-        handle.join().unwrap();
-    }
+    run_queued(&hook_for("ghost", &missing), Some(&log));
 
     let lines = plugin_log::read(&log);
     assert_eq!(lines.len(), 1);
@@ -163,13 +130,7 @@ fn an_injected_secret_never_reaches_the_log() {
     let hook = script("secret.sh", "#!/bin/sh\necho 'ran' >&2\nexit 1\n");
     let invocation = PluginInvocation::new(&hook).env("AMENBO_CONFIG_TOKEN", "T0P-53CR3T");
 
-    for handle in fire_with_timeout(
-        vec![Hook::new("secretive", "task.created", invocation)],
-        GENEROUS,
-        Some(&log),
-    ) {
-        handle.join().unwrap();
-    }
+    run_queued(&Hook::new("secretive", "task.created", invocation), Some(&log));
 
     let raw = std::fs::read_to_string(&log).unwrap();
     assert!(raw.contains("ran"), "the run itself was recorded: {raw}");

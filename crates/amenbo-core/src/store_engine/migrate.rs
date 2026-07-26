@@ -451,6 +451,7 @@ fn stamp(tx: &Transaction<'_>, version: i64) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store_engine::schema_frozen::{frozen_or_panic, OLDEST_FROZEN_VERSION};
     use rusqlite::OptionalExtension;
 
     fn scratch(tag: &str) -> std::path::PathBuf {
@@ -458,48 +459,55 @@ mod tests {
         dir
     }
 
-    /// The columns a step adds, and the version whose step adds them — so a store made here can be put
-    /// back to the shape its version claims. Append a row when a step adds a column.
-    const COLUMNS_ADDED_BY_A_STEP: &[(i64, &str, &str)] = &[
-        (5, "decision", "status_changed_at"),
-        (6, "task", "status_changed_at"),
-        (7, "task_dependency", "established_at"),
-        (7, "decision_task_link", "linked_at"),
-        (8, "decision_edge", "drawn_at"),
-    ];
-
-    /// A store stamped at `version` — the shape an older build left behind, which is what the chain
-    /// exists to move.
+    /// A store laid down from `ddl` and stamped at `stamp`.
     ///
-    /// Stamping the version is not enough to *be* that store: every store here is created by this build,
-    /// so its `CREATE TABLE` already carries the columns later steps add, and an `ADD COLUMN` step run on
-    /// one would fail on a column that is already there. So the columns those steps add are dropped back
-    /// off, and the store really does have the shape its version claims.
-    fn store_at(dir: &Path, version: i64) -> StoreEngine {
-        let engine = StoreEngine::open(&dir.join("store.sqlite")).unwrap();
+    /// The DDL goes in **before the engine opens**, so genesis's `CREATE TABLE IF NOT EXISTS` leaves what
+    /// is there alone and creates only what is missing around it — which is exactly what open does to a
+    /// real store of that age, tables a later registry gained included. Building the store from this
+    /// build's registry and undoing the difference afterwards is the one thing this must not do: the
+    /// undo could only be driven by what the chain *declares* it added, and a column that reached the
+    /// registry with no step would then be invisible to the fixture as well (`AMB-D-375`).
+    fn store_declared_as(dir: &Path, ddl: &str, stamp: i64) -> StoreEngine {
+        let path = dir.join("store.sqlite");
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch(ddl).unwrap();
+        }
+        let engine = StoreEngine::open(&path).unwrap();
         engine
             .conn()
             .execute(
                 "INSERT INTO store_meta (key, value) VALUES (?1, ?2)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                rusqlite::params![META_FORMAT_VERSION, version.to_string()],
+                rusqlite::params![META_FORMAT_VERSION, stamp.to_string()],
             )
             .unwrap();
-        for (added_at, table, column) in COLUMNS_ADDED_BY_A_STEP {
-            if version < *added_at {
-                engine
-                    .conn()
-                    .execute_batch(&format!("ALTER TABLE {table} DROP COLUMN {column};"))
-                    .unwrap();
-            }
-        }
-        assert_eq!(engine.format_version().unwrap(), version);
+        assert_eq!(engine.format_version().unwrap(), stamp);
         engine
     }
 
+    /// A store born at `version` and stamped there — the shape an older build left behind, which is what
+    /// the chain exists to move, read from that version's frozen DDL.
+    fn store_at(dir: &Path, version: i64) -> StoreEngine {
+        store_declared_as(dir, frozen_or_panic(version), version)
+    }
+
+    /// A store **born** at `born` and carried by the chain to `stamp` — the other shape a version can
+    /// legitimately have. A column that reached the registry before it had a step gives one version two
+    /// real shapes: every new store of that window was born with the column, every older one arrives
+    /// without it. [`store_at`] is the first; this is the second.
+    fn store_born_at(dir: &Path, born: i64, stamp: i64) -> StoreEngine {
+        store_declared_as(dir, frozen_or_panic(born), stamp)
+    }
+
     /// A store at the baseline: the oldest one this build still opens, and so the one every step runs on.
+    ///
+    /// Its own shape is not in this repository's history — the history begins with the chain already at
+    /// [`OLDEST_FROZEN_VERSION`] — so the oldest frozen shape stands in, stamped at the baseline. What
+    /// that leaves untested is the shape across that one interval; what it carries faithfully is the
+    /// data every step from the baseline works on, which is what the tests below assert.
     fn baseline_store(dir: &Path) -> StoreEngine {
-        store_at(dir, BASELINE_VERSION)
+        store_born_at(dir, OLDEST_FROZEN_VERSION, BASELINE_VERSION)
     }
 
     /// A store as this build creates one — born at the latest shape, with no step to run.
@@ -626,9 +634,9 @@ mod tests {
             .execute_batch(
                 // Real projects, because the old `hook_consent` (and the new `hook_optout`) reference
                 // `project(id)` — the fold moves rows between two FK-guarded tables, so its inputs must
-                // point at live projects, exactly as production data does.
+                // point at live projects, exactly as production data does. The table itself comes with
+                // the v3 shape; a store that answered the question is one that had it.
                 "INSERT INTO project (id, name) VALUES (1, 'A'), (2, 'B'), (3, 'C');
-                 CREATE TABLE hook_consent (project_id INTEGER PRIMARY KEY, answer TEXT);
                  INSERT INTO hook_consent (project_id, answer) VALUES (1, 'yes'), (2, 'no'), (3, 'no');",
             )
             .unwrap();
@@ -661,48 +669,8 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// The `task` table as a store carried it before v9: the registry's declaration with the **narrow**
-    /// value set, in frozen text. It is laid down before the engine opens, so genesis's
-    /// `CREATE TABLE IF NOT EXISTS` leaves it alone and builds everything else around it — which is the
-    /// only way to get the shape an older build really left behind, now that this build's registry is
-    /// born wide.
-    const TASK_TABLE_AT_V8: &str = "CREATE TABLE task (
-        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-        title TEXT NOT NULL DEFAULT '',
-        notes TEXT NOT NULL DEFAULT '',
-        subtype TEXT NOT NULL DEFAULT '' CHECK(subtype IN ('', 'default', 'milestone')),
-        completed_at TEXT CHECK(completed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
-        status TEXT NOT NULL DEFAULT '' CHECK(status IN ('', 'todo', 'in_progress', 'done', 'blocked')),
-        status_changed_at TEXT CHECK(status_changed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
-        created_by_kind TEXT CHECK(created_by_kind IN ('human', 'ai')),
-        assignee_kind TEXT CHECK(assignee_kind IN ('human', 'ai')),
-        start_on TEXT CHECK(start_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
-        due_on TEXT CHECK(due_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
-        priority TEXT CHECK(priority IN ('high', 'medium', 'low')),
-        project_id BIGINT REFERENCES project(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
-        order_key TEXT,
-        created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
-        updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
-    );";
-
-    /// A store stamped at v8 whose `task` table is declared by `ddl` — the seam v9 has to work through.
-    fn store_with_task_declared_as(dir: &Path, ddl: &str) -> StoreEngine {
-        let path = dir.join("store.sqlite");
-        {
-            let conn = rusqlite::Connection::open(&path).unwrap();
-            conn.execute_batch(ddl).unwrap();
-        }
-        let engine = StoreEngine::open(&path).unwrap();
-        engine
-            .conn()
-            .execute(
-                "INSERT INTO store_meta (key, value) VALUES (?1, ?2)
-                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                rusqlite::params![META_FORMAT_VERSION, "8"],
-            )
-            .unwrap();
-        engine
-    }
+    /// The clause v9 rewrites, as every store from the baseline to v8 declares it.
+    const NARROW_STATUS_SET: &str = " CHECK(status IN ('', 'todo', 'in_progress', 'done', 'blocked'))";
 
     /// v9 in full, on the store shape v8 left behind: `task.status` admits four values, and the terminal
     /// for work decided against (`AMB-D-397`) is not one of them.
@@ -715,7 +683,7 @@ mod tests {
     #[test]
     fn the_task_status_set_widens_without_disturbing_the_table_or_its_children() {
         let dir = scratch("task-status-widen");
-        let engine = store_with_task_declared_as(&dir, TASK_TABLE_AT_V8);
+        let engine = store_at(&dir, 8);
         engine
             .conn()
             .execute_batch(
@@ -772,10 +740,12 @@ mod tests {
     #[test]
     fn a_task_table_the_step_does_not_recognise_stops_the_chain() {
         let dir = scratch("task-status-unknown");
-        let engine = store_with_task_declared_as(
+        let engine = store_declared_as(
             &dir,
-            // Same columns, no closed set on `status` — a shape this build never wrote.
-            &TASK_TABLE_AT_V8.replace(" CHECK(status IN ('', 'todo', 'in_progress', 'done', 'blocked'))", ""),
+            // v8's shape with the closed set struck off `status` — same columns, a declaration this
+            // build never wrote.
+            &frozen_or_panic(8).replace(NARROW_STATUS_SET, ""),
+            8,
         );
 
         let err = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap_err();
@@ -850,7 +820,9 @@ mod tests {
     #[test]
     fn the_task_status_clock_lands_on_a_store_that_never_had_it() {
         let dir = scratch("task-status-clock");
-        let engine = store_at(&dir, 5);
+        // Born before the registry declared the column (v3), carried by the chain to v5 — the older of
+        // the two shapes a v5 store has, and the one v6 exists for.
+        let engine = store_born_at(&dir, 3, 5);
         engine
             .conn()
             .execute_batch(
@@ -869,9 +841,10 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// The same step on the *other* shape of v5 store: one born with the column, from the window where the
-    /// registry declared it before any step carried it. Both are real stores at the same version, and the
-    /// step has to pass over this one rather than take the migration down with a duplicate column.
+    /// The same step on the *other* shape of v5 store: one born with the column — which is the shape v5's
+    /// frozen DDL carries, the registry having declared it two versions before any step did. Both are real
+    /// stores at the same version, and the step has to pass over this one rather than take the migration
+    /// down with a duplicate column.
     #[test]
     fn the_task_status_clock_step_passes_over_a_store_that_already_has_it() {
         let dir = scratch("task-status-clock-born-with");
@@ -879,8 +852,7 @@ mod tests {
         engine
             .conn()
             .execute_batch(
-                "ALTER TABLE task ADD COLUMN status_changed_at TEXT;
-                 INSERT INTO task (id, title, status, status_changed_at, created_at, updated_at)
+                "INSERT INTO task (id, title, status, status_changed_at, created_at, updated_at)
                  VALUES (1, 'reserved', 'in_progress', '2026-07-01T00:00:00Z', '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z');",
             )
             .unwrap();

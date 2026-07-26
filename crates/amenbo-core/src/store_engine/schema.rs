@@ -1016,6 +1016,10 @@ const RECORD_ID: &str = "INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL";
 /// rule stated there. Every record table is born [`RECORD_ID`]-keyed; a store whose rows
 /// are still ULID-keyed ([`is_legacy_keyed`]) is one `store::open` refuses rather than writing
 /// integer-keyed tables beside its ULID-keyed ones.
+///
+/// **What this owes.** Every version's output is frozen verbatim under
+/// `store_engine::schema_frozen` (`AMB-D-375`), so moving anything here comes with a step to carry
+/// existing stores and a new frozen file; the freeze check goes red until both are there.
 pub fn schema_sql() -> String {
     let mut sql = tables_ddl(DATASETS);
     sql.push_str(&plain_tables_ddl(PLAIN_TABLES));

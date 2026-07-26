@@ -19,6 +19,8 @@ pub mod read;
 pub mod record;
 pub mod runner;
 pub mod schema;
+#[cfg(test)]
+pub mod schema_frozen;
 pub mod sql;
 pub mod write;
 

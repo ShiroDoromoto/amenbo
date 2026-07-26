@@ -106,6 +106,65 @@ fn deleting_a_task_fires_deleted() {
     );
 }
 
+/// The deleted task travels with the event (`AMB-D-407`): a subscriber that only hears "task 42 is gone"
+/// has nothing left to read, so the row as it stood is carried on the event itself. Whole, not reduced to a
+/// display name — what a subscriber needs out of it is the subscriber's to choose.
+#[test]
+fn deleting_a_task_carries_the_task_that_is_gone() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let task = store.add_task(new_task("消えるタスク", project)).unwrap().id;
+
+    let h = head(&store);
+    store.delete_task(task, ActorKind::Human).unwrap();
+    let ev = only(&store, h);
+    let gone: serde_json::Value =
+        serde_json::from_str(ev.record.as_deref().expect("a deletion carries the record")).unwrap();
+    assert_eq!(gone["id"], task);
+    assert_eq!(gone["title"], "消えるタスク");
+    assert_eq!(gone["project_id"], project);
+    assert!(gone.get("status").is_some(), "the shape is the record's own, not a chosen subset");
+    assert!(
+        store.task(task).unwrap().is_none(),
+        "and it is carried precisely because there is nothing left to read it off",
+    );
+}
+
+/// A comment taken back carries the comment (`AMB-D-407`) — the same reason, on the other deletion: its
+/// text is gone from the store, so a mirror that has to unpublish it needs the body on the event.
+#[test]
+fn removing_a_comment_carries_the_comment_that_is_gone() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+    let comment = store.add_task_comment(task, ActorKind::Ai, "誤投稿").unwrap();
+
+    let h = head(&store);
+    assert!(store.remove_task_comment(comment.id, ActorKind::Human).unwrap());
+    let ev = only(&store, h);
+    let gone: serde_json::Value =
+        serde_json::from_str(ev.record.as_deref().expect("a removal carries the comment")).unwrap();
+    assert_eq!(gone["id"], comment.id);
+    assert_eq!(gone["task_id"], task, "which task it hung on is in the shape itself");
+    assert_eq!(gone["text"], "誤投稿");
+}
+
+/// An event whose record is still there carries none: a live record is read back by name (`AMB-D-406`), and
+/// a copy on the event would go stale between the append and the run.
+#[test]
+fn an_event_whose_record_survives_carries_no_shape() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+
+    let h = head(&store);
+    let task = store.add_task(new_task("残るタスク", project)).unwrap().id;
+    assert_eq!(only(&store, h).record, None, "a creation carries no shape");
+
+    let h = head(&store);
+    store.set_task_status(task, TaskStatus::InProgress, ActorKind::Ai).unwrap();
+    assert_eq!(only(&store, h).record, None, "nor does a status change");
+}
+
 /// Deleting a project fires one `task.deleted` per task the cascade carried off — a task that vanished
 /// inside a project delete is as observable as one deleted on its own (there is no row left to re-read,
 /// so a silent cascade would lose it for good). Only the tasks are observed: the decisions and the
@@ -132,6 +191,11 @@ fn deleting_a_project_fires_deleted_for_every_task_it_carried_off() {
     assert!(
         rows.iter().all(|r| r.project == Some(doomed)),
         "each carries the project it was carried off by, read before the cascade removed it: {rows:?}",
+    );
+    assert!(
+        rows.iter().all(|r| r.record.is_some()),
+        "and each carries the task it took down (`AMB-D-407`) — a cascade is where re-reading is most \
+         hopeless, since the project is gone too: {rows:?}",
     );
     let mut deleted: Vec<i64> = rows.iter().map(|r| r.record_id).collect();
     deleted.sort_unstable();

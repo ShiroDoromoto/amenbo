@@ -7,6 +7,7 @@
 //!
 //! ```json
 //! { "v": 1, "event": "task.status_changed", "id": 42, "actor": "ai", "at": "2026-07-22T09:00:00Z", "new": "in_progress" }
+//! { "v": 1, "event": "task.deleted", "id": 42, "actor": "ai", "at": "2026-07-22T09:01:00Z", "record": { "id": 42, "title": "…" } }
 //! ```
 //!
 //! - **Common four** (`event`, `id`, `actor`, `at`) — present on every event. `event` is the namespace
@@ -14,7 +15,11 @@
 //! - **New state** (`new`) — the record's state *after* the change, for the events an `update`
 //!   disambiguates (a status change, an assignment, a move). Absent on events whose name already is the
 //!   whole state (a creation, a deletion, a done, an accept/reject, a comment). No *before* value is
-//!   carried by design (see `AMB-D-348` in the decision log), so v1 loads the new state only.
+//!   carried for a record that still exists (`AMB-D-348`).
+//! - **The vanished record** (`record`) — the deleted record's own shape, on the events where there is
+//!   nothing left to read (`AMB-D-407`). A live record is read back by the plugin itself (`AMB-D-406`), so
+//!   only the unreadable half travels on the wire. This is `AMB-D-348`'s foreseen additive extension: a
+//!   *before* captured at the ops write point, for the events that need one.
 //! - **Version** `v` — a single integer for the whole contract, `1` today. Adding a field does **not**
 //!   bump it: a consumer ignores keys it does not know, so new fields are additive and silent. `v`
 //!   rises only on a breaking change to an existing field's meaning (see `AMB-D-349`).
@@ -90,7 +95,7 @@ pub const V1_EVENTS: [&str; 11] = [
 /// kin) — each fills `event` with the right name and `new` with the right state, so the eleven events are
 /// constructed by name and cannot be mismatched. Field order is the wire order: `v` leads, as `AMB-D-349`
 /// asks.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Payload {
     /// The contract version, always [`VERSION`]. First on the wire.
     pub v: u32,
@@ -105,13 +110,23 @@ pub struct Payload {
     /// The record's new state, for the events an `update` disambiguates; absent on the rest.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub new: Option<String>,
+    /// The **vanished record**, for the events whose record is gone (`AMB-D-407`): the row as it stood the
+    /// instant before it went, one record's worth, its children not folded in — each child fires its own
+    /// deletion. Absent on every other event, where the record is still there and a plugin reads it back
+    /// by name (`AMB-D-406`), and absent on a deletion an older store appended without one.
+    ///
+    /// Carried whole rather than reduced to a display name: what a subscriber needs out of a deleted
+    /// record is the subscriber's to decide, and the publisher choosing for it is the choice that cannot
+    /// be undone later.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<serde_json::Value>,
 }
 
 impl Payload {
     /// The shared shell — the common four plus `v`, with no new state. The named constructors below add
     /// `new` where the event carries one.
     fn base(event: &'static str, id: i64, actor: ActorKind, at: Timestamp) -> Self {
-        Self { v: VERSION, event, id, actor, at, new: None }
+        Self { v: VERSION, event, id, actor, at, new: None, record: None }
     }
 
     /// `task.created` — a task was created.
@@ -145,7 +160,9 @@ impl Payload {
         Self { new: Some(new.into()), ..Self::base(name::TASK_MOVED, id, actor, at) }
     }
 
-    /// `task.deleted` — a task was deleted.
+    /// `task.deleted` — a task was deleted. The vanished task rides on `record` when the emit point
+    /// captured one (`AMB-D-407`); this constructor builds the event without it, which is also the shape a
+    /// row appended before the capture existed rebuilds to.
     pub fn task_deleted(id: i64, actor: ActorKind, at: Timestamp) -> Self {
         Self::base(name::TASK_DELETED, id, actor, at)
     }
@@ -183,14 +200,28 @@ impl Payload {
     /// `actor` / `at` that does not parse — so the dispatcher can warn and skip rather than fire a payload
     /// it cannot faithfully build.
     pub fn from_outbox_row(row: &crate::store_engine::OutboxRow) -> Option<Self> {
-        Self::from_wire(&row.event, row.record_id, &row.actor, &row.at, row.new_state.as_deref())
+        Self::from_wire(
+            &row.event,
+            row.record_id,
+            &row.actor,
+            &row.at,
+            row.new_state.as_deref(),
+            row.record.as_deref(),
+        )
     }
 
     /// The same rebuild, from a row on a plugin's queue (`AMB-D-399`). A queued row is an outbox row the
     /// fan-out addressed to one plugin, so the wire fields — and what makes them unrecognisable — are the
     /// same; only the reader differs (the runner of one queue, rather than the drain of the outbox).
     pub fn from_queue_row(row: &crate::store_engine::QueueRow) -> Option<Self> {
-        Self::from_wire(&row.event, row.record_id, &row.actor, &row.at, row.new_state.as_deref())
+        Self::from_wire(
+            &row.event,
+            row.record_id,
+            &row.actor,
+            &row.at,
+            row.new_state.as_deref(),
+            row.record.as_deref(),
+        )
     }
 
     /// The mapping both stored forms share: opaque strings in, the typed payload out, `None` for anything
@@ -201,11 +232,23 @@ impl Payload {
         actor: &str,
         at: &str,
         new: Option<&str>,
+        record: Option<&str>,
     ) -> Option<Self> {
         let event = V1_EVENTS.iter().copied().find(|name| *name == event)?;
         let actor = ActorKind::parse(actor)?;
         let at = Timestamp::parse_rfc3339(at)?;
-        Some(Self { v: VERSION, event, id: record_id, actor, at, new: new.map(str::to_string) })
+        Some(Self {
+            v: VERSION,
+            event,
+            id: record_id,
+            actor,
+            at,
+            new: new.map(str::to_string),
+            // A shape that will not parse is dropped rather than passed on as text: the field is a JSON
+            // object on the wire, and half an answer in the shape of one is worse than the absence a
+            // subscriber already has to handle (an older store's deletion carries none).
+            record: record.and_then(|raw| serde_json::from_str(raw).ok()),
+        })
     }
 }
 
@@ -297,6 +340,7 @@ mod tests {
             at: "2026-07-22T09:00:00Z".to_string(),
             new_state: Some("in_progress".to_string()),
             project: Some(1),
+            record: None,
         };
         let rebuilt = Payload::from_outbox_row(&row).unwrap();
         assert_eq!(
@@ -312,6 +356,34 @@ mod tests {
         );
     }
 
+    /// A deletion's row rebuilds with the vanished record parsed back into the payload's own JSON
+    /// (`AMB-D-407`) — the wire carries an object, so the column's text becomes one.
+    #[test]
+    fn a_deletions_row_rebuilds_with_the_record_that_is_gone() {
+        use crate::store_engine::OutboxRow;
+        let row = OutboxRow {
+            id: 9,
+            event: "task.deleted".to_string(),
+            record_id: 42,
+            actor: "ai".to_string(),
+            at: "2026-07-22T09:00:00Z".to_string(),
+            new_state: None,
+            project: Some(1),
+            record: Some(r#"{"id":42,"title":"消えたタスク"}"#.to_string()),
+        };
+        let rebuilt = Payload::from_outbox_row(&row).unwrap();
+        assert_eq!(rebuilt.record.as_ref().unwrap()["title"], "消えたタスク");
+        assert!(
+            serde_json::to_string(&rebuilt).unwrap().contains(r#""record":{"#),
+            "and it goes out as an object, not as a string holding JSON",
+        );
+
+        // A shape that will not parse is dropped, not passed on as text: the absence is a case every
+        // subscriber already handles, and half an answer in the shape of an object is not.
+        let broken = OutboxRow { record: Some("{not json".to_string()), ..row };
+        assert_eq!(Payload::from_outbox_row(&broken).unwrap().record, None);
+    }
+
     #[test]
     fn from_outbox_row_rejects_a_row_it_cannot_faithfully_build() {
         use crate::store_engine::OutboxRow;
@@ -323,6 +395,7 @@ mod tests {
             at: "2026-07-22T09:00:00Z".to_string(),
             new_state: None,
             project: None,
+            record: None,
         };
         assert!(Payload::from_outbox_row(&ok).is_some());
         // An event outside the v1 catalog, an unparseable actor, and a bad timestamp each yield None.

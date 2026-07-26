@@ -56,8 +56,45 @@ fn emit(
         at,
         new_state,
         project: project_of(tx, event, record_id)?,
+        record: gone_record(tx, event, record_id)?.as_deref(),
     })?;
     Ok(())
+}
+
+/// The record the event is about, as JSON, for the events whose record is **gone** by the time anyone
+/// reads them (`AMB-D-407`) — read here for the same reason [`project_of`] is: this is the last instant
+/// the row exists, and the emit door is where no write point has to remember it.
+///
+/// `None` on every other event, and that is not a shortcoming: a record still there is read back by name,
+/// by the plugin itself (`AMB-D-406`), so carrying it would be a copy that goes stale between the append
+/// and the run. `None` again for a deletion whose row cannot be read or whose shape will not serialize —
+/// an event that fires without the shape is better than a delete that fails because of a notification.
+///
+/// The scope is **one record**. A task that takes its comments down with it does not fold them in here:
+/// each is its own deletion event, and folding would say the same thing twice in two shapes.
+fn gone_record(tx: &WriteTx<'_>, event: &str, record_id: i64) -> Result<Option<String>> {
+    use crate::plugin_payload::name as ev;
+    use crate::store_engine::read;
+    let conn = tx.conn();
+    let shape = match event {
+        ev::TASK_DELETED => read::task(conn, record_id)?.as_ref().and_then(to_json),
+        ev::COMMENT_REMOVED => read::task_comment(conn, record_id)?.as_ref().and_then(to_json),
+        _ => None,
+    };
+    Ok(shape)
+}
+
+/// One record as the JSON the payload carries, or `None` when it will not serialize. A shape that cannot
+/// be written is dropped rather than raised: this is a notification riding along with a deletion, and the
+/// deletion is the operation the caller asked for.
+fn to_json<T: serde::Serialize>(record: &T) -> Option<String> {
+    match serde_json::to_string(record) {
+        Ok(json) => Some(json),
+        Err(e) => {
+            tracing::warn!(error = %e, "a deleted record could not be carried on its event");
+            None
+        }
+    }
 }
 
 /// The project the event's record is in, read **inside the emitting transaction, before the operation

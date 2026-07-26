@@ -801,6 +801,14 @@ plain_tables! {
     /// event to its new home. `NULL` means "in no project, or from before this column existed". No foreign
     /// key: an event outlives the record it is about, and a project delete must leave its tasks'
     /// `task.deleted` events standing rather than cascade them away.
+    ///
+    /// `record` is the other thing the event cannot be asked for later: the **vanished record's own
+    /// shape**, as JSON, on the events whose record is gone by the time anyone reads them (`AMB-D-407`).
+    /// A live record is read back by name — a plugin calls amenbo (`AMB-D-406`) — so only what cannot be
+    /// read is carried, and it is written at the append for the same reason `project` is: this is the last
+    /// instant the row exists. The store does not interpret it, here or anywhere: what a subscriber needs
+    /// out of a deleted record is the subscriber's to decide. `NULL` on every other event, and on a
+    /// deletion from before this column existed.
     plugin_outbox {
         id: integer("PRIMARY KEY AUTOINCREMENT"),
         event: text,
@@ -809,6 +817,7 @@ plain_tables! {
         at: text,
         new_state: text_opt,
         project: bigint_opt,
+        record: text_opt,
     }
 
     /// One plugin's **work queue**: the events fanned out to it and not yet run (`AMB-D-399`). Delivery is
@@ -832,6 +841,10 @@ plain_tables! {
     /// point is what this decision removed — by the time a queue is drained the record may have moved, or
     /// be gone. `NULL` means "in no project, or unknown", and a project-scoped subscription fires nothing
     /// for it.
+    ///
+    /// `record` rides across the same way (`AMB-D-407`): the deleted record's shape was captured at the
+    /// append, and the runner builds the payload from this row alone. Copying it is what lets it: there is
+    /// nothing left to read it off.
     plugin_queue {
         id: integer("PRIMARY KEY AUTOINCREMENT"),
         plugin: text,
@@ -842,6 +855,7 @@ plain_tables! {
         at: text,
         new_state: text_opt,
         project: bigint_opt,
+        record: text_opt,
     }
 
     /// Who is **running** a plugin's queue right now — at most one row per plugin, and the whole of the

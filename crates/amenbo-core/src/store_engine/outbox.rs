@@ -71,6 +71,10 @@ pub struct EventRow<'a> {
     /// a project-scoped subscription on, resolved once by the caller at the emit door. `None` is a real
     /// answer: a record in no project has none.
     pub project: Option<i64>,
+    /// The vanished record's own shape as JSON, for an event whose record is gone by the time anyone
+    /// reads it (`AMB-D-407`) — captured by the caller at the emit door, the last instant it exists.
+    /// `None` on every other event: a record still there is read back by name, not carried.
+    pub record: Option<&'a str>,
 }
 
 /// Append one semantic event to the outbox. Runs on the caller's transaction (a `&Transaction` deref-es
@@ -85,6 +89,7 @@ pub(super) fn append(conn: &Connection, ev: &EventRow<'_>) -> Result<()> {
         .set(out.at, ev.at)
         .set_opt(out.new_state, ev.new_state)
         .set_opt(out.project, ev.project)
+        .set_opt(out.record, ev.record)
         .sql()
         .execute(conn)
         .map(|_| ())
@@ -109,6 +114,9 @@ pub struct OutboxRow {
     /// The project the record was in when the event fired, as it was stamped (`AMB-D-405`); `None` for a
     /// record in no project, and for a row an older store appended before the column existed.
     pub project: Option<i64>,
+    /// The vanished record's shape as JSON (`AMB-D-407`), as it was captured; `None` on an event whose
+    /// record is still there to read, and on a deletion from before the column existed.
+    pub record: Option<String>,
 }
 
 /// What a reader gets back when it asks the outbox for everything after its cursor.
@@ -147,7 +155,7 @@ pub fn events_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Outb
     let out = col::plugin_outbox::ALL;
     // One row past the page, so "is there more?" costs no second query.
     let mut sel = Select::new();
-    let (id, event, record_id, actor, at, new_state, project) = (
+    let (id, event, record_id, actor, at, new_state, project, record) = (
         sel.col(out.id),
         sel.col(out.event),
         sel.col(out.record_id),
@@ -155,6 +163,7 @@ pub fn events_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Outb
         sel.col(out.at),
         sel.col(out.new_state),
         sel.col(out.project),
+        sel.col(out.record),
     );
     let mut page = Sql::from(&sel, out.table);
     page.push_where(Some(&Pred::cmp(out.id, ">", after_id)))
@@ -171,6 +180,7 @@ pub fn events_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Outb
                 at: at.get(r)?,
                 new_state: new_state.get(r)?,
                 project: project.get(r)?,
+                record: record.get(r)?,
             })
         })
         .map_err(StoreEngineError::from)?
@@ -243,7 +253,7 @@ mod tests {
     }
 
     fn ev<'a>(event: &'a str, id: i64, new_state: Option<&'a str>) -> EventRow<'a> {
-        EventRow { event, record_id: id, actor: "ai", at: "2026-07-22T09:00:00Z", new_state, project: None }
+        EventRow { event, record_id: id, actor: "ai", at: "2026-07-22T09:00:00Z", new_state, project: None, record: None }
     }
 
     /// The same event with a project stamped on it — what the emit door composes for a record that lives

@@ -4069,6 +4069,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
         TaskCmd::Reopen { id } => return task_complete(store, flags, &id, false),
         TaskCmd::Status { id, status } => return task_set_status(store, flags, &id, &status),
         TaskCmd::Block { id, reason } => return task_block(store, flags, &id, body_arg_opt(reason)?),
+        TaskCmd::Reject { id, reason } => return task_reject(store, flags, &id, body_arg(reason)?),
         TaskCmd::Move { id, project, before, after, top, bottom } => {
             let tid = resolve_task(store, &id).map_err(CliError::from)?;
             let project_id = project.map(|p| store.resolve_project_ref(&p)).transpose().map_err(CliError::from)?;
@@ -5020,15 +5021,19 @@ fn os_open(target: &str) -> Result<(), CliError> {
 fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) -> Result<i32, CliError> {
     let tid = resolve_task(store, id).map_err(CliError::from)?;
     let before = store.task(tid).map_err(CliError::from)?;
-    let already = before.as_ref().is_some_and(|t| t.completed());
+    let old = before.map(|t| t.status).unwrap_or_default();
+    // "Already in the target state" reads differently in each direction, because the two terminals are not
+    // one (`AMB-D-397`): `done` has arrived only when the work was carried out, while `reopen` has arrived
+    // whenever the task has not ended at all. A task decided against *has* ended, so reopen is the way back
+    // from it — reading `completed` here would answer false and make the command silently do nothing.
+    let already_there = if completed { old == TaskStatus::Done } else { !old.is_closed() };
     let action = if completed { "task.done" } else { "task.reopen" };
-    if already == completed {
+    if already_there {
         // Idempotent: already in the target state. Report success, as a no-op.
         let detail = store.task_detail(tid).map_err(CliError::from)?;
         write_envelope(flags, action, "task", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("(no change) {}", task_label(tid)));
         return Ok(0);
     }
-    let old = before.map(|t| t.status).unwrap_or_default();
     // Safety net (`AMB-D-366`): completing a reserved task is the moment not to miss — read the premises pinned on
     // after the reservation *before* the transition retires the in_progress clock they are measured against.
     let pc = premise_change_when(store, tid, completed && old == TaskStatus::InProgress);
@@ -5053,7 +5058,7 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) ->
 fn task_set_status(store: &mut Store, flags: &Flags, id: &str, status: &str) -> Result<i32, CliError> {
     let new_status = TaskStatus::parse(status).ok_or_else(|| CliError {
         code: "invalid_value",
-        message: format!("status '{status}' is invalid (todo / in_progress / done / blocked)"),
+        message: format!("status '{status}' is invalid (todo / in_progress / done / blocked / rejected)"),
         hint: None,
         exit: 2,
     })?;
@@ -5113,6 +5118,50 @@ fn task_block(store: &mut Store, flags: &Flags, id: &str, reason: Option<String>
     let mut resource = serde_json::to_value(&detail).unwrap();
     attach_premise_change(&mut resource, &pc);
     write_envelope(flags, "task.block", "task", resource, Some(vec!["status".to_string()]), false, format!("✓ Set to blocked: {}", task_label(t.id)));
+    warn_premise_change(&pc);
+    Ok(0)
+}
+
+/// `task reject <id> --reason <why>`: end a task that will not be done (`AMB-D-397`). The sibling of
+/// `task done` — both are terminals, and the difference is only whether the work was carried out.
+///
+/// The reason is **required**, and it is why the command exists at all: `task status <id> rejected` can
+/// reach the same state, but nothing there asks for the reasoning, which is the part worth keeping when a
+/// task is closed unfinished. It lands as a comment rather than a column of its own — the same sugar as
+/// `task block --reason` and `decision reject --reason`, so free text keeps its one home on the timeline.
+fn task_reject(store: &mut Store, flags: &Flags, id: &str, reason: String) -> Result<i32, CliError> {
+    // An empty `--reason` passes clap (it is a value) but not the point of the flag: a rejection with no
+    // reasoning is the `done`-borrowing this command was added to end.
+    let reason = reason.trim().to_string();
+    if reason.is_empty() {
+        return Err(CliError {
+            code: "invalid_value",
+            message: "--reason is empty — say why the task will not be done".to_string(),
+            hint: Some("A rejection is kept for its reasoning; pass the text, or `-` to read it from stdin.".to_string()),
+            exit: 2,
+        });
+    }
+    let tid = resolve_task(store, id).map_err(CliError::from)?;
+    let old = store.task(tid).map_err(CliError::from)?.map(|t| t.status).unwrap_or_default();
+    if old == TaskStatus::Rejected {
+        // Idempotent: already decided against. Report success as a no-op, and do **not** pile the reason
+        // on — a re-reject changes nothing, so it has nothing new to explain (`decision reject` likewise).
+        let detail = store.task_detail(tid).map_err(CliError::from)?;
+        write_envelope(flags, "task.reject", "task", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("(no change) {}", task_label(tid)));
+        return Ok(0);
+    }
+    // Safety net (`AMB-D-366`): ending a reserved task is the moment not to miss — read the premises pinned
+    // on after the reservation before the transition retires the in_progress clock they are measured against.
+    let pc = premise_change_when(store, tid, old == TaskStatus::InProgress);
+    let t = store.set_task_status(tid, TaskStatus::Rejected, flags.actor).map_err(CliError::from)?;
+    emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), t.status.as_str()));
+    // A blocker decided against is a blocker no longer — dependents may have just become ready.
+    emit_unblocks(store, flags, tid);
+    store.add_task_comment(tid, flags.actor, &reason).map_err(CliError::from)?;
+    let detail = store.task_detail(t.id).map_err(CliError::from)?;
+    let mut resource = serde_json::to_value(&detail).unwrap();
+    attach_premise_change(&mut resource, &pc);
+    write_envelope(flags, "task.reject", "task", resource, Some(vec!["status".to_string()]), false, format!("✓ Rejected: {}", task_label(t.id)));
     warn_premise_change(&pc);
     Ok(0)
 }

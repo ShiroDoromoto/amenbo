@@ -1423,6 +1423,47 @@ fn status_transitions_and_completed_stays_in_sync() {
     assert_eq!(code, 2);
 }
 
+/// `task reject` is the write port for the terminal that is not an achievement (`AMB-D-397`): the reason
+/// is what the row is kept for, so it cannot be skipped, and it lands on the timeline rather than in a
+/// field of its own. Reopen is the way back — reading `completed` there would answer "not done" about a
+/// task that has very much ended, and silently do nothing.
+#[test]
+fn rejecting_a_task_demands_a_reason_and_keeps_it_on_the_timeline() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.a_project();
+    let tid = id_str(&cli.json(&["task", "add", "--title", "弱ハードの実測", "--project", &pid, "--json"])["task"]["id"]);
+
+    // No --reason at all: clap refuses the invocation (exit 2) — the flag is required, not optional.
+    let (_o, code) = cli.run(&["task", "reject", &tid]);
+    assert_eq!(code, 2, "a rejection with no reasoning is what this command exists to prevent");
+    // An empty one gets past clap but not past the command.
+    let (err, code) = cli.run_err(&["task", "reject", &tid, "--reason", "   ", "--json"]);
+    assert_eq!(code, 2, "an empty reason is refused too: {err}");
+    assert_eq!(cli.json(&["task", "show", &tid, "--json"])["status"], "todo", "a refused rejection moves nothing");
+
+    // With a reason: the task ends as rejected — closed, but not carried out.
+    let rj = cli.json(&["task", "reject", &tid, "--reason", "測っても分岐が痩せていて何も変わらない", "--json"]);
+    assert_eq!(rj["task"]["status"], "rejected");
+    assert_eq!(rj["task"]["completed"], false, "decided against is not carried out");
+    let comments = cli.json(&["comment", "list", &tid, "--json"]);
+    assert!(
+        comments["comments"].as_array().unwrap().iter().any(|c| c["text"] == "測っても分岐が痩せていて何も変わらない"),
+        "the reason is kept as a comment: {comments}"
+    );
+
+    // Re-rejecting is an idempotent no-op, and does not pile a second reason on.
+    let again = cli.json(&["task", "reject", &tid, "--reason", "二度目の理由", "--json"]);
+    assert_eq!(again["noop"], true);
+    let comments = cli.json(&["comment", "list", &tid, "--json"]);
+    assert_eq!(comments["comments"].as_array().unwrap().len(), 1, "a re-reject explains nothing new: {comments}");
+
+    // Reopen brings it back from the rejected terminal, the same as it does from done.
+    let re = cli.json(&["task", "reopen", &tid, "--json"]);
+    assert_eq!(re["noop"], false, "reopening a rejected task is a real change, not a no-op");
+    assert_eq!(re["task"]["status"], "todo");
+}
+
 /// The holder-side surface of `AMB-D-366`: after a task is reserved (`in_progress`), a premise pinned on
 /// afterwards silently drops its readiness. An ordinary `task show` (the early warning) and completing it
 /// (the safety net) both surface the added premise; a fresh reservation and a plain `todo` task show

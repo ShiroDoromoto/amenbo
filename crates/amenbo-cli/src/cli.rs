@@ -904,12 +904,12 @@ pub enum TaskCmd {
     /// Mark a task done
     Done { id: String },
     Reopen { id: String },
-    /// Explicitly change the progress state (todo / in_progress / done / blocked). Setting
+    /// Explicitly change the progress state (todo / in_progress / done / blocked / rejected). Setting
     /// in_progress reserves it — a compare-and-swap that only succeeds from todo, so a second
     /// session's reserve is rejected with already_reserved (the double-work guard); todo releases it
     Status {
         id: String,
-        /// new state: todo / in_progress / done / blocked
+        /// new state: todo / in_progress / done / blocked / rejected
         status: String,
     },
     /// Mark blocked (stuck)
@@ -918,6 +918,13 @@ pub enum TaskCmd {
         /// reason (recorded as a comment). Pass `-` to read it from stdin
         #[arg(long)]
         reason: Option<String>,
+    },
+    /// End a task that will not be done — the terminal for work decided against, next to `done`
+    Reject {
+        id: String,
+        /// why it will not be done (required, recorded as a comment). Pass `-` to read it from stdin
+        #[arg(long)]
+        reason: String,
     },
     Move {
         id: String,

@@ -193,6 +193,9 @@ const REGISTRY: &[OpSpec] = &[
     // (and the reserve), `done` / `reopen` / `block` are the three the CLI gives their own verb.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "status", required: &["target", "status"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "done", required: &["target"], refs: &["target"], binds: false },
+    // The other terminal. A reason is required by the command, so it is required here: what separates
+    // work decided against from work carried out is why, and it is recorded rather than remembered.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "reject", required: &["target", "reason"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "reopen", required: &["target"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "block", required: &["target", "reason"], refs: &["target"], binds: false },
     // Editing a task's own fields: `update` sets the ones it names, `clear` takes one back.

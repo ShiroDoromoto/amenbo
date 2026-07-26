@@ -142,3 +142,85 @@ steps:
       target: seed
       field: completed
       equals: false
+
+  # The other way a task ends. Something waiting on it is held back while it is open, which is what
+  # makes the terminal worth reading: a task decided against has to release its dependents exactly as
+  # a finished one does, or the work behind it stays stuck on a decision already taken.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — waiting on the one that was dropped
+    as: waiting
+
+  - type: action
+    domain: task
+    op: depend
+    with:
+      target: waiting
+      on: seed
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "ready:yes"
+      target: waiting
+      present: false
+
+  - type: action
+    domain: task
+    op: reject
+    with:
+      target: seed
+      reason: SCENARIO — decided against, and here is why
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: rejected
+
+  # Closed, but not carried out — the whole point of splitting the two terminals.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: completed
+      equals: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "done:true"
+      target: seed
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo"
+      target: seed
+      present: false
+
+  # The reason is required by the command because it is what a later reader has instead of the work:
+  # it lands on the timeline, beside the note and the stall reason already there.
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — decided against, and here is why
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "ready:yes"
+      target: waiting
+      present: true

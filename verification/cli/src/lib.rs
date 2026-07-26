@@ -222,6 +222,12 @@ impl Driver {
                 self.run_json(&["task", "done", &target.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("marked task {target} done")))
             }
+            (Domain::Task, "reject") => {
+                let target = self.resolve(with)?;
+                let reason = req_str(with, "reason")?;
+                self.run_json(&["task", "reject", &target.to_string(), "--reason", reason, "--json"])?;
+                Ok(Outcome::action(format!("rejected task {target}: {reason}")))
+            }
             (Domain::Task, "reopen") => {
                 let target = self.resolve(with)?;
                 self.run_json(&["task", "reopen", &target.to_string(), "--json"])?;

@@ -1037,6 +1037,35 @@ fn global_project_override_drives_defaults() {
     assert!(err.contains("not_found"), "an unknown project is not_found: {err}");
 }
 
+/// A human standing in a bound folder does not have to name the project that folder already names: the
+/// slot `task add` leaves empty is filled from `.amenbo`, exactly as `decision add` and `dimension add`
+/// fill theirs. The binding is the answer for both facets, which is what keeps the one caller who *can*
+/// name a project from being the only one who must.
+#[test]
+fn a_task_added_in_a_bound_folder_lands_there_without_naming_it() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let bound = cli.bound_project();
+    // A second project, so "it landed in the bound one" is a choice rather than the only answer available.
+    cli.json(&["project", "add", "--name", "Elsewhere", "--json"]);
+
+    let added = cli.json(&["task", "add", "--title", "束縛先に入るタスク", "--json"]);
+    assert_eq!(added["action"], "task.add");
+    assert_eq!(
+        id_str(&added["task"]["placement"]["project"]["id"]),
+        bound,
+        "the folder's own project took the slot",
+    );
+
+    // And the override still outranks it, from the same folder.
+    let elsewhere = cli.json(&["task", "add", "--title", "名指しした先", "--project", "Elsewhere", "--json"]);
+    assert_eq!(
+        elsewhere["task"]["placement"]["project"]["name"],
+        "Elsewhere",
+        "naming a project still wins over the binding",
+    );
+}
+
 #[test]
 fn personal_mode_has_no_sharing_commands() {
     let cli = Cli::new();

@@ -3946,13 +3946,15 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             // task has low discoverability and breaks per-project numbering — and point at the existing
             // projects so the caller can pick one. Enforced here at the CLI write boundary, not in core
             // add_task: backup/migrate must still reconstruct legacy project-less rows (project_id: None),
-            // so it is a write policy, not a data invariant. An AI cannot pass --project, so for it the
-            // binding fills the slot; without a binding there is nothing to fill it with, and the create
-            // is refused.
-            let project_id = match project {
-                Some(p) => store.resolve_project_ref(&p).map_err(CliError::from)?,
-                None => store.reach().project().ok_or_else(|| project_required(store))?,
-            };
+            // so it is a write policy, not a data invariant.
+            //
+            // Where the slot comes from is `project_or_bound`'s answer, the same one `decision add` and
+            // `dimension add` take: what `--project` named, else the folder's own binding. Not the *reach*,
+            // which answers for an AI alone — a reach is what closes an AI to one project, and a human's is
+            // the whole device, so reading it would make a human name the project their folder already
+            // names. An AI cannot pass `--project`, so for it this is the binding either way; without a
+            // binding there is nothing to fill the slot with, and the create is refused.
+            let project_id = project_or_bound(store, project)?;
             let due_on = parse_date_opt(&due)?;
             let start_on = parse_date_opt(&start)?;
             let priority = match priority { Some(p) => Some(parse_priority(&p)?), None => None };

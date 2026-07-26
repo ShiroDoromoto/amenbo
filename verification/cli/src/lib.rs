@@ -12,7 +12,7 @@
 pub mod scratch;
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use amenbo_scenario::{Args, Domain, Scenario, Step};
@@ -56,6 +56,13 @@ impl Driver {
     /// execution failure (spawn failed, non-JSON output, non-zero exit, or an `error` object) —
     /// distinct from an assert that ran cleanly and came out false.
     fn run_json(&self, args: &[&str]) -> Result<serde_json::Value, String> {
+        self.run_json_in(&self.session.cwd, args)
+    }
+
+    /// The same, from a chosen folder. Where the command stands is itself an input for anything to
+    /// do with binding — the pointer that decides what a run reaches is found by walking up from
+    /// the CWD — so those steps ask their question from inside the folder they are asking about.
+    fn run_json_in(&self, cwd: &Path, args: &[&str]) -> Result<serde_json::Value, String> {
         // The facet goes on the command line, which is the one input amenbo is to take it by; a call
         // that names its own is left alone.
         let mut with_facet = args.to_vec();
@@ -64,7 +71,7 @@ impl Driver {
         }
         let out = Command::new(&self.bin)
             .args(&with_facet)
-            .current_dir(&self.session.cwd)
+            .current_dir(cwd)
             .env("AMENBO_HOME", &self.session.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("NO_COLOR", "1")
@@ -374,6 +381,48 @@ impl Driver {
                 self.run_json(&["decision", "unlink", &target.to_string(), "--from", &other.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("decision {target} no longer points at decision {other}")))
             }
+            (Domain::Store, "config-set") => {
+                let key = req_str(with, "key")?;
+                let value = req_str(with, "value")?;
+                self.run_json(&["config", "set", key, value, "--json"])?;
+                Ok(Outcome::action(format!("set `{key}` to `{value}`")))
+            }
+            (Domain::Folder, "init") => {
+                let dir = self.folder(with)?;
+                // Run it *from inside* the folder: `init` binds where it stands, and the project it
+                // raises is named after that folder.
+                let v = self.run_json_in(&dir, &["init", "--json"])?;
+                let id = v["identity"]["project_id"].as_i64().ok_or("init did not report a project_id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
+                Ok(Outcome::action(format!("initialised {} as project {id}", dir.display())))
+            }
+            (Domain::Folder, "bind") => {
+                // Which project a folder is pointed at: this run's own unless the step names another.
+                let pid = match with.get("project") {
+                    Some(_) => self.resolve_key(with, "project")?,
+                    None => self.project_id,
+                };
+                let dir = self.folder(with)?;
+                let path = dir.to_string_lossy().into_owned();
+                self.run_json(&["bind", "--project", &pid.to_string(), "--dir", &path, "--json"])?;
+                Ok(Outcome::action(format!("bound {path} to project {pid}")))
+            }
+            (Domain::Folder, "unbind") => {
+                let dir = self.folder(with)?;
+                let path = dir.to_string_lossy().into_owned();
+                // Removing a pointer asks first; the driver is unattended, so it answers up front.
+                self.run_json(&["unbind", "--dir", &path, "--yes", "--json"])?;
+                Ok(Outcome::action(format!("unbound {path}")))
+            }
+            (Domain::Folder, "sync-guide") => {
+                let dir = self.folder(with)?;
+                let path = dir.to_string_lossy().into_owned();
+                let v = self.run_json(&["sync-guide", "--dir", &path, "--json"])?;
+                let rewritten = v["updated"].as_array().map_or(0, Vec::len);
+                Ok(Outcome::action(format!("resynced the guidance in {path} ({rewritten} file(s) rewritten)")))
+            }
             _ => Err(unmapped(domain, op)),
         }
     }
@@ -406,7 +455,7 @@ impl Driver {
             (Domain::Project, "field") => {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["project", "show", &target.to_string(), "--json"])?;
-                judge_field("project", target, with, &v)
+                judge_field(&format!("project {target}"), with, &v)
             }
             (Domain::Dimension, "listed") => {
                 let dimension = req_str(with, "dimension")?;
@@ -467,7 +516,7 @@ impl Driver {
             (Domain::Task, "field") => {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["task", "show", &target.to_string(), "--json"])?;
-                judge_field("task", target, with, &v)
+                judge_field(&format!("task {target}"), with, &v)
             }
             (Domain::Task, "commit") => {
                 let target = self.resolve(with)?;
@@ -516,7 +565,7 @@ impl Driver {
             (Domain::Decision, "field") => {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["decision", "show", &target.to_string(), "--json"])?;
-                judge_field("decision", target, with, &v)
+                judge_field(&format!("decision {target}"), with, &v)
             }
             (Domain::Decision, "listed") => {
                 let target = self.resolve(with)?;
@@ -565,8 +614,85 @@ impl Driver {
                     ),
                 ))
             }
+            (Domain::Store, "config") => {
+                let v = self.run_json(&["config", "--json"])?;
+                judge_field("this store's configuration", with, &v)
+            }
+            (Domain::Store, "identity") => {
+                let v = self.run_json(&["whoami", "--json"])?;
+                judge_field("this store's identity", with, &v)
+            }
+            (Domain::Store, "update") => {
+                // `--print` is the face that opens nothing, which is the only one a scenario may
+                // wear: a check is a read, and it must not launch a browser at whoever runs it.
+                let v = self.run_json(&["update", "--print", "--json"])?;
+                judge_field("the update check", with, &v)
+            }
+            (Domain::Folder, "bound") => {
+                let dir = self.folder(with)?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let want = match with.get("project") {
+                    Some(_) => Some(self.resolve_key(with, "project")?),
+                    None => None,
+                };
+                // Asked from inside the folder, which is the question an AI launched there asks.
+                let v = self.run_json_in(&dir, &["bind", "--json"])?;
+                let at = v["binding"]["project_id"].as_i64();
+                let found = match (at, want) {
+                    (Some(id), Some(named)) => id == named,
+                    (Some(_), None) => true,
+                    (None, _) => false,
+                };
+                let pass = found == present;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "{} {} (expected {}, {})",
+                        dir.display(),
+                        match at {
+                            Some(id) => format!("points at project {id}"),
+                            None => "points at no project".to_string(),
+                        },
+                        match (present, want) {
+                            (true, Some(named)) => format!("project {named}"),
+                            (true, None) => "a binding".to_string(),
+                            (false, _) => "none".to_string(),
+                        },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            (Domain::Folder, "resynced") => {
+                let dir = self.folder(with)?;
+                let path = dir.to_string_lossy().into_owned();
+                let changed = opt_bool(with, "changed").unwrap_or(false);
+                // A resync writes only what actually differs, so "nothing left to write" is how a
+                // folder says its block is already at this build's version — and it is the property
+                // that makes the command safe to point at every folder on the device.
+                let v = self.run_json(&["sync-guide", "--dir", &path, "--json"])?;
+                let rewritten = v["updated"].as_array().map_or(0, Vec::len);
+                let pass = (rewritten > 0) == changed;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "a resync of {path} rewrote {rewritten} file(s) (expected {}, {})",
+                        if changed { "a rewrite" } else { "nothing to do" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             _ => Err(unmapped(domain, op)),
         }
+    }
+
+    /// The folder a step names. A scenario says *which* folder, never where it is: the driver places
+    /// it, because a binding is answered by where a folder sits and only the driver knows where its
+    /// own isolated run lives.
+    fn folder(&self, with: &Args) -> Result<PathBuf, String> {
+        let name = req_str(with, "dir")?;
+        self.session
+            .folder(name)
+            .map_err(|e| format!("could not make the folder `{name}`: {e}"))
     }
 
     /// Resolve a step's `target:` to the id an earlier action bound. The loader already proved
@@ -687,11 +813,12 @@ fn dig<'a>(shown: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::V
     Some(here)
 }
 
-/// Judge a `field` assert against the object's own `show --json`. `equals` is any scalar (string /
-/// bool / number / null), compared structurally against the field's JSON value, so `status: todo`
-/// and `completed: false` both work — and a field the output does not carry at all is a mismatch,
-/// not an error, since a scenario naming one is asserting about the shipped output's shape too.
-fn judge_field(noun: &str, id: i64, with: &Args, shown: &serde_json::Value) -> Result<Outcome, String> {
+/// Judge a `field` assert against a read of the thing it is about — an object's `show --json`, or
+/// one of the reads the store answers about itself. `equals` is any scalar (string / bool / number /
+/// null), compared structurally against the field's JSON value, so `status: todo` and `completed:
+/// false` both work — and a field the output does not carry at all is a mismatch, not an error,
+/// since a scenario naming one is asserting about the shipped output's shape too.
+fn judge_field(subject: &str, with: &Args, shown: &serde_json::Value) -> Result<Outcome, String> {
     let field = req_str(with, "field")?;
     let expected = with.get("equals").ok_or("arg `equals` is required")?;
     let expected = serde_json::to_value(expected)
@@ -699,14 +826,14 @@ fn judge_field(noun: &str, id: i64, with: &Args, shown: &serde_json::Value) -> R
     match dig(shown, field) {
         None => Ok(Outcome::assert(
             false,
-            format!("{noun} {id} has no field `{field}` in its show output (MISMATCH)"),
+            format!("{subject} has no field `{field}` in its output (MISMATCH)"),
         )),
         Some(actual) => {
             let pass = *actual == expected;
             Ok(Outcome::assert(
                 pass,
                 format!(
-                    "{noun} {id} field `{field}` = {actual} (expected {expected}, {})",
+                    "{subject} field `{field}` = {actual} (expected {expected}, {})",
                     if pass { "as expected" } else { "MISMATCH" }
                 ),
             ))

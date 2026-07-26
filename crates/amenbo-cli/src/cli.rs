@@ -449,8 +449,13 @@ pub enum PluginCmd {
     /// face is a stamp for lining the store up against this log, not a turn order — both faces drive, and
     /// nothing chooses between them.
     ///
-    /// Reads one machine-local file and two store rows, and nothing else — no network. The log is bounded by
-    /// construction (the last runs of each installed plugin), so there is no window to ask for and no
+    /// Under it, one `waiting` line per plugin that still owes something: how many events are on its queue,
+    /// since when, and whether a runner is on it. Nothing ran and nothing is queued is a working store; a
+    /// queue piling up with nobody running it is a plugin that stopped, which the runs below cannot show,
+    /// because what did not run wrote no line. Nothing is printed when nothing is waiting.
+    ///
+    /// Reads one machine-local file and a few store rows, and nothing else — no network. The log is bounded
+    /// by construction (the last runs of each installed plugin), so there is no window to ask for and no
     /// deep history to page: a longer one is a logging plugin's business.
     Log {
         /// narrow to one plugin's runs; omit for every plugin's, newest first

@@ -24,6 +24,7 @@ use amenbo_core::model::{ActorKind, Attachment, AttachmentTarget, Priority, Task
 use amenbo_core::ops::Position;
 use amenbo_core::plugin_drive::Face;
 use amenbo_core::plugin_installed;
+use amenbo_core::plugin_runner::Waiting;
 use amenbo_core::plugin_subscribe::EnabledSubscribers;
 use amenbo_core::reach::Reach;
 use amenbo_core::worktree;
@@ -1229,6 +1230,11 @@ fn plugin_log_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i3
     let path = store.paths.plugin_log_file();
     let cursor = amenbo_core::plugin_drive::persisted_cursor(store.read_model())?;
     let cursor_face = amenbo_core::plugin_drive::persisted_cursor_face(store.read_model())?;
+    let waiting: Vec<Waiting> = amenbo_core::plugin_runner::waiting(store.read_model())?
+        .into_iter()
+        .filter(|w| name.is_none_or(|n| w.depth.plugin == n))
+        .collect();
+    let now = amenbo_core::time::Timestamp::now().to_rfc3339_z();
     // Newest first either way — the run a reader is looking for is nearly always the last one.
     let lines = match name {
         Some(name) => plugin_log::recent(&path, name),
@@ -1254,6 +1260,18 @@ fn plugin_log_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i3
                 })
             })
             .collect();
+        let queues: Vec<_> = waiting
+            .iter()
+            .map(|w| {
+                json!({
+                    "plugin": w.depth.plugin,
+                    "waiting": w.depth.waiting,
+                    "oldest": w.depth.oldest,
+                    "running": w.is_running(&now),
+                    "runner": w.lease.as_ref().map(|l| json!({ "owner": l.owner, "expires_at": l.expires_at })),
+                })
+            })
+            .collect();
         print_json(&json!({
             "count": rows.len(),
             "dispatch": {
@@ -1262,12 +1280,16 @@ fn plugin_log_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i3
             },
             "log": path.display().to_string(),
             "plugin": name,
+            "queues": queues,
             "runs": rows,
         }));
         return Ok(0);
     }
 
     human(flags, dispatch_cursor_line(cursor, cursor_face));
+    for line in backlog_lines(&waiting, &now) {
+        human(flags, line);
+    }
     if lines.is_empty() {
         match name {
             Some(name) => human(flags, format!("No runs recorded for plugin '{name}'.")),
@@ -1306,6 +1328,42 @@ fn plugin_log_cmd(store: &Store, flags: &Flags, name: Option<&str>) -> Result<i3
         }
     }
     Ok(0)
+}
+
+/// The backlog lines `plugin log` shows under the cursor — one per queue that still owes something, and
+/// nothing at all when none does.
+///
+/// Silence is the right answer for an empty backlog because it is the ordinary state: a fan-out starts a
+/// runner straight away, so a queue holds rows only while one is working or while nobody is. A line saying
+/// so on every invocation would push the runs down the screen to report that nothing is wrong.
+///
+/// Each line ends with what the count cannot say on its own — whether anyone is on it. A lease past its
+/// horizon reads as *its runner went quiet* rather than *running*: that is a runner that died without
+/// releasing, and the queue is waiting for the next drive to take it over, which is a third state and not
+/// a happy one.
+///
+/// `now` is the caller's so the wording is testable without a clock.
+fn backlog_lines(waiting: &[Waiting], now: &str) -> Vec<String> {
+    waiting
+        .iter()
+        .map(|w| {
+            let events = if w.depth.waiting == 1 { "event" } else { "events" };
+            let who = match &w.lease {
+                Some(lease) if w.is_running(now) => {
+                    format!("a runner is on it (until {})", lease.expires_at)
+                }
+                Some(lease) => format!(
+                    "its runner went quiet at {} — the next drive takes the queue over",
+                    lease.expires_at
+                ),
+                None => "nobody is running this queue".to_string(),
+            };
+            format!(
+                "waiting  {}  {} {events}, oldest {}  —  {who}",
+                w.depth.plugin, w.depth.waiting, w.depth.oldest
+            )
+        })
+        .collect()
 }
 
 /// The dispatch-cursor line `plugin log` leads with: how far this store's outbox has been fanned out onto
@@ -6545,5 +6603,41 @@ mod tests {
         let unstamped = dispatch_cursor_line(42, None);
         assert!(unstamped.contains("42"), "{unstamped}");
         assert!(!unstamped.contains("nothing has been delivered"), "{unstamped}");
+    }
+
+    /// The backlog lines have to tell the three states of a piling-up queue apart — a runner is on it, a
+    /// runner went quiet, nobody ever took it — because they are what a reader does something different
+    /// about, and the runs below say nothing at all about a plugin that never ran. An empty backlog says
+    /// nothing, which is the ordinary state and the one that must not push the runs down the screen.
+    #[test]
+    fn the_backlog_lines_tell_a_working_queue_from_a_stuck_one() {
+        use amenbo_core::store_engine::{Lease, QueueDepth};
+
+        let now = "2026-07-25T09:00:00Z";
+        let depth = |plugin: &str, waiting| QueueDepth {
+            plugin: plugin.to_string(),
+            waiting,
+            oldest: "2026-07-25T08:00:00Z".to_string(),
+        };
+        let lease = |expires_at: &str| Lease {
+            plugin: "any".to_string(),
+            owner: "r1".to_string(),
+            expires_at: expires_at.to_string(),
+        };
+
+        assert!(backlog_lines(&[], now).is_empty(), "an empty backlog is not worth a line");
+
+        let lines = backlog_lines(
+            &[
+                Waiting { depth: depth("slack", 3), lease: Some(lease("2026-07-25T09:00:30Z")) },
+                Waiting { depth: depth("mirror", 7), lease: Some(lease("2026-07-25T08:59:00Z")) },
+                Waiting { depth: depth("email", 1), lease: None },
+            ],
+            now,
+        );
+        assert!(lines[0].contains("slack") && lines[0].contains("3 events") && lines[0].contains("a runner is on it"), "{}", lines[0]);
+        assert!(lines[1].contains("went quiet") && lines[1].contains("takes the queue over"), "{}", lines[1]);
+        assert!(lines[2].contains("1 event,") && lines[2].contains("nobody is running"), "{}", lines[2]);
+        assert!(lines.iter().all(|l| l.contains("oldest 2026-07-25T08:00:00Z")), "{lines:?}");
     }
 }

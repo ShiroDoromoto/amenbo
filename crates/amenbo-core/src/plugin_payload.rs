@@ -19,7 +19,7 @@
 //!   bump it: a consumer ignores keys it does not know, so new fields are additive and silent. `v`
 //!   rises only on a breaking change to an existing field's meaning (see `AMB-D-349`).
 //!
-//! This module is the single source of truth for the payload *type* and the [`nine v1 event
+//! This module is the single source of truth for the payload *type* and the [`eleven v1 event
 //! names`](name). It does not read the store or launch anything: a caller on the write path (which alone
 //! knows the actor) builds a [`Payload`] with the values it already holds and hands it to the hook runner.
 
@@ -32,10 +32,11 @@ use crate::time::Timestamp;
 /// change to an existing field — additive fields do not touch it (`AMB-D-349`).
 pub const VERSION: u32 = 1;
 
-/// The ten v1 event names — the one source of truth for the strings a plugin dispatches on, shared
-/// with the ops write points that emit them. Seven are the events an `update` disambiguates (named
-/// alongside the new state that tells them apart); the other three name themselves outright — a
-/// creation, a deletion, a comment. Together they are the v1 catalog ([`V1_EVENTS`]).
+/// The eleven v1 event names — the one source of truth for the strings a plugin dispatches on, shared
+/// with the ops write points that emit them. Three are the events an `update` alone cannot tell apart
+/// (named alongside the new state that does); the other eight name themselves outright — a creation, a
+/// deletion, a terminal, a comment posted or taken back. Together they are the v1 catalog
+/// ([`V1_EVENTS`]).
 pub mod name {
     /// A task was created. No `new` — the name is the whole state.
     pub const TASK_CREATED: &str = "task.created";
@@ -60,11 +61,16 @@ pub mod name {
     pub const DECISION_REJECTED: &str = "decision.rejected";
     /// A comment was added to a task. No `new` — the name is the whole state.
     pub const COMMENT_ADDED: &str = "comment.added";
+    /// A comment was taken back — hard-deleted — from a task, and the pair of [`COMMENT_ADDED`]
+    /// (`AMB-D-401`). A deletion is the one change a subscriber cannot catch up on by re-reading (there
+    /// is nothing left to read), so without this event a mirror keeps a comment that is gone. No `new` —
+    /// the name is the whole state.
+    pub const COMMENT_REMOVED: &str = "comment.removed";
 }
 
-/// The complete v1 event catalog — all ten names in [`name`]. A plugin's subscription is checked
+/// The complete v1 event catalog — all eleven names in [`name`]. A plugin's subscription is checked
 /// against this set.
-pub const V1_EVENTS: [&str; 10] = [
+pub const V1_EVENTS: [&str; 11] = [
     name::TASK_CREATED,
     name::TASK_STATUS_CHANGED,
     name::TASK_DONE,
@@ -75,12 +81,13 @@ pub const V1_EVENTS: [&str; 10] = [
     name::DECISION_ACCEPTED,
     name::DECISION_REJECTED,
     name::COMMENT_ADDED,
+    name::COMMENT_REMOVED,
 ];
 
 /// One fired event, ready to serialize to the JSON a plugin receives.
 ///
 /// Build one with the per-event constructor ([`task_status_changed`](Self::task_status_changed) and its
-/// kin) — each fills `event` with the right name and `new` with the right state, so the nine events are
+/// kin) — each fills `event` with the right name and `new` with the right state, so the eleven events are
 /// constructed by name and cannot be mismatched. Field order is the wire order: `v` leads, as `AMB-D-349`
 /// asks.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -158,6 +165,12 @@ impl Payload {
         Self::base(name::COMMENT_ADDED, id, actor, at)
     }
 
+    /// `comment.removed` — a comment was taken back; `id` is the comment's id, the same axis
+    /// [`comment_added`](Self::comment_added) reports on, so a subscriber can pair the two.
+    pub fn comment_removed(id: i64, actor: ActorKind, at: Timestamp) -> Self {
+        Self::base(name::COMMENT_REMOVED, id, actor, at)
+    }
+
     /// Rebuild the payload a fired event carries from its stored outbox row (`AMB-D-367`). The store
     /// classifies nothing — an [`OutboxRow`](crate::store_engine::OutboxRow) holds the wire fields as
     /// opaque strings — so this is the mapping half that turns one back into the typed payload the
@@ -205,11 +218,11 @@ mod tests {
     }
 
     #[test]
-    fn the_catalog_holds_ten_distinct_names() {
+    fn the_catalog_holds_eleven_distinct_names() {
         let mut seen = V1_EVENTS.to_vec();
         seen.sort_unstable();
         seen.dedup();
-        assert_eq!(seen.len(), 10, "the v1 catalog is ten distinct events");
+        assert_eq!(seen.len(), 11, "the v1 catalog is eleven distinct events");
     }
 
     #[test]
@@ -225,6 +238,7 @@ mod tests {
             Payload::decision_accepted(1, ActorKind::Human, at()),
             Payload::decision_rejected(1, ActorKind::Human, at()),
             Payload::comment_added(1, ActorKind::Human, at()),
+            Payload::comment_removed(1, ActorKind::Human, at()),
         ];
         for p in &all {
             assert!(V1_EVENTS.contains(&p.event), "{} is in the catalog", p.event);
@@ -326,6 +340,7 @@ mod tests {
             Payload::decision_accepted(1, ActorKind::Human, at()),
             Payload::decision_rejected(1, ActorKind::Human, at()),
             Payload::comment_added(1, ActorKind::Human, at()),
+            Payload::comment_removed(1, ActorKind::Human, at()),
         ] {
             let json = serde_json::to_value(&p).unwrap();
             assert!(json.get("new").is_none(), "{} carries no new state", p.event);

@@ -4268,7 +4268,7 @@ fn comment(store: &mut Store, flags: &Flags, sub: CommentCmd) -> Result<i32, Cli
             if !confirm(flags, "delete comment")? {
                 return Ok(0);
             }
-            let changed = store.remove_task_comment(cid).map_err(CliError::from)?;
+            let changed = store.remove_task_comment(cid, flags.facet()?).map_err(CliError::from)?;
             write_envelope(flags, "comment.rm", "comment", json!({ "id": cid, "deleted": true }), None, !changed, format!("✓ Deleted comment: {}", task_comment_label(cid)));
         }
         CommentCmd::Edit { comment, text } => {

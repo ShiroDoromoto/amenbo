@@ -33,8 +33,44 @@ pub struct Scenario {
     /// Optional longer prose (rationale, preconditions).
     #[serde(default)]
     pub description: Option<String>,
+    /// The drivers this scenario is written to be run through. **Absent means CLI alone**, which is
+    /// where a line belongs unless it is one of the few the screen is the only place to see.
+    ///
+    /// One scenario source, but not every driver has to copy every line: adding one costs a driver
+    /// what that driver costs. The CLI driver runs unattended and closes on an exit code, so its set
+    /// aims at the whole capability list; the GUI harnesses shoot the screen, read it back with OCR
+    /// and leave a `field` assert to a human eye, so theirs is a chosen few. Declaring it here keeps
+    /// the choice in the source of truth rather than in each driver's idea of what it should skip.
+    #[serde(default = "cli_only")]
+    pub drivers: Vec<Driver>,
     /// The ordered steps. Must be non-empty.
     pub steps: Vec<Step>,
+}
+
+/// A driver a scenario can be run through — the harnesses that map the one source to their world.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Driver {
+    /// `verify-cli` / `verify-all`: drives the shipped binary and judges `--json`.
+    Cli,
+    /// `verify-gui`: renders the scenario as a screen checklist, judged by OCR (the mac harness, and
+    /// the Linux container the same card is passed into).
+    Gui,
+}
+
+impl Driver {
+    /// The wire token, as it is written in a scenario.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Driver::Cli => "cli",
+            Driver::Gui => "gui",
+        }
+    }
+}
+
+/// The default driver set: the CLI alone.
+fn cli_only() -> Vec<Driver> {
+    vec![Driver::Cli]
 }
 
 /// One step. `type` selects the variant; every step names the [`Domain`] object it
@@ -196,6 +232,16 @@ impl fmt::Display for ValidationError {
 }
 
 impl Scenario {
+    /// Whether this scenario is written to be run through `driver`.
+    pub fn runs_on(&self, driver: Driver) -> bool {
+        self.drivers.contains(&driver)
+    }
+
+    /// The declared drivers as their wire tokens, for a message that has to name them.
+    pub fn driver_tokens(&self) -> Vec<&'static str> {
+        self.drivers.iter().map(|d| d.as_str()).collect()
+    }
+
     /// Check the semantic rules the type system cannot: non-empty id/title/steps, a known
     /// op for each step, its required args present, and every `target:` resolving to an
     /// earlier `as:` binding. Returns every problem found, not just the first.
@@ -212,6 +258,11 @@ impl Scenario {
         }
         if self.steps.is_empty() {
             errs.push(whole("scenario has no steps"));
+        }
+        // A scenario no driver runs is one nothing keeps honest: it rots silently while the set it
+        // sits in reports green.
+        if self.drivers.is_empty() {
+            errs.push(whole("scenario names no driver to run it"));
         }
 
         let mut bound: HashSet<&str> = HashSet::new();
@@ -384,6 +435,36 @@ steps:
 "#;
         let errs = load_str(yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("does not produce a binding")));
+    }
+
+    /// A scenario that says nothing about drivers is a CLI scenario — the set aims at coverage there,
+    /// so that is the answer for a line that does not go out of its way to ask for the screen.
+    #[test]
+    fn a_scenario_that_names_no_driver_is_cli_only() {
+        let s = load_str(GOOD).expect("parses");
+        assert!(s.runs_on(Driver::Cli));
+        assert!(!s.runs_on(Driver::Gui), "the screen is asked for, never assumed");
+    }
+
+    #[test]
+    fn a_declared_driver_set_is_read_back() {
+        let yaml = format!("drivers: [cli, gui]{GOOD}");
+        let s = load_str(&yaml).expect("parses");
+        assert!(s.runs_on(Driver::Cli) && s.runs_on(Driver::Gui));
+        assert_eq!(s.driver_tokens(), vec!["cli", "gui"]);
+    }
+
+    #[test]
+    fn a_driver_outside_the_set_is_a_parse_error() {
+        let yaml = format!("drivers: [tui]{GOOD}");
+        assert!(load_str(&yaml).is_err(), "an unknown driver is a typo, not an extension point");
+    }
+
+    #[test]
+    fn naming_no_driver_at_all_is_rejected() {
+        let yaml = format!("drivers: []{GOOD}");
+        let errs = load_str(&yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("no driver")));
     }
 
     #[test]

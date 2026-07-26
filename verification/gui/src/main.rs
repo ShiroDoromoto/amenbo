@@ -53,6 +53,16 @@ fn run(opts: &Opts) -> Result<bool, String> {
     let scenario = amenbo_scenario::lint_file(&opts.scenario)
         .map_err(|errs| format!("scenario does not load/validate:\n  {}", errs.join("\n  ")))?;
 
+    // The screen is asked for in the scenario, never assumed by the harness: shooting a line written
+    // for the CLI would spend a human's eye on `Review` steps nobody meant to send here.
+    if !scenario.runs_on(amenbo_scenario::Driver::Gui) {
+        return Err(format!(
+            "`{}` is written for {} — add `gui` to its `drivers:` if the screen is where it belongs",
+            scenario.id,
+            scenario.driver_tokens().join(", ")
+        ));
+    }
+
     // Front the app first so its window counts as on-screen (uiauto skips one behind a Space).
     if let Some(app) = &opts.app {
         activate(app)?;

@@ -4,6 +4,9 @@
 # screen instruction.
 id: task-assign
 title: A task handed to me-ai is stamped as the AI's and surfaces in the me-ai todo listing
+# The GUI's representative line: a card another process wrote has to appear on the board, which is
+# the one hop no CLI run can see. Both OCR harnesses drive this file.
+drivers: [cli, gui]
 description: >
   Create a task, assign it to me-ai, then read it back two ways: the assignee the store kept, and
   the me-ai / todo listing the next session opens. This is the smallest end-to-end proof that a

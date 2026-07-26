@@ -7,6 +7,11 @@
 //! scenario never sees another's state. A scenario that fails to load or whose binary errors is
 //! recorded as a red entry and the run continues — one broken scenario never hides the rest.
 //!
+//! **A scenario that does not name `cli` among its drivers is skipped**, named as such, and counted
+//! apart from the verdict — it is written for the screen, and driving its steps through the binary
+//! would judge a line nobody wrote for this driver. A run where that leaves nothing to do exits
+//! non-zero: an empty set is the one way a gate can be green without having verified anything.
+//!
 //! Usage: `verify-all [<scenario-or-dir>...] [--bin <amenbo>] [--json] [--keep]`
 //!   positional  scenario `.yaml` files and/or directories to scan (default: `scenarios/`)
 //!   `--bin`     path to the amenbo binary to drive (default: `$AMENBO_BIN`, else `amenbo` on PATH)
@@ -18,6 +23,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use amenbo_scenario::Driver;
 use amenbo_verify_cli::{json_string, run_scenario, Report};
 
 fn main() -> ExitCode {
@@ -47,7 +53,12 @@ fn main() -> ExitCode {
         .map(|path| run_one(path, &opts.bin, opts.keep))
         .collect();
 
-    let green = results.iter().all(|r| r.passed());
+    let ran = results.iter().filter(|r| !matches!(r, ScenarioResult::Skipped { .. })).count();
+    if ran == 0 {
+        eprintln!("verify-all: every scenario given is written for another driver — nothing was run");
+        return ExitCode::from(2);
+    }
+    let green = results.iter().all(|r| !r.failed());
     if opts.json {
         println!("{}", aggregate_json(&results, green));
     } else {
@@ -56,16 +67,27 @@ fn main() -> ExitCode {
     if green { ExitCode::SUCCESS } else { ExitCode::FAILURE }
 }
 
-/// One scenario's outcome: either it ran to a verdict, or it never got that far (would not
-/// load, or its binary errored). Both count as failures for the roll-up.
+/// One scenario's outcome: it ran to a verdict, it was left to another driver, or it never got that
+/// far (would not load, or its binary errored). Only the last of the three is a failure on its own.
 enum ScenarioResult {
     Ran { report: Report },
+    /// Loaded fine, but written for another driver — neither green nor red, just not this run's.
+    Skipped { path: PathBuf, id: String, drivers: String },
     Errored { path: PathBuf, error: String },
 }
 
 impl ScenarioResult {
     fn passed(&self) -> bool {
         matches!(self, ScenarioResult::Ran { report, .. } if report.passed())
+    }
+    /// What the roll-up turns red on. A skip is not a failure — it is a line this driver was never
+    /// asked to carry.
+    fn failed(&self) -> bool {
+        match self {
+            ScenarioResult::Ran { report } => !report.passed(),
+            ScenarioResult::Skipped { .. } => false,
+            ScenarioResult::Errored { .. } => true,
+        }
     }
 }
 
@@ -81,6 +103,13 @@ fn run_one(path: &Path, bin: &Path, keep: bool) -> ScenarioResult {
             };
         }
     };
+    if !scenario.runs_on(Driver::Cli) {
+        return ScenarioResult::Skipped {
+            path: path.to_path_buf(),
+            id: scenario.id.clone(),
+            drivers: scenario.driver_tokens().join(", "),
+        };
+    }
     match run_scenario(&scenario, bin, keep) {
         Ok(report) => ScenarioResult::Ran { report },
         Err(error) => ScenarioResult::Errored { path: path.to_path_buf(), error },
@@ -133,6 +162,7 @@ fn scan_dir(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
 
 fn print_human(results: &[ScenarioResult], green: bool) {
     let mut passed = 0usize;
+    let mut skipped = 0usize;
     for r in results {
         match r {
             ScenarioResult::Ran { report, .. } => {
@@ -143,27 +173,38 @@ fn print_human(results: &[ScenarioResult], green: bool) {
                 // The human line leans on the scenario id; the file path is kept for the JSON form.
                 println!("{mark} {} — {}", report.scenario_id(), report.title());
             }
+            ScenarioResult::Skipped { id, drivers, .. } => {
+                skipped += 1;
+                println!("- {id} — skipped, written for {drivers}");
+            }
             ScenarioResult::Errored { path, error } => {
                 println!("✗ {} — ERROR: {error}", path.display());
             }
         }
     }
+    let ran = results.len() - skipped;
     println!("---");
-    println!(
-        "{}/{} scenarios green — VERDICT: {}",
-        passed,
-        results.len(),
-        if green { "green" } else { "red" }
-    );
+    print!("{passed}/{ran} scenarios green");
+    if skipped > 0 {
+        print!(" ({skipped} skipped)");
+    }
+    println!(" — VERDICT: {}", if green { "green" } else { "red" });
 }
 
 /// A machine-readable aggregate: the roll-up plus each scenario's own report (or its error).
 fn aggregate_json(results: &[ScenarioResult], green: bool) -> String {
     let passed = results.iter().filter(|r| r.passed()).count();
+    let skipped = results.iter().filter(|r| matches!(r, ScenarioResult::Skipped { .. })).count();
     let items: Vec<String> = results
         .iter()
         .map(|r| match r {
             ScenarioResult::Ran { report, .. } => report.to_json(),
+            ScenarioResult::Skipped { path, id, drivers } => format!(
+                "{{\"scenario\":{},\"path\":{},\"skipped\":true,\"drivers\":{}}}",
+                json_string(id),
+                json_string(&path.display().to_string()),
+                json_string(drivers)
+            ),
             ScenarioResult::Errored { path, error } => format!(
                 "{{\"scenario\":null,\"path\":{},\"passed\":false,\"error\":{}}}",
                 json_string(&path.display().to_string()),
@@ -172,10 +213,11 @@ fn aggregate_json(results: &[ScenarioResult], green: bool) -> String {
         })
         .collect();
     format!(
-        "{{\"total\":{},\"passed\":{},\"failed\":{},\"green\":{},\"scenarios\":[{}]}}",
+        "{{\"total\":{},\"passed\":{},\"failed\":{},\"skipped\":{},\"green\":{},\"scenarios\":[{}]}}",
         results.len(),
         passed,
-        results.len() - passed,
+        results.len() - passed - skipped,
+        skipped,
         green,
         items.join(",")
     )

@@ -89,14 +89,20 @@ cargo run -p amenbo-verify-cli --bin verify-all -- --bin /path/to/amenbo
 cargo run -p amenbo-verify-cli --bin verify-all -- scenarios/task-add.yaml scenarios/task-assign.yaml --json
 ```
 
-The exit code is the roll-up — `0` when every scenario is green, non-zero when any is red or
-errored — so a release gate reads it directly. The `--json` aggregate carries `total` / `passed`
-/ `failed` / `green` plus each scenario's own report (or its error).
+A scenario that does not name `cli` in its `drivers` is **skipped**: printed as skipped, counted
+apart, and left out of the verdict. If that leaves nothing to run, the exit is non-zero rather than
+an empty green — a gate that verified nothing must not read as one that verified everything.
+
+The exit code is the roll-up — `0` when every scenario that ran is green, non-zero when any is red
+or errored — so a release gate reads it directly. The `--json` aggregate carries `total` / `passed`
+/ `failed` / `skipped` / `green` plus each scenario's own report (or its error, or the drivers it
+was written for).
 
 ## GUI harness (mac)
 
-`verify-gui` reads the same scenario as a **screen checklist**. It bakes in no command line and
-no pixel: each step becomes a plain-language instruction of what to do or confirm on
+`verify-gui` reads the same scenario as a **screen checklist**, and only a scenario whose
+`drivers` name `gui` — it refuses the rest by name instead of shooting a line written for the
+binary. It bakes in no command line and no pixel: each step becomes a plain-language instruction of what to do or confirm on
 screen, the running GUI's window is located through `app/scripts/uiauto/uiauto.swift`, and every
 step is captured with `screencapture -l <winid>` into an evidence directory (plus a
 `manifest.json` pairing each instruction, verdict and shot).
@@ -148,15 +154,16 @@ a human from the evidence, not by the exit code.
 
 ## Scenario format
 
-A scenario is an `id`, a human `title`, an optional `description`, and an ordered list of
-`steps`. Each step is an `action` (changes state) or an `assert` (an expected result),
-names the `domain` it touches (`task` / `decision` / `comment` / `project`) and an `op`,
-and carries named args under `with`. An action may bind its result with `as:`, and a later
-step refers back to it with `target:`.
+A scenario is an `id`, a human `title`, an optional `description`, an optional `drivers`
+list, and an ordered list of `steps`. Each step is an `action` (changes state) or an
+`assert` (an expected result), names the `domain` it touches (`task` / `decision` /
+`comment` / `project`) and an `op`, and carries named args under `with`. An action may bind
+its result with `as:`, and a later step refers back to it with `target:`.
 
 ```yaml
 id: task-assign
 title: A task handed to me-ai is stamped as the AI's and surfaces in the me-ai todo listing
+drivers: [cli, gui]
 steps:
   - { type: action, domain: task, op: create, with: { title: SEED }, as: seed }
   - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
@@ -166,6 +173,19 @@ steps:
 The op vocabulary is a **closed registry** in `core/src/lib.rs`: an unknown op is rejected,
 so a typo never runs as a no-op. Drivers grow the registry (and their own op → driver
 mapping) as new ops are needed.
+
+### `drivers` — which harnesses run this line
+
+`drivers` says which harnesses a scenario is written for. **Omit it and the scenario is
+CLI-only**, which is where a line belongs unless the screen is the only place it can break.
+The set is one source of truth, but a driver only carries what it was given: the CLI runner
+skips a scenario that does not name `cli`, and the GUI harness refuses one that does not
+name `gui` rather than spending an eye on `Review` steps nobody sent there.
+
+The asymmetry is what the field is for. A CLI line costs a process and an exit code, so that
+set aims at the whole capability list; a GUI line costs a screenshot, an OCR pass and a
+human reading the `field` asserts OCR cannot judge, so that set stays a chosen few. An empty
+list is refused — a scenario nothing runs rots while the set around it reports green.
 
 ## Lint
 

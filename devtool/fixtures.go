@@ -137,12 +137,57 @@ func fixturesRefresh(args []string) {
 		logf("→ update/latest.json (%d bytes)", len(latest))
 	}
 
+	// The catalog is served in two documents, so a capture of the list alone is a fake world where
+	// nothing can be installed: each entry's detail is taken from beside the list it was named in.
+	entries := catalogEntries(catalog)
+	for _, entry := range entries {
+		refreshDetail(dir, *catalogSrc, entry.Name)
+	}
+
 	// The repositories the catalog itself names, so the capture follows the catalog rather than a
 	// list kept by hand beside it.
-	for _, repo := range dedupe(append(catalogRepos(catalog), repos...)) {
+	repoList := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Repo != "" {
+			repoList = append(repoList, entry.Repo)
+		}
+	}
+	for _, repo := range dedupe(append(repoList, repos...)) {
 		refreshRepo(dir, repo)
 	}
 	logf("→ fixtures in %s", dir)
+}
+
+// refreshDetail captures one plugin's detail document — what an install reads, and what a detail
+// view opens. Best-effort like a repository's answers: a catalog that lists an entry whose detail is
+// not published yet is a real state of the world, and the absent file makes the fake say so too.
+func refreshDetail(dir, catalogSrc, name string) {
+	src := detailSource(catalogSrc, name)
+	body, err := readSource(src)
+	if err != nil {
+		logf("! %s: %v", src, err)
+		return
+	}
+	path := filepath.Join(dir, "plugins", name+".json")
+	if err := writeFixture(path, body); err != nil {
+		logf("devtool: %v", err)
+		os.Exit(1)
+	}
+	logf("→ %s (%d bytes)", strings.TrimPrefix(path, dir+string(filepath.Separator)), len(body))
+}
+
+// detailSource is where one plugin's detail sits beside the list it was named in: the same base,
+// under `plugins/`. Derived rather than configured, because the two documents are published together
+// — a checkout of the catalog repository holds both, and so does the published site.
+func detailSource(catalogSrc, name string) string {
+	rel := "plugins/" + name + ".json"
+	if strings.HasPrefix(catalogSrc, "http://") || strings.HasPrefix(catalogSrc, "https://") {
+		if cut := strings.LastIndex(catalogSrc, "/"); cut >= 0 {
+			return catalogSrc[:cut+1] + rel
+		}
+		return rel
+	}
+	return filepath.Join(filepath.Dir(catalogSrc), "plugins", name+".json")
 }
 
 // refreshRepo captures the three answers a plugin's detail reads for one repository. Each is
@@ -171,26 +216,25 @@ func refreshRepo(dir, repo string) {
 	}
 }
 
-// catalogRepos picks the `repo` of every entry out of a catalog envelope. It reads the JSON loosely
-// on purpose: the envelope is the producer's to grow, and a capture that refuses to run because a
-// field it does not use appeared would be a capture nobody takes.
-func catalogRepos(catalog []byte) []string {
+// catalogEntry is the little of a list entry a capture needs: the name its detail document is
+// fetched by, and the repository its figures are read from.
+type catalogEntry struct {
+	Name string `json:"name"`
+	Repo string `json:"repo"`
+}
+
+// catalogEntries picks the entries out of a catalog envelope. It reads the JSON loosely on purpose:
+// the envelope is the producer's to grow, and a capture that refuses to run because a field it does
+// not use appeared would be a capture nobody takes.
+func catalogEntries(catalog []byte) []catalogEntry {
 	var envelope struct {
-		Plugins []struct {
-			Repo string `json:"repo"`
-		} `json:"plugins"`
+		Plugins []catalogEntry `json:"plugins"`
 	}
 	if err := json.Unmarshal(catalog, &envelope); err != nil {
-		logf("! could not read the catalog's entries (%v) — capturing no repository from it", err)
+		logf("! could not read the catalog's entries (%v) — capturing nothing from it", err)
 		return nil
 	}
-	out := make([]string, 0, len(envelope.Plugins))
-	for _, p := range envelope.Plugins {
-		if p.Repo != "" {
-			out = append(out, p.Repo)
-		}
-	}
-	return out
+	return envelope.Plugins
 }
 
 // readSource reads a URL or a local path, so a catalog can be taken from a checkout of the catalog
@@ -352,6 +396,13 @@ func fixtureHandler(dir string, rules map[face]failure, hold time.Duration) http
 	}
 
 	mux.HandleFunc("GET /catalog.json", serve(faceCatalog, filepath.Join(dir, "catalog.json"), "application/json"))
+	// The second document of the catalog: what an install reads for the one plugin it is installing.
+	// The wildcard is the whole file name, which is all a mux pattern may match, and `filepath.Base`
+	// keeps a path that tries to climb out of the fixtures directory from naming a file above it.
+	mux.HandleFunc("GET /plugins/{file}", func(w http.ResponseWriter, r *http.Request) {
+		file := filepath.Base(r.PathValue("file"))
+		serve(faceCatalog, filepath.Join(dir, "plugins", file), "application/json")(w, r)
+	})
 	mux.HandleFunc("GET /update/latest.json", serve(faceUpdate, filepath.Join(dir, "update", "latest.json"), "application/json"))
 
 	// The three GitHub reads one opened plugin makes. `{owner}/{name}` is the catalog's `repo`, and

@@ -4,7 +4,9 @@
 //! The catalog is delivered in two stages: a `catalog.json` everyone fetches once to draw the list, and a
 //! `plugins/<name>.json` fetched only for the one plugin someone opened or is installing. A manifest field
 //! therefore belongs to exactly one of two faces — [`ListEntry`], what a browse view draws, and [`Detail`],
-//! what an install needs — and [`split`] is where that assignment is written down.
+//! what an install needs — and [`split`] is where that assignment is written down. [`join`] is the way
+//! back: amenbo's own gates all read a whole manifest, so a client that fetched both halves puts them
+//! together once rather than teaching each gate to read two documents.
 //!
 //! **The line lives in amenbo, not in the aggregator.** The catalog repository's CI calls
 //! `plugin validate --json` and publishes what comes back, so it names no manifest field of its own. A
@@ -48,7 +50,9 @@ pub struct ListEntry {
     /// The plugin's category, which a list filters by.
     pub category: String,
     /// The official badge. Catalog-authoritative (`AMB-D-347`): the CI decides it, and a manifest that
-    /// claims it for itself is refused at intake.
+    /// claims it for itself is refused at intake. Absent reads as `false`, the same safe default the
+    /// manifest takes — the badge is a claim a reader must find, never one it assumes.
+    #[serde(default)]
     pub official: bool,
     /// **The catalog's slot, emitted unset**: the recommendation, hand-curated on the official index
     /// (`AMB-D-347`). Unlike `official` — a fact about who wrote the plugin, which the CI can read off the
@@ -149,6 +153,41 @@ pub fn split(manifest: &Manifest) -> (ListEntry, Detail) {
     (entry, detail)
 }
 
+/// Put the two documents the catalog serves back together as the one manifest amenbo works from
+/// (`AMB-D-385`) — the reverse of [`split`], and the shape every gate downstream already speaks.
+///
+/// An install reads the list once and the detail for the one plugin it is installing; from there on the
+/// platform resolution, the provenance check, the compatibility gate and the record written beside the
+/// binary all want a whole manifest, so the join happens once here rather than each of them learning to
+/// read two documents. `detail_sum` rides along from the entry, which is what makes the record beside the
+/// binary say which detail it came from (`AMB-D-386`).
+///
+/// **The join is not a door.** The two halves are untrusted delivery, and joining them judges nothing:
+/// the caller runs [`crate::plugin_validate::validate_manifest`] over the result before anything is
+/// fetched or written. That the detail is the one the entry asked for — same `name` — is checked where it
+/// is fetched ([`crate::plugin_catalog::detail`]), since that is where the question is asked.
+pub fn join(entry: &ListEntry, detail: &Detail) -> Manifest {
+    Manifest {
+        name: entry.name.clone(),
+        desc: entry.desc.clone(),
+        author: entry.author.clone(),
+        repo: entry.repo.clone(),
+        os: entry.os.clone(),
+        category: entry.category.clone(),
+        official: entry.official,
+        detail_sum: entry.detail_sum.clone(),
+        url: detail.url.clone(),
+        checksum: detail.checksum.clone(),
+        signature: detail.signature.clone(),
+        assets: detail.assets.clone(),
+        scope: detail.scope,
+        payload_v: detail.payload_v,
+        min_amenbo: detail.min_amenbo.clone(),
+        config: detail.config.clone(),
+        events: detail.events.clone(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,6 +214,7 @@ mod tests {
                 }
             },
             "official": true,
+            "detail_sum": format!("sha256:{}", "3".repeat(64)),
             "scope": "machine",
             "payload_v": 1,
             "min_amenbo": "1.8.0",
@@ -232,7 +272,10 @@ mod tests {
         assert!(entry.official, "the badge rides in the list, where the badge is drawn");
         assert!(!entry.featured, "the catalog's, curated by hand — never claimed by a manifest");
         assert_eq!(entry.added_at, None, "the catalog's, from git history");
-        assert_eq!(entry.detail_sum, None, "the catalog's, over the bytes it publishes");
+        assert_eq!(
+            entry.detail_sum, None,
+            "the catalog's, over the bytes it publishes — a value on the way in is not published"
+        );
 
         assert_eq!(detail.name, "worktree", "the join back to the entry that named it");
         assert_eq!(detail.checksum, "sha256:".to_string() + &"0".repeat(64));
@@ -245,6 +288,28 @@ mod tests {
         assert_eq!(detail.events.len(), 1);
         assert_eq!(detail.events[0].faces, vec![Face::Cli]);
         assert!(detail.events[0].reply, "and the reply the subscription asked for survives the split");
+    }
+
+    /// **The two documents put back together are the manifest they came from.** What an install works
+    /// from is the join, so a value that survives the split and is then dropped by the join would be lost
+    /// exactly where it is needed. The one deliberate difference is the catalog's own slot: `detail_sum`
+    /// comes back as the entry carried it, which is empty until the CI fills it in.
+    #[test]
+    fn joining_the_two_documents_gives_back_the_manifest() {
+        let manifest = full();
+        let (entry, detail) = split(&manifest);
+
+        assert_eq!(join(&entry, &detail), Manifest { detail_sum: None, ..manifest });
+    }
+
+    /// The digest the catalog put on the entry is what the joined manifest records, which is what makes an
+    /// install able to say later which detail document it was installed from (`AMB-D-386`).
+    #[test]
+    fn the_joined_manifest_records_the_detail_it_was_joined_with() {
+        let (mut entry, detail) = split(&full());
+        entry.detail_sum = Some(format!("sha256:{}", "4".repeat(64)));
+
+        assert_eq!(join(&entry, &detail).detail_sum, entry.detail_sum);
     }
 
     /// A manifest that omits its optional fields splits into documents that omit them too, so what the

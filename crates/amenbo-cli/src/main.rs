@@ -1087,12 +1087,13 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 
     let installed =
         amenbo_core::plugin_installed::installed(&store.paths).map_err(CliError::from)?;
-    // Which installs the cached catalog offers a different build of — best-effort, no network: an absent
-    // or unreadable cache is simply no marks, and `plugin update --check` is the surface that refreshes it.
+    // Which installs the cached catalog's list says something has moved about — best-effort, no network:
+    // an absent or unreadable cache is simply no marks, and `plugin update --check` is the surface that
+    // refreshes it and reads what actually moved.
     let updatable: std::collections::HashSet<String> =
         amenbo_core::plugin_update::available_cached(&store.paths)
             .into_iter()
-            .map(|u| u.name)
+            .map(|c| c.name)
             .collect();
     let here = bound_project(store);
     // `None` = this plugin's switch cannot be answered from where we stand (a project-scoped plugin, and
@@ -2826,7 +2827,7 @@ fn parse_view(s: &str) -> Result<View, CliError> {
         other => Err(CliError {
             code: "invalid_value",
             message: format!("--view value '{other}' is invalid."),
-            hint: Some("Specify one of: list | board.".to_string()),
+            hint: Some("Specify one of: list | board | calendar | timeline.".to_string()),
             exit: 2,
         }),
     }
@@ -3035,7 +3036,7 @@ fn init_cmd(flags: &Flags, name: Option<String>, language: Option<String>, force
     let project = store
         .project_add(amenbo_core::ops::project::NewProject {
             name: project_name,
-            view: amenbo_core::model::View::Board,
+            view: store.config.default_view,
             notes: String::new(),
             color: None,
         })
@@ -3405,7 +3406,13 @@ fn config(store: &mut Store, flags: &Flags, sub: Option<ConfigCmd>) -> Result<i3
 fn project(store: &mut Store, flags: &Flags, sub: ProjectCmd) -> Result<i32, CliError> {
     match sub {
         ProjectCmd::Add { name, view, notes, color } => {
-            let view = parse_view(&view)?;
+            // No `--view` is not "board": it is "whatever this store was configured to open a new
+            // project on". The setting exists to be the answer here, so reading it anywhere else —
+            // or defaulting past it — is what would leave it a value nothing acts on.
+            let view = match view {
+                Some(v) => parse_view(&v)?,
+                None => store.config.default_view,
+            };
             let p = store.project_add(ops::project::NewProject { name, view, notes, color }).map_err(CliError::from)?;
             let detail = store.project_detail(p.id).map_err(CliError::from)?;
             write_envelope(flags, "project.add", "project", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Created project: {} ({})", p.name, p.id));

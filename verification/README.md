@@ -243,6 +243,23 @@ rather than an error. A `listed` assert asks whether the task is in the listing;
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible.
 
+### `refused:` — the step that is right to fail
+
+Some of what amenbo promises is a **refusal**: a reserve of a task another session holds comes back
+`already_reserved`, one whose premises are unmet comes back `not_ready`, and a write outside an AI's
+reach comes back `out_of_reach`. A driver that reads every non-zero exit as its own failure cannot
+write that line down at all — so an action names the code it expects to be turned away with:
+
+```yaml
+- { type: action, domain: task, op: status, with: { target: held, status: in_progress, refused: already_reserved } }
+```
+
+The op and its args are the ordinary ones; what is under test is the guard standing in front of
+them. The step is then judged like an assert: refused with that code passes, **going through
+fails** — that is the regression it exists to catch — and being refused for some *other* reason
+fails too, since a different guard is not the one the line is about. A refused operation produces
+nothing, so it takes no `as:`.
+
 ### `drivers` — which harnesses run this line
 
 `drivers` says which harnesses a scenario is written for. **Omit it and the scenario is

@@ -78,12 +78,19 @@ fn cli_only() -> Vec<Driver> {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Step {
-    /// A domain operation that changes state.
+    /// A domain operation that changes state — or, with `refused:` among its args, one the
+    /// scenario says amenbo will turn away.
     Action {
         domain: Domain,
         op: String,
         /// Named arguments for the op. A string value under the key `target` is a
         /// reference to an earlier step's `as:` binding.
+        ///
+        /// One key is not the op's own: `refused: <error code>` says this operation is expected to
+        /// be **rejected**, and names the code it must be rejected with. Then the step is judged
+        /// like an assert — the refusal is what passes, going through is what fails, and a refusal
+        /// for some other reason fails too, since a guard that turns the operation away for the
+        /// wrong reason is not the guard under test.
         #[serde(default)]
         with: Args,
         /// Optional binding name so later steps can refer to what this produced.
@@ -124,7 +131,7 @@ impl Step {
 }
 
 /// Free-form named arguments. Values stay as YAML so a driver interprets them; the loader
-/// only inspects the few keys it validates (`target`, `present`, `ok`).
+/// only inspects the few keys it validates (`target`, `present`, `ok`, `refused`).
 pub type Args = std::collections::BTreeMap<String, serde_yaml::Value>;
 
 /// The domain object a step touches. Kept small and closed on purpose — an unknown domain
@@ -471,6 +478,22 @@ impl Scenario {
                 }
             }
 
+            // A step that says its operation will be turned away. It is an action's word — an
+            // assert already comes back with a verdict of its own — and what it names is the code
+            // the refusal has to carry, so a step written against one guard cannot pass on another
+            // guard's refusal.
+            if let Some(v) = step.with().get("refused") {
+                if step.kind() == Kind::Assert {
+                    errs.push(at(i, "`refused` belongs on an action — an assert already carries a verdict".to_string()));
+                } else if v.as_str().is_none() {
+                    errs.push(at(i, "`refused` must be the error code the operation is expected to be rejected with".to_string()));
+                }
+                // Nothing came of an operation that was turned away, so there is nothing to name.
+                if let Step::Action { bind: Some(name), .. } = step {
+                    errs.push(at(i, format!("a refused op produces nothing, so `as: {name}` is not allowed")));
+                }
+            }
+
             // Record / guard the binding this step introduces.
             if let Step::Action { bind: Some(name), .. } = step {
                 if !spec.binds {
@@ -707,6 +730,82 @@ steps:
 "#;
         let errs = load_str(yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("`ok` must be a boolean")));
+    }
+
+    /// The refusal vocabulary: an action may declare that amenbo will turn it away, and the code it
+    /// will be turned away with. The op and its args are the ordinary ones — what is under test is
+    /// the guard in front of them, not a second spelling of the command.
+    #[test]
+    fn an_action_may_declare_the_refusal_it_expects() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+    as: held
+  - type: action
+    domain: task
+    op: status
+    with: { target: held, status: in_progress }
+  - type: action
+    domain: task
+    op: status
+    with: { target: held, status: in_progress, refused: already_reserved }
+"#;
+        load_str(yaml).unwrap().validate().expect("valid");
+    }
+
+    /// The code is the whole of it: a refusal on some other ground is a different guard, so the
+    /// arg has to name one rather than merely saying that something went wrong.
+    #[test]
+    fn a_refusal_without_a_code_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T, refused: true }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("must be the error code")));
+    }
+
+    #[test]
+    fn a_refusal_declared_on_an_assert_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: assert
+    domain: store
+    op: doctor
+    with: { ok: true, refused: already_reserved }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("belongs on an action")));
+    }
+
+    /// A binding on a refused op would name something that was never made — and every later step
+    /// reading it would be asserting about a task the store does not hold.
+    #[test]
+    fn binding_a_refused_op_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T, refused: out_of_reach }
+    as: ghost
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("produces nothing")));
     }
 
     #[test]

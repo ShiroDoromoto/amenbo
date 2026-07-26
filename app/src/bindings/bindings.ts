@@ -320,7 +320,7 @@ cmd: string, };
  * A reference to a task a decision spawned. A [`DecisionRefDto`] plus **status**, so the screen can
  * answer "is this decision's work finished yet?". Completed ones are muted on the screen side.
  */
-export type LinkedTaskRefDto = { id: number, name: string, ref?: string, status: "todo" | "in_progress" | "done" | "blocked", };
+export type LinkedTaskRefDto = { id: number, name: string, ref?: string, status: "todo" | "in_progress" | "done" | "blocked" | "rejected", };
 
 /**
  * [`amenbo_core::migrate::MigrationReport`] as the completion panel reads it.
@@ -884,7 +884,7 @@ export type TaskCardDto = { id: number, title: string,
 /**
  * The name it goes by on screen, `#<n>` (the display form of `id`).
  */
-ref: string, notes: string, projectId: number | null, status: "todo" | "in_progress" | "done" | "blocked", assignee: ActorDto | null, priority: "high" | "medium" | "low" | null, due: string | null, dueLabel: string | null, 
+ref: string, notes: string, projectId: number | null, status: "todo" | "in_progress" | "done" | "blocked" | "rejected", assignee: ActorDto | null, priority: "high" | "medium" | "low" | null, due: string | null, dueLabel: string | null, 
 /**
  * Completion timestamp (RFC3339 UTC). Used to sort the Done column newest-first, among other
  * things. None while the task is still open.

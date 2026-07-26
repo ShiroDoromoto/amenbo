@@ -12,6 +12,7 @@ import {
   EDGE_KINDS, edgeCandidates, edgeRows, promotesToAccepted, standingOn, type EdgeKind, type EdgeRow,
 } from "../core/decisionEdges";
 import { confirmDialog } from "../core/dialog";
+import { isClosed } from "../core/status";
 import { isEnterSubmit } from "../core/keys";
 import { errText, statusLabel, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
@@ -207,11 +208,11 @@ export function DecisionDetailPane({
         <div style={{ marginTop: 8, fontSize: "var(--fs-sm)" }}>
           {t("dec.linkedTasks")}:{" "}
           {d.linkedTasks.map((lt, i) => (
-            <span key={lt.id} style={lt.status === "done" ? { color: "var(--c-muted)" } : undefined}>
+            <span key={lt.id} style={isClosed(lt.status) ? { color: "var(--c-muted)" } : undefined}>
               {i > 0 && ", "}
               <button
                 className="feed__action"
-                style={{ padding: "0 4px", ...(lt.status === "done" ? { opacity: 0.6 } : {}) }}
+                style={{ padding: "0 4px", ...(isClosed(lt.status) ? { opacity: 0.6 } : {}) }}
                 onClick={() => onOpenTask?.(Number(lt.id))}
               >
                 {lt.ref ?? ""} {lt.name}

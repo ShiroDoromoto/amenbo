@@ -1,0 +1,22 @@
+# Registering a task is the first thing anyone does with amenbo, and the state it starts in is what
+# every later line builds on: a fresh task is todo, and nothing else has to be said for it to be.
+id: task-add
+title: A newly registered task starts as todo
+description: >
+  Create a task with nothing but a title, then read its status back. The write reaching the shipped
+  store and the default it lands with are one step apart, so this line covers both.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — freshly registered
+    as: seed
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo

@@ -1,8 +1,0 @@
-id: task-field-and-decision
-title: A task reports its status and assignee by field, and a decision can be recorded
-steps:
-  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — field & decision }, as: seed }
-  - { type: assert, domain: task, op: field, with: { target: seed, field: status, equals: todo } }
-  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
-  - { type: assert, domain: task, op: field, with: { target: seed, field: assignee_kind, equals: ai } }
-  - { type: action, domain: decision, op: create, with: { title: SCENARIO DECISION — recorded by the driver } }

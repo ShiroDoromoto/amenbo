@@ -283,7 +283,7 @@ dist-gui-linux:
 ## The scenario that drives verify-gui-linux — the single source every driver reads. Its
 ## listed/present title is the card the check writes and OCRs back; override to point the
 ## Linux check at another scenario.
-SCENARIO ?= verification/scenarios/task-appears-on-board.yaml
+SCENARIO ?= verification/scenarios/task-assign.yaml
 
 ## Exercise "another process writes → the screen updates" on a real Linux GUI app. Put the .deb that
 ## dist-gui-linux built into a container with Xvfb and launch it, write via the CLI, and take

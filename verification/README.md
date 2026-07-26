@@ -21,6 +21,36 @@ they are never pulled into `make test`. Nothing in CI builds or tests them eithe
 license/audit-scans their lockfile), so `cd verification && cargo clippy --all-targets && cargo
 test` is the gate — run it before you land a change here.
 
+## One scenario file per capability
+
+The scenario set is not a pile that grows by one file per feature. **Its size is pinned to the
+capability list `amenbo agent --json` prints**: one file per capability, holding every line that
+capability owns. Then the count only moves when amenbo's own capability list moves, and a changed
+behaviour turns exactly one file red.
+
+- **The file is named after the capability's first command**, spaces to dashes — the capability
+  "Assign a task to a person or that person's AI" leads with `task assign`, so its file is
+  `task-assign.yaml`. The scenario's `id` is the file's stem. The prose of a capability gets
+  reworded; the command it leads with is the stable handle, and it is the handle a coverage count
+  matches on.
+- **A line belongs to the capability whose command it exists to prove** — the operation under test,
+  not the read it is checked with. Every line ends by reading something back, so `task field` and
+  `task listed` show up all over the set; they are the assert vocabulary, not the owner. A line that
+  reserves a task and reads its status back belongs to `task-status.yaml`.
+
+Adding a line to the set:
+
+1. Find the capability it proves, and open that file.
+2. **Write the steps into it.** Do not add a file — a second file for a capability that has one is
+   the pile coming back.
+3. Only when no file answers for it — the capability itself is new — start one.
+4. When a feature goes, its file goes with it.
+
+One rule sits above all of that: **a line that needs an op the registry does not have is not written
+here at all.** Growing the registry means growing every driver's mapping with it, which is its own
+implementation in its own workspace; a YAML that runs ahead of it turns `verify-all` red and holds
+up a release. File a task for the op instead, and leave the line out until it lands.
+
 ## CLI driver
 
 `verify-cli` reads one scenario, maps each step to an invocation of the **shipped / installed**
@@ -30,9 +60,9 @@ knows the domain vocabulary, not the build under test.
 ```sh
 cd verification
 # drive a specific binary (e.g. the CLI extracted from a release .pkg):
-cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-appears-on-board.yaml --bin /path/to/amenbo
+cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-assign.yaml --bin /path/to/amenbo
 # or the `amenbo` on PATH (the installed CLI), with a machine-readable result:
-cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-appears-on-board.yaml --json
+cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-assign.yaml --json
 ```
 
 The run is isolated by `AMENBO_HOME` pointed at a throwaway store plus a `.amenbo`-free CWD;
@@ -56,7 +86,7 @@ cd verification
 # every scenario under scenarios/ (the default), against a specific binary:
 cargo run -p amenbo-verify-cli --bin verify-all -- --bin /path/to/amenbo
 # a chosen subset (files and/or directories), with a machine-readable aggregate:
-cargo run -p amenbo-verify-cli --bin verify-all -- scenarios/one.yaml scenarios/two.yaml --json
+cargo run -p amenbo-verify-cli --bin verify-all -- scenarios/task-add.yaml scenarios/task-assign.yaml --json
 ```
 
 The exit code is the roll-up — `0` when every scenario is green, non-zero when any is red or
@@ -83,20 +113,20 @@ The Linux container carries no toolchain, so it can't read the scenario itself. 
 (`make verify-gui-linux`) resolves the scenario through the `emit` bin and passes the card — the
 `listed`/present title — into the container as `AMENBO_E2E_CARD`. tesseract reads the words but not
 every glyph, so that path matches the title on its alphanumerics, not verbatim. `SCENARIO` selects
-which scenario drives it (default `scenarios/task-appears-on-board.yaml`).
+which scenario drives it (default `scenarios/task-assign.yaml`).
 
 ```sh
 cd verification
 # the crate's JSON face over the validated model — a shell consumer reads it through jq,
 # never by reparsing YAML:
-cargo run -p amenbo-scenario --bin emit -- scenarios/task-appears-on-board.yaml
+cargo run -p amenbo-scenario --bin emit -- scenarios/task-assign.yaml
 ```
 
 ```sh
 cd verification
 ID=2147   # the task whose own dev GUI you built and opened
 # front the dev GUI, resolve its window via uiauto (by pid), and shoot one shot per step:
-cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/task-appears-on-board.yaml \
+cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/task-assign.yaml \
   --app "amenbo (dev $ID)" --pid "$(devtool devgui pid "$ID")"
 ```
 
@@ -125,8 +155,8 @@ and carries named args under `with`. An action may bind its result with `as:`, a
 step refers back to it with `target:`.
 
 ```yaml
-id: task-appears-on-board
-title: A task assigned to me-ai surfaces in the me-ai todo listing
+id: task-assign
+title: A task handed to me-ai is stamped as the AI's and surfaces in the me-ai todo listing
 steps:
   - { type: action, domain: task, op: create, with: { title: SEED }, as: seed }
   - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
@@ -146,7 +176,7 @@ earlier `as:`). Run it over the whole scenario set:
 ```sh
 cd verification && cargo run -p amenbo-scenario --bin lint
 # or against specific files:
-cargo run -p amenbo-scenario --bin lint -- scenarios/task-appears-on-board.yaml
+cargo run -p amenbo-scenario --bin lint -- scenarios/task-assign.yaml
 ```
 
 Non-zero exit on any parse or validation failure, so it drops into a make target or CI.

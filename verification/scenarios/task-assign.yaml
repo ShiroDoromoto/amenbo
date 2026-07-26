@@ -1,0 +1,40 @@
+# Delegation, the line amenbo exists for: a task handed to me-ai is stamped as the AI's, and it
+# surfaces in the mailbox the next session opens. Driver-independent: no command line, no
+# coordinates. The CLI driver maps each step to a shipped-binary call; the GUI harness maps it to a
+# screen instruction.
+id: task-assign
+title: A task handed to me-ai is stamped as the AI's and surfaces in the me-ai todo listing
+description: >
+  Create a task, assign it to me-ai, then read it back two ways: the assignee the store kept, and
+  the me-ai / todo listing the next session opens. This is the smallest end-to-end proof that a
+  write lands and is readable back.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — handed to me-ai
+    as: seed
+
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: seed
+      assignee: me-ai
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: assignee_kind
+      equals: ai
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "assignee:me-ai status:todo"
+      target: seed
+      present: true

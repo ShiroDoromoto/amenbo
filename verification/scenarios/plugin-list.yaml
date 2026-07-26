@@ -1,0 +1,87 @@
+# Putting a plugin on the machine, and the switch that is not the same act.
+#
+# This is the one scenario that reaches outside the box on purpose. `plugin install` resolves the
+# official catalog over the network, picks this OS and architecture's asset, verifies its signature
+# against the key built into the binary, and lands an executable on disk. Every one of those is a
+# layer that exists only in a shipped build — a wrong key, a missing asset for a platform, a lost
+# execute bit — and none of them is reachable from a test that never leaves the workspace. The
+# subject is the official `worktree` plugin, which is also the reference implementation of the
+# plugin contract, so what passes here is the contract itself.
+#
+# The price is that a release gate now has a line that needs the network and an intact catalog.
+# That is the trade: the signature path cannot be proven any other way, and faking it would leave
+# the count reading "covered" over the very thing this exists to catch.
+#
+# `plugin update` / `plugin rollback` are not here: both need a build to move to, which only the
+# catalog can offer and only when it has actually moved past this one.
+id: plugin-list
+title: A plugin is fetched from the catalog, sits there with its gate shut, is opened and shut again, and leaves nothing behind
+description: >
+  Install the official `worktree` plugin from the catalog and read it back off the listing — present,
+  and **not** enabled, which is the normal state and the one people misread. Open its gate, read it
+  open, shut it again, and then remove the plugin and confirm the machine is back where it started.
+steps:
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # Installed is not enabled. A plugin that sits there doing nothing until somebody
+  # says otherwise is the design, not a fault, so the listing has to say both things.
+  - type: assert
+    domain: plugin
+    op: listed
+    with:
+      name: worktree
+      present: true
+
+  - type: assert
+    domain: plugin
+    op: listed
+    with:
+      name: worktree
+      enabled: false
+
+  # The gate. This plugin declares itself project-scoped, so the switch answers for the project the
+  # folder is bound to — and there is one switch, at the level its author declared.
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: listed
+    with:
+      name: worktree
+      enabled: true
+
+  - type: action
+    domain: plugin
+    op: disable
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: listed
+    with:
+      name: worktree
+      enabled: false
+
+  # Removal takes everything the plugin left — its directory, its settings, the consent it was
+  # given — so the listing is the machine's own answer that nothing is left over.
+  - type: action
+    domain: plugin
+    op: uninstall
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: listed
+    with:
+      name: worktree
+      present: false

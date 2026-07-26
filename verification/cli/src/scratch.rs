@@ -49,7 +49,47 @@ pub fn session(tag: &str, keep: bool) -> std::io::Result<Session> {
     let cwd = base.join("cwd");
     std::fs::create_dir_all(&home)?;
     std::fs::create_dir_all(&cwd)?;
+    git_repo(&cwd)?;
     Ok(Session { home, cwd, keep, base })
+}
+
+/// Make the bound folder a git repository, with one empty commit on `main` to cut from.
+///
+/// A folder somebody binds amenbo to is, in practice, a checkout — and some of what a scenario
+/// drives only means anything inside one: the commit hook amenbo installs, and the official
+/// `worktree` plugin, which resolves everything it does from the repository root it is called in.
+/// Handing every session a repository puts that back where it belongs, as the shape of the folder
+/// rather than as a step a scenario has to spell out.
+///
+/// A failure here is raised, not swallowed: the alternative is a run that reports a plugin's
+/// "not inside a git repository" as though the shipped build were at fault.
+fn git_repo(dir: &Path) -> std::io::Result<()> {
+    let git = |args: &[&str]| -> std::io::Result<()> {
+        let out = std::process::Command::new("git").args(args).current_dir(dir).output()?;
+        if !out.status.success() {
+            return Err(std::io::Error::other(format!(
+                "`git {}` failed in {}: {}",
+                args.join(" "),
+                dir.display(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            )));
+        }
+        Ok(())
+    };
+    git(&["init", "--quiet", "--initial-branch", "main", "."])?;
+    // Named on the command line rather than left to the machine's git config: a box with no
+    // identity set would otherwise fail here, and neither name belongs to anybody.
+    git(&[
+        "-c",
+        "user.name=verify",
+        "-c",
+        "user.email=verify@example.invalid",
+        "commit",
+        "--quiet",
+        "--allow-empty",
+        "-m",
+        "the branch a scenario cuts from",
+    ])
 }
 
 impl Session {
@@ -109,6 +149,7 @@ mod tests {
             assert!(s.home.is_dir() && s.cwd.is_dir(), "both dirs exist");
             assert_ne!(s.home, s.cwd, "home and cwd are separate");
             assert!(!s.cwd.join(".amenbo").exists(), "the cwd carries no .amenbo ancestor");
+            assert!(s.cwd.join(".git").exists(), "the bound folder is a checkout, as a real one is");
             assert_eq!(s.base.parent(), Some(root().as_path()), "under the one parent");
         }
         for s in sessions {

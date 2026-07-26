@@ -39,12 +39,22 @@ struct Driver {
     session: scratch::Session,
     project_id: i64,
     bindings: HashMap<String, i64>,
+    /// What the last `plugin run` came back with. A command face's return value is its own stdout
+    /// and is deliberately kept out of the execution log, so this is the only place a later step can
+    /// read it from — which is why the assert that reads it has to follow its call.
+    last_run: Option<serde_json::Value>,
 }
 
 impl Driver {
     /// Boot a fresh store: `init` creates it and hands back the project every `task add` needs.
     fn new(bin: &Path, session: scratch::Session) -> Result<Driver, String> {
-        let mut d = Driver { bin: bin.to_path_buf(), session, project_id: 0, bindings: HashMap::new() };
+        let mut d = Driver {
+            bin: bin.to_path_buf(),
+            session,
+            project_id: 0,
+            bindings: HashMap::new(),
+            last_run: None,
+        };
         let v = d.run_json(&["init", "--name", "verify", "--json"])?;
         d.project_id = v["identity"]["project_id"]
             .as_i64()
@@ -416,6 +426,54 @@ impl Driver {
                 self.run_json(&["unbind", "--dir", &path, "--yes", "--json"])?;
                 Ok(Outcome::action(format!("unbound {path}")))
             }
+            (Domain::Plugin, "install") => {
+                let name = req_str(with, "name")?;
+                let v = self.run_json(&["plugin", "install", name, "--json"])?;
+                let bytes = v["program_bytes"].as_i64().unwrap_or(0);
+                Ok(Outcome::action(format!("installed plugin `{name}` ({bytes} bytes of program)")))
+            }
+            (Domain::Plugin, "enable") => {
+                let name = req_str(with, "name")?;
+                let v = self.run_json(&["plugin", "enable", name, "--json"])?;
+                let level = v["level"].as_str().unwrap_or("?").to_string();
+                Ok(Outcome::action(format!("opened `{name}`'s gate ({level})")))
+            }
+            (Domain::Plugin, "disable") => {
+                let name = req_str(with, "name")?;
+                self.run_json(&["plugin", "disable", name, "--json"])?;
+                Ok(Outcome::action(format!("closed `{name}`'s gate")))
+            }
+            (Domain::Plugin, "uninstall") => {
+                let name = req_str(with, "name")?;
+                // Removing a plugin takes its settings, its consent and its log rows with it, so it
+                // asks first; the driver is unattended and answers up front.
+                self.run_json(&["plugin", "uninstall", name, "--yes", "--json"])?;
+                Ok(Outcome::action(format!("removed plugin `{name}`")))
+            }
+            (Domain::Plugin, "run") => {
+                let name = req_str(with, "name")?.to_string();
+                let command = req_str(with, "command")?.to_string();
+                // Everything after `plugin run <name>` belongs to the plugin, so amenbo's own flags
+                // have to be said before the subcommand — appended, they would reach the plugin as
+                // arguments and amenbo would see no facet at all.
+                let mut args: Vec<String> =
+                    vec!["--actor".into(), "human".into(), "--json".into(), "plugin".into(), "run".into()];
+                args.push(name.clone());
+                args.push(command.clone());
+                if with.contains_key("task") {
+                    args.push(self.resolve_key(with, "task")?.to_string());
+                }
+                for extra in with.get("args").and_then(|v| v.as_sequence()).unwrap_or(&Vec::new()) {
+                    let extra = extra.as_str().ok_or("every entry under `args` must be a string")?;
+                    args.push(extra.to_string());
+                }
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                let value = v["value"].as_str().unwrap_or_default().len();
+                self.last_run = Some(v);
+                Ok(Outcome::action(format!(
+                    "called `{name} {command}` — it returned {value} byte(s)"
+                )))
+            }
             (Domain::Folder, "sync-guide") => {
                 let dir = self.folder(with)?;
                 let path = dir.to_string_lossy().into_owned();
@@ -661,6 +719,95 @@ impl Driver {
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))
+            }
+            (Domain::Plugin, "listed") => {
+                let name = req_str(with, "name")?;
+                let v = self.run_json(&["plugin", "list", "--json"])?;
+                let row = v["plugins"]
+                    .as_array()
+                    .and_then(|rows| rows.iter().find(|p| p["name"].as_str() == Some(name)));
+                // With `enabled` the question is the gate, and `install ≠ enable` is exactly what a
+                // reader gets wrong — so the two are asked apart, never rolled into one answer.
+                match opt_bool(with, "enabled") {
+                    Some(want) => {
+                        let got = row.and_then(|r| r["enabled"].as_bool());
+                        let pass = got == Some(want);
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "plugin `{name}` gate is {} (expected {want}, {})",
+                                match got {
+                                    Some(open) => open.to_string(),
+                                    None => "not installed at all".to_string(),
+                                },
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                    None => {
+                        let present = opt_bool(with, "present").unwrap_or(true);
+                        let pass = row.is_some() == present;
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "plugin `{name}` {} on this machine (expected {}, {})",
+                                if row.is_some() { "is installed" } else { "is not installed" },
+                                if present { "installed" } else { "gone" },
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                }
+            }
+            (Domain::Plugin, "returned") => {
+                let want = req_str(with, "contains")?;
+                let last = self
+                    .last_run
+                    .as_ref()
+                    .ok_or("no `plugin run` has been called yet, so there is no return value to read")?;
+                let value = last["value"].as_str().unwrap_or_default();
+                let pass = value.contains(want);
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "the call returned {:?} (expected it to carry `{want}`, {})",
+                        value,
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            (Domain::Plugin, "ran") => {
+                let name = req_str(with, "name")?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let v = self.run_json(&["plugin", "runs", name, "--json"])?;
+                // Newest first, so the run a step is asking about is the one at the head.
+                let newest = v["runs"].as_array().and_then(|rows| rows.first());
+                match with.get("outcome").and_then(|v| v.as_str()) {
+                    Some(want) => {
+                        let got = newest.and_then(|r| r["outcome"].as_str());
+                        let pass = got == Some(want);
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "`{name}`'s last run ended {} (expected {want}, {})",
+                                got.unwrap_or("— it has no runs at all"),
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                    None => {
+                        let pass = newest.is_some() == present;
+                        Ok(Outcome::assert(
+                            pass,
+                            format!(
+                                "the log holds {} run(s) for `{name}` (expected {}, {})",
+                                v["count"].as_i64().unwrap_or(0),
+                                if present { "at least one" } else { "none" },
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        ))
+                    }
+                }
             }
             (Domain::Folder, "resynced") => {
                 let dir = self.folder(with)?;

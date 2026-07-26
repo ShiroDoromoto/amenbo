@@ -379,6 +379,7 @@ fn domain_str(d: Domain) -> &'static str {
         Domain::Dimension => "dimension",
         Domain::Store => "store",
         Domain::Folder => "folder",
+        Domain::Plugin => "plugin",
     }
 }
 

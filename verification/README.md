@@ -70,9 +70,18 @@ cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-assign.yaml --
 
 The run is isolated by `AMENBO_HOME` pointed at a throwaway store plus a `.amenbo`-free CWD;
 the real app-data is never touched, and `AMENBO_UPDATE_CHECK=0` keeps it off the
-network. Exit code is the machine signal — `0` when every assert passes, non-zero on any failed
-assert or execution error — so the runner reads it directly. `--keep` leaves the throwaway store
-in place for inspection.
+network. That CWD is a git repository with one empty commit on `main`, because a folder somebody
+binds amenbo to is one in practice, and some of what a scenario drives only means anything inside a
+checkout — the commit hook amenbo installs, and the official `worktree` plugin, which resolves
+everything it does from the repository root it is called in. Exit code is the machine signal — `0`
+when every assert passes, non-zero on any failed assert or execution error — so the runner reads it
+directly. `--keep` leaves the throwaway store in place for inspection.
+
+**One thing does leave the box.** `plugin install` resolves the official catalog over the network,
+picks this platform's asset and verifies its signature against the key built into the binary — a
+layer that exists only in a shipped build, and one no local fixture can stand in for without the
+count reading "covered" over the very thing it exists to catch. The scenarios that install a plugin
+therefore need the network and an intact catalog, and are the only ones that do.
 
 Each op the driver maps is a `(domain, op)` arm in `cli/src/lib.rs`; an op that is in the
 scenario registry but not yet mapped fails loudly rather than passing silently.
@@ -186,21 +195,30 @@ a human from the evidence, not by the exit code.
 A scenario is an `id`, a human `title`, an optional `description`, an optional `drivers`
 list, and an ordered list of `steps`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
-`comment` / `project` / `dimension` / `store` / `folder`) and an `op`, and carries named args under
-`with`. An action may bind its result with `as:`, and a later step refers back to it with `target:` —
-an op that joins two objects names the second under its own key (`decision link`'s `task:`), and
-every such key is checked back to an earlier binding, not just `target:`.
+`comment` / `project` / `dimension` / `store` / `folder` / `plugin`) and an `op`, and carries named
+args under `with`. An action may bind its result with `as:`, and a later step refers back to it with
+`target:` — an op that joins two objects names the second under its own key (`decision link`'s
+`task:`), and every such key is checked back to an earlier binding, not just `target:`.
 
-The last two are not things filed in a store: `store` is this device's amenbo itself — its settings,
-the identity it answers `whoami` with, and the build in place — and `folder` is a directory and the
-project its `.amenbo` names.
+The last three are not things filed in a store: `store` is this device's amenbo itself — its
+settings, the identity it answers `whoami` with, and the build in place — `folder` is a directory
+and the project its `.amenbo` names, and `plugin` is what is installed on the machine, whose gate is
+open, and what the execution log kept.
 
 Not every object is reached by a binding. A **dimension** travels as the words a person says — its
 axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what
 the command takes too; a bare number there would be read as a name, not an id. A **folder** travels
 as a plain name too (`dir: shared`), and for a different reason: a binding is answered by where a
 folder sits, so the driver is the one that places it — clear of the run's own bound CWD, which a
-pointer search would otherwise walk up into.
+pointer search would otherwise walk up into. A **plugin** is named the way the catalog names it
+(`name: worktree`), which is what every one of its commands takes.
+
+`plugin run` is the one place where a step's arguments are not amenbo's. Everything after the
+plugin's name belongs to the plugin, so `command:` is the word its own face takes, `task:` hands it
+the id of a task an earlier step created, and `args:` carries anything else through verbatim. The
+value that comes back is read by the `returned` assert, which has to **follow its call**: a command
+face's return value is its own stdout and is deliberately not written to the execution log, so
+nothing else can go and fetch it afterwards.
 
 ```yaml
 id: task-assign

@@ -69,6 +69,10 @@ cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-assign.yaml --
 cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-assign.yaml --json
 ```
 
+`--bin` (and `$AMENBO_BIN`) takes a relative path as well — `--bin ../target/debug/amenbo` to point
+at your own build — read from where you run the command, not from the throwaway directory the
+scenario is driven in. A value with no separator in it (`--bin amenbo`) stays a `PATH` lookup.
+
 The run is isolated by `AMENBO_HOME` pointed at a throwaway store plus a `.amenbo`-free CWD;
 the real app-data is never touched, and `AMENBO_UPDATE_CHECK=0` keeps it off the
 network. Exit code is the machine signal — `0`

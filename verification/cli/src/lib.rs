@@ -33,6 +33,24 @@ pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Repor
     Ok(report)
 }
 
+/// Pin the binary under test to where the caller named it, while we are still standing there.
+/// Every run drives the binary from a throwaway cwd, so a relative path handed in on `--bin` (or
+/// `$AMENBO_BIN`) would be counted from *that* directory and land on nothing — and the failure it
+/// raises names the binary, never the directory it looked in, so the path itself reads as the
+/// suspect. Resolving it at the door is what keeps `--bin ../target/debug/amenbo` meaning what the
+/// caller sees. A bare name carries no separator and is a `PATH` lookup, so it is left alone.
+pub fn anchor_bin(bin: PathBuf) -> PathBuf {
+    let names_a_path = bin.parent().is_some_and(|p| !p.as_os_str().is_empty());
+    if bin.is_absolute() || !names_a_path {
+        return bin;
+    }
+    match std::env::current_dir() {
+        Ok(cwd) => cwd.join(bin),
+        // Nowhere to anchor to: hand back what we were given and let the run report its own failure.
+        Err(_) => bin,
+    }
+}
+
 /// Drives the shipped binary against one isolated store, remembering the ids that steps bind.
 struct Driver {
     bin: std::path::PathBuf,
@@ -2041,5 +2059,26 @@ mod tests {
         let v = json!({ "blocked_by": [] });
         assert_eq!(dig(&v, "blocked_by.0.name"), None);
         assert_eq!(dig(&v, "placement.project.name"), None);
+    }
+
+    /// The one that the throwaway cwd would otherwise break: a path the caller counted from their
+    /// own directory is resolved there, not where the scenario ends up running.
+    #[test]
+    fn a_relative_binary_is_anchored_where_it_was_typed() {
+        let here = std::env::current_dir().expect("a cwd to anchor to");
+        assert_eq!(
+            anchor_bin(PathBuf::from("../target/debug/amenbo")),
+            here.join("../target/debug/amenbo")
+        );
+        assert_eq!(anchor_bin(PathBuf::from("./amenbo")), here.join("./amenbo"));
+    }
+
+    /// A name with no separator is a `PATH` lookup, and an absolute path is already answered —
+    /// anchoring either would turn a working invocation into a miss.
+    #[test]
+    fn a_bare_name_and_an_absolute_path_are_left_as_they_are() {
+        assert_eq!(anchor_bin(PathBuf::from("amenbo")), PathBuf::from("amenbo"));
+        let abs = std::env::current_dir().expect("a cwd").join("amenbo");
+        assert_eq!(anchor_bin(abs.clone()), abs);
     }
 }

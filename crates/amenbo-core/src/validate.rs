@@ -176,10 +176,11 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
     // of `task_dependency` and `task.project_id` all carry FK declarations, and a store in an older layout
     // without those constraints is refused at open: the only stores that open are ones the fold has stripped
     // of orphans and passed through `foreign_key_check`. Every write after that runs under
-    // `PRAGMA foreign_keys = ON`, so a row with no referent cannot be inserted. `task.project_id` alone is
-    // RESTRICT rather than CASCADE, but deleting a project (`ops::project::delete`) physically deletes its
-    // tasks first and only then the project — and RESTRICT would refuse the delete outright if any remained —
-    // so a task that has lost its placement cannot exist either. What is left is exactly what this layer can
+    // `PRAGMA foreign_keys = ON`, so a row with no referent cannot be inserted. Deleting a parent is the
+    // other side of it: every reference that stands for a concept is RESTRICT (`AMB-D-403`), so a delete op
+    // takes its children first — `ops::project::delete` deletes a project's tasks and only then the project —
+    // and the database refuses the parent outright while one remains. So a row that has lost what it hangs
+    // on cannot exist either, whichever end you come at it from. What is left is exactly what this layer can
     // still find: self-reference (a perfectly valid reference, so no FK stops it) and duplicate order_keys
     // (nothing to do with FKs).
 

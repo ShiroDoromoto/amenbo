@@ -109,3 +109,49 @@ fn a_deferred_foreign_key_allows_child_before_parent() {
         e.conn().query_row("SELECT count(*) FROM task_dependency", [], |r| r.get(0)).unwrap();
     assert_eq!(edges, 1, "both tasks exist by commit, so the edge is kept");
 }
+
+/// **A concept row is not swept away with its parent** (`AMB-D-403`). Leaving a child behind stops the
+/// parent's `DELETE` where it stands rather than taking it: what a delete op does not take, the database
+/// refuses to lose. And it stops *there* — `RESTRICT` is not deferred, so the statement fails rather than
+/// the commit, even though the reference is declared `DEFERRABLE INITIALLY DEFERRED` (that deferral is the
+/// dangling-reference check's, which is a different one).
+#[test]
+fn a_parent_with_a_child_left_behind_cannot_be_deleted() {
+    let e = StoreEngine::open_in_memory().unwrap();
+    let tx = e.write().unwrap();
+    tx.put_record("task", 1, &[("title", text("has a comment"))]).unwrap();
+    tx.put_record("task_comment", 1, &[("task_id", text("1")), ("text", text("said something"))])
+        .unwrap();
+    tx.commit().unwrap();
+
+    let refused = e.conn().execute("DELETE FROM task WHERE id = 1", []);
+    assert!(refused.is_err(), "the comment is still there, so the task cannot go: {refused:?}");
+    let left: i64 =
+        e.conn().query_row("SELECT count(*) FROM task_comment", [], |r| r.get(0)).unwrap();
+    assert_eq!(left, 1, "and nothing was taken on the way out");
+
+    // Taking the child first is what a delete op does, and then the parent goes.
+    e.conn().execute("DELETE FROM task_comment WHERE id = 1", []).unwrap();
+    e.conn().execute("DELETE FROM task WHERE id = 1", []).expect("with no child left, the task goes");
+}
+
+/// The exclusion the same decision names: amenbo's own per-project settings are not concepts anyone points
+/// at, so they still ride the project's cascade. Pinned here because a blanket rewrite of the schema would
+/// take them along silently, and the cost of that is a `project delete` op that has to sweep rows nobody
+/// outside amenbo ever sees.
+#[test]
+fn amenbos_own_settings_still_go_with_the_project() {
+    let e = StoreEngine::open_in_memory().unwrap();
+    let tx = e.write().unwrap();
+    tx.put_record("project", 1, &[("name", text("going away"))]).unwrap();
+    tx.commit().unwrap();
+    let tx = e.write().unwrap();
+    tx.put_record("plugin_enable", 1, &[("project_id", text("1")), ("plugin", text("slack"))])
+        .unwrap();
+    tx.commit().unwrap();
+
+    e.conn().execute("DELETE FROM project WHERE id = 1", []).expect("no concept row holds it back");
+    let left: i64 =
+        e.conn().query_row("SELECT count(*) FROM plugin_enable", [], |r| r.get(0)).unwrap();
+    assert_eq!(left, 0, "the gate went with the project it was about");
+}

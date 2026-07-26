@@ -175,6 +175,15 @@ pub const STEPS: &[Step] = &[
         // here — see the function.
         apply: Apply::Custom(admit_rejected_task_status),
     },
+    Step {
+        to: 10,
+        name: "hold the concept rows to RESTRICT, so no delete of theirs happens outside a delete op",
+        // `AMB-D-403`: a row that stands for a concept is deleted by an op or not at all, and `RESTRICT` is
+        // how the database holds that. The ops already take their children row by row (`AMB-T-2195`), so on
+        // a store that has been driven by this build nothing changes — what changes is that leaving one
+        // behind now stops the parent's `DELETE` instead of sweeping it.
+        apply: Apply::Custom(restrict_the_concept_references),
+    },
 ];
 
 /// v4: the lint-hook question stopped being one per project and became one for the device
@@ -319,7 +328,7 @@ fn admit_rejected_task_status(ctx: &Ctx<'_>) -> Result<()> {
     }
     let widened = declared.replace(NARROW, WIDE);
 
-    let before = task_column_names(ctx.tx)?;
+    let before = column_names(ctx.tx, "task")?;
     ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
     let wrote = ctx.tx.execute(
         "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'task'",
@@ -329,20 +338,109 @@ fn admit_rejected_task_status(ctx: &Ctx<'_>) -> Result<()> {
     // sees the widened `CHECK` instead of the one this connection read at open.
     ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
     wrote?;
-    let after = task_column_names(ctx.tx)?;
+    let after = column_names(ctx.tx, "task")?;
     if before != after {
         return Err(super::StoreEngineError::UnrecognisedDdl { table: "task", expected: NARROW });
     }
     Ok(())
 }
 
-/// The `task` table's columns, in physical order — the invariant [`admit_rejected_task_status`] holds
-/// itself to, since a rewritten declaration that changed the shape would be a corrupted store rather
-/// than a migrated one.
-fn task_column_names(tx: &Transaction<'_>) -> Result<Vec<String>> {
-    let mut stmt = tx.prepare("SELECT name FROM pragma_table_info('task') ORDER BY cid")?;
-    let names = stmt.query_map([], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+/// A table's columns, in physical order — the invariant every declaration rewrite holds itself to, since
+/// a rewritten declaration that changed the shape would be a corrupted store rather than a migrated one.
+fn column_names(tx: &Transaction<'_>, table: &str) -> Result<Vec<String>> {
+    let mut stmt = tx.prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid")?;
+    let names =
+        stmt.query_map([table], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(names)
+}
+
+/// The `ON DELETE` clause a concept reference carried up to v9, and the one v10 leaves it with — frozen
+/// text, like every step's. Each carries the whole tail of the declaration `fk!` emitted, not the two
+/// words alone, so a rewrite can only land on a reference's clause and never on some other `CASCADE`.
+const REFERENCE_CASCADES: &str = "ON DELETE CASCADE ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED";
+/// The same clause, restricted (`AMB-D-403`).
+const REFERENCE_RESTRICTS: &str =
+    "ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED";
+
+/// The tables v10 rewrites, and how many references each of them declared. The count is what makes the
+/// rewrite exact: a table that has grown a reference since would otherwise have that one changed too,
+/// silently and outside what the decision named. What is deliberately absent is amenbo's own settings for
+/// a project — `plugin_config`, `plugin_enable`, `hook_optout` — which keep their cascade.
+const RESTRICTED_TABLES: &[(&str, usize)] = &[
+    ("task_comment", 1),
+    ("decision_comment", 1),
+    ("task_dependency", 2),
+    ("task_commit", 1),
+    ("decision_task_link", 2),
+    ("decision_edge", 2),
+    ("dimension_value", 1),
+    ("task_dimension_value", 3),
+];
+
+/// v10: hold the rows that stand for a concept to `RESTRICT` (`AMB-D-403`).
+///
+/// **Why this is not SQL, and not a rebuild either.** SQLite has no `ALTER TABLE … DROP CONSTRAINT`, and
+/// the rebuild-and-swap its documentation prescribes is closed for the reason [`admit_rejected_task_status`]
+/// gives at length: dropping a referenced table performs an implicit `DELETE` that fires the very actions
+/// being changed, and the `PRAGMA foreign_keys = OFF` escape is a no-op inside the transaction a step is.
+/// So each table stays where it is and only its declaration is rewritten — the same handle v9 used, on a
+/// different clause.
+///
+/// **Read everything before writing anything.** Every table is recognised first, and a store that does not
+/// declare what this step expects is refused with nothing written — a half-restricted store would carry a
+/// version stamp saying the whole set had moved. A table already restricted is passed over rather than
+/// refused: a store born from a registry that carries the clause, stamped back to an earlier version, has
+/// nothing left for this step to do.
+///
+/// The check on the way out is the same as v9's: the column list before and after must be identical, since
+/// this changes a constraint and never the shape. It runs after `writable_schema` is shut, which is both
+/// where the connection re-parses what was written and where that door has to close regardless.
+fn restrict_the_concept_references(ctx: &Ctx<'_>) -> Result<()> {
+    let mut rewrites = Vec::new();
+    for (table, references) in RESTRICTED_TABLES {
+        let declared: String = ctx.tx.query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [table],
+            |r| r.get(0),
+        )?;
+        if !declared.contains(REFERENCE_CASCADES)
+            && declared.matches(REFERENCE_RESTRICTS).count() == *references
+        {
+            continue;
+        }
+        if declared.matches(REFERENCE_CASCADES).count() != *references {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table,
+                expected: REFERENCE_CASCADES,
+            });
+        }
+        let restricted = declared.replace(REFERENCE_CASCADES, REFERENCE_RESTRICTS);
+        rewrites.push((*table, restricted, column_names(ctx.tx, table)?));
+    }
+
+    ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = rewrites.iter().try_for_each(|(table, sql, _)| {
+        ctx.tx
+            .execute(
+                "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = ?2",
+                rusqlite::params![sql, table],
+            )
+            .map(|_| ())
+    });
+    // `RESET` both shuts the door and drops the connection's parsed schema, so the very next statement
+    // sees the restricted references instead of the ones this connection read at open.
+    ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+
+    for (table, _, before) in &rewrites {
+        if column_names(ctx.tx, table)? != *before {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table,
+                expected: REFERENCE_CASCADES,
+            });
+        }
+    }
+    Ok(())
 }
 
 /// The version a store ends at once the chain has run — the last step's, or the baseline if there is
@@ -644,6 +742,91 @@ mod tests {
         }
     }
 
+    /// One table's declaration, as the store carries it.
+    fn declared_sql(engine: &StoreEngine, table: &str) -> String {
+        engine
+            .conn()
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                [table],
+                |r| r.get(0),
+            )
+            .unwrap_or_else(|e| panic!("no declaration for `{table}`: {e}"))
+    }
+
+    /// **v10 on every shape the chain starts from** (`AMB-D-403`). A store born at any frozen version comes
+    /// out of the chain declaring the same `ON DELETE` as one born from today's registry — which is the
+    /// whole point of a step for a constraint that `CREATE TABLE IF NOT EXISTS` can never revisit.
+    ///
+    /// The check is on the clauses and not on the whole declaration, because two stores at one version
+    /// legitimately carry their columns in different order (see [`admit_rejected_task_status`]); the count
+    /// is what says every reference moved rather than the first one found.
+    ///
+    /// It also pins the exclusion the decision named: amenbo's own per-project settings come out still
+    /// cascading. A rewrite that swept the whole schema would take those too, silently, and only a delete
+    /// op growing a sweep it never needed would eventually say so.
+    #[test]
+    fn the_chain_restricts_the_concept_references_and_leaves_the_settings_cascading() {
+        for born in OLDEST_FROZEN_VERSION..=LATEST_VERSION {
+            let dir = scratch(&format!("restrict-v{born}"));
+            let engine = store_at(&dir, born);
+
+            run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+            for (table, references) in RESTRICTED_TABLES {
+                let sql = declared_sql(&engine, table);
+                assert_eq!(
+                    sql.matches(REFERENCE_RESTRICTS).count(),
+                    *references,
+                    "a store born at v{born} leaves `{table}` with the wrong number of restricted \
+                     references:\n{sql}"
+                );
+                assert!(
+                    !sql.contains(REFERENCE_CASCADES),
+                    "a store born at v{born} still lets `{table}` be swept:\n{sql}"
+                );
+            }
+            for table in ["plugin_config", "plugin_enable"] {
+                assert!(
+                    declared_sql(&engine, table).contains(REFERENCE_CASCADES),
+                    "a store born at v{born} stopped cascading `{table}`, which is amenbo's own setting"
+                );
+            }
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
+    /// A store whose table does not declare what v10 expects is **refused**, and refused before anything is
+    /// written: a half-restricted store would carry a version stamp saying the whole set had moved.
+    #[test]
+    fn a_table_the_restriction_step_does_not_recognise_stops_the_chain_with_nothing_written() {
+        let dir = scratch("restrict-unrecognised");
+        let engine = store_at(&dir, 9);
+        // A `task_commit` that never declared the clause — the shape this step cannot speak for. It is late
+        // in the list, so the tables ahead of it are what must be found untouched afterwards.
+        engine
+            .conn()
+            .execute_batch(
+                "PRAGMA writable_schema = ON;
+                 UPDATE sqlite_master SET sql = replace(sql, 'ON DELETE CASCADE', 'ON DELETE NO ACTION')
+                  WHERE type = 'table' AND name = 'task_commit';
+                 PRAGMA writable_schema = RESET;",
+            )
+            .unwrap();
+
+        let err = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap_err();
+        assert!(
+            matches!(err, super::super::StoreEngineError::UnrecognisedDdl { table: "task_commit", .. }),
+            "{err}"
+        );
+        assert!(
+            declared_sql(&engine, "task_comment").contains(REFERENCE_CASCADES),
+            "the tables ahead of the one that stopped the step are untouched"
+        );
+        assert_eq!(engine.format_version().unwrap(), 9, "and the store is still where it was");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// The shipped chain, run on the oldest store this build opens: it lands, and it carries the store to
     /// the version this build says it can open.
     #[test]
@@ -776,7 +959,7 @@ mod tests {
             .unwrap();
         let before = {
             let tx = engine.conn().unchecked_transaction().unwrap();
-            task_column_names(&tx).unwrap()
+            column_names(&tx, "task").unwrap()
         };
         assert!(
             engine.conn().execute("UPDATE task SET status = 'rejected' WHERE id = 1", []).is_err(),
@@ -803,7 +986,7 @@ mod tests {
         assert_eq!(count("task_commit"), 1, "…and so is the commit anchor");
         let after = {
             let tx = engine.conn().unchecked_transaction().unwrap();
-            task_column_names(&tx).unwrap()
+            column_names(&tx, "task").unwrap()
         };
         assert_eq!(before, after, "a constraint changed, not the shape");
         assert!(

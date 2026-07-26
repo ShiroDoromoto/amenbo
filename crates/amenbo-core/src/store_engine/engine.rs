@@ -367,9 +367,10 @@ impl StoreEngine {
     }
 
     /// Physically delete one record row: `DELETE FROM <table> WHERE id = ?`. Whatever the registry's
-    /// `ON DELETE` says happens to the rows that reference it — a link, a comment, a dependency edge goes
-    /// with it (`CASCADE`); a `RESTRICT`ed entity reference makes this fail rather than orphan the child,
-    /// which is why a delete op deletes an entity subtree child-first itself. The polymorphic
+    /// `ON DELETE` says happens to the rows that reference it — a comment, a dependency edge, a link is
+    /// `RESTRICT`ed (`AMB-D-403`), so a child still there makes this fail rather than vanish outside any
+    /// op, which is why a delete op deletes an entity subtree child-first itself; amenbo's own per-project
+    /// settings go with the project instead (`CASCADE`). The polymorphic
     /// `attachment` carries no constraint at all; the caller sweeps it with
     /// [`delete_records_for_target`](Self::delete_records_for_target) before deleting the parent.
     pub fn delete_record(&self, dataset: &str, row: i64) -> Result<()> {

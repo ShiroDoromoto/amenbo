@@ -47,18 +47,24 @@
 //!    operation = one transaction).
 //!
 //! Deletion is physical (`DELETE`), not a `deleted_at` tombstone, so every reference has to say what
-//! happens to it when its parent goes. The rule is that **the schema never silently deletes a
-//! first-class entity**: deleting an entity's subtree is something a delete op does explicitly, in code
-//! a reviewer can read, not something a `CASCADE` does behind it. So the action follows the *kind* of
-//! relation, and each `fk!`/`fk_opt!` names its own:
+//! happens to it when its parent goes. The rule is that **the schema never silently deletes a row that
+//! stands for a concept** (`AMB-D-403`): deleting an entity's subtree is something a delete op does
+//! explicitly, in code a reviewer can read, not something a `CASCADE` does behind it. A row a `CASCADE`
+//! removed never passed through that op, so there is no place amenbo could learn it went — and an
+//! observation event is appended at the op's write point (`AMB-D-367`), which means a `CASCADE` decides
+//! today that nobody will ever be told. The line is therefore drawn by **what the row is**, not by what
+//! kind of relation holds it:
 //!
-//! | kind | example | `ON DELETE` |
+//! | what the row is | example | `ON DELETE` |
 //! |---|---|---|
-//! | required entity reference | `decision.project_id`, `dimension.project_id` | `RESTRICT` |
-//! | entity reference the delete op cascades itself | `task.project_id` | `RESTRICT` (+ the op deletes the tasks first) |
+//! | a concept someone can point at | a comment, a dependency edge, a decision↔task link, a commit anchor, a classification value | `RESTRICT` (+ the delete op takes the children first) |
+//! | amenbo's own settings for a project | `plugin_config`, `plugin_enable`, `hook_optout` | `CASCADE` |
 //! | optional entity reference (keep the child, drop the reference) | none in the registry today | `SET NULL` |
-//! | link / junction row | `decision_edge`, `decision_task_link`, `task_dependency`, `task_dimension_value` | `CASCADE` |
-//! | dependent content | `task_comment.task_id`, `dimension_value.dimension_id` | `CASCADE` |
+//!
+//! So `RESTRICT` is what holds the ops to the rule: leave a child behind and the parent's `DELETE` stops
+//! there rather than quietly taking it. It bites at the statement even under
+//! `DEFERRABLE INITIALLY DEFERRED` — deferral holds the dangling-reference check to `COMMIT`, and this is
+//! not that check.
 //!
 //! `ON UPDATE CASCADE` is uniform and harmless (an `INTEGER` key does not change in place).
 //! `attachment.target_id` is polymorphic — no `REFERENCES` can branch on a sibling `target_type`
@@ -567,8 +573,8 @@ datasets! {
     // `decision_edge_pair` (below) keeps a pair from carrying two kinds at once — `supersedes`/`amends`
     // contradict, and both imply `builds_on`, so there is never a second edge to draw.
     decision_edge => decision_edge {
-        decision_id: fk("decision", "CASCADE"),
-        target_decision_id: fk("decision", "CASCADE"),
+        decision_id: fk("decision", "RESTRICT"),
+        target_decision_id: fk("decision", "RESTRICT"),
         kind: enum_col("supersedes", "amends", "builds_on"),
         // When the edge came to carry the `kind` it carries now — the third of the premise-change intent
         // columns (`AMB-D-372`), beside `task_dependency.established_at` and `decision_task_link.linked_at`.
@@ -582,8 +588,8 @@ datasets! {
     }
 
     decision_task_link => decision_task_link {
-        decision_id: fk("decision", "CASCADE"),
-        task_id: fk("task", "CASCADE"),
+        decision_id: fk("decision", "RESTRICT"),
+        task_id: fk("task", "RESTRICT"),
         // When the link was drawn — the intent column the premise-change judgement dates a link by
         // (`AMB-D-372`). `created_at` is a record column and stays out of that judgement even though this
         // row is append-only: the threat is an out-of-band batch or restore rewriting record columns, which
@@ -596,7 +602,7 @@ datasets! {
 
     // Permanent task comments. A comment is always task-scoped and always carries a body.
     task_comment => task_comment {
-        task_id: fk("task", "CASCADE"),
+        task_id: fk("task", "RESTRICT"),
         author_kind: actor_kind,
         text: col(REQ),
         // When the body was rewritten in place, if it ever was — the "edited" mark a reader needs to
@@ -609,7 +615,7 @@ datasets! {
     // Permanent comments on a decision record. Mirrors `task_comment`, but kept a **separate** table
     // rather than a polymorphic shared one so each row holds a real FK (`decision_id → decision.id`).
     decision_comment => decision_comment {
-        decision_id: fk("decision", "CASCADE"),
+        decision_id: fk("decision", "RESTRICT"),
         author_kind: actor_kind,
         text: col(REQ),
         // The edit stamp, for the same reason as `task_comment`.
@@ -617,8 +623,8 @@ datasets! {
     }
 
     dependency => task_dependency {
-        task_id: fk("task", "CASCADE"),
-        blocked_by_id: fk("task", "CASCADE"),
+        task_id: fk("task", "RESTRICT"),
+        blocked_by_id: fk("task", "RESTRICT"),
         created_by_kind: actor_kind,
         // When the edge was established — the twin of `decision_task_link.linked_at`, and for the same
         // reason (`AMB-D-372`): the premise-change judgement dates an edge by this column, never by
@@ -632,7 +638,7 @@ datasets! {
     // lower-case hex the ops layer normalises to and admits at the door (40 = SHA-1, 64 = SHA-256);
     // short forms, refs and revisions are refused before they can land.
     task_commit => task_commit {
-        task_id: fk("task", "CASCADE"),
+        task_id: fk("task", "RESTRICT"),
         sha: col(REQ),
         created_by_kind: actor_kind,
     }
@@ -656,7 +662,7 @@ datasets! {
     }
 
     dimension_value => dimension_value {
-        dimension_id: fk("dimension", "CASCADE"),
+        dimension_id: fk("dimension", "RESTRICT"),
         name: col(REQ),
         order_key: col(ORDER_KEY),
         // The period of a `role: time_axis` value (a day, like `task.start_on`). Every value carries
@@ -666,11 +672,11 @@ datasets! {
     }
 
     task_dimension_value => task_dimension_value {
-        task_id: fk("task", "CASCADE"),
+        task_id: fk("task", "RESTRICT"),
         // Denormalised so the (task,dimension) single-select constraint and axis filters query
         // the row directly without joining through `dimension_value` (model.rs).
-        dimension_id: fk("dimension", "CASCADE"),
-        value_id: fk("dimension_value", "CASCADE"),
+        dimension_id: fk("dimension", "RESTRICT"),
+        value_id: fk("dimension_value", "RESTRICT"),
     }
 
     // Two-mode attachment (`blob` ingest / `url` link). The target is polymorphic

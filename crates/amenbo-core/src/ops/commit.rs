@@ -11,9 +11,9 @@
 //! land twice, and the `(task_id, sha)` UNIQUE index — which is what makes a re-record idempotent — stops
 //! meaning anything (byte-equality is all it sees). The AI always has the full SHA, so nothing is lost.
 //!
-//! Writes ride the same seam as `task_dependency` ([`crate::ops::emit_create`]); with `ON DELETE CASCADE`
-//! on `task_id`, a row dies in the same statement as the task it hangs off, so the ops layer needs no
-//! cleanup of its own on task deletion.
+//! Writes ride the same seam as `task_dependency` ([`crate::ops::emit_create`]). An anchor belongs to its
+//! task and goes when the task goes — deleted by [`crate::ops::task::delete_subtree`], which reads the
+//! anchors' ids first, rather than by a constraint that would take them where no code could see it.
 
 use crate::error::{Error, Result};
 use crate::model::{ActorKind, TaskCommit};
@@ -81,8 +81,8 @@ pub fn add(
 
 /// Forget commit `sha` on `task_id` (a hard delete). A SHA that is not recorded is a no-op (idempotent);
 /// the return value is `changed`. The `sha` is normalised the same way `add` stored it, so a caller may
-/// pass any case. There is no cleanup here for task deletion: `task_id` is `ON DELETE CASCADE`, so
-/// deleting the task takes its commit rows with it.
+/// pass any case. Deleting the task is a separate path: [`crate::ops::task::delete_subtree`] sweeps the
+/// anchors it finds, so nothing here is called for that.
 pub fn remove(tx: &WriteTx<'_>, task_id: i64, sha: &str) -> Result<bool> {
     let sha = normalize(sha);
     let Some(id) = read::task_commit_id(tx.conn(), task_id, &sha)? else {
@@ -170,16 +170,15 @@ mod tests {
         });
     }
 
-    /// Delete a task and the schema's `ON DELETE CASCADE` on `task_id` takes its commit rows with it —
-    /// the ops layer needs no cleanup code of its own (the `task_dependency` guarantee, mirrored).
+    /// Delete a task and its commit anchors go with it (the `task_dependency` guarantee, mirrored).
     #[test]
-    fn deleting_a_task_cascades_its_commits() {
+    fn deleting_a_task_takes_its_commits() {
         with_tx(|tx| {
             let a = mk_task(tx, "a");
             add(tx, a, SHA1, None).unwrap();
             add(tx, a, SHA256, None).unwrap();
             crate::ops::task::delete(tx, a).unwrap();
-            assert!(read::task_commits(tx.conn(), a).unwrap().is_empty(), "commits cascaded with the task");
+            assert!(read::task_commits(tx.conn(), a).unwrap().is_empty(), "the anchors went with the task");
         });
     }
 }

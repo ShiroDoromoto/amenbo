@@ -487,10 +487,9 @@ fn trim_change_feed_on_open(conn: &Connection) -> Result<()> {
 
 /// Wire SQLite's `update_hook` to the change buffer: every row the connection touches is reported here,
 /// and the record rows among them are what the feed carries. The hook, rather than an emit at each write
-/// site, because an operation deleting one task record makes SQLite quietly take the task's comments, its
-/// dependency edges, its dimension values and its decision links with it (`ON DELETE CASCADE`) — the ops
-/// layer never sees those rows, so a hand-written emit cannot name them; only SQLite knows what a
-/// statement really touched, and a mutation nobody remembered to instrument still reports. The callback
+/// site, because only SQLite knows what a statement really touched: a row a constraint took (`plugin_config`
+/// and `plugin_enable` still ride the project's `CASCADE`) is named by no ops code at all, and even where
+/// the delete op does sweep its children itself, a write nobody remembered to instrument still reports. The callback
 /// only records: it cannot write to the feed table from here — SQLite forbids using the connection inside
 /// the hook — so the rows are collected now and written inside the transaction that produced them
 /// ([`super::write::WriteTx::commit`]).

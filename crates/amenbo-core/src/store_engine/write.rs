@@ -16,8 +16,8 @@
 //!   `BEGIN IMMEDIATE` so the write lock is held from `BEGIN` — no second writer can
 //!   read the same high-water mark and take the same number.
 //! - **It writes the change feed, in the same transaction.** Every record row the batch touched —
-//!   including the ones only SQLite knows about, the `ON DELETE CASCADE` children the ops layer never
-//!   names — is collected by an `update_hook` and appended to `change_feed` inside the commit. That
+//!   including the ones only SQLite knows about, such as a child a constraint took — is collected by an
+//!   `update_hook` and appended to `change_feed` inside the commit. That
 //!   in-transaction ordering is the whole point: a committed change always has its feed rows, so the GUI
 //!   reading the feed with a cursor can invalidate exactly what went stale instead of re-reading the
 //!   store. It is **not an audit log**: the feed says *which rows moved*, for a machine, and

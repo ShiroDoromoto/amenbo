@@ -390,11 +390,26 @@ fn compact_locked(path: &Path) -> std::io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
+/// The compaction lock, held for the length of a rotation.
+///
+/// It releases **by asking**, not by closing the fd: a close's release lands microseconds late, and a
+/// writer that arrives inside that window skips a rotation it could have performed. Same reasoning, and
+/// the same measured lag, as [`crate::swap_lock::SwapGuard`].
+struct CompactionLock {
+    file: File,
+}
+
+impl Drop for CompactionLock {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
+    }
+}
+
 /// Take the compaction lock, or `None` when someone else holds it (or the sidecar cannot be made).
-fn try_lock(path: &Path) -> Option<File> {
+fn try_lock(path: &Path) -> Option<CompactionLock> {
     let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path).ok()?;
     match file.try_lock() {
-        Ok(()) => Some(file),
+        Ok(()) => Some(CompactionLock { file }),
         Err(TryLockError::WouldBlock) => None,
         Err(TryLockError::Error(e)) => {
             tracing::warn!(error = %e, "activity ledger: cannot take the compaction lock");

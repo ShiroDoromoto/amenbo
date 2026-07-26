@@ -18,8 +18,8 @@
 //!   not that nothing is *lost*.
 //!
 //! The lock is a zero-byte sidecar `store.swap.lock` beside the truth source, one per store directory, so
-//! it covers whichever of `store.sqlite` / `oplog.sqlite` is live. The OS releases an flock/`LockFileEx`
-//! when the fd closes, so a [`SwapGuard`] releases on drop with no explicit unlock.
+//! it covers whichever of `store.sqlite` / `oplog.sqlite` is live. A [`SwapGuard`] **unlocks explicitly**
+//! before it closes the fd — see its `Drop`.
 
 use std::fs::{File, OpenOptions, TryLockError};
 use std::io;
@@ -37,12 +37,27 @@ pub fn lock_path(db_path: &Path) -> PathBuf {
     db_path.with_file_name(SWAP_LOCK_NAME)
 }
 
-/// An advisory file lock held for the length of a swap or an open. Dropping it releases the lock (the OS
-/// frees the flock/`LockFileEx` when the fd closes).
+/// An advisory file lock held for the length of a swap or an open. Dropping it releases the lock.
 #[derive(Debug)]
 #[must_use = "dropping the guard immediately releases the swap lock"]
 pub struct SwapGuard {
-    _file: File,
+    file: File,
+}
+
+/// Release the lock **by asking**, not by closing the fd.
+///
+/// Closing does release it, but not in time: on macOS a `try_lock` issued right after the close still sees
+/// the lock for tens to hundreds of microseconds (measured 65–400 µs on a loaded machine). That window is
+/// enough for the open that follows a restore — same thread, the next statement — to come back
+/// `store_busy` when no swap is underway at all. An explicit unlock is a synchronous syscall, so the lock
+/// is gone the moment the guard drops and a spurious `store_busy` cannot be minted.
+///
+/// A failure here is not worth surfacing: it means the fd is already gone, which is the state this is
+/// trying to reach.
+impl Drop for SwapGuard {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
+    }
 }
 
 /// The bilingual `store_busy` a contended open surfaces: the store is mid-swap, so retrying in a
@@ -59,7 +74,7 @@ fn busy() -> Error {
 /// distinguishes the two in [`TryLockError`], so this needs no platform-specific errno comparison.
 fn try_shared(file: File) -> Result<SwapGuard> {
     match file.try_lock_shared() {
-        Ok(()) => Ok(SwapGuard { _file: file }),
+        Ok(()) => Ok(SwapGuard { file }),
         Err(TryLockError::WouldBlock) => Err(busy()),
         Err(TryLockError::Error(e)) => Err(Error::from(e)),
     }
@@ -81,7 +96,7 @@ pub fn hold_for_swap(db_path: &Path) -> Result<SwapGuard> {
 pub(crate) fn hold_exclusive(path: &Path) -> Result<SwapGuard> {
     let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path)?;
     file.lock()?;
-    Ok(SwapGuard { _file: file })
+    Ok(SwapGuard { file })
 }
 
 /// Take the store's swap lock **shared**, for the write-open side (which is allowed to create the lock
@@ -148,6 +163,22 @@ mod tests {
         // Uncontended now: both opens succeed.
         let _reopened = guard_write_open(&db).expect("write open after the swap released");
         assert!(guard_read_open(&db).unwrap().is_some(), "read open after the swap released");
+    }
+
+    /// The release is **prompt**, not eventual: the open that follows a swap — same thread, the next
+    /// statement, which is exactly what a restore's caller does — succeeds on its first try, every time.
+    /// A lock left to the fd's close instead of released by asking lingers for microseconds after the
+    /// guard is gone, and an open landing in that window is told the store is busy while nothing is
+    /// swapping it. The repetition is what gives such a lag a chance to show.
+    #[test]
+    fn an_open_right_after_a_swap_released_is_never_told_the_store_is_busy() {
+        let dir = scratch("prompt-release");
+        let db = dir.join("store.sqlite");
+        for i in 0..500 {
+            drop(hold_for_swap(&db).unwrap());
+            let opened = guard_write_open(&db);
+            assert!(opened.is_ok(), "open {i}, right after the swap released: {opened:?}");
+        }
     }
 
     /// Two opens can hold the shared lock at once — readers never block each other, only a swap blocks them.

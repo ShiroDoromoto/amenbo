@@ -356,10 +356,10 @@ fn forget_locked(path: &Path, plugin: &str) -> std::io::Result<bool> {
 
 /// Take the trim lock, waiting until it is free — the purge path ([`forget`]) needs it to actually happen,
 /// not to skip. `None` only when the sidecar cannot be made or the lock call itself errors.
-fn lock_blocking(path: &Path) -> Option<File> {
+fn lock_blocking(path: &Path) -> Option<TrimLock> {
     let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path).ok()?;
     match file.lock() {
-        Ok(()) => Some(file),
+        Ok(()) => Some(TrimLock { file }),
         Err(e) => {
             tracing::warn!(error = %e, "plugin log: cannot take the trim lock to purge");
             None
@@ -400,11 +400,26 @@ fn lock_path(path: &Path) -> PathBuf {
     path.with_file_name(LOCK_NAME)
 }
 
+/// The trim lock, held for the length of a trim or a purge.
+///
+/// It releases **by asking**, not by closing the fd: a close's release lands microseconds late, and a
+/// writer that arrives inside that window skips a trim it could have performed. Same reasoning, and the
+/// same measured lag, as [`crate::swap_lock::SwapGuard`].
+struct TrimLock {
+    file: File,
+}
+
+impl Drop for TrimLock {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
+    }
+}
+
 /// Take the trim lock, or `None` when someone else holds it (or the sidecar cannot be made).
-fn try_lock(path: &Path) -> Option<File> {
+fn try_lock(path: &Path) -> Option<TrimLock> {
     let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path).ok()?;
     match file.try_lock() {
-        Ok(()) => Some(file),
+        Ok(()) => Some(TrimLock { file }),
         Err(TryLockError::WouldBlock) => None,
         Err(TryLockError::Error(e)) => {
             tracing::warn!(error = %e, "plugin log: cannot take the trim lock");

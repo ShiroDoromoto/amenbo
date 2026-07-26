@@ -4547,6 +4547,10 @@ pub struct PluginInstallDto {
     /// (`AMB-D-356`). Empty for a plugin that declares none, which is the form's own answer to
     /// whether there is anything to configure.
     config: Vec<PluginConfigFieldDto>,
+    /// Whether the build the last update replaced is still retained beside this one, so a rollback
+    /// has somewhere to go (`AMB-D-359`). An update retains exactly one build and a rollback consumes
+    /// it, so this is false for a plugin that was never updated and false again once it is used.
+    rollback: bool,
 }
 
 /// Read one declared setting into its DTO, at the tiers a form edits. The author's `secret` flag is
@@ -4607,6 +4611,7 @@ fn install_row(
         compatible: why.is_none(),
         incompatible_reason: why.map(|why| why.to_string()),
         config,
+        rollback: amenbo_core::plugin_update::backup_path(&store.paths, &plugin.name).exists(),
     })
 }
 
@@ -4942,6 +4947,23 @@ pub async fn plugin_update_apply_all() -> Result<Vec<PluginUpdateOutcomeDto>, Cm
     .map_err(|e| -> CmdError { format!("プラグインの更新に失敗しました: {e}").into() })?
 }
 
+/// Put the build the last update replaced back (`AMB-D-359`) — the GUI's `plugin rollback <name>`, and the
+/// way back from an update the face itself offered.
+///
+/// It is core's ([`amenbo_core::plugin_update::rollback`]) and adds nothing: the retained pair — the
+/// executable and the manifest that describes it — is restored together, and the gate, the settings and the
+/// secrets are keyed elsewhere and left where they are. Nothing is fetched and nothing is re-verified: the
+/// retained build passed the door on its way in.
+///
+/// One build back, and no further: applying an update retains exactly one, and this consumes it. Returns
+/// what is running again, so the face can name the build it went back to rather than say only that it did.
+#[tauri::command]
+pub fn plugin_rollback(name: String) -> Result<String, CmdError> {
+    let store = open_store_read()?;
+    let rolled = amenbo_core::plugin_update::rollback(&store.paths, &name)?;
+    Ok(rolled.restored.desc)
+}
+
 /// The config re-check the two apply paths above hand to core as their `approve` gate (`AMB-D-359`).
 /// [`amenbo_core::plugin_config::required_unset_for_update`] decides *whether* a build is held back — the
 /// same call the CLI makes — and this only words the refusal for a window, where the way out is the
@@ -5253,6 +5275,56 @@ mod tests {
 
         // A key the manifest does not declare has no routing rule — amenbo does not invent one.
         assert!(plugin_config_set("notify".into(), "nope".into(), "x".into(), None).is_err());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The way back from an update the face itself applied (`AMB-D-359`): the row says whether there is a
+    /// retained build at all, the rollback restores the pair — the executable and the manifest describing
+    /// it — and the one backup there is is consumed, so the row stops offering a return that has nowhere
+    /// to go.
+    #[test]
+    fn a_rollback_restores_the_retained_build_and_uses_up_the_one_backup() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("plugin-rollback");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        plant_plugin(&tmp, "notify", "machine");
+        let row = || plugin_installs(None).unwrap().into_iter().find(|r| r.name == "notify").unwrap();
+
+        // Never updated: there is nothing retained, so the face has no return to offer.
+        assert!(!row().rollback);
+        assert!(plugin_rollback("notify".into()).is_err(), "nothing retained is a refusal, not a no-op");
+
+        // What an applied update leaves behind: the replaced pair, beside the running one.
+        let home = tmp.join("plugins").join("notify");
+        let previous = serde_json::json!({
+            "name": "notify",
+            "desc": "the build before the update",
+            "author": "amenbo",
+            "repo": "ShiroDoromoto/amenbo-plugin-test",
+            "os": ["macos", "linux", "windows"],
+            "category": "workflow",
+            "url": "https://example.com/x.tar.gz",
+            "checksum": "sha256:0ldbuild",
+            "scope": "machine",
+            "config": [],
+        });
+        std::fs::write(home.join("manifest.json.bak"), serde_json::to_vec(&previous).unwrap()).unwrap();
+        std::fs::write(
+            home.join(amenbo_core::plugin_installed::program_file_name("notify")).with_extension("bak"),
+            b"previous",
+        )
+        .unwrap();
+        assert!(row().rollback, "a retained build is what the row offers the return for");
+
+        assert_eq!(plugin_rollback("notify".into()).unwrap(), "the build before the update");
+        let running = amenbo_core::plugin_installed::read(
+            &amenbo_core::config::Paths::at(tmp.clone()),
+            "notify",
+        )
+        .unwrap();
+        assert_eq!(running.manifest.desc, "the build before the update", "the pair moved together");
+        assert!(!row().rollback, "the one backup is consumed — there is nothing further back to go");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

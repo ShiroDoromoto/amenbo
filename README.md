@@ -277,6 +277,10 @@ amenbo task add --title "Pick colors" --project "Website refresh"
 # Every id is the number amenbo shows you: task AMB-T-<n> is `<n>`, decision AMB-D-<n> is `<n>`
 amenbo task depend <n> --on <m>            # <n> waits on <m> (dependency, not a subtask)
 amenbo task done <n>
+# A task ends one of two ways. Work you decided against ends here, not at `done`
+# (a history that claims what never happened) or `delete` (the reasoning gone with
+# the row) — the reason is required, and lands on the timeline as a comment
+amenbo task reject <n> --reason "measured it — too thin to be worth the change"
 
 # Dimensions: user-defined classification axes (categories, phases, or anything
 # you need). New projects seed none — create the axes you want. --ordered gives

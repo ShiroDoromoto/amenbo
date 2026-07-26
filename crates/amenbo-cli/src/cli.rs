@@ -1195,13 +1195,13 @@ pub enum DecisionCmd {
         #[arg(long)]
         unlink: bool,
     },
-    /// Promote a task comment into a decision (the comment text becomes the body; links to the task)
+    /// Promote a comment into a decision (the comment text becomes the body; a task comment links to its task)
     Promote {
-        /// the task comment ref to promote, AMB-TC-n
+        /// the comment ref to promote, AMB-TC-n (on a task) or AMB-DC-n (on a decision)
         comment: String,
         #[arg(long)]
         title: String,
-        /// project (defaults to the comment's task project)
+        /// project (defaults to the project of the comment's task or decision)
         #[arg(long)]
         project: Option<String>,
     },

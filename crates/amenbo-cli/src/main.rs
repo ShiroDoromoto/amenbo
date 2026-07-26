@@ -672,10 +672,12 @@ const STDIN_LABEL: &str = "<stdin>";
 /// required field is the shape half of the door — so it is reported as a problem, not surfaced as a crash.
 /// Exits non-zero when the manifest is invalid, dropping cleanly into a pre-submit check.
 ///
-/// On `--json` a passing manifest also carries a `manifest` field — the whole serde shape amenbo read
-/// (`AMB-T-2109`) — so the catalog aggregator builds install entries from it rather than from its own list
-/// of fields to copy, which silently drops a field amenbo later adds. It rides back only when the manifest
-/// passes: a parse error read nothing, and a rule-breaking manifest is refused at the door.
+/// On `--json` a passing manifest also carries the manifest amenbo read, in three shapes: `manifest`, the
+/// whole serde body (`AMB-T-2109`), and `entry` / `detail`, that same body split into the two documents the
+/// catalog serves (`AMB-D-385`). Either way the catalog aggregator publishes what amenbo hands it rather
+/// than keeping its own list of fields to copy, which silently drops a field amenbo later adds. All three
+/// ride back only when the manifest passes: a parse error read nothing, and a rule-breaking manifest is
+/// refused at the door.
 fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
     let text = std::fs::read_to_string(&path).map_err(|e| CliError {
         code: "io_error",
@@ -725,6 +727,15 @@ fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
         // what the author wrote.
         if problems.is_empty() {
             out["manifest"] = serde_json::to_value(&manifest).unwrap();
+            // …and the same manifest split into the two documents the catalog serves (`AMB-D-385`): the
+            // `entry` everyone fetches to draw the list, and the `detail` fetched for one plugin at a time.
+            // The split is amenbo's (`amenbo_core::plugin_wire`) for the same reason the body above is —
+            // an aggregator that decided which half a field belongs to would be keeping the list of fields
+            // all over again. `entry` carries `added_at` and `detail_sum` as empty slots the catalog CI
+            // fills; neither is knowable from a manifest alone.
+            let (entry, detail) = amenbo_core::plugin_wire::split(&manifest);
+            out["entry"] = serde_json::to_value(&entry).unwrap();
+            out["detail"] = serde_json::to_value(&detail).unwrap();
         }
         print_json(&out);
     } else if problems.is_empty() {
@@ -4722,26 +4733,16 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             }
         }
         DecisionCmd::Promote { comment, title, project } => {
-            // Promote a comment (task_comment) into a decision: its text becomes the body, its task's project
-            // becomes the home, and the decision is linked back to that task.
-            let not_found = || CliError { code: "not_found", message: format!("comment '{comment}' not found"), hint: Some(format!("pass a comment id from `{} comment list <task>`", Paths::command_name())), exit: 1 };
-            let cid = store.resolve_task_comment(&comment).map_err(CliError::from)?.first().copied().ok_or_else(not_found)?;
-            let c = store.task_comment(cid).map_err(CliError::from)?.ok_or_else(not_found)?;
-            let task_id = c.task_id;
-            let body = c.text.clone();
-            let project_id = match project {
-                Some(p) => store.resolve_project_ref(&p).map_err(CliError::from)?,
-                None => store.task(task_id).map_err(CliError::from)?
-                    
-                    .and_then(|t| t.project_id)
-                    .ok_or_else(|| CliError { code: "invalid_value", message: "the comment's task has no project; pass --project".to_string(), hint: None, exit: 2 })?,
+            let from_task = store.resolve_task_comment(&comment).map_err(CliError::from)?.first().copied();
+            let from_decision = store.resolve_decision_comment(&comment).map_err(CliError::from)?.first().copied();
+            let (did, source) = match (from_task, from_decision) {
+                (Some(a), Some(b)) => return Err(ambiguous_comment(&comment, a, b)),
+                (Some(cid), None) => (promote_task_comment(store, cid, title, project)?, task_comment_label(cid)),
+                (None, Some(cid)) => (promote_decision_comment(store, cid, title, project)?, decision_comment_label(cid)),
+                (None, None) => return Err(comment_not_found(&comment)),
             };
-            let d = store.add_decision(ops::decision::NewDecision {
-                title, body, project_id,
-            }).map_err(CliError::from)?;
-            store.link_decision(d.id, task_id).map_err(CliError::from)?;
-            let detail = store.decision_detail(d.id).map_err(CliError::from)?;
-            write_envelope(flags, "decision.promote", "decision", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Promoted comment to decision: {} ({})", d.title, decision_label(d.id)));
+            let detail = store.decision_detail(did).map_err(CliError::from)?;
+            write_envelope(flags, "decision.promote", "decision", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Promoted {source} to decision: {} ({})", detail.title, decision_label(did)));
         }
         DecisionCmd::Comment { sub } => return decision_comment(store, flags, sub),
         DecisionCmd::Attach { id, source, url, name } => {
@@ -4750,6 +4751,57 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
         }
     }
     Ok(0)
+}
+
+/// The task-comment side of `decision promote`: the comment's text becomes the body, its task's project
+/// becomes the home, and the new decision is linked back to that task — the decision is that task's
+/// premise, which is exactly what the edge says.
+fn promote_task_comment(store: &mut Store, cid: i64, title: String, project: Option<String>) -> Result<i64, CliError> {
+    let c = store.task_comment(cid).map_err(CliError::from)?.ok_or_else(|| comment_not_found(&task_comment_label(cid)))?;
+    let task_id = c.task_id;
+    let body = c.text.clone();
+    let project_id = match project {
+        Some(p) => store.resolve_project_ref(&p).map_err(CliError::from)?,
+        None => store.task(task_id).map_err(CliError::from)?
+            .and_then(|t| t.project_id)
+            .ok_or_else(|| CliError { code: "invalid_value", message: "the comment's task has no project; pass --project".to_string(), hint: None, exit: 2 })?,
+    };
+    let d = store.add_decision(ops::decision::NewDecision { title, body, project_id }).map_err(CliError::from)?;
+    store.link_decision(d.id, task_id).map_err(CliError::from)?;
+    Ok(d.id)
+}
+
+/// The decision-comment side of `decision promote`: the text becomes the body and the comment's decision
+/// gives the home, but **no edge is drawn back to it**. A record raised out of a decision's comment thread
+/// is a question that turned into its own, and an automatic link would claim a relation promote cannot
+/// know. Where one does hold, its author names it — `builds-on`, `amend`, `supersede`.
+fn promote_decision_comment(store: &mut Store, cid: i64, title: String, project: Option<String>) -> Result<i64, CliError> {
+    let c = store.decision_comment(cid).map_err(CliError::from)?.ok_or_else(|| comment_not_found(&decision_comment_label(cid)))?;
+    let body = c.text.clone();
+    let project_id = match project {
+        Some(p) => store.resolve_project_ref(&p).map_err(CliError::from)?,
+        None => store.decision_detail(c.decision_id).map_err(CliError::from)?
+            .project.map(|p| p.id)
+            .ok_or_else(|| CliError { code: "invalid_value", message: "the comment's decision has no project; pass --project".to_string(), hint: None, exit: 2 })?,
+    };
+    let d = store.add_decision(ops::decision::NewDecision { title, body, project_id }).map_err(CliError::from)?;
+    Ok(d.id)
+}
+
+/// A bare `<n>` handed to `decision promote` when both comment tables hold that key. They number
+/// independently, so the number alone names a row in each and the kind code is what disjoins them — the
+/// same shape as a bare number that is both a task and a decision. Refused, never guessed at.
+fn ambiguous_comment(reference: &str, task_comment_id: i64, decision_comment_id: i64) -> CliError {
+    CliError {
+        code: "invalid_value",
+        message: format!(
+            "'{reference}' names both {} and {}; say which",
+            task_comment_label(task_comment_id),
+            decision_comment_label(decision_comment_id)
+        ),
+        hint: None,
+        exit: 2,
+    }
 }
 
 /// Record the reason a decision was accepted or rejected as a comment (the same shape as
@@ -4847,12 +4899,18 @@ fn resolve_live_decision_comment(store: &Store, reference: &str) -> Result<i64, 
 }
 
 fn pick_comment(hits: Vec<i64>, reference: &str) -> Result<i64, CliError> {
-    hits.into_iter().next().ok_or_else(|| CliError {
+    hits.into_iter().next().ok_or_else(|| comment_not_found(reference))
+}
+
+/// A comment reference that names no row — in either comment table. The hint points at both listings: a
+/// comment carries no conversational number, so the listing is the only place its id comes from.
+fn comment_not_found(reference: &str) -> CliError {
+    CliError {
         code: "not_found",
         message: format!("comment '{reference}' not found"),
         hint: Some("list the comments to find the id (`comment list <task>` / `decision comment list <decision>`)".to_string()),
         exit: 1,
-    })
+    }
 }
 
 // ───────────────────────── attach ─────────────────────────

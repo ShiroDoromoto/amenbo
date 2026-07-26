@@ -323,11 +323,19 @@ impl Store {
     }
 
     /// A single task comment; `None` if there is none (a row exists ⇒ it is live). The id is a comment id, which
-    /// is not a conversational ref, so this is itself a reach entry point — it is the path
-    /// `decision promote <comment id>` takes to read the body.
+    /// is not a conversational ref, so this is itself a reach entry point — `decision promote` reads the
+    /// body of a task comment through here.
     pub fn task_comment(&self, id: i64) -> Result<Option<crate::model::TaskComment>> {
-        self.reachable(&format!("comment #{id}"), |c| super::owner::task_comment(c, id))?;
+        self.reachable(&crate::idref::task_comment(id), |c| super::owner::task_comment(c, id))?;
         Ok(crate::store_engine::read::task_comment(self.engine.conn(), id)?)
+    }
+
+    /// A single decision comment; `None` if there is none (a row exists ⇒ it is live). The decision-side
+    /// twin of [`Self::task_comment`], and a reach entry point for the same reason — `decision promote`
+    /// reads the body of either kind of comment through one of these two.
+    pub fn decision_comment(&self, id: i64) -> Result<Option<crate::model::DecisionComment>> {
+        self.reachable(&crate::idref::decision_comment(id), |c| super::owner::decision_comment(c, id))?;
+        Ok(crate::store_engine::read::decision_comment(self.engine.conn(), id)?)
     }
 
     /// The task comment ids a comment reference (an exact id match) hits. A row exists ⇒ it is live.

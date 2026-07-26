@@ -488,8 +488,8 @@ agent --json` and follow it.* That block is a thin, frozen pointer — the actua
 workflow and rules live in `amenbo agent --json` (in the binary, so an update
 ships them immediately), not duplicated in the block.
 
-**The binding is also the AI's reach.** An AI (`--actor ai` / `AMENBO_ACTOR=ai`)
-started in a bound folder operates that folder's project and nothing else: it
+**The binding is also the AI's reach.** An AI (`--actor ai` — the one way a facet
+is declared) started in a bound folder operates that folder's project and nothing else: it
 cannot name another project (`--project` and the `project:` filter are yours, not
 its), and reading or writing another project's tasks, decisions or comments is
 refused with `out_of_reach`. So one machine can hold every project you
@@ -505,7 +505,6 @@ the start of every session — its stdout is added to the session context:
 ```jsonc
 // .claude/settings.json (or ~/.claude/settings.json to apply everywhere)
 {
-  "env": { "AMENBO_ACTOR": "ai" },
   "hooks": {
     "SessionStart": [
       { "hooks": [ { "type": "command", "command": "amenbo agent --json" } ] }

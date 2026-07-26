@@ -14,12 +14,12 @@
 //! is what makes the versioning and backward compatibility above worth having.
 
 /// Format version of the begin marker. An unversioned `(managed)` counts as version 1; the newest
-/// version this binary writes is 2 (`(managed v2)`). Bumping the version is how a binary update
+/// version this binary writes is 3 (`(managed v3)`). Bumping the version is how a binary update
 /// whose block template changed can tell an existing folder's block is out of date: run amenbo in
 /// that folder and [`follow_stale_block`] brings it up to the current version by itself, while the
 /// folders you have not been in are [detected](stale_bound_blocks) by `doctor` and
 /// [fixed](resync_bound_blocks) by `sync-guide`.
-pub const MANAGED_BLOCK_VERSION: u32 = 2;
+pub const MANAGED_BLOCK_VERSION: u32 = 3;
 
 /// Version-independent stable prefix of the begin marker (both `(managed)` and `(managed vN)`
 /// start with it).
@@ -31,7 +31,7 @@ const BEGIN_MARKER_SUFFIX: &str = ") -->";
 /// The begin marker at the version **this binary writes** (paired with [`MANAGED_BLOCK_VERSION`]).
 /// Detection goes through [`find_begin_marker`]'s prefix match rather than an exact compare, so an
 /// unversioned `(managed)` is still recognised.
-pub const BEGIN_MARKER: &str = "<!-- amenbo:begin (managed v2) -->";
+pub const BEGIN_MARKER: &str = "<!-- amenbo:begin (managed v3) -->";
 pub const END_MARKER: &str = "<!-- amenbo:end -->";
 
 /// Finds the first managed begin marker in `text`, **whatever version it carries**. Returns
@@ -65,8 +65,8 @@ pub fn managed_block_version(text: &str) -> Option<u32> {
 /// Body of the managed block (without the markers): English-based, plus the directive naming the
 /// language to talk to the human in. `cmd` is the launch command name
 /// ([`crate::config::Paths::command_name`] — `amenbo` in production, `amenbo-dev` on the dev
-/// channel) and is used **only where a command is invoked** — the product name,
-/// `.amenbo` and `AMENBO_*` are fixed and channel-independent. `language_label` is what
+/// channel) and is used **only where a command is invoked** — the product name, `.amenbo` and the
+/// flags amenbo takes are fixed and channel-independent. `language_label` is what
 /// `config::language_label` returns (e.g. `Japanese`).
 pub fn managed_block_body(language_label: &str, cmd: &str) -> String {
     format!(
@@ -74,7 +74,7 @@ pub fn managed_block_body(language_label: &str, cmd: &str) -> String {
          \n\
          The user set up amenbo here. Before you act on any request in this directory,\n\
          you MUST first run `{cmd} agent --json` and follow it — it is the single source\n\
-         of truth for how to work in this folder. Always set `AMENBO_ACTOR=ai`.\n\
+         of truth for how to work in this folder. Always pass `--actor ai`.\n\
          \n\
          **Communicate with the human, and write task titles, notes, and comments, in {language_label}.**\n\
          \n\

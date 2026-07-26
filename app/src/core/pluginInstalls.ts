@@ -13,10 +13,16 @@
 import { invoke } from "./ipc";
 import { inTauri } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
-import type { PluginInstallDto, PluginRemovedDto } from "../bindings/bindings";
+import type {
+  PluginConfigFieldDto,
+  PluginInstallDto,
+  PluginRemovedDto,
+} from "../bindings/bindings";
 
 /** One installed plugin and where its switch stands (generated DTO). */
 export type PluginInstall = PluginInstallDto;
+/** One setting its author declared, and what this machine holds for it (generated DTO). */
+export type PluginConfigField = PluginConfigFieldDto;
 /** What an uninstall found and removed (generated DTO). */
 export type PluginRemoved = PluginRemovedDto;
 
@@ -84,6 +90,27 @@ export async function setPluginEnabled(
   const now = await invoke<boolean>("plugin_set_enabled", { name, projectId, enabled });
   reloadInstalls();
   return now;
+}
+
+/**
+ * Write one setting the plugin's author declared (Tauri: `plugin_config_set`, `AMB-D-356`).
+ *
+ * `projectId` is the tier, not the gate: `null` writes the machine default and a project writes that
+ * project's override, while a secret ignores it entirely — the author's flag decides where the value
+ * lives, and this seam never says which is which. An **empty** value clears the setting.
+ *
+ * The installs are refetched afterwards because they carry what is now held, which is what the form
+ * draws from.
+ */
+export async function setPluginConfig(
+  name: string,
+  key: string,
+  value: string,
+  projectId: number | null,
+): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<null>("plugin_config_set", { name, key, value, projectId });
+  reloadInstalls();
 }
 
 /**

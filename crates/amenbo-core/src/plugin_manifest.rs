@@ -447,6 +447,21 @@ pub struct Manifest {
     /// self-declared — absent means `false`.
     #[serde(default)]
     pub official: bool,
+    /// **Which detail document this entry was published as** (`AMB-D-386`) — the digest of
+    /// `plugins/<name>.json`, and the catalog's value rather than the author's.
+    ///
+    /// A catalog entry travels as two documents ([`crate::plugin_wire`]): the list half everyone fetches,
+    /// and the detail half an install reads for the one plugin it is installing. A manifest amenbo holds
+    /// is the two joined, and this is the field that says *which* detail it was joined with. It is the
+    /// comparison material update detection is left with once the checksums live a document away
+    /// (`AMB-D-386`): an install records it beside the binary, and a later fetch of the list alone reports
+    /// a candidate by finding the entry's digest no longer the one recorded.
+    ///
+    /// Absent means unknown, never "current" — a manifest placed by hand has no digest to compare, so it
+    /// is never reported as updatable. [`plugin_wire::split`](crate::plugin_wire::split) empties the slot
+    /// on the way out, because the digest is over bytes that do not exist until the catalog publishes them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail_sum: Option<String>,
     /// Which switch enables this plugin — per project, or once for the device ([`Scope`], `AMB-D-379`).
     /// Absent means [`Scope::Project`], the answer that fits most plugins and the safe one: a project that
     /// has said nothing runs nothing. Declaring `machine` is the author saying a per-project answer would

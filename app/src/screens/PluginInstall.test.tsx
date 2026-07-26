@@ -78,6 +78,7 @@ const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => 
   scope: "machine",
   consented: false,
   compatible: true,
+  config: [],
   ...over,
 });
 

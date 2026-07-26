@@ -1,5 +1,5 @@
 //! The plugin catalog as amenbo holds it — **one** fetch of the whole index, cached on disk
-//! (`AMB-D-347`).
+//! (`AMB-D-347`), and one small document per plugin someone actually opens or installs (`AMB-D-385`).
 //!
 //! The unit of retrieval is the catalog, never the plugin: the catalog repository's CI aggregates every
 //! reviewed manifest into a single `catalog.json` on a static host, and amenbo fetches that one file.
@@ -7,17 +7,24 @@
 //! so the cost of discovery does not grow with the number of plugins.
 //!
 //! What comes back is an envelope — `catalog_v` (the envelope's version), `generated_at`, and `plugins` —
-//! whose entries are plugin manifests plus the two fields only the catalog can supply: the `signature` its
-//! CI produced (verified at install by [`crate::plugin_provenance`]) and `added_at`, the day the manifest
-//! first appeared in the index. `added_at` has no other source: a client holds no git history of the
-//! catalog repository, so "new" is knowable only because the CI writes it.
+//! whose entries are **list entries** ([`crate::plugin_wire::ListEntry`]): what a browse view draws, plus
+//! the two fields only the catalog can supply. `added_at` is the day the manifest first appeared in the
+//! index, which has no other source — a client holds no git history of the catalog repository, so "new"
+//! is knowable only because the CI writes it. `detail_sum` is the digest of that plugin's detail document
+//! (`AMB-D-386`), which is what keeps update detection riding on this one fetch.
+//!
+//! **What an install needs is a second document**, `plugins/<name>.json` beside the catalog ([`detail`],
+//! `AMB-D-385`): the url, checksums, signature and contract versions, fetched for the one plugin being
+//! opened or installed rather than carried for all of them. The signature alone is larger than everything
+//! a list draws, and every reader would otherwise pay for every plugin's.
 //!
 //! **The delivery path is not trusted** (`AMB-D-354`). Every entry is run through
 //! [`crate::plugin_validate`] here, on the way in, and one that does not parse or does not validate is
 //! dropped — the rest of the catalog stays usable. Dropping is recorded ([`Dropped`]) rather than
-//! silent, so a catalog that is quietly losing entries is visible. The envelope itself is fail-closed
-//! the other way: a `catalog_v` from the future is refused whole, because amenbo cannot know what a newer
-//! envelope means.
+//! silent, so a catalog that is quietly losing entries is visible. A detail document is checked the same
+//! way where it is used: it must be the one the entry asked for, and — when the entry declares a digest —
+//! the bytes it declared. The envelope itself is fail-closed the other way: a `catalog_v` from the future
+//! is refused whole, because amenbo cannot know what a newer envelope means.
 //!
 //! **The catalog carries no signature, and needs none.** Trust rests on each asset's signature, which
 //! verifies only against the public key amenbo ships ([`crate::plugin_provenance::CATALOG_PUBLIC_KEY`]).
@@ -34,8 +41,8 @@
 
 use crate::config::Paths;
 use crate::error::{Error, Result};
-use crate::plugin_manifest::Manifest;
-use crate::plugin_validate::{validate_manifest, Problem};
+use crate::plugin_validate::{validate_list_entry, Problem};
+use crate::plugin_wire::{Detail, ListEntry};
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -77,21 +84,6 @@ struct Envelope {
     plugins: Vec<serde_json::Value>,
 }
 
-/// One usable catalog entry: a manifest, plus what only the catalog knows about it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Entry {
-    /// The plugin's manifest — validated ([`crate::plugin_validate`]) before it got here.
-    pub manifest: Manifest,
-    /// When this manifest first entered the catalog, from the catalog repository's git history. `None`
-    /// for a catalog built before the CI wrote the field; it is the only source for a "new" sort, so a
-    /// missing value means unknown, never "old".
-    pub added_at: Option<String>,
-    /// Whether the index that served this entry recommends it — hand curation, the "featured" axis of
-    /// discovery (`AMB-D-347`). It is a claim the document makes, so it means something only from an index
-    /// whose curation a reader trusts; [`discover`] is where that is settled, before any face reads it.
-    pub featured: bool,
-}
-
 /// Why one entry did not make it into the catalog amenbo holds. Kept rather than discarded so a catalog
 /// that is silently shedding entries can be seen (`AMB-D-354`).
 #[derive(Clone, Debug)]
@@ -112,28 +104,17 @@ pub struct Catalog {
     /// When the catalog CI generated this copy, verbatim from the envelope.
     pub generated_at: Option<String>,
     /// The entries that parsed and validated, in catalog order.
-    pub entries: Vec<Entry>,
+    pub entries: Vec<ListEntry>,
     /// The entries that did not, and why.
     pub dropped: Vec<Dropped>,
 }
 
 impl Catalog {
-    /// Find one entry by plugin name — what an install resolves against (`AMB-T-2050`).
-    pub fn find(&self, name: &str) -> Option<&Entry> {
-        self.entries.iter().find(|e| e.manifest.name == name)
+    /// Find one entry by plugin name — what an install resolves against (`AMB-T-2050`), and the entry
+    /// whose detail document it then fetches.
+    pub fn find(&self, name: &str) -> Option<&ListEntry> {
+        self.entries.iter().find(|e| e.name == name)
     }
-}
-
-/// A catalog entry on the wire: a manifest with the catalog's own `added_at` and `featured` beside it.
-/// `signature` is part of the manifest already, so it needs no special handling here.
-#[derive(Debug, Deserialize)]
-struct WireEntry {
-    #[serde(flatten)]
-    manifest: Manifest,
-    #[serde(default)]
-    added_at: Option<String>,
-    #[serde(default)]
-    featured: bool,
 }
 
 /// The URL to fetch: [`OFFICIAL_CATALOG_URL`], unless the environment overrides it.
@@ -167,30 +148,26 @@ pub fn parse(json: &str) -> Result<Catalog> {
         ));
     }
 
-    let mut entries: Vec<Entry> = Vec::new();
+    let mut entries: Vec<ListEntry> = Vec::new();
     let mut dropped = Vec::new();
     for (index, value) in envelope.plugins.into_iter().enumerate() {
-        let wire: WireEntry = match serde_json::from_value(value) {
-            Ok(w) => w,
+        let entry: ListEntry = match serde_json::from_value(value) {
+            Ok(e) => e,
             Err(e) => {
                 dropped.push(Dropped::Unreadable { index, error: e.to_string() });
                 continue;
             }
         };
-        let problems = validate_manifest(&wire.manifest);
+        let problems = validate_list_entry(&entry);
         if !problems.is_empty() {
-            dropped.push(Dropped::Invalid { name: wire.manifest.name.clone(), problems });
+            dropped.push(Dropped::Invalid { name: entry.name, problems });
             continue;
         }
-        if entries.iter().any(|e| e.manifest.name == wire.manifest.name) {
-            dropped.push(Dropped::Duplicate { name: wire.manifest.name });
+        if entries.iter().any(|e| e.name == entry.name) {
+            dropped.push(Dropped::Duplicate { name: entry.name });
             continue;
         }
-        entries.push(Entry {
-            manifest: wire.manifest,
-            added_at: wire.added_at,
-            featured: wire.featured,
-        });
+        entries.push(entry);
     }
     Ok(Catalog { generated_at: envelope.generated_at, entries, dropped })
 }
@@ -303,6 +280,110 @@ fn write_cache_at(cache_file: &std::path::Path, json: &str) -> Result<()> {
     std::fs::write(&tmp, json)?;
     std::fs::rename(&tmp, cache_file)?;
     Ok(())
+}
+
+// ---- the detail document, fetched one plugin at a time (`AMB-D-385`) ----
+//
+// The other half of a catalog entry: what an install needs and a list does not. It is fetched for the one
+// plugin being opened or installed, which is the same lazy shape `AMB-D-347` already takes for a plugin's
+// stars and download counts — no new principle, and the list stays one fetch for everyone.
+
+/// The directory-relative name of one plugin's detail document, under the same base as `catalog.json`.
+fn detail_path(name: &str) -> String {
+    format!("plugins/{name}.json")
+}
+
+/// Where one plugin's detail document is published: alongside `catalog.json`, under `plugins/`. Derived
+/// from the catalog URL rather than configured separately, so an override that points amenbo at a test
+/// catalog (`AMENBO_PLUGIN_CATALOG_URL`) moves both documents together — one address, one publisher.
+fn detail_url(catalog_url: &str, name: &str) -> String {
+    match catalog_url.rsplit_once('/') {
+        Some((base, _file)) => format!("{base}/{}", detail_path(name)),
+        None => detail_path(name),
+    }
+}
+
+/// Where one plugin's detail document is cached: `<base>/plugins/registry/detail-<name>.json`, beside the
+/// catalog's own cache. Named after the plugin, because that is what it is fetched by — and prefixed so it
+/// can never collide with the catalog cache, the sources list, or a third-party catalog's cache.
+fn detail_cache_file(paths: &Paths, name: &str) -> PathBuf {
+    paths.registry_dir().join(format!("detail-{name}.json"))
+}
+
+/// The detail document for one listed plugin — the half of its catalog entry an install needs
+/// (`AMB-D-385`).
+///
+/// Fetched fresh, with the cached copy answering when the network does not, exactly as [`load`] does for
+/// the list: being offline costs freshness, not function, and a fetch that returns garbage never replaces
+/// what is cached.
+///
+/// **Two things are checked before it is anything but bytes** (`AMB-D-354`, the delivery path is not
+/// trusted). The document must name the plugin it was fetched for — the `name` in both documents is the
+/// join, and a detail that names another plugin is not an answer to what was asked. And when the entry
+/// declares a `detail_sum` (`AMB-D-386`), the bytes must hash to it: it is what the entry says this
+/// plugin's detail *is*, so a document that fails it is a mismatched pair, not a newer one. That check is
+/// also what makes the cached copy safe to fall back on — a cache from a previous publication does not
+/// answer for the entry in hand, so it is passed over as if it were not there.
+///
+/// This is not the trust root. The asset's signature and checksum are (`AMB-D-371`), verified at install
+/// over the bytes the URL served; a swapped detail buys nothing, because its asset still has to pass that
+/// door.
+pub fn detail(paths: &Paths, entry: &ListEntry) -> Result<Detail> {
+    detail_to(&catalog_url(), &detail_cache_file(paths, &entry.name), entry)
+}
+
+/// [`detail`] against a named catalog URL and cache file — the seam a test drives, the same shape the
+/// list's [`load_to`] takes.
+fn detail_to(catalog_url: &str, cache_file: &std::path::Path, entry: &ListEntry) -> Result<Detail> {
+    let url = detail_url(catalog_url, &entry.name);
+    match fetch(&url) {
+        Ok(json) => {
+            let detail = read_detail(&json, entry)?;
+            write_cache_at(cache_file, &json)?;
+            Ok(detail)
+        }
+        Err(offline) => std::fs::read_to_string(cache_file)
+            .ok()
+            .and_then(|json| read_detail(&json, entry).ok())
+            .ok_or(offline),
+    }
+}
+
+/// One detail document, checked against the entry that named it (see [`detail`]).
+fn read_detail(json: &str, entry: &ListEntry) -> Result<Detail> {
+    if let Some(sum) = &entry.detail_sum {
+        crate::plugin_provenance::verify_checksum(json.as_bytes(), sum).map_err(|_| {
+            Error::invalid(
+                format!(
+                    "the catalog's detail for '{}' is not the document the catalog listed ({sum})",
+                    entry.name
+                ),
+                format!(
+                    "カタログの '{}' の詳細が、一覧の記載（{sum}）と一致しません",
+                    entry.name
+                ),
+            )
+        })?;
+    }
+    let detail: Detail = serde_json::from_str(json).map_err(|e| {
+        Error::invalid(
+            format!("the catalog's detail for '{}' is not readable: {e}", entry.name),
+            format!("カタログの '{}' の詳細を読み取れません：{e}", entry.name),
+        )
+    })?;
+    if detail.name != entry.name {
+        return Err(Error::invalid(
+            format!(
+                "the catalog's detail for '{}' names another plugin ('{}')",
+                entry.name, detail.name
+            ),
+            format!(
+                "カタログの '{}' の詳細が別のプラグイン（'{}'）を名乗っています",
+                entry.name, detail.name
+            ),
+        ));
+    }
+    Ok(detail)
 }
 
 // ---- registered third-party catalogs, and the merged view (`AMB-T-1980`) ----
@@ -439,7 +520,7 @@ pub struct DiscoveredSource {
 #[derive(Clone, Debug)]
 pub struct DiscoveredEntry {
     /// The entry as its catalog published it.
-    pub entry: Entry,
+    pub entry: ListEntry,
     /// The URL of the catalog that served it.
     pub source: String,
     /// Whether [`source`](DiscoveredEntry::source) is the official catalog — the entry passed review
@@ -489,8 +570,8 @@ pub fn discover(paths: &Paths) -> Discovery {
                 let offered = catalog.entries.len();
                 dropped.extend(catalog.dropped);
                 for mut entry in catalog.entries {
-                    if entries.iter().any(|e| e.entry.manifest.name == entry.manifest.name) {
-                        dropped.push(Dropped::Duplicate { name: entry.manifest.name });
+                    if entries.iter().any(|e| e.entry.name == entry.name) {
+                        dropped.push(Dropped::Duplicate { name: entry.name });
                     } else {
                         entry.featured &= official;
                         entries.push(DiscoveredEntry {
@@ -540,10 +621,8 @@ mod tests {
             "repo": "ShiroDoromoto/amenbo",
             "os": ["macos", "linux", "windows"],
             "category": "workflow",
-            "url": "https://example.invalid/x.tar.gz",
-            "checksum": format!("sha256:{}", "a".repeat(64)),
-            "signature": "untrusted comment: x\nsig\ntrusted comment: y\nglobal\n",
             "added_at": "2026-07-23T04:23:48Z",
+            "detail_sum": format!("sha256:{}", "a".repeat(64)),
         })
     }
 
@@ -565,15 +644,46 @@ mod tests {
         assert_eq!(catalog.generated_at.as_deref(), Some("2026-07-23T04:57:10Z"));
     }
 
+    /// The values on an entry that no author writes: the day it entered the index, the digest of the
+    /// document an install goes on to fetch (`AMB-D-386`), and the index's own recommendation.
     #[test]
     fn an_entry_keeps_the_fields_only_the_catalog_supplies() {
         let mut json = entry_json("worktree");
         json["featured"] = serde_json::json!(true);
         let catalog = parse(&catalog_json(vec![json])).unwrap();
         let entry = catalog.find("worktree").expect("the entry is there");
-        assert!(entry.manifest.signature.is_some(), "the CI's signature rides on the manifest");
         assert_eq!(entry.added_at.as_deref(), Some("2026-07-23T04:23:48Z"), "the 'new' axis");
+        assert_eq!(
+            entry.detail_sum,
+            Some(format!("sha256:{}", "a".repeat(64))),
+            "the comparison material update detection is left with"
+        );
         assert!(entry.featured, "the 'featured' axis");
+    }
+
+    /// An entry carries nothing an install needs, and intake does not ask it for any: a list entry with
+    /// no url, checksum or signature anywhere on it is exactly what the catalog now publishes
+    /// (`AMB-D-385`), and refusing it would empty the catalog.
+    #[test]
+    fn an_entry_without_a_distributable_is_a_perfectly_good_entry() {
+        let catalog = parse(&catalog_json(vec![entry_json("worktree")])).unwrap();
+        assert!(catalog.dropped.is_empty(), "nothing was dropped: {:?}", catalog.dropped);
+        assert!(catalog.find("worktree").is_some());
+    }
+
+    /// The digest is the one field intake checks beyond what a browse view draws, because a malformed one
+    /// is a comparison that could never be made.
+    #[test]
+    fn an_entry_whose_digest_is_not_a_digest_is_dropped() {
+        let mut entry = entry_json("worktree");
+        entry["detail_sum"] = serde_json::json!("whatever-the-ci-felt-like");
+        let catalog = parse(&catalog_json(vec![entry])).unwrap();
+        assert!(
+            matches!(catalog.dropped.as_slice(), [Dropped::Invalid { name, problems }]
+                if name == "worktree" && problems.iter().any(|p| p.location == "detail_sum")),
+            "the field is named: {:?}",
+            catalog.dropped
+        );
     }
 
     /// A catalog built before the field existed says nothing about it, and nothing is what that means:
@@ -600,9 +710,8 @@ mod tests {
     #[test]
     fn a_broken_entry_is_dropped_and_the_rest_survives() {
         // The delivery path is not trusted: one entry missing a required field must not cost the catalog.
-        // `repo` and not `checksum`: a manifest may legitimately carry no top-level checksum now that it
-        // can publish one per OS (`AMB-D-381`), so a missing one is a rule the validator breaks it on
-        // (dropped as Invalid), not a shape serde cannot read.
+        // `repo` is a field a list entry owes outright, so serde cannot read the entry at all — which is a
+        // different drop from one that reads and then breaks a rule.
         let mut broken = entry_json("broken");
         broken.as_object_mut().unwrap().remove("repo");
         let json = catalog_json(vec![entry_json("first"), broken, entry_json("last")]);
@@ -637,7 +746,7 @@ mod tests {
         let json = catalog_json(vec![entry_json("worktree"), second]);
         let catalog = parse(&json).unwrap();
         assert_eq!(catalog.entries.len(), 1);
-        assert_eq!(catalog.find("worktree").unwrap().manifest.desc, "a plugin", "the first one holds");
+        assert_eq!(catalog.find("worktree").unwrap().desc, "a plugin", "the first one holds");
         assert!(matches!(catalog.dropped.as_slice(), [Dropped::Duplicate { .. }]));
     }
 
@@ -725,7 +834,7 @@ mod tests {
         write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("only-on-disk")])).unwrap();
 
         let catalog = fresh(&paths).expect("the cache answers");
-        let names: Vec<_> = catalog.entries.iter().map(|e| e.manifest.name.as_str()).collect();
+        let names: Vec<_> = catalog.entries.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, vec!["only-on-disk"]);
     }
 
@@ -734,6 +843,101 @@ mod tests {
     #[test]
     fn no_cache_has_no_age() {
         assert!(cache_age_at(&cache_file(&paths_at("ageless"))).is_none());
+    }
+
+    // ---- the detail document (`AMB-D-385`) ----
+
+    fn detail_json(name: &str) -> String {
+        serde_json::json!({
+            "name": name,
+            "url": "https://example.invalid/x.tar.gz",
+            "checksum": format!("sha256:{}", "b".repeat(64)),
+            "payload_v": 1,
+        })
+        .to_string()
+    }
+
+    /// The digest the catalog CI computes: sha256 over the bytes it publishes (`AMB-D-386`).
+    fn sum_of(json: &str) -> String {
+        use sha2::{Digest, Sha256};
+        let hex: String = Sha256::digest(json.as_bytes()).iter().map(|b| format!("{b:02x}")).collect();
+        format!("sha256:{hex}")
+    }
+
+    fn listed(name: &str, detail_sum: Option<String>) -> ListEntry {
+        let mut entry: ListEntry = serde_json::from_value(entry_json(name)).unwrap();
+        entry.detail_sum = detail_sum;
+        entry
+    }
+
+    /// The two documents are published together, so the address of one is the address of the other: an
+    /// override that points amenbo at a test catalog moves the details with it.
+    #[test]
+    fn a_detail_sits_beside_the_catalog_that_listed_it() {
+        assert_eq!(
+            detail_url("https://example.invalid/amenbo-plugins/catalog.json", "worktree"),
+            "https://example.invalid/amenbo-plugins/plugins/worktree.json"
+        );
+    }
+
+    #[test]
+    fn a_detail_that_names_another_plugin_is_refused() {
+        let entry = listed("worktree", None);
+        let err = read_detail(&detail_json("slack"), &entry).unwrap_err();
+        assert!(format!("{err:?}").contains("slack"), "the name it did carry is shown: {err:?}");
+    }
+
+    /// The entry says what this plugin's detail is; a document that does not hash to it is a mismatched
+    /// pair, and taking it would install from bytes the list never vouched for.
+    #[test]
+    fn a_detail_that_is_not_the_one_listed_is_refused() {
+        let json = detail_json("worktree");
+        assert!(read_detail(&json, &listed("worktree", Some(sum_of(&json)))).is_ok(), "the pair agrees");
+
+        let entry = listed("worktree", Some(sum_of("some other document")));
+        assert!(read_detail(&json, &entry).is_err(), "and a pair that does not, does not install");
+    }
+
+    /// An entry with no digest is not refused for it — the check is over what the catalog declared, and a
+    /// catalog that declares nothing is one whose plugins simply never report an update.
+    #[test]
+    fn an_entry_with_no_digest_takes_its_detail_as_it_comes() {
+        assert!(read_detail(&detail_json("worktree"), &listed("worktree", None)).is_ok());
+    }
+
+    #[test]
+    fn the_cached_detail_answers_when_the_fetch_fails() {
+        let paths = paths_at("detail-offline");
+        let json = detail_json("worktree");
+        let entry = listed("worktree", Some(sum_of(&json)));
+        write_cache_at(&detail_cache_file(&paths, "worktree"), &json).unwrap();
+
+        let detail =
+            detail_to(UNREACHABLE, &detail_cache_file(&paths, "worktree"), &entry).expect("cached");
+        assert_eq!(detail.checksum, format!("sha256:{}", "b".repeat(64)));
+    }
+
+    /// A cached detail from a previous publication does not answer for the entry in hand: it is passed
+    /// over as if there were no cache, rather than installed from as though it were current.
+    #[test]
+    fn a_cached_detail_the_entry_no_longer_lists_is_passed_over() {
+        let paths = paths_at("detail-stale");
+        write_cache_at(&detail_cache_file(&paths, "worktree"), &detail_json("worktree")).unwrap();
+        let moved_on = listed("worktree", Some(sum_of("what the catalog publishes now")));
+
+        assert!(detail_to(UNREACHABLE, &detail_cache_file(&paths, "worktree"), &moved_on).is_err());
+    }
+
+    /// The detail cache is named per plugin and never collides with the catalog's own cache, the sources
+    /// list, or a third-party catalog's cache.
+    #[test]
+    fn a_detail_cache_file_is_distinct_from_every_other_file_in_the_registry() {
+        let paths = paths_at("detail-cache-name");
+        let a = detail_cache_file(&paths, "worktree");
+        assert_ne!(a, detail_cache_file(&paths, "slack"));
+        assert_ne!(a, cache_file(&paths));
+        assert_ne!(a, sources_file(&paths));
+        assert_ne!(a, source_cache_file(&paths, "https://example.invalid/a/catalog.json"));
     }
 
     // ---- registered third-party catalogs, and the merged discovery view (`AMB-T-1980`) ----
@@ -817,11 +1021,10 @@ mod tests {
         .unwrap();
 
         let discovery = discover(&paths);
-        let names: Vec<_> =
-            discovery.entries.iter().map(|e| e.entry.manifest.name.as_str()).collect();
+        let names: Vec<_> = discovery.entries.iter().map(|e| e.entry.name.as_str()).collect();
         assert_eq!(names, vec!["worktree", "extra"], "official first, then the source's fresh entry");
         assert_eq!(
-            discovery.entries[0].entry.manifest.desc, "a plugin",
+            discovery.entries[0].entry.desc, "a plugin",
             "the official 'worktree' held; the impostor did not displace it"
         );
         assert!(discovery.entries[0].listed, "the official catalog served it");

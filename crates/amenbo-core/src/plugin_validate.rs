@@ -11,6 +11,12 @@
 //! - **`plugin validate`** (`AMB-T-1988`): an author self-checks a manifest before opening a catalog PR,
 //!   seeing *every* problem at once rather than one per run.
 //!
+//! The catalog is delivered as two documents (`AMB-D-385`), so intake meets a manifest in halves: the
+//! fetch of the list has only a list entry in hand and checks it with [`validate_list_entry`], and the
+//! install door has both halves joined and checks the whole thing with [`validate_manifest`]. Same rules,
+//! applied to whichever fields are present — a list entry is not refused for lacking a checksum it does
+//! not carry, and the checksum is still refused where it does.
+//!
 //! Because both go through [`validate_manifest`], the door and the author's tool can never disagree about
 //! what "valid" means. The validator **collects** problems ([`Vec<Problem>`], empty ⇒ valid) rather than
 //! returning on the first: the door only asks "is it empty", while the author wants the whole list.
@@ -28,7 +34,8 @@ use serde::{Serialize, Serializer};
 use crate::config::is_reserved_plugin_name;
 use crate::error::Msg;
 use crate::plugin_config::MAX_CONFIG_IDENT_BYTES;
-use crate::plugin_manifest::{Face, Manifest};
+use crate::plugin_manifest::{Face, Manifest, Os};
+use crate::plugin_wire::ListEntry;
 
 /// The shortest a plugin id (`name`) may be (`AMB-D-360`).
 pub const NAME_MIN_LEN: usize = 2;
@@ -204,9 +211,37 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
     check_repo(&mut problems, &m.repo);
     check_assets(&mut problems, m);
     check_min_amenbo(&mut problems, m.min_amenbo.as_deref());
-    check_os(&mut problems, m);
+    check_os(&mut problems, &m.os);
     check_config(&mut problems, m);
     check_events(&mut problems, m);
+
+    problems
+}
+
+/// Validate one **list** entry — the half of a catalog entry that rides in `catalog.json` (`AMB-D-385`),
+/// which is all the intake of a catalog fetch has in front of it. Empty ⇒ valid, as above.
+///
+/// The rules are the same rules, applied to the fields that are there: an entry is not a manifest, so
+/// asking it for a checksum it no longer carries would drop every well-formed entry in the catalog. What
+/// an entry owes is what a browse view draws — an id that fits the grammar, one-line text within its
+/// caps, GitHub coordinates, a non-empty OS set — plus the catalog's own digest being a digest
+/// (`AMB-D-386`), since it is what an update is later detected by.
+///
+/// The rest of a manifest is checked at the install door, over the two halves joined
+/// ([`crate::plugin_wire::join`]): the detail is untrusted delivery too, and that is where all of it is
+/// in hand at once.
+pub fn validate_list_entry(e: &ListEntry) -> Vec<Problem> {
+    let mut problems = Vec::new();
+
+    problems.extend(validate_plugin_id(&e.name));
+    check_line(&mut problems, "desc", &e.desc, MAX_DESC_LEN);
+    check_line(&mut problems, "author", &e.author, MAX_AUTHOR_LEN);
+    check_line(&mut problems, "category", &e.category, MAX_CATEGORY_LEN);
+    check_repo(&mut problems, &e.repo);
+    check_os(&mut problems, &e.os);
+    if let Some(sum) = &e.detail_sum {
+        check_checksum(&mut problems, "detail_sum", sum);
+    }
 
     problems
 }
@@ -451,9 +486,10 @@ fn check_min_amenbo(problems: &mut Vec<Problem>, min_amenbo: Option<&str>) {
     }
 }
 
-/// Check the OS set: non-empty (a plugin must run somewhere) and free of duplicates.
-fn check_os(problems: &mut Vec<Problem>, m: &Manifest) {
-    if m.os.is_empty() {
+/// Check the OS set: non-empty (a plugin must run somewhere) and free of duplicates. Takes the set
+/// rather than the manifest, because a list entry carries the same set and owes the same rule.
+fn check_os(problems: &mut Vec<Problem>, os: &[Os]) {
+    if os.is_empty() {
         problems.push(Problem::new(
             "os",
             ProblemCode::EmptyOs,
@@ -463,7 +499,7 @@ fn check_os(problems: &mut Vec<Problem>, m: &Manifest) {
         return;
     }
     let mut seen = HashSet::new();
-    for os in &m.os {
+    for os in os {
         if !seen.insert(*os) {
             problems.push(Problem::new(
                 "os",
@@ -617,6 +653,7 @@ mod tests {
             assets: Default::default(),
             events: Vec::new(),
             official: true,
+            detail_sum: None,
             scope: crate::plugin_manifest::Scope::Project,
             payload_v: 1,
             min_amenbo: Some("1.8.0".into()),

@@ -356,6 +356,7 @@ mod tests {
             signature: None,
             assets: Default::default(),
             official: false,
+            detail_sum: None,
             scope,
             payload_v: 1,
             min_amenbo: None,

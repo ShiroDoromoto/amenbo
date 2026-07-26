@@ -229,7 +229,8 @@ to the author instead of answering it.
 Captures the outside world into `devtool/fixtures/`, from the real sources:
 
 ```
-devtool/fixtures/catalog.json                          the plugin catalog
+devtool/fixtures/catalog.json                          the plugin catalog's list
+devtool/fixtures/plugins/<name>.json                   one plugin's detail — what an install reads
 devtool/fixtures/update/latest.json                    the update check's answer
 devtool/fixtures/github/repos/<owner>__<name>.json     /repos/{repo}
 devtool/fixtures/github/releases/<owner>__<name>.json  /repos/{repo}/releases/latest
@@ -239,14 +240,14 @@ devtool/fixtures/github/readme/<owner>__<name>.md      /repos/{repo}/readme
 **They are copies, never written by hand.** A hand-written fixture drifts from
 what the producer actually sends, and the mismatch shows up as a green check over
 a broken screen — an aggregation that quietly stopped copying a field is the kind
-of thing only a real capture catches. The repositories fetched are the ones the
-catalog itself names, so no list is kept beside it to go stale; `--repo` adds one
-the catalog does not name yet.
+of thing only a real capture catches. The plugins whose details are taken and the
+repositories fetched are the ones the catalog itself names, so no list is kept
+beside it to go stale; `--repo` adds one the catalog does not name yet.
 
 `--catalog` takes the envelope from somewhere else — a checkout of the catalog
 repository, where its own CI generated it — which is the answer while the
-published catalog is still empty. It is still a generated artifact, not a
-hand-written one.
+published catalog is still empty. The details are taken from beside it, the same
+way they are published. It is still a generated artifact, not a hand-written one.
 
 ### `devtool fixtures gui [--fail <face>=<mode>] [--fresh] [--port n] [--app path] [--no-launch]`
 

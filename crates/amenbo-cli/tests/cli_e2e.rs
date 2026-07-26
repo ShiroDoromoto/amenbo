@@ -4342,6 +4342,9 @@ fn install_scoped_plugin(cli: &Cli, name: &str, scope: &str, config: serde_json:
         "category": "workflow",
         "url": "https://example.com/x.tar.gz",
         "checksum": "sha256:deadbeef",
+        // What an install records of the detail document it was installed from (`AMB-D-386`) — the
+        // value a later catalog fetch compares against to say the plugin has moved.
+        "detail_sum": format!("sha256:{}", "d".repeat(64)),
         "scope": scope,
         "config": config,
     });
@@ -4504,9 +4507,10 @@ fn a_plugin_this_build_cannot_speak_to_is_named_in_the_listing() {
     );
 }
 
-/// The listing marks a plugin the catalog holds a different build of (`AMB-D-359`). The check reads the
-/// freshness-bounded catalog, so a cache inside the window answers with no request — here a cache seeded
-/// fresh. A plugin the catalog does not list is passed over, not marked. Applying stays the explicit
+/// The listing marks a plugin the catalog's list says something has moved about (`AMB-D-359`). It reads
+/// the cached list alone, so no request is made at all — not for the list, and not for the detail
+/// document that would say *what* moved (`AMB-D-386`): that is `plugin update --check`'s to fetch. A
+/// plugin the catalog does not list is passed over, not marked. Applying stays the explicit
 /// `plugin update <name>`; the listing only carries the fact, quietly.
 #[test]
 fn the_listing_marks_a_plugin_the_catalog_has_a_different_build_of() {
@@ -4517,9 +4521,10 @@ fn the_listing_marks_a_plugin_the_catalog_has_a_different_build_of() {
     // check passes over rather than marking.
     install_plugin(&cli, "watcher", serde_json::json!([]));
 
-    // A catalog offering a *different* build of `worktree` — a moved checksum against the installed
-    // `sha256:deadbeef`. Seeded straight into the registry cache and freshly written, so the
-    // freshness-bounded check answers from it without ever reaching the (refused) catalog URL.
+    // A catalog listing a *different* detail document for `worktree` — a moved digest against the one
+    // the install recorded. Seeded straight into the registry cache, so the listing's mark is read from
+    // it without ever reaching the (refused) catalog URL, and without the second document being fetched
+    // at all: a listing marks the candidate, and `plugin update --check` is what goes and reads it.
     let registry = cli.home.join("plugins").join("registry");
     std::fs::create_dir_all(&registry).unwrap();
     let catalog = serde_json::json!({
@@ -4528,8 +4533,8 @@ fn the_listing_marks_a_plugin_the_catalog_has_a_different_build_of() {
         "plugins": [{
             "name": "worktree", "desc": "a plugin", "author": "amenbo",
             "repo": "ShiroDoromoto/amenbo", "os": ["macos", "linux", "windows"],
-            "category": "workflow", "url": "https://example.invalid/x.tar.gz",
-            "checksum": format!("sha256:{}", "b".repeat(64)),
+            "category": "workflow",
+            "detail_sum": format!("sha256:{}", "b".repeat(64)),
         }],
     });
     std::fs::write(registry.join("official.json"), serde_json::to_vec(&catalog).unwrap()).unwrap();

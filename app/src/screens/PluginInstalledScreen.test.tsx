@@ -6,7 +6,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PluginInstall } from "../core/pluginInstalls";
+import type { PluginConfigField, PluginInstall } from "../core/pluginInstalls";
 
 const hoisted = vi.hoisted(() => ({
   installs: [] as PluginInstall[],
@@ -15,6 +15,8 @@ const hoisted = vi.hoisted(() => ({
   gated: [] as { name: string; projectId: number | null; enabled: boolean }[],
   projects: [] as { id: number; name: string }[],
   removed: [] as string[],
+  /** Every setting written, in order — the tier included, since that is what the switch chooses. */
+  wrote: [] as { name: string; key: string; value: string; projectId: number | null }[],
   /** What the uninstall answers — the receipt the screen reports from. */
   receipt: {} as Record<string, unknown>,
   /** What the confirmation was asked, and how it was answered. */
@@ -39,6 +41,10 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
     uninstallPlugin: (name: string) => {
       hoisted.removed.push(name);
       return Promise.resolve(hoisted.receipt);
+    },
+    setPluginConfig: (name: string, key: string, value: string, projectId: number | null) => {
+      hoisted.wrote.push({ name, key, value, projectId });
+      return Promise.resolve();
     },
   };
 });
@@ -71,12 +77,34 @@ const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => 
   scope: "machine",
   consented: false,
   compatible: true,
+  config: [],
+  ...over,
+});
+
+/** One declared setting, holding nothing until a test says otherwise. */
+const field = (over: Partial<PluginConfigField> & { key: string }): PluginConfigField => ({
+  label: over.key,
+  secret: false,
+  required: false,
+  secretSet: false,
   ...over,
 });
 
 const button = (label: string) =>
   Array.from(container.querySelectorAll("button")).find((b) => b.textContent === label);
 const rows = () => Array.from(container.querySelectorAll(".feed__item"));
+const boxes = () => Array.from(container.querySelectorAll<HTMLInputElement>(".plugcfg input"));
+const type = (el: HTMLInputElement, value: string) => {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+  setter.call(el, value);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+};
+const select = (el: HTMLSelectElement, value: string) => {
+  el.value = value;
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+};
+/** The form's own selects: the tier, and (once the project tier is chosen) which project. */
+const tiers = () => Array.from(container.querySelectorAll<HTMLSelectElement>(".plugcfg select"));
 /** Every badge on screen, in order — the row's own state, told apart from the prose around it. */
 const chips = () => Array.from(container.querySelectorAll(".chip")).map((c) => c.textContent);
 
@@ -87,6 +115,7 @@ beforeEach(() => {
   hoisted.gated = [];
   hoisted.projects = [];
   hoisted.removed = [];
+  hoisted.wrote = [];
   hoisted.asked = [];
   hoisted.confirm = true;
   hoisted.receipt = {
@@ -212,6 +241,96 @@ describe("a plugin this build cannot speak to", () => {
     hoisted.installs = [row({ name: "notify", consented: true, enabled: true })];
     render();
     expect(chips()).toEqual([t("plugins.gate.machine"), t("plugins.enabledChip")]);
+  });
+});
+
+// The settings a plugin's author declared (`AMB-D-356`), drawn as a form amenbo generates. amenbo judges
+// nothing in it: a text box and a masked pair are the two kinds there are, the tier is the user's choice,
+// and every value goes out through the one write boundary.
+describe("the settings form", () => {
+  it("offers settings only for a plugin that declares any, and counts what an enable will refuse over", () => {
+    hoisted.installs = [
+      row({ name: "notify", config: [field({ key: "webhook", required: true })] }),
+      row({ name: "quiet" }),
+    ];
+    render();
+
+    expect(button(t("plugins.cfg.open"))).toBeTruthy();
+    expect(container.textContent).toContain(tf("plugins.cfg.requiredUnset", { count: 1 }));
+    // The row that declares nothing has nothing to open.
+    expect(rows()[1].textContent).not.toContain(t("plugins.cfg.open"));
+  });
+
+  it("writes a text setting at the machine tier, and only what changed", async () => {
+    hoisted.installs = [
+      row({
+        name: "notify",
+        config: [field({ key: "events", machineValue: "push" }), field({ key: "room" })],
+      }),
+    ];
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    // The box opens holding what is stored, so an edit is a correction rather than a retype.
+    expect(boxes()[0].value).toBe("push");
+    act(() => { type(boxes()[0], "push,merge"); });
+    await act(async () => { button(t("plugins.cfg.save"))!.click(); });
+
+    expect(hoisted.wrote).toEqual([
+      { name: "notify", key: "events", value: "push,merge", projectId: null },
+    ]);
+  });
+
+  // The tiers are the settings' own: an override is written for the project the form names, and an empty
+  // one is no override at all — which is why the default it falls back to is shown beside it.
+  it("writes the override for the project the tier switch names", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }, { id: 8, name: "beta" }];
+    hoisted.installs = [row({ name: "notify", config: [field({ key: "events", machineValue: "push" })] })];
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    act(() => { select(tiers()[0], "project"); });
+    // Nothing can be written until the project is named — the machine default is not a fallback here.
+    expect(container.textContent).toContain(t("plugins.cfg.pickProjectNote"));
+    expect(button(t("plugins.cfg.save"))!.disabled).toBe(true);
+
+    act(() => { select(tiers()[1], "8"); });
+    expect(container.textContent).toContain(tf("plugins.cfg.fallback", { value: "push" }));
+    act(() => { type(boxes()[0], "deploy"); });
+    await act(async () => { button(t("plugins.cfg.save"))!.click(); });
+
+    expect(hoisted.wrote).toEqual([
+      { name: "notify", key: "events", value: "deploy", projectId: 8 },
+    ]);
+  });
+
+  // A secret is written and never read back, so the second box is the only check on a typo there is.
+  it("asks for a secret twice, and writes nothing when the two do not match", async () => {
+    hoisted.installs = [row({ name: "notify", config: [field({ key: "token", secret: true })] })];
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    act(() => { type(boxes()[0], "shh"); });
+    act(() => { type(boxes()[1], "shhh"); });
+    await act(async () => { button(t("plugins.cfg.save"))!.click(); });
+    expect(hoisted.wrote).toEqual([]);
+    expect(container.textContent).toContain(t("plugins.cfg.secretMismatch"));
+
+    act(() => { type(boxes()[1], "shh"); });
+    await act(async () => { button(t("plugins.cfg.save"))!.click(); });
+    // A secret is one value for the device: the tier the form is on does not reach it.
+    expect(hoisted.wrote).toEqual([{ name: "notify", key: "token", value: "shh", projectId: null }]);
+  });
+
+  // Clearing is the same door as setting: an empty value is "not provided", which is what `required` reads.
+  it("clears a held setting with an empty value", async () => {
+    hoisted.installs = [row({ name: "notify", config: [field({ key: "events", machineValue: "push" })] })];
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    await act(async () => { button(t("plugins.cfg.clear"))!.click(); });
+    expect(hoisted.wrote).toEqual([{ name: "notify", key: "events", value: "", projectId: null }]);
+    expect(container.textContent).toContain(t("plugins.cfg.cleared"));
   });
 });
 

@@ -4365,13 +4365,13 @@ pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
                 .entries
                 .into_iter()
                 .map(|e| PluginEntryDto {
-                    name: e.entry.manifest.name,
-                    desc: e.entry.manifest.desc,
-                    author: e.entry.manifest.author,
-                    repo: e.entry.manifest.repo,
-                    os: e.entry.manifest.os.iter().map(|o| o.as_str().to_string()).collect(),
-                    category: e.entry.manifest.category,
-                    official: e.entry.manifest.official,
+                    name: e.entry.name,
+                    desc: e.entry.desc,
+                    author: e.entry.author,
+                    repo: e.entry.repo,
+                    os: e.entry.os.iter().map(|o| o.as_str().to_string()).collect(),
+                    category: e.entry.category,
+                    official: e.entry.official,
                     listed: e.listed,
                     featured: e.entry.featured,
                     added_at: e.entry.added_at,
@@ -4476,6 +4476,45 @@ pub async fn plugin_repo_facts(repo: String) -> Result<PluginRepoFactsDto, CmdEr
     .map_err(|e| -> CmdError { format!("GitHub の情報取得に失敗しました: {e}").into() })?
 }
 
+/// One setting a plugin's author declared, and what this machine currently holds for it
+/// (`AMB-D-356`) — everything the generic form needs to draw a row and nothing amenbo judges for
+/// itself.
+///
+/// The two text tiers are carried separately rather than resolved into one effective value, because
+/// the form edits a tier: a project override that is absent has to read as absent, with the machine
+/// default it falls back to shown beside it.
+///
+/// **A secret's value is never here.** The author's flag is what routes it to the user-area secret
+/// file, and a value read back into a webview would be a copy of it in a place `AMB-D-356` keeps it
+/// out of — so a secret carries whether it is held, and that is all a form needs to mask it.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginConfigFieldDto {
+    /// The key the author declared — what a write names, and what a refusal quotes back.
+    key: String,
+    /// The author's own label for the field, drawn as the form's caption.
+    label: String,
+    /// Whether the author marked it secret. The form masks it and stores it once for the device; a
+    /// text field gets the two tiers instead.
+    secret: bool,
+    /// Whether the author marked it required. An enable is refused while one of these has no value,
+    /// so the form says which before the switch does.
+    required: bool,
+    /// The text machine default, as stored — absent when unset, and always absent for a secret.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    machine_value: Option<String>,
+    /// The text override held by the project the request named — absent when unset, when no project
+    /// was named, and always for a secret.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    project_value: Option<String>,
+    /// Whether a secret is held for this key on this device. Always false for a text field, whose
+    /// values say it themselves.
+    secret_set: bool,
+}
+
 /// One plugin this machine holds, as the market draws its state on top of the catalog entry of the same
 /// name (`AMB-D-351`). Installed and enabled are two facts, not one: an installed plugin that fires
 /// nothing is the ordinary state.
@@ -4504,6 +4543,41 @@ pub struct PluginInstallDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     incompatible_reason: Option<String>,
+    /// The settings the author declared, in that order, each with what this machine holds for it
+    /// (`AMB-D-356`). Empty for a plugin that declares none, which is the form's own answer to
+    /// whether there is anything to configure.
+    config: Vec<PluginConfigFieldDto>,
+}
+
+/// Read one declared setting into its DTO, at the tiers a form edits. The author's `secret` flag is
+/// the only thing that decides where the value lives, so it is the only thing read here to route the
+/// probe (`AMB-D-356`).
+fn config_field_row(
+    store: &Store,
+    plugin: &str,
+    field: &amenbo_core::plugin_manifest::ConfigField,
+    project: Option<i64>,
+) -> Result<PluginConfigFieldDto, CmdError> {
+    use amenbo_core::plugin_config::{get, Scope};
+    let (machine_value, project_value, secret_set) = if field.secret {
+        (None, None, get(store, field, plugin, Scope::MachineDefault)?.is_some())
+    } else {
+        let machine = get(store, field, plugin, Scope::MachineDefault)?;
+        let over = match project {
+            Some(id) => get(store, field, plugin, Scope::Project(id))?,
+            None => None,
+        };
+        (machine, over, false)
+    };
+    Ok(PluginConfigFieldDto {
+        key: field.key.clone(),
+        label: field.label.clone(),
+        secret: field.secret,
+        required: field.required,
+        machine_value,
+        project_value,
+        secret_set,
+    })
 }
 
 /// Read one installed plugin into its DTO at the gate `project` names (the shape `plugin list` prints).
@@ -4519,6 +4593,12 @@ fn install_row(
         Ok(gate) => Some(effective_enabled_in(store, &plugin.name, gate)?),
         Err(_) => None,
     };
+    let config = plugin
+        .manifest
+        .config
+        .iter()
+        .map(|f| config_field_row(store, &plugin.name, f, project))
+        .collect::<Result<Vec<_>, CmdError>>()?;
     Ok(PluginInstallDto {
         name: plugin.name.clone(),
         scope: plugin.manifest.scope.as_str().to_string(),
@@ -4526,6 +4606,7 @@ fn install_row(
         consented: store.config.plugin_consented(&plugin.name),
         compatible: why.is_none(),
         incompatible_reason: why.map(|why| why.to_string()),
+        config,
     })
 }
 
@@ -4609,6 +4690,48 @@ pub fn plugin_set_enabled(
             disable(store, &name, gate)?;
         }
         Ok(effective_enabled_in(store, &name, gate)?)
+    })
+}
+
+/// Write one plugin setting — the GUI form's half of `plugin config set`, through the one write
+/// boundary every face shares ([`amenbo_core::plugin_config::set`], `AMB-D-356`).
+///
+/// This side does what the CLI's does and no more: find the field the key names in the installed
+/// manifest, and turn the caller's tier into a scope. The author's `secret` flag on that field is what
+/// routes the value — a secret to the user-area secret file, text to the tier — and **amenbo never
+/// decides secrecy here**; a key the manifest does not declare has no routing rule, so it is refused
+/// rather than guessed at.
+///
+/// `project_id` is the tier: `null` writes the machine default, a project writes that project's
+/// override. A secret ignores it, holding one value for the device.
+///
+/// An **empty** `value` clears the setting, which is how the form's clear works — "not provided" is
+/// unset, the same reading `required` uses. Nothing is echoed back: the caller has the value it typed,
+/// and a secret has no business coming back out.
+#[tauri::command]
+pub fn plugin_config_set(
+    name: String,
+    key: String,
+    value: String,
+    project_id: Option<i64>,
+) -> Result<(), CmdError> {
+    with_store_mut(|store| {
+        let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
+        let field = installed.manifest.config.iter().find(|f| f.key == key).cloned().ok_or_else(|| {
+            let declared: Vec<&str> =
+                installed.manifest.config.iter().map(|f| f.key.as_str()).collect();
+            let known = if declared.is_empty() { "none".to_string() } else { declared.join(", ") };
+            CmdError::from(amenbo_core::Error::invalid(
+                format!("plugin '{name}' declares no setting '{key}' (it declares: {known})"),
+                format!("プラグイン '{name}' に設定 '{key}' はありません（宣言されているのは: {known}）"),
+            ))
+        })?;
+        let scope = match project_id {
+            Some(id) => amenbo_core::plugin_config::Scope::Project(id),
+            None => amenbo_core::plugin_config::Scope::MachineDefault,
+        };
+        amenbo_core::plugin_config::set(store, &field, &name, &value, scope)?;
+        Ok(())
     })
 }
 
@@ -4945,13 +5068,10 @@ mod tests {
         g
     }
 
-    /// In WAL mode, an external writer's commit (the CLI, the AI) lands only in `store.sqlite-wal`,
-    /// and the mtime of `store.sqlite` itself does not move until a checkpoint. The change signature
-    /// rests on **`PRAGMA data_version`**, so a write from another process always moves it, even
-    /// though the main file was never touched — pinned here against a real store.
     /// Plant an installed plugin under the test's app-data: the manifest (which is the install marker)
     /// and the executable named after it — the whole on-disk shape `plugin_installed::read` looks for.
-    fn plant_plugin(home: &std::path::Path, name: &str, scope: &str) {
+    /// `config` is the settings schema its author declares, which is what a form is generated from.
+    fn plant_plugin_with(home: &std::path::Path, name: &str, scope: &str, config: serde_json::Value) {
         let dir = home.join("plugins").join(name);
         std::fs::create_dir_all(&dir).unwrap();
         let manifest = serde_json::json!({
@@ -4964,11 +5084,16 @@ mod tests {
             "url": "https://example.com/x.tar.gz",
             "checksum": "sha256:deadbeef",
             "scope": scope,
-            "config": [],
+            "config": config,
         });
         std::fs::write(dir.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
         let program = amenbo_core::plugin_installed::program_file_name(name);
         std::fs::write(dir.join(program), b"x").unwrap();
+    }
+
+    /// The same plant for a plugin whose author declared no settings at all.
+    fn plant_plugin(home: &std::path::Path, name: &str, scope: &str) {
+        plant_plugin_with(home, name, scope, serde_json::json!([]));
     }
 
     /// The GUI's creation screen asks for a name and nothing else, so the view a new project opens on
@@ -5054,6 +5179,88 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// What a generated settings form is drawn from and writes through (`AMB-D-356`): the author's
+    /// schema comes back with what each tier holds, the write routes by the author's `secret` flag
+    /// alone, and a secret's value never comes back out — the form has "held" and nothing more.
+    #[test]
+    fn the_settings_carry_both_tiers_and_a_secret_only_as_held() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("plugin-config");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "テストPJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        plant_plugin_with(
+            &tmp,
+            "notify",
+            "machine",
+            serde_json::json!([
+                {"key": "events", "label": "通知するイベント", "secret": false, "required": false},
+                {"key": "token", "label": "APIトークン", "secret": true, "required": true},
+            ]),
+        );
+        let field = |project: Option<i64>, key: &str| {
+            plugin_installs(project)
+                .unwrap()
+                .into_iter()
+                .find(|r| r.name == "notify")
+                .unwrap()
+                .config
+                .into_iter()
+                .find(|f| f.key == key)
+                .unwrap()
+        };
+
+        // The schema arrives whole, holding nothing yet — which is what the form draws "not provided"
+        // and the enable gate refuses over.
+        let events = field(Some(project_id), "events");
+        assert_eq!(events.label, "通知するイベント");
+        assert!(!events.secret && !events.required);
+        assert_eq!((events.machine_value, events.project_value, events.secret_set), (None, None, false));
+
+        // Text: the two tiers are separate answers, and the project's is only read for the project asked
+        // about — resolving them into one would leave the form editing a value it could not clear.
+        plugin_config_set("notify".into(), "events".into(), "push".into(), None).unwrap();
+        plugin_config_set("notify".into(), "events".into(), "deploy".into(), Some(project_id)).unwrap();
+        let here = field(Some(project_id), "events");
+        assert_eq!(here.machine_value.as_deref(), Some("push"));
+        assert_eq!(here.project_value.as_deref(), Some("deploy"));
+        assert_eq!(field(None, "events").project_value, None, "no project named, no override read");
+
+        // Secret: routed by the author's flag to the user-area file, and reported as held — the value
+        // itself is for injection at run time, never for a webview.
+        plugin_config_set("notify".into(), "token".into(), "s3cret".into(), None).unwrap();
+        let token = field(Some(project_id), "token");
+        assert!(token.secret_set, "a held secret is what the form masks");
+        assert_eq!((token.machine_value, token.project_value), (None, None), "never the value itself");
+        let config_raw = std::fs::read_to_string(tmp.join("config.json")).unwrap_or_default();
+        assert!(!config_raw.contains("s3cret"), "a secret must not reach config.json");
+
+        // The empty value is the clear, at whichever tier it is aimed.
+        plugin_config_set("notify".into(), "events".into(), String::new(), Some(project_id)).unwrap();
+        let cleared = field(Some(project_id), "events");
+        assert_eq!(cleared.project_value, None, "the override is gone");
+        assert_eq!(cleared.machine_value.as_deref(), Some("push"), "the default under it stays");
+
+        // A key the manifest does not declare has no routing rule — amenbo does not invent one.
+        assert!(plugin_config_set("notify".into(), "nope".into(), "x".into(), None).is_err());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// In WAL mode, an external writer's commit (the CLI, the AI) lands only in `store.sqlite-wal`,
+    /// and the mtime of `store.sqlite` itself does not move until a checkpoint. The change signature
+    /// rests on **`PRAGMA data_version`**, so a write from another process always moves it, even
+    /// though the main file was never touched — pinned here against a real store.
     #[test]
     fn store_signature_moves_on_an_external_writers_wal_only_commit() {
         let _env = env_guard();

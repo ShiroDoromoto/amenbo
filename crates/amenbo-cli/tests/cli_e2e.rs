@@ -4590,6 +4590,68 @@ fn plugin_runs_says_why_a_hook_did_nothing() {
     assert!(out.contains("last advanced by cli"), "{out}");
 }
 
+/// The read-back path, end to end (`AMB-D-406`): a plugin calls `amenbo` again to read what its payload only
+/// named, and what it reads back is the project it observes — and nothing outside it.
+///
+/// The whole point is that neither half comes from where the plugin happens to be standing. It is handed the
+/// store and its window in its environment, and the window is the gate its manifest declared: `scope:
+/// project`, so one project. The callback declares no facet — it is a plain read — which under the old rule
+/// would have made it a human seeing the whole device, so a refusal here can only have come from the window.
+#[cfg(unix)]
+#[test]
+fn a_plugin_reads_its_own_project_back_and_no_other() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "観測されるPJ"]);
+    let bound = cli.bound_project();
+    let inside = cli.json(&["task", "add", "--title", "中の仕事", "--project", &bound, "--json"]);
+    let inside_id = id_str(&inside["task"]["id"]);
+
+    // A second project on the same device, holding the task the plugin must not be able to reach.
+    let other = cli.json(&["project", "add", "--name", "別のPJ", "--json"]);
+    let other_id = id_str(&other["project"]["id"]);
+    let outside = cli.json(&["task", "add", "--title", "外の仕事", "--project", &other_id, "--json"]);
+    let outside_id = id_str(&outside["task"]["id"]);
+
+    // A project-scoped plugin whose whole body is two calls back into amenbo, each answer kept in a file so
+    // the test reads exactly what the plugin saw.
+    install_plugin(&cli, "reader", serde_json::json!([]));
+    let answers = cli.home.join("answers");
+    std::fs::create_dir_all(&answers).unwrap();
+    let program = cli.home.join("plugins").join("reader").join("reader");
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\ncat >/dev/null\n\
+             '{bin}' task list --json > '{out}/list.json'\n\
+             '{bin}' task show {outside_id} --json > '{out}/show.out' 2> '{out}/show.err'\n\
+             printf '%s' \"$?\" > '{out}/show.code'\n",
+            bin = env!("CARGO_BIN_EXE_amenbo"),
+            out = answers.display(),
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    cli.json(&["plugin", "enable", "reader", "--json"]);
+
+    let run = cli.json(&["plugin", "run", "--json", "reader"]);
+    assert_eq!(run["ok"], true, "the plugin ran: {run}");
+
+    // It read its own project's work — the listing needed no `--project`, because the window filled the slot.
+    let listed: Value =
+        serde_json::from_str(&std::fs::read_to_string(answers.join("list.json")).unwrap()).unwrap();
+    let ids: Vec<String> =
+        listed["tasks"].as_array().unwrap().iter().map(|t| id_str(&t["id"])).collect();
+    assert_eq!(ids, vec![inside_id], "the plugin sees its own project's tasks and only those: {listed}");
+
+    // And the task one project over is out of reach — refused, not served, and not an empty result either.
+    let code = std::fs::read_to_string(answers.join("show.code")).unwrap();
+    assert_ne!(code, "0", "reading outside the window is refused");
+    let refusal = std::fs::read_to_string(answers.join("show.err")).unwrap();
+    assert!(refusal.contains("out_of_reach"), "the refusal says why: {refusal}");
+}
+
 /// Plant an installed plugin that subscribes to `events` — [`install_plugin`] with the manifest field the
 /// dispatch resolver reads. The executable it lays down does nothing; a caller that wants the plugin to
 /// *do* something overwrites it.

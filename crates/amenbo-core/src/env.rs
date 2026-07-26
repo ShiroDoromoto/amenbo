@@ -20,10 +20,27 @@ pub fn actor() -> Option<String> {
     var("AMENBO_ACTOR")
 }
 
+/// The name of [`home`], for the surfaces that **set** it rather than read it — a plugin is handed the
+/// store this way ([`crate::plugin_callback`]), and a name that is written in two places is a name that can
+/// drift.
+pub const HOME_VAR: &str = "AMENBO_HOME";
+
 /// `AMENBO_HOME` — the explicit root that isolates the whole user layer (secrets, config, store)
-/// into one place, for tests and dogfooding.
+/// into one place, for tests and dogfooding. It is also how a launched plugin is told which store to call
+/// back into ([`crate::plugin_callback`]).
 pub fn home() -> Option<OsString> {
-    var_os("AMENBO_HOME")
+    var_os(HOME_VAR)
+}
+
+/// The name of [`plugin_reach`], for the runner that sets it on a plugin's process
+/// ([`crate::plugin_callback`]).
+pub const PLUGIN_REACH_VAR: &str = "AMENBO_PLUGIN_REACH";
+
+/// `AMENBO_PLUGIN_REACH` — how far the plugin amenbo just launched may read (`AMB-D-406`): `all`, or a
+/// project's `AMB-P-<n>` ref. Set by amenbo on a plugin's process and read back when that plugin calls
+/// `amenbo` again; unset everywhere else, where the facet and the binding decide the reach as usual.
+pub fn plugin_reach() -> Option<String> {
+    var(PLUGIN_REACH_VAR)
 }
 
 /// `AMENBO_PROJECT_DIR` — where the search for the `.amenbo` pointer starts, so the GUI and friends

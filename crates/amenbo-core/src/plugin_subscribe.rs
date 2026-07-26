@@ -21,9 +21,11 @@
 //!   `AMB-D-356`), splitting the plugin's own settings into secret env vars and text stdin config.
 //!
 //! For each such plugin the resolver builds a [`Subscriber`]: the program to run, its secret config set as
-//! environment variables (off argv, off logs), and its non-secret config for the payload's `config` key.
-//! It never sets the event payload itself — [`plugin_dispatch`](crate::plugin_dispatch) composes stdin, so
-//! the payload channel stays the dispatcher's.
+//! environment variables (off argv, off logs), the read-back path beside it ([`plugin_callback`],
+//! `AMB-D-406` — the store to call `amenbo` into and the window to read it through), and its non-secret
+//! config for the payload's `config` key. It never sets the event payload itself —
+//! [`plugin_dispatch`](crate::plugin_dispatch) composes stdin, so the payload channel stays the
+//! dispatcher's.
 //!
 //! **What is installed is given, not discovered here.** The resolver is handed the set of
 //! [`InstalledPlugin`]s — each a name, an executable, and a manifest — rather than scanning the plugins
@@ -32,12 +34,11 @@
 //! the dispatcher above it. The mount point (`AMB-T-2033`) assembles the list and constructs this resolver
 //! once per drive.
 //!
-//! **Both tiered reads are at the machine tier here.** A fired observation event carries no single project
-//! (the outbox spans them), so [`resolve`](EnabledSubscribers::resolve) reads each plugin's text config at
-//! its machine default and its gate at the machine-global answer — the `project` a two-tier override would
-//! need is not one an event has. The project-scoped tiers are the command face's, where an invocation runs
-//! inside one project (`AMB-D-356` for a value, `AMB-D-350` for the gate). Resolving an event back to the
-//! project of the record it names, so a per-project gate can decide an observation too, is its own work.
+//! **The project is the event's own, not the caller's.** The dispatcher resolves each drained row back to
+//! the project of the record it names and hands it here, so both project-keyed reads — the gate
+//! (`AMB-D-379`) and a text setting's override (`AMB-D-356`) — are answered where the event happened rather
+//! than wherever the drive was standing. An event whose project cannot be named answers at the machine tier
+//! alone, and fires no project-scoped plugin at all (above).
 //!
 //! **A config read that errors drops that one plugin, not the event.** Delivery is best-effort
 //! (`AMB-D-352`): if a plugin's config cannot be read, the resolver warns and omits it, and the event still
@@ -45,6 +46,7 @@
 
 use std::path::PathBuf;
 
+use crate::plugin_callback;
 use crate::plugin_dispatch::{Subscriber, Subscribers};
 use crate::plugin_exec::PluginInvocation;
 use crate::plugin_inject;
@@ -155,6 +157,14 @@ impl Subscribers for EnabledSubscribers<'_> {
             };
             let mut invocation = PluginInvocation::new(&plugin.program);
             for (name, value) in injection.env {
+                invocation = invocation.env(name, value);
+            }
+            // The read-back path (`AMB-D-406`): the store to call `amenbo` into, and the window to read it
+            // through — the same gate that let this subscriber fire, since what a plugin may observe is what
+            // it may read.
+            for (name, value) in
+                plugin_callback::env(&self.store.paths.base_dir, plugin_callback::reach_of(gate))
+            {
                 invocation = invocation.env(name, value);
             }
             subscribers.push(Subscriber {
@@ -352,11 +362,9 @@ mod tests {
         let resolver = EnabledSubscribers::new(&plugins, &store);
         let subs = resolver.resolve("task.created", None, Face::Cli);
         assert_eq!(subs.len(), 1);
-        // Secret → env, off the payload.
-        assert_eq!(
-            subs[0].invocation.env,
-            vec![("AMENBO_CONFIG_WEBHOOK_URL".to_string(), "https://hooks/x".to_string())]
-        );
+        // Secret → env, off the payload. (The read-back path rides the same channel — `AMB-D-406` — so this
+        // asks for the one variable rather than for the whole environment.)
+        assert_eq!(env_of(&subs[0], "AMENBO_CONFIG_WEBHOOK_URL"), "https://hooks/x");
         // Text → the config map the dispatcher folds onto stdin.
         assert_eq!(subs[0].config.get("channel").and_then(|v| v.as_str()), Some("#ops"));
         assert!(subs[0].config.get("webhook_url").is_none(), "a secret never rides the stdin config");
@@ -425,6 +433,50 @@ mod tests {
         let resolver = EnabledSubscribers::new(&plugins, &store);
         assert_eq!(resolver.resolve("task.created", Some(p), Face::Cli).len(), 1);
         assert_eq!(resolver.resolve("task.created", None, Face::Cli).len(), 1);
+    }
+
+    // ───────────────────── the read-back path a subscriber is handed (`AMB-D-406`) ─────────────────
+
+    /// Every fired subscriber is told which store to call `amenbo` into: the one this resolver reads, named
+    /// rather than left to the plugin's directory to imply.
+    #[test]
+    fn a_subscriber_is_told_which_store_to_read_back_from() {
+        let (mut store, dir) = store_at("callback-store");
+        enable_machine(&mut store, "slack");
+        let plugins = [installed("slack", &["task.created"], vec![])];
+
+        let resolver = EnabledSubscribers::new(&plugins, &store);
+        let subs = resolver.resolve("task.created", None, Face::Cli);
+        let named = env_of(&subs[0], crate::plugin_callback::STORE_ENV);
+        assert_eq!(std::path::PathBuf::from(named), dir);
+    }
+
+    /// The window a subscriber reads through is the gate it fired through: one project for a project-scoped
+    /// plugin, the device for a machine-scoped one (`AMB-D-406`).
+    #[test]
+    fn a_subscribers_window_is_the_gate_it_fired_through() {
+        let (mut store, _dir) = store_at("callback-reach");
+        let p = mk_project(&mut store, "p");
+        enable_in(&mut store, "slack", p);
+        enable_machine(&mut store, "watcher");
+        let plugins = [project_scoped("slack", &["task.created"]), installed("watcher", &["task.created"], vec![])];
+
+        let resolver = EnabledSubscribers::new(&plugins, &store);
+        let subs = resolver.resolve("task.created", Some(p), Face::Cli);
+        let scoped = subs.iter().find(|s| s.plugin == "slack").expect("the project-scoped plugin fired");
+        assert_eq!(env_of(scoped, crate::plugin_callback::REACH_ENV), crate::idref::project(p));
+        let device = subs.iter().find(|s| s.plugin == "watcher").expect("the machine-scoped one too");
+        assert_eq!(env_of(device, crate::plugin_callback::REACH_ENV), crate::plugin_callback::ALL_REACH);
+    }
+
+    /// One variable's value off a resolved subscriber's invocation.
+    fn env_of(sub: &Subscriber, key: &str) -> String {
+        sub.invocation
+            .env
+            .iter()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value.clone())
+            .unwrap_or_else(|| panic!("{key} was not set on {}'s invocation", sub.plugin))
     }
 
     // ───────────────────── the face a subscription fires on (`AMB-D-383`) ──────────────────────────

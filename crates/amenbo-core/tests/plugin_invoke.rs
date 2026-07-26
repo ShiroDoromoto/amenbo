@@ -128,3 +128,23 @@ fn a_failing_plugin_discards_its_return_value_and_lands_on_the_log() {
     assert_eq!(logged[0].event, plugin_invoke::LOG_EVENT);
     assert_eq!(logged[0].code, Some(3));
 }
+
+/// The read-back path arrives in the child's own environment (`AMB-D-406`): the store to call `amenbo` into,
+/// and the window to read it through. Read by a shell plugin with `$AMENBO_…` and nothing else — which is
+/// the point of putting it in the environment rather than on stdin.
+#[test]
+fn a_called_plugin_reads_the_store_and_its_window_out_of_its_environment() {
+    use amenbo_core::plugin_callback::{ALL_REACH, REACH_ENV, STORE_ENV};
+
+    let mut store = store_with_plugin(
+        "invoke-callback",
+        "reader",
+        &format!("#!/bin/sh\ncat >/dev/null\nprintf '%s|%s\\n' \"${STORE_ENV}\" \"${REACH_ENV}\"\n"),
+    );
+    enable(&mut store, "reader", Gate::Machine, &[], |_| true).unwrap();
+
+    let outcome = plugin_invoke::call(&store, "reader", &[], None).unwrap();
+    let base = store.paths.base_dir.to_string_lossy();
+    // `scope: machine`, so the gate is the device's and so is the window.
+    assert_eq!(outcome.value(), Some(format!("{base}|{ALL_REACH}\n").as_str()));
+}

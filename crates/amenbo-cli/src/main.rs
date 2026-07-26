@@ -1661,10 +1661,21 @@ fn plugin_run_cmd(
 }
 
 fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
+    // The **plugin face** (`AMB-D-406`): amenbo launched a plugin, and that plugin is calling amenbo back to
+    // read what its payload only named. The store to open and the window to read it through were handed over
+    // in the environment, so both are read here, once, ahead of everything that would otherwise consult this
+    // directory — a plugin's is whatever its launcher happened to be in, and nothing here is decided by it.
+    // `None` is every other invocation: nothing launched this as a plugin, and the facet and the binding
+    // decide the reach as they always have.
+    let plugin_window = amenbo_core::plugin_callback::reach_from_env().map_err(CliError::from)?;
     // Whether this checkout is a place to use amenbo at all is asked before any dispatch: `init` raises a
     // project in the real store and returns below without ever reaching the guards further down, so a
-    // refusal that came later would arrive after the damage it exists to prevent.
-    refuse_a_nested_worktree(&cli.command)?;
+    // refusal that came later would arrive after the damage it exists to prevent. A plugin is outside it for
+    // the reason `plugin-runner` is (see `nested_guard_target`): the store it works was named to it, so the
+    // upward walk this guard makes would judge a folder that decides nothing here.
+    if plugin_window.is_none() {
+        refuse_a_nested_worktree(&cli.command)?;
+    }
     // Init creates the store itself, so do not open one first.
     match &cli.command {
         Some(Command::Init { name, language, force }) => return init_cmd(flags, name.clone(), language.clone(), *force),
@@ -1797,7 +1808,8 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         amenbo_core::binding::resolve_upward(&store, &cwd);
     }
 
-    // Decide this surface's reach once, here, from the facet and the binding. An AI (`--actor ai` /
+    // Decide this surface's reach once, here — from what amenbo handed a plugin it launched (`plugin_window`,
+    // above), and otherwise from the facet and the binding. An AI (`--actor ai` /
     // `AMENBO_ACTOR=ai`) is confined to the project the `.amenbo` points at; a human sees the whole device
     // (the overview is the human's place). Reach is drawn from the binding alone — `--project` never widens
     // it: the resolution below is checked against exactly this reach, and naming an outside project is
@@ -1807,12 +1819,19 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // nothing to bite on, and falling back to All would reduce the binding to decoration. init (which creates
     // the binding) and migrate/unbind (which do not surface store content) are handled before this point and
     // never arrive here; that is the shape of the exceptions.
-    let mut store = match flags.actor {
-        ActorKind::Ai => {
-            let reach = Reach::for_ai(binding_project(&store)).map_err(CliError::from)?;
-            store.with_reach(reach)
-        }
-        ActorKind::Human => store,
+    let mut store = match plugin_window {
+        // The plugin face answers first, and for either facet (`AMB-D-406`). A plugin is neither a human nor
+        // an AI — it is a program amenbo started — so its window is not drawn from a facet's default but from
+        // the gate it fires through: the device for a `machine` plugin, one project for a `project` one. It
+        // cannot come from the binding either, since the folder a plugin runs in has none to read.
+        Some(reach) => store.with_reach(reach),
+        None => match flags.actor {
+            ActorKind::Ai => {
+                let reach = Reach::for_ai(binding_project(&store)).map_err(CliError::from)?;
+                store.with_reach(reach)
+            }
+            ActorKind::Human => store,
+        },
     };
 
     // Read-only integrity check at startup. Problems are reported as warnings and never repaired

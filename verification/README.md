@@ -186,10 +186,16 @@ a human from the evidence, not by the exit code.
 A scenario is an `id`, a human `title`, an optional `description`, an optional `drivers`
 list, and an ordered list of `steps`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
-`comment` / `project`) and an `op`, and carries named args under `with`. An action may bind
+`comment` / `project` / `store`) and an `op`, and carries named args under `with`. An action may bind
 its result with `as:`, and a later step refers back to it with `target:` — an op that joins two
 objects names the second under its own key (`decision link`'s `task:`), and every such key is
 checked back to an earlier binding, not just `target:`.
+
+`store` is the store itself rather than anything in it — `export`, `backup`, `restore`, and the
+integrity reads. Its `export` and `backup` bind through the same `as:`, and what they bind is the
+file they wrote: `restore` names the archive it puts back the way any step names an earlier result,
+so a mistyped name is a lint failure and not a driver hunting for a file nobody wrote. The files land
+in the run's own throwaway space and go with it.
 
 ```yaml
 id: task-assign

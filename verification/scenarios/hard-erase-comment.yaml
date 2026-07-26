@@ -1,0 +1,87 @@
+# Erasing content from the truth source — the one place amenbo destroys something on purpose, so a
+# delete that quietly left the row behind is a break nothing else in the set would catch.
+#
+# The capability's other arm (redacting an accepted decision's body) is not here yet, and not because
+# it is uninteresting: writing it turned up a defect. Both arms take a safety archive named to the
+# second, and the second erase within one second is refused rather than rotating, so a line holding
+# the two together is red on a fast machine and green on a slow one. The registry op and its driver
+# mapping are in place; the arm goes in with the fix.
+id: hard-erase-comment
+title: A comment leaves the store in full, and what sat beside it stays
+description: >
+  Post two comments and read them back, then erase one and read the same timeline again — the assert
+  is the absence, which is the whole promise. What sat beside it is asserted as still there, since an
+  erase that took the timeline with it would satisfy the first assert just as well. The store is
+  asked whether it is sound afterwards, because this arm rewrites the file itself (VACUUM) rather
+  than just a row in it. Run as the human: this is human-gated maintenance and the AI actor is
+  refused.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the task the erased line hung on
+    as: seed
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — the line that must be gone from the file
+    as: leak
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — the line beside it, which stays
+    as: keeper
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — the line that must be gone from the file
+      present: true
+
+  - type: action
+    domain: comment
+    op: hard-erase
+    with:
+      target: leak
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — the line that must be gone from the file
+      present: false
+
+  # Erasing one comment takes one comment: the timeline it sat in, and the task under it, carry on.
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — the line beside it, which stays
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "done:false"
+      target: seed
+      present: true
+
+  # The file itself is rewritten and VACUUMed under a live store, so it is asked whether it came
+  # through — an erase that left the database inconsistent would still pass every assert above.
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true

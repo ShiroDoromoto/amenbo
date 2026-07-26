@@ -124,7 +124,7 @@ impl Step {
 }
 
 /// Free-form named arguments. Values stay as YAML so a driver interprets them; the loader
-/// only inspects the few keys it validates (`target`, `present`).
+/// only inspects the few keys it validates (`target`, `present`, `ok`).
 pub type Args = std::collections::BTreeMap<String, serde_yaml::Value>;
 
 /// The domain object a step touches. Kept small and closed on purpose — an unknown domain
@@ -136,6 +136,9 @@ pub enum Domain {
     Decision,
     Comment,
     Project,
+    /// The store itself, rather than anything in it — what comes out of it (`export`), what is set
+    /// aside (`backup`), what goes back in (`restore`), and whether it is sound (`doctor`).
+    Store,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -160,7 +163,8 @@ struct OpSpec {
     /// that joins two objects names both sides, and each has to be checked or a typo on the second
     /// one reaches the driver as a binding that was never produced.
     refs: &'static [&'static str],
-    /// Whether this op may carry an `as:` binding (true only for ops that produce an object).
+    /// Whether this op may carry an `as:` binding (true only for ops that produce something a
+    /// later step can name — an object in the store, or the file a `store` action writes beside it).
     binds: bool,
 }
 
@@ -205,6 +209,17 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment", required: &["target", "text"], refs: &["target"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-edit", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-rm", required: &["target"], refs: &["target"], binds: false },
+    // The store as a whole. `export` and `backup` write a file the run keeps, and bind it by the
+    // same `as:` every other producing op uses — so `restore` names the archive it puts back the
+    // way a step names any other earlier result, and a mistyped name is caught here rather than in
+    // a driver.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "export", required: &[], refs: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "backup", required: &[], refs: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "restore", required: &["target"], refs: &["target"], binds: false },
+    // Erasing content from the truth source itself: a comment goes in full, a decision keeps its
+    // number and loses its body to the replacement text.
+    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "hard-erase", required: &["target"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "hard-erase", required: &["target", "body"], refs: &["target"], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], binds: false },
@@ -220,6 +235,17 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "commented", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "commented", required: &["target", "text"], refs: &["target"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "activity", required: &["target"], refs: &["target"], binds: false },
+    // What a `store` action left behind: the archive on disk, and whether an export carries the row
+    // for an object an earlier step made. `from` names the export the same way `target` names the
+    // object, so both sides are checked back to a binding.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "snapshot", required: &["target"], refs: &["target"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "exported", required: &["target", "from"], refs: &["target", "from"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "exported", required: &["target", "from"], refs: &["target", "from"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Comment, op: "exported", required: &["target", "from"], refs: &["target", "from"], binds: false },
+    // The two integrity reads, each by the command a user reaches for. `ok` is the verdict asked
+    // of it; `validate` narrows to one object when a `target` is given.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "doctor", required: &["ok"], refs: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "validate", required: &["ok"], refs: &["target"], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {
@@ -354,10 +380,13 @@ impl Scenario {
                 }
             }
 
-            // `present`, when given, is a boolean.
-            if let Some(v) = step.with().get("present") {
-                if v.as_bool().is_none() {
-                    errs.push(at(i, "`present` must be a boolean".to_string()));
+            // The two yes/no args are booleans wherever they appear: `present` asks whether
+            // something is there, `ok` asks what verdict a check is expected to come back with.
+            for key in ["present", "ok"] {
+                if let Some(v) = step.with().get(key) {
+                    if v.as_bool().is_none() {
+                        errs.push(at(i, format!("`{key}` must be a boolean")));
+                    }
                 }
             }
 
@@ -540,6 +569,63 @@ steps:
         let yaml = format!("drivers: []{GOOD}");
         let errs = load_str(&yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("no driver")));
+    }
+
+    /// The file a `store` action writes is named back through the one binding namespace every
+    /// other result uses, so an archive named at the wrong step is caught here and not by a driver
+    /// looking for a file nobody wrote.
+    #[test]
+    fn a_store_action_binds_the_file_it_wrote() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: action
+    domain: store
+    op: backup
+    as: snapshot
+  - type: action
+    domain: store
+    op: restore
+    with: { target: snapshot }
+  - type: assert
+    domain: store
+    op: snapshot
+    with: { target: snapshot, present: true }
+"#;
+        load_str(yaml).unwrap().validate().expect("valid");
+    }
+
+    #[test]
+    fn restoring_an_archive_nobody_wrote_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: action
+    domain: store
+    op: restore
+    with: { target: snapshot }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("does not resolve")));
+    }
+
+    /// `ok` is the verdict a check is expected to report, so a string that merely reads like one
+    /// ("true") is a scenario bug rather than something a driver should interpret.
+    #[test]
+    fn a_non_boolean_verdict_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps:
+  - type: assert
+    domain: store
+    op: doctor
+    with: { ok: "yes" }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`ok` must be a boolean")));
     }
 
     #[test]

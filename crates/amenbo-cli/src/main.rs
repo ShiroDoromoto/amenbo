@@ -1506,18 +1506,20 @@ fn plugin_disable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i3
         .map(|p| p.manifest.scope);
     let Some(scope) = declared else {
         let mut closed = false;
+        let mut dropped = 0;
         for gate in [Some(Gate::Machine), bound_project(store).map(Gate::Project)].into_iter().flatten() {
             closed |= effective_enabled_in(store, name, gate).map_err(CliError::from)?;
-            disable(store, name, gate).map_err(CliError::from)?;
+            dropped += disable(store, name, gate).map_err(CliError::from)?.queued;
         }
         human(
             flags,
             format!("Disabled plugin: {name} (its manifest is unreadable, so every gate it could hold was closed)"),
         );
+        say_dropped(flags, dropped);
         if flags.json {
             print_json(&json!({
                 "ok": true, "action": "plugin.disable", "plugin": name,
-                "enabled": false, "scope": null, "noop": !closed,
+                "enabled": false, "scope": null, "noop": !closed, "dropped_queued": dropped,
             }));
         }
         return Ok(0);
@@ -1525,7 +1527,7 @@ fn plugin_disable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i3
 
     let gate = plugin_gate(store, scope)?;
     let was_enabled = effective_enabled_in(store, name, gate).map_err(CliError::from)?;
-    disable(store, name, gate).map_err(CliError::from)?;
+    let stopped = disable(store, name, gate).map_err(CliError::from)?;
 
     let where_ = plugin_gate_level(gate);
     human(
@@ -1536,13 +1538,24 @@ fn plugin_disable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i3
             format!("Plugin already disabled: {name} ({where_})")
         },
     );
+    say_dropped(flags, stopped.queued);
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "plugin.disable", "plugin": name,
             "enabled": false, "scope": scope.as_str(), "level": where_, "noop": !was_enabled,
+            "dropped_queued": stopped.queued,
         }));
     }
     Ok(0)
+}
+
+/// Say what a stop threw away, when it threw anything away (`AMB-D-399`). Silence for nothing dropped: a
+/// plugin with an empty queue is the ordinary case, and a line saying so every time would train the reader
+/// to skip the one that matters. The events are gone for good — the user is owed the number.
+fn say_dropped(flags: &Flags, queued: usize) {
+    if queued > 0 {
+        human(flags, format!("  {queued} queued event(s) were dropped — a disabled plugin is not caught up afterwards."));
+    }
 }
 
 /// `plugin uninstall <name>` — remove the plugin and every trace of it (`AMB-D-357`). The confirmation
@@ -1570,6 +1583,7 @@ fn plugin_uninstall_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<
             "removed_anything": removed.anything(),
             "removed": {
                 "was_enabled": removed.was_enabled,
+                "queued": removed.queued,
                 "consent": removed.consent,
                 "machine_defaults": removed.machine_defaults,
                 "secrets": removed.secrets,

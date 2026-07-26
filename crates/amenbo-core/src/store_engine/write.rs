@@ -123,6 +123,21 @@ impl<'a> WriteTx<'a> {
         super::queue::dequeue(&self.tx, row)
     }
 
+    /// Throw away what is queued for `plugin` — every row, or only those stamped with `project` — **inside
+    /// this transaction**, and say how many went (`AMB-D-399`). A stopped plugin's queue and the lease of
+    /// whoever is working it go together ([`drop_runner`](Self::drop_runner)), so a stop is one atom: no
+    /// runner is left holding a queue that is no longer there. See [`super::queue`].
+    pub fn drop_queued(&self, plugin: &str, project: Option<i64>) -> Result<usize> {
+        super::queue::drop_queued(&self.tx, plugin, project)
+    }
+
+    /// Take `plugin`'s runner lease away whoever holds it, **inside this transaction** — the stop side of
+    /// [`release_runner`](Self::release_runner), issued when the plugin itself is being stopped
+    /// (`AMB-D-399`). See [`super::runner`].
+    pub fn drop_runner(&self, plugin: &str) -> Result<bool> {
+        super::runner::drop_lease(&self.tx, plugin)
+    }
+
     /// Take `plugin`'s runner lease for `owner` until `expires_at`, judged against `now` — `true` when it
     /// was taken, `false` when a live lease is already standing (`AMB-D-399`). Claiming **inside this
     /// transaction** is what makes "at most one runner per plugin" hold: the read that finds the lease

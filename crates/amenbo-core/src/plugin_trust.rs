@@ -48,6 +48,30 @@ pub enum Gate {
     Project(i64),
 }
 
+impl Gate {
+    /// Which of a plugin's queued rows this gate answers for (`AMB-D-399`) — the project's own when the
+    /// switch is a project's, all of them when it is the device's.
+    ///
+    /// A project-scoped plugin can be on in one project and off in another (`AMB-D-379`), so turning it off
+    /// in one says nothing about the other's events; a device-wide switch closing stops the plugin outright.
+    /// The shape is [`Store::drop_plugin_delivery`]'s `project` argument, named here because the answer is
+    /// the gate's.
+    pub fn queue_share(self) -> Option<i64> {
+        match self {
+            Gate::Machine => None,
+            Gate::Project(project_id) => Some(project_id),
+        }
+    }
+}
+
+/// What stopping a plugin threw away — the receipt [`disable`] returns, so a face can report the discard
+/// rather than make it silently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Stopped {
+    /// How many events were waiting on the plugin's queue and were dropped (`AMB-D-399`).
+    pub queued: usize,
+}
+
 /// The gate to move for a plugin declaring `declared`, from a context that is in `project` (or in none).
 ///
 /// A `machine` plugin ignores the project entirely — that is what its author declared, and offering a
@@ -117,7 +141,18 @@ pub fn enable(
 /// installed and stays consented, so a later [`enable`] asks for nothing again. Idempotent, and it does not
 /// ask whether the plugin still reads as installed — stopping a half-broken install is exactly when this
 /// matters most.
-pub fn disable(store: &mut Store, plugin: &str, gate: Gate) -> Result<()> {
+///
+/// **And it throws the plugin's waiting work away** (`AMB-D-399`, [`Store::drop_plugin_delivery`]): what is
+/// queued at that gate goes, and the runner working it ends. Disabling says *do not run this now*, not
+/// *save it all up for me* — a queue kept while a plugin is off grows for as long as it stays off and then
+/// arrives at once, describing a world that has since moved. The cost is admitted rather than mitigated: an
+/// event that happened while a plugin was off never reaches it, and a deletion is the one kind that cannot
+/// be caught up on afterwards by re-reading the current state. A plugin whose author would rather decide
+/// for itself stays enabled and does nothing.
+///
+/// [`Stopped`] carries what that cost was on this call, so a face can say it out loud instead of leaving a
+/// silent discard.
+pub fn disable(store: &mut Store, plugin: &str, gate: Gate) -> Result<Stopped> {
     match gate {
         Gate::Machine => {
             store.config.disable_plugin(plugin);
@@ -127,7 +162,11 @@ pub fn disable(store: &mut Store, plugin: &str, gate: Gate) -> Result<()> {
             store.set_plugin_enabled_in_project(project_id, plugin, false)?;
         }
     }
-    Ok(())
+    // The gate is closed first, so nothing is queued behind the drop: the fan-out asks this same gate
+    // (`plugin_subscribe::EnabledSubscribers`) and a write racing this one either sees the gate still open
+    // and queues what the drop then takes, or sees it shut and queues nothing.
+    let queued = store.drop_plugin_delivery(plugin, gate.queue_share())?;
+    Ok(Stopped { queued })
 }
 
 /// Whether the plugin fires at the gate `gate` names.
@@ -240,6 +279,76 @@ mod tests {
 
         enable(&mut store, "slack", Gate::Machine, &[], |_| true).unwrap();
         assert!(effective_enabled_in(&store, "slack", Gate::Machine).unwrap());
+    }
+
+    /// Put one row on a plugin's queue, stamped with `project` — the fan-out's leavings, for the tests
+    /// about what a stop does to them.
+    fn queue_for(store: &Store, plugin: &str, project: Option<i64>, id: i64) {
+        let tx = store.read_model().write().unwrap();
+        tx.queue_event(&crate::store_engine::QueuedEvent {
+            plugin,
+            face: "cli",
+            event: "task.created",
+            record_id: id,
+            actor: "ai",
+            at: "2026-07-25T09:00:00Z",
+            new_state: None,
+            project,
+        })
+        .unwrap();
+        tx.commit().unwrap();
+    }
+
+    fn still_queued(store: &Store, plugin: &str) -> usize {
+        crate::store_engine::queued_for(store.read_model().conn(), plugin, 100).unwrap().len()
+    }
+
+    /// Disabling throws the plugin's waiting work away and ends the runner on it (`AMB-D-399`): a plugin
+    /// that is off has no condition left under which those rows would ever be worked.
+    #[test]
+    fn disabling_drops_the_queue_and_the_runners_lease() {
+        let mut store = store_at("machine-disable-queue");
+        enable(&mut store, "slack", Gate::Machine, &[], |_| true).unwrap();
+        queue_for(&store, "slack", None, 1);
+        queue_for(&store, "slack", Some(7), 2);
+        let tx = store.read_model().write().unwrap();
+        tx.claim_runner("slack", "runner-1", "2999-01-01T00:00:00Z", "2026-07-25T09:00:00Z").unwrap();
+        tx.commit().unwrap();
+
+        let stopped = disable(&mut store, "slack", Gate::Machine).unwrap();
+
+        assert_eq!(stopped.queued, 2, "the device-wide switch takes every row it had");
+        assert_eq!(still_queued(&store, "slack"), 0);
+        assert_eq!(
+            crate::store_engine::lease_of(store.read_model().conn(), "slack").unwrap(),
+            None,
+            "and the runner working that queue is ended, not left holding a claim"
+        );
+    }
+
+    /// A project-scoped plugin turned off in one project keeps what it has waiting in another — the switch
+    /// that closed answers for one project only (`AMB-D-379`), so the runner is left to it.
+    #[test]
+    fn disabling_in_one_project_keeps_the_other_projects_queue() {
+        let mut store = store_at("project-disable-queue");
+        let a = mk_project(&mut store, "A");
+        let b = mk_project(&mut store, "B");
+        enable(&mut store, "slack", Gate::Project(a), &[], |_| true).unwrap();
+        enable(&mut store, "slack", Gate::Project(b), &[], |_| true).unwrap();
+        queue_for(&store, "slack", Some(a), 1);
+        queue_for(&store, "slack", Some(b), 2);
+        let tx = store.read_model().write().unwrap();
+        tx.claim_runner("slack", "runner-1", "2999-01-01T00:00:00Z", "2026-07-25T09:00:00Z").unwrap();
+        tx.commit().unwrap();
+
+        let stopped = disable(&mut store, "slack", Gate::Project(a)).unwrap();
+
+        assert_eq!(stopped.queued, 1, "only the project that was switched off loses its rows");
+        assert_eq!(still_queued(&store, "slack"), 1);
+        assert!(
+            crate::store_engine::lease_of(store.read_model().conn(), "slack").unwrap().is_some(),
+            "the runner keeps the lease: it still has the other project's row to carry out"
+        );
     }
 
     /// Uninstall's after-clean erases the consent record entirely (`AMB-D-357`).

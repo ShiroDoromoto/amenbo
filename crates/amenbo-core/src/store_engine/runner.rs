@@ -124,6 +124,25 @@ pub(super) fn release(conn: &Connection, plugin: &str, owner: &str) -> Result<bo
         .map_err(StoreEngineError::from)
 }
 
+/// Take `plugin`'s lease away, whoever holds it, and say whether one was standing — a **stop**, not a
+/// release (`AMB-D-399`).
+///
+/// [`release`] names an owner because a runner may only give up its own lease. This one is issued from the
+/// other side: the plugin has been stopped, and the runner working it is precisely the thing to end. A
+/// runner extends its lease before every row ([`extend`]), so the one that is mid-run finishes that row and
+/// then finds it holds nothing — it stops before taking the next, which is the shape a stop should have.
+/// Nothing is left behind either way: a lease standing for a plugin with no queue would be a claim nobody
+/// can release.
+pub(super) fn drop_lease(conn: &Connection, plugin: &str) -> Result<bool> {
+    let r = col::plugin_runner::ALL;
+    Delete::from(r.table)
+        .filter(Pred::eq(r.plugin, plugin))
+        .sql()
+        .execute(conn)
+        .map(|removed| removed > 0)
+        .map_err(StoreEngineError::from)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -260,6 +260,27 @@ impl Store {
         )
     }
 
+    /// Stop delivering to a plugin: throw away what is waiting for it and end the runner working it, on one
+    /// transaction (`AMB-D-399`). Returns how many queued rows went.
+    ///
+    /// `project` narrows the drop to one project's share, which is what a per-project switch closing means
+    /// (`AMB-D-379`); `None` is the whole plugin — a machine-wide switch, or an uninstall. The lease goes
+    /// only once the queue is empty, read inside the same transaction: a plugin still on in another project
+    /// has work left, and the runner already on it is the one that should carry it out.
+    ///
+    /// The pair is why this is one transaction rather than two calls. A queue emptied with the lease left
+    /// standing would be a claim no runner can release (the holder releases only what it can see is empty,
+    /// and the rows are gone), and a lease dropped with rows left would end a runner that still has work.
+    pub fn drop_plugin_delivery(&self, plugin: &str, project: Option<i64>) -> Result<usize> {
+        let tx = self.engine.write()?;
+        let dropped = tx.drop_queued(plugin, project)?;
+        if crate::store_engine::queued_for(tx.conn(), plugin, 1)?.is_empty() {
+            tx.drop_runner(plugin)?;
+        }
+        tx.commit()?;
+        Ok(dropped)
+    }
+
     /// The inbox items archived (dismissed) on this machine, as task_ids.
     pub fn inbox_archive_ids(&self) -> Result<Vec<i64>> {
         crate::overview::inbox_archive_ids(&self.engine)

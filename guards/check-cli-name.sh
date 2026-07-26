@@ -14,8 +14,10 @@
 # What is scanned: the Rust that words user-facing text (errors, hints, notices, the doctor's fixes)
 # in amenbo-core and amenbo-cli. What is not:
 #
-#   - comment lines (`//`, `///`, `//!`) — prose about the code, not output. Note that clap turns the
-#     doc comments in `cli.rs` into `--help` text, which this guard therefore does not reach.
+#   - comment lines (`//`, `///`, `//!`) — prose about the code, not output. clap does turn the doc
+#     comments in `cli.rs` into `--help` text, but those are authored with the production spelling on
+#     purpose and reworded as the help is built (`retargeted_cli` in the CLI's `main.rs`), the same
+#     way the agent spec is; a test on the walk holds that rule.
 #   - everything from a file's first `#[cfg(test)]` — a test that pins the production spelling is
 #     asserting the production channel's answer, which is exactly right.
 #   - `crates/amenbo-core/src/agent.rs` — the agent spec is authored with the production spelling on

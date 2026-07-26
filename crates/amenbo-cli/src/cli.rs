@@ -1,10 +1,16 @@
 //! Command definitions, via clap.
 //! The single source of truth for the command spec is `agent.rs` (`amenbo agent --json`); this file is kept in step with it.
+//!
+//! Every command worded here for someone to run is spelled `amenbo`, the name the production build
+//! installs — the derive takes literals, so there is nothing to interpolate a channel's name into.
+//! `retargeted_cli` in `main.rs` does the swapping as the help is built, so a dev build never hands
+//! out a command it does not answer to. Write the production spelling and let it do that.
 
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(
+    // The fallback only; `retargeted_cli` sets the name this build actually installs.
     name = "amenbo",
     version,
     about = "Local-first, server-less task management (CLI-first, AI-agent ready)",

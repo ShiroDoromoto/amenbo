@@ -466,7 +466,10 @@ mod tests {
     fn catalog(entries: Vec<Manifest>) -> Catalog {
         Catalog {
             generated_at: None,
-            entries: entries.into_iter().map(|manifest| Entry { manifest, added_at: None }).collect(),
+            entries: entries
+                .into_iter()
+                .map(|manifest| Entry { manifest, added_at: None, featured: false })
+                .collect(),
             dropped: Vec::new(),
         }
     }

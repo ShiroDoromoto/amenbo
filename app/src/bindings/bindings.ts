@@ -542,6 +542,13 @@ official: boolean,
  */
 listed: boolean, 
 /**
+ * Whether the official index recommends it — hand curation (`AMB-D-347`), for the "featured"
+ * ordering and the badge beside the trust layer. A third axis again: what a plugin is for, rather
+ * than who wrote it or who reviewed it. Core has already discounted a third-party catalog's claim
+ * on its own entries, so this is answered, not raw.
+ */
+featured: boolean, 
+/**
  * When the catalog first listed it (`YYYY-MM-DD…`), for the "new" ordering. Absent on a catalog
  * that does not record it.
  */

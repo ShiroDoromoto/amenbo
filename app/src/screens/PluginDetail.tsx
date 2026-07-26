@@ -50,6 +50,8 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
           <span className={`chip ${layer === "official" ? "chip--official" : ""}`}>
             {t(`plugins.layer.${layer}`)}
           </span>
+          {/* The same pair the row wore, so opening an entry does not quietly drop a claim the list made. */}
+          {entry.featured && <span className="chip chip--featured">{t("plugins.featured")}</span>}
           <span className="topbar__spacer" style={{ flex: 1 }} />
           <button className="btn" onClick={onClose}>{t("plugins.close")}</button>
         </div>

@@ -90,7 +90,15 @@ export function filterPlugins(entries: PluginEntry[], f: PluginFilter): PluginEn
 }
 
 /** How the market list is ordered. */
-export type PluginSort = "new" | "name";
+export type PluginSort = "featured" | "new" | "name";
+
+/** The "new" ordering, which "featured" falls back to within each half. */
+function byNewest(a: PluginEntry, b: PluginEntry): number {
+  if (!a.addedAt && !b.addedAt) return 0;
+  if (!a.addedAt) return 1;
+  if (!b.addedAt) return -1;
+  return b.addedAt.localeCompare(a.addedAt);
+}
 
 /**
  * Order the entries. Sorting is the client's, over the list already in hand — the same reason the
@@ -100,6 +108,12 @@ export type PluginSort = "new" | "name";
  * catalog repository). An entry without one is not old, it is unknown, so it sinks below the dated
  * ones rather than sorting as the epoch. Ties keep catalog order, which puts the official catalog
  * first.
+ *
+ * "Featured" reads the official index's hand curation, which is a flag and not a rank: it says which
+ * plugins are recommended, never in what order among themselves. So it lifts them as a block and
+ * orders within it by the same "new" rule, rather than inventing a ranking the catalog never made.
+ * The rest of the list follows unfiltered — a recommendation is a way in, not a way of hiding the
+ * plugins nobody got round to recommending.
  */
 export function sortPlugins(entries: PluginEntry[], sort: PluginSort): PluginEntry[] {
   const out = [...entries];
@@ -107,12 +121,11 @@ export function sortPlugins(entries: PluginEntry[], sort: PluginSort): PluginEnt
     out.sort((a, b) => a.name.localeCompare(b.name));
     return out;
   }
-  out.sort((a, b) => {
-    if (!a.addedAt && !b.addedAt) return 0;
-    if (!a.addedAt) return 1;
-    if (!b.addedAt) return -1;
-    return b.addedAt.localeCompare(a.addedAt);
-  });
+  if (sort === "featured") {
+    out.sort((a, b) => Number(b.featured) - Number(a.featured) || byNewest(a, b));
+    return out;
+  }
+  out.sort(byNewest);
   return out;
 }
 

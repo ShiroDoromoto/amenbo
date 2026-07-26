@@ -28,7 +28,7 @@ const OS_CHOICES = ["macos", "windows", "linux"] as const;
 const LAYER_CHOICES: PluginLayer[] = ["listed", "official", "third-party"];
 
 /** The orderings on offer. "Popular" is not among them: stars are fetched for one opened entry, never for a list. */
-const SORT_CHOICES: PluginSort[] = ["new", "name"];
+const SORT_CHOICES: PluginSort[] = ["featured", "new", "name"];
 
 export function PluginMarketScreen() {
   const { catalog, loading, error } = usePluginCatalog();
@@ -36,7 +36,10 @@ export function PluginMarketScreen() {
   const [category, setCategory] = useState("");
   const [os, setOs] = useState("");
   const [layer, setLayer] = useState<PluginLayer | "">("");
-  const [sort, setSort] = useState<PluginSort>("new");
+  // Recommended first, which is the view `AMB-D-347` leads discovery with. On a catalog that has
+  // curated nothing it is exactly the "new" ordering, so the default costs nothing before there is
+  // anything to recommend.
+  const [sort, setSort] = useState<PluginSort>("featured");
   const [sourcesOpen, setSourcesOpen] = useState(false);
   // The opened entry is held by name, not as a row: the catalog can be refetched underneath, and a
   // detail must then show what the catalog now holds rather than a copy frozen at the click.
@@ -263,6 +266,9 @@ function PluginCard({ entry, install, onOpen }: {
   // One badge, not two: the layers nest, so an official plugin wearing both would only invite the
   // reading that "official" and "listed" are a scale of the same thing rather than who wrote it and
   // who reviewed it.
+  //
+  // The recommendation badge below sits beside it because it is not on that ladder at all: it says the
+  // index recommends the plugin, which a listed third-party plugin can be and an official one can lack.
   const layer = pluginLayer(entry);
   return (
     <div
@@ -278,6 +284,14 @@ function PluginCard({ entry, install, onOpen }: {
           <span className={`chip ${layer === "official" ? "chip--official" : ""}`}>
             {t(`plugins.layer.${layer}`)}
           </span>
+          {/* No star: a star is the popularity figure this list deliberately never asks GitHub for
+              (`AMB-D-347`), and wearing one here would read as exactly that number. */}
+          {entry.featured && (
+            <>
+              {" "}
+              <span className="chip chip--featured">{t("plugins.featured")}</span>
+            </>
+          )}
           {/* Installed and enabled are two facts (`AMB-D-351`), and the row says which one it is: a plugin
               that is here but fires nothing is the ordinary state, not a half-finished install. */}
           {install && (

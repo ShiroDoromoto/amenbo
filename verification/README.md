@@ -205,6 +205,13 @@ The op vocabulary is a **closed registry** in `core/src/lib.rs`: an unknown op i
 so a typo never runs as a no-op. Drivers grow the registry (and their own op → driver
 mapping) as new ops are needed.
 
+A `field` assert names its value by a dotted path into the object's `show --json`, so what the
+output nests is reachable without a new op per corner: `placement.project.name` walks two objects,
+`blocked_by.0.name` indexes an array on the way, and a path that runs off the output is a mismatch
+rather than an error. A `listed` assert asks whether the task is in the listing; give it
+`position: first` / `last` instead of `present:` when what is under test is the order the store
+keeps, which is the only place a reorder is visible.
+
 ### `drivers` — which harnesses run this line
 
 `drivers` says which harnesses a scenario is written for. **Omit it and the scenario is

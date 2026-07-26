@@ -1,0 +1,61 @@
+# The activity stream is the one place where what the store did and what people said are read as one
+# thing. A task's own history lands there without anyone writing it down, so what is under test is
+# that the stream is fed at all — and that narrowing it by kind still answers.
+id: activity
+title: A task's events and comments arrive on one timeline, and each kind can be read on its own
+description: >
+  Register a task, comment on it, and read the shared timeline scoped to that task — whole, then
+  narrowed to the system events and to what was written. The system side is fed by the store itself,
+  so an empty answer there means the stream is not being written, not that nothing happened.
+steps:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the task whose history is read
+    as: seed
+
+  # Registering it is itself an event: the stream is fed by the store, with nobody recording it.
+  - type: assert
+    domain: task
+    op: activity
+    with:
+      target: seed
+      kind: system
+      present: true
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — said on the way past
+
+  - type: assert
+    domain: task
+    op: activity
+    with:
+      target: seed
+      text: SCENARIO — said on the way past
+      present: true
+
+  # The same entry, read through the narrowed stream: a comment is a comment on this side too.
+  - type: assert
+    domain: task
+    op: activity
+    with:
+      target: seed
+      kind: comment
+      text: SCENARIO — said on the way past
+      present: true
+
+  # And it is not on the system side — narrowing that returns nothing would be the same answer as
+  # narrowing wrongly, so this is what tells the two apart.
+  - type: assert
+    domain: task
+    op: activity
+    with:
+      target: seed
+      kind: system
+      text: SCENARIO — said on the way past
+      present: false

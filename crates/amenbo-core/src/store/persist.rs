@@ -226,10 +226,9 @@ fn emit_task_created(
 
 /// `task.deleted`: a task was hard-deleted (`AMB-D-367`). The name is the whole state (no `new`) and
 /// `id` is the task's own — the row is gone after the delete, but the outbox is a separate table, so the
-/// event outlives it. What the task takes down with it — its comments, its edges — is not a v1 event, so
-/// only the task is observed; a **project** delete, which takes down tasks, calls this once per task it
-/// carried off (`Store::project_delete`). The caller passes the deletion's clock as `at`, shared with the
-/// ledger line.
+/// event outlives it. This is the task's own event alone; the comments it takes down with it are observed
+/// by [`emit_task_subtree_deleted`], which is what both delete paths actually call. The caller passes the
+/// deletion's clock as `at`, shared with the ledger line.
 ///
 /// **Call this while the task is still there** — before the `DELETE`, inside the same transaction. The
 /// event is stamped with the project the task was in (`AMB-D-405`), and a deleted task can no longer say
@@ -271,6 +270,31 @@ fn emit_comment_removed(
     at: &str,
 ) -> Result<()> {
     emit(tx, crate::plugin_payload::name::COMMENT_REMOVED, id, actor, at, None)
+}
+
+/// Everything one task's removal is observed as: a `comment.removed` for each comment the cascade carries
+/// off, and then the `task.deleted` itself (`AMB-D-401`). Children first, the order the delete op itself
+/// unwinds them in — a subscriber mirroring the store can drop the comments and then the task they hung
+/// on, never the reverse.
+///
+/// A comment swept up by a delete is as unrecoverable as one deleted on its own, and just as invisible to
+/// a re-read, so leaving the cascade silent is the generation gap `AMB-D-367` does not allow. Both delete
+/// paths go through here — a task deleted on its own ([`Store::delete_task`]) and a task carried off by
+/// its project ([`Store::project_delete`], once per member task) — so the two cannot drift apart.
+///
+/// **Call this while the task is still there**, before the `DELETE` and inside the same transaction: the
+/// comment ids are read off the live rows, and every event is stamped with the project they were in
+/// (`AMB-D-405`).
+fn emit_task_subtree_deleted(
+    tx: &WriteTx<'_>,
+    task_id: i64,
+    actor: crate::model::ActorKind,
+    at: &str,
+) -> Result<()> {
+    for comment_id in crate::store_engine::read::task_comment_ids(tx.conn(), task_id)? {
+        emit_comment_removed(tx, comment_id, actor, at)?;
+    }
+    emit_task_deleted(tx, task_id, actor, at)
 }
 
 impl Store {
@@ -433,9 +457,9 @@ impl Store {
             let activity_id = mint_activity_id(tx)?;
             // One clock for the deletion — the plugin event and the ledger line record the same instant.
             let now = crate::time::Timestamp::now();
-            // Before the delete: the event is stamped with the task's project, which only a task that is
-            // still there can say (`AMB-D-405`).
-            emit_task_deleted(tx, id, actor, &now.to_rfc3339_z())?;
+            // Before the delete: the events are stamped with the task's project, which only a task that
+            // is still there can say (`AMB-D-405`).
+            emit_task_subtree_deleted(tx, id, actor, &now.to_rfc3339_z())?;
             let orphaned = crate::ops::task::delete(tx, id)?;
             let entry = crate::activity_log::Entry {
                 id: activity_id,
@@ -631,11 +655,13 @@ impl Store {
     /// have a single delete bury thousands of lines in the ledger and wash every other story away.
     ///
     /// **The plugin outbox is the opposite**: it gets one `task.deleted` per task the cascade carried
-    /// off. A deletion is the one event a plugin cannot recover by re-reading (there is no row left to
-    /// read), so a task that vanished inside a project delete has to be as observable as one deleted on
-    /// its own — leaving it silent is a generation gap, which `AMB-D-367` does not allow. The count of
-    /// events is bounded by what was deleted and they are appended in the deleting transaction; running
-    /// them costs one runner per plugin however many there are (`AMB-D-399`).
+    /// off, and one `comment.removed` per comment those tasks carried off with them
+    /// ([`emit_task_subtree_deleted`]). A deletion is the one event a plugin cannot recover by re-reading
+    /// (there is no row left to read), so a record that vanished inside a project delete has to be as
+    /// observable as one deleted on its own — leaving it silent is a generation gap, which `AMB-D-367`
+    /// does not allow. The count of events is bounded by what was deleted and they are appended in the
+    /// deleting transaction; running them costs one runner per plugin however many there are
+    /// (`AMB-D-399`).
     pub fn project_delete(&mut self, id: i64, actor: crate::model::ActorKind) -> Result<()> {
         let (orphaned, entry) = self.write_one(&[WriteTarget::Project(id)], |tx| {
             use crate::store_engine::read;
@@ -651,7 +677,7 @@ impl Store {
             // Before the cascade, for the reason the single delete emits before its own: a task carried
             // off by its project can no longer name the project it was in (`AMB-D-405`).
             for task_id in &tasks {
-                emit_task_deleted(tx, *task_id, actor, &at)?;
+                emit_task_subtree_deleted(tx, *task_id, actor, &at)?;
             }
             let orphaned = crate::ops::project::delete(tx, id)?;
             let entry = crate::activity_log::Entry {

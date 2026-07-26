@@ -112,8 +112,33 @@ impl Driver {
             (Domain::Task, "comment") => {
                 let target = self.resolve(with)?;
                 let text = req_str(with, "text")?;
-                self.run_json(&["comment", "add", &target.to_string(), "--text", text, "--json"])?;
+                let v = self.run_json(&["comment", "add", &target.to_string(), "--text", text, "--json"])?;
+                let id = v["comment"]["id"].as_i64().ok_or("comment add did not report an id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
                 Ok(Outcome::action(format!("commented on task {target}")))
+            }
+            (Domain::Comment, "edit") => {
+                let target = self.resolve(with)?;
+                let text = req_str(with, "text")?;
+                self.run_json(&["comment", "edit", &target.to_string(), "--text", text, "--json"])?;
+                Ok(Outcome::action(format!("rewrote comment {target}")))
+            }
+            (Domain::Comment, "rm") => {
+                let target = self.resolve(with)?;
+                self.run_json(&["comment", "rm", &target.to_string(), "--yes", "--json"])?;
+                Ok(Outcome::action(format!("deleted comment {target}")))
+            }
+            (Domain::Comment, "promote") => {
+                let target = self.resolve(with)?;
+                let title = req_str(with, "title")?;
+                let v = self.run_json(&["decision", "promote", &target.to_string(), "--title", title, "--json"])?;
+                let id = v["decision"]["id"].as_i64().ok_or("decision promote did not report an id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
+                Ok(Outcome::action(format!("promoted comment {target} into decision {id}")))
             }
             (Domain::Task, "status") => {
                 let target = self.resolve(with)?;
@@ -139,6 +164,64 @@ impl Driver {
                 let reason = req_str(with, "reason")?;
                 self.run_json(&["task", "block", &target.to_string(), "--reason", reason, "--json"])?;
                 Ok(Outcome::action(format!("blocked task {target}: {reason}")))
+            }
+            (Domain::Task, "update") => {
+                let target = self.resolve(with)?;
+                let id = target.to_string();
+                let mut args: Vec<String> = vec!["task".into(), "update".into(), id];
+                // Only the fields the step names are sent, so one op covers "set a due date" and
+                // "retitle and reprioritise" without a scenario spelling out the command line.
+                for key in ["title", "notes", "due", "start", "priority"] {
+                    if let Some(v) = with.get(key) {
+                        let v = v.as_str().ok_or_else(|| format!("arg `{key}` must be a string"))?;
+                        args.push(format!("--{key}"));
+                        args.push(v.to_string());
+                    }
+                }
+                if args.len() == 3 {
+                    return Err("`update` names no field to set".to_string());
+                }
+                args.push("--json".into());
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!("updated task {target}")))
+            }
+            (Domain::Task, "clear") => {
+                let target = self.resolve(with)?;
+                let field = req_str(with, "field")?;
+                let flag = format!("--clear-{field}");
+                self.run_json(&["task", "update", &target.to_string(), &flag, "--json"])?;
+                Ok(Outcome::action(format!("cleared `{field}` on task {target}")))
+            }
+            (Domain::Task, "move") => {
+                let target = self.resolve(with)?;
+                let id = target.to_string();
+                let mut args: Vec<String> = vec!["task".into(), "move".into(), id];
+                if with.contains_key("project") {
+                    args.push("--project".into());
+                    args.push(self.resolve_key(with, "project")?.to_string());
+                }
+                // Where in the project it lands: the same command carries the re-home and the order.
+                if let Some(pos) = with.get("position").and_then(|v| v.as_str()) {
+                    match pos {
+                        "top" | "bottom" => args.push(format!("--{pos}")),
+                        other => return Err(format!("`position: {other}` is not top or bottom")),
+                    }
+                }
+                if args.len() == 3 {
+                    return Err("`move` names neither a project nor a position".to_string());
+                }
+                args.push("--json".into());
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!("moved task {target}")))
+            }
+            (Domain::Project, "create") => {
+                let name = req_str(with, "name")?;
+                let v = self.run_json(&["project", "add", "--name", name, "--json"])?;
+                let id = v["project"]["id"].as_i64().ok_or("project add did not report an id")?;
+                if let Some(b) = bind {
+                    self.bindings.insert(b.to_string(), id);
+                }
+                Ok(Outcome::action(format!("created project {id} `{name}`")))
             }
             (Domain::Task, "depend") => {
                 let target = self.resolve(with)?;
@@ -186,6 +269,27 @@ impl Driver {
                 self.run_json(&["decision", "accept", &target.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("accepted decision {target}")))
             }
+            (Domain::Decision, "comment") => {
+                let target = self.resolve(with)?;
+                let text = req_str(with, "text")?;
+                let v = self.run_json(&["decision", "comment", "add", &target.to_string(), "--text", text, "--json"])?;
+                let id = v["comment"]["id"].as_i64().ok_or("decision comment add did not report an id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
+                Ok(Outcome::action(format!("commented on decision {target}")))
+            }
+            (Domain::Decision, "comment-edit") => {
+                let target = self.resolve(with)?;
+                let text = req_str(with, "text")?;
+                self.run_json(&["decision", "comment", "edit", &target.to_string(), "--text", text, "--json"])?;
+                Ok(Outcome::action(format!("rewrote decision comment {target}")))
+            }
+            (Domain::Decision, "comment-rm") => {
+                let target = self.resolve(with)?;
+                self.run_json(&["decision", "comment", "rm", &target.to_string(), "--yes", "--json"])?;
+                Ok(Outcome::action(format!("deleted decision comment {target}")))
+            }
             (Domain::Decision, "link") => {
                 let target = self.resolve(with)?;
                 let task = self.resolve_key(with, "task")?;
@@ -203,10 +307,29 @@ impl Driver {
                 let filter = req_str(with, "filter")?;
                 let present = opt_bool(with, "present").unwrap_or(true);
                 let v = self.run_json(&["task", "list", "--filter", filter, "--json"])?;
-                let found = v["tasks"]
-                    .as_array()
-                    .map(|a| a.iter().any(|t| t["id"].as_i64() == Some(target)))
-                    .unwrap_or(false);
+                let rows = v["tasks"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+                let at = rows.iter().position(|t| t["id"].as_i64() == Some(target));
+                let found = at.is_some();
+                // `position` asks where in the listing it sits, which is the only place a reorder is
+                // visible: order is the store's to keep, and the key it keeps it by is opaque.
+                if let Some(want) = with.get("position").and_then(|v| v.as_str()) {
+                    let last = rows.len().saturating_sub(1);
+                    let (pass, seen) = match (want, at) {
+                        ("first", Some(i)) => (i == 0, i),
+                        ("last", Some(i)) => (i == last, i),
+                        (other, Some(_)) => return Err(format!("`position: {other}` is not first or last")),
+                        (_, None) => (false, 0),
+                    };
+                    return Ok(Outcome::assert(
+                        pass,
+                        format!(
+                            "task {target} sits at {} of {} in `{filter}` (expected {want}, {})",
+                            if found { seen.to_string() } else { "nowhere".to_string() },
+                            rows.len(),
+                            if pass { "as expected" } else { "MISMATCH" }
+                        ),
+                    ));
+                }
                 let pass = found == present;
                 let word = if present { "present in" } else { "absent from" };
                 Ok(Outcome::assert(
@@ -242,6 +365,30 @@ impl Driver {
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))
+            }
+            (Domain::Task, "commented") => {
+                let target = self.resolve(with)?;
+                let v = self.run_json(&["comment", "list", &target.to_string(), "--json"])?;
+                judge_timeline("task", target, with, &v["comments"])
+            }
+            (Domain::Decision, "commented") => {
+                let target = self.resolve(with)?;
+                let v = self.run_json(&["decision", "comment", "list", &target.to_string(), "--json"])?;
+                judge_timeline("decision", target, with, &v["comments"])
+            }
+            (Domain::Task, "activity") => {
+                let target = self.resolve(with)?;
+                let id = target.to_string();
+                let mut args: Vec<String> =
+                    vec!["activity".into(), "--task".into(), id, "--json".into()];
+                // `kind` narrows the stream the way a reader does — the system events one way, what
+                // people wrote the other — so a scenario can ask which side an entry landed on.
+                if let Some(kind) = with.get("kind").and_then(|v| v.as_str()) {
+                    args.push("--kind".into());
+                    args.push(kind.to_string());
+                }
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                judge_timeline("task", target, with, &v["items"])
             }
             (Domain::Decision, "field") => {
                 let target = self.resolve(with)?;
@@ -284,6 +431,47 @@ impl Outcome {
     }
 }
 
+/// Judge a timeline assert: does this stream of entries carry the wording the step names? With no
+/// `text` the question is only whether the stream has anything in it at all, which is what a
+/// narrowed activity read (a `kind`) is asked. `present: false` is the same question in reverse —
+/// the proof a comment that was deleted is really gone.
+fn judge_timeline(noun: &str, id: i64, with: &Args, entries: &serde_json::Value) -> Result<Outcome, String> {
+    let want = with.get("text").and_then(|v| v.as_str());
+    let present = opt_bool(with, "present").unwrap_or(true);
+    let rows = entries.as_array().map(Vec::as_slice).unwrap_or(&[]);
+    let found = match want {
+        Some(text) => rows.iter().any(|c| c["text"].as_str() == Some(text)),
+        None => !rows.is_empty(),
+    };
+    let pass = found == present;
+    Ok(Outcome::assert(
+        pass,
+        format!(
+            "{noun} {id} timeline {} {} ({} entries, expected {}, {})",
+            if found { "carries" } else { "does not carry" },
+            want.map(|t| format!("`{t}`")).unwrap_or_else(|| "an entry".to_string()),
+            rows.len(),
+            if present { "carried" } else { "gone" },
+            if pass { "as expected" } else { "MISMATCH" }
+        ),
+    ))
+}
+
+/// Read a field out of a `show --json` object, following a dotted path into what the output nests:
+/// `placement.project.name` walks two objects, `blocked_by.0.name` indexes an array on the way. A
+/// path that runs off the output is `None`, which the caller reports as a mismatch — a scenario
+/// naming a path is asserting about the shape of the shipped output as much as about the value.
+fn dig<'a>(shown: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::Value> {
+    let mut here = shown;
+    for step in path.split('.') {
+        here = match step.parse::<usize>() {
+            Ok(i) => here.get(i)?,
+            Err(_) => here.get(step)?,
+        };
+    }
+    Some(here)
+}
+
 /// Judge a `field` assert against the object's own `show --json`. `equals` is any scalar (string /
 /// bool / number / null), compared structurally against the field's JSON value, so `status: todo`
 /// and `completed: false` both work — and a field the output does not carry at all is a mismatch,
@@ -293,7 +481,7 @@ fn judge_field(noun: &str, id: i64, with: &Args, shown: &serde_json::Value) -> R
     let expected = with.get("equals").ok_or("arg `equals` is required")?;
     let expected = serde_json::to_value(expected)
         .map_err(|e| format!("arg `equals` is not a valid value: {e}"))?;
-    match shown.get(field) {
+    match dig(shown, field) {
         None => Ok(Outcome::assert(
             false,
             format!("{noun} {id} has no field `{field}` in its show output (MISMATCH)"),
@@ -421,4 +609,31 @@ impl Report {
 /// a bespoke struct just for output).
 pub fn json_string(s: &str) -> String {
     serde_json::Value::String(s.to_string()).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_dotted_path_walks_objects_and_indexes_arrays() {
+        let v = json!({
+            "placement": { "project": { "name": "verify" } },
+            "blocked_by": [{ "name": "the blocker" }],
+            "status": "todo",
+        });
+        assert_eq!(dig(&v, "status"), Some(&json!("todo")));
+        assert_eq!(dig(&v, "placement.project.name"), Some(&json!("verify")));
+        assert_eq!(dig(&v, "blocked_by.0.name"), Some(&json!("the blocker")));
+    }
+
+    /// A path that runs off the output comes back empty rather than landing on something else —
+    /// the caller reports that as a mismatch, which is what a scenario naming a stale path deserves.
+    #[test]
+    fn a_path_that_does_not_exist_is_none() {
+        let v = json!({ "blocked_by": [] });
+        assert_eq!(dig(&v, "blocked_by.0.name"), None);
+        assert_eq!(dig(&v, "placement.project.name"), None);
+    }
 }

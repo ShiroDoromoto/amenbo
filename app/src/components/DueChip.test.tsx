@@ -10,8 +10,8 @@ let container: HTMLDivElement;
 let root: Root;
 
 const chip = () => container.querySelector(".chip.due");
-const render = (due: string | null, label: string | null = null) =>
-  act(() => root.render(createElement(DueChip, { due, label })));
+const render = (due: string | null) =>
+  act(() => root.render(createElement(DueChip, { due })));
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -51,11 +51,13 @@ describe("DueChip", () => {
     expect(chip()?.className).toContain("due--today");
   });
 
-  it("shows the label when there is one, and the raw date otherwise", () => {
-    render("2026-06-22", "明日");
-    expect(chip()?.textContent).toContain("明日");
+  it("words the date rather than printing it", () => {
     render("2026-06-22");
-    expect(chip()?.textContent).toContain("2026-06-22");
+    expect(chip()?.textContent).toContain("明日");
+    render("2026-06-21");
+    expect(chip()?.textContent).toContain("今日");
+    render("2026-06-25");
+    expect(chip()?.textContent).toContain("4日後");
   });
 
   it("draws nothing without a due date", () => {

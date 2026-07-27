@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { t, tf, type CmdError } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, BoundFolderDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 
 /**
@@ -119,18 +119,17 @@ function unblock(tasks: TaskCard[], blockerId: number): TaskCard[] {
   });
 }
 
-function sysRow(target: ActivityTargetDto, kind: string, text: string): ActivityItem {
+function sysRow(target: ActivityTargetDto, event: EventDto): ActivityItem {
   return {
     id: Date.now(),
     // The shared activity counter (`AMB-D-388`): a ledger row is numbered against it, and so is the
     // optimistic stand-in for one.
     seq: 0,
     at: new Date().toISOString(),
-    ago: tf("act.justNow"),
     kind: "system",
     author: me(),
     target,
-    event: { kind, text },
+    event,
   };
 }
 
@@ -139,8 +138,8 @@ function sysRow(target: ActivityTargetDto, kind: string, text: string): Activity
  * target ceasing to exist, so there is nothing to open. Every other row names a target we just
  * touched, which is therefore still there.
  */
-function sysItem(taskId: number, title: string, kind: string, text: string): ActivityItem {
-  return sysRow({ type: "task", id: taskId, title, live: kind !== "task.deleted" }, kind, text);
+function sysItem(taskId: number, title: string, event: EventDto): ActivityItem {
+  return sysRow({ type: "task", id: taskId, title, live: event.kind !== "task.deleted" }, event);
 }
 
 /** Returns the id of the task just created, so the caller can open its detail pane. Null if it cannot be resolved. */
@@ -163,11 +162,11 @@ export async function addTask(projectId: number | null, title: string, notes?: s
 
     const task: TaskCard = {
       id, title, notes: notes ?? "", status: "todo", assignee: null, priority: null,
-      due: null, dueLabel: null, comments: 0, createdBy: me(),
+      due: null, comments: 0, createdBy: me(),
       ref: taskRef(id), projectId, completedAt: null,
       ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], notStartedUntil: null,
     };
-    return { ...s, tasks: [...s.tasks, task], activity: [sysItem(id, title, "task.created", tf("act.created", { title })), ...s.activity] };
+    return { ...s, tasks: [...s.tasks, task], activity: [sysItem(id, title, { kind: "task.created" }), ...s.activity] };
   });
   return id;
 }
@@ -202,16 +201,13 @@ export async function setStatus(id: number, status: Status): Promise<void> {
   // Status is the single source of truth for completion; `completedAt` only carries a value while a task is done
   // (`ops::task::set_status`) — a rejection is a terminal but not an achievement, so it leaves the field unset.
   const completedAt = status === "done" ? new Date().toISOString() : null;
-  const text = status === "done" ? tf("act.completed", { title: t.title })
-    : isClosed(t.status) ? tf("act.reopened", { title: t.title })
-    : tf("act.statusChanged", { title: t.title });
   mockMutate((s) => ({
     ...s,
     // A task that closes — either terminal — drops out of the blockers of everything waiting on it (core's
     // `blocked_by` derivation asks `is_closed`, so a rejection releases its dependents just as a completion does).
     tasks: (isClosed(status) ? unblock(s.tasks, id) : s.tasks)
       .map((x) => (x.id === id ? { ...x, status, completedAt } : x)),
-    activity: [sysItem(id, t.title, "task.status_changed", text), ...s.activity],
+    activity: [sysItem(id, t.title, { kind: "task.status_changed", status }), ...s.activity],
   }));
 }
 
@@ -251,7 +247,7 @@ export async function deleteTask(id: number): Promise<void> {
   mockMutate((s) => ({
     ...s,
     tasks: unblock(s.tasks, id).filter((x) => x.id !== id),
-    activity: [sysItem(id, t.title, "task.deleted", tf("act.deleted", { title: t.title })), ...s.activity],
+    activity: [sysItem(id, t.title, { kind: "task.deleted" }), ...s.activity],
   }));
 }
 
@@ -419,21 +415,28 @@ export async function deleteProject(projectId: number): Promise<void> {
     return invokeAck("project_delete", { projectId });
   }
   const gone = getSnapshot().projects.find((p) => p.id === projectId);
-  mockMutate((s) => ({
-    ...s,
-    projects: s.projects.filter((p) => p.id !== projectId),
+  mockMutate((s) => {
     // Drop the same subtree core drops. Removing only the project row would leave tasks and decisions
     // in the cache still belonging to a project that no longer exists, and browser iteration would be
     // looking at a store Tauri never shows.
-    tasks: s.tasks.filter((t) => t.projectId !== projectId),
-    decisions: s.decisions.filter((d) => d.project?.id !== projectId),
-    activity: gone
-      ? [
-          sysRow({ type: "project", id: projectId, title: gone.name, live: false }, "project.deleted", tf("act.deleted", { title: gone.name })),
-          ...s.activity,
-        ]
-      : s.activity,
-  }));
+    const tasks = s.tasks.filter((t) => t.projectId !== projectId);
+    const decisions = s.decisions.filter((d) => d.project?.id !== projectId);
+    // The counts the line reports are what actually went, so the browser reads the same sentence
+    // Tauri would write from the ledger.
+    const went = { tasks: s.tasks.length - tasks.length, decisions: s.decisions.length - decisions.length };
+    return {
+      ...s,
+      projects: s.projects.filter((p) => p.id !== projectId),
+      tasks,
+      decisions,
+      activity: gone
+        ? [
+            sysRow({ type: "project", id: projectId, title: gone.name, live: false }, { kind: "project.deleted", ...went }),
+            ...s.activity,
+          ]
+        : s.activity,
+    };
+  });
 }
 
 /**
@@ -679,7 +682,7 @@ export async function setAssignee(id: number, kind: Facet | null): Promise<void>
     return mockMutate((s) => ({
       ...s,
       tasks: s.tasks.map((x) => (x.id === id ? { ...x, assignee: null } : x)),
-      activity: [sysItem(id, t.title, "task.assigned", tf("act.unassigned", { title: t.title })), ...s.activity],
+      activity: [sysItem(id, t.title, { kind: "task.assigned" }), ...s.activity],
     }));
   }
   const name = snap.roster.find((a) => a.kind === kind)?.name ?? kind;
@@ -687,8 +690,7 @@ export async function setAssignee(id: number, kind: Facet | null): Promise<void>
     ...s,
     tasks: s.tasks.map((x) => (x.id === id ? { ...x, assignee: { name, kind } } : x)),
     activity: [
-      sysItem(id, t.title, "task.assigned",
-        kind === "ai" ? tf("act.assignedAi", { title: t.title }) : tf("act.assignedTo", { title: t.title, name })),
+      sysItem(id, t.title, { kind: "task.assigned", toKind: kind }),
       ...s.activity,
     ],
   }));
@@ -1373,7 +1375,7 @@ export async function addComment(taskId: number, text: string): Promise<void> {
     tasks: s.tasks.map((x) => (x.id === taskId ? { ...x, comments: x.comments + 1 } : x)),
     activity: [
       {
-        id: Date.now(), seq: 0, at: new Date().toISOString(), ago: tf("act.justNow"), kind: "comment",
+        id: Date.now(), seq: 0, at: new Date().toISOString(), kind: "comment",
         author: me(), target: { type: "task", id: taskId, title: t.title, live: true }, text,
       },
       ...s.activity,

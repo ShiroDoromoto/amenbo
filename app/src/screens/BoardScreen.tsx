@@ -390,7 +390,7 @@ export function BoardScreen({
                 <PremiseChangedChip task={t} />
                 {t.assignee && <FacetAvatar actor={t.assignee} />}
                 <PriorityDot priority={t.priority} />
-                <DueChip due={t.due} label={t.dueLabel} />
+                <DueChip due={t.due} />
               </div>
             ))}
           </div>
@@ -601,7 +601,7 @@ const TaskCardView = memo(function TaskCardView({
 
       <div className="card__row">
         <PriorityDot priority={task.priority} />
-        <DueChip due={task.due} label={task.dueLabel} />
+        <DueChip due={task.due} />
         <BlockedChips task={task} />
         <PremiseChangedChip task={task} />
       </div>

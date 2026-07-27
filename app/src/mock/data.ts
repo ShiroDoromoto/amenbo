@@ -34,7 +34,7 @@ export const projects: Project[] = [
 // fixture wants to state only what matters, so this factory fills the rest of the wire fields with
 // defaults and keeps the mock pleasant to write.
 type MockTaskInput = Partial<TaskCard> &
-  Pick<TaskCard, "id" | "title" | "projectId" | "status" | "assignee" | "priority" | "due" | "dueLabel" | "comments" | "createdBy">;
+  Pick<TaskCard, "id" | "title" | "projectId" | "status" | "assignee" | "priority" | "due" | "comments" | "createdBy">;
 const mt = (t: MockTaskInput): TaskCard => ({
   ref: taskRef(t.id), notes: "", completedAt: null,
   ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], notStartedUntil: null,
@@ -50,7 +50,6 @@ export const tasks: TaskCard[] = [
     assignee: A_H,
     priority: "high",
     due: "2026-06-22",
-    dueLabel: "明日",
     comments: 3,
     createdBy: A_H,
   }),
@@ -62,7 +61,6 @@ export const tasks: TaskCard[] = [
     assignee: A_AI,
     priority: "medium",
     due: null,
-    dueLabel: null,
     comments: 0,
     createdBy: A_H,
   }),
@@ -74,7 +72,6 @@ export const tasks: TaskCard[] = [
     assignee: A_AI,
     priority: "high",
     due: "2026-06-23",
-    dueLabel: "明後日",
     comments: 1,
     createdBy: A_AI,
   }),
@@ -86,7 +83,6 @@ export const tasks: TaskCard[] = [
     assignee: A_H,
     priority: "high",
     due: "2026-06-20",
-    dueLabel: "昨日",
     comments: 5,
     createdBy: A_H,
   }),
@@ -98,7 +94,6 @@ export const tasks: TaskCard[] = [
     assignee: A_AI,
     priority: "low",
     due: null,
-    dueLabel: null,
     comments: 2,
     createdBy: A_AI,
   }),
@@ -110,7 +105,6 @@ export const tasks: TaskCard[] = [
     assignee: A_H,
     priority: null,
     due: null,
-    dueLabel: null,
     comments: 0,
     createdBy: A_H,
   }),
@@ -118,48 +112,48 @@ export const tasks: TaskCard[] = [
 
 export const activity: ActivityItem[] = [
   {
-    id: 1, seq: 0, at: "2026-06-21T09:58:00Z", ago: "2分前", kind: "system", author: A_AI,
+    id: 1, seq: 0, at: "2026-06-21T09:58:00Z", kind: "system", author: A_AI,
     target: { type: "task", id: 3, title: "API 設計", live: true },
-    event: { kind: "task.status_changed", text: "「API 設計」を着手中に変更" },
+    event: { kind: "task.status_changed", status: "in_progress" },
   },
   {
-    id: 2, seq: 0, at: "2026-06-21T09:55:00Z", ago: "5分前", kind: "comment", author: A_H,
+    id: 2, seq: 0, at: "2026-06-21T09:55:00Z", kind: "comment", author: A_H,
     target: { type: "task", id: 1, title: "ワイヤーフレーム作成", live: true },
     text: "先方確認待ち。木曜には返ってくる想定。",
   },
   {
-    id: 3, seq: 0, at: "2026-06-21T09:52:00Z", ago: "8分前", kind: "system", author: A_AI,
+    id: 3, seq: 0, at: "2026-06-21T09:52:00Z", kind: "system", author: A_AI,
     target: { type: "task", id: 3, title: "API 設計", live: true },
-    event: { kind: "task.created", text: "タスクを3件作成（媒体別に分解）" },
+    event: { kind: "task.created" },
     burstCount: 3,
   },
   {
-    id: 4, seq: 0, at: "2026-06-21T09:48:00Z", ago: "12分前", kind: "system", author: A_H,
+    id: 4, seq: 0, at: "2026-06-21T09:48:00Z", kind: "system", author: A_H,
     target: { type: "project", id: 9, title: "旧サイト（統合前）", live: false },
-    event: { kind: "project.deleted", text: "「旧サイト（統合前）」を削除（タスク4件・決定1件）" },
+    event: { kind: "project.deleted", tasks: 4, decisions: 1 },
   },
   {
-    id: 5, seq: 0, at: "2026-06-21T09:42:00Z", ago: "18分前", kind: "system", author: A_H,
+    id: 5, seq: 0, at: "2026-06-21T09:42:00Z", kind: "system", author: A_H,
     target: { type: "task", id: 6, title: "配色チェック", live: true },
-    event: { kind: "task.status_changed", text: "「配色チェック」を完了" },
+    event: { kind: "task.status_changed", status: "done" },
   },
   {
-    id: 7, seq: 0, at: "2026-06-21T09:36:00Z", ago: "24分前", kind: "system", author: A_H,
+    id: 7, seq: 0, at: "2026-06-21T09:36:00Z", kind: "system", author: A_H,
     target: { type: "task", id: 11, title: "重複していた下書き", live: false },
-    event: { kind: "task.deleted", text: "「重複していた下書き」を削除" },
+    event: { kind: "task.deleted" },
   },
   {
     // A comment on a *live* decision — the row the feed opens, replies to and edits on the decision side, the twin
     // of the task-aimed comment above. Two ids here deliberately repeat one from another space: its *target* id is
     // also a task id, and its own row id is one the shared activity counter already gave out (`AMB-D-388` — a
     // decision comment is numbered against its own table). Anything routing or identifying by id alone is caught here.
-    id: 2, seq: 1, at: "2026-06-21T09:33:00Z", ago: "27分前", kind: "comment", author: A_H,
+    id: 2, seq: 1, at: "2026-06-21T09:33:00Z", kind: "comment", author: A_H,
     target: { type: "decision", id: 3, title: "RDB を真実源にする", live: true },
     text: "この線で進める。移行は次の版で。",
   },
   {
-    id: 6, seq: 0, at: "2026-06-21T09:30:00Z", ago: "30分前", kind: "system", author: A_H,
+    id: 6, seq: 0, at: "2026-06-21T09:30:00Z", kind: "system", author: A_H,
     target: { type: "decision", id: 2, title: "旧方針の決定", live: false },
-    event: { kind: "decision.deleted", text: "「旧方針の決定」を削除" },
+    event: { kind: "decision.deleted" },
   },
 ];

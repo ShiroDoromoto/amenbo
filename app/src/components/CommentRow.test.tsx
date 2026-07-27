@@ -43,7 +43,7 @@ const AUTHOR = { kind: "human", name: "Alice" } as const;
 function render(props: Partial<Parameters<typeof CommentRow>[0]>) {
   act(() => {
     root.render(createElement(CommentRow, {
-      id: 1, author: AUTHOR, ago: "now", text: "hello", target: "task_comment",
+      id: 1, author: AUTHOR, at: new Date().toISOString(), text: "hello", target: "task_comment",
       onEdit: () => {}, onRemove: () => {}, ...props,
     }));
   });

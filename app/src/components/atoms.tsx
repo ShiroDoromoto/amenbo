@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { Actor, Priority, Status, TaskCard } from "../mock/types";
 import type { PremiseChangeDto } from "../bindings/bindings";
 import { dueKind, todayStr } from "../core/calendar";
-import { dateLocale, priorityLabel, statusLabel, t, tf } from "../core/i18n";
+import { dateLocale, dueLabel, priorityLabel, statusLabel, t, tf } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
 import { getSnapshot } from "../core/snapshot";
 import { pushNotice } from "../core/notice";
@@ -210,10 +210,10 @@ export function PriorityDot({ priority }: { priority: Priority | null }) {
  * real day, so colour and wording have to be read off one clock — a colour judged against any other day says
  * "overdue" next to a label that says "tomorrow".
  */
-export function DueChip({ due, label }: { due: string | null; label: string | null }) {
+export function DueChip({ due }: { due: string | null }) {
   if (!due) return null;
   const cls = `due--${dueKind(due, todayStr())}`;
-  return <span className={`chip due ${cls}`}>🗓 {label ?? due}</span>;
+  return <span className={`chip due ${cls}`}>🗓 {dueLabel(due)}</span>;
 }
 
 /**

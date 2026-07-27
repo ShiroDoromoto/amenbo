@@ -436,7 +436,6 @@ pub struct TaskCardDto {
     #[ts(type = "\"high\" | \"medium\" | \"low\" | null")]
     priority: Option<&'static str>,
     due: Option<String>,
-    due_label: Option<String>,
     /// Completion timestamp (RFC3339 UTC). Used to sort the Done column newest-first, among other
     /// things. None while the task is still open.
     completed_at: Option<String>,
@@ -492,12 +491,33 @@ pub struct ActivityTargetDto {
     live: bool,
 }
 
+/// A system event as the GUI needs it: the kind names the sentence template, and the rest are the
+/// values that go into it. No prose — the wording lives in the GUI's dictionary, in the reader's
+/// language, and the target's own name comes from [`ActivityTargetDto::title`] beside this.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct EventDto {
     kind: String,
-    text: String,
+    /// `task.status_changed`: the status the task moved to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    status: Option<String>,
+    /// `task.assigned`: the facet the task went to. Absent means the assignee was taken away, which
+    /// is a different sentence rather than a missing value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    to_kind: Option<String>,
+    /// `project.deleted`: how much went with the project. Both are always sent together, so the
+    /// sentence can say "none of either" without having to tell absent from zero.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[ts(type = "number")]
+    tasks: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[ts(type = "number")]
+    decisions: Option<u64>,
 }
 
 #[derive(Serialize, TS)]
@@ -513,7 +533,6 @@ pub struct ActivityItemDto {
     #[ts(type = "number")]
     seq: i64,
     at: String,
-    ago: String,
     #[ts(type = "\"system\" | \"comment\"")]
     kind: String,
     author: ActorDto,
@@ -524,12 +543,12 @@ pub struct ActivityItemDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     text: Option<String>,
-    /// Comment rows only: relative time of a later in-place edit of the body. Absent when it was
-    /// never edited. No revision history is kept, so this is the only hint a reader gets that the
-    /// body is not what they read a moment ago.
+    /// Comment rows only: when the body was later edited in place. Absent when it was never edited.
+    /// No revision history is kept, so this is the only hint a reader gets that the body is not what
+    /// they read a moment ago.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    edited_ago: Option<String>,
+    edited_at: Option<String>,
 }
 
 #[derive(Serialize, TS)]
@@ -678,140 +697,30 @@ fn date_iso(d: NaiveDate) -> String {
     amenbo_core::time::date_to_string(d)
 }
 
-/// A count and its unit in English, pluralized (`1 day` / `2 days`). Every English label worded in
-/// this file counts through here, so the rule is spelled once.
-fn en_plural(n: u64, unit: &str) -> String {
-    if n == 1 { format!("{n} {unit}") } else { format!("{n} {unit}s") }
-}
-
-/// The human label for a due date (today, tomorrow, in N days, ...). Core returns the bare date, so
-/// the GUI side does the wording — in the reader's language, like every other label built here.
-fn due_label(d: NaiveDate, lang: &str) -> String {
-    let diff = (d - amenbo_core::time::today()).num_days();
-    let en = lang == "en";
-    match (diff, en) {
-        (0, true) => "Today".to_string(),
-        (0, false) => "今日".to_string(),
-        (1, true) => "Tomorrow".to_string(),
-        (1, false) => "明日".to_string(),
-        (-1, true) => "Yesterday".to_string(),
-        (-1, false) => "昨日".to_string(),
-        (n, true) if n > 1 => format!("In {}", en_plural(n as u64, "day")),
-        (n, false) if n > 1 => format!("{n}日後"),
-        (n, true) => format!("{} ago", en_plural(n.unsigned_abs(), "day")),
-        (n, false) => format!("{}日前", -n),
-    }
-}
-
-/// The relative-time label (just now, N minutes ago, ...), in the reader's language. The English
-/// wording of "just now" matches `act.justNow` in app/src/core/i18n/locales/en.ts, which the browser fallback
-/// uses for the same spot.
-fn ago_label(at: &Timestamp, lang: &str) -> String {
-    let secs = (chrono::Utc::now() - at.0).num_seconds().max(0) as u64;
-    let en = lang == "en";
-    if secs < 60 {
-        if en { "just now".to_string() } else { "たった今".to_string() }
-    } else if secs < 3600 {
-        let n = secs / 60;
-        if en { format!("{} ago", en_plural(n, "minute")) } else { format!("{n}分前") }
-    } else if secs < 86400 {
-        let n = secs / 3600;
-        if en { format!("{} ago", en_plural(n, "hour")) } else { format!("{n}時間前") }
-    } else {
-        let n = secs / 86400;
-        if en { format!("{} ago", en_plural(n, "day")) } else { format!("{n}日前") }
-    }
-}
-
-/// Normalize config.language to "ja" or "en" (unset or unknown falls back to the default, ja). Used
-/// to pick the wording of system event lines (`render_event`).
-fn lang_code(language: &Option<String>) -> &'static str {
-    match language.as_deref() {
-        Some(l) if l.eq_ignore_ascii_case("en") || l.to_ascii_lowercase().starts_with("en-") => "en",
-        _ => "ja",
-    }
-}
-
-/// The stand-in name for a target whose name could not be recovered. Core returns an empty
-/// `Item.title` when the target is not there as a live row and no ledger row carrying its name could
-/// be found either (it fell out in the ledger's self-compaction, or it lay outside the name lookback
-/// budget `NAME_SCAN_BUDGET`) — both end in the same place, a vanished target, so both get the same
-/// wording. Core has no notion of language, so the emptiness is carried this far and worded here.
-fn nameless_title(lang: &str) -> &'static str {
-    if lang == "en" { "(deleted)" } else { "（削除済み）" }
-}
-
-/// Turn a system event into the line the GUI shows. Under Tauri the wording is chosen here; the
-/// browser fallback goes through tf() in mutations.ts. Keys and wording must stay in step with
-/// act.* in app/src/core/i18n/locales/.
-fn render_event(ev: &serde_json::Value, title: &str, lang: &str) -> EventDto {
+/// Take a system event apart into the kind that names a sentence template and the values that fill
+/// it, leaving the sentence itself to the GUI's dictionary (`eventText` in app/src/core/i18n). A
+/// kind carries only the fields its own template asks for, so everything else stays absent; a kind
+/// this build does not know keeps its name and reaches the reader through the generic template.
+fn event_dto(ev: &serde_json::Value) -> EventDto {
     let kind = ev
         .get("kind")
         .and_then(|k| k.as_str())
         .unwrap_or("event")
         .to_string();
-    let en = lang == "en";
-    let status_label = |s: &str| -> String {
-        match (s, en) {
-            ("todo", false) => "未着手",
-            ("todo", true) => "To do",
-            ("in_progress", false) => "着手中",
-            ("in_progress", true) => "In progress",
-            ("done", false) => "完了",
-            ("done", true) => "Done",
-            ("blocked", false) => "ブロック",
-            ("blocked", true) => "Blocked",
-            ("rejected", false) => "却下",
-            ("rejected", true) => "Rejected",
-            (other, _) => other,
-        }
-        .to_string()
-    };
-    let text = match kind.as_str() {
-        "task.created" => if en { format!("Created “{title}”") } else { format!("「{title}」を作成") },
-        "task.status_changed" => {
-            let new = ev.get("new").and_then(|x| x.as_str()).unwrap_or("");
-            if en {
-                format!("Changed “{title}” to {}", status_label(new))
-            } else {
-                format!("「{title}」を{}に変更", status_label(new))
-            }
-        }
-        "task.assigned" => {
-            let to_kind = ev.get("to_kind").and_then(|x| x.as_str());
-            let ai = to_kind == Some("ai");
-            if to_kind.is_none() {
-                if en { format!("Unassigned “{title}”") } else { format!("「{title}」の担当を外す") }
-            } else if ai {
-                if en { format!("Delegated “{title}” to AI") } else { format!("「{title}」を AI に委任") }
-            } else if en {
-                format!("Assigned “{title}”")
-            } else {
-                format!("「{title}」を担当に割り当て")
-            }
-        }
-        "task.moved" => if en { format!("Moved “{title}”") } else { format!("「{title}」を移動") },
-        "task.unblocked" => if en { format!("“{title}” is now unblocked (ready)") } else { format!("「{title}」が着手可能に（依存解除）") },
-        "task.deleted" | "decision.deleted" => {
-            if en { format!("Deleted “{title}”") } else { format!("「{title}」を削除") }
-        }
+    let str_field = |field: &str| ev.get(field).and_then(|x| x.as_str()).map(str::to_string);
+    let count = |field: &str| ev.get(field).and_then(|x| x.as_u64()).unwrap_or(0);
+    let mut dto = EventDto { kind, status: None, to_kind: None, tasks: None, decisions: None };
+    match dto.kind.as_str() {
+        "task.status_changed" => dto.status = str_field("new"),
+        // Absent `to_kind` is itself the answer here: the assignee was taken away.
+        "task.assigned" => dto.to_kind = str_field("to_kind"),
         "project.deleted" => {
-            let count = |field: &str| ev.get(field).and_then(|x| x.as_u64()).unwrap_or(0);
-            let (tasks, decisions) = (count("tasks"), count("decisions"));
-            match (en, tasks + decisions) {
-                (true, 0) => format!("Deleted “{title}”"),
-                (false, 0) => format!("「{title}」を削除"),
-                (true, _) => format!(
-                    "Deleted “{title}” ({}, {})",
-                    en_plural(tasks, "task"),
-                    en_plural(decisions, "decision")
-                ),
-                (false, _) => format!("「{title}」を削除（タスク{tasks}件・決定{decisions}件）"),
-            }
+            dto.tasks = Some(count("tasks"));
+            dto.decisions = Some(count("decisions"));
         }
-        _ => if en { format!("Updated “{title}”") } else { format!("「{title}」を更新") },
-    };
-    EventDto { kind, text }
+        _ => {}
+    }
+    dto
 }
 
 /// Build a [`TaskCardDto`] from a read-model [`amenbo_core::store_engine::read::TaskCardRow`].
@@ -821,7 +730,6 @@ fn render_event(ev: &serde_json::Value, title: &str, lang: &str) -> EventDto {
 /// comes from the placement.
 fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskCardRow) -> TaskCardDto {
     let config = &store.config;
-    let lang = lang_code(&config.language);
     let card_kind = |a: &amenbo_core::store_engine::read::CardActor| a.kind.as_deref().and_then(ActorKind::parse);
 
     let project_id = row.placement.as_ref().map(|p| p.project_id);
@@ -875,7 +783,6 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         assignee,
         priority: row.priority.as_deref().and_then(Priority::parse).map(|p| p.as_str()),
         due: due_date.map(date_iso),
-        due_label: due_date.map(|d| due_label(d, lang)),
         completed_at: row
             .completed_at
             .as_deref()
@@ -990,7 +897,7 @@ fn decision_card_from_row(row: amenbo_core::store_engine::read::DecisionCardRow)
 }
 
 /// Build the store's projection into `acc` (projects + activity).
-fn collect_store(store: &Store, acc: &mut Acc, lang: &str) -> Result<(), CmdError> {
+fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
     use amenbo_core::store_engine;
 
     let read_model = store.read_model();
@@ -1035,21 +942,21 @@ fn collect_store(store: &Store, acc: &mut Acc, lang: &str) -> Result<(), CmdErro
         conn,
         &amenbo_core::activity::Filter { limit: Some(100), ..Default::default() },
     )?;
-    acc.activity.extend(items.into_iter().map(|it| activity_dto(it, lang, &store.config)));
+    acc.activity.extend(items.into_iter().map(|it| activity_dto(it, &store.config)));
     Ok(())
 }
 
 /// The store's activity (the latest `limit` items, newest first), shaped into DTOs. This is what
 /// `activity_page` reaches back with, over the same path as `collect_store`'s default read of 100
 /// (the file ledger merged with `task_comment`).
-fn store_activity_dtos(store: &Store, limit: usize, lang: &str) -> Result<Vec<ActivityItemDto>, CmdError> {
+fn store_activity_dtos(store: &Store, limit: usize) -> Result<Vec<ActivityItemDto>, CmdError> {
     let read_model = store.read_model();
     let items = amenbo_core::activity::page(
         &amenbo_core::activity::Ledger::open(&store.paths.activity_file),
         read_model.conn(),
         &amenbo_core::activity::Filter { limit: Some(limit), ..Default::default() },
     )?;
-    Ok(items.into_iter().map(|it| activity_dto(it, lang, &store.config)).collect())
+    Ok(items.into_iter().map(|it| activity_dto(it, &store.config)).collect())
 }
 
 /// Has the first snapshot after process start already bypassed the update-check cache and asked
@@ -1073,7 +980,6 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
     let language = config.language.clone();
     let date_locale = config.date_locale.clone();
     let onboarded = config.onboarded;
-    let lang = lang_code(&language);
 
     let first_snapshot = UPDATE_CHECK_REFRESHED
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -1089,7 +995,7 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
     with_store_read(|store| {
         startup_health.absorb(store);
         version_status.absorb(store, upstream.as_ref());
-        collect_store(store, &mut acc, lang)
+        collect_store(store, &mut acc)
     })?;
 
     Ok(Snapshot {
@@ -1351,15 +1257,10 @@ pub fn open_logs_dir() -> Result<(), CmdError> {
 /// virtual scroller reaches back past those, it calls this for its scroll window and nothing more.
 #[tauri::command]
 pub fn activity_page(offset: usize, limit: usize) -> Result<Vec<ActivityItemDto>, CmdError> {
-    let language = amenbo_core::config::Paths::resolve()
-        .ok()
-        .and_then(|p| amenbo_core::config::Config::load(&p.config_file).language);
-    let lang = lang_code(&language);
-
     let need = offset.saturating_add(limit);
     let mut all: Vec<ActivityItemDto> = Vec::new();
     with_store_read(|store| {
-        all.extend(store_activity_dtos(store, need, lang)?);
+        all.extend(store_activity_dtos(store, need)?);
         Ok(())
     })?;
     all.sort_by(|a, b| b.at.cmp(&a.at));
@@ -1449,30 +1350,28 @@ pub fn change_cursor() -> Result<i64, CmdError> {
     Ok(amenbo_core::store_engine::read::change_feed_head(store.read_model().conn())?)
 }
 
-/// Shape one row of the persistent read-model into a GUI DTO. Wording an `event` (system events
-/// only) and the relative-time label happen here, so core stays free of rendering and i18n.
-fn activity_dto(it: amenbo_core::activity::Item, lang: &str, config: &amenbo_core::config::Config) -> ActivityItemDto {
-    let ago = ago_label(&it.at, lang);
+/// Shape one row of the persistent read-model into a GUI DTO — timestamps and an event's parts, with
+/// nothing worded. An unrecoverable target name arrives from core as an empty `title` and is passed
+/// on empty: the stand-in a reader sees is a sentence, and sentences are the GUI's to write.
+fn activity_dto(it: amenbo_core::activity::Item, config: &amenbo_core::config::Config) -> ActivityItemDto {
     // Read before `it` is taken apart below: the sequence is derived from the whole row.
     let seq = it.seq().rank();
-    let title = if it.title.is_empty() { nameless_title(lang).to_string() } else { it.title };
-    let event = it.event.as_ref().map(|ev| render_event(ev, &title, lang));
+    let event = it.event.as_ref().map(event_dto);
     ActivityItemDto {
         id: it.id,
         seq,
         at: it.at.to_rfc3339_z(),
-        ago,
         kind: it.kind.as_str().to_string(),
         author: facet_actor(config, it.author_kind),
         target: ActivityTargetDto {
             target_type: it.target_type.as_str().to_string(),
             id: it.target_id,
-            title,
+            title: it.title,
             live: it.target_live,
         },
         event,
         text: it.text,
-        edited_ago: it.edited_at.as_ref().map(|t| ago_label(t, lang)),
+        edited_at: it.edited_at.as_ref().map(Timestamp::to_rfc3339_z),
     }
 }
 
@@ -1484,11 +1383,6 @@ fn activity_dto(it: amenbo_core::activity::Item, lang: &str, config: &amenbo_cor
 #[tauri::command]
 pub fn task_activity(task_id: i64, limit: Option<usize>) -> Result<Vec<ActivityItemDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("task_activity");
-    let language = amenbo_core::config::Paths::resolve()
-        .ok()
-        .and_then(|p| amenbo_core::config::Config::load(&p.config_file).language);
-    let lang = lang_code(&language);
-
     let collect_from = |store: &Store| -> Result<Vec<ActivityItemDto>, CmdError> {
         let read_model = store.read_model();
         let items = amenbo_core::activity::page(
@@ -1496,7 +1390,7 @@ pub fn task_activity(task_id: i64, limit: Option<usize>) -> Result<Vec<ActivityI
             read_model.conn(),
             &amenbo_core::activity::Filter { task_id: Some(task_id), limit, ..Default::default() },
         )?;
-        Ok(items.into_iter().map(|it| activity_dto(it, lang, &store.config)).collect())
+        Ok(items.into_iter().map(|it| activity_dto(it, &store.config)).collect())
     };
 
     let found = find_in_store(|store| {
@@ -2079,22 +1973,22 @@ pub fn comment_edit(id: i64, task_id: i64, text: String) -> Result<WriteAck, Cmd
 
 /// One permanent comment on a decision record, for the GUI. Task comments ride in the per-task
 /// `task_activity` (kind=comment), but decisions have no activity path, so they get a read DTO of
-/// their own. The author's facet is resolved to a display name from config, and the relative time
-/// `ago` is worded here (the front end does nothing but render).
+/// their own. The author's facet is resolved to a display name from config; the times are sent as
+/// they are, for the front end to word.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct DecisionCommentDto {
     #[ts(type = "number")]
     id: i64,
-    ago: String,
+    at: String,
     author: ActorDto,
     text: String,
-    /// Relative time of a later edit of the body. Absent when it was never edited (same meaning and
-    /// same treatment as [`ActivityItemDto::edited_ago`] on task comments).
+    /// When the body was later edited. Absent when it was never edited (same meaning and same
+    /// treatment as [`ActivityItemDto::edited_at`] on task comments).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    edited_ago: Option<String>,
+    edited_at: Option<String>,
 }
 
 /// Shape one read-model row (`CommentRow`) into a decision comment DTO.
@@ -2102,20 +1996,14 @@ fn decision_comment_dto_from_row(
     row: amenbo_core::store_engine::read::CommentRow,
     config: &amenbo_core::config::Config,
 ) -> DecisionCommentDto {
-    let lang = lang_code(&config.language);
-    let ago =
-        Timestamp::parse_rfc3339(&row.created_at).map(|ts| ago_label(&ts, lang)).unwrap_or_default();
+    let normalize = |s: &str| Timestamp::parse_rfc3339(s).map(|ts| ts.to_rfc3339_z()).unwrap_or_default();
     let author_kind = row.author_kind.as_deref().and_then(ActorKind::parse);
-    let edited_ago = row
-        .edited_at
-        .as_deref()
-        .map(|t| Timestamp::parse_rfc3339(t).map(|ts| ago_label(&ts, lang)).unwrap_or_default());
     DecisionCommentDto {
         id: row.id,
-        ago,
+        at: normalize(&row.created_at),
         author: facet_actor(config, author_kind),
         text: row.text,
-        edited_ago,
+        edited_at: row.edited_at.as_deref().map(normalize),
     }
 }
 
@@ -5250,11 +5138,11 @@ mod tests {
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     /// When the target is gone and no ledger row carrying its name can be recovered either (dropped
-    /// in compaction, or beyond the lookback budget), core returns an empty title. Rendering that as
-    /// it is would leave empty quotation marks on screen, so the DTO's entry point says the target
-    /// is deleted — in **both** the event line and the destination label, in the right language.
+    /// in compaction, or beyond the lookback budget), core returns an empty title. It is passed on
+    /// empty: the stand-in a reader sees is a sentence in their language, so it is the GUI that puts
+    /// one there, and a DTO that filled the blank here would hide the emptiness from it.
     #[test]
-    fn a_subject_whose_name_is_gone_is_named_deleted_not_left_blank() {
+    fn a_subject_whose_name_is_gone_is_passed_on_empty() {
         let nameless = |title: &str| amenbo_core::activity::Item {
             id: 1,
             at: Timestamp::now(),
@@ -5270,65 +5158,45 @@ mod tests {
         };
         let config = amenbo_core::config::Config::default();
 
-        let ja = activity_dto(nameless(""), "ja", &config);
-        assert_eq!(ja.target.title, "（削除済み）");
-        assert_eq!(ja.event.unwrap().text, "「（削除済み）」を完了に変更");
+        let gone = activity_dto(nameless(""), &config);
+        assert_eq!(gone.target.title, "");
+        let event = gone.event.unwrap();
+        assert_eq!(event.kind, "task.status_changed");
+        assert_eq!(event.status.as_deref(), Some("done"));
 
-        let en = activity_dto(nameless(""), "en", &config);
-        assert_eq!(en.target.title, "(deleted)");
-        assert_eq!(en.event.unwrap().text, "Changed “(deleted)” to Done");
-
-        let alive = activity_dto(nameless("生きているタスク"), "ja", &config);
+        let alive = activity_dto(nameless("生きているタスク"), &config);
         assert_eq!(alive.target.title, "生きているタスク");
-        assert_eq!(alive.event.unwrap().text, "「生きているタスク」を完了に変更");
     }
 
-    /// Every label this layer words follows the UI language, the due chip and the relative time
-    /// included — an English UI reads a card end to end in English, down to the date on it.
+    /// Each event kind carries the values its own sentence asks for, and nothing else. A field left
+    /// behind here cannot be recovered on the other side, and one sent for a kind that has no use
+    /// for it invites a sentence built on a value that means nothing there.
     #[test]
-    fn the_due_and_relative_time_labels_follow_the_ui_language() {
-        let day = |n: i64| amenbo_core::time::today() + chrono::Duration::days(n);
-
-        assert_eq!(due_label(day(0), "en"), "Today");
-        assert_eq!(due_label(day(1), "en"), "Tomorrow");
-        assert_eq!(due_label(day(-1), "en"), "Yesterday");
-        assert_eq!(due_label(day(2), "en"), "In 2 days");
-        assert_eq!(due_label(day(-3), "en"), "3 days ago");
-        assert_eq!(due_label(day(0), "ja"), "今日");
-        assert_eq!(due_label(day(2), "ja"), "2日後");
-        assert_eq!(due_label(day(-3), "ja"), "3日前");
-
-        let ago = |secs: i64| Timestamp(chrono::Utc::now() - chrono::Duration::seconds(secs));
-
-        assert_eq!(ago_label(&ago(5), "en"), "just now");
-        // The singular is not cosmetic: "1 minutes ago" is the tell of a label built by rote.
-        assert_eq!(ago_label(&ago(60), "en"), "1 minute ago");
-        assert_eq!(ago_label(&ago(120), "en"), "2 minutes ago");
-        assert_eq!(ago_label(&ago(3600), "en"), "1 hour ago");
-        assert_eq!(ago_label(&ago(86_400 * 3), "en"), "3 days ago");
-        assert_eq!(ago_label(&ago(5), "ja"), "たった今");
-        assert_eq!(ago_label(&ago(120), "ja"), "2分前");
-        assert_eq!(ago_label(&ago(86_400 * 3), "ja"), "3日前");
-    }
-
-    /// Deleting a project or a decision also lands in the ledger (`activity_log::event`). Without a
-    /// branch for it, the line falls through to the default "updated" and reports a deletion as an
-    /// update.
-    #[test]
-    fn deleting_a_project_or_a_decision_is_told_as_a_deletion() {
+    fn an_event_carries_the_values_its_own_sentence_needs() {
         let project = |tasks: u64, decisions: u64| {
             serde_json::json!({"kind": "project.deleted", "name": "旧サイト", "tasks": tasks, "decisions": decisions})
         };
-        let decision = serde_json::json!({"kind": "decision.deleted", "title": "旧方針の決定"});
 
-        assert_eq!(render_event(&project(4, 1), "旧サイト", "ja").text, "「旧サイト」を削除（タスク4件・決定1件）");
-        assert_eq!(render_event(&project(4, 1), "旧サイト", "en").text, "Deleted “旧サイト” (4 tasks, 1 decision)");
+        let deleted = event_dto(&project(4, 1));
+        assert_eq!(deleted.kind, "project.deleted");
+        assert_eq!((deleted.tasks, deleted.decisions), (Some(4), Some(1)));
+        // Zero is a count, not an absence: the sentence for "nothing went with it" is chosen from
+        // the numbers, so they are sent even when both are nought.
+        let empty = event_dto(&project(0, 0));
+        assert_eq!((empty.tasks, empty.decisions), (Some(0), Some(0)));
 
-        assert_eq!(render_event(&project(0, 0), "空の PJ", "ja").text, "「空の PJ」を削除");
-        assert_eq!(render_event(&project(0, 0), "空の PJ", "en").text, "Deleted “空の PJ”");
+        // An assignment that was taken away sends no facet — that absence is what says so.
+        let unassigned = event_dto(&serde_json::json!({"kind": "task.assigned"}));
+        assert_eq!(unassigned.to_kind, None);
+        let delegated = event_dto(&serde_json::json!({"kind": "task.assigned", "to_kind": "ai"}));
+        assert_eq!(delegated.to_kind.as_deref(), Some("ai"));
 
-        assert_eq!(render_event(&decision, "旧方針の決定", "ja").text, "「旧方針の決定」を削除");
-        assert_eq!(render_event(&decision, "旧方針の決定", "en").text, "Deleted “旧方針の決定”");
+        // A kind with no values of its own carries none, and one this build never heard of keeps
+        // its name rather than being flattened into a known kind.
+        let moved = event_dto(&serde_json::json!({"kind": "task.moved"}));
+        assert_eq!(moved.kind, "task.moved");
+        assert_eq!((moved.status, moved.to_kind, moved.tasks, moved.decisions), (None, None, None, None));
+        assert_eq!(event_dto(&serde_json::json!({"kind": "task.hatched"})).kind, "task.hatched");
     }
 
     /// The tests' env guard. It takes ENV_LOCK to serialize, and disables the update check so the
@@ -6213,8 +6081,8 @@ mod tests {
             .expect("the deletion is on the timeline");
         assert_eq!(deleted.kind, "system");
         assert_eq!(deleted.target.id, del_id);
-        assert!(
-            deleted.event.as_ref().unwrap().text.contains("消す対象"),
+        assert_eq!(
+            deleted.target.title, "消す対象",
             "a deleted row's name lives only in the ledger payload (the DB cannot join to it)"
         );
 
@@ -6275,7 +6143,7 @@ mod tests {
         assert_eq!(comments[0].text, "一言目", "oldest first");
         assert_eq!(comments[1].text, "二言目");
         assert_eq!(comments[0].author.kind, "human", "human facet author");
-        assert!(!comments[0].ago.is_empty(), "relative time label is populated");
+        assert!(!comments[0].at.is_empty(), "the time the front end words is carried");
 
         let rm = decision_comment_remove(comments[0].id, did).unwrap();
         assert_eq!(rm.decisions, vec![did], "comment_remove acks its decision");

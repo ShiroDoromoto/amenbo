@@ -6,7 +6,7 @@ import { Attachments } from "./Attachments";
 import { inTauri } from "../core/snapshot";
 import { isEnterSubmit } from "../core/keys";
 import { confirmDialog } from "../core/dialog";
-import { t, errText } from "../core/i18n";
+import { agoLabel, t, errText } from "../core/i18n";
 
 /**
  * One comment row in a timeline. Tasks and decision records draw the body from different places (activity vs.
@@ -19,11 +19,11 @@ import { t, errText } from "../core/i18n";
  * `startEditAt` is the outside world's signal to begin editing; every increment re-opens it, so the same row can
  * be opened again and again.
  */
-export function CommentRow({ id, author, ago, editedAgo, text, target, onEdit, onRemove, startEditAt }: {
+export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onRemove, startEditAt }: {
   id: number;
   author: Actor;
-  ago: string;
-  editedAgo?: string;
+  at: string;
+  editedAt?: string;
   text: string;
   target: "task_comment" | "decision_comment";
   // A failing write must not read as a success. Both may reject, so they may return a promise to await; a
@@ -73,8 +73,8 @@ export function CommentRow({ id, author, ago, editedAgo, text, target, onEdit, o
     <div className="comment">
       <div className="comment__meta">
         <span>
-          <FacetAvatar actor={author} /> {author.name} · {ago}
-          {editedAgo && <span className="faint"> · {t("comment.edited")} {editedAgo}</span>}
+          <FacetAvatar actor={author} /> {author.name} · {agoLabel(at)}
+          {editedAt && <span className="faint"> · {t("comment.edited")} {agoLabel(editedAt)}</span>}
         </span>
         {inTauri() && !editing && (
           <>

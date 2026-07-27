@@ -13,7 +13,7 @@ import { confirmDialog } from "../core/dialog";
 import {
   DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip,
 } from "../components/atoms";
-import { errText, priorityLabel, t, tf } from "../core/i18n";
+import { agoLabel, errText, eventText, priorityLabel, t, tf } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
 import { useRefNav } from "../core/refNav";
 import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
@@ -236,7 +236,7 @@ export function TaskDetailPane({
                 <option key={p} value={p}>{priorityLabel(p)}</option>
               ))}
             </select>
-            <DueChip due={task.due} label={task.dueLabel} />
+            <DueChip due={task.due} />
           </div>
 
           <div className="detail__field">
@@ -420,8 +420,8 @@ export function TaskDetailPane({
                     key={c.id}
                     id={c.id}
                     author={c.author}
-                    ago={c.ago}
-                    editedAgo={c.editedAgo}
+                    at={c.at}
+                    editedAt={c.editedAt}
                     text={c.text ?? ""}
                     target="task_comment"
                     onEdit={(text) => editComment(c.id, text)}
@@ -473,10 +473,10 @@ export function TaskDetailPane({
                   <div className="feed__body">
                     <div className="feed__line">
                       <strong>{it.author.name}</strong>{" "}
-                      {it.kind === "comment" ? `「${it.text}」` : it.event?.text}
+                      {it.kind === "comment" ? `「${it.text}」` : it.event && eventText(it.event, it.target.title)}
                     </div>
                     <div className="feed__meta">
-                      <span>{it.ago}{it.editedAgo && <span className="faint"> · {t("comment.edited")} {it.editedAgo}</span>}</span>
+                      <span>{agoLabel(it.at)}{it.editedAt && <span className="faint"> · {t("comment.edited")} {agoLabel(it.editedAt)}</span>}</span>
                     </div>
                   </div>
                 </div>

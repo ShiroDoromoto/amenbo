@@ -60,7 +60,7 @@ pub struct LatestRelease {
     pub notes_url: Option<String>,
     /// `os-arch[-kind]` → distribution asset URL (wharfy's `assets` map). The key vocabulary follows
     /// wharfy: os is `macos` / `windows` / `linux`, arch is `x64` / `arm64`. A unified installer
-    /// carries a kind suffix (`macos-arm64-pkg`, `windows-x64-exe`, `linux-x64-deb`), while a
+    /// carries a kind suffix (`macos-arm64-pkg`, `windows-x64-exe`, `linux-x64-appimage`), while a
     /// suffix-less key (`macos-arm64`, …) is the CLI archive (tar.gz/zip). The "open the latest
     /// installer" affordance looks up the installer key for the current OS.
     #[serde(default)]
@@ -118,7 +118,8 @@ pub fn current_platform_key() -> String {
 }
 
 /// The wharfy `assets` key (`os-arch-kind`) of the **unified installer** for the current OS. The
-/// kind follows from the OS: macOS → `pkg`, Windows → `exe`, Linux → `deb`. This composite key is
+/// kind follows from the OS: macOS → `pkg`, Windows → `exe`, Linux → `appimage` — the per-user
+/// AppImage is the whole of the Linux GUI distribution (`AMB-D-428`). This composite key is
 /// what picks the installer rather than the CLI archive (the suffix-less `os-arch` tar.gz/zip); on
 /// mac we ship both arm64 and x64. Where no installer exists for an OS/arch (Linux arm64, say), the
 /// key is simply absent from `assets` and
@@ -128,7 +129,8 @@ fn installer_asset_key() -> String {
     let kind = match std::env::consts::OS {
         "macos" => "pkg",
         "windows" => "exe",
-        _ => "deb", // linux (any other OS tries the deb key too, but an absent key falls back to None).
+        // linux (any other OS tries the appimage key too, but an absent key falls back to None).
+        _ => "appimage",
     };
     format!("{}-{kind}", current_platform_key())
 }
@@ -288,21 +290,24 @@ mod tests {
     /// `.wharfy/latest.json`), pinned here to **fix the contract**. Because the query is silent on
     /// failure by design, a schema change on wharfy's side — the key vocabulary, a field name —
     /// would break this consumer quietly; this sample is the anchor that makes CI catch it. It pins
-    /// both parsing and the choice of installer for the current OS.
+    /// both parsing and the choice of installer for the current OS. The `.deb` / `.rpm` keys are on
+    /// their way out (`AMB-D-428` retires them), and they are kept in the sample on purpose: while
+    /// they are still listed, Linux must pick the AppImage over them.
     const WHARFY_LATEST_JSON: &str = r#"{
-      "version": "1.0.3",
-      "notes_url": "https://github.com/ShiroDoromoto/amenbo/releases/tag/v1.0.3",
+      "version": "2.2.0",
+      "notes_url": "https://github.com/ShiroDoromoto/amenbo/releases/tag/v2.2.0",
       "assets": {
-        "linux-arm64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo_1.0.3_linux_arm64.tar.gz",
-        "linux-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo_1.0.3_linux_amd64.tar.gz",
-        "linux-x64-deb": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-app-linux-amd64.deb",
-        "linux-x64-rpm": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-app-linux-x86_64.rpm",
-        "macos-arm64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo_1.0.3_darwin_arm64.tar.gz",
-        "macos-arm64-pkg": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-darwin-arm64.pkg",
-        "macos-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo_1.0.3_darwin_amd64.tar.gz",
-        "macos-x64-pkg": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-darwin-amd64.pkg",
-        "windows-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo_1.0.3_windows_amd64.zip",
-        "windows-x64-exe": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-app-windows-x64-setup.exe"
+        "linux-arm64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo_2.2.0_linux_arm64.tar.gz",
+        "linux-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo_2.2.0_linux_amd64.tar.gz",
+        "linux-x64-appimage": "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo-app-linux-x86_64.AppImage",
+        "linux-x64-deb": "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo-app-linux-amd64.deb",
+        "linux-x64-rpm": "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo-app-linux-x86_64.rpm",
+        "macos-arm64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo_2.2.0_darwin_arm64.tar.gz",
+        "macos-arm64-pkg": "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo-darwin-arm64.pkg",
+        "macos-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo_2.2.0_darwin_amd64.tar.gz",
+        "macos-x64-pkg": "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo-darwin-amd64.pkg",
+        "windows-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo_2.2.0_windows_amd64.zip",
+        "windows-x64-exe": "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo-app-windows-x64-setup.exe"
       }
     }"#;
 
@@ -310,21 +315,21 @@ mod tests {
     #[test]
     fn parses_wharfy_manifest() {
         let r: LatestRelease = serde_json::from_str(WHARFY_LATEST_JSON).unwrap();
-        assert_eq!(r.version, "1.0.3");
+        assert_eq!(r.version, "2.2.0");
         assert_eq!(
             r.notes_url.as_deref(),
-            Some("https://github.com/ShiroDoromoto/amenbo/releases/tag/v1.0.3")
+            Some("https://github.com/ShiroDoromoto/amenbo/releases/tag/v2.2.0")
         );
         // Both the unified installers (kind suffix) and the CLI archives (no suffix) are listed.
         assert_eq!(
             r.assets.get("macos-arm64-pkg").map(String::as_str),
-            Some("https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-darwin-arm64.pkg")
+            Some("https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo-darwin-arm64.pkg")
         );
         assert_eq!(
             r.assets.get("windows-x64-exe").map(String::as_str),
-            Some("https://github.com/ShiroDoromoto/amenbo/releases/download/v1.0.3/amenbo-app-windows-x64-setup.exe")
+            Some("https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0/amenbo-app-windows-x64-setup.exe")
         );
-        assert!(r.assets.contains_key("linux-x64-deb"));
+        assert!(r.assets.contains_key("linux-x64-appimage"));
         assert!(r.assets.contains_key("macos-arm64"), "the CLI archive keys are listed too, with no suffix");
     }
 
@@ -339,8 +344,9 @@ mod tests {
         assert_eq!(r.installer_for_current_platform(), r.assets.get("macos-arm64-pkg").map(String::as_str));
         #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
         assert_eq!(r.installer_for_current_platform(), r.assets.get("windows-x64-exe").map(String::as_str));
+        // Linux picks the AppImage even though the sample still lists the `.deb` / `.rpm` next to it.
         #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-        assert_eq!(r.installer_for_current_platform(), r.assets.get("linux-x64-deb").map(String::as_str));
+        assert_eq!(r.installer_for_current_platform(), r.assets.get("linux-x64-appimage").map(String::as_str));
         // Whatever gets picked, it never carries a CLI-archive extension: the contract is to pick an
         // installer.
         if let Some(url) = r.installer_for_current_platform() {

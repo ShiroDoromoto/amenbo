@@ -103,8 +103,11 @@ it by the `as:` binding rather than by a URL it could not have known. `catalog-r
 other of two keys from the same address, which is a publisher rotating theirs as amenbo sees it. The
 host is `amenbo-static-host`, shared with the main workspace's own tests.
 
-Each op the driver maps is a `(domain, op)` arm in `cli/src/lib.rs`; an op that is in the
-scenario registry but not yet mapped fails loudly rather than passing silently.
+Each op the driver maps is an arm in its domain's module under `cli/src/domain/` — `task depend` in
+`task.rs`, `plugin install` in `plugin.rs` — and an op that is in the scenario registry but not yet
+mapped fails loudly rather than passing silently. `cli/src/lib.rs` keeps only what every arm stands
+on (the isolated session, the one invocation, the bindings, the report) and hands each step to the
+domain it names, so "how is this op driven?" is answered by opening one file.
 
 ## Runner
 

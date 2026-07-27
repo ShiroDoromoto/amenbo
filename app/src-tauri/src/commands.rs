@@ -4615,11 +4615,16 @@ pub async fn plugin_repo_facts(repo: String) -> Result<PluginRepoFactsDto, CmdEr
 /// single entry and only when it is looked at — the same lazy shape, and the same place, as the stars and
 /// the README ([`plugin_repo_facts`]).
 ///
-/// It resolves against the **official** catalog, which is what an install resolves against: a third-party
-/// index is for discovery alone (`AMB-D-371` — its asset cannot verify, so it cannot be installed), and
-/// answering from the official base for an entry the official index does not carry would describe some
-/// other plugin. A name it does not list therefore comes back as `null` — the entry exists, it simply has
-/// no detail here — rather than as a failure, so the market draws what it has instead of an error.
+/// It resolves against the **merged** view — the same catalogs the list drew from, and the same view an
+/// install resolves against (`AMB-D-389`). The row a user opened is the thing being described, so the
+/// question this answers has to be asked of whichever catalog served that row: the second half of an
+/// entry lives beside its own `catalog.json`, and asking the official base for a registered catalog's
+/// plugin would be asking the wrong publisher. Anything else would leave a whole tier listed but
+/// unreadable — the scope, the events, the settings, the compatibility verdict are exactly what someone
+/// wants *before* installing.
+///
+/// A name no catalog carries comes back as `null` — an answer, not a failure — so the market draws what
+/// it has instead of an error.
 ///
 /// Off the main thread: it may fetch (core answers from its cache within the freshness window, and falls
 /// back to it when the network does not answer).
@@ -4627,14 +4632,14 @@ pub async fn plugin_repo_facts(repo: String) -> Result<PluginRepoFactsDto, CmdEr
 pub async fn plugin_detail(name: String) -> Result<Option<PluginDetailDto>, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<Option<PluginDetailDto>, CmdError> {
         let paths = amenbo_core::config::Paths::resolve()?;
-        let catalog = amenbo_core::plugin_catalog::load(&paths)?;
-        let Some(entry) = catalog.find(&name).cloned() else {
+        let discovery = amenbo_core::plugin_catalog::discover(&paths);
+        let Some(found) = discovery.find(&name) else {
             return Ok(None);
         };
-        let detail = amenbo_core::plugin_catalog::detail(&paths, &entry)?;
+        let detail = amenbo_core::plugin_catalog::detail_of(&paths, found)?;
         // The compatibility gate reads a whole manifest, so the two halves are put back together once
         // here rather than teaching the gate to read a document at a time.
-        let manifest = amenbo_core::plugin_wire::join(&entry, &detail);
+        let manifest = amenbo_core::plugin_wire::join(&found.entry, &detail);
         let why = amenbo_core::plugin_compat::check(&manifest).err();
         Ok(Some(PluginDetailDto {
             scope: detail.scope.as_str().to_string(),
@@ -5680,8 +5685,79 @@ mod tests {
         assert!(!other.compatible);
         assert!(other.incompatible_reason.is_some(), "core's own sentence, not a made-up one");
 
-        // A name the official catalog does not list has no detail here — an answer, not a failure.
+        // A name no catalog carries has no detail here — an answer, not a failure.
         assert!(tauri::async_runtime::block_on(plugin_detail("elsewhere".into())).unwrap().is_none());
+
+        std::env::remove_var("AMENBO_PLUGIN_CATALOG_URL");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// A plugin off a **registered** catalog is readable before it is installed (`AMB-D-389`): the row is
+    /// in the merged list, so the detail behind it has to come from the catalog that served the row.
+    /// Answered on a port rather than from a file, because a registered catalog is reached by URL and
+    /// caches under a name derived from it — a fixture on disk would prove the cache, not the join.
+    #[test]
+    fn a_registered_catalogs_plugin_opens_from_the_catalog_that_served_it() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("plugin-detail-registered");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        // The official catalog answers from its cache alone: nothing listens there, and it lists a
+        // different name, so what comes back can only have come off the registered shelf.
+        std::env::set_var("AMENBO_PLUGIN_CATALOG_URL", "http://127.0.0.1:9/catalog.json");
+        let registry = amenbo_core::config::Paths::at(tmp.clone()).registry_dir();
+        std::fs::create_dir_all(&registry).unwrap();
+        let entry = |name: &str| {
+            serde_json::json!({
+                "name": name,
+                "desc": "a plugin",
+                "author": "amenbo",
+                "repo": "ShiroDoromoto/amenbo",
+                "os": ["macos", "linux", "windows"],
+                "category": "workflow",
+            })
+        };
+        let catalog = |name: &str| {
+            serde_json::json!({
+                "catalog_v": 1,
+                "generated_at": "2026-07-27T00:00:00Z",
+                "plugins": [entry(name)],
+            })
+            .to_string()
+        };
+        std::fs::write(registry.join("official.json"), catalog("notify")).unwrap();
+
+        let host = amenbo_static_host::StaticHost::serve([
+            ("/third/catalog.json", catalog("inhouse")),
+            (
+                "/third/plugins/inhouse.json",
+                serde_json::json!({
+                    "name": "inhouse",
+                    "url": "https://example.invalid/inhouse.tar.gz",
+                    "checksum": format!("sha256:{}", "c".repeat(64)),
+                    "scope": "machine",
+                    "payload_v": amenbo_core::plugin_payload::VERSION,
+                    "config": [],
+                    "events": ["task.created"],
+                })
+                .to_string(),
+            ),
+        ]);
+        let source_url = host.url("/third/catalog.json");
+        std::fs::write(
+            registry.join(amenbo_core::plugin_catalog::SOURCES_FILE_NAME),
+            serde_json::json!({ "sources": [{ "url": source_url, "name": "社内カタログ" }] })
+                .to_string(),
+        )
+        .unwrap();
+
+        let detail =
+            tauri::async_runtime::block_on(plugin_detail("inhouse".into())).unwrap().unwrap();
+        assert_eq!(
+            detail.scope, "machine",
+            "the registered catalog's own document, not the official one"
+        );
+        assert_eq!(detail.events, vec!["task.created".to_string()]);
+        assert!(detail.compatible && detail.incompatible_reason.is_none());
 
         std::env::remove_var("AMENBO_PLUGIN_CATALOG_URL");
         let _ = std::fs::remove_dir_all(&tmp);

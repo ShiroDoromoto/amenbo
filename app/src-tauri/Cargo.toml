@@ -58,6 +58,9 @@ tauri-plugin-updater = "2"
 # The store-watch tests (`tests/store_watch.rs`) dig real directories on a real filesystem.
 [dev-dependencies]
 amenbo-scratch = { path = "../../crates/amenbo-scratch" }
+# A registered catalog is reached by URL and cached under a name derived from it, so a test that opens a
+# plugin off one has to be answered on a port rather than handed a file (dev-dependency only).
+amenbo-static-host = { path = "../../crates/amenbo-static-host" }
 tempfile = "3"
 
 # Asks `statfs(2)` whether the store's directory sits on a network filesystem (`store_watch`). On NFS

@@ -46,8 +46,20 @@ echo "→ codesigning $APP with the Developer ID Application identity (hardened 
 # build. So: every nested Mach-O first (the CLI sidecar `amenbo`, and whatever a
 # future bundle layout adds), then the bundle itself last, which seals the main
 # executable.
+#
+# The main executable is deliberately NOT in that first pass. Handed its main
+# executable's path, codesign signs the enclosing BUNDLE — so signing it here would
+# seal the bundle while the sidecar beside it is still bare, and codesign refuses
+# ("code object is not signed at all / In subcomponent"). The asymmetry is easy to
+# miss on an arm64 host: arm64 Mach-O must carry a signature to run at all, so the
+# linker ad-hoc signs it and the premature seal finds nothing bare. An x86_64 slice
+# carries no such signature, so the cross build is where it bites.
+main_exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist" 2>/dev/null || true)"
+[ -n "$main_exe" ] || { echo "✗ $APP/Contents/Info.plist names no CFBundleExecutable" >&2; exit 1; }
+
 nested=()
 while IFS= read -r -d '' f; do
+  if [ "$f" = "$APP/Contents/MacOS/$main_exe" ]; then continue; fi
   case "$(file -b "$f")" in
     Mach-O*) nested+=("$f") ;;
   esac

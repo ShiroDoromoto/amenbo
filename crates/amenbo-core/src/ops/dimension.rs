@@ -277,11 +277,22 @@ pub(crate) fn delete_value_subtree(tx: &WriteTx<'_>, value_id: i64) -> Result<()
 /// and the insert ride on **the same transaction** — commit them separately and a crash in between
 /// leaves zero or two rows for one task on one dimension, breaking the one-row invariant.
 pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensionValue, bool)> {
-    if !read::task_live(tx.conn(), task_id)? {
+    let Some(task) = read::task(tx.conn(), task_id)? else {
         return Err(crate::ops::task::NOUN.not_found(task_id.to_string()));
-    }
+    };
     let dimension_id = read::dimension_id_of_value(tx.conn(), value_id)?
         .ok_or_else(|| VALUE_NOUN.not_found(value_id.to_string()))?;
+    let axis = read::dimension(tx.conn(), dimension_id)?
+        .ok_or_else(|| NOUN.not_found(dimension_id.to_string()))?;
+    // A classification is an edge like any other: it names an axis and a value that live in one project,
+    // and following it is how that project's vocabulary — what its axes are called, what values they
+    // offer — reaches this task's context.
+    crate::ops::guard_same_project(
+        task.project_id,
+        Some(axis.project_id),
+        "this classification",
+        "この分類",
+    )?;
 
     // Idempotent noop when the same value is already assigned.
     if let Some(id) = read::assignment_id(tx.conn(), task_id, value_id)? {

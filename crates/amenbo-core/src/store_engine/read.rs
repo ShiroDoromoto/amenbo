@@ -3435,19 +3435,21 @@ pub fn dependency_id(
 }
 
 
-/// The projects on the far side of every edge this task has — its dependencies (in both directions) and
-/// the decisions linked to it. `None` is a peer sitting in the inbox (no project of its own). This is
-/// what [`crate::ops::task::move_to`] asks before re-homing a task: an edge that was legal when it was
-/// drawn (both ends in one project) becomes a project-crossing one the moment one end moves, so the
-/// no-crossing invariant has to be re-checked against the destination rather than only at creation.
-/// Costs the task's own edges, never the tables.
+/// The projects on the far side of every edge this task has — its dependencies (in both directions), the
+/// decisions linked to it, and the axes it is classified on. `None` is a peer sitting in the inbox (no
+/// project of its own). This is what [`crate::ops::task::move_to`] asks before re-homing a task: an edge
+/// that was legal when it was drawn (both ends in one project) becomes a project-crossing one the moment
+/// one end moves, so the no-crossing invariant has to be re-checked against the destination rather than
+/// only at creation. Costs the task's own edges, never the tables.
 pub fn edge_peer_projects(conn: &Connection, task_id: i64) -> Result<Vec<Option<i64>>> {
     const D: col::task_dependency::Cols = col::task_dependency::of("d");
     const T: col::task::Cols = col::task::of("t");
     const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
     const K: col::decision::Cols = col::decision::of("k");
+    const V: col::task_dimension_value::Cols = col::task_dimension_value::of("v");
+    const M: col::dimension::Cols = col::dimension::of("m");
 
-    // Three arms, one column: the project the peer sits in. Each arm builds its own projection, and the
+    // Four arms, one column: the project the peer sits in. Each arm builds its own projection, and the
     // slots they hand back are the same type — which is the layer holding the arms to one row shape.
     let (project, sql) = Union::all(|sel| {
         let project = sel.col(T.project_id);
@@ -3470,6 +3472,17 @@ pub fn edge_peer_projects(conn: &Connection, task_id: i64) -> Result<Vec<Option<
         let mut tail = Sql::from_table(L.table);
         tail.join(K.table, same(K.id, L.decision_id))
             .push_where(Some(&Pred::eq(L.task_id, task_id)));
+        (project, tail)
+    })
+    .arm(|sel| {
+        // The axis a classification puts the task on. An assignment names a value by its axis, and reading
+        // that axis is reading another project's vocabulary — so it is a peer like any other. The
+        // assignment carries the axis id itself, so the value table need not be walked. An axis always
+        // sits in a project, and widens like the decision arm.
+        let project = sel.col(M.project_id.nullable());
+        let mut tail = Sql::from_table(V.table);
+        tail.join(M.table, same(M.id, V.dimension_id))
+            .push_where(Some(&Pred::eq(V.task_id, task_id)));
         (project, tail)
     })
     .into_parts();

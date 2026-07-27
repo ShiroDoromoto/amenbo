@@ -667,10 +667,18 @@ fn a_board_reads_only_its_own_project_and_only_the_axis_it_asked_for() {
     s.set_task_dimension_value(t.id, bug.id).unwrap();
 
     // Pin a task from the *other* project onto **this** project's axis value. `ops::dimension::set`
-    // does not check that the value's project matches the task's, so this row really can be written —
-    // and it will show up on the board unless the reader's project filter does its job.
+    // refuses to write that (a classification may not cross projects), so it goes in at the truth source:
+    // what is under test is the reader's project filter, the last thing standing should a row like this
+    // ever exist — an older store, a restore, a file edited by hand.
     let far = s.add_task(task("よそのタスク", Some(other.id))).unwrap();
-    s.set_task_dimension_value(far.id, doing.id).unwrap();
+    s.engine
+        .conn()
+        .execute(
+            "INSERT INTO task_dimension_value (task_id, dimension_id, value_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+            rusqlite::params![far.id, axis.id, doing.id],
+        )
+        .unwrap();
 
     let rows =
         crate::store_engine::read::project_dimension_assignments(s.engine.conn(), p.id, axis.id)

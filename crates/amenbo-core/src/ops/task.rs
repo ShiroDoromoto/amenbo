@@ -361,14 +361,14 @@ pub fn move_to(
     // An edge that was legal within one project becomes a crossing as soon as one of its ends moves. A guard
     // at creation time alone cannot hold the invariant, so re-check the edges against the destination. If one
     // of them would cross, detaching it before the move is the caller's call — cutting it silently would make
-    // dependencies and decision links disappear without a sound.
+    // dependencies, decision links and classifications disappear without a sound.
     if read::edge_peer_projects(tx.conn(), id)?
         .into_iter()
         .any(|peer| crate::ops::crosses_projects(Some(proj), peer))
     {
         return Err(Error::invalid(
-            "moving this task there would leave an edge crossing projects — detach its dependencies / decision links first",
-            "このタスクをそこへ移すと、プロジェクトを跨ぐエッジが残ります ── 先に依存／決定リンクを外してください",
+            "moving this task there would leave an edge crossing projects — detach its dependencies / decision links / dimension values first",
+            "このタスクをそこへ移すと、プロジェクトを跨ぐエッジが残ります ── 先に依存／決定リンク／次元の値を外してください",
         ));
     }
 

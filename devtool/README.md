@@ -270,7 +270,7 @@ to the author instead of answering it.
   throwaway `AMENBO_HOME` **and** a CWD with no `.amenbo` ancestor) — the real
   store is never read.
 
-### `devtool fixtures refresh [--catalog <url|path>] [--repo owner/name]`
+### `devtool fixtures refresh [--catalog <url|path|repo dir>] [--amenbo <bin>] [--repo owner/name]`
 
 Captures the outside world into `devtool/fixtures/`, from the real sources:
 
@@ -290,10 +290,31 @@ of thing only a real capture catches. The plugins whose details are taken and th
 repositories fetched are the ones the catalog itself names, so no list is kept
 beside it to go stale; `--repo` adds one the catalog does not name yet.
 
-`--catalog` takes the envelope from somewhere else — a checkout of the catalog
-repository, where its own CI generated it — which is the answer while the
-published catalog is still empty. The details are taken from beside it, the same
-way they are published. It is still a generated artifact, not a hand-written one.
+`--catalog` takes the envelope from somewhere else — a URL, or the path of a copy
+some other run generated. The details are taken from beside it, the same way they
+are published.
+
+**Point it at a checkout of the catalog repository and the catalog is built from
+the manifests**, which is the answer while the published catalog lists nothing:
+there is no copy to take, and the reviewed manifests are the material either way.
+
+```sh
+devtool fixtures refresh --catalog ../amenbo-plugins
+```
+
+It runs the same aggregation the catalog's CI runs, in the one way a developer
+can: the split into a list entry and an install detail is `plugin validate --json`'s,
+so nothing here holds a second copy of amenbo's schema, and what is added is what
+only an aggregation knows — the digest of the detail as written, when the manifest
+first landed (git), and the curation list's recommendation. Validation needs a
+build that carries the plugin commands, so it uses **this checkout's** (`--amenbo`
+picks another); the released CLI on the PATH does not have them yet.
+
+What it cannot do it does not fake: signing each distributable takes a key only the
+catalog's CI holds, so the details carry the manifest's own `url` / `checksum` and
+no signature. The fake catalog is one whose plugins can be browsed and opened, and
+do not install — which is what the market, the detail view and the update banner
+are looked at with. An install is exercised against the real thing.
 
 ### `devtool fixtures gui [--fail <face>=<mode>] [--fresh] [--port n] [--app path] [--no-launch]`
 

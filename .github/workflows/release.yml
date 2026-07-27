@@ -134,7 +134,7 @@ jobs:
           if-no-files-found: error
 
   linux:
-    name: Linux bundle (.deb + .rpm) + amd64 CLI + GUI e2e
+    name: Linux AppImage + amd64 CLI + GUI e2e
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -152,7 +152,7 @@ jobs:
           cargo build --release -p amenbo-cli
           cp target/release/amenbo dist/amenbo-linux-amd64
 
-      # The unified Linux GUI bundle (.deb + .rpm, GUI + CLI on /usr/bin) builds in the
+      # The Linux GUI bundle (the AppImage, per-user and self-updating) builds in the
       # shared Docker recipe on this NATIVE amd64 runner, because Apple Silicon can't
       # build amd64 under qemu (the Tauri CLI SIGABRTs). Docker is preinstalled and
       # runs natively here.
@@ -160,7 +160,7 @@ jobs:
       # minisign-signs the AppImage in place, emitting the .AppImage.sig updater artifact the
       # GUI self-update path reads. Absent on a fork → the AppImage still builds,
       # just unsigned (no updater artifact), and the manifest step skips linux.
-      - name: Build the Linux GUI bundle (.deb + .rpm + AppImage)
+      - name: Build the Linux GUI bundle (AppImage)
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -186,8 +186,6 @@ jobs:
           name: dist-linux
           path: |
             dist/amenbo-linux-amd64
-            dist/amenbo-app-linux-amd64.deb
-            dist/amenbo-app-linux-x86_64.rpm
             dist/amenbo-app-linux-x86_64.AppImage
             dist/amenbo-app-linux-x86_64.AppImage.sig
           if-no-files-found: error

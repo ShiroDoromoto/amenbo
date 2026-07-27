@@ -1,8 +1,8 @@
 # wharfy distribution config — ship the all-OS unified installer (GUI+CLI bundled) via GitHub Release.
 # project / github / homepage / license are inferred from the git remote and conventions (no need to
 # state them).
-# Artifacts: mac .pkg / Windows NSIS / Linux .deb+.rpm (each installs GUI+CLI together and puts the
-# CLI on PATH).
+# Artifacts: mac .pkg / Windows NSIS (each installs GUI+CLI together and puts the CLI on PATH) /
+# Linux AppImage (the GUI alone, per-user).
 
 project: amenbo
 github: ShiroDoromoto/amenbo
@@ -38,10 +38,10 @@ prebuilt:
 #                two builds, arm64 / amd64 (the Intel build is cross-built with `MAC_GUI_ARCH=amd64`).
 #                It is not a single universal build because the asset-key scheme (os-arch) and the
 #                update_check mapping assume a per-arch layout.
-#   linux .deb/.rpm … `make dist-gui-linux` (GUI+CLI to /usr/bin; for amd64 the Tauri CLI dies under
-#                      qemu, so GitHub Actions' native x86_64 runner release.yml is the primary path)
-#   linux AppImage … the same Tauri build's third artifact: the per-user route (needs no root; the
-#                    user puts it on PATH). Declared here so a first install has a URL in latest.json
+#   linux AppImage … `make dist-gui-linux` — the whole of the Linux GUI distribution, and a per-user
+#                    one (needs no root; the user puts it on PATH). For amd64 the Tauri CLI dies under
+#                    qemu, so GitHub Actions' native x86_64 runner release.yml is the primary path.
+#                    Declared here so a first install has a URL in latest.json
 #                    (`linux-x64-appimage`) instead of only the Releases page. What the running GUI
 #                    downloads to update itself is a byte-identical copy under a `-update` name,
 #                    attached by release.yml via gh — deliberately not a bundle here, so the two
@@ -55,7 +55,5 @@ bundle:
   bundles:
     - { os: darwin,  arch: arm64, kind: pkg,  path: dist/amenbo-darwin-arm64.pkg }
     - { os: darwin,  arch: amd64, kind: pkg,  path: dist/amenbo-darwin-amd64.pkg }
-    - { os: linux,   arch: amd64, kind: deb,  path: dist/amenbo-app-linux-amd64.deb }
-    - { os: linux,   arch: amd64, kind: rpm,  path: dist/amenbo-app-linux-x86_64.rpm }
     - { os: linux,   arch: amd64, kind: appimage, path: dist/amenbo-app-linux-x86_64.AppImage }
     - { os: windows, arch: amd64, kind: nsis, path: dist/amenbo-app-windows-x64-setup.exe }

@@ -3547,9 +3547,10 @@ pub fn ui_language() -> Option<String> {
 /// Exit this process and launch the same executable again (the button on the restart screen). A
 /// long-running GUI that a newer process has overtaken is nothing but **an old process still sitting
 /// in memory**: the GUI and the CLI ship together, so the executable on disk is already the new
-/// version, and relaunching `current_exe` simply becomes it (on Linux, `dpkg` swaps the inode, so
-/// only the running process is stale). This is not self-update: it touches no network and fetches no
-/// new binary — it relaunches what is already there, and the user is the one who presses it.
+/// version, and relaunching `current_exe` simply becomes it (on Linux the updated AppImage takes
+/// the same path, so only the running process is stale). This is not self-update: it touches no
+/// network and fetches no new binary — it relaunches what is already there, and the user is the one
+/// who presses it.
 #[tauri::command]
 pub fn restart_app(app: tauri::AppHandle) {
     app.restart();

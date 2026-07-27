@@ -373,9 +373,10 @@ pub enum PluginCmd {
     /// registered one (official wins a clash), fetch its asset, verify its provenance fail-closed — the
     /// signature against the key that catalog answers for, amenbo's own or the one pinned at registration
     /// (`AMB-D-371`/`AMB-D-389`), then the checksum of the distributable published for this OS
-    /// (`AMB-D-351`/`AMB-D-381`) — and lay it down under the app-data `plugins/` directory. **Installing never enables**: the plugin lands inert and
-    /// `plugin enable` is the separate act. A name already installed is refused rather than overwritten
-    /// (`AMB-D-360`).
+    /// (`AMB-D-351`/`AMB-D-381`) — and lay it down under the app-data `plugins/` directory, with a note of
+    /// which catalog it came from, which is where `plugin update` will go back to. **Installing never
+    /// enables**: the plugin lands inert and `plugin enable` is the separate act. A name already installed
+    /// is refused rather than overwritten (`AMB-D-360`).
     Install {
         /// the plugin's name, as the catalog lists it
         name: String,
@@ -466,6 +467,13 @@ pub enum PluginCmd {
 
     /// Bring an installed plugin onto the build the catalog publishes — or, with `--check`, only report
     /// which installs it has moved past (`AMB-D-359`).
+    ///
+    /// **A plugin is updated from the catalog it was installed from** (`AMB-D-389`), which amenbo recorded
+    /// beside it. Not from whichever catalog carries the name today: a second catalog publishing a name you
+    /// already have offers your install nothing, so a distributor cannot change hands under an update. The
+    /// visible edge of that is a plugin whose own catalog has dropped it — there is no build to move to, and
+    /// the refusal names the catalog it asked. An install made before amenbo recorded this is looked for in
+    /// the official catalog; re-installing it records where it really comes from.
     ///
     /// Detection is the catalog amenbo already fetches whole laid beside the manifest sitting next to
     /// each installed binary — no central server, and no per-plugin request. A manifest carries no

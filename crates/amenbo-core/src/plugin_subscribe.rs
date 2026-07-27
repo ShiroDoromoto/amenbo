@@ -50,6 +50,7 @@ use crate::plugin_callback;
 use crate::plugin_dispatch::{Subscriber, Subscribers};
 use crate::plugin_exec::PluginInvocation;
 use crate::plugin_inject;
+use crate::plugin_installed::Origin;
 use crate::plugin_manifest::{Face, Manifest};
 use crate::plugin_trust;
 use crate::store::Store;
@@ -66,6 +67,11 @@ pub struct InstalledPlugin {
     pub program: PathBuf,
     /// The plugin's manifest — the subscription list (`events`) and config schema this resolver reads.
     pub manifest: Manifest,
+    /// Which catalog it was installed from, or `None` for an install that records none — placed by hand,
+    /// or made before amenbo wrote the record down. Nothing in this module reads it; it rides along
+    /// because it is part of what one install *is* on disk, and the update path is where it is spent
+    /// ([`plugin_update`](crate::plugin_update)).
+    pub origin: Option<Origin>,
 }
 
 /// The real subscription resolver: fires the installed plugins that are enabled and subscribed to an event,
@@ -254,6 +260,7 @@ mod tests {
             name: name.into(),
             program: PathBuf::from(format!("/plugins/{name}")),
             manifest: manifest(events, config),
+            origin: Some(Origin::Official),
         }
     }
 

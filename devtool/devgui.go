@@ -53,6 +53,12 @@ func taskIDFromCheckout(root string) string {
 	return id
 }
 
+// devGUIBinaryGlob matches the GUI executable inside a bundle, whichever instance the bundle is. Each
+// dev shape carries an executable name of its own (`amenbo-app-dev`, `amenbo-app-dev-<id>`) so the OS
+// can be told which app to address; prod keeps `amenbo-app`. The CLI that ships beside it in the same
+// directory is plain `amenbo`, so nothing else answers to this pattern.
+const devGUIBinaryGlob = "amenbo-app*"
+
 // devGUIBundleNames are the dev GUI bundles a checkout may launch, most specific first: a task
 // worktree reaches for its own instance and falls back to the shared dev app only when it has not
 // built one, and the main checkout has only the shared app to reach.
@@ -285,8 +291,8 @@ func taskDevGUIRunning(id string) bool {
 }
 
 // taskDevGUIProcessMarker is the substring only this instance's own processes carry: every one of
-// them is executed out of its installed bundle, and all three builds share the process name
-// `amenbo-app`, so the bundle path is the only thing that tells them apart.
+// them is executed out of its installed bundle, so the bundle path names one instance exactly —
+// including a helper process that carries no name of its own.
 func taskDevGUIProcessMarker(id string) string {
 	return devGUIProcessMarker(taskDevBundle(id))
 }
@@ -344,10 +350,11 @@ func pidRunningFrom(psOut, prefix string) int {
 
 // devGUIShowPID prints on stdout the pid of a dev GUI instance, so a caller can hand it straight to
 // `uiauto window <pid>` — the step that turns "which of these windows is mine" from a guess into a
-// lookup, and the reason this exists: the production app, the shared dev app and every per-task
-// instance all run under the process name `amenbo-app`, so `System Events`' front window answers
-// with whichever happens to be in front (in practice the production one, which is how a session
-// came to shoot it and report it as the dev app — 2026-07-24).
+// lookup, and the reason this exists: `System Events`' front window answers with whichever app is in
+// front, which on a machine running several of them is rarely the one being verified (in practice the
+// production app, which is how a session came to shoot it and report it as the dev app — 2026-07-24).
+// A dev build does carry an executable name of its own, so a name is another way to reach for one;
+// a pid remains the exact handle, and the one uiauto takes.
 //
 // With no id it resolves the dev GUI *this checkout* launches, in the order devGUIBundleNames gives
 // — a task worktree's own instance ahead of the shared app — so the same words work from either.

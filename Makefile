@@ -20,6 +20,11 @@ GUI_APP     := $(BUNDLE_DIR)/amenbo.app
 # their own work instead of installing over each other. `devtool task finish <id>` deletes the
 # instance's bundle and its app-data together with the worktree.
 #
+# Each shape also carries its own executable name (GUI_DEV_BIN), which is what lets the OS tell the
+# running apps apart: `pgrep`, System Events and a screenshot harness all address a process by name,
+# and a dev instance sharing the prod name is one an automated click can land on by mistake. Prod
+# keeps `amenbo-app`; only the dev shapes are renamed.
+#
 # The name is amenbo's own task namespace on purpose, and not a plain word like TASK: make reads
 # the environment as well as the command line, so a plain word is one a shell may already export
 # and this build would silently obey. A hyphenated name is one no shell can assign at all, which
@@ -29,6 +34,7 @@ ifeq ($(strip $(AMB-T-ID)),)
 GUI_DEV_NAME := amenbo (dev)
 GUI_DEV_ID   := work.amenbo.app.dev
 GUI_DEV_DATA := amenbo-dev
+GUI_DEV_BIN  := amenbo-app-dev
 else
 # Digits only, the same canonical task ref devtool pins its worktree and branch names to: the
 # bundle name has to be the identical string on both sides, or teardown looks for a bundle that
@@ -39,6 +45,7 @@ endif
 GUI_DEV_NAME := amenbo (dev $(AMB-T-ID))
 GUI_DEV_ID   := work.amenbo.app.dev.$(AMB-T-ID)
 GUI_DEV_DATA := amenbo-dev-$(AMB-T-ID)
+GUI_DEV_BIN  := amenbo-app-dev-$(AMB-T-ID)
 endif
 GUI_APP_DEV := $(BUNDLE_DIR)/$(GUI_DEV_NAME).app
 
@@ -551,12 +558,12 @@ gui:
 	@scripts/codesign-local.sh sign "$(GUI_APP)"
 	@echo "→ amenbo.app (prod): app/src-tauri/target/release/bundle/macos/amenbo.app"
 
-## Dev GUI: the dev identifier/productName and the dev AMENBO_APP_NAME. AMB-T-ID=<id> swaps all three
-## for that task's throwaway instance (see the GUI_DEV_* block above). The second --config is
+## Dev GUI: the dev identifier/productName/executable name and the dev AMENBO_APP_NAME. AMB-T-ID=<id>
+## swaps all four for that task's throwaway instance (see the GUI_DEV_* block above). The second --config is
 ## merged over the file, so one recipe covers both shapes; with AMB-T-ID unset it merely restates what
 ## tauri.dev.conf.json already says.
 gui-dev:
-	cd app && AMENBO_APP_NAME=$(GUI_DEV_DATA) npm run tauri build -- --config src-tauri/tauri.dev.conf.json --config '{"productName":"$(GUI_DEV_NAME)","identifier":"$(GUI_DEV_ID)"}'
+	cd app && AMENBO_APP_NAME=$(GUI_DEV_DATA) npm run tauri build -- --config src-tauri/tauri.dev.conf.json --config '{"productName":"$(GUI_DEV_NAME)","identifier":"$(GUI_DEV_ID)","mainBinaryName":"$(GUI_DEV_BIN)"}'
 	@# Tauri emits an ad-hoc (linker-signed) .app whose CDHash changes every rebuild,
 	@# re-prompting the keychain each cycle. Sign with the stable local identity so
 	@# one "Always Allow" survives future rebuilds (matches install/install-dev).

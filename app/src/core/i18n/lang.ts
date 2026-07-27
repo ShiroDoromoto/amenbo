@@ -48,11 +48,40 @@ const BY_PRIMARY: Record<string, Lang> = Object.fromEntries(
  * matches it.
  */
 export function normalizeLang(code?: string | null): Lang {
+  return matchLang(code) ?? DEFAULT_LANG;
+}
+
+/** The language a code names, or nothing when it names none of the nineteen. */
+function matchLang(code?: string | null): Lang | undefined {
   const subtags = code?.trim().toLowerCase().split(/[-_]/).filter(Boolean) ?? [];
-  if (subtags.length === 0) return DEFAULT_LANG;
+  if (subtags.length === 0) return undefined;
   const [primary, secondary] = subtags;
   const narrowed = secondary ? `${primary}-${secondary}` : primary;
-  return BY_SUBTAG[narrowed] ?? BY_SUBTAG[primary] ?? BY_PRIMARY[primary] ?? DEFAULT_LANG;
+  return BY_SUBTAG[narrowed] ?? BY_SUBTAG[primary] ?? BY_PRIMARY[primary];
+}
+
+/**
+ * The language to start someone in before they have chosen one, guessed from what the OS says they
+ * read. Only ever an opening offer: it fills the language step of first-run setup, and a language
+ * already settled in `config.language` is never overwritten by it.
+ *
+ * The whole preference list is walked, not just its head, because the head is often a language we do
+ * not carry while the next one down is — a reader whose order is Catalan then Spanish is better
+ * served Spanish than English. Nothing recognized in the list, or no list at all, is English.
+ */
+export function guessLang(preferred?: readonly string[]): Lang {
+  const list = preferred ?? browserLanguages();
+  for (const code of list) {
+    const match = matchLang(code);
+    if (match) return match;
+  }
+  return DEFAULT_LANG;
+}
+
+/** What this platform says the reader prefers, in order. Empty where there is no `navigator`. */
+function browserLanguages(): readonly string[] {
+  if (typeof navigator === "undefined") return [];
+  return navigator.languages?.length ? navigator.languages : [navigator.language].filter(Boolean);
 }
 
 /** The current UI language (snapshot.language, normalized). */

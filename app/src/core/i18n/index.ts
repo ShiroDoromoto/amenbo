@@ -18,7 +18,7 @@ import { en } from "./locales/en";
 import { ja } from "./locales/ja";
 import { currentLang, type Lang } from "./lang";
 
-export { currentLang, dateLocale, DEFAULT_LANG, LANGS, normalizeLang, type Lang } from "./lang";
+export { currentLang, dateLocale, DEFAULT_LANG, guessLang, LANGS, normalizeLang, type Lang } from "./lang";
 export type { ViewKind } from "./keys";
 
 /**

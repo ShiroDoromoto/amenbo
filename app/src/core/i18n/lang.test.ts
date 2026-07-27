@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../snapshot", () => ({ getSnapshot: () => ({ language: null, dateLocale: null }) }));
 
-import { DEFAULT_LANG, LANGS, normalizeLang } from "./index";
+import { DEFAULT_LANG, guessLang, LANGS, normalizeLang } from "./index";
 
 describe("normalizeLang", () => {
   it("carries nineteen languages, and English is where they fall back to", () => {
@@ -49,5 +49,28 @@ describe("normalizeLang", () => {
     for (const code of [undefined, null, "", "   ", "kl", "not a language", "-", "xx-YY"]) {
       expect(normalizeLang(code), String(code)).toBe("en");
     }
+  });
+});
+
+// What someone is started in before they have picked. It only fills the language step of first-run
+// setup — a language already chosen is never guessed over — so being wrong costs one click, while
+// asking "which language do you read?" in a language they cannot read costs the whole screen.
+describe("guessLang", () => {
+  it("takes the reader's first preference that we carry", () => {
+    expect(guessLang(["ja-JP", "en-US"])).toBe("ja");
+    expect(guessLang(["fr-CA"])).toBe("fr");
+    expect(guessLang(["zh-TW", "zh-CN"])).toBe("zh-Hant");
+  });
+
+  // The head of the list is often a language nobody has translated, while the next one down is one
+  // the reader also reads. Stopping at the head would send them to English past a better answer.
+  it("reads past a preference we do not carry to one we do", () => {
+    expect(guessLang(["ca", "es-ES", "en"])).toBe("es");
+    expect(guessLang(["gd", "cy", "de"])).toBe("de");
+  });
+
+  it("is English when nothing in the list is carried, and when there is no list", () => {
+    expect(guessLang(["ca", "eu", "gl"])).toBe("en");
+    expect(guessLang([])).toBe("en");
   });
 });

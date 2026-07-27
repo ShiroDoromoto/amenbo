@@ -197,3 +197,16 @@ steps:
     op: blobs
     with:
       count: 0
+
+# ── The third face of `--fix`, and why it is not walked here ──────────────────────────────────
+# `--fix` also forgets orphan bindings: folder rows no live project claims. That state is not
+# reachable by using amenbo, so there is nothing here for a scenario to put wrong. Deleting a project
+# releases every folder bound to it in the same breath — the pointer, the guidance block and the
+# registry row all go — and that is the only operation that drops the project a row points at. A row
+# is left over only when the release itself fails part way, which a scenario driving the shipped
+# binary cannot arrange.
+#
+# So the face is covered from the other side: `project-add.yaml` binds a folder, deletes its project,
+# and asks `doctor` for the absence of `orphan_binding`. That is the assertion worth making — the
+# sweep has nothing to sweep because the delete cleans up after itself, and a delete that stopped
+# doing so would turn that line red.

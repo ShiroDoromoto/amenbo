@@ -1,9 +1,11 @@
 id: project-add
-title: A project is registered, renamed, reordered, archived out of the everyday list and brought back
+title: A project is registered, renamed, reordered, archived out of the everyday list, brought back, and finally deleted with the folder it held
 description: >
   The place work is kept. A project that cannot be created, renamed or reordered leaves tasks with
   nowhere to sit, and archiving is the one operation that takes a project out of the everyday listing
-  without deleting it — so both listings have to be asked to prove it moved between them.
+  without deleting it — so both listings have to be asked to prove it moved between them. Deleting is
+  the other end: it destroys the row and reaches outside the store to release every folder that
+  pointed at the project, which is why a folder is bound to it first and read back afterwards.
 steps:
   # Registered, and readable back under the name it was given.
   - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — the place work is kept }, as: pj }
@@ -36,3 +38,23 @@ steps:
   - { type: action, domain: project, op: unarchive, with: { target: pj } }
   - { type: assert, domain: project, op: field, with: { target: pj, field: archived, equals: false } }
   - { type: assert, domain: project, op: listed, with: { target: pj, present: true } }
+
+  # A folder pointed at the project that is about to go. Deleting reaches outside the store — this is
+  # the folder the teardown has to release, and the only way to see that it did.
+  - { type: action, domain: folder, op: bind, with: { dir: doomed, project: pj } }
+  - { type: assert, domain: folder, op: bound, with: { dir: doomed, project: pj } }
+
+  # Deleted: gone from both listings, the everyday one and the one that carries the archived — which
+  # is the difference from `archive`, where the row is still somewhere.
+  - { type: action, domain: project, op: delete, with: { target: pj } }
+  - { type: assert, domain: project, op: listed, with: { target: pj, present: false } }
+  - { type: assert, domain: project, op: listed, with: { target: pj, archived: true, present: false } }
+
+  # The folder is loose again: its pointer is gone, so an AI launched there reaches nothing rather
+  # than a project that no longer exists.
+  - { type: assert, domain: folder, op: bound, with: { dir: doomed, present: false } }
+
+  # And the store is left clean. `orphan_binding` is what `doctor` raises for a folder row no live
+  # project claims — the debris a delete would leave if the teardown skipped a folder — so asking for
+  # its absence here is what proves the release was recorded, not just carried out on disk.
+  - { type: assert, domain: store, op: doctor, with: { ok: true, issue: orphan_binding, present: false } }

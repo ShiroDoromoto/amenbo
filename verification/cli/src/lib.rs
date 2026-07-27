@@ -433,6 +433,13 @@ impl Driver {
                 self.run_json(&["project", verb, &target.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("{verb}d project {target}")))
             }
+            (Domain::Project, "delete") => {
+                let target = self.resolve(with)?;
+                // Destructive, and the run has nobody to ask: `--yes` is how a non-interactive caller
+                // declares the confirmation the command would otherwise stop for.
+                self.run_json(&["project", "delete", &target.to_string(), "--yes", "--json"])?;
+                Ok(Outcome::action(format!("deleted project {target}")))
+            }
             (Domain::Dimension, "create") => {
                 let name = req_str(with, "name")?;
                 let pid = self.project_id.to_string();

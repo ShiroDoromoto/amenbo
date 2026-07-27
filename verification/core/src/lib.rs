@@ -225,6 +225,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "move", required: &["target", "position"], refs: &["target"], strings: &["position"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "archive", required: &["target"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "unarchive", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // The end of the line, and the one project operation that reaches outside the store: the folders
+    // bound to a deleted project are released with it, so a scenario naming this op is asking about the
+    // teardown as much as about the row.
+    OpSpec { kind: Kind::Action, domain: Domain::Project, op: "delete", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // A classification axis, its values, and the assignment that files a task under one. The axis and
     // the value travel as names — that is how the CLI takes them, and how a person says them.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: false },

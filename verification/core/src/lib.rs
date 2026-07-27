@@ -336,6 +336,14 @@ const REGISTRY: &[OpSpec] = &[
     // is: the driver writes the declaration onto the installed manifest, the way `stale-manifest`
     // writes the disagreement it needs. Everything after it is amenbo's own doing.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-secret", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
+    // An installed plugin whose program answers with the secrets it was handed. A secret travels to a
+    // run as an environment variable on the child process — off argv, off the log, out of the store —
+    // so the only place it can be seen arriving is inside the run, and only a plugin willing to say
+    // what it was given can say it. None of the published ones is (they use their settings, they do
+    // not report them), so the driver stands one in that prints its injected config and nothing else.
+    // What it reads back is amenbo's own doing: which value, at which tier, and whether there is one
+    // left at all.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "echo-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // An installed plugin that takes `seconds` to answer. A queue only holds rows while its plugin is
     // still on one — the runner takes the row off the moment the plugin replies, whichever end it
     // reached — so a backlog is not a state a scenario can arrive at by using amenbo: it would be

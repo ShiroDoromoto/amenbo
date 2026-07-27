@@ -5,7 +5,7 @@
 # Like every line that installs a plugin, this one goes to the catalog over the network on purpose
 # (see `plugin-list.yaml`): the settings are a face of a plugin that is really there.
 id: plugin-config-set
-title: A plugin's setting is filled in at the machine tier, overridden for the project, taken back, and never invented — and a secret one goes nowhere a reader can reach it
+title: A plugin's setting is filled in at the machine tier, overridden for the project, taken back, and never invented — and a secret one reaches the run it is for and nowhere else, until a removal takes it
 description: >
   Install the official `worktree` plugin, fill in the setting its manifest declares, and read it back.
   Write a different value as this project's override and read that back at its own tier — the two are
@@ -13,7 +13,9 @@ description: >
   nothing while the machine still holds its own. Then a key the manifest never declared: it is
   refused, because a plugin is told only what its author said it takes. Finally the other route a
   value can take: a setting the author marked secret is filled in, and the read says it is set without
-  saying what it is — while neither the backup nor the export carries the value at all.
+  saying what it is — while neither the backup nor the export carries the value at all. Then the two
+  ends nothing else can see: a run is asked what it was handed, and answers with the secret; and a
+  plugin removed with one still set is installed again, to be handed nothing.
 steps:
   - type: action
     domain: plugin
@@ -173,6 +175,36 @@ steps:
       target: taken-out
       absent: amb_scenario_secret_9f2c4b7e0d1a5f36
 
+  # None of that says the value ever reaches the plugin, and nothing here can: it travels as an
+  # environment variable on the child process, which is the one place neither a person nor the store
+  # looks. So the only witness is a plugin willing to say what it was handed, and the driver stands one
+  # in (see the op's own note). The gate is opened because a command run needs it — what a plugin may
+  # be told is what it may be run for.
+  - type: action
+    domain: plugin
+    op: echo-program
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: config
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: amb_scenario_secret_9f2c4b7e0d1a5f36
+
   # A secret is taken back the way any other setting is — the same door, an empty value.
   - type: action
     domain: plugin
@@ -181,6 +213,46 @@ steps:
       name: worktree
       key: token
       value: ""
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: token
+      set: false
+
+  # And the end of a secret's life. A secret is kept in the user area, outside the store, so nothing a
+  # backup or an export carries would show one left behind — and once the plugin is gone, the read that
+  # would answer for it is gone with it. So it is filled in again, the plugin removed, and installed a
+  # second time: what a fresh install is handed is the whole question, and it has to be nothing.
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: token
+      value: amb_scenario_secret_9f2c4b7e0d1a5f36
+
+  - type: action
+    domain: plugin
+    op: uninstall
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: declare-secret
+    with:
+      name: worktree
+      key: token
+      label: API token
 
   - type: assert
     domain: plugin

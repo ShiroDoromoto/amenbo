@@ -32,13 +32,18 @@ export const CORE_ERROR_CODES = [
  * `.amenbo` gives `init_pointer_exists`; a marker plus several live stores claiming ownership is an
  * irrecoverable ambiguity and gives `init_ambiguous_owners`); the nested-binding guard in `project_bind_folder`,
  * which binds an existing folder to an existing project; and every open blocked while a startup migration holds
- * the store (`migrate::gate()` — mid-migration the format is half-moved, and after a failure it is still old). */
+ * the store (`migrate::gate()` — mid-migration the format is half-moved, and after a failure it is still old);
+ * and the consent guard in `plugin_catalog_add_source`, where registering a catalog crosses a process
+ * boundary between showing a fingerprint and agreeing to it, so the pin that is written has to be the one
+ * that was on screen (`AMB-D-389`). */
 export const TAURI_ERROR_CODES = [
   "init_ambiguous_owners",
   "init_pointer_exists",
   "binding_nested_tree",
   "migration_failed",
   "migration_running",
+  "plugin_catalog_consent_required",
+  "plugin_catalog_key_changed",
 ] as const;
 
 /** Every code a webview can receive — the contract that i18n and code-based branching may refer to. */

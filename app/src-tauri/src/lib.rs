@@ -259,6 +259,7 @@ pub fn run() {
       commands::doctor_fix,
       commands::open_latest_installer,
       commands::plugin_catalog_browse,
+      commands::plugin_catalog_probe_source,
       commands::plugin_catalog_add_source,
       commands::plugin_catalog_remove_source,
       commands::plugin_repo_facts,

@@ -136,7 +136,7 @@ help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
 	@echo "make install-dev  - install the dev CLI to ~/.cargo/bin/amenbo-dev (app-data: work.amenbo.amenbo-dev)"
 	@echo "make test         - full gate (core/cli scale,e2e + app crate clippy/test + GUI typecheck/build/test)"
-	@echo "make verify ARGS=\"...\" - run the CLI in a throwaway isolated store (leaves prod/dev app-data untouched; INIT=1 binds it first, which is what --actor ai needs)"
+	@echo "make verify ARGS=\"...\" - run the CLI in a throwaway isolated store (leaves prod/dev app-data untouched; INIT=1 binds it first, which is what --actor ai needs; SCRIPT=<file> runs a sequence through one isolation)"
 	@echo "make lint-linux   - clippy the Linux branch (cfg(target_os=\"linux\")) in a container = the same 2 jobs as CI's rust/app-rust (make test does not see them; needs Docker)"
 	@echo "make shell-gate   - shellcheck tracked shell (scripts/, guards/, .githooks/) and actionlint the run: in workflows (automatic at the start of make test; needs shellcheck 0.10+/actionlint)"
 	@echo "make comment-gate - audit every comment in the tree, and the prose and config values of every tracked file that carries no code, against esorp.yaml = the same commands CI runs (automatic at the start of make test; skipped without esorp)"
@@ -564,12 +564,16 @@ sweep-stale:
 ## Use KEEP=1 to inspect the contents on failure.
 ## Use INIT=1 to raise a store in (2) first, so the run has a bound folder = what `--actor ai` needs to
 ## reach anything. Left off, the CWD is bound to nothing and the ai facet is refused, which is the
-## other shape worth running. Both switches read as make variables or as environment, so
-## `make verify INIT=1` and `INIT=1 make verify` are the same thing.
+## other shape worth running.
+## Use SCRIPT=<file> instead of ARGS to run a sequence of commands through ONE isolation (1 line = 1
+## command, `amenbo` omitted, `#` comments) = how a store several steps built gets read back without
+## writing a harness by hand. Example: make verify SCRIPT=/tmp/steps.txt.
+## Every switch reads as a make variable or as environment, so `make verify INIT=1` and
+## `INIT=1 make verify` are the same thing.
 ## Isolation and cleanup (two mktemp + rm -rf) live in the script = a target of shell-gate.
 verify:
 	cargo build -q -p amenbo-cli
-	@KEEP="$(KEEP)" INIT="$(INIT)" scripts/verify-cli.sh "$(CURDIR)/target/debug/amenbo" $(ARGS)
+	@KEEP="$(KEEP)" INIT="$(INIT)" SCRIPT="$(SCRIPT)" scripts/verify-cli.sh "$(CURDIR)/target/debug/amenbo" $(ARGS)
 
 ## Prod GUI (local build). Stable distribution signing is retired = this does not use a distribution
 ## identity; it signs with the local stable self-signature (codesign-local) only to stop the dev

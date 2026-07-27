@@ -929,6 +929,31 @@ impl Driver {
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 Ok(Outcome::action(format!("`{name}` now declares `{key}` as a secret setting")))
             }
+            // Standing in a program that says what it was handed, so the injection has a witness. A
+            // secret reaches a run as an environment variable and nowhere else: the store never held
+            // it, the log is kept clear of it, and the read that says it is set says nothing more. A
+            // plugin is the only thing on the receiving end, and the published ones use their settings
+            // rather than report them (see the registry) — so this one prints its injected config and
+            // stops there. The prefix is amenbo's own; the callback variables beside it are left out,
+            // because what is under test is the value a plugin was told, not the door it can read back
+            // through.
+            (Domain::Plugin, "echo-program") => {
+                let name = req_str(with, "name")?;
+                let path = self.session.home.join("plugins").join(name).join(name);
+                if !path.exists() {
+                    return Err(format!("`{name}` has no program at {} to stand in for", path.display()));
+                }
+                // `grep` finding nothing is a non-zero exit, and a command run that exits non-zero is a
+                // failure amenbo reports rather than a return value — so the script ends by saying it
+                // is fine. Handed nothing, it returns nothing, which is exactly the reading a scenario
+                // asking whether a secret is gone needs.
+                std::fs::write(&path, "#!/bin/sh\nenv | grep '^AMENBO_CONFIG_'\nexit 0\n")
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                make_runnable(&path)?;
+                Ok(Outcome::action(format!(
+                    "left `{name}` answering with the config it is handed, and nothing else"
+                )))
+            }
             // Leaving an installed plugin answering slowly, so its queue has something in it to read.
             // A row comes off a queue the moment the plugin replies, so a backlog is a window and not
             // a state amenbo can be asked for (see the registry): what is queued while a plugin is

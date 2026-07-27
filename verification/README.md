@@ -258,7 +258,10 @@ no plugin in the official catalog declares one — so the secret route, which fa
 text, would otherwise go unwalked until one does. `plugin slow-program` leaves an installed plugin
 taking seconds to answer, which is the only way a queue holds anything to read: a row leaves the moment
 its plugin replies, so the backlog `plugin log` reports is the window a slow plugin holds open, and
-every plugin the catalog publishes answers in the time a process takes to start. They are the same idea as `repo write-file`: the
+every plugin the catalog publishes answers in the time a process takes to start. `plugin echo-program`
+leaves one answering with the config it was handed, which is the only witness a secret's delivery has:
+it travels as an environment variable on the child process, and the published plugins use their
+settings rather than report them. They are the same idea as `repo write-file`: the
 state on disk a scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach
 for one only when the line under test is what amenbo does about that state.
 

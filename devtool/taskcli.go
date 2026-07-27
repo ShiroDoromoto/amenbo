@@ -8,14 +8,14 @@ import (
 	"strings"
 )
 
-// `devtool task cli <id> -- …` — an amenbo CLI pointed at the store one task's dev GUI reads.
+// `devtool devgui cli <id> -- …` — an amenbo CLI pointed at the store one task's dev GUI reads.
 //
 // A task's dev GUI opens the setup it was seeded with, and nothing else: whatever a screen needs in
 // order to show anything (a rejected task, a card with a due date, a plugin in a given state) has to
 // be *in* that store before the screen can be looked at. Until this existed there was no way to put
 // it there. The app-data name is fixed at build time (`AMENBO_APP_NAME`), so no CLI on the machine
-// pointed at `amenbo-dev-<id>`, and a session that needed one rebuilt the CLI with that name set —
-// two minutes, and a build only that one task can use.
+// is pointed at `amenbo-dev-<id>`, and building one with that name set costs two minutes for a
+// binary only that one task can use.
 //
 // **What is baked at build time is a name; what it selects is a directory.** `AMENBO_HOME` names
 // that directory at run time — the same seam `make verify` isolates through — so the CLI that runs
@@ -76,14 +76,14 @@ func taskCLI(id string, noBuild bool, argv []string) (int, error) {
 		return 0, fmt.Errorf("the per-task dev store lives where the dev GUI is installed, which is macOS only")
 	}
 	if len(argv) == 0 {
-		return 0, fmt.Errorf("nothing to run — `devtool task cli %s -- <amenbo args…>`", id)
+		return 0, fmt.Errorf("nothing to run — `devtool devgui cli %s -- <amenbo args…>`", id)
 	}
-	_, _, worktree, err := paths(id)
+	_, worktree, err := paths(id)
 	if err != nil {
 		return 0, err
 	}
 	if _, err := os.Stat(worktree); err != nil {
-		return 0, fmt.Errorf("no worktree for task %s (%s missing) — `devtool task start %s` first", id, worktree, id)
+		return 0, fmt.Errorf("no worktree for task %s (%s missing) — cut one with the `worktree` plugin first", id, worktree)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -92,9 +92,9 @@ func taskCLI(id string, noBuild bool, argv []string) (int, error) {
 
 	store := appDataDir(home, taskDevAppData(id))
 	if !dirExists(store) {
-		// `task start` seeds this by cloning the shared dev store; a checkout with no app/ never
-		// got one. Making it here is what lets the first command create a store rather than fail
-		// on a missing directory — an empty instance is a usable one.
+		// `devgui seed` clones the shared dev store into this; a checkout with no app/ gets none.
+		// Making it here is what lets the first command create a store rather than fail on a
+		// missing directory — an empty instance is a usable one.
 		if err := os.MkdirAll(store, 0o755); err != nil {
 			return 0, fmt.Errorf("make the task's store dir: %w", err)
 		}

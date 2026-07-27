@@ -321,8 +321,8 @@ jobs:
       - name: Test
         run: npm test
 
-  # devtool is not built or shipped by anything else here — it is the optional helper that stamps
-  # out a git worktree per task and measures the agent entry — so no other job compiles it, and
+  # devtool is not built or shipped by anything else here — it is the optional helper that gives a
+  # task its own dev GUI and measures the agent entry — so no other job compiles it, and
   # nothing but this one would notice it breaking. Publishing it without this job would be
   # publishing a tool that rots. It is seconds: one stdlib-only module, no dependencies to
   # resolve, tests that touch only temp dirs and git.

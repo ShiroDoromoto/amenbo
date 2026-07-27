@@ -17,8 +17,8 @@ GUI_APP     := $(BUNDLE_DIR)/amenbo.app
 # installs. Unset is the shared dev app: one permanent bundle, the place to keep a grown setup
 # (plugins, catalog, projects) that no task may delete. AMB-T-ID=<id> is a throwaway instance one
 # task owns — its own bundle identifier, product name and app-data, so two parallel sessions verify
-# their own work instead of installing over each other. `devtool task finish <id>` deletes the
-# instance's bundle and its app-data together with the worktree.
+# their own work instead of installing over each other. The instance lives outside the checkout, so
+# `devtool devgui rm <id>` is what reclaims its bundle and its app-data when the task is finished.
 #
 # Each shape also carries its own executable name (GUI_DEV_BIN), which is what lets the OS tell the
 # running apps apart: `pgrep`, System Events and a screenshot harness all address a process by name,
@@ -46,6 +46,18 @@ GUI_DEV_NAME := amenbo (dev $(AMB-T-ID))
 GUI_DEV_ID   := work.amenbo.app.dev.$(AMB-T-ID)
 GUI_DEV_DATA := amenbo-dev-$(AMB-T-ID)
 GUI_DEV_BIN  := amenbo-app-dev-$(AMB-T-ID)
+endif
+
+# What a task's instance opens on. Its app-data is seeded from the shared dev store, so the screen
+# being verified has the grown setup (plugins, catalog, projects) behind it rather than a first-run
+# one. Seeding belongs to the build because this is the one place a task's instance is made at all,
+# and devtool is the one that knows where a store lives. devtool is optional, so its absence says so
+# and builds anyway — an instance that opens empty is a poorer screen, not a broken build.
+ifeq ($(strip $(AMB-T-ID)),)
+SEED_GUI_DEV_DATA := :
+else
+SEED_GUI_DEV_DATA := command -v devtool >/dev/null 2>&1 && devtool devgui seed $(AMB-T-ID) \
+	|| echo "  dev GUI : devtool is not installed (make devtool) — this instance opens on whatever app-data it already has"
 endif
 GUI_APP_DEV := $(BUNDLE_DIR)/$(GUI_DEV_NAME).app
 
@@ -149,7 +161,7 @@ help:
 	@echo "make gui-dev      - build the dev GUI ($(GUI_DEV_NAME).app / $(GUI_DEV_ID))"
 	@echo "make install-gui     - [retired] the prod GUI ships in the unified installer; release with make release"
 	@echo "make install-gui-dev - build the dev GUI and put it in $(APPS_DIR)/$(GUI_DEV_NAME).app"
-	@echo "                       AMB-T-ID=<id> builds that task's own throwaway instance (app-data work.amenbo.amenbo-dev-<id>) instead of the shared dev app; devtool task finish <id> deletes it"
+	@echo "                       AMB-T-ID=<id> builds that task's own throwaway instance (app-data work.amenbo.amenbo-dev-<id>, seeded from the shared dev store) instead of the shared dev app; devtool devgui rm <id> deletes it"
 
 ## Re-resolve the lockfile of the GUI shell crate. That crate sits outside the workspace but reaches
 ## core through a path dependency, so a workspace bump changes what its lock resolves to — while the
@@ -593,6 +605,7 @@ install-gui:
 ## Build the dev GUI and apply it to /Applications (quit it first if it is running, then replace).
 ## AMB-T-ID=<id> targets that task's own instance instead of the shared dev app.
 install-gui-dev: gui-dev
+	@$(SEED_GUI_DEV_DATA)
 	-osascript -e 'quit app "$(GUI_DEV_NAME)"' >/dev/null 2>&1
 	rsync -a --delete "$(GUI_APP_DEV)/" "$(APPS_DIR)/$(GUI_DEV_NAME).app/"
 	@# Check the copy that is actually clicked, not just the one that was built: the shared dev app is
@@ -600,8 +613,8 @@ install-gui-dev: gui-dev
 	@scripts/verify-gui-front.sh "$(APPS_DIR)/$(GUI_DEV_NAME).app"
 	@echo "→ updated $(APPS_DIR)/$(GUI_DEV_NAME).app (dev; app-data: work.amenbo.$(GUI_DEV_DATA))"
 
-## The parallel-development helper (Go, one static binary): it stamps out and tears down a git
-## worktree per task so several implementation sessions run without stepping on each other, and it
+## The parallel-development helper (Go, one static binary): it gives a task the throwaway dev GUI it
+## is verified in so several implementation sessions run without stepping on each other, and it
 ## measures what a diff does to the `amenbo agent --json` entry (devtool/README.md).
 ## It is **optional**. amenbo builds, tests and ships without it, so Go is not a dependency of the
 ## tree — it is asked for here and nowhere else, and whoever never runs this target never needs it.

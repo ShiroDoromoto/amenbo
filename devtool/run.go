@@ -17,7 +17,7 @@ func logf(format string, a ...any) {
 // runThrough executes a command in dir with this process's own stdio, adding `extraEnv` to the
 // environment, and returns its exit code. Unlike run it captures nothing: what the command prints is
 // what the caller sees, in the order it printed it, which is the whole point when the command is one
-// the caller asked to be passed through (`task cli`). An exit code comes back as a code, not an
+// the caller asked to be passed through (`devgui cli`). An exit code comes back as a code, not an
 // error — a non-zero amenbo is an answer, and only a command that could not be run at all is a
 // failure of devtool's.
 func runThrough(dir string, extraEnv []string, name string, args ...string) (int, error) {

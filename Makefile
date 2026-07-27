@@ -130,7 +130,7 @@ LINUX_LINT_IMAGE  := amenbo-linux-lint:$(HOST_GUI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac test doc-gate shell-gate comment-gate go-gate scopes-gate cli-name-gate sweep-stale schema-freeze dist-gui dist-gui-mac dist-gui-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac test doc-gate shell-gate comment-gate go-gate scopes-gate cli-name-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -155,6 +155,7 @@ help:
 	@echo "make release      - [pre-tag gate only] just runs make test. Build and distribution are both public CI (release.yml on tag push -> prerelease, the promote workflow does the promotion) = there is no command here that distributes"
 	@echo "make codesign-cert - one-time: create a stable self-signed certificate so install-dev/gui-dev stop re-prompting the keychain on every rebuild (macOS)"
 	@echo "make schema-freeze - write the store's current shape to store_engine/schema_frozen/v<latest>.sql and name it in frozen() (run it after appending a migration step, which is what bumps the version)"
+	@echo "make schema-renumber - after a merge left two steps on the same version number, move the trailing steps back into ascending order and freeze the number the last one lands on (the steps' own tests are yours)"
 	@echo "make lock         - re-resolve app/src-tauri/Cargo.lock (the GUI shell is outside the workspace, so a workspace bump leaves its lock behind; CI fails a PR whose lock is stale)"
 	@echo "make hooks        - enable the git hooks (core.hooksPath=.githooks): pre-commit runs the tree guards over the staged diff, commit-msg holds the message to the same vocabulary"
 	@echo "make devtool      - build the optional parallel-development helper to ~/.cargo/bin/devtool (needs Go; amenbo itself builds and tests without it)"
@@ -170,6 +171,13 @@ help:
 ## LATEST_VERSION and schema_sql() directly. It never rewrites a frozen file — a past shape is a record.
 schema-freeze:
 	cargo run -q -p amenbo-core --example freeze-schema
+
+## Move a step that landed on a version number another branch had already taken, and freeze the number
+## it moves to. Two branches appending a step both write the next number, and the second to merge is
+## left with a chain that no longer ascends — this puts the trailing steps back in order and pays the
+## freeze debt for the number the last one lands on, in one run. The step's own tests are not touched.
+schema-renumber:
+	cargo run -q -p amenbo-core --example freeze-schema -- --renumber
 
 ## Re-resolve the lockfile of the GUI shell crate. That crate sits outside the workspace but reaches
 ## core through a path dependency, so a workspace bump changes what its lock resolves to — while the

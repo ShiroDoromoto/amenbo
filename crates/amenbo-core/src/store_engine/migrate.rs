@@ -600,6 +600,10 @@ pub fn pending(from: i64, steps: &'static [Step]) -> &'static [Step] {
 /// what lets [`pending`] find the resume point by a single partition, and what makes "the version a
 /// store carries" name exactly one point in the chain. A malformed chain is a coding defect; the test
 /// below holds [`STEPS`] to it.
+///
+/// The one shape that arrives without anyone writing it is two branches appending a step on the same
+/// number, which the second merge leaves side by side. `make schema-renumber` is what moves the
+/// trailing steps back into order and freezes the number the last one lands on.
 pub fn is_well_formed(steps: &[Step]) -> bool {
     steps.windows(2).all(|w| w[0].to < w[1].to)
         && steps.first().is_none_or(|s| s.to > BASELINE_VERSION)

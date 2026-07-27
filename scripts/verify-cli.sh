@@ -17,7 +17,16 @@
 #   (2) a throwaway CWD with no `.amenbo` ancestor — so a run inside the repo cannot grab the
 #       production pointer.
 #
-# Usage: scripts/verify-cli.sh <cli-binary> [args...]        (KEEP=1 to inspect the dirs after)
+# The throwaway CWD is bound to nothing, which is a shape of its own: an AI reaches only the project
+# its folder names, so every read that draws a reach comes back out_of_reach there. Both shapes are
+# worth being able to run — the refusal itself is behaviour under test — so the binding is opt-in
+# rather than assumed:
+#   INIT=1 raises a store in the throwaway CWD first (`init`, as a human sets a folder up), and the
+#   command that follows runs against a bound folder — which is the only way `--actor ai` reaches
+#   anything here. Without it the CWD stays unbound, and an unbound folder is what gets exercised.
+#
+# Usage: scripts/verify-cli.sh <cli-binary> [args...]
+#        (KEEP=1 to inspect the dirs after; INIT=1 to run against a bound store)
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
@@ -31,6 +40,17 @@ shift
 
 home=$(mktemp -d)
 cwd=$(mktemp -d)
+
+if [ "${INIT:-0}" = "1" ]; then
+    # Setting a folder up is a human's act, so that is the facet it is done under. Its stdout goes to
+    # stderr: the caller's own command owns stdout, and a JSON reader must not find a banner in front
+    # of the document it asked for.
+    if ! ( cd "$cwd" && env AMENBO_HOME="$home" "$bin" init --name verify --quiet --actor human ) >&2; then
+        echo "✗ verify: INIT=1 could not raise a store in $cwd" >&2
+        rm -rf "$home" "$cwd"
+        exit 1
+    fi
+fi
 
 rc=0
 ( cd "$cwd" && env AMENBO_HOME="$home" "$bin" "$@" ) || rc=$?

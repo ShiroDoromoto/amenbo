@@ -1,11 +1,12 @@
-# Runtime image for the Linux GUI end-to-end check: installs the .deb built by
-# `make dist-gui-linux` (GUI + CLI sidecar) and renders the app against a virtual X
-# display, so the WebKitGTK webview is real and can be screenshotted.
+# Runtime image for the Linux GUI end-to-end check: unpacks the AppImage built by
+# `make dist-gui-linux` and renders the app against a virtual X display, so the WebKitGTK
+# webview is real and can be screenshotted. The AppImage is the whole of the Linux GUI
+# distribution, so this launches what a Linux user launches.
 #
 # This is the only place that exercises the LAST hop of the change path on Linux —
 # tauri's `store-changed` emit reaching the webview. The hops before it are covered by
 # `app/src-tauri/tests/store_watch.rs` (OS-specific waking, in CI) and the GUI vitest
-# suite (OS-independent feed → scope invalidation). It needs the .deb (a full Linux
+# suite (OS-independent feed → scope invalidation). It needs the AppImage (a full Linux
 # release build), so it rides the Linux GUI bundle workflow rather than every push.
 FROM ubuntu:22.04
 
@@ -13,7 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Xvfb gives the webview a display; imagemagick screenshots + diffs it; tesseract reads the
 # board back off the screen so the run can judge itself unattended; the webkit/gtk runtime
-# libs are what the .deb depends on (the -dev packages live in the build image). The CJK font
+# libs are what the app links against (the -dev packages live in the build image). The CJK font
 # is what keeps the screenshots legible as evidence — the UI ships Japanese by default and
 # renders it as tofu boxes without one.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -22,9 +23,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-dejavu-core fonts-noto-cjk ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-ARG DEB=amenbo-app-linux-arm64.deb
-COPY ${DEB} /tmp/amenbo.deb
-RUN apt-get update && apt-get install -y /tmp/amenbo.deb && rm -rf /var/lib/apt/lists/*
+# A container has no FUSE, so the AppImage is unpacked rather than mounted (its own runtime
+# does that with --appimage-extract, no privileges needed). AppRun is what sets the unpacked
+# tree's environment up, so that — not the raw binary beside it — is what goes on PATH, under
+# the name the check launches. It reaches its siblings (the gtk hook scripts) through the
+# directory it was invoked from, so PATH gets a wrapper that execs it in place; a symlink
+# would send it looking beside the link instead, and the GUI dies on the missing hook.
+ARG APPIMAGE=amenbo-app-linux-aarch64.AppImage
+COPY ${APPIMAGE} /tmp/amenbo.AppImage
+RUN chmod +x /tmp/amenbo.AppImage \
+    && cd /opt && /tmp/amenbo.AppImage --appimage-extract > /dev/null \
+    && mv squashfs-root amenbo-app \
+    && rm -f /tmp/amenbo.AppImage \
+    && printf '#!/bin/sh\nexec /opt/amenbo-app/AppRun "$@"\n' > /usr/local/bin/amenbo-app \
+    && chmod +x /usr/local/bin/amenbo-app
+
+# The writer whose effect the check watches for. It is a separate process by design — the
+# AppImage carries the GUI alone, so the CLI arrives as its own binary.
+ARG CLI=amenbo-linux-arm64
+COPY ${CLI} /usr/local/bin/amenbo
+RUN chmod +x /usr/local/bin/amenbo
 
 COPY gui-e2e.sh /gui-e2e.sh
 RUN chmod +x /gui-e2e.sh

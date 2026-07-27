@@ -166,11 +166,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: make dist-gui-linux LINUX_GUI_ARCH=amd64
 
-      # Run the real .deb GUI under Xvfb, write to the store from a separate CLI
-      # process, and read the board back off the screen: the new card must appear with
-      # no interaction. Guards the last hop (tauri's emit reaching the WebKitGTK
-      # webview), which only breaks on a tauri/webview upgrade — so gating it at
-      # release time is exactly when a broken hop would otherwise ship.
+      # Run the real AppImage GUI under Xvfb, write to the store from a separate CLI
+      # process (the binary built above), and read the board back off the screen: the
+      # new card must appear with no interaction. Guards the last hop (tauri's emit
+      # reaching the WebKitGTK webview), which only breaks on a tauri/webview upgrade —
+      # so gating it at release time is exactly when a broken hop would otherwise ship.
       - name: GUI e2e — an external write must repaint the running webview
         run: make verify-gui-linux
       - name: Upload the e2e screenshots (evidence, pass or fail)

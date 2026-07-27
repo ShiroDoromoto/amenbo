@@ -1,5 +1,5 @@
 # Reading one decision back in full. `show` is where a reader learns whether what they are about to
-# stand on still holds: the body, whether it is current, what it replaced, and the premise it was
+# stand on still holds: the body, what replaced it, what it replaced, and the premise it was
 # built on. Those relations are not decoration — they are the answer to "is this still true?", and a
 # chain that came out of the shipped build broken sends the next piece of work onto rotten ground.
 id: decision-show
@@ -7,7 +7,7 @@ title: A decision shows its body, its supersession chain in both directions, and
 description: >
   Build the smallest shape that has all three: a premise, a decision that replaces an older one, and
   the older one it replaced. Then read each side back. Currency is derived from the edges rather than
-  stored, so the superseded decision is asked whether it still counts as current — the one answer a
+  stored, so the superseded decision is asked what points at it — the one answer a
   reader takes everything else from.
 steps:
   - type: action
@@ -74,7 +74,7 @@ steps:
       target: new
       on: premise
 
-  # The new decision's own card: settled, current, and carrying both of its relations.
+  # The new decision's own card: settled, unreplaced, and carrying both of its relations.
   - type: assert
     domain: decision
     op: field
@@ -85,11 +85,11 @@ steps:
 
   - type: assert
     domain: decision
-    op: field
+    op: listed
     with:
+      filter: "superseded:no"
       target: new
-      field: current
-      equals: true
+      present: true
 
   - type: assert
     domain: decision
@@ -109,8 +109,8 @@ steps:
       other: premise
       present: true
 
-  # The replaced decision, read from its own side: still accepted — the row is not touched — but no
-  # longer current, and naming what replaced it.
+  # The replaced decision, read from its own side: still accepted — the row is not touched — and
+  # naming what replaced it.
   - type: assert
     domain: decision
     op: field
@@ -121,11 +121,11 @@ steps:
 
   - type: assert
     domain: decision
-    op: field
+    op: listed
     with:
+      filter: "superseded:yes"
       target: old
-      field: current
-      equals: false
+      present: true
 
   - type: assert
     domain: decision

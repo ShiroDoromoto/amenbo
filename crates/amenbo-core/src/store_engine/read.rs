@@ -1605,11 +1605,9 @@ pub struct DecisionRow {
     pub body: String,
     /// `DecisionStatus` as snake_case wire text (proposed/accepted/rejected).
     pub status: String,
-    /// Currency, derived: no decision holds a `supersedes` edge at this one.
-    pub current: bool,
     /// The live decisions that superseded this one, in the order the edges were drawn — the reverse view
-    /// `decision show` carries, brought down onto the list row. Empty ⇔ `current`: both are read off the
-    /// same edges ([`supersessions`], [`superseded`]), so the two cannot come to disagree.
+    /// `decision show` carries, brought down onto the list row. Whether it was replaced is read off this
+    /// alone (`AMB-D-410`), so there is no second field to come to disagree with it.
     pub superseded_by: Vec<i64>,
     pub decided_at: Option<String>,
     pub created_at: String,
@@ -1675,8 +1673,6 @@ pub fn decision_list(
     // it optional, not the column — so it is the registry's column, widened (`Col::nullable`).
     let project_name = sel.col(P.name.nullable());
     let status = sel.col(D.status);
-    // Currency is derived, not stored: no live decision holds a `supersedes` edge here.
-    let current = sel.pred(!superseded(D));
     let (decided_at, created_at) = (sel.col(D.decided_at), sel.col(D.created_at));
     let linked_task_count = sel.count_of(
         Count::over(L.table)
@@ -1701,7 +1697,6 @@ pub fn decision_list(
             title: title.get(r)?,
             body: body.get(r)?,
             status: status.get(r)?,
-            current: current.get(r)?,
             superseded_by: successors.get(&id).cloned().unwrap_or_default(),
             decided_at: decided_at.get(r)?,
             created_at: created_at.get(r)?,
@@ -2336,15 +2331,13 @@ pub struct DecisionCardRow {
     pub created_at: String,
     /// The owning project; `None` when the project is not live.
     pub project: Option<ProjectRef>,
-    /// Currency, derived: `superseded_by` is empty. The GUI greys a non-current card.
-    pub current: bool,
     /// The decisions this one replaced (any liveness; `ref` = `AMB-D-n`). A set, not a single target: one
     /// decision may supersede several.
     pub supersedes: Vec<DecisionCardRef>,
     /// The live decisions that replaced this one (reverse edges; `ref` = `AMB-D-n`).
     pub superseded_by: Vec<DecisionCardRef>,
-    /// The decisions this one amends (any liveness; `ref` = `AMB-D-n`). Unlike `supersedes` the targets stay
-    /// current (not historicised) — the GUI keeps them un-greyed.
+    /// The decisions this one amends (any liveness; `ref` = `AMB-D-n`). Unlike `supersedes`, an amend
+    /// draws no claim that the target was replaced — read the two together.
     pub amends: Vec<DecisionCardRef>,
     /// The live decisions that amend this one (reverse edges; `ref` = `AMB-D-n`).
     pub amended_by: Vec<DecisionCardRef>,
@@ -2403,8 +2396,7 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
                 created_at: created_at.get(r)?,
                 // Project: present only when live.
                 project: project_name.map(|name| ProjectRef { id: project_id, name }),
-                // The edge sets — and the currency they derive — are filled below.
-                current: true,
+                // The edge sets are filled below.
                 supersedes: Vec::new(),
                 superseded_by: Vec::new(),
                 amends: Vec::new(),
@@ -2465,10 +2457,9 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
     };
     row.supersedes = edges.supersedes.into_iter().map(forward).collect();
     row.superseded_by = edges.superseded_by.into_iter().map(reverse).collect();
-    row.current = row.superseded_by.is_empty();
     row.amends = edges.amends.into_iter().map(forward).collect();
     row.amended_by = edges.amended_by.into_iter().map(reverse).collect();
-    // A premise is a forward target that carries its own currency: the successor is rendered as a `D-n`
+    // A premise is a forward target that carries what replaced it: the successor is rendered as a `D-n`
     // ref so the card can say *which* decision overturned the ground it stands on.
     row.builds_on = edges
         .builds_on

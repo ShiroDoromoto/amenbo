@@ -562,9 +562,9 @@ mod tests {
             + e.built_on_by.len()
     }
 
-    /// Is this decision current — i.e. not pointed at by a live `supersedes` edge?
-    fn is_current(tx: &WriteTx<'_>, decision_id: i64) -> bool {
-        read::decision_card_row(tx.conn(), decision_id).unwrap().expect("live decision").current
+    /// Does a live decision hold a `supersedes` edge at this one?
+    fn is_superseded(tx: &WriteTx<'_>, decision_id: i64) -> bool {
+        !read::decision_card_row(tx.conn(), decision_id).unwrap().expect("live decision").superseded_by.is_empty()
     }
 
     /// How many live comments this decision has.
@@ -1321,8 +1321,8 @@ mod tests {
         // The old row is untouched: its status stays accepted, and being superseded shows up in the
         // derived currency instead.
         assert_eq!(read::decision(tx.conn(), old.id).unwrap().unwrap().status, DecisionStatus::Accepted, "the old side's status is unchanged");
-        assert!(!is_current(tx, old.id), "superseded means not current (derived from the edge)");
-        assert!(is_current(tx, new.id), "the superseding side is current");
+        assert!(is_superseded(tx, old.id), "the edge points at the target");
+        assert!(!is_superseded(tx, new.id), "nothing points at the superseding side");
         // Self-reference is rejected.
         assert!(supersede(tx, new.id, new.id, None).is_err());
     }
@@ -1340,10 +1340,10 @@ mod tests {
         accept(tx, old.id, None).unwrap();
         let new = new_decision(tx, pid, "誤って覆した決定");
         supersede(tx, new.id, old.id, None).unwrap();
-        assert!(!is_current(tx, old.id), "precondition: it has been superseded");
+        assert!(is_superseded(tx, old.id), "precondition: it has been superseded");
 
         assert!(unlink_edge(tx, new.id, old.id).unwrap(), "the edge came off");
-        assert!(is_current(tx, old.id), "with supersedes gone the target becomes current again (no cleanup needed)");
+        assert!(!is_superseded(tx, old.id), "with supersedes gone nothing points at the target (no cleanup needed)");
         assert!(read::decision(tx.conn(), new.id).unwrap().is_some(), "the decision itself stays — only the wiring came off");
         assert!(targets(tx, new.id, DecisionEdgeKind::Supersedes).is_empty());
 
@@ -1368,16 +1368,16 @@ mod tests {
         accept(tx, old.id, None).unwrap();
         let new = new_decision(tx, pid, "誤って覆した決定");
         supersede(tx, new.id, old.id, None).unwrap();
-        assert!(!is_current(tx, old.id));
+        assert!(is_superseded(tx, old.id));
 
         delete(tx, new.id).unwrap();
-        assert!(is_current(tx, old.id), "retiring the superseding side restores currency (no orphaned superseded is left behind)");
+        assert!(!is_superseded(tx, old.id), "retiring the superseding side takes its edge with it (no orphaned superseded is left behind)");
         assert_eq!(read::decision(tx.conn(), old.id).unwrap().unwrap().status, DecisionStatus::Accepted);
     }
 
-    /// A superseded decision is queryable through the edges (`current:`).
+    /// A superseded decision is queryable through the edges (`superseded:`).
     #[test]
-    fn decision_list_filters_by_current() {
+    fn decision_list_filters_by_superseded() {
         use crate::query::{decision_list, DecisionListParams};
         let e = new_engine();
         let tx = &e.write().unwrap();
@@ -1400,8 +1400,8 @@ mod tests {
             .map(|d| d.id)
             .collect()
         };
-        assert_eq!(list("current:no"), vec![old.id], "the superseded decision");
-        assert_eq!(list("current:yes"), vec![new.id], "the current decision");
+        assert_eq!(list("superseded:yes"), vec![old.id], "the decision an edge points at");
+        assert_eq!(list("superseded:no"), vec![new.id], "the decision nothing points at");
         // status has only three values, so a superseded decision still comes back as accepted.
         assert_eq!(list("status:accepted").len(), 2);
         // `status:superseded` is refused: being superseded is not a status.
@@ -1416,7 +1416,7 @@ mod tests {
 
     /// Filtering by the day a decision was accepted is an ordinary `decision list` filter term;
     /// there is no dedicated as-of mode. "The policy that was settled by T" comes from composing it
-    /// with `current:`, so this pins down that the two compose.
+    /// with `superseded:`, so this pins down that the two compose.
     #[test]
     fn decision_list_filters_by_the_day_it_was_decided() {
         use crate::query::{decision_list, DecisionListParams};
@@ -1452,8 +1452,8 @@ mod tests {
         assert!(!list("decided_before:+1d").contains(&open.id));
         assert!(!list("decided_after:-1d").contains(&open.id));
         assert_eq!(list("status:proposed"), vec![open.id]);
-        // Compose with the currency filter to get the policy that was live as of T.
-        assert_eq!(list("decided_before:today current:yes"), vec![settled.id]);
+        // Compose with the edge filter to get what had been settled as of T and nothing has replaced.
+        assert_eq!(list("decided_before:today superseded:no"), vec![settled.id]);
         // A range, with both ends inclusive.
         assert_eq!(list("decided_after:-1d decided_before:+1d"), vec![settled.id]);
         // A value that is not a date is refused.
@@ -1491,9 +1491,9 @@ mod tests {
         );
         assert_eq!(targets(tx, newer.id, DecisionEdgeKind::Amends), vec![c.id]);
         // Only the two superseded decisions stop being current; the amended one stays current.
-        assert!(!is_current(tx, a.id));
-        assert!(!is_current(tx, b.id));
-        assert!(is_current(tx, c.id), "amend does not historicize its target");
+        assert!(is_superseded(tx, a.id));
+        assert!(is_superseded(tx, b.id));
+        assert!(!is_superseded(tx, c.id), "amend draws no supersedes edge at its target");
         assert_eq!(read::decision(tx.conn(), c.id).unwrap().unwrap().status, DecisionStatus::Accepted);
     }
 
@@ -1536,7 +1536,7 @@ mod tests {
         assert_eq!(targets(tx, standing.id, DecisionEdgeKind::BuildsOn), vec![premise.id]);
         assert_eq!(res.status, DecisionStatus::Proposed, "the drawing side's status is not moved");
         assert_eq!(read::decision(tx.conn(), premise.id).unwrap().unwrap().status, DecisionStatus::Accepted);
-        assert!(is_current(tx, premise.id), "the premise stays current (it is not greyed out)");
+        assert!(!is_superseded(tx, premise.id), "builds_on draws no supersedes edge at the premise");
         // Redrawing the same premise adds nothing (idempotent). Self-reference is rejected.
         builds_on(tx, standing.id, premise.id).unwrap();
         assert_eq!(edge_count(tx, standing.id), 1);

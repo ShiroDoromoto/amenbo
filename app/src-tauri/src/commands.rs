@@ -330,12 +330,10 @@ pub struct DecisionDto {
     r#ref: String,
     title: String,
     body: String,
-    /// proposed / accepted / rejected. "Superseded" is not a status — look at `current`.
+    /// proposed / accepted / rejected. "Superseded" is not a status — it is an edge, and
+    /// `superseded_by` is where it is read.
     #[ts(type = "\"proposed\" | \"accepted\" | \"rejected\"")]
     status: String,
-    /// Is it current? (derived projection, never stored): true unless a live `supersedes` edge
-    /// points at it.
-    current: bool,
     /// The project it lives under (the id is an integer key).
     project: Option<ProjectRefDto>,
     /// Decisions this one replaced (supersession, forward). One decision can replace several.
@@ -953,7 +951,6 @@ fn decision_card_from_row(row: amenbo_core::store_engine::read::DecisionCardRow)
         title: row.title,
         body: row.body,
         status: row.status,
-        current: row.current,
         project: row.project.map(|p| ProjectRefDto { id: p.id, name: p.name }),
         supersedes: row.supersedes.into_iter().map(to_ref).collect(),
         superseded_by: row.superseded_by.into_iter().map(to_ref).collect(),
@@ -6334,7 +6331,6 @@ mod tests {
 
         let c = card(head);
         assert_eq!(c.r#ref, amenbo_core::idref::decision(head), "the conversational ref is the display form of the id");
-        assert!(c.current, "a decision replaced by nothing is current");
         assert_eq!(c.status, "accepted", "supersede promotes the drawing side to accepted");
         assert!(c.decided_at.is_some(), "an accepted decision has a decided-on date");
         assert!(!c.decided_by.as_ref().unwrap().name.is_empty(), "who decided is carried too");
@@ -6345,7 +6341,7 @@ mod tests {
         assert_eq!(c.amends[0].id, partial);
         assert_eq!(c.builds_on.len(), 1, "the decision it builds on");
         assert_eq!(c.builds_on[0].id, premise);
-        assert!(c.builds_on[0].superseded_by.is_none(), "no rot note when the premise is current");
+        assert!(c.builds_on[0].superseded_by.is_none(), "no rot note when nothing replaced the premise");
         assert!(c.superseded_by.is_empty(), "the reverse lookup is still empty");
         assert!(c.amended_by.is_empty());
         assert!(c.built_on_by.is_empty());
@@ -6357,9 +6353,8 @@ mod tests {
 
         let c_old = card(old);
         assert_eq!(c_old.superseded_by.iter().map(|r| r.id).collect::<Vec<_>>(), vec![head]);
-        assert!(!c_old.current, "a superseded decision is no longer current");
         assert_eq!(card(partial).amended_by.iter().map(|r| r.id).collect::<Vec<_>>(), vec![head]);
-        assert!(card(partial).current, "the target stays current even when amended");
+        assert!(card(partial).superseded_by.is_empty(), "amending draws no supersedes edge at the target");
         assert_eq!(card(premise).built_on_by.iter().map(|r| r.id).collect::<Vec<_>>(), vec![head], "the radius of impact");
 
         let killer = add("台帳は先頭から読む");
@@ -6373,7 +6368,7 @@ mod tests {
 
         decision_unlink_edge(head, old).unwrap();
         assert!(card(head).supersedes.is_empty(), "an unlinked edge disappears from the card");
-        assert!(card(old).current, "unlinking supersedes returns the target to current (no cleanup)");
+        assert!(card(old).superseded_by.is_empty(), "unlinking supersedes takes the edge off the target (no cleanup)");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

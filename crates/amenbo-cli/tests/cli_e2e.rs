@@ -3546,12 +3546,12 @@ fn a_premise_is_read_first_and_its_overturn_names_what_to_revisit() {
     cli.json(&["decision", "accept", &premise, "--json"]);
     cli.json(&["decision", "accept", &standing, "--json"]);
 
-    // Draw the premise edge: neither decision moves, and the premise stays current.
+    // Draw the premise edge: neither decision moves, and nothing is drawn at the premise.
     let built = cli.json(&["decision", "builds-on", &standing, "--on", &premise, "--json"]);
     assert_eq!(built["action"], "decision.builds_on");
     let shown = cli.json(&["decision", "show", &standing, "--json"]);
     assert_eq!(id_str(&shown["builds_on"][0]["id"]), premise, "premise = the decision to read first");
-    assert_eq!(shown["builds_on"][0]["current"], true, "the premise stays current (not greyed out)");
+    assert!(shown["builds_on"][0]["superseded_by"].is_null(), "nothing has replaced the premise");
     // The reverse lookup is the blast radius — what needs revisiting if this decision is overturned.
     let from_premise = cli.json(&["decision", "show", &premise, "--json"]);
     assert_eq!(id_str(&from_premise["built_on_by"][0]["id"]), standing);
@@ -3564,14 +3564,13 @@ fn a_premise_is_read_first_and_its_overturn_names_what_to_revisit() {
 
     // Open the standing decision and the overturned premise is right there.
     let after = cli.json(&["decision", "show", &standing, "--json"]);
-    assert_eq!(after["builds_on"][0]["current"], false, "the premise is no longer current");
     assert_eq!(after["builds_on"][0]["superseded_by"], amenbo_core::idref::decision(successor.parse().unwrap()), "names the successor");
 }
 
-/// A listing row says **who** overturned a decision, not merely that something did. `current` is a
-/// projection over the supersedes edges; `superseded_by` is those edges themselves, so a reader who finds
-/// a row historicised can go straight to the decision that replaced it, from the listing and without
-/// opening anything. Read off the same edges in the same pass, the two can never come to disagree.
+/// A listing row says **who** overturned a decision, not merely that something did. `superseded_by` is
+/// the edges themselves, so a reader who finds a row replaced can go straight to the decision that
+/// replaced it, from the listing and without opening anything. It is also the whole of what the row says
+/// on the subject (`AMB-D-410`), so there is no second field for it to disagree with.
 #[test]
 fn a_decision_listing_row_names_what_superseded_it() {
     let cli = Cli::new();
@@ -3598,26 +3597,23 @@ fn a_decision_listing_row_names_what_superseded_it() {
         r["superseded_by"].as_array().expect("always an array").iter().map(id_str).collect()
     };
 
-    // With no edge drawn, every row is current and names nobody — the field is present, not omitted.
+    // With no edge drawn, every row names nobody — the field is present, not omitted.
     let before = cli.json(&["decision", "list", "--json"]);
     for id in [&old, &newer, &untouched] {
-        assert_eq!(row(&before, id)["current"], true, "nothing has been overturned yet");
-        assert!(named(&row(&before, id)).is_empty(), "and so no row names a successor");
+        assert!(named(&row(&before, id)).is_empty(), "no row names a successor yet");
     }
 
     cli.json(&["decision", "supersede", &newer, "--replaces", &old, "--json"]);
 
     let after = cli.json(&["decision", "list", "--json"]);
     let overturned = row(&after, &old);
-    assert_eq!(overturned["current"], false, "the projection still says it was replaced");
     assert_eq!(
         named(&overturned),
         vec![amenbo_core::idref::decision(newer.parse().unwrap())],
         "and the row names the decision that replaced it, as its conversational ref"
     );
-    // The successor, and a decision no edge touches, stay empty — the projection and the edges agree.
+    // The successor, and a decision no edge touches, stay empty.
     for id in [&newer, &untouched] {
-        assert_eq!(row(&after, id)["current"], true);
         assert!(named(&row(&after, id)).is_empty());
     }
 }

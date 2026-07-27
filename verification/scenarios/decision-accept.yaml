@@ -7,7 +7,7 @@ title: A decision is proposed, accepted, reopened for a second look, replaced �
 description: >
   Walk one decision through every ruling it can meet, reading the store back after each: accepted
   (which freezes the body), reopened (which lifts the freeze), and superseded (which leaves it
-  readable but no longer current, with the chain on both ends). A second decision takes the third
+  readable, with the chain on both ends). A second decision takes the third
   ruling, rejection, whose reason lands on the timeline rather than in a field of its own.
   Acceptance is what other work waits on, so the status these lines read is the one a task's
   readiness is derived from.
@@ -59,15 +59,15 @@ steps:
       field: status
       equals: accepted
 
-  # An accepted decision nothing has replaced is the current one — the flag a reader goes by when
-  # asking whether this is still what holds.
+  # Nothing has replaced it, which is asked of the edges rather than of a word: `superseded:no` is
+  # the listing arm a reader narrows by when looking for what has not been overturned.
   - type: assert
     domain: decision
-    op: field
+    op: listed
     with:
+      filter: "superseded:no"
       target: rec
-      field: current
-      equals: true
+      present: true
 
   # A ruling is not a one-way door. Reopening un-settles it, which is what makes the body editable
   # again — the freeze is what acceptance is, so taking the ruling back has to lift it.
@@ -115,8 +115,8 @@ steps:
       equals: accepted
 
   # Superseding is how a settled decision is replaced rather than rewritten: the old one stays,
-  # readable and accepted, and stops being the current one. Both ends carry the chain, since a
-  # reader arriving at either has to be able to walk to the other.
+  # readable and accepted, and gains an edge naming what replaced it. Both ends carry the chain,
+  # since a reader arriving at either has to be able to walk to the other.
   - type: action
     domain: decision
     op: create
@@ -141,19 +141,19 @@ steps:
 
   - type: assert
     domain: decision
-    op: field
+    op: listed
     with:
+      filter: "superseded:no"
       target: successor
-      field: current
-      equals: true
+      present: true
 
   - type: assert
     domain: decision
-    op: field
+    op: listed
     with:
+      filter: "superseded:yes"
       target: rec
-      field: current
-      equals: false
+      present: true
 
   # Replaced, not deleted: what it decided is still there to read.
   - type: assert

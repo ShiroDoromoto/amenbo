@@ -4671,10 +4671,13 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             } else {
                 human(flags, count_header(result.count, result.total_matched, "decision"));
                 for d in &result.decisions {
-                    // "Superseded" is not a status, so a decision that has been overturned is marked on the
-                    // currency side instead.
-                    let state =
-                        if d.current { d.status.as_str().to_string() } else { format!("{}, superseded", d.status.as_str()) };
+                    // "Superseded" is not a status, and does not stand in place of one: a rejected decision
+                    // that was later replaced is both, so the edge is said after the status, not instead of it.
+                    let state = if d.superseded_by.is_empty() {
+                        d.status.as_str().to_string()
+                    } else {
+                        format!("{}, superseded", d.status.as_str())
+                    };
                     human(flags, format!("  {}  [{}] {} (tasks: {})", d.r#ref, state, d.title, d.linked_task_count));
                     // `--with-body`: follow with the body, indented — a body column on a narrowed page.
                     if let Some(body) = &d.body {
@@ -4693,11 +4696,6 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
             } else {
                 human(flags, format!("{}  {}", detail.r#ref, detail.title));
                 human(flags, format!("status: {}", detail.status.as_str()));
-                // Not current means another decision has replaced it; the "superseded by" line below names
-                // the successor.
-                if !detail.current {
-                    human(flags, "current: no");
-                }
                 // Each edge kind is a set — one decision may supersede or amend several others — so every
                 // edge gets its own line.
                 for (label, edges) in [
@@ -4714,10 +4712,9 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
                 // is called out on its own line: this decision stands on rotten ground and wants revisiting
                 // (the reason the edge type exists at all).
                 for p in detail.builds_on.iter() {
-                    let rot = match (p.current, p.superseded_by.as_deref()) {
-                        (false, Some(by)) => format!("  ⚠ premise superseded by {by} — revisit this decision"),
-                        (false, None) => "  ⚠ premise is no longer current — revisit this decision".to_string(),
-                        _ => String::new(),
+                    let rot = match p.superseded_by.as_deref() {
+                        Some(by) => format!("  ⚠ premise superseded by {by} — revisit this decision"),
+                        None => String::new(),
                     };
                     human(flags, format!("builds on: {} {}{rot}", decision_label(p.id), decision_ref_name(&p.name)));
                 }

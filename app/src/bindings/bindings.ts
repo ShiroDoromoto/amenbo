@@ -7,13 +7,13 @@ export type ActivityItemDto = { id: number,
  * and a decision comment can carry the same one (`AMB-D-388`). A front end that identifies rows —
  * to de-duplicate a page boundary, or to key a list — has to pair the two.
  */
-seq: number, at: string, ago: string, kind: "system" | "comment", author: ActorDto, target: ActivityTargetDto, event?: EventDto, text?: string, 
+seq: number, at: string, kind: "system" | "comment", author: ActorDto, target: ActivityTargetDto, event?: EventDto, text?: string, 
 /**
- * Comment rows only: relative time of a later in-place edit of the body. Absent when it was
- * never edited. No revision history is kept, so this is the only hint a reader gets that the
- * body is not what they read a moment ago.
+ * Comment rows only: when the body was later edited in place. Absent when it was never edited.
+ * No revision history is kept, so this is the only hint a reader gets that the body is not what
+ * they read a moment ago.
  */
-editedAgo?: string, };
+editedAt?: string, };
 
 export type ActivityTargetDto = { 
 /**
@@ -111,15 +111,15 @@ total: number | null, };
 /**
  * One permanent comment on a decision record, for the GUI. Task comments ride in the per-task
  * `task_activity` (kind=comment), but decisions have no activity path, so they get a read DTO of
- * their own. The author's facet is resolved to a display name from config, and the relative time
- * `ago` is worded here (the front end does nothing but render).
+ * their own. The author's facet is resolved to a display name from config; the times are sent as
+ * they are, for the front end to word.
  */
-export type DecisionCommentDto = { id: number, ago: string, author: ActorDto, text: string, 
+export type DecisionCommentDto = { id: number, at: string, author: ActorDto, text: string, 
 /**
- * Relative time of a later edit of the body. Absent when it was never edited (same meaning and
- * same treatment as [`ActivityItemDto::edited_ago`] on task comments).
+ * When the body was later edited. Absent when it was never edited (same meaning and same
+ * treatment as [`ActivityItemDto::edited_at`] on task comments).
  */
-editedAgo?: string, };
+editedAt?: string, };
 
 /**
  * One decision record. The real data behind the list, the detail view and the cross-links.
@@ -235,7 +235,26 @@ export type DoctorIssueDto = { kind: string, severity: string, target: string, p
  */
 export type DoctorReportDto = { ok: boolean, errors: number, warnings: number, issues: Array<DoctorIssueDto>, };
 
-export type EventDto = { kind: string, text: string, };
+/**
+ * A system event as the GUI needs it: the kind names the sentence template, and the rest are the
+ * values that go into it. No prose — the wording lives in the GUI's dictionary, in the reader's
+ * language, and the target's own name comes from [`ActivityTargetDto::title`] beside this.
+ */
+export type EventDto = { kind: string, 
+/**
+ * `task.status_changed`: the status the task moved to.
+ */
+status?: string, 
+/**
+ * `task.assigned`: the facet the task went to. Absent means the assignee was taken away, which
+ * is a different sentence rather than a missing value.
+ */
+toKind?: string, 
+/**
+ * `project.deleted`: how much went with the project. Both are always sent together, so the
+ * sentence can say "none of either" without having to tell absent from zero.
+ */
+tasks?: number, decisions?: number, };
 
 /**
  * What [`run_export`] returns: the directory it wrote to, how big it is, and how many attachments
@@ -1080,7 +1099,7 @@ export type TaskCardDto = { id: number, title: string,
 /**
  * The name it goes by on screen, `#<n>` (the display form of `id`).
  */
-ref: string, notes: string, projectId: number | null, status: "todo" | "in_progress" | "done" | "blocked" | "rejected", assignee: ActorDto | null, priority: "high" | "medium" | "low" | null, due: string | null, dueLabel: string | null, 
+ref: string, notes: string, projectId: number | null, status: "todo" | "in_progress" | "done" | "blocked" | "rejected", assignee: ActorDto | null, priority: "high" | "medium" | "low" | null, due: string | null, 
 /**
  * Completion timestamp (RFC3339 UTC). Used to sort the Done column newest-first, among other
  * things. None while the task is still open.

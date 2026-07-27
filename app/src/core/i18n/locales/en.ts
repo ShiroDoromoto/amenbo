@@ -394,13 +394,31 @@ const ui = {
   "plugins.removedPart.secrets": "secrets", "plugins.removedPart.consent": "the permission",
   "plugins.removedPart.runs": "the run log",
   "common.listSeparator": ", ",
-  // dynamic activity text (mutations.ts sysItem templates)
-  "common.you": "You", "act.justNow": "just now",
-  "act.created": "Created “{title}”", "act.completed": "Completed “{title}”",
-  "act.reopened": "Reopened “{title}”", "act.statusChanged": "Changed status of “{title}”",
+  // One activity line per event kind. The backend sends the kind and the values, never the
+  // sentence, so these are the only place a timeline line is worded — under Tauri and in the
+  // browser fallback alike (see eventText in ../index.ts).
+  "common.you": "You",
+  "act.created": "Created “{title}”",
+  "act.statusChanged": "Changed “{title}” to {status}",
+  "act.assigned": "Assigned “{title}”", "act.assignedAi": "Delegated “{title}” to AI",
+  "act.unassigned": "Unassigned “{title}”",
+  "act.moved": "Moved “{title}”", "act.unblocked": "“{title}” is now unblocked (ready)",
   "act.deleted": "Deleted “{title}”",
-  "act.assignedAi": "Delegated “{title}” to AI", "act.unassigned": "Unassigned “{title}”",
-  "act.assignedTo": "Assigned “{title}” to {name}",
+  "act.deletedWith": "Deleted “{title}” ({tasks}, {decisions})",
+  "act.updated": "Updated “{title}”",
+  "act.nTasks.one": "{n} task", "act.nTasks.other": "{n} tasks",
+  "act.nDecisions.one": "{n} decision", "act.nDecisions.other": "{n} decisions",
+  // The stand-in for a target whose name is past recovering: it was deleted, and the ledger row
+  // that carried the name is gone too. The backend sends an empty title and this fills the gap.
+  "act.nameless": "(deleted)",
+  // Relative time, and the due chip. Both are worded from a bare timestamp the backend sends.
+  "ago.justNow": "just now",
+  "ago.minutes.one": "{n} minute ago", "ago.minutes.other": "{n} minutes ago",
+  "ago.hours.one": "{n} hour ago", "ago.hours.other": "{n} hours ago",
+  "ago.days.one": "{n} day ago", "ago.days.other": "{n} days ago",
+  "due.today": "Today", "due.tomorrow": "Tomorrow", "due.yesterday": "Yesterday",
+  "due.inDays.one": "In {n} day", "due.inDays.other": "In {n} days",
+  "due.daysAgo.one": "{n} day ago", "due.daysAgo.other": "{n} days ago",
   // app / shell chrome
   "app.loadError": "Failed to load data.", "app.loading": "Loading…",
   // lint hook consent: the question amenbo asks before writing into .git/hooks

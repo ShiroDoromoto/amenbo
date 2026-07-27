@@ -6,6 +6,7 @@
 // missing key is the normal state rather than a fault — the screen shows the English string and
 // stays whole. What is *not* here shows up as the bare key, which is the one case nothing can
 // render.
+import type { EventDto } from "../../bindings/bindings";
 import { type ErrorCode, isErrorCode } from "../errorCodes";
 import { type DoctorIssueKind, isDoctorIssueKind } from "../doctorKinds";
 import type { Priority, Status } from "../../mock/types";
@@ -128,6 +129,99 @@ export function errText(e: unknown): string {
 
 export function statusLabel(s: Status, lang: Lang = currentLang()): string {
   return DICTS[lang].status[s] ?? en.status[s];
+}
+
+/**
+ * A counted noun, from the `.one` / `.other` pair under `base`. English needs the two forms and
+ * Japanese writes one, so the pair is what a dictionary can express in both; a language whose plural
+ * rules need more than a count of one will want `Intl.PluralRules` picking the arm instead.
+ */
+function counted(base: string, n: number, lang: Lang): string {
+  return tf(`${base}.${n === 1 ? "one" : "other"}`, { n }, lang);
+}
+
+/** How long ago, from a timestamp — the wording under every comment and activity line. */
+export function agoLabel(at: string, lang: Lang = currentLang(), now: number = Date.now()): string {
+  const secs = Math.max(0, Math.floor((now - new Date(at).getTime()) / 1000));
+  if (secs < 60) return t("ago.justNow", lang);
+  if (secs < 3600) return counted("ago.minutes", Math.floor(secs / 60), lang);
+  if (secs < 86400) return counted("ago.hours", Math.floor(secs / 3600), lang);
+  return counted("ago.days", Math.floor(secs / 86400), lang);
+}
+
+/**
+ * The due chip's wording, from the bare date core holds. Days are counted in whole calendar days
+ * from today, so "tomorrow" means the next date rather than 24 hours from now — which is what a due
+ * date means to the person who set it.
+ */
+export function dueLabel(due: string, lang: Lang = currentLang(), today: Date = new Date()): string {
+  // A due date is a day. Anything a caller has attached to it is cut off first, the same way
+  // `dueKind` colours the chip, so the two never disagree about which day this is.
+  const at = new Date(`${due.slice(0, 10)}T00:00:00`);
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const diff = Math.round((at.getTime() - start.getTime()) / 86_400_000);
+  if (diff === 0) return t("due.today", lang);
+  if (diff === 1) return t("due.tomorrow", lang);
+  if (diff === -1) return t("due.yesterday", lang);
+  return diff > 0 ? counted("due.inDays", diff, lang) : counted("due.daysAgo", -diff, lang);
+}
+
+/**
+ * The name a timeline row's target goes by. An empty one is not a blank to render: core sends it
+ * empty when the target is deleted **and** the ledger row that carried its name is past recovering
+ * (compacted away, or beyond the name lookback budget), so the reader gets a stand-in saying so.
+ */
+export function targetTitle(title: string, lang: Lang = currentLang()): string {
+  return title === "" ? t("act.nameless", lang) : title;
+}
+
+/**
+ * One system event as a line of prose. Like `doctorText`, the backend holds no wording for it — it
+ * sends the kind that names the template and the values that fill it — so this is where a timeline
+ * line is written, once, for both the Tauri path and the browser fallback. A kind this build has
+ * never heard of falls to the generic "updated" line rather than showing nothing.
+ */
+export function eventText(
+  event: EventDto,
+  title: string,
+  lang: Lang = currentLang(),
+): string {
+  const name = targetTitle(title, lang);
+  switch (event.kind) {
+    case "task.created":
+      return tf("act.created", { title: name }, lang);
+    case "task.status_changed": {
+      const s = event.status;
+      const status = s && isStatus(s) ? statusLabel(s, lang) : (s ?? "");
+      return tf("act.statusChanged", { title: name, status }, lang);
+    }
+    case "task.assigned":
+      if (event.toKind === undefined) return tf("act.unassigned", { title: name }, lang);
+      return tf(event.toKind === "ai" ? "act.assignedAi" : "act.assigned", { title: name }, lang);
+    case "task.moved":
+      return tf("act.moved", { title: name }, lang);
+    case "task.unblocked":
+      return tf("act.unblocked", { title: name }, lang);
+    case "task.deleted":
+    case "decision.deleted":
+      return tf("act.deleted", { title: name }, lang);
+    case "project.deleted": {
+      const tasks = event.tasks ?? 0;
+      const decisions = event.decisions ?? 0;
+      if (tasks + decisions === 0) return tf("act.deleted", { title: name }, lang);
+      return tf("act.deletedWith", {
+        title: name,
+        tasks: counted("act.nTasks", tasks, lang),
+        decisions: counted("act.nDecisions", decisions, lang),
+      }, lang);
+    }
+    default:
+      return tf("act.updated", { title: name }, lang);
+  }
+}
+
+function isStatus(s: string): s is Status {
+  return s in en.status;
 }
 export function priorityLabel(p: Priority, lang: Lang = currentLang()): string {
   return DICTS[lang].priority[p] ?? en.priority[p];

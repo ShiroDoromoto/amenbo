@@ -139,7 +139,7 @@ const TaskRow = memo(function TaskRow({
       {task.assignee && <FacetAvatar actor={task.assignee} />}
       <PriorityDot priority={task.priority} />
       {showUnread && <TriggeredAtChip at={task.triggeredAt} />}
-      <DueChip due={task.due} label={task.dueLabel} />
+      <DueChip due={task.due} />
       {(onMarkRead || onArchive || onUnarchive) && (
         <span className="row__actions">
           {unread && onMarkRead && (

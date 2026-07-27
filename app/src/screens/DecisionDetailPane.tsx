@@ -305,8 +305,8 @@ export function DecisionDetailPane({
                     key={c.id}
                     id={c.id}
                     author={c.author}
-                    ago={c.ago}
-                    editedAgo={c.editedAgo}
+                    at={c.at}
+                    editedAt={c.editedAt}
                     text={c.text}
                     target="decision_comment"
                     onEdit={(text) => editDecisionComment(c.id, d.id, text)}

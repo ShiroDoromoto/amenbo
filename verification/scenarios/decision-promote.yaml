@@ -1,12 +1,19 @@
 # Most decisions are first said in passing, on the timeline of the task that provoked them. Promotion
 # is the path from there to a record: the comment's text becomes the body, and the new decision comes
 # out linked to the task it was said on — so the rationale and the work it governs arrive attached.
+#
+# The other timeline a decision is first said on is another decision's, where an aside turns out to be
+# its own question. That promotion draws no link at all: nothing about the discussion it came out of
+# makes the new record depend on it, and the record it was raised from is left alone. So both sides
+# are walked here, and what separates them is what each one brings with it.
 id: decision-promote
-title: A comment promoted into a decision keeps its words and arrives linked to the task it was said on
+title: A comment promoted into a decision keeps its words, and brings the task it was said on — or, raised off another decision, nothing at all
 description: >
   Say something on a task's timeline, promote that comment into a decision, and read back the body
   it carries, the state it starts in, and the link it brought with it. Promotion crosses three
-  objects at once, which is exactly the shape a shipped build can half-carry.
+  objects at once, which is exactly the shape a shipped build can half-carry. Then do it again from a
+  decision's own timeline, on a project of its own: the words carry over the same way, the record is
+  filed where the decision it was raised from is filed, and it arrives with no edge whatsoever.
 steps:
   - type: action
     domain: task
@@ -73,3 +80,81 @@ steps:
       target: seed
       field: ready
       equals: false
+
+  # The other side. A shelf of its own, so "where did the new record land?" has an answer that is not
+  # "where everything else in this run landed".
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: SCENARIO SEED — the shelf the aside was made on
+    as: shelf
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — the decision that was being discussed
+      project: shelf
+    as: settled
+
+  - type: action
+    domain: decision
+    op: comment
+    with:
+      target: settled
+      text: SCENARIO — an aside that turned out to be its own question
+    as: aside
+
+  - type: action
+    domain: decision
+    op: comment-promote
+    with:
+      target: aside
+      title: SCENARIO SEED — raised out of a decision's own timeline
+    as: raised
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: raised
+      field: body
+      equals: SCENARIO — an aside that turned out to be its own question
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: raised
+      field: status
+      equals: proposed
+
+  # It is filed where the decision it was raised from is filed, not where the run happens to stand.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: raised
+      field: project.name
+      equals: SCENARIO SEED — the shelf the aside was made on
+
+  # And it arrives free: an aside is not the work of the decision it was said on, so there is no task
+  # to inherit and no premise to draw. A link invented here would make a record wait on a discussion.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: raised
+      field: linked_tasks
+      equals: []
+
+  # The decision it came out of is untouched — nothing points back at it either, which is the half a
+  # promotion that quietly drew an edge would fail.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: settled
+      field: superseded_by
+      equals: []

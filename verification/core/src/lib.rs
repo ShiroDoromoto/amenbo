@@ -240,7 +240,9 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "undepend", required: &["target", "on"], refs: &["target", "on"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "commit-add", required: &["target", "sha"], refs: &["target"], strings: &["sha"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "commit-rm", required: &["target", "sha"], refs: &["target"], strings: &["sha"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], refs: &[], strings: &["title"], binds: true },
+    // `project` names the shelf it is filed on, for a scenario about where a record ends up; left
+    // out, it is the run's own project like everything else.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
     // A decision's own life: the body is edited while it is still proposed, accepting freezes it,
     // and the link is what makes it a task's premise.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "edit", required: &["target", "body"], refs: &["target"], strings: &["body"], binds: false },
@@ -260,6 +262,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-edit", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-rm", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // The other promotion. A decision's comment is raised into a record of its own, and it is an op
+    // apart from the task side's because the two comment tables number independently: which one a
+    // number names is said in the ref, and a step cannot leave that to be guessed.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "comment-promote", required: &["target", "title"], refs: &["target"], strings: &["title"], binds: true },
     // The store as a whole. `export` and `backup` write a file the run keeps, and bind it by the
     // same `as:` every other producing op uses — so `restore` names the archive it puts back the
     // way a step names any other earlier result, and a mistyped name is caught here rather than in

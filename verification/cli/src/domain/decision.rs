@@ -12,7 +12,11 @@ impl Driver {
         match op {
             "create" => {
                 let title = req_str(with, "title")?;
-                let pid = self.project_id.to_string();
+                // A step that names no project files it where everything else in the run goes.
+                let pid = match with.get("project") {
+                    Some(_) => self.resolve_key(with, "project")?.to_string(),
+                    None => self.project_id.to_string(),
+                };
                 let v = self.run_json(&["decision", "add", "--title", title, "--project", &pid, "--json"])?;
                 let id = v["decision"]["id"].as_i64().ok_or("decision add did not report an id")?;
                 if let Some(name) = bind {
@@ -70,6 +74,19 @@ impl Driver {
                 let target = self.resolve(with)?;
                 self.run_json(&["decision", "comment", "rm", &target.to_string(), "--yes", "--json"])?;
                 Ok(Outcome::action(format!("deleted decision comment {target}")))
+            }
+            "comment-promote" => {
+                let target = self.resolve(with)?;
+                let title = req_str(with, "title")?;
+                // The two comment tables number independently, so a store holding both can have this
+                // id twice and a bare number is refused. This is the decision side; say so in the ref.
+                let target_ref = format!("AMB-DC-{target}");
+                let v = self.run_json(&["decision", "promote", &target_ref, "--title", title, "--json"])?;
+                let id = v["decision"]["id"].as_i64().ok_or("decision promote did not report an id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
+                Ok(Outcome::action(format!("raised decision comment {target} into decision {id}")))
             }
             "link" => {
                 let target = self.resolve(with)?;

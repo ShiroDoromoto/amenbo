@@ -40,6 +40,12 @@ prebuilt:
 #                update_check mapping assume a per-arch layout.
 #   linux .deb/.rpm … `make dist-gui-linux` (GUI+CLI to /usr/bin; for amd64 the Tauri CLI dies under
 #                      qemu, so GitHub Actions' native x86_64 runner release.yml is the primary path)
+#   linux AppImage … the same Tauri build's third artifact: the per-user route (needs no root; the
+#                    user puts it on PATH). Declared here so a first install has a URL in latest.json
+#                    (`linux-x64-appimage`) instead of only the Releases page. What the running GUI
+#                    downloads to update itself is a byte-identical copy under a `-update` name,
+#                    attached by release.yml via gh — deliberately not a bundle here, so the two
+#                    audiences' download counts stay apart.
 #   win  NSIS … built natively by public CI (release.yml's windows job runs `tauri build --bundles
 #               nsis`); registers GUI + bundled CLI on PATH; **unsigned** = the SmartScreen first-run
 #               warning is accepted.
@@ -51,4 +57,5 @@ bundle:
     - { os: darwin,  arch: amd64, kind: pkg,  path: dist/amenbo-darwin-amd64.pkg }
     - { os: linux,   arch: amd64, kind: deb,  path: dist/amenbo-app-linux-amd64.deb }
     - { os: linux,   arch: amd64, kind: rpm,  path: dist/amenbo-app-linux-x86_64.rpm }
+    - { os: linux,   arch: amd64, kind: appimage, path: dist/amenbo-app-linux-x86_64.AppImage }
     - { os: windows, arch: amd64, kind: nsis, path: dist/amenbo-app-windows-x64-setup.exe }

@@ -435,7 +435,7 @@ jobs:
             dist/amenbo-darwin-amd64.app.tar.gz dist/amenbo-darwin-amd64.app.tar.gz.sig \
             dist/amenbo-app-windows-x64-setup.exe.sig \
             dist/amenbo-app-windows-x64-setup-update.exe dist/amenbo-app-windows-x64-setup-update.exe.sig \
-            dist/amenbo-app-linux-x86_64.AppImage dist/amenbo-app-linux-x86_64.AppImage.sig \
+            dist/amenbo-app-linux-x86_64.AppImage.sig \
             dist/amenbo-app-linux-x86_64-update.AppImage dist/amenbo-app-linux-x86_64-update.AppImage.sig \
             dist/latest-tauri.json \
             --clobber
@@ -444,9 +444,9 @@ jobs:
       # never sees them — leaving them the only release assets without build provenance. wharfy verify
       # (and the weekly rot check) flags any partly-attested release red (attest_unverified), so attest
       # these here too, with the same keyless OIDC identity, bound to the exact bytes just uploaded.
-      # (The windows setup.exe a new install downloads is a wharfy-declared bundle and is already
-      # attested; what rides via gh is its detached .sig and the update-named copy, so those are the
-      # ones listed here.)
+      # (What a new install downloads on Windows and Linux — the setup.exe and the AppImage — is a
+      # wharfy-declared bundle and is already attested; what rides via gh is each one's detached .sig
+      # and the update-named copy, so those are the ones listed here.)
       - name: Attest the gh-attached updater artifacts
         uses: actions/attest-build-provenance@v4
         with:
@@ -458,7 +458,6 @@ jobs:
             dist/amenbo-app-windows-x64-setup.exe.sig
             dist/amenbo-app-windows-x64-setup-update.exe
             dist/amenbo-app-windows-x64-setup-update.exe.sig
-            dist/amenbo-app-linux-x86_64.AppImage
             dist/amenbo-app-linux-x86_64.AppImage.sig
             dist/amenbo-app-linux-x86_64-update.AppImage
             dist/amenbo-app-linux-x86_64-update.AppImage.sig
@@ -509,7 +508,7 @@ jobs:
             "amenbo-darwin-amd64.app.tar.gz" "amenbo-darwin-amd64.app.tar.gz.sig"
             "amenbo-app-windows-x64-setup.exe.sig"
             "amenbo-app-windows-x64-setup-update.exe" "amenbo-app-windows-x64-setup-update.exe.sig"
-            "amenbo-app-linux-x86_64.AppImage" "amenbo-app-linux-x86_64.AppImage.sig"
+            "amenbo-app-linux-x86_64.AppImage.sig"
             "amenbo-app-linux-x86_64-update.AppImage" "amenbo-app-linux-x86_64-update.AppImage.sig"
             "latest-tauri.json"
           )

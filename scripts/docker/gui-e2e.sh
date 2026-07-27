@@ -39,6 +39,11 @@ echo "== seed the store (CLI, before the GUI starts)"
 # not name a project, so the writes carry no --project.
 cd /work
 amenbo init --name Alice --actor ai
+# A store nobody has been welcomed into opens the GUI on first-run setup, and that dialog sits over
+# the board — the card under test is then half behind it, and OCR truthfully reports only the sliver
+# it can see. The question here is whether the board repaints, not whether a newcomer is greeted, so
+# the store arrives already welcomed.
+amenbo config set onboarded true --actor ai
 amenbo task add --title "SEED TASK BEFORE GUI" --actor ai
 
 echo "== start Xvfb"

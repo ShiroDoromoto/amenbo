@@ -555,16 +555,16 @@ vulnerability, don't use a public issue — follow [SECURITY.md](SECURITY.md).
 **Extending amenbo takes no pull request.** A plugin is just an executable in any
 language: amenbo hands it JSON on stdin and reads what it writes back. The contract an
 author works to — the two faces, the manifest, enabling, signatures — is
-**[Writing a plugin](https://amenbo.work/en/plugins/)**
-(also [in Japanese](https://amenbo.work/plugins/)); `amenbo plugin validate <manifest>`
+**[Writing a plugin](https://github.com/ShiroDoromoto/amenbo-plugins/blob/main/docs/writing-a-plugin.md)**
+(also [in Japanese](https://github.com/ShiroDoromoto/amenbo-plugins/blob/main/docs/writing-a-plugin.ja.md)); `amenbo plugin validate <manifest>`
 checks a manifest against the same rules amenbo enforces at its door.
 
 **Handing plugins out takes no server either.** A catalog is three static files, which a
 user registers by URL — the usual reason to run one is a closed shelf: plugins you have
 no intention of publishing, handed to people inside your own company. What to serve, and
 how to make and rotate the signing key your users pin, is
-**[Running a catalog](https://amenbo.work/en/catalogs/)**
-(also [in Japanese](https://amenbo.work/catalogs/)).
+**[Running a catalog](https://github.com/ShiroDoromoto/amenbo-plugins/blob/main/docs/running-a-catalog.md)**
+(also [in Japanese](https://github.com/ShiroDoromoto/amenbo-plugins/blob/main/docs/running-a-catalog.ja.md)).
 
 ## License
 

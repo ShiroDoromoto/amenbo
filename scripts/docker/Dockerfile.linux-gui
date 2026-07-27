@@ -1,4 +1,4 @@
-# Linux GUI build image for amenbo (Tauri v2). Produces AppImage + .deb inside a
+# Linux GUI build image for amenbo (Tauri v2). Produces the AppImage inside a
 # container so the mac host toolchain isn't involved. Built on Ubuntu 22.04
 # for a portable-enough glibc; webkit2gtk-4.1 (Tauri 2.x) ships in 22.04's universe.
 #
@@ -8,18 +8,17 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Tauri v2 Linux build deps + AppImage/deb tooling. webkit2gtk-4.1 (NOT 4.0) is the
+# Tauri v2 Linux build deps + AppImage tooling. webkit2gtk-4.1 (NOT 4.0) is the
 # one Tauri 2.x links; libayatana-appindicator3 backs the tray; librsvg renders the
 # icon; libdbus is for the notification plugin (zbus talks to the session bus).
-# `rpm` is only for querying the built .rpm in build-linux-gui.sh's CLI-on-PATH guard —
-# Tauri v2 builds the .rpm itself via the pure-Rust rpm crate (no rpmbuild needed).
+# `file` reads the built AppImage's ELF machine back in build-linux-gui.sh's arch guard.
 # `xdg-utils` supplies /usr/bin/xdg-open, which the AppImage bundler copies into the
 # AppDir and refuses to build without.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential curl wget file ca-certificates git rsync pkg-config \
       libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
       libayatana-appindicator3-dev libssl-dev libdbus-1-dev libxdo-dev \
-      patchelf fuse3 desktop-file-utils rpm xdg-utils \
+      patchelf fuse3 desktop-file-utils xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Node 24 (matches .tool-versions) via NodeSource.

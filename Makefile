@@ -101,10 +101,10 @@ GUI_PKG_AMD64 := $(DIST_DIR)/amenbo-darwin-amd64.pkg
 # installer does (notification authorization survives updates). The tar is AppleDouble-free
 # (COPYFILE_DISABLE) — a stray ._ file breaks the update's signature seal — then minisign-signed.
 MAC_UPDATER_DIST := $(DIST_DIR)/amenbo-darwin-$(MAC_GUI_ARCH).app.tar.gz
-# Linux GUI bundles are built inside a container for an explicit arch, pinned via --platform.
+# The Linux GUI bundle is built inside a container for an explicit arch, pinned via --platform.
 # amd64 is the default (Linux desktop is overwhelmingly x86_64); override with
-# LINUX_GUI_ARCH=arm64. deb uses amd64/arm64, rpm/AppImage use x86_64/aarch64, matching
-# each tool's convention. The .deb/.rpm ship the GUI + CLI on PATH; AppImage stays GUI-only.
+# LINUX_GUI_ARCH=arm64. The AppImage's own arch token is x86_64/aarch64, matching the tool's
+# convention. It carries the GUI alone — the CLI has its own install route.
 #   IMPORTANT: on Apple Silicon, amd64 is emulated via qemu and the Tauri CLI ABORTS
 #   (SIGABRT) mid-bundle — so amd64 does NOT build reliably here. The amd64 release build
 #   runs on a native x86_64 runner instead (.github/workflows/release.yml). Local
@@ -114,8 +114,6 @@ LINUX_GUI_IMAGE   := amenbo-linux-gui:latest
 LINUX_GUI_ARCH    ?= amd64
 LINUX_IMG_ARCH    := $(if $(filter arm64,$(LINUX_GUI_ARCH)),aarch64,x86_64)
 GUI_APPIMAGE_DIST := $(DIST_DIR)/amenbo-app-linux-$(LINUX_IMG_ARCH).AppImage
-GUI_DEB_DIST      := $(DIST_DIR)/amenbo-app-linux-$(LINUX_GUI_ARCH).deb
-GUI_RPM_DIST      := $(DIST_DIR)/amenbo-app-linux-$(LINUX_IMG_ARCH).rpm
 # The GUI e2e (verify-gui-linux) must run the HOST's arch: an emulated (qemu) amd64 build
 # aborts in the Tauri CLI, and an emulated GUI is not what we want to watch anyway.
 HOST_GUI_ARCH     := $(if $(filter arm64,$(shell uname -m)),arm64,amd64)
@@ -152,7 +150,7 @@ help:
 	@echo "make sweep-stale  - if the cargo cache exceeds $(SWEEP_LIMIT_GB)GB, drop artifacts untouched for $(SWEEP_DAYS) days (automatic at the end of make test)"
 	@echo "make dist-gui     - build the prod GUI (mac dmg) with build-time signing into dist/ (a supplement for non-installer users; not a wharfy bundle)"
 	@echo "make dist-gui-mac - build the mac unified .pkg (GUI to /Applications, CLI to /usr/local/bin) into dist/ (the mac release bundle itself; Intel build via MAC_GUI_ARCH=amd64)"
-	@echo "make dist-gui-linux - build the Linux GUI+CLI (.deb/.rpm bundling /usr/bin/amenbo) + AppImage in Docker into dist/ (needs Docker; partial build via BUNDLES=deb etc.)"
+	@echo "make dist-gui-linux - build the Linux GUI AppImage in Docker into dist/ (needs Docker)"
 	@echo "make verify-gui-linux - exercise 'another process writes → the screen updates' on a real Linux GUI over Xvfb (needs Docker)"
 	@echo "make verify-network-linux - stand up real NFS/SMB and exercise store_watch's network-FS detection (needs Docker; also runs every time in CI)"
 	@echo "make verify-network-mac - the macOS version of the above (MNT_LOCAL detection). Mounts real SMB over loopback and exercises it (needs Docker)"
@@ -209,7 +207,7 @@ hooks:
 ## CI -> the promote workflow.
 install:
 	@echo "✗ the prod CLI's 'make install' is retired (it ships in the unified installer)."
-	@echo "  install prod : take the unified installer from the GitHub Release (ShiroDoromoto/amenbo) (mac .pkg / win NSIS / linux .deb, rpm)"
+	@echo "  install prod : take the unified installer from the GitHub Release (ShiroDoromoto/amenbo) (mac .pkg / win NSIS / linux AppImage)"
 	@echo "  dev CLI      : make install-dev (~/.cargo/bin/amenbo-dev)"
 	@echo "  release      : tag push → public CI (release.yml builds prerelease + attestation) → verify → the promote workflow. The local gate is make release"
 	@exit 1
@@ -290,8 +288,8 @@ dist-gui-mac:
 verify-existing-store:
 	@scripts/open-existing-store.sh "$(GUI_PKG_DIST)" $(if $(STORE_HOME),"$(STORE_HOME)",)
 
-## Build the Linux GUI bundles (.deb + .rpm + AppImage) inside a Docker container and collect them
-## into dist/. The .deb/.rpm bundle the GUI + CLI (`/usr/bin/amenbo`); AppImage is GUI-only.
+## Build the Linux GUI bundle (the AppImage) inside a Docker container and collect it
+## into dist/. It carries the GUI alone — the CLI has its own install route.
 ## It never touches the mac host's toolchain / target/ / mac-native node_modules (it copies the
 ## source inside the container to build, and pulls back only the artifacts into dist/). Linux
 ## dependencies such as webkit2gtk-4.1 are isolated in scripts/docker/Dockerfile.linux-gui. Needs
@@ -304,23 +302,18 @@ dist-gui-linux:
 	@# volume so the AppImage step doesn't re-download from GitHub every build — repeated
 	@# unauthenticated downloads get rate-limited (HTTP 429). XDG_CACHE_HOME points Tauri
 	@# at the mounted volume. Per-arch volume (the tools are arch-specific).
-	@# BUNDLES lets you build a subset (e.g. `make dist-gui-linux BUNDLES=deb`) for a fast
-	@# partial verify; empty passes through as the container's default (deb,rpm,appimage).
 	@# TAURI_SIGNING_* (release CI secret) flows through so the AppImage stage emits the signed
 	@# updater artifact (.AppImage.sig); unset for a local build, where the AppImage stays
-	@# unsigned (GUI-only, no updater artifact).
+	@# unsigned (no updater artifact).
 	docker run --rm --platform linux/$(LINUX_GUI_ARCH) \
 	  -e VERSION="$(VERSION)" -e TARGET_ARCH="$(LINUX_GUI_ARCH)" -e XDG_CACHE_HOME=/cache \
-	  -e BUNDLES="$(BUNDLES)" \
 	  -e TAURI_SIGNING_PRIVATE_KEY -e TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
 	  -v "amenbo-tauri-cache-$(LINUX_GUI_ARCH):/cache" \
 	  -v "$(CURDIR):/src:ro" \
 	  -v "$(CURDIR)/$(DIST_DIR):/out" \
 	  $(LINUX_GUI_IMAGE) bash /src/scripts/docker/build-linux-gui.sh
-	@echo "→ Linux GUI bundles built (arch=$(LINUX_GUI_ARCH); bundles=$(if $(BUNDLES),$(BUNDLES),deb,rpm,appimage)):"
-	@# A partial build (BUNDLES=deb) leaves the others absent; list whatever landed rather
-	@# than fail on the missing ones (the container already named the collected/missing set).
-	@ls -1 $(DIST_DIR)/amenbo-app-linux-*.deb $(DIST_DIR)/amenbo-app-linux-*.rpm $(DIST_DIR)/amenbo-app-linux-*.AppImage 2>/dev/null || true
+	@echo "→ Linux GUI bundle built (arch=$(LINUX_GUI_ARCH)):"
+	@ls -1 $(DIST_DIR)/amenbo-app-linux-*.AppImage
 
 ## The scenario that drives verify-gui-linux — the single source every driver reads. Its
 ## listed/present title is the card the check writes and OCRs back; override to point the
@@ -358,7 +351,7 @@ verify-gui-linux: $(GUI_APPIMAGE_HOST) $(CLI_LINUX_HOST)
 	@echo "→ screenshots: $(DIST_DIR)/gui-e2e/{1-before,2-after,3-diff}.png"
 
 $(GUI_APPIMAGE_HOST):
-	$(MAKE) dist-gui-linux BUNDLES=appimage LINUX_GUI_ARCH=$(HOST_GUI_ARCH)
+	$(MAKE) dist-gui-linux LINUX_GUI_ARCH=$(HOST_GUI_ARCH)
 
 ## The CLI the e2e writes with, built for Linux. Cross-compiling from the mac is not possible (the
 ## same wall lint-linux describes), so it borrows the Linux image the lint uses — already carrying
@@ -642,7 +635,7 @@ gui-dev:
 install-gui:
 	@echo "✗ the prod GUI's 'make install-gui' is retired (it is distributed via the unified installer)."
 	@echo "  Replacing the prod amenbo.app locally clobbers the release-signed build."
-	@echo "  install prod : take the unified installer from the GitHub Release (ShiroDoromoto/amenbo) (mac .pkg / win NSIS / linux .deb, rpm)"
+	@echo "  install prod : take the unified installer from the GitHub Release (ShiroDoromoto/amenbo) (mac .pkg / win NSIS / linux AppImage)"
 	@echo "  dev GUI      : make install-gui-dev (amenbo (dev).app)"
 	@echo "  release      : tag push → public CI (release.yml builds prerelease + attestation) → verify → the promote workflow. The local gate is make release"
 	@exit 1

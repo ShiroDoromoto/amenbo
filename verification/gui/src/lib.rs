@@ -99,9 +99,33 @@ pub fn activate(app: &str) -> Result<(), String> {
     }
 }
 
+/// Fold a reading to the part of it OCR can be held to: the words, not the glyphs. Vision reads the
+/// words on a card reliably and the punctuation between them however it likes — an em dash comes
+/// back as a hyphen, a space, or nothing — so a verbatim comparison fails on a title no human would
+/// call misread. Case goes the same way, and a line break where the card wrapped folds to the single
+/// space the title was written with. Alphanumerics are what survives, Japanese included: the screen
+/// under test is in Japanese and is judged by this same rule.
+fn fold(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut pending_space = false;
+    for c in s.chars() {
+        if c.is_alphanumeric() {
+            if pending_space && !out.is_empty() {
+                out.push(' ');
+            }
+            pending_space = false;
+            out.extend(c.to_lowercase());
+        } else {
+            pending_space = true;
+        }
+    }
+    out
+}
+
 /// Read the text off a screenshot with `ocr.swift` (macOS Vision). Returns the recognized text as
 /// one string (Vision's per-region lines joined by newlines), which the caller
-/// judges an expected string against by substring. An error is an execution failure, not a miss:
+/// judges an expected string against by substring, both sides folded (`fold`). An error is an
+/// execution failure, not a miss:
 /// a shot Vision read but found no text in comes back as `Ok("")`.
 pub fn ocr(image: &Path, ocr_swift: &Path) -> Result<String, String> {
     let out = Command::new("swift")
@@ -381,7 +405,7 @@ where
             ("assert", Some(exp)) => {
                 let text = read_text(&shot_path)
                     .map_err(|e| format!("step {}: reading `{screenshot}` failed: {e}", i + 1))?;
-                let hit = text.contains(&exp.text);
+                let hit = fold(&text).contains(&fold(&exp.text));
                 let _ = std::fs::write(
                     evidence_dir.join(format!("{:02}-{kind}-{domain}-{op}.txt", i + 1)),
                     &text,
@@ -619,6 +643,22 @@ steps:
 
         let exp = ins.expectation(&s.steps[0]).expect("a detail assert is OCR-judged");
         assert_eq!(exp, Expectation { text: "Channel webhook".to_string(), present: true });
+    }
+
+    /// A title carrying an em dash is what the scenarios are actually written with, and Vision hands
+    /// it back as a hyphen. Judged verbatim, such a title can never match however plainly it is on
+    /// screen — so the reading and the expectation meet folded.
+    #[test]
+    fn a_reading_meets_its_expectation_through_the_words_alone() {
+        assert_eq!(fold("SCENARIO SEED — handed to me-ai"), "scenario seed handed to me ai");
+        assert!(fold("… SCENARIO SEED - handed to me-ai\nAMB-T-1 …")
+            .contains(&fold("SCENARIO SEED — handed to me-ai")));
+        // A card that wrapped mid-title reads as two lines, and folds back to the one it was written as.
+        assert!(fold("SCENARIO SEED — handed to\nme-ai").contains(&fold("handed to me-ai")));
+        // Japanese is words too, so a screen in Japanese is judged by the same rule.
+        assert_eq!(fold("入れたあとに設定するもの: Channel webhook (必須)"), "入れたあとに設定するもの channel webhook 必須");
+        // What is not there is still not there.
+        assert!(!fold("some other card").contains(&fold("SEED")));
     }
 
     #[test]

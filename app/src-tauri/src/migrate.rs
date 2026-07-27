@@ -201,14 +201,14 @@ pub fn gate() -> Result<(), CmdError> {
         "failed" => Err(status.error.clone().unwrap_or_else(|| {
             CmdError::coded(
                 "migration_failed",
-                "ストアの移行に失敗しました。",
                 "The store's migration failed.",
+                serde_json::Value::Null,
             )
         })),
         "running" => Err(CmdError::coded(
             "migration_running",
-            "ストアを更新しています。終わるまでお待ちください。",
             "The store is being updated. Wait for it to finish.",
+            serde_json::Value::Null,
         )),
         _ => Ok(()),
     }

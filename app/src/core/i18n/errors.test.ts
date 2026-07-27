@@ -1,7 +1,9 @@
 // A Tauri command reports failure as a structured CmdError (src-tauri/error.rs). The front end maps the code to a
 // per-language template, falling back to message (ja) / message_en (en) for codes that have no template.
 import { describe, it, expect } from "vitest";
+import { TAURI_ERROR_CODES } from "../errorCodes";
 import { errLabel, errText, type CmdError } from "./index";
+import { en } from "./locales/en";
 
 const bindingStale: CmdError = {
   code: "binding_stale",
@@ -25,6 +27,15 @@ const notFound: CmdError = {
   fields: null,
 };
 
+// A refusal the Tauri layer raises itself. It carries no Japanese — the sentence a Japanese reader
+// gets is the template here, built from the fields.
+const nestedTree: CmdError = {
+  code: "binding_nested_tree",
+  message: "this folder is already inside an amenbo-managed tree (bound at /work/repo); binding a subfolder would shadow that pointer",
+  message_en: "this folder is already inside an amenbo-managed tree (bound at /work/repo); binding a subfolder would shadow that pointer",
+  fields: { path: "/work/repo" },
+};
+
 describe("errLabel", () => {
   it("interpolates a code that has a template with its fields (per language)", () => {
     expect(errLabel(bindingStale, "ja")).toBe("プロジェクトの紐付け先ディレクトリが見つかりません: /gone");
@@ -34,6 +45,16 @@ describe("errLabel", () => {
   it("interpolates array fields as a comma-separated list", () => {
     expect(errLabel(ambiguous, "ja")).toContain("候補: abc, abd");
     expect(errLabel(ambiguous, "en")).toContain("(abc, abd)");
+  });
+
+  it("writes a Tauri-raised refusal in the reader's language, from its fields alone", () => {
+    expect(errLabel(nestedTree, "ja")).toBe(
+      "このフォルダは既に amenbo の管理ツリーの中にあります（/work/repo で紐付け済み）。サブフォルダを紐付けると上位のポインタが隠れます。",
+    );
+    expect(errLabel(nestedTree, "en")).toContain("bound at /work/repo");
+    // The English it arrives with is what a reader gets only where no template exists, so the
+    // Japanese above must not be it.
+    expect(errLabel(nestedTree, "ja")).not.toBe(nestedTree.message);
   });
 
   it("a code with no template falls back to the per-language message", () => {
@@ -56,5 +77,16 @@ describe("errText", () => {
   it("a non-CmdError object falls back to String() (the check that avoids [object Object])", () => {
     // An object that does not carry all of code/message/message_en is not treated as a structured error.
     expect(errText({ foo: "bar" })).toBe("[object Object]");
+  });
+});
+
+// A code core raises carries an English sentence of its own, so a missing template still reads.
+// A code raised here does not: nothing else holds a sentence for it, and without a template the
+// reader would be shown the bare English one whatever language they are in. So every one of them
+// must have a template, and adding a refusal means adding its sentence in the same breath.
+describe("the codes this layer raises itself", () => {
+  it("all have an English template, which is where their sentence lives", () => {
+    const missing = TAURI_ERROR_CODES.filter((code) => !en.err[code]);
+    expect(missing).toEqual([]);
   });
 });

@@ -2683,13 +2683,10 @@ pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck,
         return Err(CmdError::coded(
             "init_pointer_exists",
             format!(
-                "このフォルダ（または上位）は既に amenbo プロジェクトに紐付いています: {}",
-                bound_dir.display()
-            ),
-            format!(
                 "this folder (or an ancestor) is already bound to an amenbo project: {}",
                 bound_dir.display()
             ),
+            serde_json::json!({ "path": bound_dir.display().to_string() }),
         ));
     }
     if amenbo_core::agents::dir_has_managed_block(path) {
@@ -2707,13 +2704,13 @@ pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck,
                 return Err(CmdError::coded(
                     "init_ambiguous_owners",
                     format!(
-                        "このフォルダは複数の生存プロジェクトが所有を主張しており、どれを復旧すべきか一意に決められません（候補: {candidates}）: {}",
-                        path.display()
-                    ),
-                    format!(
                         "several living projects claim this folder, so the lost pointer can't be recovered unambiguously (candidates: {candidates}): {}",
                         path.display()
                     ),
+                    serde_json::json!({
+                        "path": path.display().to_string(),
+                        "candidates": candidates,
+                    }),
                 ));
             }
             _ => {}
@@ -2960,13 +2957,10 @@ pub fn project_bind_folder(project_id: i64, dir: String) -> Result<WriteAck, Cmd
         return Err(CmdError::coded(
             "binding_nested_tree",
             format!(
-                "このフォルダは既に amenbo 管理ツリーの中にあります（{} で紐付け済み）。サブフォルダを紐付けると上位のポインタをシャドウします。",
-                bound_dir.display()
-            ),
-            format!(
                 "this folder is already inside an amenbo-managed tree (bound at {}); binding a subfolder would shadow that pointer",
                 bound_dir.display()
             ),
+            serde_json::json!({ "path": bound_dir.display().to_string() }),
         ));
     }
     let store = open_store()?;
@@ -4375,24 +4369,18 @@ fn agreed_pin(
         Some(agreed) => Err(CmdError::coded(
             "plugin_catalog_key_changed",
             format!(
-                "{} の鍵が、確認した指紋（{agreed}）から {serving} に変わりました。登録し直して、新しい指紋を確かめてください。",
-                probe.url
-            ),
-            format!(
                 "{} now publishes {serving}, not the {agreed} you were shown — register it again and check the new fingerprint.",
                 probe.url
             ),
+            serde_json::json!({ "url": probe.url, "agreed": agreed, "serving": serving }),
         )),
         None => Err(CmdError::coded(
             "plugin_catalog_consent_required",
             format!(
-                "{} を登録すると署名鍵（{serving}）を信頼することになります。指紋を確認してから登録してください。",
-                probe.url
-            ),
-            format!(
                 "registering {} trusts its signing key ({serving}) — agree to the fingerprint before it is pinned.",
                 probe.url
             ),
+            serde_json::json!({ "url": probe.url, "serving": serving }),
         )),
     }
 }

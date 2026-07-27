@@ -532,6 +532,19 @@ const ui = {
 const err: Partial<Record<ErrorCode, string>> = {
   ambiguous_id: "The id “{prefix}” matches multiple candidates ({candidates})",
   binding_stale: "The linked project directory was not found: {path}",
+  // The refusals the Tauri layer raises itself, for contexts core knows nothing about. Their
+  // sentences live here rather than in Rust, so the reader gets them in their own language.
+  init_pointer_exists: "This folder (or one above it) is already bound to an amenbo project: {path}",
+  init_ambiguous_owners:
+    "Several living projects claim this folder ({candidates}), so the lost marker cannot be put back for one of them: {path}",
+  binding_nested_tree:
+    "This folder is already inside an amenbo-managed tree (bound at {path}). Binding a subfolder would hide the pointer above it.",
+  migration_failed: "The store's update failed.",
+  migration_running: "The store is being updated. Wait for it to finish.",
+  plugin_catalog_consent_required:
+    "Registering {url} means trusting its signing key ({serving}). Check the fingerprint before it is pinned.",
+  plugin_catalog_key_changed:
+    "{url} now publishes {serving}, not the {agreed} you were shown. Register it again and check the new fingerprint.",
 };
 
 // doctor issue kind → template (`{name}` interpolated from the issue's params).

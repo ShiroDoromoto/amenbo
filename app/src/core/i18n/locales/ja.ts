@@ -518,6 +518,17 @@ export const ja: Translation = {
   err: {
     ambiguous_id: "ID「{prefix}」は複数の候補に一致します（候補: {candidates}）",
     binding_stale: "プロジェクトの紐付け先ディレクトリが見つかりません: {path}",
+    init_pointer_exists: "このフォルダ（または上位）は既に amenbo プロジェクトに紐付いています: {path}",
+    init_ambiguous_owners:
+      "このフォルダは複数の生存プロジェクト（{candidates}）が所有を主張しており、どれの目印を戻すか決められません: {path}",
+    binding_nested_tree:
+      "このフォルダは既に amenbo の管理ツリーの中にあります（{path} で紐付け済み）。サブフォルダを紐付けると上位のポインタが隠れます。",
+    migration_failed: "ストアの更新に失敗しました。",
+    migration_running: "ストアを更新しています。終わるまでお待ちください。",
+    plugin_catalog_consent_required:
+      "{url} を登録すると、その署名鍵（{serving}）を信頼することになります。指紋を確かめてから登録してください。",
+    plugin_catalog_key_changed:
+      "{url} の鍵が、確認した指紋（{agreed}）から {serving} に変わりました。登録し直して、新しい指紋を確かめてください。",
   },
 
   doctor: {

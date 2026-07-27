@@ -15,12 +15,16 @@
 //! build answers for (`AMB-D-389`), taken from the same resolution — an update is not a way to install
 //! bytes from a catalog whose key nothing was pinned to.
 //!
-//! **What an update resolves against is the merged view, by name.** A plugin installed from a registered
-//! catalog is therefore updated from it, which is the point; the seam is that a name is all an installed
-//! plugin records, so should a catalog earlier in the order start publishing that same name, the update
-//! would come from there instead. Recording which catalog an install came from is what closes that, and
-//! it is its own change (`AMB-T-2281`). What is written goes through [`plugin_install::place`], so the install order
-//! holds — the executable first, `manifest.json` last.
+//! **What an update resolves against is the catalog the install came from**
+//! ([`plugin_installed::Origin`], `AMB-D-389`) — not the merged view by name. The merged view is how a
+//! plugin is *found*, and a name in it belongs to whoever the fold gave it to; an update is not looking
+//! for a plugin, it is replacing bytes that came from somewhere, and that somewhere is recorded beside
+//! them. Resolving by name would mean a catalog earlier in the order publishing that name became the
+//! place the next update fetched from — and, since each catalog answers for its own key, the swap would
+//! verify against the new publisher's key and look exactly like an ordinary update. A name the recorded
+//! catalog has stopped carrying is therefore no update at all, which is the honest answer: the shelf that
+//! served this build has nothing newer on it. What is written goes through [`plugin_install::place`], so
+//! the install order holds — the executable first, `manifest.json` last.
 //!
 //! **What an update leaves alone is as much the contract as what it moves.** The enable gate, the config
 //! values and the secrets are all keyed by the plugin's name, in stores this module never opens: it
@@ -75,6 +79,7 @@ use std::path::PathBuf;
 use crate::config::Paths;
 use crate::error::{Error, Result};
 use crate::plugin_catalog::{self, DiscoveredEntry, Discovery};
+use crate::plugin_installed::Origin;
 use crate::plugin_manifest::{Manifest, Platform};
 use crate::plugin_subscribe::InstalledPlugin;
 use crate::plugin_wire::ListEntry;
@@ -143,13 +148,14 @@ pub fn differs(installed: &Manifest, available: &Manifest, here: Platform) -> bo
 /// without a network or a disk.
 ///
 /// Name-sorted, because [`plugin_installed::installed`] is: a listing and a check see the same order. A
-/// plugin the catalog does not list is passed over — it may have been installed by hand or delisted since,
-/// and neither is something this layer can offer to fix.
+/// plugin **its own catalog** does not list is passed over ([`Discovery::find_from`]) — it may have been
+/// installed by hand, or delisted since, or the name may now belong to another catalog entirely, and none
+/// of the three is something this layer can offer to fix.
 pub fn compare(installed: &[InstalledPlugin], view: &Discovery) -> Vec<Candidate> {
     installed
         .iter()
         .filter_map(|plugin| {
-            let found = view.find(&plugin.name)?;
+            let found = view.find_from(&plugin.name, plugin.origin.as_ref())?;
             moved(&plugin.manifest, &found.entry).then(|| Candidate {
                 name: plugin.name.clone(),
                 installed: plugin.manifest.clone(),
@@ -304,8 +310,9 @@ pub fn backup_manifest_path(paths: &Paths, name: &str) -> PathBuf {
 /// what moved in it was another platform's asset and not this machine's.
 ///
 /// Refuses, leaving the install untouched, when the plugin is not installed (that is `plugin install`'s
-/// door), when the catalog does not list it (installed by hand, or delisted since — there is no build to
-/// move to), when the offered build cannot run on this amenbo, when the caller's `approve` gate holds it
+/// door), when the catalog it came from does not list it (installed by hand, delisted since, or a record
+/// too old to name a catalog — [`no_build_for`] says which), when the offered build cannot run on this
+/// amenbo, when the caller's `approve` gate holds it
 /// back (a new `required` setting an enabled plugin has no value for — `AMB-D-359`), or when its asset does
 /// not verify.
 ///
@@ -327,12 +334,9 @@ pub fn apply(
         )
     })?;
     let view = plugin_catalog::for_install(paths)?;
-    let found = view.find(name).ok_or_else(|| {
-        Error::not_found(
-            format!("no catalog lists a plugin named '{name}', so there is no build to update to"),
-            format!("プラグイン '{name}' はどのカタログにも無いので、更新先の版がありません"),
-        )
-    })?;
+    let found = view
+        .find_from(name, installed.origin.as_ref())
+        .ok_or_else(|| no_build_for(&view, name, installed.origin.as_ref()))?;
     // The list's answer first: unmoved there, and nothing about this plugin's install has changed at all,
     // so the second document need not be fetched to establish it.
     if !moved(&installed.manifest, &found.entry) {
@@ -349,7 +353,45 @@ pub fn apply(
     // The caller's gate on the new schema, before the download (see the module docs): a refusal keeps the
     // working build exactly as it was.
     approve(&update.available)?;
-    replace(paths, &update, &candidate.found.trust_root()?).map(Some)
+    replace(paths, &update, &candidate.found.trust_root()?, &candidate.found.origin()).map(Some)
+}
+
+/// Why there is nothing to update to, said in terms of the shelf that was actually looked on.
+///
+/// "No catalog lists it" would be the wrong sentence for every one of these: the look-up was never across
+/// every catalog. A catalog that has been unregistered, one that could not be answered, one that dropped
+/// the entry, and an install too old to say where it came from are four situations, three of which the
+/// user can do something about — and the sentence is what tells them which one they are in.
+fn no_build_for(view: &Discovery, name: &str, origin: Option<&Origin>) -> Error {
+    let url = match origin {
+        Some(Origin::Catalog(url)) => url,
+        Some(Origin::Official) => {
+            return Error::not_found(
+                format!("the official catalog does not list a plugin named '{name}', so there is no build to update to"),
+                format!("公式カタログにプラグイン '{name}' は無いので、更新先の版がありません"),
+            )
+        }
+        None => {
+            return Error::not_found(
+                format!("'{name}' does not record which catalog it came from, so it is looked for in the official catalog, which does not list it. Uninstall and install it again to record where it comes from."),
+                format!("'{name}' はどの配布元から入れたかを記録していないため公式カタログを見ますが、そこには載っていません。uninstall して install し直すと配布元が記録されます。"),
+            )
+        }
+    };
+    match view.sources.iter().find(|s| &s.url == url) {
+        None => Error::not_found(
+            format!("'{name}' was installed from {url}, which is no longer a registered catalog — register it again to update from it (amenbo updates a plugin only from the catalog it came from)"),
+            format!("'{name}' の配布元 {url} は登録が解除されています——更新するには登録し直してください（更新は install した配布元からのみ行います）"),
+        ),
+        Some(source) if !source.reachable => Error::not_found(
+            format!("'{name}' was installed from {url}, which did not answer and has nothing cached — there is nothing to compare its build against"),
+            format!("'{name}' の配布元 {url} は応答せず、キャッシュもありません——版を比べる相手がありません"),
+        ),
+        Some(_) => Error::not_found(
+            format!("'{name}' was installed from {url}, which no longer lists it — there is no build to update to (amenbo updates a plugin only from the catalog it came from)"),
+            format!("'{name}' の配布元 {url} は、もうこのプラグインを載せていません——更新先の版がありません（更新は install した配布元からのみ行います）"),
+        ),
+    }
 }
 
 /// Apply every update the catalog holds, one plugin at a time.
@@ -382,7 +424,11 @@ pub fn apply_all(
                 match candidate
                     .found
                     .trust_root()
-                    .and_then(|root| approve(&update.available).and_then(|()| replace(paths, &update, &root)))
+                    .and_then(|root| {
+                        approve(&update.available).and_then(|()| {
+                            replace(paths, &update, &root, &candidate.found.origin())
+                        })
+                    })
                 {
                     Ok(replaced) => Outcome::Replaced(Box::new(replaced)),
                     Err(error) => Outcome::Failed { name: update.name, error },
@@ -400,7 +446,12 @@ pub fn apply_all(
 /// The order is the safety story (see the module docs): the two gates that can refuse run before the
 /// network, and the network runs before anything on disk is touched, so a plugin that fails any of them
 /// is left exactly as it was.
-fn replace(paths: &Paths, update: &Update, root: &crate::plugin_provenance::TrustRoot) -> Result<Replaced> {
+fn replace(
+    paths: &Paths,
+    update: &Update,
+    root: &crate::plugin_provenance::TrustRoot,
+    origin: &Origin,
+) -> Result<Replaced> {
     // A build this amenbo cannot speak to is not an improvement. Refusing here keeps a working plugin
     // working — the alternative is replacing it with one that will be dropped at dispatch.
     if let Err(why) = plugin_compat::check(&update.available) {
@@ -408,7 +459,7 @@ fn replace(paths: &Paths, update: &Update, root: &crate::plugin_provenance::Trus
     }
     // Off the network and through the trust gates (`AMB-D-351`) — the same door the first install used.
     let program = plugin_install::fetch_verified_program(&update.available, root)?;
-    retain_and_place(paths, update, &program)
+    retain_and_place(paths, update, &program, origin)
 }
 
 /// The disk half of [`replace`], with the verified bytes handed in — the seam a test drives, since
@@ -417,11 +468,22 @@ fn replace(paths: &Paths, update: &Update, root: &crate::plugin_provenance::Trus
 /// Retain first, overwrite second: the previous executable **and** the manifest describing it are copied
 /// aside before [`plugin_install::place`] writes over either, so the pair a rollback needs is complete
 /// from the first byte of the replacement onward.
-fn retain_and_place(paths: &Paths, update: &Update, program: &[u8]) -> Result<Replaced> {
+///
+/// The origin is re-written rather than left alone, and it is the same one the resolution used, so for a
+/// plugin that had a record this changes nothing. What it does is finish the record for an install made
+/// before there was one: such a plugin resolved on the official shelf to get here, so that is what it
+/// came from, and after one update it says so.
+fn retain_and_place(
+    paths: &Paths,
+    update: &Update,
+    program: &[u8],
+    origin: &Origin,
+) -> Result<Replaced> {
     let name = &update.name;
     std::fs::copy(plugin_installed::program_path(paths, name), backup_path(paths, name))?;
     std::fs::copy(plugin_installed::manifest_path(paths, name), backup_manifest_path(paths, name))?;
 
+    plugin_installed::record_origin(paths, name, origin)?;
     let placed = plugin_install::place(paths, &update.available, program)?;
     Ok(Replaced {
         name: name.clone(),
@@ -565,6 +627,7 @@ mod tests {
             name: name.to_string(),
             program: std::path::PathBuf::from("/dev/null"),
             manifest: manifest(name, checksum),
+            origin: Some(Origin::Official),
         }
     }
 
@@ -627,6 +690,7 @@ mod tests {
             name: "worktree".to_string(),
             program: std::path::PathBuf::from("/dev/null"),
             manifest: by_hand,
+            origin: Some(Origin::Official),
         }];
 
         assert!(compare(&installed, &catalog(vec![manifest("worktree", "bb")])).is_empty());
@@ -637,6 +701,124 @@ mod tests {
     fn a_plugin_the_catalog_does_not_list_is_passed_over() {
         let installed = vec![installed_plugin("homemade", "aa")];
         assert!(compare(&installed, &catalog(vec![manifest("worktree", "bb")])).is_empty());
+    }
+
+    /// The same manifests as one catalog would serve them, but from a registered catalog rather than the
+    /// official one.
+    fn third_party_catalog(url: &str, entries: Vec<Manifest>) -> Discovery {
+        Discovery::served_by(
+            url,
+            false,
+            Some("RWSgV8uCt8tyYg74JbwBblWoE+g7bxSGvK8blkKW7gUo3EuBXaqy5oMR"),
+            crate::plugin_catalog::Catalog {
+                generated_at: None,
+                entries: entries.iter().map(listed).collect(),
+                dropped: Vec::new(),
+            },
+        )
+    }
+
+    /// The whole point of recording where an install came from: a catalog that starts publishing a name
+    /// already installed from somewhere else offers that install nothing. Without this the update would
+    /// fetch from the new publisher — and verify, against the new publisher's key.
+    #[test]
+    fn another_catalog_publishing_the_same_name_offers_no_update() {
+        let src = "https://example.invalid/third/catalog.json";
+        let mut installed = installed_plugin("worktree", "aa");
+        installed.origin = Some(Origin::Catalog(src.to_string()));
+
+        // The official catalog now carries the name too, with a different build behind it.
+        assert!(
+            compare(std::slice::from_ref(&installed), &catalog(vec![manifest("worktree", "bb")]))
+                .is_empty(),
+            "the official catalog is not this plugin's publisher"
+        );
+
+        // Its own catalog is, and there the newer build is an update.
+        let candidates =
+            compare(&[installed], &third_party_catalog(src, vec![manifest("worktree", "bb")]));
+        assert_eq!(candidates.len(), 1, "the catalog it came from still offers it");
+        assert_eq!(candidates[0].found.source, src);
+    }
+
+    /// An install too old to record its origin is looked for on the official shelf, and nowhere else.
+    #[test]
+    fn an_install_with_no_recorded_origin_is_only_offered_the_official_build() {
+        let mut installed = installed_plugin("worktree", "aa");
+        installed.origin = None;
+
+        assert_eq!(
+            compare(std::slice::from_ref(&installed), &catalog(vec![manifest("worktree", "bb")]))
+                .len(),
+            1,
+            "the official catalog answers for it"
+        );
+        assert!(
+            compare(
+                &[installed],
+                &third_party_catalog(
+                    "https://example.invalid/third/catalog.json",
+                    vec![manifest("worktree", "bb")]
+                )
+            )
+            .is_empty(),
+            "and a registered catalog that now carries the name does not"
+        );
+    }
+
+    /// A view in which `src` is registered, and answered or did not.
+    fn view_with_source(src: &str, reachable: bool) -> Discovery {
+        Discovery {
+            entries: Vec::new(),
+            shadowed: Vec::new(),
+            sources: vec![crate::plugin_catalog::DiscoveredSource {
+                url: src.to_string(),
+                name: "an internal catalog".to_string(),
+                fingerprint: None,
+                official: false,
+                reachable,
+                offered: 0,
+            }],
+            dropped: Vec::new(),
+        }
+    }
+
+    /// The ways there is nothing to update to read differently, because they are different situations —
+    /// unregistered, unreachable, delisted, and an install with no record — and the sentence is what tells
+    /// the user which one they are in.
+    #[test]
+    fn the_refusal_names_the_shelf_that_was_looked_on() {
+        let src = "https://example.invalid/third/catalog.json";
+        let from = Some(Origin::Catalog(src.to_string()));
+        let empty = || Discovery {
+            entries: Vec::new(),
+            shadowed: Vec::new(),
+            sources: Vec::new(),
+            dropped: Vec::new(),
+        };
+
+        let gone = no_build_for(&empty(), "worktree", from.as_ref());
+        assert_eq!(gone.code(), "not_found");
+        assert!(format!("{gone:?}").contains("register it again"), "unregistered: {gone:?}");
+
+        let silent = no_build_for(&view_with_source(src, false), "worktree", from.as_ref());
+        assert!(format!("{silent:?}").contains("did not answer"), "unreachable: {silent:?}");
+
+        let delisted = no_build_for(&view_with_source(src, true), "worktree", from.as_ref());
+        assert!(format!("{delisted:?}").contains("no longer lists it"), "delisted: {delisted:?}");
+        assert!(format!("{delisted:?}").contains(src), "and the catalog is named: {delisted:?}");
+
+        let official = no_build_for(&empty(), "worktree", Some(&Origin::Official));
+        assert!(
+            format!("{official:?}").contains("official catalog"),
+            "the official shelf is named: {official:?}"
+        );
+
+        let unrecorded = no_build_for(&empty(), "worktree", None);
+        assert!(
+            format!("{unrecorded:?}").contains("install it again"),
+            "and an install with no record is told how to get one: {unrecorded:?}"
+        );
     }
 
     /// Several installs are answered in the order they came in — the name-sorted one.
@@ -679,6 +861,7 @@ mod tests {
             name: "worktree".to_string(),
             program: std::path::PathBuf::from("/dev/null"),
             manifest: installed_manifest.clone(),
+            origin: Some(Origin::Official),
         }];
 
         // Only Linux was rebuilt.
@@ -789,7 +972,12 @@ mod tests {
         after.desc = "the newer build".to_string();
 
         let replaced =
-            retain_and_place(&paths, &update_of(before.clone(), after.clone()), b"#!/bin/sh\nnew\n")
+            retain_and_place(
+                &paths,
+                &update_of(before.clone(), after.clone()),
+                b"#!/bin/sh\nnew\n",
+                &Origin::Official,
+            )
                 .unwrap();
 
         assert_eq!(std::fs::read(&replaced.program).unwrap(), b"#!/bin/sh\nnew\n");
@@ -812,6 +1000,30 @@ mod tests {
         assert!(compare(&[read], &catalog(vec![after])).is_empty(), "and it is current");
     }
 
+    /// An update writes the origin down, which is how an install made before there was a record gets one:
+    /// it resolved on the official shelf to be updated at all, so that is what it says afterwards.
+    #[test]
+    fn applying_records_the_shelf_the_build_came_from() {
+        let paths = paths_at("apply-origin");
+        let before = manifest("worktree", "aa");
+        install_on_disk(&paths, &before, b"old");
+        assert_eq!(plugin_installed::origin(&paths, "worktree"), None, "nothing recorded yet");
+
+        let src = "https://example.invalid/third/catalog.json";
+        retain_and_place(
+            &paths,
+            &update_of(before, manifest("worktree", "bb")),
+            b"new",
+            &Origin::Catalog(src.to_string()),
+        )
+        .unwrap();
+
+        assert_eq!(
+            plugin_installed::read(&paths, "worktree").unwrap().origin,
+            Some(Origin::Catalog(src.to_string()))
+        );
+    }
+
     /// A second update overwrites the retained build rather than accumulating: a rollback goes back one
     /// step, and only one (`AMB-D-359` — one `.bak`).
     #[test]
@@ -822,8 +1034,9 @@ mod tests {
         let second = manifest("worktree", "bb");
         let third = manifest("worktree", "cc");
 
-        retain_and_place(&paths, &update_of(first, second.clone()), b"two").unwrap();
-        retain_and_place(&paths, &update_of(second.clone(), third), b"three").unwrap();
+        retain_and_place(&paths, &update_of(first, second.clone()), b"two", &Origin::Official).unwrap();
+        retain_and_place(&paths, &update_of(second.clone(), third), b"three", &Origin::Official)
+            .unwrap();
 
         assert_eq!(std::fs::read(backup_path(&paths, "worktree")).unwrap(), b"two");
         let retained: Manifest = serde_json::from_slice(
@@ -844,7 +1057,8 @@ mod tests {
         let stray = paths.plugin_dir("worktree").join("state.json");
         std::fs::write(&stray, b"whatever the plugin keeps").unwrap();
 
-        retain_and_place(&paths, &update_of(before, manifest("worktree", "bb")), b"new").unwrap();
+        retain_and_place(&paths, &update_of(before, manifest("worktree", "bb")), b"new", &Origin::Official)
+            .unwrap();
 
         assert_eq!(std::fs::read(&stray).unwrap(), b"whatever the plugin keeps");
     }
@@ -859,7 +1073,12 @@ mod tests {
         let mut after = manifest("worktree", "bb");
         after.min_amenbo = Some("99.0.0".to_string());
 
-        let err = replace(&paths, &update_of(before.clone(), after), &crate::plugin_provenance::TrustRoot::official())
+        let err = replace(
+            &paths,
+            &update_of(before.clone(), after),
+            &crate::plugin_provenance::TrustRoot::official(),
+            &Origin::Official,
+        )
             .unwrap_err();
         assert_eq!(err.code(), "invalid_value");
         assert!(format!("{err:?}").contains("99.0.0"), "the floor is named: {err:?}");
@@ -887,7 +1106,8 @@ mod tests {
         let before = manifest("worktree", "aa");
         install_on_disk(&paths, &before, b"#!/bin/sh\nold\n");
         let after = manifest("worktree", "bb");
-        retain_and_place(&paths, &update_of(before.clone(), after), b"#!/bin/sh\nnew\n").unwrap();
+        retain_and_place(&paths, &update_of(before.clone(), after), b"#!/bin/sh\nnew\n", &Origin::Official)
+            .unwrap();
 
         let rolled = rollback(&paths, "worktree").unwrap();
         assert_eq!(rolled.restored, before);
@@ -902,7 +1122,8 @@ mod tests {
         let paths = paths_at("rollback-once");
         let before = manifest("worktree", "aa");
         install_on_disk(&paths, &before, b"old");
-        retain_and_place(&paths, &update_of(before, manifest("worktree", "bb")), b"new").unwrap();
+        retain_and_place(&paths, &update_of(before, manifest("worktree", "bb")), b"new", &Origin::Official)
+            .unwrap();
 
         rollback(&paths, "worktree").unwrap();
         assert!(!backup_path(&paths, "worktree").exists(), "the retained binary is gone");
@@ -934,7 +1155,8 @@ mod tests {
         let paths = paths_at("rollback-preserve");
         let before = manifest("worktree", "aa");
         install_on_disk(&paths, &before, b"old");
-        retain_and_place(&paths, &update_of(before, manifest("worktree", "bb")), b"new").unwrap();
+        retain_and_place(&paths, &update_of(before, manifest("worktree", "bb")), b"new", &Origin::Official)
+            .unwrap();
         let stray = paths.plugin_dir("worktree").join("state.json");
         std::fs::write(&stray, b"kept across the round trip").unwrap();
 

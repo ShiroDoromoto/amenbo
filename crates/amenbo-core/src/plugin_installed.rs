@@ -6,7 +6,7 @@
 //! lifecycle's. This module is that half — the one place that knows the on-disk shape of an installed
 //! plugin, so the dispatch mount, the CLI faces and `uninstall` all read the same layout.
 //!
-//! **One plugin's home is `<base>/plugins/<name>/`**, holding exactly two things this layer knows about:
+//! **One plugin's home is `<base>/plugins/<name>/`**, holding exactly three things this layer knows about:
 //!
 //! - `manifest.json` — the catalog entry the plugin was installed from ([`Manifest`]), kept beside the
 //!   binary so the subscription list and config schema are readable with no network and no catalog. It is
@@ -15,6 +15,9 @@
 //! - the **executable**, named after the plugin itself (`<name>`, plus the platform's `.exe` suffix). The
 //!   name is a convention, not a manifest field: the catalog entry says where to *fetch* an asset, never
 //!   what to run, so nothing a third party writes can point amenbo's spawn at another path.
+//! - `source.json` — which catalog it came from ([`Origin`], `AMB-D-389`). A separate file because the
+//!   manifest is the *catalog's* document and this is amenbo's note about it; written before the manifest,
+//!   so anything that reads as installed has it.
 //!
 //! **The directory name is the identity.** `Config::plugin_enabled`, the config storage key and the secret
 //! file all key off the plugin's name, so a manifest whose `name` disagrees with the directory it sits in
@@ -40,6 +43,94 @@ use crate::plugin_subscribe::InstalledPlugin;
 /// The file in a plugin's home holding the catalog entry it was installed from, and the marker that the
 /// install finished (see the module docs).
 pub const MANIFEST_FILE_NAME: &str = "manifest.json";
+
+/// The file in a plugin's home recording which catalog it was installed from (see [`Origin`]).
+pub const SOURCE_FILE_NAME: &str = "source.json";
+
+/// Which catalog a plugin was installed from — the shelf an update goes back to.
+///
+/// A name alone is not enough to find that shelf again. Browsing and installing resolve a name across the
+/// merged catalogs (`AMB-D-389`), so a catalog earlier in the order that starts publishing a name already
+/// installed would become where the next update fetched from — and because each catalog answers for its
+/// own key, that update would verify, against the new publisher's key. The distributor would have changed
+/// with nothing to notice it by. Recording the shelf is what makes an update ask the same catalog that
+/// answered the install.
+///
+/// The official catalog is [`Origin::Official`] rather than its URL: it is the one shelf whose identity is
+/// not an address the user typed, and writing the address down would make a build pointed at a staging
+/// catalog read as a different origin from the one beside it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Origin {
+    /// The official catalog — the shelf amenbo ships a key for, and the only one needing no registration.
+    Official,
+    /// A catalog the user registered, named by the URL it was registered under (the identity the
+    /// registration list keys on).
+    Catalog(String),
+}
+
+/// How [`Origin::Official`] is written down. A registered catalog is stored as its URL, which must start
+/// with `http://` or `https://` to have been registered at all, so the two can never be read for
+/// each other.
+const OFFICIAL_SOURCE: &str = "official";
+
+/// The on-disk shape of `source.json` — an envelope, so a field can be added later without an older build
+/// misreading it (the same discipline as the catalog and sources files).
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SourceFile {
+    source: String,
+}
+
+impl Origin {
+    /// How this origin is written down (see [`OFFICIAL_SOURCE`]).
+    fn as_stored(&self) -> &str {
+        match self {
+            Origin::Official => OFFICIAL_SOURCE,
+            Origin::Catalog(url) => url,
+        }
+    }
+}
+
+/// Where one installed plugin's origin record sits: `<base>/plugins/<name>/source.json`.
+pub fn source_path(paths: &Paths, name: &str) -> PathBuf {
+    paths.plugin_dir(name).join(SOURCE_FILE_NAME)
+}
+
+/// Which catalog this install came from, or `None` when nothing says.
+///
+/// `None` is an install amenbo cannot place: one laid down by hand, or one made before the record
+/// existed. It is not "the official catalog" — the caller decides what an unknown origin resolves
+/// against, and is the one that can say so in a message.
+///
+/// A record that will not parse reads as unknown rather than as an error. The unknown case is the
+/// careful one anyway (see [`crate::plugin_catalog::Discovery::find_from`]), so a corrupted note lands
+/// where a missing one does instead of taking the whole install down with it.
+pub fn origin(paths: &Paths, name: &str) -> Option<Origin> {
+    let raw = std::fs::read_to_string(source_path(paths, name)).ok()?;
+    let Ok(file) = serde_json::from_str::<SourceFile>(&raw) else {
+        tracing::warn!(plugin = %name, "ignoring an unreadable plugin origin record");
+        return None;
+    };
+    Some(match file.source.as_str() {
+        OFFICIAL_SOURCE => Origin::Official,
+        url => Origin::Catalog(url.to_string()),
+    })
+}
+
+/// Record which catalog an install came from, in the plugin's home.
+///
+/// Called before the manifest is written, so an install that reads as finished has its origin: the
+/// manifest is the install marker, and a marker that could land without this would leave an install whose
+/// shelf is unknown for no reason but the order of two writes.
+pub(crate) fn record_origin(paths: &Paths, name: &str, origin: &Origin) -> Result<()> {
+    let dest = source_path(paths, name);
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(&SourceFile { source: origin.as_stored().to_string() })
+        .map_err(|e| Error::Io(std::io::Error::other(e)))?;
+    std::fs::write(dest, json)?;
+    Ok(())
+}
 
 /// The executable's file name inside a plugin's home: the plugin's own name plus the platform's
 /// executable suffix (`.exe` on Windows, empty elsewhere).
@@ -107,7 +198,7 @@ pub fn read(paths: &Paths, name: &str) -> Result<InstalledPlugin> {
             format!("プラグイン '{name}' の実行ファイルがありません（{}）", program.display()),
         ));
     }
-    Ok(InstalledPlugin { name: name.to_string(), program, manifest })
+    Ok(InstalledPlugin { name: name.to_string(), program, manifest, origin: origin(paths, name) })
 }
 
 /// Every plugin installed on this machine, name-sorted so a listing and a dispatch see the same order.
@@ -268,6 +359,45 @@ mod tests {
         assert_eq!(read(&paths, Paths::REGISTRY_DIR_NAME).unwrap_err().code(), "invalid_value");
         let names: Vec<_> = installed(&paths).unwrap().into_iter().map(|p| p.name).collect();
         assert_eq!(names, vec!["worktree"]);
+    }
+
+    /// The origin round-trips, in both shapes: the official shelf, and a registered catalog named by the
+    /// URL it was registered under.
+    #[test]
+    fn the_catalog_an_install_came_from_is_read_back() {
+        let (paths, _dir) = paths_at("origin");
+        install(&paths, "worktree", "worktree");
+
+        record_origin(&paths, "worktree", &Origin::Official).unwrap();
+        assert_eq!(origin(&paths, "worktree"), Some(Origin::Official));
+        assert_eq!(read(&paths, "worktree").unwrap().origin, Some(Origin::Official));
+
+        let url = "https://catalog.example.invalid/catalog.json";
+        record_origin(&paths, "worktree", &Origin::Catalog(url.to_string())).unwrap();
+        assert_eq!(origin(&paths, "worktree"), Some(Origin::Catalog(url.to_string())));
+    }
+
+    /// An install that says nothing about where it came from is unknown, not official: what to do about
+    /// that is the update path's call, and it cannot make it if this layer has already guessed.
+    #[test]
+    fn an_install_with_no_record_has_no_origin() {
+        let (paths, _dir) = paths_at("origin-absent");
+        install(&paths, "worktree", "worktree");
+
+        assert_eq!(origin(&paths, "worktree"), None);
+        assert_eq!(read(&paths, "worktree").unwrap().origin, None, "and the install still reads");
+    }
+
+    /// A record that will not parse reads as unknown rather than taking the install down with it — the
+    /// unknown case is the careful one, so landing there is safe.
+    #[test]
+    fn an_unreadable_origin_record_reads_as_unknown() {
+        let (paths, _dir) = paths_at("origin-broken");
+        install(&paths, "worktree", "worktree");
+        std::fs::write(source_path(&paths, "worktree"), b"{ not json").unwrap();
+
+        assert_eq!(origin(&paths, "worktree"), None);
+        assert!(read(&paths, "worktree").is_ok(), "the install itself is fine");
     }
 
     /// The scan is name-sorted, and one broken install does not hide the good ones.

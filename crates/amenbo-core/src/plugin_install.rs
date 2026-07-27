@@ -36,6 +36,12 @@
 //! is matched on its *file name*, so a member called `../../etc/cron.d/x` is simply not the one being
 //! looked for, and only a regular file is ever read.
 //!
+//! **Which catalog answered is written down** ([`plugin_installed::Origin`], `AMB-D-389`). Resolution
+//! here is by name across the merged view, official first — an install is asked for by name and that is
+//! the shelf order the user was browsing. An *update* is a different question: it replaces bytes that are
+//! already here, and it must go back to the catalog that served them rather than to whoever holds the
+//! name now. So the shelf is recorded beside the install, before the manifest that marks it finished.
+//!
 //! **Install is not enable** (`AMB-D-351`). Nothing here opens a gate, records consent, or fires
 //! anything: the plugin lands on disk inert, and `plugin enable` is the separate, explicit act — which is
 //! also where compatibility is judged ([`crate::plugin_compat`]), since an install that is merely
@@ -99,6 +105,9 @@ pub fn install(paths: &Paths, name: &str) -> Result<Installed> {
     refuse_an_overwrite(paths, &found.entry.name)?;
     let manifest = catalog_manifest(paths, found)?;
     let program = fetch_verified_program(&manifest, &found.trust_root()?)?;
+    // Which shelf this came off, before the marker that says it is installed at all: an update reads it
+    // to go back to the same one (see `plugin_installed::Origin`).
+    plugin_installed::record_origin(paths, &manifest.name, &found.origin())?;
     place(paths, &manifest, &program)
 }
 

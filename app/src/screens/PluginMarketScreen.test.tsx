@@ -74,9 +74,17 @@ const catalogOf = (n: number): PluginCatalog => ({
     category: i % 2 === 0 ? "workflow" : "notify",
     official: i === 0,
     listed: i < 4,
+    // What review put on the official index came from it; the rest is the in-house catalog's.
+    source: i < 4 ? "https://official" : "https://inhouse",
+    sourceName: i < 4 ? "amenbo" : "社内カタログ",
     featured: false,
   })),
-  sources: [{ url: "https://official", name: "amenbo", fingerprint: "6272CBB782CB57A0", official: true, reachable: true, offered: n }],
+  sources: [
+    { url: "https://official", name: "amenbo", fingerprint: "6272CBB782CB57A0", official: true, reachable: true, offered: n },
+    ...(n > 4
+      ? [{ url: "https://inhouse", name: "社内カタログ", fingerprint: "AA11BB22CC33DD44", official: false, reachable: true, offered: n - 4 }]
+      : []),
+  ],
   dropped: 0,
 });
 
@@ -154,14 +162,32 @@ describe("PluginMarketScreen", () => {
     expect(container.textContent).toContain(t("plugins.emptyFilter"));
   });
 
-  // The badge is the trust picture: who wrote it and who reviewed it, one label per row.
-  it("badges each row with its layer", () => {
+  // The badge is the trust picture: who wrote it and who reviewed it, one label per row — and on the
+  // free layer, which shelf it came off (`AMB-D-389`) rather than an anonymous "other".
+  it("badges each row with its layer, and a free-layer row with its catalog", () => {
     hoisted.catalog = catalogOf(6);
     render();
     const badges = rows().map((r) => r.querySelector(".chip")!.textContent);
     expect(badges[0]).toBe(t("plugins.layer.official"));
     expect(badges[1]).toBe(t("plugins.layer.listed"));
-    expect(badges[5]).toBe(t("plugins.layer.third-party"));
+    expect(badges[5]).toBe("社内カタログ");
+  });
+
+  // The filter asks "where is this from?" at two grains: the three layers, then each registered
+  // catalog one by one, so "only the in-house one" is one click (`AMB-D-389`). The list itself stays
+  // mixed — splitting it is the reader's move, not the screen's default.
+  it("offers each registered catalog in the source filter, and narrows to it", () => {
+    hoisted.catalog = catalogOf(6);
+    render();
+    const origin = (Array.from(container.querySelectorAll("select")) as HTMLSelectElement[])[2];
+    expect(Array.from(origin.options).map((o) => o.textContent)).toEqual([
+      t("plugins.anyLayer"),
+      t("plugins.layer.listed"), t("plugins.layer.official"), t("plugins.layer.third-party"),
+      "社内カタログ",
+    ]);
+
+    act(() => select(origin, "https://inhouse"));
+    expect(rows().map((r) => r.querySelector("strong")!.textContent)).toEqual(["plugin-4", "plugin-5"]);
   });
 
   // The default ordering is the recommended one, which on a catalog that has curated nothing is

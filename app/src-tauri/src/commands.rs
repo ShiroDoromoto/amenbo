@@ -4309,8 +4309,15 @@ pub struct PluginEntryDto {
     /// Whether the official catalog is what served this entry — reviewed onto the official index. The
     /// other axis of the same trust picture as `official`, and not derivable from it: an official
     /// plugin is always listed, a listed one is written by anybody who passed review, and an entry
-    /// from a third-party catalog is neither. Which catalog exactly is the `sources` list's business.
+    /// from a third-party catalog is neither.
     listed: bool,
+    /// The URL of the catalog that served it — the identity the source filter narrows on, since a name
+    /// is the user's and two catalogs may share one.
+    source: String,
+    /// What that catalog is called. Carried on the entry rather than looked up in `sources`, because it
+    /// is what the row wears on the free layer (`AMB-D-389`): a registered catalog is a trust root with
+    /// a name, not an anonymous "other".
+    source_name: String,
     /// Whether the official index recommends it — hand curation (`AMB-D-347`), for the "featured"
     /// ordering and the badge beside the trust layer. A third axis again: what a plugin is for, rather
     /// than who wrote it or who reviewed it. Core has already discounted a third-party catalog's claim
@@ -4385,6 +4392,8 @@ pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
                     category: e.entry.category,
                     official: e.entry.official,
                     listed: e.listed,
+                    source: e.source,
+                    source_name: e.source_name,
                     featured: e.entry.featured,
                     added_at: e.entry.added_at,
                 })

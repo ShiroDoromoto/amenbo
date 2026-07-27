@@ -5,6 +5,7 @@
 // network per keystroke, and nothing asks GitHub about an entry that is merely listed (stars,
 // README and download counts are the detail view's, lazily, for the one entry a user opened).
 // So the filtering below is deliberately plain client-side work over an array, not a query.
+import { t } from "./i18n";
 import { invoke } from "./ipc";
 import { inTauri } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
@@ -58,6 +59,19 @@ export function pluginLayer(e: PluginEntry): PluginLayer {
   return e.listed ? "listed" : "third-party";
 }
 
+/**
+ * What the badge on a row says. The two reviewed layers are named by the layer itself; the free layer is
+ * named by **the catalog that served it** (`AMB-D-389`).
+ *
+ * A registered catalog is a trust root the user chose and named — what installs from it is verified on
+ * its key — so the shelf's name is the most informative thing a row can carry there, and "third-party"
+ * is left to the filter, where a generic choice is what the vocabulary needs.
+ */
+export function pluginLayerLabel(e: PluginEntry): string {
+  const layer = pluginLayer(e);
+  return layer === "third-party" ? e.sourceName : t(`plugins.layer.${layer}`);
+}
+
 /** What the market list is narrowed by. Every field is optional; an unset one narrows nothing. */
 export interface PluginFilter {
   /** Free text, matched case-insensitively against the name, the description and the author. */
@@ -72,6 +86,13 @@ export interface PluginFilter {
    * registered third-party catalog offers.
    */
   layer?: PluginLayer | "";
+  /**
+   * Only entries one named catalog served, by its URL, or "" for every catalog (`AMB-D-389`). The URL
+   * and not the name, because the name is the user's and two catalogs may carry the same one.
+   *
+   * The narrower half of `layer`: that says which shelf a plugin sits on, this says which shelf.
+   */
+  source?: string;
 }
 
 /**
@@ -86,6 +107,7 @@ export function filterPlugins(entries: PluginEntry[], f: PluginFilter): PluginEn
     if (f.layer === "official" && !e.official) return false;
     if (f.layer === "listed" && !e.listed) return false;
     if (f.layer === "third-party" && e.listed) return false;
+    if (f.source && e.source !== f.source) return false;
     if (f.category && e.category !== f.category) return false;
     if (f.os && !e.os.includes(f.os)) return false;
     if (!q) return true;

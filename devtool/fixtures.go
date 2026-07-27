@@ -337,13 +337,16 @@ func writeFixture(path string, body []byte) error {
 func fixturesGUI(args []string) {
 	fs := flag.NewFlagSet("fixtures gui", flag.ExitOnError)
 	port := fs.Int("port", 0, "port to serve the fake world on (0 = pick a free one)")
-	app := fs.String("app", "", "the dev GUI binary to launch (default: the installed dev app)")
+	app := fs.String("app", "", "the dev GUI to launch — its bundle or the executable inside it (default: the installed dev app)")
 	noLaunch := fs.Bool("no-launch", false, "serve and print the environment, but launch nothing")
 	fresh := fs.Bool("fresh", false,
 		"run against a throwaway store, so every cache starts cold and the fake world is actually asked")
 	var fails repeated
 	fs.Var(&fails, "fail", "make a face fail: <catalog|github|update|all>=<status|timeout> (repeatable)")
 	fs.Parse(args)
+	// Once, here: everything downstream reads this as the executable — the launch, the CLI beside it,
+	// and the app-data the bundle three levels up names.
+	*app = insideBundle(*app)
 
 	rules, err := parseFailures(fails)
 	if err != nil {
@@ -623,6 +626,32 @@ func devAppBinary() (string, error) {
 	}
 	return "", fmt.Errorf("no dev GUI found (%s) — build it with '%s', or pass --app",
 		strings.Join(candidates, ", "), devGUIBuildCommand(root))
+}
+
+// insideBundle turns a `--app` that names a macOS bundle into the executable inside it. A bundle is
+// what a person has: it is what sits in `/Applications`, what a click reaches, and what the build
+// prints when it lands. It is also a directory, so passing one reaches `exec` as a permission error
+// and nothing about the answer says which of the two paths was wanted.
+//
+// The other half is quieter and worse. The CLI that registers the fake world's own catalog is looked
+// for beside the executable — inside the bundle, where it ships — so a bundle path looks beside
+// `/Applications`, finds nothing, and the run carries on with the catalog unregistered: a market
+// screen missing the very rows it was opened for, and nothing on it saying so.
+//
+// Anything that is not a bundle is handed back untouched: a path into `target/release` is already the
+// executable, and one that names nothing at all keeps its own error rather than this function's.
+func insideBundle(app string) string {
+	if !strings.HasSuffix(app, ".app") {
+		return app
+	}
+	if info, err := os.Stat(app); err != nil || !info.IsDir() {
+		return app
+	}
+	found, err := filepath.Glob(filepath.Join(app, "Contents", "MacOS", devGUIBinaryGlob))
+	if err != nil || len(found) == 0 {
+		return app
+	}
+	return found[0]
 }
 
 // ---- shared ----

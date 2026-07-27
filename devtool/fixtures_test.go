@@ -200,3 +200,38 @@ func TestDetailSource(t *testing.T) {
 		t.Errorf("detailSource(path) = %q", got)
 	}
 }
+
+// TestInsideBundleTakesTheExecutableOutOfABundle covers what `--app` is given by hand. A bundle is
+// what a person has and a directory to `exec`, and the CLI that registers the fake world's catalog
+// ships inside it — so resolving one path wrong costs the launch and the catalog both.
+func TestInsideBundleTakesTheExecutableOutOfABundle(t *testing.T) {
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "amenbo (dev 2291).app")
+	macos := filepath.Join(bundle, "Contents", "MacOS")
+	if err := os.MkdirAll(macos, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gui := filepath.Join(macos, "amenbo-app-dev-2291")
+	// The CLI ships in the same directory, which is the whole reason the executable is the path to
+	// hand on: `devCLI` looks beside it.
+	for _, f := range []string{gui, filepath.Join(macos, "amenbo")} {
+		if err := os.WriteFile(f, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := insideBundle(bundle); got != gui {
+		t.Errorf("insideBundle(bundle) = %q, want the executable %q", got, gui)
+	}
+
+	// Everything that is not a bundle is handed back as it stands: an executable already resolved,
+	// a bundle with nothing in it, an empty flag, and a name that is only a name.
+	empty := filepath.Join(dir, "hollow.app")
+	if err := os.MkdirAll(filepath.Join(empty, "Contents", "MacOS"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []string{gui, empty, "", filepath.Join(dir, "absent.app")} {
+		if got := insideBundle(c); got != c {
+			t.Errorf("insideBundle(%q) = %q, want it unchanged", c, got)
+		}
+	}
+}

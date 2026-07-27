@@ -258,6 +258,20 @@ describe("drawing an edge (promotion warning and blast radius)", () => {
   });
 });
 
+describe("the badge", () => {
+  // The badge says the status and nothing else (`AMB-D-410`). A decision that was overturned is still
+  // whatever it was decided as, and saying "superseded" in the badge's place hides that — most visibly
+  // for a rejected decision, which the older wording rendered as neither rejected nor rejected-looking.
+  it("says the status even when the decision was superseded, and leaves the supersession to the edges", () => {
+    hoisted.decisions.set(1, decision(1, { status: "rejected", current: false, supersededBy: [ref(7)] }));
+    render(1);
+
+    expect(container.textContent).toContain(t("dec.status.rejected"));
+    expect(container.textContent).toContain(t("dec.supersededBy"));
+    expect(container.textContent).toContain("D-7");
+  });
+});
+
 describe("rejection blast radius", () => {
   it("lists the decisions that stand on it, opens one when clicked, and never blocks the rejection itself", async () => {
     hoisted.decisions.set(1, decision(1, { supersededBy: [ref(7)], builtOnBy: [ref(8)] }));

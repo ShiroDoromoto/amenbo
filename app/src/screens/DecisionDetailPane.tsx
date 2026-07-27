@@ -17,8 +17,9 @@ import { isEnterSubmit } from "../core/keys";
 import { errText, statusLabel, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
 
-// Colour of the status badge — keep it matching DecisionsScreen's statusColor. "Superseded" is not a
-// status but a derived fact (current:false), so grey is decided by currency, not by status.
+// Colour of the status badge — keep it matching DecisionsScreen's statusColor. The badge says the status
+// and nothing else (`AMB-D-410`); that this decision was overturned is an edge, and the edge list below
+// is where it is read.
 function statusColor(s: DecisionStatus): string {
   switch (s) {
     case "accepted": return "#2e9e6b";
@@ -164,8 +165,8 @@ export function DecisionDetailPane({
         )}
         <span style={{
           fontSize: "var(--fs-xs)", padding: "1px 8px", borderRadius: 10, color: "#fff",
-          background: d.current ? statusColor(d.status) : "#8a93a0",
-        }}>{d.current ? t(`dec.status.${d.status}`) : t("dec.status.superseded")}</span>
+          background: statusColor(d.status),
+        }}>{t(`dec.status.${d.status}`)}</span>
         {!editing && editable && (
           <button className="feed__action" style={{ marginLeft: 6 }} onClick={startEdit}>{t("detail.edit")}</button>
         )}
@@ -342,7 +343,7 @@ export function DecisionDetailPane({
 
 // Shows and edits the edges between decisions (supersedes / amends / builds_on). All three types, in
 // both directions, are listed in one column, and any row can be unwired. Unwiring never undoes the
-// decision itself — drop a supersedes and the other decision simply becomes current again.
+// decision itself — drop a supersedes and what is gone is the claim that one replaced the other.
 function DecisionEdges({ d, onOpenDecision }: {
   d: Decision;
   onOpenDecision?: (id: number) => void;

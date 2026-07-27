@@ -3,7 +3,8 @@ import { type Decision, type DecisionStatus } from "../core/snapshot";
 import { addDecision } from "../core/mutations";
 import { useDecisionPage, useDecisionSearchIds } from "../core/reads";
 import { Pager, usePager } from "../components/Pager";
-import { dateLocale, errText, t } from "../core/i18n";
+import { dateLocale, errText, t, tf } from "../core/i18n";
+import { decisionRef } from "../core/idref";
 import { parseRefQuery } from "../core/filters";
 
 // The list of decision records. A decision is a first-class entity that keeps "why we went with X"
@@ -33,7 +34,9 @@ function compareDecisions(a: Decision, b: Decision, sort: DecisionSort): number 
 /**
  * The decision records of a single project. Only this project's decisions are fetched, and the status
  * filter and the sort are layered on the client because the count is bounded. "Superseded" is not a status
- * but something derived (current:false), so it appears only as a filter choice.
+ * and no badge says it — a decision holds its status and the edges its author drew, and nothing else
+ * (`AMB-D-410`). It is a filter choice, and what it selects on is the edge itself: rows another decision
+ * points at with `supersedes`.
  *
  * **The search is core's, not the client's.** It reaches title, body and any live comment body — the third
  * of those being why it cannot be a substring match over the page: comments are not on the page payload,
@@ -60,7 +63,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   // for. `null` back from the hook is "nothing was asked", which is not the same as "nothing matched".
   const { hits, error: searchError } = useDecisionSearchIds(projectId, ref ? "" : q);
   const shown = decisions
-    .filter((d) => filter === "all" || (filter === "superseded" ? !d.current : d.status === filter))
+    .filter((d) => filter === "all" || (filter === "superseded" ? d.supersededBy.length > 0 : d.status === filter))
     .filter((d) =>
       ref ? ref.space === "decision" && Number(d.id) === ref.num : hits === null || hits.has(Number(d.id)),
     )
@@ -91,8 +94,10 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
           {t("board.filter")}{" "}
           <select value={filter} onChange={(e) => setFilter(e.target.value as DecisionFilterKey)}>
             <option value="all">{t("dec.filterAll")}</option>
+            {/* Every arm but one names a status; "superseded" names an edge, and takes a label of its
+                own so the status namespace is not made to hold something that is not a status. */}
             {FILTERS.map((s) => (
-              <option key={s} value={s}>{t(`dec.status.${s}`)}</option>
+              <option key={s} value={s}>{t(s === "superseded" ? "dec.filterSuperseded" : `dec.status.${s}`)}</option>
             ))}
           </select>
         </label>
@@ -180,8 +185,16 @@ function DecisionCard({ d, selected, onSelect }: {
       <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.title}</span>
       <span style={{
         fontSize: "var(--fs-xs)", padding: "1px 8px", borderRadius: 10, color: "#fff", whiteSpace: "nowrap",
-        background: d.current ? statusColor(d.status) : "#8a93a0",
-      }}>{d.current ? t(`dec.status.${d.status}`) : t("dec.status.superseded")}</span>
+        background: statusColor(d.status),
+      }}>{t(`dec.status.${d.status}`)}</span>
+      {/* The edge, said in the row: which decision overturned this one. It sits beside the status rather
+          than instead of it — a rejected decision that was later superseded is both, and a badge that
+          picked one of the two would be hiding the other. */}
+      {d.supersededBy.length > 0 && (
+        <span className="faint" style={{ fontSize: "var(--fs-xs)", whiteSpace: "nowrap" }}>
+          {tf("dec.supersededByRef", { by: d.supersededBy.map((r) => r.ref ?? decisionRef(r.id)).join(", ") })}
+        </span>
+      )}
       <span style={{ flex: 1 }} />
       {date && <span style={{ fontSize: "var(--fs-sm)", color: "var(--c-muted)", whiteSpace: "nowrap" }}>{date}</span>}
     </div>

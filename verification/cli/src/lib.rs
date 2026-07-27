@@ -929,6 +929,36 @@ impl Driver {
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 Ok(Outcome::action(format!("`{name}` now declares `{key}` as a secret setting")))
             }
+            // Leaving an installed plugin answering slowly, so its queue has something in it to read.
+            // A row comes off a queue the moment the plugin replies, so a backlog is a window and not
+            // a state amenbo can be asked for (see the registry): what is queued while a plugin is
+            // still on it is the only backlog there is. The program is replaced rather than the
+            // manifest edited — how long a plugin takes is the program's own doing, and nothing about
+            // the install is being lied about. Everything after it is amenbo's: the queue, the lease
+            // and the runner are its own, and the events are ones the plugin really subscribes to.
+            (Domain::Plugin, "slow-program") => {
+                let name = req_str(with, "name")?;
+                let seconds = req_i64(with, "seconds")?;
+                if seconds <= 0 {
+                    return Err("`seconds` has to be a window an assert can read in".to_string());
+                }
+                // `<home>/plugins/<name>/<name>` — the executable amenbo runs, under the plugin's own
+                // name. A shell script stands in for it: every plugin the catalog publishes ships a
+                // binary, and no binary can be written here that sleeps.
+                let path = self.session.home.join("plugins").join(name).join(name);
+                if !path.exists() {
+                    return Err(format!("`{name}` has no program at {} to slow down", path.display()));
+                }
+                // The payload arrives on stdin and is small enough to sit in the pipe, so a program
+                // that never reads it still gets to sleep and answer cleanly — which is what this is
+                // standing in for: a plugin that is slow, not one that is broken.
+                std::fs::write(&path, format!("#!/bin/sh\nsleep {seconds}\nexit 0\n"))
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                make_runnable(&path)?;
+                Ok(Outcome::action(format!(
+                    "left `{name}` taking {seconds}s to answer, so what is queued for it stays queued"
+                )))
+            }
             // Filling in a setting the plugin's author declared. An empty value is the way one is
             // taken back, so it is passed through as written rather than being turned into an op of
             // its own — the command reads it the same way a person typing `""` does.
@@ -1639,6 +1669,56 @@ impl Driver {
                     }
                 }
             }
+            // The other half of the same command's answer: the log says what ran, this says what has
+            // not run yet. A plugin with an empty queue is on no backlog at all, so an absent row is
+            // read as nothing waiting rather than as an error — "none queued" is a real answer and the
+            // ordinary one. The oldest row's instant rides in the message and is judged by nothing:
+            // it is a clock reading, and what a line can hold up is the count and the lease.
+            (Domain::Plugin, "waiting") => {
+                let name = req_str(with, "name")?;
+                let v = self.run_json(&["plugin", "log", name, "--json"])?;
+                let queued = v["queues"]
+                    .as_array()
+                    .and_then(|rows| rows.iter().find(|q| q["plugin"].as_str() == Some(name)));
+                let count = queued.and_then(|q| q["waiting"].as_i64()).unwrap_or(0);
+                let running = queued.and_then(|q| q["running"].as_bool()).unwrap_or(false);
+                let oldest = queued
+                    .and_then(|q| q["oldest"].as_str())
+                    .map(|at| format!(", oldest {at}"))
+                    .unwrap_or_default();
+                let mut pass = true;
+                let mut wanted = Vec::new();
+                if let Some(want) = with.get("count").and_then(|v| v.as_i64()) {
+                    pass &= count == want;
+                    wanted.push(format!("{want} queued"));
+                }
+                if let Some(want) = opt_bool(with, "running") {
+                    pass &= running == want;
+                    wanted.push(match want {
+                        true => "a runner on it".to_string(),
+                        false => "nothing running it".to_string(),
+                    });
+                }
+                if let Some(want) = opt_bool(with, "present") {
+                    pass &= queued.is_some() == want;
+                    wanted.push(match want {
+                        true => "a queue at all".to_string(),
+                        false => "no queue at all".to_string(),
+                    });
+                }
+                if wanted.is_empty() {
+                    return Err("a `waiting` assert has to ask for `count`, `running` or `present`".to_string());
+                }
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "`{name}` has {count} event(s) waiting{oldest}, {} (expected {}, {})",
+                        if running { "with a runner on them" } else { "with nothing running them" },
+                        wanted.join(" and "),
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             (Domain::Folder, "resynced") => {
                 let dir = self.folder(with)?;
                 let path = dir.to_string_lossy().into_owned();
@@ -1974,6 +2054,27 @@ fn carries_text(path: &Path, needle: &str) -> Result<(bool, u64), String> {
         read += n;
     }
     Ok((carried, read))
+}
+
+/// Give the file at `path` the exec bit, so what was just written there can be run as a program.
+///
+/// Standing in for a plugin's program with a script is a unix shape: elsewhere the executable carries
+/// the platform's suffix and no script is one, which is refused rather than left to fail as a plugin
+/// that will not start. Nothing is lost by it — the plugins these scenarios install publish no build
+/// for such a platform either, so the install ahead of this is the step that stops there.
+#[cfg(unix)]
+fn make_runnable(path: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
+        .map_err(|e| format!("could not make {} runnable: {e}", path.display()))
+}
+
+#[cfg(not(unix))]
+fn make_runnable(path: &Path) -> Result<(), String> {
+    Err(format!(
+        "{} cannot be stood in for here: a plugin's program is a script only on unix",
+        path.display()
+    ))
 }
 
 fn req_str<'a>(with: &'a Args, key: &str) -> Result<&'a str, String> {

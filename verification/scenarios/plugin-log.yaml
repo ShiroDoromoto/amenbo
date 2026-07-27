@@ -5,14 +5,20 @@
 # and deliberately kept out of the shared timeline — which means a release that
 # shipped it broken would look exactly like a release that shipped it working.
 #
+# The same command answers for what has *not* run: what is queued for each plugin,
+# and whether anything is working it. That half has no other reading anywhere — what
+# never ran wrote no line — and it is why silence has to be diagnosed here or nowhere.
+#
 # Removing a plugin takes its rows with it, and that is the last line here: an
 # execution log is one of the places a removed plugin can leave a trace behind.
 id: plugin-log
-title: Every call a plugin answers lands in the execution log, and removing the plugin takes its rows with it
+title: Every call a plugin answers lands in the execution log, what is still queued for it shows there too, and removing the plugin takes its rows with it
 description: >
   Start from a machine where the plugin has never run, call its command face twice through a task's
   life — the checkout made, then taken away — and read each call back off the log as having ended
-  cleanly. Then remove the plugin and confirm the log no longer answers for it.
+  cleanly. Then leave the plugin answering slowly, fire an event it subscribes to, and read the
+  backlog back: one event waiting, with a runner on it. Finally remove the plugin and confirm the log
+  no longer answers for it.
 steps:
   # The plugin resolves everything it does from the repository it is called in, so there has to be
   # one — the same shape the folder a person binds amenbo to has.
@@ -77,6 +83,46 @@ steps:
     with:
       name: worktree
       outcome: ok
+
+  # The command answers for delivery as well as for runs, and a plugin that has kept up owes nothing:
+  # an empty backlog is what a working delivery layer looks like, and it is the reading every line
+  # below is a departure from.
+  - type: assert
+    domain: plugin
+    op: waiting
+    with:
+      name: worktree
+      count: 0
+
+  # Now the other half — what has not run. A row leaves a queue the moment its plugin replies, so the
+  # only backlog there is is the one a plugin is still working, and the driver leaves this one taking
+  # its time. Ten seconds is the window the two asserts below read in, not a wait the run makes.
+  - type: action
+    domain: plugin
+    op: slow-program
+    with:
+      name: worktree
+      seconds: 10
+
+  # A status change is an event this plugin subscribes to, so this queues one for it. Nothing here
+  # waits on the plugin: the runner is a process of its own and the command returns to us at once.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: in_progress
+
+  # One event owed, and a runner holding the queue — which is the ordinary "it is taking a while", and
+  # the reading a person opens this command for. The count alone would not say that much: the same one
+  # event with nothing running it is a queue nobody is on, a different diagnosis entirely.
+  - type: assert
+    domain: plugin
+    op: waiting
+    with:
+      name: worktree
+      count: 1
+      running: true
 
   # And the log is part of what a removal clears. A plugin that is gone but still shows runs would
   # read as one that is still there.

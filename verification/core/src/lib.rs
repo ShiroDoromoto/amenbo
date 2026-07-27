@@ -336,6 +336,14 @@ const REGISTRY: &[OpSpec] = &[
     // is: the driver writes the declaration onto the installed manifest, the way `stale-manifest`
     // writes the disagreement it needs. Everything after it is amenbo's own doing.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-secret", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
+    // An installed plugin that takes `seconds` to answer. A queue only holds rows while its plugin is
+    // still on one — the runner takes the row off the moment the plugin replies, whichever end it
+    // reached — so a backlog is not a state a scenario can arrive at by using amenbo: it would be
+    // racing the runner it just started. Every plugin the catalog publishes answers in the time a
+    // process takes to start, and slowness is exactly what the backlog display exists to diagnose, so
+    // the driver leaves one answering slowly, the way `declare-secret` writes a declaration no
+    // published plugin carries. `seconds` is the window the asserts after it have to read in.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "slow-program", required: &["name", "seconds"], refs: &[], strings: &["name"], binds: false },
     // What an installed plugin is told. `key` is a setting its author declared, and `scope` picks the
     // tier the value is written at (the machine default, or this project's override); an empty value
     // is how one is taken back, which is why it is a value here and not an op of its own.
@@ -412,6 +420,12 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "listed", required: &["name"], refs: &[], strings: &["name"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "returned", required: &["contains"], refs: &[], strings: &["contains"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "ran", required: &["name"], refs: &[], strings: &["name", "outcome"], binds: false },
+    // What one plugin's queue owes, and whether anything is working it. The execution log
+    // answers for what ran; this answers for what has not — and the two questions have to be asked
+    // together, since what never ran wrote no line to read. `count` is how many events are waiting,
+    // and `running` whether a runner still holds the lease: the same count with and without one are
+    // different diagnoses (a plugin taking its time, against a queue nobody is on).
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "waiting", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // Whether the catalog holds a different build of an installed plugin — the question `update --check`
     // answers, and the only way to read from outside which build a machine is on (a manifest carries no
     // version number, so there is no number to compare).
@@ -571,9 +585,10 @@ impl Scenario {
                 }
             }
 
-            // The two yes/no args are booleans wherever they appear: `present` asks whether
-            // something is there, `ok` asks what verdict a check is expected to come back with.
-            for key in ["present", "ok"] {
+            // The yes/no args are booleans wherever they appear: `present` asks whether something is
+            // there, `ok` what verdict a check is expected to come back with, and `running` whether
+            // anything is working a queue.
+            for key in ["present", "ok", "running"] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));

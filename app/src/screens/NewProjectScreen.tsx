@@ -4,12 +4,13 @@
 // there, so an AI started in that folder can operate this project). A successful create does not
 // jump straight to the board; it shows the done step.
 // Done step: "Created project X", plus — when a folder was linked — what that enables and where it
-// is, plus the next moves (copy `amenbo status`, open in the terminal or Finder, or add a folder if
-// there is none). The primary action is "Open the board". This carries the same information as the
-// CLI's own init/bind success output.
+// is, and then the first loop (`FirstLoop`), which is what the reader is meant to do next. The rest
+// (reveal the folder, copy `amenbo status`) sits below it as a side offer. The primary action is
+// "Open the board". This carries the same information as the CLI's own init/bind success output.
 import { useState } from "react";
+import { FirstLoop } from "../components/FirstLoop";
 import { useCliCommandName } from "../core/cliCommand";
-import { createProject, openTerminal, pickFolder, revealFolder } from "../core/mutations";
+import { createProject, pickFolder, revealFolder } from "../core/mutations";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
@@ -101,11 +102,11 @@ export function NewProjectScreen({ onCreated, onCancel }: { onCreated: (nav: Nav
 
 /**
  * The done step: "Created project X", plus — when a folder was linked — "an AI started in this folder
- * can operate this project", the path, and the next moves, with "Open the board" as the primary
- * action. The next moves only appear under Tauri, on the desktop; in the browser they would be no-ops,
- * so they are hidden. With no folder there is no `.amenbo` for anything to resolve through — neither
- * status nor a terminal can point at this project — so instead of next moves it invites the user to
- * add a folder.
+ * can operate this project", the path, and the first loop, with "Open the board" as the primary
+ * action. Both only appear under Tauri, on the desktop; in the browser opening a terminal or a file
+ * manager would be a no-op, so they are hidden. With no folder there is no `.amenbo` for anything to
+ * resolve through — no terminal to open, and nowhere for an AI to write — so instead the step invites
+ * the user to add a folder.
  */
 function DoneStep({ created, onOpenBoard }: { created: Created; onOpenBoard: () => void }) {
   const { name, dir } = created;
@@ -125,7 +126,6 @@ function DoneStep({ created, onOpenBoard }: { created: Created; onOpenBoard: () 
     }
   };
   const reveal = async () => { try { if (dir) await revealFolder(dir); } catch (e) { setError(errText(e)); } };
-  const terminal = async () => { try { if (dir) await openTerminal(dir); } catch (e) { setError(errText(e)); } };
 
   return (
     <>
@@ -145,16 +145,18 @@ function DoneStep({ created, onOpenBoard }: { created: Created; onOpenBoard: () 
         )}
 
         {inTauri() && dir && (
-          <div className="newproj__next">
-            <span className="newproj__label">{t("newproj.nextTitle")}</span>
-            <div className="newproj__nextrow">
-              <button className="btn" onClick={() => void copyStatus()}>
-                {copied ? t("newproj.copied") : `📋 ${tf("newproj.copyStatus", { cmd: cli })}`}
-              </button>
-              <button className="btn" onClick={() => void terminal()}>⌨️ {t("newproj.openTerminal")}</button>
-              <button className="btn" onClick={() => void reveal()}>📂 {t("newproj.openFinder")}</button>
+          <>
+            <FirstLoop dir={dir} />
+            <div className="newproj__next">
+              <span className="newproj__label">{t("newproj.moreTitle")}</span>
+              <div className="newproj__nextrow">
+                <button className="btn" onClick={() => void reveal()}>📂 {t("newproj.openFinder")}</button>
+                <button className="btn" onClick={() => void copyStatus()}>
+                  {copied ? t("newproj.copied") : `📋 ${tf("newproj.copyStatus", { cmd: cli })}`}
+                </button>
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {error && <div className="newproj__error" role="alert">⚠ {error}</div>}

@@ -519,6 +519,31 @@ button.feed__target:hover { color: var(--c-accent); }
 .newproj__next { display: flex; flex-direction: column; gap: var(--s-2); }
 .newproj__nextrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 
+/* ---------- the first loop (ask an AI, see it land on the board) ---------- */
+.firstloop {
+  display: flex; flex-direction: column; gap: var(--s-4);
+  padding: var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md);
+  background: var(--c-surface);
+}
+.firstloop__head { display: flex; flex-direction: column; gap: 2px; }
+.firstloop__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
+.firstloop__intro { font-size: var(--fs-sm); }
+.firstloop__step { display: flex; gap: var(--s-3); }
+.firstloop__num {
+  width: 24px; height: 24px; flex: none; border-radius: 50%;
+  background: var(--c-accent); color: #fff; font-size: var(--fs-sm); font-weight: var(--fw-bold);
+  display: flex; align-items: center; justify-content: center;
+}
+.firstloop__stepbody { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.firstloop__steptitle { font-weight: var(--fw-bold); }
+.firstloop__stephint { font-size: var(--fs-sm); }
+.firstloop__prompt {
+  margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
+  background: var(--c-surface-sunken); font-size: var(--fs-sm); line-height: 1.6;
+}
+.firstloop__step .btn { align-self: flex-start; }
+.firstloop__error { color: var(--c-danger, #c0392b); font-size: var(--fs-sm); }
+
 /* ---------- pager (list/smart-view windowing) ---------- */
 .pager { display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: var(--s-3); }
 .pager__info { font-size: var(--fs-sm); color: var(--c-text-muted); min-width: 12ch; text-align: center; }

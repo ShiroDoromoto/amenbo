@@ -441,6 +441,24 @@ const REGISTRY: &[OpSpec] = &[
     // which is answered by a resync finding nothing left to write.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "bound", required: &["dir"], refs: &["project"], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "resynced", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // What a project with no work in it yet hands its reader: the loop that joins the two ends — the
+    // reader asks their AI, the AI writes to amenbo, and what it wrote lands on the board. Every move
+    // the interface can make on their behalf it makes, so what the screen carries is a terminal
+    // already inside the linked folder and a request finished enough to paste.
+    //
+    // `hands_over` is the words that request has to carry, and what they name is the file the AI is
+    // sent to read before it writes anything. It is the one part of the card that is the same in
+    // whatever language the app is in, so it is the part a reading can be held to.
+    //
+    // GUI only, and not by omission: none of this reaches the store. A request that lost the file
+    // name, and a terminal opened somewhere other than the linked folder, leave exactly the rows
+    // behind that a working one does — so there is no read to ask, and the screen is the only witness.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "first-loop", required: &["hands_over"], refs: &[], strings: &["hands_over"], binds: false },
+    // Where that loop sits among everything else the same screen offers, written as one line naming
+    // the order. A reading says which words are on a shot, never which of them came first, so this is
+    // a `Review` — and is written down for exactly that reason: an arrangement is what a build
+    // reorders without a single assert going red.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "first-loop-order", required: &["order"], refs: &[], strings: &["order"], binds: false },
     // What is on this machine and whose gate is open (`enabled` asks the gate; without it the
     // question is only whether the plugin is there at all), what the last call returned on its own
     // stdout, and what the execution log kept of a run.

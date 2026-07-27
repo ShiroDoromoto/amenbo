@@ -40,7 +40,12 @@ let request = VNRecognizeTextRequest()
 request.recognitionLevel = .accurate
 request.usesLanguageCorrection = false
 // The app renders both scripts; a scenario seeds English titles but the surrounding UI is Japanese.
-request.recognitionLanguages = ["en-US", "ja-JP"]
+// The order is not a list of what to accept, it is which language leads: asked for English first,
+// Vision reads a Japanese line as mangled Latin and drops the words inside it — a file name in the
+// middle of a Japanese sentence comes back as nothing at all, which is the shape of an assert
+// failing over text plainly on screen. Japanese leads, and the Latin around it — ids, paths, file
+// names, English card titles — is read as well as it was before, or better.
+request.recognitionLanguages = ["ja-JP", "en-US"]
 
 let handler = VNImageRequestHandler(cgImage: image, options: [:])
 do {

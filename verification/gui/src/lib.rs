@@ -206,6 +206,11 @@ impl Instructor {
     ///
     /// `detail` follows that same line: what it expects is the declaration the step named, which the
     /// catalog's document carries in the author's own words — an event id, or a setting's label.
+    ///
+    /// `first-loop` too: what it expects is the file name the handed-over request tells the reader's
+    /// AI to read, which is a file name in any language the app is in. Its sibling `first-loop-order`
+    /// names an order instead, and an order is not something a reading settles — which words are on a
+    /// shot is all OCR answers — so that one is left for a `Review`.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -218,6 +223,9 @@ impl Instructor {
             }
             (Domain::Plugin, "detail") => {
                 Some(Expectation { text: arg_str(with, "declares")?.to_string(), present: true })
+            }
+            (Domain::Folder, "first-loop") => {
+                Some(Expectation { text: arg_str(with, "hands_over")?.to_string(), present: true })
             }
             _ => None,
         }
@@ -279,6 +287,14 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "source")?,
                 req(with, "declares")?
+            ),
+            (Domain::Folder, "first-loop") => format!(
+                "Confirm the first loop is offered here: its first move opens a terminal already inside the linked folder, its second hands over the request to paste — which names \"{}\" — and its third says the tasks will appear on the board.",
+                req(with, "hands_over")?
+            ),
+            (Domain::Folder, "first-loop-order") => format!(
+                "Confirm the screen is arranged in this order: {}.",
+                req(with, "order")?
             ),
             _ => return Err(unmapped(domain, op)),
         })
@@ -643,6 +659,37 @@ steps:
 
         let exp = ins.expectation(&s.steps[0]).expect("a detail assert is OCR-judged");
         assert_eq!(exp, Expectation { text: "Channel webhook".to_string(), present: true });
+    }
+
+    /// The first loop: what OCR is sent looking for is the file name the handed-over request tells
+    /// the reader's AI to read — a file name, so the reading does not turn on the app's language.
+    /// The order the same screen puts its moves in is not something a reading settles, so that step
+    /// is a `Review` and its instruction is what an eye closes it by.
+    #[test]
+    fn a_first_loop_assert_expects_the_file_its_request_names() {
+        let yaml = r#"
+id: x
+title: y
+drivers: [gui]
+steps:
+  - type: assert
+    domain: folder
+    op: first-loop
+    with: { hands_over: AGENTS.md }
+  - type: assert
+    domain: folder
+    op: first-loop-order
+    with: { order: "the first loop, then the other moves, then the way on to the board" }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("\"AGENTS.md\"") && lines[0].contains("linked folder"), "got: {}", lines[0]);
+        assert!(lines[1].contains("then the way on to the board"), "got: {}", lines[1]);
+
+        let exp = ins.expectation(&s.steps[0]).expect("the request's file name is OCR-judged");
+        assert_eq!(exp, Expectation { text: "AGENTS.md".to_string(), present: true });
+        assert!(ins.expectation(&s.steps[1]).is_none(), "an order is not something a reading settles");
     }
 
     /// A title carrying an em dash is what the scenarios are actually written with, and Vision hands

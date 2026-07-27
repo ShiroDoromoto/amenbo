@@ -1,0 +1,42 @@
+# The one thing about a new project's first loop that only the screen ever says.
+#
+# The loop is the single push that joins the two ends a project starts with no bridge between: the
+# reader asks their AI, the AI writes to amenbo, and what it wrote lands on the board. Every move the
+# interface can make on their behalf it makes — the terminal opens already inside the linked folder,
+# and the request is handed over finished, with no hole left to fill in — so what stays with the
+# reader is launching their own AI and pasting.
+#
+# None of that reaches the store. A request that lost the file name it sends the AI to read, a
+# terminal opened somewhere other than the linked folder, a loop no longer leading the screen it was
+# put on: each leaves behind exactly the rows a working one does, so there is no read to ask and no
+# exit code to fail. The screen is the only witness there is.
+#
+# What this wants in front of it is the step creating a project ends on, with a folder linked — so
+# walk a project's creation through to its last screen and point the run at that. The order below is
+# what that screen was never seen in: it went out on the strength of the part's own tests, which say
+# what the loop draws and nothing about where it was put.
+#
+# Clear the notices along the top of the window before shooting. One of them — the one that says the
+# AI guidance in a folder is an old version — names the very file the request names, and a reading
+# says which words are on a shot, not which part of it they came from: left up, it answers for the
+# card, and the card could be blank.
+id: first-loop
+title: The screen a new project ends on leads with the first loop, and the request it hands over names the file the AI is told to read
+drivers: [gui]
+description: >
+  Stand at the last step of creating a project and read what it offers. The loop leads it — open a
+  terminal, copy the request, watch the tasks arrive — and the request it hands over names AGENTS.md,
+  which is what sends the reader's AI to learn amenbo before it writes anything. The moves that were
+  there before the loop sit underneath it, and the way on to the board is last.
+steps:
+  - type: assert
+    domain: folder
+    op: first-loop
+    with:
+      hands_over: AGENTS.md
+
+  - type: assert
+    domain: folder
+    op: first-loop-order
+    with:
+      order: the first loop, then the other moves, then the way on to the board

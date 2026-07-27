@@ -26,5 +26,9 @@ path = "src/bin/coverage.rs"
 
 [dependencies]
 amenbo-scenario = { path = "../core" }
+# The loopback host a scenario stands a catalog on. It lives in the main workspace beside the tests
+# that share it, and is reached by path from here — this workspace is deliberately outside that one,
+# and a second hand-rolled listener is what having one crate exists to stop.
+amenbo-static-host = { path = "../../crates/amenbo-static-host" }
 serde_json = "1"
 serde_yaml = "0.9"

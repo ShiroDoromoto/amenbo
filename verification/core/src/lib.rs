@@ -356,10 +356,23 @@ const REGISTRY: &[OpSpec] = &[
     // tier the value is written at (the machine default, or this project's override); an empty value
     // is how one is taken back, which is why it is a value here and not an op of its own.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-set", required: &["name", "key", "value"], refs: &[], strings: &["name", "key", "value", "scope"], binds: false },
+    // A catalog of the run's own, answering on the loopback for as long as the scenario lasts.
+    // Registering one is a trust decision taken on the key it publishes beside its `catalog.json`,
+    // and a key is only published by something that answers on a port — no URL a scenario can write
+    // down serves one, so the run stands the catalog it is about to trust.
+    // `publishes_key` is the whole of what it varies: a catalog that publishes none is the other
+    // half of the rule, browsable and uninstallable.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-stand", required: &["publishes_key"], refs: &[], strings: &[], binds: true },
+    // The same catalog, publishing a different key than the one pinned on it — a publisher rotating
+    // their key, which is the event the pin exists to meet.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-rotate-key", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The catalogs a browse reads. A third-party one is named by the URL of its `catalog.json`, and
     // that URL is the handle for taking it back off again — there is nothing else to name it by.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-add", required: &["url"], refs: &[], strings: &["url"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-remove", required: &["url"], refs: &[], strings: &["url"], binds: false },
+    // A catalog the run stood up has no URL to write down (its port is handed out at run time), so
+    // it is named by the `as:` binding instead: one of `url` / `target`, which the driver settles
+    // since neither alone can be required here.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-add", required: &[], refs: &["target"], strings: &["url"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-remove", required: &[], refs: &["target"], strings: &["url"], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
@@ -444,8 +457,11 @@ const REGISTRY: &[OpSpec] = &[
     // true of: that it says so, and that the value does not come out with it.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "scope"], binds: false },
     // A catalog in the browsing view: whether it is a source at all (`present`), whether the browse
-    // could reach it, and how many plugins it offers.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "catalog", required: &["url"], refs: &[], strings: &["url"], binds: false },
+    // could reach it, and — `pinned_key` — whether a key of its is what plugins from it would be
+    // trusted on. The last is the half that decides installability rather than visibility, and it is
+    // asked as a yes/no because the fingerprint itself belongs to whichever key the driver stood the
+    // catalog on, and no scenario is written against one driver's key.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "catalog", required: &[], refs: &["target"], strings: &["url"], binds: false },
     // The author's own door, before anything is installed anywhere: a manifest file is held up to the
     // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
     // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.
@@ -594,9 +610,10 @@ impl Scenario {
             }
 
             // The yes/no args are booleans wherever they appear: `present` asks whether something is
-            // there, `ok` what verdict a check is expected to come back with, and `running` whether
-            // anything is working a queue.
-            for key in ["present", "ok", "running"] {
+            // there, `ok` what verdict a check is expected to come back with, `running` whether
+            // anything is working a queue, and the two key questions whether a catalog serves a
+            // signing key and whether one of its is pinned.
+            for key in ["present", "ok", "running", "publishes_key", "pinned_key"] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));

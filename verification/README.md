@@ -96,6 +96,13 @@ count reading "covered" over the very thing it exists to catch. The plugin scena
 the network and an intact catalog — the ones that install one, and the one that reads the browsing
 view back — and they are the only ones that do.
 
+The loopback is the other side of that. A third-party catalog is trusted on the signing key it
+publishes beside its `catalog.json`, and a key is *served*, never written down — so a scenario that
+walks the pin (`plugin catalog-stand`) has the run publish a catalog of its own on a port, and names
+it by the `as:` binding rather than by a URL it could not have known. `catalog-rotate-key` serves the
+other of two keys from the same address, which is a publisher rotating theirs as amenbo sees it. The
+host is `amenbo-static-host`, shared with the main workspace's own tests.
+
 Each op the driver maps is a `(domain, op)` arm in `cli/src/lib.rs`; an op that is in the
 scenario registry but not yet mapped fails loudly rather than passing silently.
 

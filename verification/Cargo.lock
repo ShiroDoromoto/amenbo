@@ -12,10 +12,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "amenbo-static-host"
+version = "1.8.0"
+
+[[package]]
 name = "amenbo-verify-cli"
 version = "0.1.0"
 dependencies = [
  "amenbo-scenario",
+ "amenbo-static-host",
  "serde_json",
  "serde_yaml",
 ]

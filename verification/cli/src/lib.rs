@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use amenbo_scenario::{Args, Domain, Scenario, Step};
+use amenbo_static_host::StaticHost;
 
 /// Load, isolate, execute, judge — one scenario against one binary. `Err` is an execution error
 /// (the scenario would not load, the binary would not run); a scenario that ran but had a failing
@@ -65,6 +66,10 @@ struct Driver {
     /// namespace — the loader keeps it unique across both — and which of the two maps a name lands
     /// in follows from the op that bound it: nothing in the store is a path, and no archive is an id.
     artifacts: HashMap<String, std::path::PathBuf>,
+    /// The catalogs the run stood up itself, under the names their steps bound. They are held here
+    /// for the length of the scenario because a host answers only while it is alive: dropping one
+    /// after the step that made it would leave every later step pointed at a closed port.
+    catalogs: HashMap<String, StoodCatalog>,
     /// Set while a step that declared `refused:` is running. It is read where a failed invocation
     /// is judged, so the arm issuing the command never has to know it might be turned away —
     /// [`Driver::refused`] puts it up and takes it back down around the one call.
@@ -77,6 +82,40 @@ struct Driver {
 /// it apart from a real failure. The code that came back is spliced on after it.
 const REFUSED: &str = "\u{1}refused:";
 
+/// Where a stood catalog publishes its index — the URL a registration is given.
+const CATALOG_PATH: &str = "/catalog.json";
+
+/// And where it publishes its signing key. amenbo looks for the key **beside** the `catalog.json` it
+/// was given, so this path is not a choice: it follows from the one above.
+const CATALOG_KEY_PATH: &str = "/catalog-key.pub";
+
+/// What a stood catalog offers: nothing. Standing one up is about the trust root taken at
+/// registration, and an empty shelf keeps every count in the run about the official catalog alone.
+const EMPTY_CATALOG: &str = r#"{"catalog_v": 1, "generated_at": "2026-07-27T00:00:00Z", "plugins": []}"#;
+
+/// The two signing keys a stood catalog publishes, before and after a rotation. Both are real
+/// minisign public keys from this repository's own tests — which key is which means nothing here,
+/// only that they are two, since what a pin has to notice is that the second is not the first.
+const FIRST_KEY: &str = "RWSgV8uCt8tyYg74JbwBblWoE+g7bxSGvK8blkKW7gUo3EuBXaqy5oMR\n";
+const SECOND_KEY: &str = "RWSw3wZ34b1PMyHu4KajlLhV0SdlMAgQGefo4pFIxv7MgRoWSVpCVXSE\n";
+
+/// A catalog the run is publishing, and which of the two keys it is publishing now. Rotating serves
+/// **the other** one, so a scenario never names a key: what it can say is that the key changed, and
+/// changing it back is how a step asks which key a registration ended up pinned to.
+struct StoodCatalog {
+    host: StaticHost,
+    key: Option<&'static str>,
+}
+
+impl StoodCatalog {
+    /// Publish the key this catalog is not publishing now — a catalog that published none starts.
+    fn rotate_key(&mut self) {
+        let next = if self.key == Some(FIRST_KEY) { SECOND_KEY } else { FIRST_KEY };
+        self.host.set(CATALOG_KEY_PATH, next);
+        self.key = Some(next);
+    }
+}
+
 impl Driver {
     /// Boot a fresh store: `init` creates it and hands back the project every `task add` needs.
     fn new(bin: &Path, session: scratch::Session) -> Result<Driver, String> {
@@ -87,6 +126,7 @@ impl Driver {
             bindings: HashMap::new(),
             last_run: None,
             artifacts: HashMap::new(),
+            catalogs: HashMap::new(),
             refusal: None,
         };
         let v = d.run_json(&["init", "--name", "verify", "--json"])?;
@@ -1005,17 +1045,54 @@ impl Driver {
                     _ => format!("told `{name}` its `{key}` at the {scope} tier"),
                 }))
             }
+            // A catalog of the run's own on the loopback, so a scenario can walk what only a catalog
+            // that answers can show: the key it publishes beside its `catalog.json`, and the pin
+            // taken on it. What it offers is deliberately nothing — this is about the trust root
+            // amenbo takes at registration, not about what is on the shelf.
+            (Domain::Plugin, "catalog-stand") => {
+                let publishes_key = req_bool(with, "publishes_key")?;
+                let name = bind.ok_or("`catalog-stand` produces a catalog, so it needs an `as:` name")?;
+                let host = StaticHost::serve([(CATALOG_PATH, EMPTY_CATALOG)]);
+                let url = host.url(CATALOG_PATH);
+                let mut stood = StoodCatalog { host, key: None };
+                if publishes_key {
+                    stood.rotate_key();
+                }
+                self.catalogs.insert(name.to_string(), stood);
+                Ok(Outcome::action(format!(
+                    "stood a catalog at {url} ({})",
+                    if publishes_key { "publishing a signing key" } else { "publishing no key" }
+                )))
+            }
+            // The publisher rotates their key, at the same URL. Nothing about the catalog moves —
+            // that is the point: what amenbo has to notice is the key alone.
+            (Domain::Plugin, "catalog-rotate-key") => {
+                let name = req_str(with, "target")?;
+                let stood = self
+                    .catalogs
+                    .get_mut(name)
+                    .ok_or_else(|| format!("internal: no catalog was stood up as `{name}`"))?;
+                stood.rotate_key();
+                Ok(Outcome::action(format!("`{name}` now publishes a different signing key")))
+            }
             (Domain::Plugin, verb @ ("catalog-add" | "catalog-remove")) => {
-                let url = req_str(with, "url")?;
+                let url = self.catalog_url(with)?;
                 let sub = verb.trim_start_matches("catalog-");
-                let v = self.run_json(&["plugin", "catalog", sub, url, "--json"])?;
+                // `--yes` is the consent a registration takes when the catalog publishes a key: this
+                // is a non-interactive run, and amenbo refuses to pin a trust root without being told
+                // so. A catalog with no key to pin never asks, so passing it costs that case nothing.
+                let v = self.run_json(&["plugin", "catalog", sub, &url, "--yes", "--json"])?;
                 // Adding fetches the catalog once, so the count it comes back with is what a first
                 // browse would have found — and the reachability, which is the half a bad URL shows.
                 Ok(Outcome::action(match sub {
                     "add" => format!(
-                        "registered {url} ({} plugin(s), {})",
+                        "registered {url} ({} plugin(s), {}, {})",
                         v["offered"].as_i64().unwrap_or(0),
-                        if v["reachable"].as_bool().unwrap_or(false) { "reached" } else { "unreachable" }
+                        if v["reachable"].as_bool().unwrap_or(false) { "reached" } else { "unreachable" },
+                        match v["fingerprint"].as_str() {
+                            Some(fp) => format!("key {fp} pinned"),
+                            None => "no key to pin".to_string(),
+                        }
                     ),
                     _ => format!("dropped {url} from the browsing view"),
                 }))
@@ -1506,14 +1583,34 @@ impl Driver {
                     }
                 }
             }
-            // A catalog as the browsing view sees it: whether it is a source at all, and — the half
-            // that matters for a third-party one — whether the browse could reach it.
+            // A catalog as the browsing view sees it: whether it is a source at all, whether the
+            // browse could reach it, and whether a key of its is pinned — the last being what
+            // separates a catalog that can be installed from one that can only be looked at.
             (Domain::Plugin, "catalog") => {
-                let url = req_str(with, "url")?;
+                let url = self.catalog_url(with)?;
                 let v = self.run_json(&["plugin", "catalog", "list", "--json"])?;
                 let row = v["sources"]
                     .as_array()
-                    .and_then(|rows| rows.iter().find(|s| s["url"].as_str() == Some(url)));
+                    .and_then(|rows| rows.iter().find(|s| s["url"].as_str() == Some(url.as_str())));
+                if let Some(want) = opt_bool(with, "pinned_key") {
+                    // A row that is not there at all answers neither way, so it is reported as the
+                    // third state rather than folded into "no key".
+                    let got = row.map(|r| !r["fingerprint"].is_null());
+                    let pass = got == Some(want);
+                    return Ok(Outcome::assert(
+                        pass,
+                        format!(
+                            "{url} {} (expected {}, {})",
+                            match got {
+                                Some(true) => "has a key pinned on it".to_string(),
+                                Some(false) => "has no key pinned on it".to_string(),
+                                None => "is not a source at all".to_string(),
+                            },
+                            if want { "a pinned key" } else { "no pinned key" },
+                            if pass { "as expected" } else { "MISMATCH" }
+                        ),
+                    ));
+                }
                 match opt_bool(with, "reachable") {
                     Some(want) => {
                         let got = row.and_then(|r| r["reachable"].as_bool());
@@ -1870,6 +1967,24 @@ impl Driver {
     /// the name resolves to an earlier `as:`, so a miss here is an internal error, not user input.
     fn resolve(&self, with: &Args) -> Result<i64, String> {
         self.resolve_key(with, "target")
+    }
+
+    /// The catalog a step names: `url` for one out on the network, `target` for one the run stood up
+    /// (whose port is handed out while it runs, so there is no URL a scenario could have written).
+    /// Naming neither is caught here rather than in the loader — a required key is one key, and
+    /// which of the two a step carries is what tells the two kinds of catalog apart.
+    fn catalog_url(&self, with: &Args) -> Result<String, String> {
+        if let Some(name) = with.get("target").and_then(|v| v.as_str()) {
+            return self
+                .catalogs
+                .get(name)
+                .map(|stood| stood.host.url(CATALOG_PATH))
+                .ok_or_else(|| format!("internal: no catalog was stood up as `{name}`"));
+        }
+        with.get("url")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .ok_or_else(|| "a catalog is named by `url:` or by the `target:` a `catalog-stand` bound".to_string())
     }
 
     /// The same, for an op that names a second object under its own key (`decision link`'s `task`).

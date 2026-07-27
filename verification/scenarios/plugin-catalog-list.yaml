@@ -3,20 +3,23 @@
 #
 # Registering one is a trust decision, not a bookmark: the key the catalog publishes beside its
 # catalog.json is pinned on the user's consent, and that key is what plugins from it are trusted on.
-# The catalog here publishes none, which is its own answer — it can be browsed, and nothing on it can
-# be installed. Standing up a catalog that serves a real key, and consenting to its fingerprint, is a
-# server this file cannot stand.
 #
-# The third-party URL here is deliberately one that answers nothing. A catalog that cannot be reached
-# still registers and is retried later — one dead source must not cost the view — and that is exactly
-# the state a scenario can hold up without standing a server of its own.
+# So this file has two halves. The first names a third-party URL that deliberately answers nothing: a
+# catalog that cannot be reached still registers and is retried later — one dead source must not cost
+# the view — and that is the state a scenario can hold up without standing a server of its own. The
+# second needs one, because a key is served, never written down: the run stands its own catalog on the
+# loopback (`catalog-stand`), which is the only way to walk what is pinned, what a rotation meets, and
+# what a catalog publishing no key is allowed to be.
 id: plugin-catalog-list
-title: A third-party catalog joins the browsing view beside the official one, unreachable and all, and can be taken back off
+title: A third-party catalog joins the browsing view beside the official one, unreachable and all, is trusted on the key it publishes, and can be taken back off
 description: >
   Read the browsing view as it comes: the official catalog, alone and reached. Register a third-party
   catalog and read it back as a source of its own — unreachable, which is reported rather than hidden
   and does not take the view down with it. Register the same URL again and see nothing change.
-  Then take it off, and the view is back to the one catalog it started with.
+  Then take it off, and the view is back to the one catalog it started with. Finally, stand a catalog
+  that publishes a signing key: registering it pins that key, a rotation is refused rather than
+  swallowed on the old consent, unregistering is what lets go of the pin — and a catalog that
+  publishes no key registers all the same, with nothing pinned to install anything on.
 steps:
   # What a machine browses before anybody widens anything: the official catalog, and it answers.
   - type: assert
@@ -90,3 +93,126 @@ steps:
     with:
       url: https://shirodoromoto.github.io/amenbo-plugins/catalog.json
       present: true
+
+  # The other half: a catalog that answers, and publishes the key it wants to be trusted on.
+  - type: action
+    domain: plugin
+    op: catalog-stand
+    with:
+      publishes_key: true
+    as: in-house
+
+  - type: action
+    domain: plugin
+    op: catalog-add
+    with:
+      target: in-house
+
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      target: in-house
+      reachable: true
+
+  # What registering it did beyond widening the view: it took a key. Plugins from this catalog will be
+  # verified against that key and no other, which is why the listing says so on every line — and why
+  # the line with nothing to say is the one worth noticing.
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      target: in-house
+      pinned_key: true
+
+  # The publisher rotates their key at the same URL. amenbo will not accept the new one on the old
+  # consent: a pin that gave way the moment the far end changed would make registering a catalog a
+  # formality rather than a standing answer to "trusted on what?".
+  - type: action
+    domain: plugin
+    op: catalog-rotate-key
+    with:
+      target: in-house
+
+  - type: action
+    domain: plugin
+    op: catalog-add
+    with:
+      target: in-house
+      refused: invalid_value
+
+  # And the refusal left the registration alone. Being turned away is not being unregistered — the
+  # catalog stays in the view, still trusted on the key it was consented to.
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      target: in-house
+      pinned_key: true
+
+  # Unregistering is what lets go of a pin, so the key served now can be consented to from scratch.
+  # The route through is a person's act, deliberately, and not a flag on the command that was refused.
+  - type: action
+    domain: plugin
+    op: catalog-remove
+    with:
+      target: in-house
+
+  - type: action
+    domain: plugin
+    op: catalog-add
+    with:
+      target: in-house
+
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      target: in-house
+      pinned_key: true
+
+  # And the pin really did move to the key served now, rather than the old one surviving the
+  # re-registration: rotating back to the first key is refused in its turn, which only holds if what
+  # is pinned is the second.
+  - type: action
+    domain: plugin
+    op: catalog-rotate-key
+    with:
+      target: in-house
+
+  - type: action
+    domain: plugin
+    op: catalog-add
+    with:
+      target: in-house
+      refused: invalid_value
+
+  # A catalog that publishes no key is not an error, it is a lesser offer: nothing is being trusted,
+  # so nothing is asked, and it joins the view with nothing pinned on it. What it costs is installing
+  # — there is no key to verify a plugin from it against.
+  - type: action
+    domain: plugin
+    op: catalog-stand
+    with:
+      publishes_key: false
+    as: keyless
+
+  - type: action
+    domain: plugin
+    op: catalog-add
+    with:
+      target: keyless
+
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      target: keyless
+      reachable: true
+
+  - type: assert
+    domain: plugin
+    op: catalog
+    with:
+      target: keyless
+      pinned_key: false

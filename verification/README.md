@@ -57,6 +57,12 @@ Adding a line to the set:
 3. Only when no file answers for it — the capability itself is new — start one.
 4. When a feature goes, its file goes with it.
 
+**One kind of line has no capability to be filed under**: what only the screen ever says. An entry's
+own `official` claim is read back nowhere in the CLI, so the capability list names no command for it
+and no file can be named after one. Such a line gets a file of its own, `drivers: [gui]`, named after
+what it browses (`plugin-browse.yaml`). It is not a second file for a capability — it is the file for
+a line the capability list cannot reach — and the count treats it as neither covered nor stray.
+
 What is covered and what is not is counted, not eyeballed — `verify-coverage` (below) reads the
 capability list out of the shipped binary and names every capability with no file to its name.
 
@@ -148,11 +154,13 @@ cargo run -p amenbo-verify-cli --bin verify-coverage -- --bin /path/to/amenbo
 cargo run -p amenbo-verify-cli --bin verify-coverage -- --json
 ```
 
-It reports three things: capabilities with no file (**uncovered**), files answering for no capability
-(**unowned** — a leftover from a capability that went, or a name that never matched one), and files
-whose `id` has drifted from their name (**misfiled** — the name is what the count matches on, the id
-is what a report prints, and a file where they disagree is filed as one capability and reported as
-another).
+It reports four things: capabilities with no file (**uncovered**), files answering for no capability
+(**unowned** — a leftover from a capability that went, or a name that never matched one), files
+written for the screen alone (**screen_only** — `drivers: [gui]`, counted apart because the
+denominator is what the CLI declares and a line the CLI cannot read has no command to be named
+after), and files whose `id` has drifted from their name (**misfiled** — the name is what the count
+matches on, the id is what a report prints, and a file where they disagree is filed as one capability
+and reported as another).
 
 **A gap is not a failure**: the exit code is 0 whether or not the set is complete. An uncovered line
 is work to file, not a reason to hold a release — a gate that blocked on it would only teach everyone
@@ -202,6 +210,12 @@ process was executed out of, which names one instance exactly — a dev build's 
 (`amenbo-app-dev`, `amenbo-app-dev-<id>`, against prod's `amenbo-app`) reaches the right app too,
 but a pid is what uiauto takes (`devtool/README.md`). Inside a task worktree the id can be dropped entirely:
 with no argument the command answers for the dev GUI that checkout launches.
+
+A screen line sometimes needs a world the app cannot be talked into from its own interface. The
+browsing view is one: `plugin-browse.yaml` reads the badge on a row a **registered** catalog served,
+and no such catalog exists to register. `devtool fixtures gui` stands one and registers it in the
+store the app opens (`devtool/README.md`), and `--app` points that at the build under test — the
+overrides it uses are the product's own, so the build is not a different one for having been asked.
 
 uiauto is the input primitive, called here, never moved: `window <pid>` yields the id
 `screencapture -l` needs and the window bounds (in the manifest) an operator uses to turn a shot's

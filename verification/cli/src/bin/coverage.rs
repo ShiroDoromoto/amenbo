@@ -4,7 +4,9 @@
 //! from `agent --json`, so it grows the moment amenbo grows and this count notices without anyone
 //! remembering to update it. The numerator is the scenario set, one file per capability, named after
 //! the command that capability leads with (`task assign` → `task-assign.yaml`, see
-//! `verification/README.md`).
+//! `verification/README.md`) — the CLI's set, since the denominator is what the CLI declares. A file
+//! written for the screen alone answers for a line that has no command to be named after, so it is
+//! counted apart rather than as a capability or as a stray.
 //!
 //! Usage: `verify-coverage [<scenario-dir>] [--bin <amenbo>] [--json]`
 //!   positional  the scenario directory to count (default: `scenarios/`)
@@ -55,9 +57,9 @@ fn main() -> ExitCode {
     let unowned: Vec<&String> = owned.stems.iter().filter(|s| !slugs.contains(s.as_str())).collect();
 
     if opts.json {
-        println!("{}", inventory_json(&capabilities, &uncovered, &unowned, &owned.misfiled));
+        println!("{}", inventory_json(&capabilities, &uncovered, &unowned, &owned));
     } else {
-        print_human(&capabilities, &uncovered, &unowned, &owned.misfiled);
+        print_human(&capabilities, &uncovered, &unowned, &owned);
     }
     ExitCode::SUCCESS
 }
@@ -122,10 +124,16 @@ fn slug_of(command: &str) -> String {
     command.replace(' ', "-")
 }
 
-/// What the scenario directory holds: the stem of every scenario file — the capabilities the set
-/// claims to own — and any file whose `id` has drifted from its name.
+/// What the scenario directory holds: the stem of every scenario file that answers for a capability
+/// — the ones the set claims to own — the screen-only files counted apart, and any file whose `id`
+/// has drifted from its name.
 struct Owned {
     stems: BTreeSet<String>,
+    /// Files written for the screen alone (`drivers: [gui]`), which own no capability and are not
+    /// missing one either. The denominator here is the capability list the **CLI** declares, and a
+    /// line the CLI cannot read has no command to be named after — so counting such a file as a
+    /// stray would report the set's own design as a leftover.
+    screen_only: BTreeSet<String>,
     /// `(file stem, the id inside it)`. The two are one handle wearing two hats: the name is what a
     /// count matches on, the id is what a report prints, and a file where they disagree is filed
     /// under one capability and reported as another.
@@ -135,7 +143,8 @@ struct Owned {
 fn scenario_files(dir: &Path) -> Result<Owned, String> {
     let entries =
         std::fs::read_dir(dir).map_err(|e| format!("cannot read directory {}: {e}", dir.display()))?;
-    let mut owned = Owned { stems: BTreeSet::new(), misfiled: Vec::new() };
+    let mut owned =
+        Owned { stems: BTreeSet::new(), screen_only: BTreeSet::new(), misfiled: Vec::new() };
     for entry in entries {
         let path = entry.map_err(|e| format!("cannot read {}: {e}", dir.display()))?.path();
         let is_yaml = path
@@ -147,13 +156,20 @@ fn scenario_files(dir: &Path) -> Result<Owned, String> {
         }
         let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else { continue };
         // A file that will not parse is the lint's to shout about — it runs in the same gate, and
-        // saying it twice in two voices helps nobody. Here it simply carries its name.
+        // saying it twice in two voices helps nobody. Here it simply carries its name, and counts
+        // as answering for a capability, since a file nobody could read has not said it does not.
+        let mut answers_for_a_capability = true;
         if let Ok(scenario) = amenbo_scenario::load_file(&path) {
             if scenario.id != stem {
                 owned.misfiled.push((stem.to_string(), scenario.id.clone()));
             }
+            answers_for_a_capability = scenario.drivers.contains(&amenbo_scenario::Driver::Cli);
         }
-        owned.stems.insert(stem.to_string());
+        if answers_for_a_capability {
+            owned.stems.insert(stem.to_string());
+        } else {
+            owned.screen_only.insert(stem.to_string());
+        }
     }
     Ok(owned)
 }
@@ -162,8 +178,9 @@ fn print_human(
     capabilities: &[Capability],
     uncovered: &[&Capability],
     unowned: &[&String],
-    misfiled: &[(String, String)],
+    owned: &Owned,
 ) {
+    let misfiled = &owned.misfiled;
     let total = capabilities.len();
     let covered = total - uncovered.len();
     println!("{covered}/{total} capabilities have a scenario file");
@@ -178,6 +195,13 @@ fn print_human(
         println!("---");
         println!("scenario files answering for no capability:");
         for stem in unowned {
+            println!("  {stem}.yaml");
+        }
+    }
+    if !owned.screen_only.is_empty() {
+        println!("---");
+        println!("written for the screen alone (counted apart, they own no capability):");
+        for stem in &owned.screen_only {
             println!("  {stem}.yaml");
         }
     }
@@ -196,8 +220,9 @@ fn inventory_json(
     capabilities: &[Capability],
     uncovered: &[&Capability],
     unowned: &[&String],
-    misfiled: &[(String, String)],
+    owned: &Owned,
 ) -> String {
+    let misfiled = &owned.misfiled;
     let items: Vec<String> = uncovered
         .iter()
         .map(|c| {
@@ -211,16 +236,18 @@ fn inventory_json(
         })
         .collect();
     let strays: Vec<String> = unowned.iter().map(|s| json_string(s)).collect();
+    let screen: Vec<String> = owned.screen_only.iter().map(|s| json_string(s)).collect();
     let drifted: Vec<String> = misfiled
         .iter()
         .map(|(stem, id)| format!("{{\"file\":{},\"id\":{}}}", json_string(stem), json_string(id)))
         .collect();
     format!(
-        "{{\"total\":{},\"covered\":{},\"uncovered\":[{}],\"unowned\":[{}],\"misfiled\":[{}]}}",
+        "{{\"total\":{},\"covered\":{},\"uncovered\":[{}],\"unowned\":[{}],\"screen_only\":[{}],\"misfiled\":[{}]}}",
         capabilities.len(),
         capabilities.len() - uncovered.len(),
         items.join(","),
         strays.join(","),
+        screen.join(","),
         drifted.join(",")
     )
 }

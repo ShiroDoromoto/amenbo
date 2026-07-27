@@ -468,6 +468,15 @@ const REGISTRY: &[OpSpec] = &[
     // asked as a yes/no because the fingerprint itself belongs to whichever key the driver stood the
     // catalog on, and no scenario is written against one driver's key.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "catalog", required: &[], refs: &["target"], strings: &["url"], binds: false },
+    // One row of the browsing view: which catalog served the entry (`source`) and whether it wears
+    // the official badge (`official`). The two are one question — the badge is the official index's
+    // to grant, so an entry a registered catalog serves must read as that shelf's name however
+    // loudly its own document claims otherwise, and the merge is what makes that true.
+    //
+    // There is no CLI here on purpose rather than by omission: `plugin catalog list` answers per
+    // catalog, `plugin list` per installed manifest, and an entry's own claim reaches a person only
+    // through the market screen. That is why the scenario carrying this is written for the screen.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "browsed", required: &["name", "source", "official"], refs: &[], strings: &["name", "source"], binds: false },
     // The author's own door, before anything is installed anywhere: a manifest file is held up to the
     // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
     // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.

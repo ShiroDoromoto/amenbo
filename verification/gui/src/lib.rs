@@ -173,14 +173,24 @@ impl Instructor {
     /// The text an assert step expects on screen, when OCR can judge it. `listed` expects the
     /// bound title present (or absent); a `field` value is not something OCR reads off a card
     /// reliably, so it returns `None` and the step is left for a visual `Review`.
+    ///
+    /// `browsed` is judged the same way when it says an entry is **not** official: the badge such a
+    /// row wears is the serving catalog's name, which is a name the user gave and not a word of the
+    /// interface, so it reads the same whatever language the app is in. The official badge is a word
+    /// of the interface, so an `official: true` line has no text to derive and is left for a
+    /// `Review`.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
-        if let Step::Assert { domain: Domain::Task, op, with } = step {
-            if op == "listed" {
+        let Step::Assert { domain, op, with } = step else { return None };
+        match (*domain, op.as_str()) {
+            (Domain::Task, "listed") => {
                 let present = with.get("present").and_then(|v| v.as_bool()).unwrap_or(true);
-                return Some(Expectation { text: self.target_label(with), present });
+                Some(Expectation { text: self.target_label(with), present })
             }
+            (Domain::Plugin, "browsed") if !official(with) => {
+                Some(Expectation { text: arg_str(with, "source")?.to_string(), present: true })
+            }
+            _ => None,
         }
-        None
     }
 
     fn action(&self, domain: Domain, op: &str, with: &Args) -> Result<String, String> {
@@ -222,6 +232,18 @@ impl Instructor {
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
             ),
+            (Domain::Plugin, "browsed") => {
+                let name = req(with, "name")?;
+                let source = req(with, "source")?;
+                match official(with) {
+                    true => format!(
+                        "Open the plugin market and confirm the row for \"{name}\", off the catalog \"{source}\", wears the official badge."
+                    ),
+                    false => format!(
+                        "Open the plugin market and confirm the row for \"{name}\" is badged \"{source}\" — the catalog that served it — and not as official."
+                    ),
+                }
+            }
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -239,6 +261,13 @@ fn arg_str<'a>(with: &'a Args, key: &str) -> Option<&'a str> {
 
 fn req<'a>(with: &'a Args, key: &str) -> Result<&'a str, String> {
     arg_str(with, key).ok_or_else(|| format!("arg `{key}` must be a string"))
+}
+
+/// Whether a step says the entry wears the official badge. The op requires the key, so the default
+/// is only what an unlinted step falls back to — and it falls back to the half with something to
+/// prove, since "not official" is the reading a badge has to earn.
+fn official(with: &Args) -> bool {
+    with.get("official").and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
 /// Render an arbitrary scalar arg for display: a string as itself, anything else through YAML so
@@ -524,6 +553,36 @@ steps:
         let mut ins = Instructor::new();
         ins.render(&s.steps[0]).unwrap();
         assert!(ins.expectation(&s.steps[1]).is_none(), "a field assert is not OCR-judged");
+    }
+
+    /// The badge line: an entry off a registered catalog reads as that catalog, and the name is what
+    /// OCR is sent looking for — a name the user gave, so it is the same word in any language the
+    /// app is in. The official badge is a word of the interface, so that half is left for a `Review`.
+    #[test]
+    fn a_browsed_assert_expects_the_serving_catalogs_name() {
+        let yaml = r#"
+id: x
+title: y
+drivers: [gui]
+steps:
+  - type: assert
+    domain: plugin
+    op: browsed
+    with: { name: standup, source: In-house catalog, official: false }
+  - type: assert
+    domain: plugin
+    op: browsed
+    with: { name: worktree, source: amenbo, official: true }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("\"standup\"") && lines[0].contains("\"In-house catalog\""));
+        assert!(lines[1].contains("wears the official badge"), "got: {}", lines[1]);
+
+        let exp = ins.expectation(&s.steps[0]).expect("a not-official row names its shelf");
+        assert_eq!(exp, Expectation { text: "In-house catalog".to_string(), present: true });
+        assert!(ins.expectation(&s.steps[1]).is_none(), "the official badge is an interface word");
     }
 
     #[test]

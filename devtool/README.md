@@ -352,6 +352,14 @@ filter, the fingerprint shown before a key is pinned. The line it prints says ho
 many plugins joined the merged view and which key was pinned. Nothing on it is
 signed, so it stops at browsing; an install is exercised against the real thing.
 
+**Both of its entries claim `official: true`, and neither is entitled to it.** The
+badge is the official index's to grant, and the merge clears the claim on
+everything a registered catalog serves — so the rows come up badged with the
+shelf's name. The claim is there to make that clearing visible: with the flag
+off, the badge would read the same whether the merge folded or did nothing, and
+nothing in the CLI reads an entry's own claim back. It is what
+`verification/scenarios/plugin-browse.yaml` is looked at for.
+
 **`--fresh` runs against a throwaway store** (`AMENBO_HOME`), so every cache
 starts cold. Without it a catalog fetch is answered from disk for an hour and a
 repository's figures for six, so the fake world is usually never asked and an

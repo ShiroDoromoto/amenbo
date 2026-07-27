@@ -85,10 +85,14 @@ func registeredCatalogDocs() map[string][]byte {
 			"repo":     registeredCatalogRepo,
 			"os":       []string{"macos", "linux"},
 			"category": p.category,
-			// The official badge is the official index's to grant, and the merge clears it on
-			// everything a registered catalog serves anyway. Saying so here keeps the invented
-			// document honest about which shelf it is.
-			"official":   false,
+			// Every entry here claims the official badge, and none of them is entitled to it: the
+			// badge is the official index's to grant, and this is a shelf anyone may publish into.
+			// The claim is deliberate. The merge clears it on everything a registered catalog
+			// serves, and a claim nobody makes is a clearing nobody can see — with `false` here,
+			// the badge would read as this shelf's name whether the merge folded or did nothing at
+			// all. Claimed on both, a merge that stopped folding takes the shelf's name off both
+			// rows, which is a screen anyone looking can tell apart.
+			"official":   true,
 			"featured":   false,
 			"added_at":   nil,
 			"detail_sum": "sha256:" + hex.EncodeToString(sum[:]),

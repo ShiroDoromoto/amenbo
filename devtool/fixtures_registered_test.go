@@ -67,10 +67,11 @@ func TestRegisteredCatalogEntriesMatchTheirDetails(t *testing.T) {
 		if want := "sha256:" + hex.EncodeToString(sum[:]); entry.DetailSum != want {
 			t.Errorf("%s detail_sum = %q, want %q", entry.Name, entry.DetailSum, want)
 		}
-		// The official badge is the official index's to grant; a catalog anyone may publish claiming
-		// it is exactly what the intake refuses.
-		if entry.Official {
-			t.Errorf("%s calls itself official, which no registered catalog's entry may", entry.Name)
+		// The claim is the fixture, not a slip: a shelf anyone may publish into says the strongest
+		// thing it can, so the merge clearing it is something a screen can be looked at for. An
+		// entry that stopped claiming would make the badge on its row prove nothing.
+		if !entry.Official {
+			t.Errorf("%s does not call itself official, so its row proves nothing about the merge", entry.Name)
 		}
 	}
 }

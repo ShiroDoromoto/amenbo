@@ -5,6 +5,7 @@ import { errText, t, tf } from "../core/i18n";
 import { openExternalUrl } from "../core/mutations";
 import {
   pluginLayer,
+  pluginLayerLabel,
   repoLinkBase,
   repoUrl,
   usePluginDetail,
@@ -57,7 +58,7 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
         <div className="plugdet__head">
           <strong className="plugdet__name">{entry.name}</strong>
           <span className={`chip ${layer === "official" ? "chip--official" : ""}`}>
-            {t(`plugins.layer.${layer}`)}
+            {pluginLayerLabel(entry)}
           </span>
           {/* The same pair the row wore, so opening an entry does not quietly drop a claim the list made. */}
           {entry.featured && <span className="chip chip--featured">{t("plugins.featured")}</span>}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Pager, usePager } from "../components/Pager";
 import { errText, t, tf } from "../core/i18n";
 import {
-  addCatalogSource, filterPlugins, pluginCategories, pluginLayer, probeCatalogSource,
+  addCatalogSource, filterPlugins, pluginCategories, pluginLayer, pluginLayerLabel, probeCatalogSource,
   removeCatalogSource, sortPlugins, unreachableSources, usePluginCatalog,
   type PluginCatalog, type PluginCatalogProbe, type PluginEntry, type PluginLayer, type PluginSort,
 } from "../core/pluginCatalog";
@@ -27,6 +27,15 @@ const OS_CHOICES = ["macos", "windows", "linux"] as const;
 /** The trust layers, widest first, as the filter offers them. */
 const LAYER_CHOICES: PluginLayer[] = ["listed", "official", "third-party"];
 
+/**
+ * The source filter holds one string: "" for any, a layer's name, or a registered catalog's URL
+ * (`AMB-D-389`). One control rather than two, because they are one question — "where is this from?" —
+ * asked at two grains, and a reader narrowing to one shelf is not also thinking about layers.
+ */
+function isLayerChoice(v: string): v is PluginLayer {
+  return (LAYER_CHOICES as string[]).includes(v);
+}
+
 /** The orderings on offer. "Popular" is not among them: stars are fetched for one opened entry, never for a list. */
 const SORT_CHOICES: PluginSort[] = ["featured", "new", "name"];
 
@@ -35,7 +44,8 @@ export function PluginMarketScreen() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [os, setOs] = useState("");
-  const [layer, setLayer] = useState<PluginLayer | "">("");
+  // Either a layer or one catalog — see `isLayerChoice`.
+  const [origin, setOrigin] = useState("");
   // Recommended first, which is the view `AMB-D-347` leads discovery with. On a catalog that has
   // curated nothing it is exactly the "new" ordering, so the default costs nothing before there is
   // anything to recommend.
@@ -58,13 +68,25 @@ export function PluginMarketScreen() {
   useEffect(() => { refreshPluginUpdates(); }, []);
 
   const categories = useMemo(() => pluginCategories(catalog.entries), [catalog.entries]);
+  // The catalogs the filter can name one by one: the registered ones, in registration order. The
+  // official catalog is not among them — it is the `official` / `listed` choices already.
+  const registered = catalog.sources.filter((s) => !s.official);
   const shown = useMemo(
-    () => sortPlugins(filterPlugins(catalog.entries, { q: search, category, os, layer }), sort),
-    [catalog.entries, search, category, os, layer, sort],
+    () => sortPlugins(
+      filterPlugins(catalog.entries, {
+        q: search,
+        category,
+        os,
+        layer: isLayerChoice(origin) ? origin : "",
+        source: isLayerChoice(origin) ? "" : origin,
+      }),
+      sort,
+    ),
+    [catalog.entries, search, category, os, origin, sort],
   );
   // Narrowing or reordering returns to the first page — page 7 of the old result set says nothing
   // about the new one.
-  const pager = usePager(shown, `${search}|${category}|${os}|${layer}|${sort}`);
+  const pager = usePager(shown, `${search}|${category}|${os}|${origin}|${sort}`);
   const unreachable = unreachableSources(catalog);
   // An entry that left the catalog while its detail was open closes it, rather than drawing a plugin
   // the merge no longer offers.
@@ -102,10 +124,15 @@ export function PluginMarketScreen() {
         </label>
         <label style={{ fontSize: "var(--fs-xs)" }}>
           {t("plugins.layer")}{" "}
-          <select value={layer} onChange={(e) => setLayer(e.target.value as PluginLayer | "")}>
+          <select value={origin} onChange={(e) => setOrigin(e.target.value)}>
             <option value="">{t("plugins.anyLayer")}</option>
             {LAYER_CHOICES.map((l) => (
               <option key={l} value={l}>{t(`plugins.layer.${l}`)}</option>
+            ))}
+            {/* "Only the in-house catalog" in one click (`AMB-D-389`). The list itself stays mixed —
+                splitting it is the reader's move to make here, not the screen's default. */}
+            {registered.map((s) => (
+              <option key={s.url} value={s.url}>{s.name}</option>
             ))}
           </select>
         </label>
@@ -371,7 +398,7 @@ function PluginCard({ entry, install, onOpen }: {
 }) {
   // One badge, not two: the layers nest, so an official plugin wearing both would only invite the
   // reading that "official" and "listed" are a scale of the same thing rather than who wrote it and
-  // who reviewed it.
+  // who reviewed it. On the free layer it is the serving catalog's name (`AMB-D-389`).
   //
   // The recommendation badge below sits beside it because it is not on that ladder at all: it says the
   // index recommends the plugin, which a listed third-party plugin can be and an official one can lack.
@@ -388,7 +415,7 @@ function PluginCard({ entry, install, onOpen }: {
         <div className="feed__line">
           <strong>{entry.name}</strong>{" "}
           <span className={`chip ${layer === "official" ? "chip--official" : ""}`}>
-            {t(`plugins.layer.${layer}`)}
+            {pluginLayerLabel(entry)}
           </span>
           {/* No star: a star is the popularity figure this list deliberately never asks GitHub for
               (`AMB-D-347`), and wearing one here would read as exactly that number. */}

@@ -76,6 +76,8 @@ const entry = (name: string) => ({
   category: "workflow",
   official: false,
   listed: true,
+  source: "https://official",
+  sourceName: "amenbo",
   featured: false,
 });
 

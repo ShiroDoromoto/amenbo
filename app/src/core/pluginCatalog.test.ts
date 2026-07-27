@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  filterPlugins, pluginCategories, pluginLayer, sortPlugins, unreachableSources, type PluginEntry,
+  filterPlugins, pluginCategories, pluginLayer, pluginLayerLabel, sortPlugins, unreachableSources,
+  type PluginEntry,
 } from "./pluginCatalog";
+import { t } from "./i18n";
 
 const entry = (over: Partial<PluginEntry>): PluginEntry => ({
   name: "worktree",
@@ -12,6 +14,8 @@ const entry = (over: Partial<PluginEntry>): PluginEntry => ({
   category: "workflow",
   official: true,
   listed: true,
+  source: "https://official",
+  sourceName: "amenbo",
   featured: false,
   ...over,
 });
@@ -20,7 +24,11 @@ describe("filterPlugins", () => {
   const entries = [
     entry({}),
     entry({ name: "slack", desc: "post to a channel", author: "someone", category: "notify", official: false, os: ["macos"] }),
-    entry({ name: "winonly", desc: "windows helper", author: "someone", category: "workflow", official: false, os: ["windows"], listed: false }),
+    entry({
+      name: "winonly", desc: "windows helper", author: "someone", category: "workflow",
+      official: false, os: ["windows"], listed: false,
+      source: "https://inhouse/catalog.json", sourceName: "社内カタログ",
+    }),
   ];
 
   it("keeps everything when nothing is asked of it", () => {
@@ -49,6 +57,16 @@ describe("filterPlugins", () => {
     expect(filterPlugins(entries, { layer: "official" }).map((e) => e.name)).toEqual(["worktree"]);
     expect(filterPlugins(entries, { layer: "listed" }).map((e) => e.name)).toEqual(["worktree", "slack"]);
     expect(filterPlugins(entries, { layer: "third-party" }).map((e) => e.name)).toEqual(["winonly"]);
+  });
+
+  // One shelf, named (`AMB-D-389`): the URL is the identity, because the name is the user's and two
+  // catalogs may carry the same one.
+  it("narrows to one named catalog by its URL", () => {
+    expect(filterPlugins(entries, { source: "https://inhouse/catalog.json" }).map((e) => e.name))
+      .toEqual(["winonly"]);
+    expect(filterPlugins(entries, { source: "https://official" }).map((e) => e.name))
+      .toEqual(["worktree", "slack"]);
+    expect(filterPlugins(entries, { source: "https://never-registered" })).toEqual([]);
   });
 
   // Every control narrows the same list, so two of them together narrow further rather than widening.
@@ -89,6 +107,18 @@ describe("pluginLayer", () => {
     expect(pluginLayer(entry({}))).toBe("official");
     expect(pluginLayer(entry({ official: false }))).toBe("listed");
     expect(pluginLayer(entry({ official: false, listed: false }))).toBe("third-party");
+  });
+});
+
+describe("pluginLayerLabel", () => {
+  // The two reviewed layers are named by the layer; the free one is named by the shelf it sits on
+  // (`AMB-D-389`) — a catalog the user registered and named is a trust root, not an anonymous "other".
+  it("names the reviewed layers, and the free layer by its catalog", () => {
+    expect(pluginLayerLabel(entry({}))).toBe(t("plugins.layer.official"));
+    expect(pluginLayerLabel(entry({ official: false }))).toBe(t("plugins.layer.listed"));
+    expect(pluginLayerLabel(entry({
+      official: false, listed: false, source: "https://inhouse/catalog.json", sourceName: "社内カタログ",
+    }))).toBe("社内カタログ");
   });
 });
 

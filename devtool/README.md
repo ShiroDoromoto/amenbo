@@ -340,6 +340,18 @@ back, and any status works (`404`, `500`). These are the branches that never get
 exercised against the real API, because the way to reach them there is to spend
 the quota or unplug the network.
 
+**The fake world serves two catalogs, and the second one is registered for you.**
+The official one is the capture; beside it sits an invented third-party catalog
+(`In-house catalog`, two plugins, with a `catalog-key.pub` of its own), which
+`fixtures gui` registers in the store the GUI is about to open and unregisters on
+the way out. It has to be registered rather than pointed at by an env var,
+because a registered catalog *is* a record in the store — and without one the
+screens that only a second shelf produces cannot appear at all: a market row
+badged with the catalog it came from, that catalog as a choice in the provenance
+filter, the fingerprint shown before a key is pinned. The line it prints says how
+many plugins joined the merged view and which key was pinned. Nothing on it is
+signed, so it stops at browsing; an install is exercised against the real thing.
+
 **`--fresh` runs against a throwaway store** (`AMENBO_HOME`), so every cache
 starts cold. Without it a catalog fetch is answered from disk for an hour and a
 repository's figures for six, so the fake world is usually never asked and an

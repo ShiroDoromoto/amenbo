@@ -61,15 +61,15 @@ steps:
       field: builds_on.0.name
       equals: SCENARIO DECISION — the store is one file on the device
 
-  # The premise it points at stays current and untouched — the edge is a reading order, not a
-  # correction of the older decision.
+  # The premise it points at is untouched — the edge is a reading order, not a correction of the
+  # older decision, so nothing draws a supersedes edge at it.
   - type: assert
     domain: decision
-    op: field
+    op: listed
     with:
+      filter: "superseded:no"
       target: premise
-      field: current
-      equals: true
+      present: true
 
   # Reverse: the impact radius. This is the direction that answers "if I overturn this, what wants
   # revisiting?", and it is the reason the edge is worth drawing at all.

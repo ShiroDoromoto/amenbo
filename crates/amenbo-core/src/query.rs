@@ -1391,15 +1391,16 @@ fn activity_item(it: crate::activity::Item) -> ActivityItem {
 
 // ───────────────────────── decision list / search ─────────────────────────
 
-/// Search filter for decision records (`status:` / `current:` / `text:` / `project:`). Decisions have
+/// Search filter for decision records (`status:` / `superseded:` / `text:` / `project:`). Decisions have
 /// no mailbox state the way tasks do, so there are few keys: storing them and searching them by
 /// text, status and time is enough.
 #[derive(Clone, Debug, Default)]
 pub struct DecisionFilter {
     pub status: Option<DecisionStatus>,
-    /// `current:yes|no` — whether the decision has not been superseded. This is not the status but a
-    /// projection derived from the edges (`current:no` means "a superseded decision").
-    pub current: Option<bool>,
+    /// `superseded:yes|no` — whether another decision draws a `supersedes` edge at this one. It keys on
+    /// the edge itself, which is a fact the author declared, rather than on a word for "still in force"
+    /// that nothing here can know (`AMB-D-410`).
+    pub superseded: Option<bool>,
     /// Substring match against title or body (case-insensitive).
     pub text: Option<String>,
     /// The reference written in `project:` (same meaning as [`Filter::project_ref`] on the task side —
@@ -1415,7 +1416,7 @@ pub struct DecisionFilter {
     pub task: Option<u32>,
     /// `decided_before:<date>` — accepted on or before this day (`decided_at`'s date ≤ date; the day
     /// itself is **included**). "What had been decided as of some point in time" is not a feature of
-    /// its own: it falls out of composing this ordinary filter key with `current:`. Decisions never
+    /// its own: it falls out of composing this ordinary filter key with `superseded:`. Decisions never
     /// accepted (proposed / rejected, with no `decided_at`) match neither direction.
     pub decided_before: Option<NaiveDate>,
     /// `decided_after:<date>` — accepted on or after this day (`decided_at`'s date ≥ date; the day
@@ -1448,14 +1449,14 @@ impl DecisionFilter {
                         )
                     })?)
                 }
-                "current" => {
-                    f.current = Some(match value {
+                "superseded" => {
+                    f.superseded = Some(match value {
                         "yes" | "true" => true,
                         "no" | "false" => false,
                         _ => {
                             return Err(Error::invalid(
-                                "current must be yes / no",
-                                "current は yes / no",
+                                "superseded must be yes / no",
+                                "superseded は yes / no",
                             ))
                         }
                     })
@@ -1471,8 +1472,8 @@ impl DecisionFilter {
                 "decided_after" => f.decided_after = Some(time::parse_date(value, today)?),
                 other => {
                     return Err(Error::invalid(
-                        format!("unknown filter key '{other}' (status/current/text/project/number/ref/task/decided_before/decided_after)"),
-                        format!("未知のフィルタキー '{other}'（status/current/text/project/number/ref/task/decided_before/decided_after）"),
+                        format!("unknown filter key '{other}' (status/superseded/text/project/number/ref/task/decided_before/decided_after)"),
+                        format!("未知のフィルタキー '{other}'（status/superseded/text/project/number/ref/task/decided_before/decided_after）"),
                     ))
                 }
             }
@@ -1481,16 +1482,16 @@ impl DecisionFilter {
         Ok(f)
     }
 
-    /// `current` is not a column on the decision (it is derived from the edges), so the caller looks
-    /// it up and passes it in. Likewise the two id sets read once and passed in so nothing is
-    /// re-queried per decision: `linked_to_task` = the live decisions linked to the task named by
+    /// Whether a decision was superseded lives in the edges, not in a column on the decision, so the
+    /// caller looks it up and passes it in. Likewise the two id sets read once and passed in so nothing
+    /// is re-queried per decision: `linked_to_task` = the live decisions linked to the task named by
     /// `task:` (or `None` when `task:` was not given), and `comment_text_hits` = the decisions whose
     /// comment body matched `text:` (or `None` when `text:` was not given) — the comment arm of the
     /// text search, mirroring the task side's EXISTS over `task_comment`.
     fn matches(
         &self,
         d: &crate::model::Decision,
-        current: bool,
+        superseded: bool,
         linked_to_task: Option<&[i64]>,
         comment_text_hits: Option<&[i64]>,
     ) -> bool {
@@ -1502,8 +1503,8 @@ impl DecisionFilter {
                 return false;
             }
         }
-        if let Some(want) = self.current {
-            if current != want {
+        if let Some(want) = self.superseded {
+            if superseded != want {
                 return false;
             }
         }
@@ -1648,11 +1649,8 @@ pub fn decision_list(
         decision: crate::model::Decision,
         project: Option<crate::view::ProjectRef>,
         linked_task_count: usize,
-        /// Currency as carried by the row (a projection derived from the edges). Both the filter and
-        /// the card read it.
-        current: bool,
-        /// The ids of the decisions that superseded it, as the row carried them — the edges `current`
-        /// is a projection over. The card spells them into refs.
+        /// The ids of the decisions that superseded it, as the row carried them. The filter reads
+        /// whether there are any; the card spells them into refs.
         superseded_by: Vec<i64>,
     }
     let mut entries: Vec<Entry> = rows
@@ -1673,11 +1671,17 @@ pub fn decision_list(
                 decision,
                 project,
                 linked_task_count: r.linked_task_count,
-                current: r.current,
                 superseded_by: r.superseded_by,
             }
         })
-        .filter(|e| filter.matches(&e.decision, e.current, linked_to_task.as_deref(), comment_text_hits.as_deref()))
+        .filter(|e| {
+            filter.matches(
+                &e.decision,
+                !e.superseded_by.is_empty(),
+                linked_to_task.as_deref(),
+                comment_text_hits.as_deref(),
+            )
+        })
         .collect();
 
     // `sort_decisions` sorts a `&mut [&Decision]`. To bring `entries` into the same order, sort the
@@ -1699,7 +1703,6 @@ pub fn decision_list(
                 &e.decision,
                 e.project.clone(),
                 e.linked_task_count,
-                e.current,
                 &e.superseded_by,
             )
         })
@@ -1760,7 +1763,7 @@ pub fn decision_detail(
     let superseded_by = reverse(row.edges.superseded_by);
     let amends = forward(row.edges.amends);
     let amended_by = reverse(row.edges.amended_by);
-    // A premise carries its currency along with the reference (the successor is given as a
+    // A premise carries what replaced it along with the reference (the successor is given as a
     // conversational reference of the form `D-40`).
     let builds_on = row
         .edges
@@ -1769,7 +1772,6 @@ pub fn decision_detail(
         .map(|p| crate::view::PremiseRef {
             id: p.id,
             name: p.title,
-            current: p.superseded_by.is_none(),
             superseded_by: p.superseded_by.map(crate::idref::decision),
         })
         .collect();
@@ -1797,8 +1799,6 @@ pub fn decision_detail(
         title: row.title,
         body: row.body,
         status: crate::model::DecisionStatus::parse(&row.status).unwrap_or_default(),
-        // Current = no live supersedes edge points at this decision.
-        current: superseded_by.is_empty(),
         supersedes,
         superseded_by,
         amends,

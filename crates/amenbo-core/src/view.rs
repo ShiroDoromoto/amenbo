@@ -90,19 +90,18 @@ pub struct DecisionRef {
 }
 
 /// A reference to a premise decision — the far end of a `builds_on` edge. It is not a plain
-/// [`DecisionRef`] because it has to carry **whether the premise is still live**: surfacing a decision
-/// that stands on a premise since overturned is the entire reason this type exists. `superseded_by` names
-/// the successor, and is `None` while the premise is current.
+/// [`DecisionRef`] because it has to carry **what overturned the premise**: surfacing a decision that
+/// stands on ground since replaced is the entire reason this type exists. `superseded_by` names the
+/// successor, and is `None` when nothing replaced it.
 #[derive(Clone, Debug, Serialize)]
 pub struct PremiseRef {
     pub id: i64,
     /// `None` when the premise target dangles (a `builds_on` edge onto a decision no longer live). The
     /// face composes the placeholder; core does not hold a display string.
     pub name: Option<String>,
-    /// Is the premise current (i.e. `superseded_by` is empty)?
-    pub current: bool,
     /// Conversational ref of the decision that overturned the premise — where to re-point, or what to
-    /// revisit.
+    /// revisit. `None` is the whole of "nothing overturned it": there is no second field saying the
+    /// same thing, and so no way for the two to disagree (`AMB-D-410`).
     pub superseded_by: Option<String>,
 }
 
@@ -252,13 +251,11 @@ pub struct DecisionCompact {
     /// `id`.
     pub r#ref: String,
     pub project: Option<ProjectRef>,
-    /// Is this current, i.e. is it not pointed at by a live `supersedes` edge? A derived projection, never
-    /// a stored flag.
-    pub current: bool,
     /// The decisions that superseded this one, as conversational refs (`AMB-D-<n>`), in the order the
-    /// edges were drawn — the fact `current` is a projection over, carried by the row itself so a reader
-    /// can go to *which* decision overturned it. Refs rather than [`DecisionRef`]s because a listing
-    /// resolves no titles: the row says where to look, and `decision show` is where it is read.
+    /// edges were drawn. This is the whole of what the row says about being replaced (`AMB-D-410`): the
+    /// edges are the author's own, and a reader goes to *which* decision overturned it rather than to a
+    /// word this row invented. Refs rather than [`DecisionRef`]s because a listing resolves no titles:
+    /// the row says where to look, and `decision show` is where it is read.
     pub superseded_by: Vec<String>,
     pub decided_at: Option<Timestamp>,
     pub created_at: Timestamp,
@@ -276,8 +273,6 @@ pub struct DecisionDetail {
     pub title: String,
     pub body: String,
     pub status: DecisionStatus,
-    /// Is this current, i.e. is `superseded_by` empty? A derived projection; it never shows up in `status`.
-    pub current: bool,
     /// The decisions this one supersedes (id + title). One decision can supersede several — the edges
     /// form a DAG.
     pub supersedes: Vec<DecisionRef>,
@@ -287,9 +282,9 @@ pub struct DecisionDetail {
     pub amends: Vec<DecisionRef>,
     /// The decisions that partially amend this one (the reverse lookup).
     pub amended_by: Vec<DecisionRef>,
-    /// The decisions this one **builds on** — read these first. A `builds_on` edge changes neither the
-    /// target's currency (it is not greyed out) nor how it is read, but the currency rides along so that a
-    /// **rotten premise** — a decision standing on ground that has since been overturned — is visible.
+    /// The decisions this one **builds on** — read these first. A `builds_on` edge changes nothing about
+    /// its target, but each premise carries what replaced it, so that a **rotten premise** — a decision
+    /// standing on ground that has since been overturned — is visible.
     pub builds_on: Vec<PremiseRef>,
     /// The decisions that build on this one (the reverse lookup) — part of the blast radius: overturn this
     /// one and these need revisiting.
@@ -320,7 +315,6 @@ pub fn decision_compact_with(
     d: &Decision,
     project: Option<ProjectRef>,
     linked_task_count: usize,
-    current: bool,
     superseded_by: &[i64],
 ) -> DecisionCompact {
     DecisionCompact {
@@ -331,7 +325,6 @@ pub fn decision_compact_with(
         status: d.status,
         r#ref: decision_display_ref(d),
         project,
-        current,
         superseded_by: superseded_by.iter().map(|id| crate::idref::decision(*id)).collect(),
         decided_at: d.decided_at,
         created_at: d.created_at,

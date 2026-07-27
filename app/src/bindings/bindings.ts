@@ -131,14 +131,10 @@ export type DecisionDto = { id: number,
  */
 ref: string, title: string, body: string, 
 /**
- * proposed / accepted / rejected. "Superseded" is not a status — look at `current`.
+ * proposed / accepted / rejected. "Superseded" is not a status — it is an edge, and
+ * `superseded_by` is where it is read.
  */
 status: "proposed" | "accepted" | "rejected", 
-/**
- * Is it current? (derived projection, never stored): true unless a live `supersedes` edge
- * points at it.
- */
-current: boolean, 
 /**
  * The project it lives under (the id is an integer key).
  */

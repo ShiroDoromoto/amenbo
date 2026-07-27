@@ -1122,7 +1122,7 @@ pub enum DecisionCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// List decisions (filter by status:/current:/text:/project:/number: (alias ref:, e.g. `D-<n>`/`#<n>`)/task: (the decisions a task rests on, e.g. `task:#<n>`)/decided_before:/decided_after: (the day a decision was accepted, YYYY-MM-DD or today/-30d; both ends inclusive), sort by decided/created/number/title/status)
+    /// List decisions (filter by status:/superseded:/text:/project:/number: (alias ref:, e.g. `D-<n>`/`#<n>`)/task: (the decisions a task rests on, e.g. `task:#<n>`)/decided_before:/decided_after: (the day a decision was accepted, YYYY-MM-DD or today/-30d; both ends inclusive), sort by decided/created/number/title/status)
     List {
         #[arg(long)]
         project: Option<String>,

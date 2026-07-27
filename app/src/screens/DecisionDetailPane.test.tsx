@@ -73,7 +73,7 @@ const opened: number[] = [];
 /** One decision. By default: proposed, no edges, under a project — the conditions under which the picker shows. */
 function decision(id: number, over: Partial<Decision> = {}): Decision {
   return {
-    id, ref: `D-${id}`, title: `決定${id}`, body: "", status: "proposed", current: true,
+    id, ref: `D-${id}`, title: `決定${id}`, body: "", status: "proposed",
     project: { id: 1, name: "検証PJ" },
     supersedes: [], supersededBy: [], amends: [], amendedBy: [], buildsOn: [], builtOnBy: [],
     decidedAt: null, decidedBy: null, linkedTasks: [], createdAt: "2026-07-12T00:00:00Z",
@@ -261,9 +261,9 @@ describe("drawing an edge (promotion warning and blast radius)", () => {
 describe("the badge", () => {
   // The badge says the status and nothing else (`AMB-D-410`). A decision that was overturned is still
   // whatever it was decided as, and saying "superseded" in the badge's place hides that — most visibly
-  // for a rejected decision, which the older wording rendered as neither rejected nor rejected-looking.
+  // for a rejected decision, which would then read as neither rejected nor rejected-looking.
   it("says the status even when the decision was superseded, and leaves the supersession to the edges", () => {
-    hoisted.decisions.set(1, decision(1, { status: "rejected", current: false, supersededBy: [ref(7)] }));
+    hoisted.decisions.set(1, decision(1, { status: "rejected", supersededBy: [ref(7)] }));
     render(1);
 
     expect(container.textContent).toContain(t("dec.status.rejected"));

@@ -3,9 +3,12 @@
 //
 // Every lookup here reads the same way: take what the current language has for the key, and take
 // English when it has nothing. Translation arrives a language at a time and mostly by machine, so a
-// missing key is the normal state rather than a fault — the screen shows the English string and
-// stays whole. What is *not* here shows up as the bare key, which is the one case nothing can
-// render.
+// missing key must never cost the screen — the reader sees the English string and the page stays
+// whole. What is *not* here shows up as the bare key, which is the one case nothing can render.
+//
+// Falling back is the runtime answer, not permission to ship half a language: because a gap is
+// silent by construction, coverage.test.ts counts it at build time and fails on a dictionary that
+// does not cover the English key set.
 import { type ErrorCode, isErrorCode } from "../errorCodes";
 import { type DoctorIssueKind, isDoctorIssueKind } from "../doctorKinds";
 import type { Priority, Status } from "../../mock/types";
@@ -17,12 +20,17 @@ import { currentLang, type Lang } from "./lang";
 export { currentLang, dateLocale, normalizeLang, type Lang } from "./lang";
 export type { ViewKind } from "./keys";
 
-const DICTS: Record<Lang, Translation> = { en, ja };
+/**
+ * Every dictionary this build carries. Exported because the coverage gate has to read what the app
+ * actually loads: a list of languages kept beside this one would go stale the first time a
+ * dictionary is added, and the gate would then pass by not looking.
+ */
+export const DICTIONARIES: Record<Lang, Translation> = { en, ja };
 
 /** The UI string this language has for the key, else the English one. */
 function ui(key: string, lang: Lang): string | undefined {
   const k = key as UiKey;
-  return DICTS[lang].ui[k] ?? en.ui[k];
+  return DICTIONARIES[lang].ui[k] ?? en.ui[k];
 }
 
 /** Localizes a fixed UI-chrome string. A key no language has falls back to the key itself. */
@@ -66,7 +74,7 @@ function isCmdError(e: unknown): e is CmdError {
 /** Renders a CmdError as one line in the current UI language: code template, else the message. */
 export function errLabel(err: CmdError, lang: Lang = currentLang()): string {
   const code: ErrorCode | undefined = isErrorCode(err.code) ? err.code : undefined;
-  const tmpl = code && (DICTS[lang].err[code] ?? en.err[code]);
+  const tmpl = code && (DICTIONARIES[lang].err[code] ?? en.err[code]);
   if (tmpl) {
     const f = err.fields ?? {};
     return tmpl.replace(/\{(\w+)\}/g, (_, k) => {
@@ -111,7 +119,7 @@ export function doctorText(
 }
 
 function doctorTemplate(kind: DoctorIssueKind, lang: Lang): DoctorTemplate {
-  return DICTS[lang].doctor[kind] ?? en.doctor[kind];
+  return DICTIONARIES[lang].doctor[kind] ?? en.doctor[kind];
 }
 
 /**
@@ -127,11 +135,11 @@ export function errText(e: unknown): string {
 }
 
 export function statusLabel(s: Status, lang: Lang = currentLang()): string {
-  return DICTS[lang].status[s] ?? en.status[s];
+  return DICTIONARIES[lang].status[s] ?? en.status[s];
 }
 export function priorityLabel(p: Priority, lang: Lang = currentLang()): string {
-  return DICTS[lang].priority[p] ?? en.priority[p];
+  return DICTIONARIES[lang].priority[p] ?? en.priority[p];
 }
 export function viewLabel(v: ViewKind, lang: Lang = currentLang()): string {
-  return DICTS[lang].view[v] ?? en.view[v];
+  return DICTIONARIES[lang].view[v] ?? en.view[v];
 }

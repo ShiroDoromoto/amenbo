@@ -21,7 +21,8 @@ export type UiKey = keyof Dictionary["ui"];
 
 /**
  * What one language file supplies. Every section is named, but each entry inside it is optional:
- * a key with no translation is rendered from English, so a language ships whatever has been
- * translated so far and the screen never waits on the rest.
+ * a key with no translation is rendered from English, so a half-written dictionary degrades to
+ * English instead of breaking a screen. That is a guarantee about the running app, not a standard
+ * for what may be committed — coverage.test.ts holds a dictionary that exists to the full key set.
  */
 export type Translation = { [S in keyof Dictionary]: Partial<Dictionary[S]> };

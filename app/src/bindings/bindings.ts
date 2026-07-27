@@ -451,6 +451,36 @@ export type PluginCatalogDto = { entries: Array<PluginEntryDto>, sources: Array<
 dropped: number, };
 
 /**
+ * What registering a catalog would mean, worked out before anything is written (`AMB-D-389`) — the
+ * material the consent screen puts in front of the user. Asking changes nothing on disk.
+ */
+export type PluginCatalogProbeDto = { 
+/**
+ * The URL as it would be registered (trimmed) — what the agreement is about.
+ */
+url: string, 
+/**
+ * What to call it when the user names nothing: the host serving it, or the name a record already
+ * registered under this URL carries.
+ */
+suggestedName: string, 
+/**
+ * The fingerprint of the key this catalog publishes. `None` is a catalog that publishes none:
+ * browsable, and nothing on it installs.
+ */
+fingerprint: string | null, 
+/**
+ * Whether this URL is already registered — a second registration changes nothing but the name,
+ * unless it is bringing a key the record does not have yet.
+ */
+registered: boolean, 
+/**
+ * Whether going ahead would pin a key that is not pinned yet. This is the one case that adds a
+ * trust root rather than a bookmark, so it is the one the screen must take consent for.
+ */
+pinsANewKey: boolean, };
+
+/**
  * One catalog that fed the merged list — the official one first, then each registered third-party
  * one in registration order.
  */

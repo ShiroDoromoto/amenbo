@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Pager, usePager } from "../components/Pager";
 import { errText, t, tf } from "../core/i18n";
 import {
-  addCatalogSource, filterPlugins, pluginCategories, pluginLayer, removeCatalogSource, sortPlugins,
-  unreachableSources, usePluginCatalog,
-  type PluginCatalog, type PluginEntry, type PluginLayer, type PluginSort,
+  addCatalogSource, filterPlugins, pluginCategories, pluginLayer, probeCatalogSource,
+  removeCatalogSource, sortPlugins, unreachableSources, usePluginCatalog,
+  type PluginCatalog, type PluginCatalogProbe, type PluginEntry, type PluginLayer, type PluginSort,
 } from "../core/pluginCatalog";
 import { installOf, usePluginInstalls, type PluginInstall } from "../core/pluginInstalls";
 import { refreshPluginUpdates } from "../core/pluginUpdates";
@@ -190,16 +190,23 @@ export function PluginMarketScreen() {
  * The catalogs the list is merged from, and the face for adding or removing one — the CLI's
  * `plugin catalog add/remove/list` in the GUI.
  *
- * Registering a catalog widens what a user *sees*, and nothing else: an asset is still trusted only
- * by amenbo's own catalog key (`AMB-D-371`), so nothing here loosens what may be installed. The
- * official catalog is always merged first and cannot be removed, which is why its row has no button.
+ * **Registering is a trust decision, not a bookmark** (`AMB-D-389`): a plugin installed from a
+ * registered catalog is verified against *that* catalog's key, so adding one adds a trust root. The
+ * URL is therefore not registered on the button — it is probed first, and what the probe found (the
+ * fingerprint that would be pinned, under the name it will be called) is put in front of the user to
+ * agree to. The official catalog is always merged first and cannot be removed, which is why its row
+ * has no button.
  */
 function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What registering the typed URL would mean, once asked — the material on screen while the user
+  // decides. Null is "nothing has been asked yet"; nothing is written until this is agreed to.
+  const [probe, setProbe] = useState<PluginCatalogProbe | null>(null);
+  const [name, setName] = useState("");
 
-  const run = async (op: () => Promise<boolean>) => {
+  const run = async (op: () => Promise<unknown>) => {
     setBusy(true);
     setError(null);
     try {
@@ -211,10 +218,33 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
     }
   };
 
-  const add = () => {
+  // Step one: ask what this URL would mean. A refusal (not http(s), the official catalog's own URL, a
+  // key that changed since it was pinned) lands here, before anything is registered.
+  const check = () => {
     const target = url.trim();
     if (!target) return;
-    void run(() => addCatalogSource(target).then((added) => { setUrl(""); return added; }));
+    void run(async () => {
+      const found = await probeCatalogSource(target);
+      setProbe(found);
+      setName(found?.suggestedName ?? "");
+    });
+  };
+
+  // Step two: register what was shown, on the fingerprint that was shown. The door refuses anything
+  // else, so a key that moved between the two calls stops here rather than being pinned unseen.
+  const confirm = () => {
+    if (!probe) return;
+    void run(async () => {
+      await addCatalogSource(probe.url, { name, agreedFingerprint: probe.fingerprint ?? undefined });
+      setProbe(null);
+      setUrl("");
+      setName("");
+    });
+  };
+
+  const cancel = () => {
+    setProbe(null);
+    setError(null);
   };
 
   return (
@@ -222,7 +252,13 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
       {catalog.sources.map((s) => (
         <div className="catsrc__row" key={s.url}>
           <span className="chip">{t(s.official ? "plugins.layer.official" : "plugins.layer.third-party")}</span>
+          <span className="catsrc__name">{s.name}</span>
           <span className="catsrc__url">{s.url}</span>
+          {/* The key its plugins are trusted on (`AMB-D-389`), on every row — the one with nothing to
+              show is the one worth noticing, because nothing from it can be installed. */}
+          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+            {s.fingerprint ? tf("plugins.sourceKey", { fp: s.fingerprint }) : t("plugins.sourceNoKey")}
+          </span>
           <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
             {s.reachable ? tf("plugins.offered", { count: s.offered }) : t("plugins.sourceDown")}
           </span>
@@ -233,20 +269,90 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
           )}
         </div>
       ))}
-      <div className="catsrc__row">
-        <input
-          className="board__search"
-          type="url"
-          placeholder={t("plugins.sourcePh")}
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
-          style={{ fontSize: "var(--fs-xs)", flex: 1, minWidth: 0 }}
+      {probe ? (
+        <SourceConsent
+          probe={probe}
+          name={name}
+          onName={setName}
+          busy={busy}
+          onConfirm={confirm}
+          onCancel={cancel}
         />
-        <button className="btn" disabled={busy || !url.trim()} onClick={add}>{t("plugins.addSource")}</button>
-      </div>
+      ) : (
+        <div className="catsrc__row">
+          <input
+            className="board__search"
+            type="url"
+            placeholder={t("plugins.sourcePh")}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") check(); }}
+            style={{ fontSize: "var(--fs-xs)", flex: 1, minWidth: 0 }}
+          />
+          <button className="btn" disabled={busy || !url.trim()} onClick={check}>
+            {busy ? t("plugins.sourceChecking") : t("plugins.addSource")}
+          </button>
+        </div>
+      )}
       {error && <div style={{ color: "var(--c-warn)", fontSize: "var(--fs-xs)" }}>{error}</div>}
       <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.sourcesNote")}</div>
+    </div>
+  );
+}
+
+/**
+ * What the user agrees to when they register a catalog (`AMB-D-389`): the fingerprint of the key its
+ * plugins will be verified against, and the name it will be called by.
+ *
+ * The fingerprint is the whole point of asking — trust-on-first-use rests on the person having seen
+ * the key they are trusting, so it is shown in full rather than summarised, and the button says what
+ * pressing it does. A catalog that publishes no key asks for no trust: it can be browsed, nothing on
+ * it installs, and the panel says so instead of pretending there is something to compare.
+ */
+function SourceConsent({ probe, name, onName, busy, onConfirm, onCancel }: {
+  probe: PluginCatalogProbe;
+  name: string;
+  onName: (v: string) => void;
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="catsrc__consent">
+      <div style={{ fontSize: "var(--fs-sm)" }}>{tf("plugins.trustTitle", { url: probe.url })}</div>
+      {probe.fingerprint ? (
+        <>
+          <div className="catsrc__fp">
+            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.fingerprint")}</span>{" "}
+            <strong>{probe.fingerprint}</strong>
+          </div>
+          <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.trustNote")}</div>
+          <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.keyChangeNote")}</div>
+        </>
+      ) : (
+        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.noKeyNote")}</div>
+      )}
+      {probe.registered && (
+        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.alreadyRegistered")}</div>
+      )}
+      <div className="catsrc__row">
+        <label style={{ fontSize: "var(--fs-xs)", flex: 1, minWidth: 0, display: "flex", gap: "var(--s-2)", alignItems: "center" }}>
+          {t("plugins.sourceName")}
+          <input
+            className="board__search"
+            type="text"
+            value={name}
+            placeholder={probe.suggestedName}
+            onChange={(e) => onName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") onConfirm(); }}
+            style={{ fontSize: "var(--fs-xs)", flex: 1, minWidth: 0 }}
+          />
+        </label>
+        <button className="feed__action" disabled={busy} onClick={onCancel}>{t("plugins.sourceCancel")}</button>
+        <button className="btn" disabled={busy} onClick={onConfirm}>
+          {t(probe.fingerprint ? "plugins.trustAndAdd" : "plugins.addSource")}
+        </button>
+      </div>
     </div>
   );
 }

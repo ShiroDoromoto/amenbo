@@ -9,9 +9,13 @@ import type { PluginCatalog } from "../core/pluginCatalog";
 
 const hoisted = vi.hoisted(() => ({
   catalog: { entries: [], sources: [], dropped: 0 } as PluginCatalog,
-  added: [] as string[],
+  /** Every registration that reached the door, with the name and the pin it was agreed on. */
+  added: [] as { url: string; name?: string; agreedFingerprint?: string }[],
+  probed: [] as string[],
+  /** What a probe answers with — the fingerprint the consent panel then has to show. */
+  probeFingerprint: "6272CBB782CB57A0" as string | null,
   removed: [] as string[],
-  addFails: false,
+  probeFails: false,
   // Which repositories the screen asked GitHub about, in order — the proof that a listed entry costs
   // nothing and only an opened one does (`AMB-D-347`).
   asked: [] as string[],
@@ -25,9 +29,19 @@ vi.mock("../core/pluginCatalog", async (importOriginal) => {
   return {
     ...orig,
     usePluginCatalog: () => ({ catalog: hoisted.catalog, loading: false, error: undefined }),
-    addCatalogSource: (url: string) => {
-      if (hoisted.addFails) return Promise.reject("plugin_catalog_url_invalid");
-      hoisted.added.push(url);
+    probeCatalogSource: (url: string) => {
+      if (hoisted.probeFails) return Promise.reject("plugin_catalog_url_invalid");
+      hoisted.probed.push(url);
+      return Promise.resolve({
+        url,
+        suggestedName: new URL(url).host,
+        fingerprint: hoisted.probeFingerprint,
+        registered: false,
+        pinsANewKey: hoisted.probeFingerprint != null,
+      });
+    },
+    addCatalogSource: (url: string, opts: { name?: string; agreedFingerprint?: string } = {}) => {
+      hoisted.added.push({ url, ...opts });
       return Promise.resolve(true);
     },
     removeCatalogSource: (url: string) => {
@@ -80,8 +94,10 @@ const select = (el: HTMLSelectElement, value: string) => {
 beforeEach(() => {
   hoisted.catalog = catalogOf(3);
   hoisted.added = [];
+  hoisted.probed = [];
+  hoisted.probeFingerprint = "6272CBB782CB57A0";
   hoisted.removed = [];
-  hoisted.addFails = false;
+  hoisted.probeFails = false;
   hoisted.asked = [];
   hoisted.facts = { stars: 512, downloads: 1234, readme: "# a plugin\n\nwhat it does", rateLimited: false };
   hoisted.factsError = undefined;
@@ -310,31 +326,102 @@ describe("PluginMarketScreen — the catalogs it merges", () => {
     expect(hoisted.removed).toEqual(["https://third"]);
   });
 
-  it("registers a URL that was typed, trimmed", async () => {
+  // Every row says which key its plugins are trusted on, and a catalog with none says that instead —
+  // it is the row nothing can be installed from (`AMB-D-389`).
+  it("says what key each catalog is trusted on", () => {
     hoisted.catalog = twoSources;
     render();
     openPanel();
-    const input = container.querySelector("input[type=url]") as HTMLInputElement;
-    act(() => type(input, "  https://new/catalog.json  "));
-    const add = Array.from(container.querySelectorAll("button"))
-      .find((b) => b.textContent === t("plugins.addSource"))!;
-    await act(async () => { add.click(); });
-    expect(hoisted.added).toEqual(["https://new/catalog.json"]);
-    expect(input.value).toBe("");
+    expect(container.textContent).toContain("6272CBB782CB57A0");
+    expect(container.textContent).toContain(t("plugins.sourceNoKey"));
   });
 
-  // A URL core refuses (not http(s), or the official catalog's own) must land on screen, not in the console.
-  it("shows why a rejected URL was rejected", async () => {
+  const button = (label: string) =>
+    Array.from(container.querySelectorAll("button")).find((b) => b.textContent === label)!;
+
+  const typeUrl = async (url: string) => {
+    const input = container.querySelector("input[type=url]") as HTMLInputElement;
+    act(() => type(input, url));
+    await act(async () => { button(t("plugins.addSource")).click(); });
+  };
+
+  // The load-bearing half of `AMB-D-389` on this screen: the button asks what registering would mean,
+  // and nothing is written until the fingerprint has been shown and agreed to.
+  it("shows the fingerprint before it registers anything, and pins the one it showed", async () => {
     hoisted.catalog = twoSources;
-    hoisted.addFails = true;
     render();
     openPanel();
-    const input = container.querySelector("input[type=url]") as HTMLInputElement;
-    act(() => type(input, "ftp://nope"));
-    const add = Array.from(container.querySelectorAll("button"))
+    await typeUrl("  https://new.example/catalog.json  ");
+
+    expect(hoisted.probed).toEqual(["https://new.example/catalog.json"]);
+    expect(hoisted.added).toEqual([]);
+    expect(container.textContent).toContain("6272CBB782CB57A0");
+    expect(container.textContent).toContain(t("plugins.trustNote"));
+
+    await act(async () => { button(t("plugins.trustAndAdd")).click(); });
+    expect(hoisted.added).toEqual([{
+      url: "https://new.example/catalog.json",
+      name: "new.example",
+      agreedFingerprint: "6272CBB782CB57A0",
+    }]);
+    expect((container.querySelector("input[type=url]") as HTMLInputElement).value).toBe("");
+  });
+
+  // The name is given on the same screen as the fingerprint, and defaults to the host that answered.
+  it("registers under the name given while agreeing", async () => {
+    hoisted.catalog = twoSources;
+    render();
+    openPanel();
+    await typeUrl("https://new.example/catalog.json");
+    const nameInput = container.querySelector(".catsrc__consent input[type=text]") as HTMLInputElement;
+    act(() => type(nameInput, "社内カタログ"));
+    await act(async () => { button(t("plugins.trustAndAdd")).click(); });
+    expect(hoisted.added[0].name).toBe("社内カタログ");
+  });
+
+  // Backing out is a real answer, and it must leave the registration untouched.
+  it("registers nothing when the consent is declined", async () => {
+    hoisted.catalog = twoSources;
+    render();
+    openPanel();
+    await typeUrl("https://new.example/catalog.json");
+    await act(async () => { button(t("plugins.sourceCancel")).click(); });
+    expect(hoisted.added).toEqual([]);
+    expect(container.querySelector(".catsrc__consent")).toBeNull();
+  });
+
+  // A catalog that publishes no key asks for no trust — so the panel says what it costs (nothing can be
+  // installed) rather than showing a fingerprint that does not exist.
+  it("registers a catalog with no key without asking for trust", async () => {
+    hoisted.catalog = twoSources;
+    hoisted.probeFingerprint = null;
+    render();
+    openPanel();
+    await typeUrl("https://new.example/catalog.json");
+    expect(container.textContent).toContain(t("plugins.noKeyNote"));
+    expect(container.querySelector(".catsrc__fp")).toBeNull();
+
+    const consent = container.querySelector(".catsrc__consent")!;
+    const add = Array.from(consent.querySelectorAll("button"))
       .find((b) => b.textContent === t("plugins.addSource"))!;
     await act(async () => { add.click(); });
+    expect(hoisted.added).toEqual([{
+      url: "https://new.example/catalog.json",
+      name: "new.example",
+      agreedFingerprint: undefined,
+    }]);
+  });
+
+  // A URL core refuses (not http(s), the official catalog's own, or one whose key changed since it was
+  // pinned) must land on screen, not in the console.
+  it("shows why a rejected URL was rejected", async () => {
+    hoisted.catalog = twoSources;
+    hoisted.probeFails = true;
+    render();
+    openPanel();
+    await typeUrl("ftp://nope");
     expect(container.textContent).toContain("plugin_catalog_url_invalid");
     expect(hoisted.added).toEqual([]);
+    expect(container.querySelector(".catsrc__consent")).toBeNull();
   });
 });

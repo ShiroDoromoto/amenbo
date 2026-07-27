@@ -4408,26 +4408,130 @@ pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
     .map_err(|e| -> CmdError { format!("プラグインカタログの取得に失敗しました: {e}").into() })?
 }
 
+/// What registering a catalog would mean, worked out before anything is written (`AMB-D-389`) — the
+/// material the consent screen puts in front of the user. Asking changes nothing on disk.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginCatalogProbeDto {
+    /// The URL as it would be registered (trimmed) — what the agreement is about.
+    url: String,
+    /// What to call it when the user names nothing: the host serving it, or the name a record already
+    /// registered under this URL carries.
+    suggested_name: String,
+    /// The fingerprint of the key this catalog publishes. `None` is a catalog that publishes none:
+    /// browsable, and nothing on it installs.
+    fingerprint: Option<String>,
+    /// Whether this URL is already registered — a second registration changes nothing but the name,
+    /// unless it is bringing a key the record does not have yet.
+    registered: bool,
+    /// Whether going ahead would pin a key that is not pinned yet. This is the one case that adds a
+    /// trust root rather than a bookmark, so it is the one the screen must take consent for.
+    pins_a_new_key: bool,
+}
+
+/// Work out what registering `url` would mean, writing nothing — the read half of registration
+/// (`AMB-D-389`).
+///
+/// The face shows the fingerprint this answers with, takes the user's agreement, and only then calls
+/// [`plugin_catalog_add_source`] with the fingerprint that was agreed to.
+///
+/// Off the main thread, like browsing: it fetches the key document beside the catalog, and a host that
+/// is not there is only found out by waiting for its timeout.
+#[tauri::command]
+pub async fn plugin_catalog_probe_source(url: String) -> Result<PluginCatalogProbeDto, CmdError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<PluginCatalogProbeDto, CmdError> {
+        let paths = amenbo_core::config::Paths::resolve()?;
+        let probe = amenbo_core::plugin_catalog::probe_source(&paths, &url)?;
+        Ok(PluginCatalogProbeDto {
+            pins_a_new_key: probe.pins_a_new_key(),
+            url: probe.url,
+            suggested_name: probe.suggested_name,
+            fingerprint: probe.fingerprint,
+            registered: probe.registered,
+        })
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("配布元を調べられませんでした: {e}").into() })?
+}
+
+/// Judge the agreement the screen took against the pin that is about to be written (`AMB-D-389`).
+///
+/// Registration in the GUI crosses a process boundary between showing a fingerprint and agreeing to
+/// it, so this door re-reads what the catalog publishes and goes ahead only when the answer is still
+/// what was on screen. The CLI needs none of this: it confirms with the probe in hand.
+///
+/// - nothing new would be pinned — no key, or the key is already the pinned one: no agreement is
+///   asked for, because registering is a bookmark again and only the name can change.
+/// - a new key, agreed to by that fingerprint: the ordinary case.
+/// - a new key and no agreement at all: refused. A door that pins on the caller's silence is not
+///   consent.
+/// - a new key and an agreement naming a different one: refused. What was read is not what would be
+///   pinned, so the answer is to look again — never to pin the one that arrived second.
+fn agreed_pin(
+    probe: &amenbo_core::plugin_catalog::SourceProbe,
+    agreed: Option<&str>,
+) -> Result<(), CmdError> {
+    if !probe.pins_a_new_key() {
+        return Ok(());
+    }
+    let serving = probe.fingerprint.as_deref().unwrap_or_default();
+    match agreed {
+        Some(agreed) if agreed == serving => Ok(()),
+        Some(agreed) => Err(CmdError::coded(
+            "plugin_catalog_key_changed",
+            format!(
+                "{} の鍵が、確認した指紋（{agreed}）から {serving} に変わりました。登録し直して、新しい指紋を確かめてください。",
+                probe.url
+            ),
+            format!(
+                "{} now publishes {serving}, not the {agreed} you were shown — register it again and check the new fingerprint.",
+                probe.url
+            ),
+        )),
+        None => Err(CmdError::coded(
+            "plugin_catalog_consent_required",
+            format!(
+                "{} を登録すると署名鍵（{serving}）を信頼することになります。指紋を確認してから登録してください。",
+                probe.url
+            ),
+            format!(
+                "registering {} trusts its signing key ({serving}) — agree to the fingerprint before it is pinned.",
+                probe.url
+            ),
+        )),
+    }
+}
+
 /// Register a third-party catalog so browsing shows what it offers (`AMB-D-347`), pinning the key it
-/// publishes (`AMB-D-389`). Returns `false` when the registration already said exactly this —
-/// idempotent, not an error.
+/// publishes against the fingerprint the user agreed to (`AMB-D-389`). Returns `false` when the
+/// registration already said exactly this — idempotent, not an error.
+///
+/// `agreed_fingerprint` is what the consent screen showed and the user accepted (see [`agreed_pin`]);
+/// it is required exactly when a key would be pinned that is not pinned yet, and may be omitted when
+/// nothing new is being trusted — a catalog that publishes no key, or a re-registration that only
+/// changes the name.
 ///
 /// Core refuses a URL that is not `http(s)://…`, the official catalog's own URL (it is not a
 /// third-party source and is merged first anyway), and a catalog that now publishes a **different**
 /// key than the one pinned: trusting a new key is unregistering and registering again.
 ///
-/// **The fingerprint is not shown on screen yet** — the consent dialog that puts it in front of the
-/// user before the pin is its own change (`AMB-T-2269`), and this door registers the way the button
-/// already did. Nothing rests on the pin until an install resolves across catalogs (`AMB-T-2106`);
-/// the CLI's `plugin catalog add` shows and confirms the fingerprint today.
-///
 /// The key is fetched here (one small document beside the catalog); the entries themselves arrive when
 /// the caller browses again.
 #[tauri::command]
-pub fn plugin_catalog_add_source(url: String, name: Option<String>) -> Result<bool, CmdError> {
-    let paths = amenbo_core::config::Paths::resolve()?;
-    let probe = amenbo_core::plugin_catalog::probe_source(&paths, &url).map_err(CmdError::from)?;
-    amenbo_core::plugin_catalog::add_source(&paths, &probe, name.as_deref()).map_err(CmdError::from)
+pub async fn plugin_catalog_add_source(
+    url: String,
+    name: Option<String>,
+    agreed_fingerprint: Option<String>,
+) -> Result<bool, CmdError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<bool, CmdError> {
+        let paths = amenbo_core::config::Paths::resolve()?;
+        let probe = amenbo_core::plugin_catalog::probe_source(&paths, &url)?;
+        agreed_pin(&probe, agreed_fingerprint.as_deref())?;
+        Ok(amenbo_core::plugin_catalog::add_source(&paths, &probe, name.as_deref())?)
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("配布元を登録できませんでした: {e}").into() })?
 }
 
 /// Unregister a third-party catalog and drop its cached copy (`AMB-D-347`). Returns `false` when the
@@ -7532,5 +7636,43 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A probe as the door would have built it, without the fetch: what the network does is core's
+    /// business, and the rule under test is what the door does with the answer.
+    fn probe_of(
+        fingerprint: Option<&str>,
+        pinned: Option<&str>,
+    ) -> amenbo_core::plugin_catalog::SourceProbe {
+        amenbo_core::plugin_catalog::SourceProbe {
+            url: "https://example.invalid/catalog.json".to_string(),
+            suggested_name: "example.invalid".to_string(),
+            // A key is present exactly when there is a fingerprint to show for it; its bytes are core's
+            // to verify and are never read here.
+            key: fingerprint.map(|f| format!("a key whose fingerprint is {f}")),
+            fingerprint: fingerprint.map(str::to_string),
+            registered: pinned.is_some(),
+            pinned: pinned.map(str::to_string),
+        }
+    }
+
+    /// The consent rule, as a truth table (`AMB-D-389`). The GUI shows a fingerprint in one call and
+    /// registers in the next, so the pin that gets written has to be the one that was agreed to —
+    /// silence and a stale agreement are both refusals, and neither is a pin.
+    #[test]
+    fn a_catalog_is_pinned_only_on_the_fingerprint_that_was_agreed_to() {
+        let fp = "6272CBB782CB57A0";
+        assert!(agreed_pin(&probe_of(Some(fp), None), Some(fp)).is_ok(), "agreed to what is served");
+        assert!(agreed_pin(&probe_of(None, None), None).is_ok(), "no key: nothing to agree to");
+        assert!(
+            agreed_pin(&probe_of(Some(fp), Some(fp)), None).is_ok(),
+            "already pinned: re-registering only renames it",
+        );
+
+        let silent = agreed_pin(&probe_of(Some(fp), None), None).unwrap_err();
+        assert_eq!(silent.code, "plugin_catalog_consent_required", "silence does not pin a key");
+        let stale = agreed_pin(&probe_of(Some(fp), None), Some("0000000000000000")).unwrap_err();
+        assert_eq!(stale.code, "plugin_catalog_key_changed", "a key that moved under the screen");
+        assert!(stale.message.contains(fp), "the refusal names what is served now: {}", stale.message);
     }
 }

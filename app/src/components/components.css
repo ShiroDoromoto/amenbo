@@ -259,6 +259,13 @@
 .catsrc { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); background: var(--c-surface-sunken); }
 .catsrc__row { display: flex; align-items: center; gap: var(--s-2); }
 .catsrc__url { font-size: var(--fs-xs); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.catsrc__name { font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12em; }
+/* What registering pins, while the user decides (`AMB-D-389`). Set apart from the rows above it,
+   because it is a question and they are a list. */
+.catsrc__consent { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface); }
+/* The fingerprint is what is being trusted, so it is read character by character: monospace, and big
+   enough to compare against what the publisher states. */
+.catsrc__fp strong { font-family: var(--font-mono); font-size: var(--fs-sm); letter-spacing: 0.04em; user-select: text; }
 
 /* A market row is the way into the detail, so it says so on hover — the click is what costs a request
    to GitHub (`AMB-D-347`), and a row that looked inert would hide that. */

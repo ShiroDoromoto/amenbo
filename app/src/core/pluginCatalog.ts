@@ -10,6 +10,7 @@ import { inTauri } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
 import type {
   PluginCatalogDto,
+  PluginCatalogProbeDto,
   PluginDetailDto,
   PluginEntryDto,
   PluginRepoFactsDto,
@@ -158,16 +159,41 @@ function reloadCatalog(): void {
   invalidateQueries((key) => key[0] === "plugin-catalog");
 }
 
+/** What registering a catalog would mean, before anything is written (generated DTO). */
+export type PluginCatalogProbe = PluginCatalogProbeDto;
+
 /**
- * Register a third-party catalog. `false` means it was already registered (idempotent, not a
- * failure); a URL core refuses — not `http(s)`, or the official catalog's own — throws.
+ * Ask what registering `url` would mean, without registering it — the fingerprint the consent screen
+ * shows, the name it suggests, and whether going ahead pins a key (`AMB-D-389`). A URL core refuses —
+ * not `http(s)`, the official catalog's own, or one whose key document is not a key — throws, as does
+ * a catalog that now publishes a different key than the one already pinned.
  *
- * Registering only widens what discovery *shows*. Installing still accepts nothing a third-party
- * catalog signed (`AMB-D-371`), so this is a browsing choice, not a trust one.
+ * Outside Tauri there is no registry to probe, so the browser mock has no honest answer.
  */
-export async function addCatalogSource(url: string): Promise<boolean> {
+export async function probeCatalogSource(url: string): Promise<PluginCatalogProbe | null> {
+  if (!inTauri()) return null;
+  return invoke<PluginCatalogProbe>("plugin_catalog_probe_source", { url });
+}
+
+/**
+ * Register a third-party catalog under `name`, pinning the key whose fingerprint the user agreed to.
+ * `false` means it was already registered exactly like this (idempotent, not a failure).
+ *
+ * Registering is a trust decision, not a bookmark (`AMB-D-389`): a plugin installed from this catalog
+ * is verified against **its** key rather than the one amenbo ships. So `agreedFingerprint` is what the
+ * consent screen showed, and the door refuses to pin anything else — including the case where the
+ * catalog started publishing a different key between the screen and the button.
+ */
+export async function addCatalogSource(
+  url: string,
+  opts: { name?: string; agreedFingerprint?: string } = {},
+): Promise<boolean> {
   if (!inTauri()) return false;
-  const added = await invoke<boolean>("plugin_catalog_add_source", { url });
+  const added = await invoke<boolean>("plugin_catalog_add_source", {
+    url,
+    name: opts.name ?? null,
+    agreedFingerprint: opts.agreedFingerprint ?? null,
+  });
   reloadCatalog();
   return added;
 }

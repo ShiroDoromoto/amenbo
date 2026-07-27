@@ -15,6 +15,7 @@ vi.mock("../core/mutations", () => ({
 }));
 
 import { OnboardingScreen } from "./OnboardingScreen";
+import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -62,5 +63,14 @@ describe("OnboardingScreen commands", () => {
     hoisted.cmd = null;
     await render();
     expect(commands()).toContain("amenbo init");
+  });
+});
+
+describe("what the asking step hands over", () => {
+  // Two wordings for the same move leave the reader checking which one is right, so the step shows
+  // the request the first loop copies rather than an example of its own.
+  it("is the request the first loop copies, word for word", async () => {
+    await render();
+    expect(commands()).toContain(t("firstloop.prompt"));
   });
 });

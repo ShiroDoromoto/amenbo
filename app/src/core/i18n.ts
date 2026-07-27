@@ -517,7 +517,6 @@ const UI: Record<Lang, Record<string, string>> = {
     "onboard.s2a": " に「まず ", "onboard.s2b": " を実行して操作を学べ」。エージェントは一発で操作を習得します。",
     "onboard.s4title": "あとは置くだけ",
     "onboard.s4body": "タスクを AI 宛に置けば、AI が着手して自律で進めます。動きはアクティビティに流れます。",
-    "onboard.s4cmd": "@Ai このPJを整理して",
     // list empty states
     "list.empty": "該当するタスクはありません", "list.emptyInbox": "あなた（と AI）宛の未対応はありません",
     "list.emptyArchived": "アーカイブした項目はありません",
@@ -999,7 +998,6 @@ const UI: Record<Lang, Record<string, string>> = {
     "onboard.s2a": " says “first run ", "onboard.s2b": " to learn the commands.” Agents pick it up in one shot.",
     "onboard.s4title": "Then just drop tasks",
     "onboard.s4body": "Assign a task to the AI and it starts and proceeds autonomously. Everything shows up in the activity feed.",
-    "onboard.s4cmd": "@Ai tidy up this project",
     // list empty states
     "list.empty": "No matching tasks", "list.emptyInbox": "Nothing pending for you (and your AI)",
     "list.emptyArchived": "No archived items",

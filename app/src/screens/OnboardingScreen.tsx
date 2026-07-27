@@ -58,7 +58,9 @@ function steps(cli: string): { title: string; cmd: string; body: React.ReactNode
       cmd: "cat AGENTS.md",
       body: <><code>AGENTS.md</code>{t("onboard.s2a")}<code>{`${cli} agent --json`}</code>{t("onboard.s2b")}</>,
     },
-    { title: t("onboard.s4title"), cmd: t("onboard.s4cmd"), body: t("onboard.s4body") },
+    // The asking step hands over the very request the first loop copies (`FirstLoop`), so a reader
+    // who meets both is taught one wording and not two.
+    { title: t("onboard.s4title"), cmd: t("firstloop.prompt"), body: t("onboard.s4body") },
   ];
 }
 

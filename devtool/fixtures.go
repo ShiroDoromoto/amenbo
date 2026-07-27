@@ -108,13 +108,17 @@ func fixturesCmd(args []string) {
 func fixturesRefresh(args []string) {
 	fs := flag.NewFlagSet("fixtures refresh", flag.ExitOnError)
 	catalogSrc := fs.String("catalog", realCatalogURL,
-		"where to take the catalog from — a URL or a path, for a catalog repo's own generated copy")
+		"where to take the catalog from — a URL, a generated copy's path, or a catalog repo checkout to aggregate")
+	amenboBin := fs.String("amenbo", "",
+		"the amenbo build to validate manifests with when aggregating a checkout (default: this one)")
 	var repos repeated
 	fs.Var(&repos, "repo", "an extra owner/name to capture, beyond the ones the catalog names (repeatable)")
 	fs.Parse(args)
 
 	dir := mustFixturesDir()
-	catalog, err := readSource(*catalogSrc)
+	// A checkout of the catalog repository is aggregated rather than copied: while the published
+	// catalog lists nothing there is no copy to take, and the manifests are the material either way.
+	catalog, details, err := readCatalog(*catalogSrc, *amenboBin)
 	if err != nil {
 		logf("devtool: %v", err)
 		os.Exit(1)
@@ -138,9 +142,14 @@ func fixturesRefresh(args []string) {
 	}
 
 	// The catalog is served in two documents, so a capture of the list alone is a fake world where
-	// nothing can be installed: each entry's detail is taken from beside the list it was named in.
+	// nothing can be installed: each entry's detail is taken from beside the list it was named in, or
+	// comes out of the aggregation that just built the list.
 	entries := catalogEntries(catalog)
 	for _, entry := range entries {
+		if body, built := details[entry.Name]; built {
+			writeDetail(dir, entry.Name, body, "built")
+			continue
+		}
 		refreshDetail(dir, *catalogSrc, entry.Name)
 	}
 
@@ -158,6 +167,61 @@ func fixturesRefresh(args []string) {
 	logf("→ fixtures in %s", dir)
 }
 
+// readCatalog answers with the catalog list and, when it built them, the detail documents that go with
+// it. A directory is a checkout of the catalog repository and is aggregated from its manifests
+// (`fixtures_catalog.go`); anything else is a URL or a generated copy, and is taken as it is.
+func readCatalog(src, amenboBin string) ([]byte, map[string][]byte, error) {
+	if info, err := os.Stat(src); err == nil && info.IsDir() {
+		bin, err := validatorBinary(amenboBin)
+		if err != nil {
+			return nil, nil, err
+		}
+		logf("→ aggregating %s with %s", src, bin)
+		return aggregateCatalog(src, bin)
+	}
+	catalog, err := readSource(src)
+	return catalog, nil, err
+}
+
+// validatorBinary is the amenbo build that splits a manifest into the two published documents. The
+// released CLI does not carry the plugin commands yet, so the default is this checkout's own build
+// rather than whatever `amenbo` is on the PATH — the same principle as the dev GUI's, and the pick is
+// named in the log so it is never a guess.
+func validatorBinary(chosen string) (string, error) {
+	if chosen != "" {
+		return chosen, nil
+	}
+	root := mustTreeRoot()
+	candidates := []string{
+		filepath.Join(root, "target", "debug", "amenbo"),
+		filepath.Join(root, "target", "dev", "release", "amenbo"),
+		filepath.Join(root, "target", "release", "amenbo"),
+	}
+	if runtime.GOOS == "windows" {
+		for i, c := range candidates {
+			candidates[i] = c + ".exe"
+		}
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c, nil
+		}
+	}
+	return "", fmt.Errorf("no amenbo build to validate with (%s) — build one with 'cargo build -p amenbo-cli', or pass --amenbo",
+		strings.Join(candidates, ", "))
+}
+
+// writeDetail puts one built detail document where a detail is fetched from — the same place a
+// captured one lands, so what serves them cannot tell the two apart.
+func writeDetail(dir, name string, body []byte, how string) {
+	path := filepath.Join(dir, "plugins", name+".json")
+	if err := writeFixture(path, body); err != nil {
+		logf("devtool: %v", err)
+		os.Exit(1)
+	}
+	logf("→ %s (%d bytes, %s)", strings.TrimPrefix(path, dir+string(filepath.Separator)), len(body), how)
+}
+
 // refreshDetail captures one plugin's detail document — what an install reads, and what a detail
 // view opens. Best-effort like a repository's answers: a catalog that lists an entry whose detail is
 // not published yet is a real state of the world, and the absent file makes the fake say so too.
@@ -168,12 +232,7 @@ func refreshDetail(dir, catalogSrc, name string) {
 		logf("! %s: %v", src, err)
 		return
 	}
-	path := filepath.Join(dir, "plugins", name+".json")
-	if err := writeFixture(path, body); err != nil {
-		logf("devtool: %v", err)
-		os.Exit(1)
-	}
-	logf("→ %s (%d bytes)", strings.TrimPrefix(path, dir+string(filepath.Separator)), len(body))
+	writeDetail(dir, name, body, "captured")
 }
 
 // detailSource is where one plugin's detail sits beside the list it was named in: the same base,

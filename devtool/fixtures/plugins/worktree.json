@@ -1,0 +1,30 @@
+{
+  "assets": {
+    "linux-arm64": {
+      "checksum": "sha256:a3b1ae53a6650e05673783d9d9e686b03c31582d488639a5af667f87e90988a5",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-worktree/releases/download/v1/worktree-v1-linux-arm64.tar.gz"
+    },
+    "linux-x64": {
+      "checksum": "sha256:f74ec13fc4341dba8bb64071651f86fb374bb932e0f15a8799bed8de014c06ac",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-worktree/releases/download/v1/worktree-v1-linux-x64.tar.gz"
+    },
+    "macos": {
+      "checksum": "sha256:a6c1027eb54606d4f5e67176faeefefff3b64161b03fd76faff5908e093bf07c",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-worktree/releases/download/v1/worktree-v1-macos-universal.tar.gz"
+    }
+  },
+  "config": [
+    {
+      "key": "base",
+      "label": "Base branch",
+      "required": false,
+      "secret": false
+    }
+  ],
+  "events": [
+    "task.status_changed"
+  ],
+  "name": "worktree",
+  "payload_v": 1,
+  "scope": "project"
+}

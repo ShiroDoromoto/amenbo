@@ -326,7 +326,9 @@ Serves those fixtures on a local host and starts the dev GUI pointed at it,
 through the three overrides the app already reads (`crates/amenbo-core/src/env.rs`)
 — there is no development-only branch in the product. The GUI it starts is this
 checkout's own instance when it has one, and the shared dev app otherwise;
-either way the launch line names the binary, and `--app` picks one by hand:
+either way the launch line names the binary, and `--app` picks one by hand — the
+bundle (`/Applications/amenbo (dev <id>).app`) or the executable inside it, since
+the executable is what the launch takes and the bundle is what a person has:
 
 | face | env var | what it answers |
 |---|---|---|

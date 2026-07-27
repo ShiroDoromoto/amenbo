@@ -2,6 +2,7 @@
 
 use std::process::Command;
 
+use amenbo_static_host::StaticHost;
 use serde_json::Value;
 
 /// A fresh, isolated AMENBO_HOME for each test.
@@ -4731,70 +4732,6 @@ fn plugin_catalog_registers_lists_and_removes_a_third_party_source() {
     assert_eq!(after["sources"].as_array().unwrap().len(), 1, "back to the official catalog alone");
 }
 
-/// A one-shot static host on the loopback, for a catalog that has to actually answer: registration
-/// fetches the key beside `catalog.json`, and no fixture on disk can stand in for a URL being fetched.
-/// It serves each path from the map until the test drops it, and it answers 404 for anything else,
-/// which is how "this catalog publishes no key" is expressed.
-struct StaticHost {
-    port: u16,
-    routes: std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>,
-    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
-}
-
-impl StaticHost {
-    fn serve(routes: Vec<(String, String)>) -> StaticHost {
-        use std::io::{Read as _, Write as _};
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
-        let port = listener.local_addr().unwrap().port();
-        let routes = std::sync::Arc::new(std::sync::Mutex::new(routes));
-        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (served, flag) = (routes.clone(), stop.clone());
-        std::thread::spawn(move || {
-            for stream in listener.incoming() {
-                if flag.load(std::sync::atomic::Ordering::Relaxed) {
-                    return;
-                }
-                let Ok(mut stream) = stream else { return };
-                let mut buf = [0u8; 1024];
-                let read = stream.read(&mut buf).unwrap_or(0);
-                let request = String::from_utf8_lossy(&buf[..read]).to_string();
-                let path = request.split_whitespace().nth(1).unwrap_or("/").to_string();
-                let body = served.lock().unwrap().iter().find(|(p, _)| *p == path).map(|(_, b)| b.clone());
-                let response = match body {
-                    Some(body) => format!(
-                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                        body.len()
-                    ),
-                    None => "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-                        .to_string(),
-                };
-                let _ = stream.write_all(response.as_bytes());
-            }
-        });
-        StaticHost { port, routes, stop }
-    }
-
-    fn url(&self, path: &str) -> String {
-        format!("http://127.0.0.1:{}{path}", self.port)
-    }
-
-    /// Replace what one path serves, the host keeping its port — how a publisher rotating their key
-    /// looks from the outside.
-    fn set(&self, path: &str, body: &str) {
-        let mut routes = self.routes.lock().unwrap();
-        routes.retain(|(p, _)| p != path);
-        routes.push((path.to_string(), body.to_string()));
-    }
-}
-
-impl Drop for StaticHost {
-    fn drop(&mut self) {
-        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
-        // Unblock the accept loop so the thread sees the flag and returns.
-        let _ = std::net::TcpStream::connect(("127.0.0.1", self.port));
-    }
-}
-
 /// Registering a catalog that publishes a key is a trust decision, not a bookmark (`AMB-D-389`): the
 /// fingerprint is put in front of whoever is deciding, the key is pinned on their consent, and a catalog
 /// that later publishes a *different* key is refused rather than re-pinned.
@@ -4818,10 +4755,10 @@ fn plugin_catalog_pins_the_key_a_catalog_publishes_and_refuses_a_changed_one() {
     const KEY_B: &str = "RWSw3wZ34b1PMyHu4KajlLhV0SdlMAgQGefo4pFIxv7MgRoWSVpCVXSE";
     let catalog = r#"{"catalog_v": 1, "generated_at": "2026-07-23T04:57:10Z", "plugins": []}"#;
 
-    let host = StaticHost::serve(vec![
-        ("/works/catalog.json".to_string(), catalog.to_string()),
+    let host = StaticHost::serve([
+        ("/works/catalog.json", catalog.to_string()),
         (
-            "/works/catalog-key.pub".to_string(),
+            "/works/catalog-key.pub",
             format!("untrusted comment: minisign public key 6272CBB782CB57A0\n{KEY_A}\n"),
         ),
     ]);

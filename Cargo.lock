@@ -32,6 +32,7 @@ version = "1.8.0"
 dependencies = [
  "amenbo-core",
  "amenbo-scratch",
+ "amenbo-static-host",
  "chrono",
  "clap",
  "libc",
@@ -72,6 +73,10 @@ dependencies = [
 
 [[package]]
 name = "amenbo-scratch"
+version = "1.8.0"
+
+[[package]]
+name = "amenbo-static-host"
 version = "1.8.0"
 
 [[package]]

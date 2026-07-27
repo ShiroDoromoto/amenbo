@@ -1,0 +1,11 @@
+[package]
+name = "amenbo-static-host"
+description = "A loopback host for the tests: fixed answers on a port nobody else took, swappable while it runs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# Test support only — nothing here is ever linked into a shipped binary.
+publish = false
+
+[dependencies]

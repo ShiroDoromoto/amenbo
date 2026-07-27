@@ -6,7 +6,7 @@ import { useState } from "react";
 import { getSnapshot } from "../core/snapshot";
 import { saveOnboarding } from "../core/mutations";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
-import { t, type Lang } from "../core/i18n";
+import { normalizeLang, t, type Lang } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
 
 // During setup the UI language has to switch as it is picked, so labels are looked up in the language
@@ -29,7 +29,7 @@ export function OnboardingSetup() {
   const rosterAi = snap.roster.find((a) => a.kind === "ai")?.name ?? "";
 
   const [step, setStep] = useState(0);
-  const [lang, setLang] = useState<Lang>(snap.language === "en" ? "en" : "ja");
+  const [lang, setLang] = useState<Lang>(normalizeLang(snap.language));
   const [humanName, setHumanName] = useState(DEFAULT_HUMAN_NAMES.includes(rosterHuman) ? "" : rosterHuman);
   const [aiName, setAiName] = useState(DEFAULT_AI_NAMES.includes(rosterAi) ? "" : rosterAi);
   const [theme, setTheme] = useState<ThemePref>(getThemePref);

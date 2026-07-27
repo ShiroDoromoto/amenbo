@@ -123,7 +123,8 @@ describe("when the terminal will not open", () => {
     render();
     await act(async () => { button(t("firstloop.s1btn"))!.click(); });
 
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain("開けません");
+    // English by default, and the fixture carries both faces, so this pins which one is shown.
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("cannot open");
   });
 
   // The walk has to keep going: the user opens their own terminal, so what they need is the folder

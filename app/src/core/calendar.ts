@@ -149,13 +149,13 @@ const MONTHS_EN = [
 
 // The month heading (year, month=0..11).
 export function monthLabel(year: number, month: number, lang: Lang): string {
-  return lang === "en" ? `${MONTHS_EN[month]} ${year}` : `${year}年${month + 1}月`;
+  return lang === "ja" ? `${year}年${month + 1}月` : `${MONTHS_EN[month]} ${year}`;
 }
 
 // The weekday headings (weekStart=0 starts the week on Sunday).
 export function weekdayLabels(lang: Lang, weekStart = 0): string[] {
-  const base = lang === "en"
-    ? ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
-    : ["日", "月", "火", "水", "木", "金", "土"];
+  const base = lang === "ja"
+    ? ["日", "月", "火", "水", "木", "金", "土"]
+    : ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
   return [...base.slice(weekStart), ...base.slice(0, weekStart)];
 }

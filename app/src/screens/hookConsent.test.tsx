@@ -41,6 +41,7 @@ vi.mock("../core/mutations", () => ({
   },
 }));
 
+import { t } from "../core/i18n";
 import { HookConsentModal } from "./HookConsentModal";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -106,7 +107,7 @@ describe("the lint hook consent modal", () => {
   it("records a yes and closes — one answer, no repository", async () => {
     hoisted.offer = offer();
     await render();
-    await click("はい");
+    await click(t("hooks.yes"));
     expect(hoisted.answers).toEqual([{ yes: true }]);
     expect(container.textContent).toBe("");
   });
@@ -114,7 +115,7 @@ describe("the lint hook consent modal", () => {
   it("records a no", async () => {
     hoisted.offer = offer();
     await render();
-    await click("いいえ");
+    await click(t("hooks.no"));
     expect(hoisted.answers).toEqual([{ yes: false }]);
   });
 
@@ -130,7 +131,7 @@ describe("the lint hook consent modal", () => {
     hoisted.offer = offer();
     await render();
     // The scope line is the promise the click makes good on, so it must be on screen before the click.
-    expect(container.textContent).toContain("1回");
+    expect(container.textContent).toContain(t("hooks.scope"));
   });
 
   it("words its hint with the command name this build answers to, never a spelled-in one", async () => {
@@ -157,7 +158,7 @@ describe("the lint hook consent modal", () => {
     hoisted.offer = offer();
     hoisted.failWith = "permission denied";
     await render();
-    await click("はい");
+    await click(t("hooks.yes"));
     expect(hoisted.answers).toEqual([]);
     expect(container.querySelector(".hookconsent__modal")).not.toBeNull(); // Still asking.
   });
@@ -189,7 +190,7 @@ describe("the lint hook consent modal", () => {
     it("says so once the question is answered", async () => {
       hoisted.offer = offer();
       await render();
-      await click("はい");
+      await click(t("hooks.yes"));
       expect(hoisted.done).toBeGreaterThan(0);
     });
 
@@ -198,7 +199,7 @@ describe("the lint hook consent modal", () => {
       hoisted.offer = offer();
       hoisted.failWith = "permission denied";
       await render();
-      await click("はい");
+      await click(t("hooks.yes"));
       expect(hoisted.done).toBe(0);
     });
   });

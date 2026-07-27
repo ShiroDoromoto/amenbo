@@ -18,20 +18,24 @@ import { en } from "./locales/en";
 import { ja } from "./locales/ja";
 import { currentLang, type Lang } from "./lang";
 
-export { currentLang, dateLocale, normalizeLang, type Lang } from "./lang";
+export { currentLang, dateLocale, DEFAULT_LANG, LANGS, normalizeLang, type Lang } from "./lang";
 export type { ViewKind } from "./keys";
 
 /**
- * Every dictionary this build carries. Exported because the coverage gate has to read what the app
- * actually loads: a list of languages kept beside this one would go stale the first time a
- * dictionary is added, and the gate would then pass by not looking.
+ * Every dictionary this build carries. Partial on purpose: a supported language with no file yet
+ * resolves to English everywhere, which is how a language arrives one file at a time rather than
+ * all nineteen at once.
+ *
+ * Exported because the coverage gate has to read what the app actually loads: a list of languages
+ * kept beside this one would go stale the first time a dictionary is added, and the gate would then
+ * pass by not looking.
  */
-export const DICTIONARIES: Record<Lang, Translation> = { en, ja };
+export const DICTIONARIES: Partial<Record<Lang, Translation>> = { en, ja };
 
 /** The UI string this language has for the key, else the English one. */
 function ui(key: string, lang: Lang): string | undefined {
   const k = key as UiKey;
-  return DICTIONARIES[lang].ui[k] ?? en.ui[k];
+  return DICTIONARIES[lang]?.ui[k] ?? en.ui[k];
 }
 
 /** Localizes a fixed UI-chrome string. A key no language has falls back to the key itself. */
@@ -75,7 +79,7 @@ function isCmdError(e: unknown): e is CmdError {
 /** Renders a CmdError as one line in the current UI language: code template, else the message. */
 export function errLabel(err: CmdError, lang: Lang = currentLang()): string {
   const code: ErrorCode | undefined = isErrorCode(err.code) ? err.code : undefined;
-  const tmpl = code && (DICTIONARIES[lang].err[code] ?? en.err[code]);
+  const tmpl = code && (DICTIONARIES[lang]?.err[code] ?? en.err[code]);
   if (tmpl) {
     const f = err.fields ?? {};
     return tmpl.replace(/\{(\w+)\}/g, (_, k) => {
@@ -120,7 +124,7 @@ export function doctorText(
 }
 
 function doctorTemplate(kind: DoctorIssueKind, lang: Lang): DoctorTemplate {
-  return DICTIONARIES[lang].doctor[kind] ?? en.doctor[kind];
+  return DICTIONARIES[lang]?.doctor[kind] ?? en.doctor[kind];
 }
 
 /**
@@ -136,7 +140,7 @@ export function errText(e: unknown): string {
 }
 
 export function statusLabel(s: Status, lang: Lang = currentLang()): string {
-  return DICTIONARIES[lang].status[s] ?? en.status[s];
+  return DICTIONARIES[lang]?.status[s] ?? en.status[s];
 }
 
 /**
@@ -232,8 +236,8 @@ function isStatus(s: string): s is Status {
   return s in en.status;
 }
 export function priorityLabel(p: Priority, lang: Lang = currentLang()): string {
-  return DICTIONARIES[lang].priority[p] ?? en.priority[p];
+  return DICTIONARIES[lang]?.priority[p] ?? en.priority[p];
 }
 export function viewLabel(v: ViewKind, lang: Lang = currentLang()): string {
-  return DICTIONARIES[lang].view[v] ?? en.view[v];
+  return DICTIONARIES[lang]?.view[v] ?? en.view[v];
 }

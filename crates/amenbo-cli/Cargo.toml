@@ -40,6 +40,7 @@ libc = "0.2"
 
 [dev-dependencies]
 amenbo-scratch.workspace = true
+amenbo-static-host.workspace = true
 
 # Real-binary end-to-end suite. Gated behind `e2e`; build/run it with `cargo test --features e2e`.
 [[test]]

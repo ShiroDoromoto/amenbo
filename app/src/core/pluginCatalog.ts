@@ -288,9 +288,10 @@ export function usePluginRepoFacts(
  * carries what a row draws; this carries what installing one would mean — the switch it gets, what it
  * watches, what it will ask to be told, and whether this build can run it.
  *
- * `null` is an answer, not a failure: the official catalog is what a detail is fetched from, so an entry
- * only a third-party index offers has none here (and cannot be installed either). Outside Tauri there is
- * no catalog to read, so the browser mock says the same.
+ * It is read from whichever catalog served the row (`AMB-D-389`), so a registered catalog's plugin says
+ * what installing it would mean before it is installed — the same merged view the list drew. `null` is an
+ * answer, not a failure: a name no catalog carries has no detail to read. Outside Tauri there is no
+ * catalog at all, so the browser mock says the same.
  */
 export async function fetchPluginDetail(name: string): Promise<PluginDetail | null> {
   if (inTauri()) return invoke<PluginDetail | null>("plugin_detail", { name });

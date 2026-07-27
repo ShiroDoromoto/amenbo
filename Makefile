@@ -119,7 +119,12 @@ GUI_RPM_DIST      := $(DIST_DIR)/amenbo-app-linux-$(LINUX_IMG_ARCH).rpm
 # The GUI e2e (verify-gui-linux) must run the HOST's arch: an emulated (qemu) amd64 build
 # aborts in the Tauri CLI, and an emulated GUI is not what we want to watch anyway.
 HOST_GUI_ARCH     := $(if $(filter arm64,$(shell uname -m)),arm64,amd64)
-GUI_DEB_HOST      := $(DIST_DIR)/amenbo-app-linux-$(HOST_GUI_ARCH).deb
+HOST_IMG_ARCH     := $(if $(filter arm64,$(HOST_GUI_ARCH)),aarch64,x86_64)
+GUI_APPIMAGE_HOST := $(DIST_DIR)/amenbo-app-linux-$(HOST_IMG_ARCH).AppImage
+# The AppImage carries the GUI alone, so the e2e's separate writer — the CLI process the
+# check watches the webview react to — is brought in as its own binary. In release CI the
+# native CLI build has already put it here, so only a local run pays to produce it.
+CLI_LINUX_HOST    := $(DIST_DIR)/amenbo-linux-$(HOST_GUI_ARCH)
 # The Linux clippy container (lint-linux) reuses Dockerfile.linux-gui but is built for
 # the HOST arch, so it gets its own tag: the same tag under two platforms would have the
 # dist image (amd64 by default) and this one overwrite each other on every build.
@@ -322,24 +327,26 @@ dist-gui-linux:
 ## Linux check at another scenario.
 SCENARIO ?= verification/scenarios/task-assign.yaml
 
-## Exercise "another process writes → the screen updates" on a real Linux GUI app. Put the .deb that
-## dist-gui-linux built into a container with Xvfb and launch it, write via the CLI, and take
+## Exercise "another process writes → the screen updates" on a real Linux GUI app. Put the AppImage
+## that dist-gui-linux built into a container with Xvfb and launch it, write via the CLI, and take
 ## before/after screenshots = confirm the spot where emit reaches WebKitGTK's webview (the last hop
-## no other test touches).
+## no other test touches). The AppImage is the whole of the Linux GUI distribution, so this runs what
+## a Linux user actually launches.
 ## The judgment is mechanical (OCR): the title of the card the CLI wrote is absent from 1-before.png
 ## and present in 2-after.png. That title is not baked into the container — the host resolves it from
 ## $(SCENARIO) through the amenbo-scenario crate and passes it in (the container has no toolchain).
-## Not on the always-on CI (it needs a full .deb build); it runs in the later stage of release.yml,
+## Not on the always-on CI (it needs a full GUI build); it runs in the later stage of release.yml,
 ## which builds the bundle = catch the breaking trigger (a tauri/webview update) right before it
 ## ships.
-verify-gui-linux: $(GUI_DEB_HOST)
+verify-gui-linux: $(GUI_APPIMAGE_HOST) $(CLI_LINUX_HOST)
 	@command -v docker >/dev/null 2>&1 || { echo "✗ docker is required"; exit 1; }
 	@command -v jq >/dev/null 2>&1 || { echo "✗ jq is required"; exit 1; }
 	@mkdir -p $(DIST_DIR)/gui-e2e
-	cp $(GUI_DEB_HOST) scripts/docker/
+	cp $(GUI_APPIMAGE_HOST) $(CLI_LINUX_HOST) scripts/docker/
 	docker build --platform linux/$(HOST_GUI_ARCH) -f scripts/docker/Dockerfile.linux-gui-e2e \
-	  --build-arg DEB=$(notdir $(GUI_DEB_HOST)) -t amenbo-linux-gui-e2e:latest scripts/docker/
-	rm -f scripts/docker/$(notdir $(GUI_DEB_HOST))
+	  --build-arg APPIMAGE=$(notdir $(GUI_APPIMAGE_HOST)) --build-arg CLI=$(notdir $(CLI_LINUX_HOST)) \
+	  -t amenbo-linux-gui-e2e:latest scripts/docker/
+	rm -f scripts/docker/$(notdir $(GUI_APPIMAGE_HOST)) scripts/docker/$(notdir $(CLI_LINUX_HOST))
 	@card="$$(cargo run -q --manifest-path verification/Cargo.toml -p amenbo-scenario --bin emit -- $(SCENARIO) \
 	  | jq -r '([ .steps[] | select(.as != null) | {key: .as, value: .with.title} ] | from_entries) as $$labels \
 	    | ([ .steps[] | select(.type == "assert" and .op == "listed" and (.with.present != false)) | .with.target ] | .[0]) as $$tgt \
@@ -350,8 +357,24 @@ verify-gui-linux: $(GUI_DEB_HOST)
 	    -v "$(CURDIR)/$(DIST_DIR)/gui-e2e:/out" amenbo-linux-gui-e2e:latest
 	@echo "→ screenshots: $(DIST_DIR)/gui-e2e/{1-before,2-after,3-diff}.png"
 
-$(GUI_DEB_HOST):
-	$(MAKE) dist-gui-linux BUNDLES=deb LINUX_GUI_ARCH=$(HOST_GUI_ARCH)
+$(GUI_APPIMAGE_HOST):
+	$(MAKE) dist-gui-linux BUNDLES=appimage LINUX_GUI_ARCH=$(HOST_GUI_ARCH)
+
+## The CLI the e2e writes with, built for Linux. Cross-compiling from the mac is not possible (the
+## same wall lint-linux describes), so it borrows the Linux image the lint uses — already carrying
+## the toolchain — and only produces the CLI. Release CI builds this natively before the e2e step,
+## so there this rule never fires.
+$(CLI_LINUX_HOST):
+	@command -v docker >/dev/null 2>&1 || { echo "✗ docker is required (the Linux CLI is built in a container)"; exit 1; }
+	@mkdir -p $(DIST_DIR)
+	docker build --platform linux/$(HOST_GUI_ARCH) -f scripts/docker/Dockerfile.linux-gui -t $(LINUX_LINT_IMAGE) scripts/docker/
+	docker run --rm --platform linux/$(HOST_GUI_ARCH) \
+	  -e OUT_NAME=$(notdir $(CLI_LINUX_HOST)) \
+	  -v "amenbo-lint-registry-$(HOST_GUI_ARCH):/root/.cargo/registry" \
+	  -v "amenbo-lint-target-$(HOST_GUI_ARCH):/build/target" \
+	  -v "$(CURDIR):/src:ro" \
+	  -v "$(CURDIR)/$(DIST_DIR):/out" \
+	  $(LINUX_LINT_IMAGE) bash /src/scripts/docker/build-linux-cli.sh
 
 ## Stand up a real network FS (NFS/SMB) and exercise whether store_watch sees a store on it as
 ## "network" and wakes on polling. Get the detection wrong and the GUI misses other hosts' writes

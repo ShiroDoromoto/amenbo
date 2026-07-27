@@ -493,7 +493,8 @@ mod tests {
     fn extract_managed_language_round_trips_the_body() {
         // The extractor is coupled to the shape managed_block_body writes; the round trip catches
         // the two drifting apart.
-        for label in ["Japanese", "English", "Chinese"] {
+        // "Simplified Chinese" holds a space, so the extractor must not stop at the first word.
+        for label in ["Japanese", "English", "Chinese", "Simplified Chinese"] {
             let wrapped = wrap(&managed_block_body(label, "amenbo"));
             assert_eq!(extract_managed_language(&wrapped).as_deref(), Some(label), "round-trips {label}");
         }

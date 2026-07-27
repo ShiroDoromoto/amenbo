@@ -641,18 +641,40 @@ pub fn default_project_name(lang: Option<&str>) -> String {
 
 /// Turn a language code (`ja`, …) into its English name, for both AI and human readers; an unknown
 /// code is returned as-is. Used when embedding the language into AGENTS.md.
+///
+/// Every supported code has a name here, because the label is what tells an AI which language to
+/// write in — a code that falls through reaches the reader as `Communicate … in hi`. Chinese and
+/// Portuguese are named down to the script / region subtag: the label picks between writing systems
+/// (`zh-Hans` vs `zh-Hant`) and between vocabularies (`pt-BR` vs European Portuguese), which a
+/// reader cannot re-derive from `Chinese` alone. A code carrying no such subtag (`zh`, `pt`) gets
+/// the plain name instead, since there is nothing to narrow it by. Subtags are matched
+/// case-insensitively, as BCP 47 defines them.
 pub fn language_label(code: &str) -> String {
-    match code.split(['-', '_']).next().unwrap_or(code) {
-        "ja" => "Japanese",
-        "en" => "English",
-        "zh" => "Chinese",
-        "ko" => "Korean",
-        "es" => "Spanish",
-        "fr" => "French",
-        "de" => "German",
-        "pt" => "Portuguese",
-        "it" => "Italian",
-        "ru" => "Russian",
+    let mut subtags = code.split(['-', '_']);
+    let primary = subtags.next().unwrap_or(code).to_ascii_lowercase();
+    let secondary = subtags.next().unwrap_or_default().to_ascii_lowercase();
+    match (primary.as_str(), secondary.as_str()) {
+        ("ja", _) => "Japanese",
+        ("en", _) => "English",
+        ("zh", "hans") => "Simplified Chinese",
+        ("zh", "hant") => "Traditional Chinese",
+        ("zh", _) => "Chinese",
+        ("ko", _) => "Korean",
+        ("es", _) => "Spanish",
+        ("pt", "br") => "Brazilian Portuguese",
+        ("pt", _) => "Portuguese",
+        ("fr", _) => "French",
+        ("de", _) => "German",
+        ("it", _) => "Italian",
+        ("ru", _) => "Russian",
+        ("hi", _) => "Hindi",
+        ("id", _) => "Indonesian",
+        ("vi", _) => "Vietnamese",
+        ("th", _) => "Thai",
+        ("tr", _) => "Turkish",
+        ("pl", _) => "Polish",
+        ("nl", _) => "Dutch",
+        ("uk", _) => "Ukrainian",
         _ => return code.to_string(),
     }
     .to_string()
@@ -890,6 +912,42 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every supported language code reaches the managed block as a name, never as the code itself
+    /// — the label is the whole instruction an AI gets about which language to write in.
+    #[test]
+    fn every_supported_language_code_has_a_name() {
+        let supported = [
+            "ja", "en", "zh-Hans", "zh-Hant", "ko", "es", "pt-BR", "fr", "de", "it", "ru", "hi", "id", "vi", "th",
+            "tr", "pl", "nl", "uk",
+        ];
+        assert_eq!(supported.len(), 19);
+
+        let mut names = std::collections::HashSet::new();
+        for code in supported {
+            let label = language_label(code);
+            assert_ne!(label, code, "{code} must resolve to a name, not fall through");
+            assert!(names.insert(label.clone()), "{code} shares the name {label} with another code");
+        }
+    }
+
+    /// The two codes that carry a script or region subtag name it, because the label is what picks
+    /// the writing system and the vocabulary; the bare code gets the plain name.
+    #[test]
+    fn a_script_or_region_subtag_narrows_the_name() {
+        assert_eq!(language_label("zh-Hans"), "Simplified Chinese");
+        assert_eq!(language_label("zh-Hant"), "Traditional Chinese");
+        assert_eq!(language_label("zh"), "Chinese");
+        assert_eq!(language_label("pt-BR"), "Brazilian Portuguese");
+        assert_eq!(language_label("pt"), "Portuguese");
+
+        // Subtags are case-insensitive, and `_` separates as `-` does.
+        assert_eq!(language_label("ZH_hant"), "Traditional Chinese");
+        // A region we do not name falls back to the language's plain name, never to the code.
+        assert_eq!(language_label("de-AT"), "German");
+        // An unsupported language is returned as-is.
+        assert_eq!(language_label("xx"), "xx");
+    }
 
     /// The plugin disk layout hangs off the base: bodies and the registry cache under `plugins/`, a
     /// plugin's home under its name, and nothing in `.amenbo` (`AMB-D-350`).

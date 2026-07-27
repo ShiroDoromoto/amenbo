@@ -4,6 +4,10 @@
 // is handed over finished, with no hole left to fill in. What stays with the user is launching their
 // own AI and pasting — which AI that is, amenbo does not know, and does not ask.
 //
+// Where there is no terminal to open — a Linux box without `x-terminal-emulator`, say — the move
+// falls back to handing over the folder's path to copy, so the loop still closes by the user opening
+// their own terminal and cd-ing there. An error alone would end the walk right at step one.
+//
 // This is a part, not a place: the completion step of project creation shows it, and so does a board
 // with nothing on it yet. So it takes the folder it speaks about and nothing about where it sits.
 // One button per move, and each does only what its label says, so nothing the reader did not press
@@ -54,24 +58,27 @@ export function ProjectFirstLoop({ projectId, onLinkFolder }: { projectId: numbe
 
 /** The whole flow, for a project whose folder is linked — `dir` is that folder. */
 export function FirstLoop({ dir }: { dir: string }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"prompt" | "path" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [noTerminal, setNoTerminal] = useState(false);
 
   const terminal = async () => {
     try {
       await openTerminal(dir);
       setError(null);
+      setNoTerminal(false);
     } catch (e) {
       setError(errText(e));
+      setNoTerminal(true);
     }
   };
 
-  const copyPrompt = async () => {
+  const copy = async (text: string, which: "prompt" | "path") => {
     try {
-      await navigator.clipboard.writeText(t("firstloop.prompt"));
+      await navigator.clipboard.writeText(text);
       setError(null);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopied(which);
+      setTimeout(() => setCopied(null), 2000);
     } catch (e) {
       setError(errText(e));
     }
@@ -86,12 +93,21 @@ export function FirstLoop({ dir }: { dir: string }) {
 
       <Step n={1} title={t("firstloop.s1title")} hint={t("firstloop.s1hint")}>
         <button className="btn" onClick={() => void terminal()}>⌨️ {t("firstloop.s1btn")}</button>
+        {noTerminal && (
+          <div className="firstloop__fallback">
+            <div className="firstloop__stephint muted">{t("firstloop.s1fallback")}</div>
+            <p className="firstloop__path">{dir}</p>
+            <button className="btn" onClick={() => void copy(dir, "path")}>
+              {copied === "path" ? t("firstloop.copied") : `📋 ${t("firstloop.s1fallbackbtn")}`}
+            </button>
+          </div>
+        )}
       </Step>
 
       <Step n={2} title={t("firstloop.s2title")} hint={t("firstloop.s2hint")}>
         <p className="firstloop__prompt">{t("firstloop.prompt")}</p>
-        <button className="btn" onClick={() => void copyPrompt()}>
-          {copied ? t("firstloop.copied") : `📋 ${t("firstloop.s2btn")}`}
+        <button className="btn" onClick={() => void copy(t("firstloop.prompt"), "prompt")}>
+          {copied === "prompt" ? t("firstloop.copied") : `📋 ${t("firstloop.s2btn")}`}
         </button>
       </Step>
 

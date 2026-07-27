@@ -125,4 +125,24 @@ describe("when the terminal will not open", () => {
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("開けません");
   });
+
+  // The walk has to keep going: the user opens their own terminal, so what they need is the folder
+  // to cd into — handed over the same way the request is, ready to paste.
+  it("hands over the folder's path to copy, so the loop still closes", async () => {
+    hoisted.terminalFails = { code: "not_found", message: "開けません", message_en: "cannot open" };
+    render("/w/mine");
+    await act(async () => { button(t("firstloop.s1btn"))!.click(); });
+
+    expect(container.textContent).toContain(t("firstloop.s1fallback"));
+    expect(container.textContent).toContain("/w/mine");
+
+    await act(async () => { button(t("firstloop.s1fallbackbtn"))!.click(); });
+    expect(clipboard).toEqual(["/w/mine"]);
+  });
+
+  it("offers nothing to copy while the terminal still opens", () => {
+    render();
+
+    expect(button(t("firstloop.s1fallbackbtn"))).toBeUndefined();
+  });
 });

@@ -542,6 +542,12 @@ button.feed__target:hover { color: var(--c-accent); }
   background: var(--c-surface-sunken); font-size: var(--fs-sm); line-height: 1.6;
 }
 .firstloop .btn { align-self: flex-start; }
+.firstloop__fallback { display: flex; flex-direction: column; gap: var(--s-2); }
+.firstloop__path {
+  margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
+  background: var(--c-surface-sunken); font-family: var(--font-mono); font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
 /* On a board the loop is the only thing on the surface, so it gets the surface's own margin and a
    width it can be read across (inside the creation screen the column already caps it). */
 .board__firstloop { padding: var(--s-5); max-width: 720px; }

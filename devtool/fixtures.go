@@ -390,6 +390,18 @@ func fixturesGUI(args []string) {
 		logf("  ! %s answers %s", f, r)
 	}
 
+	// The second catalog reaches the app through the store, not through an env var: a registered
+	// catalog **is** a record in the store, so the fake world can only offer one by registering it in
+	// the store the GUI will open.
+	registered := base + "/" + registeredCatalogPath
+	if cli, cliEnv, err := devCLI(*app, env); err != nil {
+		logf("  ! %s is not registered (%v)", registeredCatalogName, err)
+		logf("    register it by hand: amenbo plugin catalog add %s --name %q --yes", registered, registeredCatalogName)
+	} else {
+		registerFakeCatalog(cli, cliEnv, registered)
+		defer dropFakeCatalogs(cli, cliEnv, "")
+	}
+
 	if *noLaunch {
 		logf("→ fake world on %s (Ctrl-C to stop)", base)
 		waitForSignal()
@@ -432,11 +444,21 @@ func fixtureEnv(base string) []string {
 func fixtureHandler(dir string, rules map[face]failure, hold time.Duration) http.Handler {
 	mux := http.NewServeMux()
 
+	// failed answers a face the way it was told to fail, and reports whether it did — the half both
+	// kinds of document share, a captured one and an invented one alike.
+	failed := func(f face, w http.ResponseWriter, r *http.Request) bool {
+		rule, ok := rules[f]
+		if !ok {
+			return false
+		}
+		logf("  ← %s → %s", r.URL.Path, rule)
+		applyFailure(w, r, rule, hold)
+		return true
+	}
+
 	serve := func(f face, path, contentType string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			if rule, ok := rules[f]; ok {
-				logf("  ← %s → %s", r.URL.Path, rule)
-				applyFailure(w, r, rule, hold)
+			if failed(f, w, r) {
 				return
 			}
 			body, err := os.ReadFile(path)
@@ -452,6 +474,29 @@ func fixtureHandler(dir string, rules map[face]failure, hold time.Duration) http
 			w.Header().Set("Content-Type", contentType)
 			w.Write(body)
 		}
+	}
+
+	// serveBytes is serve for a document the fake world holds in memory rather than on disk, which is
+	// what an invented one is: there is no file for it to be missing.
+	serveBytes := func(f face, body []byte, contentType string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if failed(f, w, r) {
+				return
+			}
+			logf("  ← %s → %d bytes", r.URL.Path, len(body))
+			w.Header().Set("Content-Type", contentType)
+			w.Write(body)
+		}
+	}
+	// The catalog the fake world invents rather than captures, and the key it publishes beside it
+	// (`fixtures_registered.go`). It answers under the catalog face, so `--fail catalog=…` takes both
+	// shelves down at once — which is what "the catalog is unreachable" means to the app.
+	for path, body := range registeredCatalogDocs() {
+		contentType := "application/json"
+		if strings.HasSuffix(path, ".pub") {
+			contentType = "text/plain; charset=utf-8"
+		}
+		mux.HandleFunc("GET /"+path, serveBytes(faceCatalog, body, contentType))
 	}
 
 	mux.HandleFunc("GET /catalog.json", serve(faceCatalog, filepath.Join(dir, "catalog.json"), "application/json"))

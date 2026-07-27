@@ -38,8 +38,15 @@ func runThrough(dir string, extraEnv []string, name string, args ...string) (int
 // run executes a command in dir and returns its trimmed stdout. On failure the
 // error carries the captured stderr so callers can surface the real cause.
 func run(dir, name string, args ...string) (string, error) {
+	return runEnv(dir, nil, name, args...)
+}
+
+// runEnv is run with `extraEnv` added to the environment — for a command that has to be pointed at
+// something other than this process's own world, such as an amenbo told which store to open.
+func runEnv(dir string, extraEnv []string, name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), extraEnv...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

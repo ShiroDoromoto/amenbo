@@ -1,5 +1,21 @@
 {
   "catalog_v": 1,
-  "generated_at": "2026-07-24T04:28:30Z",
-  "plugins": []
+  "generated_at": "2026-07-27T04:06:50Z",
+  "plugins": [
+    {
+      "added_at": "2026-07-26T20:55:16+09:00",
+      "author": "amenbo",
+      "category": "workflow",
+      "desc": "Isolate each task in its own git worktree",
+      "detail_sum": "sha256:7a70034ea751466aa3b8dd201896406b30ed647c762be32241546f418f24b16e",
+      "featured": false,
+      "name": "worktree",
+      "official": true,
+      "os": [
+        "macos",
+        "linux"
+      ],
+      "repo": "ShiroDoromoto/amenbo-plugin-worktree"
+    }
+  ]
 }

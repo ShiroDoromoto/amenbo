@@ -178,6 +178,25 @@ mod cross_project_tests {
         .id
     }
 
+    /// One axis carrying one value, in the given project. Returns the value's id — what a classification
+    /// names.
+    fn mk_value(tx: &WriteTx<'_>, project_id: i64, axis: &str, value: &str) -> i64 {
+        let dimension = super::dimension::add(
+            tx,
+            project_id,
+            super::dimension::NewDimension {
+                name: axis.to_string(),
+                notes: String::new(),
+                cardinality: crate::model::DimensionCardinality::Single,
+                ordered: false,
+                role: crate::model::DimensionRole::None,
+            },
+        )
+        .expect("add dimension")
+        .id;
+        super::dimension::value_add(tx, dimension, value).expect("add value").id
+    }
+
     /// Decision↔decision (supersede / amend / builds_on all funnel into `put_edge`).
     #[test]
     fn a_decision_edge_cannot_cross_projects() {
@@ -228,6 +247,46 @@ mod cross_project_tests {
             let e = super::dependency::add(tx, ta, tb, None).expect_err("a crossing must be rejected");
             assert_eq!(e.code(), "invalid_value", "{e}");
             super::dependency::add(tx, ta, ta2, None).expect("within one project it goes through");
+        });
+    }
+
+    /// Task↔dimension value (a classification). Naming another project's axis means reading what that
+    /// project calls its axes and what values they offer — the same crossing as any other edge. An inbox
+    /// task belongs to no project, so classifying it is no crossing.
+    #[test]
+    fn a_classification_cannot_cross_projects_but_the_inbox_is_not_a_project() {
+        with_tx(|tx| {
+            let (a, b) = (mk_project(tx, "A"), mk_project(tx, "B"));
+            let va = mk_value(tx, a, "分類", "バグ");
+            let vb = mk_value(tx, b, "分類", "バグ");
+            let ta = mk_task_in(tx, "A のタスク", Some(a));
+            let inbox = mk_task_in(tx, "受信箱のタスク", None);
+
+            let e = super::dimension::set(tx, ta, vb).expect_err("a crossing must be rejected");
+            assert_eq!(e.code(), "invalid_value", "{e}");
+            super::dimension::set(tx, ta, va).expect("within one project it goes through");
+            super::dimension::set(tx, inbox, vb).expect("the inbox has no project, so this is no crossing");
+        });
+    }
+
+    /// The same re-check, for a classification: a task filed on this project's axis cannot be re-homed
+    /// while it is still filed there.
+    #[test]
+    fn moving_a_task_cannot_leave_a_classification_crossing_projects() {
+        with_tx(|tx| {
+            let (a, b) = (mk_project(tx, "A"), mk_project(tx, "B"));
+            let ta = mk_task_in(tx, "A のタスク", Some(a));
+            let value = mk_value(tx, a, "分類", "バグ");
+            super::dimension::set(tx, ta, value).expect("a classification within one project");
+
+            let e = super::task::move_to(tx, ta, Some(b), super::Position::Bottom)
+                .expect_err("a move that would leave a crossing must be rejected");
+            assert_eq!(e.code(), "invalid_value", "{e}");
+
+            // Clear the classification and it moves — the same "we never cut edges silently" rule the
+            // dependency case follows.
+            super::dimension::unset(tx, ta, value).expect("clear the classification");
+            super::task::move_to(tx, ta, Some(b), super::Position::Bottom).expect("once cleared, it moves");
         });
     }
 

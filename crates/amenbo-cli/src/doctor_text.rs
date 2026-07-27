@@ -3,7 +3,7 @@
 //! a reader actually sees. The GUI is the only face a human reads directly, so that one is
 //! localized and the CLI stays English-only. Hence the sentences here are English and the fixes
 //! they suggest are **CLI commands** — the GUI renders the same kinds in its own language, pointing
-//! at its own affordances (`app/src/core/i18n.ts`). Templates map one-to-one onto kinds, with the
+//! at its own affordances (`app/src/core/i18n/locales/`). Templates map one-to-one onto kinds, with the
 //! exhaustive `match` enforced by the compiler: add a kind in core and the build stays broken until
 //! this face writes its sentence, so nothing ships with the English missing.
 

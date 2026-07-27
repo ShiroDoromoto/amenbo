@@ -1,5 +1,5 @@
 // Rust↔TS parity for doctor issues. Extracts core's kind registry from the real source and holds it against the
-// TS single source (doctorKinds.ts) and the GUI's wording table (DOCTOR in i18n.ts). Adding or renaming a kind on
+// TS single source (doctorKinds.ts) and the GUI's wording table (the `doctor` section in i18n/locales/). Adding or renaming a kind on
 // one side only, or a template referring via `{...}` to params core never sends, would surface in production as
 // nothing more than a hole in a sentence — invisible. So it breaks here instead.
 import { describe, expect, it } from "vitest";

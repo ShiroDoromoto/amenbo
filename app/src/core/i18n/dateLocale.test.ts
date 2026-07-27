@@ -4,9 +4,9 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
 
 const snap = { language: null as string | null, dateLocale: null as string | null };
-vi.mock("./snapshot", () => ({ getSnapshot: () => snap }));
+vi.mock("../snapshot", () => ({ getSnapshot: () => snap }));
 
-import { dateLocale } from "./i18n";
+import { dateLocale } from "./index";
 
 beforeEach(() => {
   snap.language = null;

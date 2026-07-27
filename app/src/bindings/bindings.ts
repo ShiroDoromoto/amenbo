@@ -225,7 +225,7 @@ export type DoctorFixDto = { reclaimedBlobs: number, freedBytes: number, forgott
  * `kind` (the id of a message template) and `params` (what differs), and the surface composes the
  * sentence a person reads (the GUI localizes it by `config.language`; the CLI is always English).
  * The GUI's message table, and the affordances for how to fix each issue, live in
- * `src/core/i18n.ts`, and they point at affordances that really exist in the GUI (the repair button
+ * `src/core/i18n/locales/`, and they point at affordances that really exist in the GUI (the repair button
  * under Settings > Integrity, the folder list in project settings).
  */
 export type DoctorIssueDto = { kind: string, severity: string, target: string, params: { [key in string]: string }, };
@@ -1061,7 +1061,7 @@ export type StartupHealthDto = {
 /**
  * The problems doctor found (orphaned or dangling references, and so on). No prose sentence
  * rides along — the GUI composes one from the kind and params in `config.language`
- * (`src/core/i18n.ts`), so we hand these over as the same [`DoctorIssueDto`] the doctor screen
+ * (`src/core/i18n/`), so we hand these over as the same [`DoctorIssueDto`] the doctor screen
  * uses.
  */
 issues: Array<DoctorIssueDto>, };

@@ -1,7 +1,7 @@
 // A Tauri command reports failure as a structured CmdError (src-tauri/error.rs). The front end maps the code to a
 // per-language template, falling back to message (ja) / message_en (en) for codes that have no template.
 import { describe, it, expect } from "vitest";
-import { errLabel, errText, type CmdError } from "./i18n";
+import { errLabel, errText, type CmdError } from "./index";
 
 const bindingStale: CmdError = {
   code: "binding_stale",

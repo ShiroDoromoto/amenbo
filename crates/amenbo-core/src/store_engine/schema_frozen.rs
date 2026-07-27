@@ -12,7 +12,10 @@
 //!
 //! **Append only.** A frozen version is never rewritten — rewriting one makes a past shape a lie. What a
 //! change to the registry owes is a *new* file, and [`tests::the_latest_version_is_frozen`] is what makes
-//! that debt come due: it goes red the moment the registry moves ahead of the newest frozen file.
+//! that debt come due: it goes red the moment the registry moves ahead of the newest frozen file. Paying
+//! it is `make schema-freeze`, which writes the file, adds its arm below, and settles the table's newest
+//! row onto the commit that froze it. The arms stay literal text, so freezing a version is still a
+//! deliberate act that shows up in the diff.
 //!
 //! **Not the production genesis.** A new store is still born from the registry
 //! ([`super::schema::schema_sql`] is the single source of truth, as `schema.rs` states); these files are
@@ -82,8 +85,8 @@ pub fn frozen_or_panic(version: i64) -> &'static str {
     frozen(version).unwrap_or_else(|| {
         panic!(
             "v{version} has no frozen DDL. Versions below v{OLDEST_FROZEN_VERSION} were never emitted \
-             by this repository's history; a version above it is one whose shape is waiting to be \
-             written to store_engine/schema_frozen/v{version}.sql"
+             by this repository's history; a version above it is one whose shape is waiting for \
+             `make schema-freeze`"
         )
     })
 }
@@ -114,9 +117,9 @@ mod tests {
         panic!(
             "v{LATEST_VERSION} is frozen as something the registry no longer emits.\n\
              first divergence at line {at}:\n  frozen:   {was}\n  registry: {now}\n\
-             If the registry moved on purpose, append a step (which bumps the version) and write the \
-             new `schema_sql()` output to store_engine/schema_frozen/v<n>.sql. A frozen file is never \
-             edited in place — rewriting one makes a past shape a lie."
+             If the registry moved on purpose, append a step (which bumps the version) and run \
+             `make schema-freeze`. A frozen file is never edited in place — rewriting one makes a \
+             past shape a lie."
         );
     }
 

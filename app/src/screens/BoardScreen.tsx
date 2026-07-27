@@ -10,6 +10,8 @@ import { isClosed, STATUS_COLUMNS } from "../core/status";
 import { Pager, usePager } from "../components/Pager";
 import { useTaskPage } from "../core/reads";
 import { isEnterSubmit } from "../core/keys";
+import { ProjectFirstLoop } from "../components/FirstLoop";
+import { inTauri } from "../core/snapshot";
 import { DecisionsScreen } from "./DecisionsScreen";
 import { CalendarView } from "./CalendarView";
 import { TimelineView } from "./TimelineView";
@@ -170,6 +172,12 @@ export function BoardScreen({
   // violation throws during render and blacks out the screen). groupingDim/dims/tasks above are null-safe through
   // `project?.dimensions ?? []`, so they come out empty and reach no JSX before the guard returns the placeholder.
   const listPager = usePager(tasks, `${view}|${selectionKey(sel)}|${q}`);
+  // A project with nothing in it yet gets the first loop instead of empty columns (`AMB-D-414`) — the
+  // one push that puts something on it. The question is about the project, not about the view: what
+  // `all` holds is narrowed by nothing but `fetchFilter`, so an empty `all` under no search is the
+  // project itself being empty, where an empty `tasks` may only be the filter chips biting. Outside
+  // Tauri there is no folder to open a terminal in, so the browser iteration keeps its bare columns.
+  const untouched = all.length === 0 && fetchFilter === "" && inTauri();
   if (!project) return <div className="placeholder">{t("board.notFound")}</div>;
   const setDim = (id: string, value: string) => setSel((prev) => ({ ...prev, [id]: value }));
 
@@ -214,7 +222,13 @@ export function BoardScreen({
           onSelectDecision={onSelectDecision}
         />
       )}
-      {tab === "tasks" && (
+      {tab === "tasks" && untouched && (
+        <div className="board__firstloop">
+          <ProjectFirstLoop projectId={projectId} onLinkFolder={onOpenSettings} />
+        </div>
+      )}
+
+      {tab === "tasks" && !untouched && (
       <>
       <div className="filterbar">
         <input

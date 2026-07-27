@@ -3951,6 +3951,65 @@ fn an_ai_cannot_read_an_out_of_reach_entity_by_its_raw_id() {
     assert_eq!(cli.json(&["dimension", "list", "--actor", "ai", "--json"])["count"], 1);
 }
 
+/// An axis **name a second project also uses** must resolve for the AI, not collapse into `ambiguous`. Names
+/// are per-project, so only one of the two was ever reachable — and the `ambiguous` error names the other's
+/// id, which is exactly the out-of-binding content the reach exists to keep out of the answer. The narrowing
+/// is on both sides of the door: the reach drops what the facet cannot see, and `dimension set` / `unset`
+/// resolve inside the task's own project, so the human — who reaches both — is not asked to disambiguate
+/// something the task already pins.
+#[test]
+fn an_axis_name_two_projects_share_resolves_by_reach_and_by_the_task() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let bound = cli.bound_project();
+    let other = id_str(&cli.json(&["project", "add", "--name", "Other", "--json"])["project"]["id"]);
+
+    // The same axis name, carrying the same value name, in both projects.
+    let mut axis = Vec::new();
+    for project in [bound.as_str(), other.as_str()] {
+        let d = id_str(
+            &cli.json(&["dimension", "add", "--project", project, "--name", "フェーズ", "--json"])["dimension"]["id"],
+        );
+        cli.json(&["dimension", "value-add", &d, "--name", "運用第2期", "--json"]);
+        axis.push(d);
+    }
+    let (mine, theirs) = (axis[0].clone(), axis[1].clone());
+    let task = id_str(&cli.json(&["task", "add", "--title", "分類する", "--project", &bound, "--json"])["task"]["id"]);
+
+    // The AI names the axis by name and it lands: the other project's row never enters the candidate set.
+    let set = cli.json(&["dimension", "set", &task, "フェーズ", "運用第2期", "--actor", "ai", "--json"]);
+    assert_eq!(set["noop"], false);
+    assert_eq!(id_str(&set["task_dimension_value"]["dimension_id"]), mine);
+    assert_eq!(cli.json(&["dimension", "unset", &task, "フェーズ", "運用第2期", "--actor", "ai", "--json"])["noop"], false);
+
+    // Reading it by that name is the bound project's axis, not an ambiguity listing the other's id.
+    let shown = cli.json(&["dimension", "show", "フェーズ", "--actor", "ai", "--json"]);
+    assert_eq!(id_str(&shown["dimension"]["id"]), mine);
+
+    // Naming the other project's axis **by its id** stays out_of_reach: an id names one row on this machine,
+    // so we do not answer that it does not exist.
+    let (err, code) = cli.run_err(&["dimension", "show", &theirs, "--actor", "ai", "--json"]);
+    assert_ne!(code, 0, "the other project's axis is not readable by id");
+    assert!(err.contains("out_of_reach"), "out_of_reach, not not_found: {err}");
+    assert!(!err.contains("not_found"), "existence is not denied: {err}");
+
+    // `dimension set` narrows by the task's project rather than by the reach, and that narrowing must not
+    // swallow the distinction either: the other project's axis is unreachable, not absent.
+    let (err, code) = cli.run_err(&["dimension", "set", &task, &theirs, "運用第2期", "--actor", "ai", "--json"]);
+    assert_ne!(code, 0, "an axis outside the task's project is not assignable");
+    assert!(err.contains("out_of_reach"), "out_of_reach, not not_found: {err}");
+
+    // The human reaches both, so the bare name genuinely names two axes — that truth is unchanged.
+    let (err, code) = cli.run_err(&["dimension", "show", "フェーズ", "--json"]);
+    assert_ne!(code, 0, "for the human the name really is ambiguous");
+    assert!(err.contains("ambiguous_id"), "{err}");
+
+    // …but `dimension set` is not ambiguous even for the human: the task names the project, and an
+    // assignment never crosses one.
+    let set = cli.json(&["dimension", "set", &task, "フェーズ", "運用第2期", "--json"]);
+    assert_eq!(id_str(&set["task_dimension_value"]["dimension_id"]), mine);
+}
+
 // ───────────────────────── lint ─────────────────────────
 
 /// Run `lint` and return (stdout, stderr, exit code), optionally piping `stdin` in.

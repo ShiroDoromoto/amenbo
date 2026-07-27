@@ -24,7 +24,9 @@ impl Store {
     // (`attach show`, `attach ls --task-comment`, `dimension show`, …). Those are checked at the read
     // entry point itself (the `reachable_*` helpers below), using the same owner lookup as the write side
     // (`super::owner`) — two copies of that lookup would mean closing one side and leaving a hole in the
-    // other.
+    // other. A resolver that also takes a **name** (`Store::resolve_dimension`) runs that same lookup
+    // over the whole hit set instead of over one id: names are per-project, so what is out of reach has to
+    // leave before the set is collapsed, not after.
     //
     // The guard is *not* placed on the detail reads (`task_detail` / `project_detail`, …). Those double as
     // the **echo right after a write** (`task add` printing the new task back, `project add` the new
@@ -441,17 +443,50 @@ impl Store {
     }
 
     /// Resolve a dimension reference (an id, or an exact name match). Passing `project_id` confines the
-    /// search to that project. A call that does **not** confine it (`dimension show <name>`) searches the
-    /// whole machine, so the dimension it lands on is reach-checked here — a name collision must not let
-    /// us walk away holding a dimension outside the binding.
+    /// search to that project; a call that does **not** confine it (`dimension show <name>`) searches the
+    /// whole machine.
+    ///
+    /// Whatever the scope, **what this facet cannot reach is dropped before the hit set is collapsed**.
+    /// Names are per-project, so a name a second project also uses would otherwise collapse to
+    /// `ambiguous` — and the candidates that error lists are ids of rows outside the binding, which is
+    /// the very content a closed reach exists to keep out of the answer. Filtering first leaves exactly
+    /// what the caller could have meant.
+    ///
+    /// Filtering away every hit must not turn into "it does not exist": a reference that still matches
+    /// something out there is answered `out_of_reach`, the same as one naming an id outright.
     pub fn resolve_dimension(&self, project_id: Option<i64>, reference: &str) -> Result<i64> {
-        let hits =
-            crate::store_engine::read::resolve_dimension_in(self.engine.conn(), project_id, reference)?;
-        let id = crate::ops::pick_id(hits, reference, || {
+        let conn = self.engine.conn();
+        let hits = crate::store_engine::read::resolve_dimension_in(conn, project_id, reference)?;
+        let hits = match self.reach {
+            // Under `All` nothing is dropped and the owner lookups do not even run: humans, the GUI and
+            // library use pay nothing for this.
+            Reach::All => hits,
+            _ => {
+                let mut kept = Vec::with_capacity(hits.len());
+                for id in hits {
+                    if self.reach.allows(super::owner::dimension(conn, id)?) {
+                        kept.push(id);
+                    }
+                }
+                if kept.is_empty() {
+                    // Nothing left in scope. Look once across the store before answering not-found: a
+                    // reference that does match a row we cannot reach is `out_of_reach`. The reference is
+                    // quoted back rather than the ids it found, so the answer names nothing outside.
+                    let anywhere =
+                        crate::store_engine::read::resolve_dimension_in(conn, None, reference)?;
+                    if let Some(&outside) = anywhere.first() {
+                        self.reach.check(
+                            &format!("dimension '{reference}'"),
+                            super::owner::dimension(conn, outside)?,
+                        )?;
+                    }
+                }
+                kept
+            }
+        };
+        crate::ops::pick_id(hits, reference, || {
             crate::ops::dimension::NOUN.not_found(reference)
-        })?;
-        self.reachable(&format!("dimension #{id}"), |c| super::owner::dimension(c, id))?;
-        Ok(id)
+        })
     }
 
     /// Resolve a value reference (an id, or an exact name match) inside a dimension. A value exists only

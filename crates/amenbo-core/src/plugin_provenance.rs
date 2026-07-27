@@ -8,13 +8,14 @@
 //!   is used, to catch a post-install swap (`AMB-D-351`).
 //! - [`verify_signature`] — a minisign signature over the asset verifies against amenbo's **catalog public
 //!   key** (`AMB-D-371`, the catalog-key trust model). This is the **origin** half, and it is heavier, so
-//!   it runs **once** at download: the asset was blessed by the amenbo catalog CI, the sole trust root.
+//!   it runs **once** at download: the asset was blessed by the CI of the catalog that lists it.
 //!
-//! [`verify_catalog_asset`] runs both against the key amenbo ships — the door an install (`AMB-T-2050`)
-//! and an update (`AMB-D-359`) call before an asset is ever written enabled. A third-party asset with no
-//! signature, or one signed by any other key, does not verify, and so cannot be installed or enabled
-//! (`AMB-D-351`). [`verify_asset`] is the same door with the key as an argument, for a test that must
-//! sign its own fixtures.
+//! [`verify_against`] runs both against the root that catalog answers for — the key amenbo ships for the
+//! official catalog, the key a registration pinned for any other (`AMB-D-389`) — and is the door an
+//! install (`AMB-T-2050`) and an update (`AMB-D-359`) call before an asset is ever written enabled. An
+//! asset with no signature, or one signed by a key its own catalog is not trusted on, does not verify,
+//! and so cannot be installed or enabled (`AMB-D-351`). [`verify_asset`] is the same door with the key as
+//! a plain argument, for a test that must sign its own fixtures.
 //!
 //! **Why the public key ships to every device is safe.** The catalog **private** key lives only in the
 //! catalog CI; every amenbo carries only the **public** key ([`CATALOG_PUBLIC_KEY`]), which can verify
@@ -116,12 +117,36 @@ pub fn verify_signature(bytes: &[u8], signature: &str, public_key: &str) -> Resu
             format!("プラグイン署名の形式が不正です：{e}"),
         )
     })?;
+    let (key_en, key_ja) = key_named(public_key);
     pk.verify(bytes, &sig, false).map_err(|e| {
         Error::invalid(
-            format!("plugin signature does not verify against the amenbo catalog key: {e}"),
-            format!("プラグイン署名が amenbo カタログ鍵で検証できません：{e}"),
+            format!("plugin signature does not verify against {key_en}: {e}"),
+            format!("プラグイン署名を{key_ja}で検証できません：{e}"),
         )
     })
+}
+
+/// How a refusal names the key it checked against.
+///
+/// "The catalog key" was one key when there was one; there is now the key amenbo ships and the key each
+/// registered catalog was pinned with (`AMB-D-389`), and which of them was tried is what tells a reader
+/// what they are looking at: an official asset that fails is a broken publish, while a registered
+/// catalog's is a publisher signing with something other than what its own catalog offered. The
+/// fingerprint is the handle both sides can quote — the same short form a registration showed.
+fn key_named(public_key: &str) -> (String, String) {
+    if public_key == CATALOG_PUBLIC_KEY {
+        return ("the amenbo catalog key".to_string(), "amenbo のカタログ鍵".to_string());
+    }
+    match key_fingerprint(public_key) {
+        Ok(fp) => (
+            format!("the key pinned for the catalog this plugin came from ({fp})"),
+            format!("このプラグインの配布元に pin した鍵（{fp}）"),
+        ),
+        Err(_) => (
+            "the key its catalog was pinned with".to_string(),
+            "その配布元に pin した鍵".to_string(),
+        ),
+    }
 }
 
 /// Verify both halves of provenance on a freshly downloaded asset (`AMB-D-371`) — the door an install
@@ -129,7 +154,7 @@ pub fn verify_signature(bytes: &[u8], signature: &str, public_key: &str) -> Resu
 ///
 /// - `signature` of `None` is refused outright — an unsigned asset has no origin amenbo can vouch for
 ///   (`AMB-D-351`).
-/// - the signature must verify against `public_key` (origin: the amenbo catalog key).
+/// - the signature must verify against `public_key` (origin: the key its catalog is trusted on).
 /// - the checksum must match the bytes (integrity: what the manifest recorded).
 ///
 /// Order is deliberate: signature (origin) before checksum (integrity), so an asset from an untrusted
@@ -142,23 +167,13 @@ pub fn verify_asset(
 ) -> Result<()> {
     let signature = signature.ok_or_else(|| {
         Error::invalid(
-            "plugin asset is unsigned: it carries no amenbo catalog signature, so its origin cannot be verified",
-            "プラグイン asset が未署名です：amenbo カタログ署名が無く、出所を検証できません",
+            "plugin asset is unsigned: it carries no signature from the catalog listing it, so its origin cannot be verified",
+            "プラグイン asset が未署名です：それを載せたカタログの署名が無く、出所を検証できません",
         )
     })?;
     verify_signature(bytes, signature, public_key)?;
     verify_checksum(bytes, checksum)?;
     Ok(())
-}
-
-/// Verify a freshly downloaded asset against the catalog key amenbo ships ([`CATALOG_PUBLIC_KEY`]) — the
-/// door an install (`AMB-T-2050`) or an update (`AMB-D-359`) actually calls (`AMB-D-371`).
-///
-/// This is [`verify_asset`] with the trust root supplied rather than passed in: a caller cannot install
-/// against the wrong key, because it never names one. Reach for [`verify_asset`] only where the key is
-/// genuinely a parameter — a test signing its own fixtures.
-pub fn verify_catalog_asset(bytes: &[u8], signature: Option<&str>, checksum: &str) -> Result<()> {
-    verify_asset(bytes, signature, checksum, CATALOG_PUBLIC_KEY)
 }
 
 /// The key one asset is verified against: amenbo's own for the official catalog, or the key a registered
@@ -385,6 +400,20 @@ yO4MZq6nO8TD4ypgwfYImIKz9E1tM3szwA/S9CRXLrH30HP+gQHXcL12wngoJy9uCBgHuaIsrnRo17T3
         assert!(verify_asset(ASSET, Some(OTHER_SIG), ASSET_SHA256, TEST_PUBKEY).is_err());
     }
 
+    /// A key that is not the one amenbo ships is named by its fingerprint (`AMB-D-389`). Reading a
+    /// registered catalog's refusal as "the amenbo catalog key" sends the reader after the wrong thing:
+    /// what failed is the pin their own consent put there.
+    #[test]
+    fn a_refusal_names_the_pinned_key_it_checked_against() {
+        let err = verify_asset(ASSET, Some(OTHER_SIG), ASSET_SHA256, TEST_PUBKEY).unwrap_err();
+        let text = format!("{err:?}");
+        assert!(
+            text.contains(&key_fingerprint(TEST_PUBKEY).unwrap()),
+            "the fingerprint of the key it checked against: {text}"
+        );
+        assert!(!text.contains("amenbo catalog key"), "and not the one amenbo ships: {text}");
+    }
+
     // ---- the embedded catalog key ----
 
     #[test]
@@ -412,13 +441,17 @@ yO4MZq6nO8TD4ypgwfYImIKz9E1tM3szwA/S9CRXLrH30HP+gQHXcL12wngoJy9uCBgHuaIsrnRo17T3
     fn the_catalog_door_refuses_an_asset_signed_by_any_other_key() {
         // The test key is a real minisign key with a real signature over these exact bytes — everything
         // but the one root amenbo trusts. This is the whole point of embedding a key.
-        let err = verify_catalog_asset(ASSET, Some(ASSET_SIG), ASSET_SHA256).unwrap_err();
+        let err = verify_asset(ASSET, Some(ASSET_SIG), ASSET_SHA256, CATALOG_PUBLIC_KEY).unwrap_err();
         assert!(format!("{err:?}").contains("does not verify"), "refused on origin");
+        assert!(
+            format!("{err:?}").contains("the amenbo catalog key"),
+            "and it says which key it was checked against: {err:?}"
+        );
     }
 
     #[test]
     fn the_catalog_door_refuses_an_unsigned_asset() {
-        let err = verify_catalog_asset(ASSET, None, ASSET_SHA256).unwrap_err();
+        let err = verify_asset(ASSET, None, ASSET_SHA256, CATALOG_PUBLIC_KEY).unwrap_err();
         assert!(format!("{err:?}").contains("unsigned"), "the missing signature is the reason");
     }
 

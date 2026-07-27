@@ -49,9 +49,11 @@ pub struct ListEntry {
     pub os: Vec<Os>,
     /// The plugin's category, which a list filters by.
     pub category: String,
-    /// The official badge. Catalog-authoritative (`AMB-D-347`): the CI decides it, and a manifest that
-    /// claims it for itself is refused at intake. Absent reads as `false`, the same safe default the
-    /// manifest takes — the badge is a claim a reader must find, never one it assumes.
+    /// The official badge. Catalog-authoritative (`AMB-D-347`): the official index's CI decides it, and a
+    /// manifest that claims it for itself is refused at intake. A catalog anyone can publish holds no such
+    /// review, so the merge a browse reads clears the badge on everything a registered catalog serves
+    /// ([`crate::plugin_catalog::discover`]). Absent reads as `false`, the same safe default the manifest
+    /// takes — the badge is a claim a reader must find, never one it assumes.
     #[serde(default)]
     pub official: bool,
     /// **The catalog's slot, emitted unset**: the recommendation, hand-curated on the official index

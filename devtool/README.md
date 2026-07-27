@@ -55,17 +55,21 @@ permanent place a grown setup (plugins, catalog, projects) lives.
 | identifier | `work.amenbo.app.dev` | `work.amenbo.app.dev.<id>` |
 | app-data | `amenbo-dev` | `amenbo-dev-<id>` |
 | bundle | `/Applications/amenbo (dev).app` | `/Applications/amenbo (dev <id>).app` |
+| executable | `amenbo-app-dev` | `amenbo-app-dev-<id>` |
 | header badge | `DEV` | `DEV AMB-T-<id>` |
 | the CLI it names | `amenbo-dev` | `amenbo-dev` — it installs none of its own |
 | built by | `make install-gui-dev` | `make install-gui-dev AMB-T-ID=<id>` |
 | deleted by | nothing — it is permanent | `devtool task finish <id>` |
 
-All three builds run as the same process, `amenbo-app`, so a click lands on
-whichever window is in front. The badge is how you tell them apart *inside* the
-window: it sits in the header, so it survives a cropped screenshot, and
-production carries none at all. To reach one *without* a click, ask for its pid
-(`devgui pid` below) and drive that pid — the badge tells you afterwards what
-you shot, the pid decides beforehand what you shoot.
+Each build runs under an executable name of its own — production keeps
+`amenbo-app` — so a name reaches one app and not another: `pgrep -x
+amenbo-app-dev-<id>` finds that one instance, and `System Events` lists it under
+the same name. A *click*, though, still lands on whichever window is in front.
+The badge is how you tell them apart *inside* the window: it sits in the header,
+so it survives a cropped screenshot, and production carries none at all. To
+reach one without a click, ask for its pid (`devgui pid` below) and drive that
+pid — the badge tells you afterwards what you shot, the pid decides beforehand
+what you shoot.
 
 So **verify a task in its own app**: with no hand reaching the shared bundle,
 two parallel sessions cannot install over each other, and the collision is gone
@@ -201,12 +205,12 @@ to the tools that take one:
 swift app/scripts/uiauto/uiauto.swift window "$(devtool devgui pid --front)"
 ```
 
-Nothing else on the machine tells the three builds apart: they all run under the
-process name `amenbo-app`, `pgrep -x 'amenbo (dev)'` matches nothing, and
-`System Events`' front window answers with whichever is in front — in practice
-the **production** app. The lookup matches the bundle a process was executed out
-of, and only the app process itself, so what comes back is a pid a window
-actually belongs to.
+The bundle a process was executed out of is what the lookup matches, and only the
+app process itself, so what comes back is a pid a window actually belongs to.
+That is one step finer than a name: an executable name reaches the right
+instance, but a helper process a bundle spawns carries none of its own.
+`System Events`' front window is no help at all — it answers with whichever app
+is in front, in practice the **production** one.
 
 - With no `<id>` it answers for the dev GUI **this checkout** launches — a task
   worktree's own instance ahead of the shared app, the same order a launch takes.

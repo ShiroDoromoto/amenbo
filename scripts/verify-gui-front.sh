@@ -27,7 +27,11 @@ set -euo pipefail
 APP="${1:?usage: verify-gui-front.sh <app-bundle.app> [dist-dir]}"
 DIST="${2:-app/dist}"
 INDEX="$DIST/index.html"
-BIN="$APP/Contents/MacOS/amenbo-app"
+# The executable's name is the bundle's to say: a dev bundle carries its own (`amenbo-app-dev…`), so
+# that a click or a `pgrep` can be aimed at one app and not at whichever is frontmost. Ask the bundle
+# rather than assuming a name, and fall back to the prod one where plutil cannot answer.
+BIN_NAME=$(plutil -extract CFBundleExecutable raw "$APP/Contents/Info.plist" 2>/dev/null || echo amenbo-app)
+BIN="$APP/Contents/MacOS/$BIN_NAME"
 
 [ -f "$INDEX" ] || { echo "✗ nothing to compare against: $INDEX is missing (build the frontend first)"; exit 1; }
 [ -f "$BIN" ] || { echo "✗ not an amenbo app bundle: $BIN is missing"; exit 1; }

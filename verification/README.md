@@ -187,10 +187,10 @@ cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/task-assign.yaml \
   --app "amenbo (dev $ID)" --pid "$(devtool devgui pid "$ID")"
 ```
 
-`--pid` comes from `devtool devgui pid` and not from `pgrep`: the production app, the shared dev
-app and every per-task instance run under the one process name `amenbo-app`, so a name is not
-something `pgrep` can separate them by — only the bundle they were executed out of is, which is
-what devtool matches (`devtool/README.md`). Inside a task worktree the id can be dropped entirely:
+`--pid` comes from `devtool devgui pid` and not from `pgrep`: devtool matches on the bundle a
+process was executed out of, which names one instance exactly — a dev build's own executable name
+(`amenbo-app-dev`, `amenbo-app-dev-<id>`, against prod's `amenbo-app`) reaches the right app too,
+but a pid is what uiauto takes (`devtool/README.md`). Inside a task worktree the id can be dropped entirely:
 with no argument the command answers for the dev GUI that checkout launches.
 
 uiauto is the input primitive, called here, never moved: `window <pid>` yields the id

@@ -552,24 +552,29 @@ func (f failure) String() string {
 // picked, so which of the two it landed on is never a guess.
 func devAppBinary() (string, error) {
 	root := mustTreeRoot()
-	built := filepath.Join(root, "app", "src-tauri", "target", "release", "amenbo-app")
+	built := filepath.Join(root, "app", "src-tauri", "target", "release", devGUIBinaryGlob)
 	candidates := []string{built}
 	switch runtime.GOOS {
 	case "darwin":
 		candidates = nil
 		for _, name := range devGUIBundleNames(root) {
 			candidates = append(candidates,
-				filepath.Join(macAppsDir, name+".app", "Contents", "MacOS", "amenbo-app"),
+				filepath.Join(macAppsDir, name+".app", "Contents", "MacOS", devGUIBinaryGlob),
 				filepath.Join(root, "app", "src-tauri", "target", "release", "bundle", "macos",
-					name+".app", "Contents", "MacOS", "amenbo-app"))
+					name+".app", "Contents", "MacOS", devGUIBinaryGlob))
 		}
 	case "windows":
 		candidates = []string{built + ".exe"}
 	}
 	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c, nil
+		// A pattern, because a dev bundle names its executable after the instance it is
+		// (`amenbo-app-dev`, `amenbo-app-dev-<id>`) so that a click can be aimed at one app. The CLI
+		// that ships beside it is plain `amenbo`, so nothing else in there answers to `amenbo-app*`.
+		found, err := filepath.Glob(c)
+		if err != nil || len(found) == 0 {
+			continue
 		}
+		return found[0], nil
 	}
 	return "", fmt.Errorf("no dev GUI found (%s) — build it with '%s', or pass --app",
 		strings.Join(candidates, ", "), devGUIBuildCommand(root))

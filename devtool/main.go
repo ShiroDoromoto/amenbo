@@ -94,9 +94,12 @@ task finish  safely tear it down: refuse unless the worktree is clean and the
              branch is merged into --base (override with --force). Deletes the
              task's dev GUI too — the bundle and its app-data both.
 devgui pid   print the pid of a running dev GUI, for 'uiauto window <pid>' to
-             resolve its window from. All three builds run under the process
-             name 'amenbo-app', so nothing but the bundle they were executed out
-             of tells them apart, and the front window is whichever is in front.
+             resolve its window from. The front window is whichever app is in
+             front, which is rarely the one being verified; devtool matches on
+             the bundle a process was executed out of, which names one instance
+             exactly (each dev build also carries its own executable name --
+             'amenbo-app-dev', 'amenbo-app-dev-<id>' -- against prod's
+             'amenbo-app').
              Without an <id> it answers for the dev GUI this checkout launches
              (a task worktree's own instance ahead of the shared app); --front
              activates it first, since uiauto skips a window behind a Space.

@@ -375,6 +375,45 @@ jobs:
             echo "→ ${dst} (+ .sig)"
           done
 
+      # The CLI archives split the same way, for the same reason: install.sh fetches one and `amenbo
+      # update --apply` fetches the other, and one asset cannot report both. They are packaged by
+      # wharfy straight onto the release — dist/ holds the bare binaries it packaged, not the archives
+      # — so the copies are taken back off the release that was just made. Their names come from the
+      # release rather than being spelled here, leaving wharfy the one that decides how an archive is
+      # named. The names are handed to the verify step below through a file, so both read one list.
+      - name: Copy the CLI archives to their update-download names
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="$(git describe --tags --abbrev=0 --match 'v*')"
+          fi
+          mkdir -p dist/cli-update
+          mapfile -t archives < <(gh release view "$TAG" --json assets \
+            --jq '.assets[].name | select(test("^amenbo_.*\\.(tar\\.gz|zip)$")) | select(test("-update\\.") | not)')
+          if [ "${#archives[@]}" -eq 0 ]; then
+            echo "::error::no CLI archive on ${TAG} to copy — wharfy uploaded none" >&2
+            exit 1
+          fi
+          : >cli-update-names.txt
+          uploads=()
+          for name in "${archives[@]}"; do
+            gh release download "$TAG" --pattern "$name" --dir dist/cli-update --clobber
+            case "$name" in
+              *.tar.gz) dst="${name%.tar.gz}-update.tar.gz" ;;
+              *.zip)    dst="${name%.zip}-update.zip" ;;
+              *)        echo "::error::unexpected CLI archive name: ${name}" >&2; exit 1 ;;
+            esac
+            cp "dist/cli-update/${name}" "dist/cli-update/${dst}"
+            uploads+=("dist/cli-update/${dst}")
+            echo "$dst" >>cli-update-names.txt
+            echo "→ ${dst}"
+          done
+          gh release upload "$TAG" "${uploads[@]}" --clobber
+
       # The GUI self-update path (tauri-plugin-updater) reads a Tauri-schema manifest that is NOT
       # wharfy's latest.json — assemble it from the per-OS updater artifacts' signatures and attach
       # it, plus the updater artifacts themselves, onto the same prerelease. wharfy uploads only what
@@ -423,6 +462,8 @@ jobs:
             dist/amenbo-app-linux-x86_64.AppImage.sig
             dist/amenbo-app-linux-x86_64-update.AppImage
             dist/amenbo-app-linux-x86_64-update.AppImage.sig
+            dist/cli-update/*-update.tar.gz
+            dist/cli-update/*-update.zip
             dist/latest-tauri.json
 
       # A green release job is not proof of a release. If wharfy ever prints its plan
@@ -472,6 +513,10 @@ jobs:
             "amenbo-app-linux-x86_64-update.AppImage" "amenbo-app-linux-x86_64-update.AppImage.sig"
             "latest-tauri.json"
           )
+          # The update-named CLI archives, as the copy step recorded them (wharfy names the originals,
+          # so spelling them a second time here would be a second source of truth for the same names).
+          mapfile -t cli_updates <cli-update-names.txt
+          expected+=("${cli_updates[@]}")
 
           assets="$(jq -r '.assets[].name' <<<"$rel")"
           echo "Release assets:"; echo "$assets"

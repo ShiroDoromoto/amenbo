@@ -26,18 +26,21 @@
 //! the bytes it declared. The envelope itself is fail-closed the other way: a `catalog_v` from the future
 //! is refused whole, because amenbo cannot know what a newer envelope means.
 //!
-//! **The catalog carries no signature, and needs none.** Trust rests on each asset's signature, which
-//! verifies only against the public key amenbo ships ([`crate::plugin_provenance::CATALOG_PUBLIC_KEY`]).
-//! A swapped catalog buys nothing: its assets still have to pass that door at install.
+//! **The catalog carries no signature, and needs none.** Trust rests on each asset's signature, and on
+//! the key that signature has to verify against: the one amenbo ships
+//! ([`crate::plugin_provenance::CATALOG_PUBLIC_KEY`]) for the official catalog, and the key a registered
+//! catalog published — pinned on the user's consent — for its own (`AMB-D-389`). A swapped catalog buys
+//! nothing: its assets still have to pass that door at install.
 //!
 //! Offline is the normal case, not an error: [`load`] serves the cached copy when the fetch fails, and a
 //! failed fetch never overwrites what is cached — the cache is replaced only by a catalog that parsed.
 //!
-//! Scope of install/update: the official catalog, one URL. **Third-party catalogs** register beside it and
-//! merge into a browsing view ([`discover`], `AMB-T-1980`) — which is why the cache is a **named file** in
-//! the registry directory, not the directory itself. A registration carries the key that catalog publishes,
-//! pinned on the user's consent (`AMB-D-389`, [`Source`]), which is what an install off it will verify
-//! against; teaching install and update to resolve across the merged view is its own change.
+//! Scope of install/update: **the merged view**, official catalog and every registered one
+//! ([`for_install`]) — which is why the cache is a **named file** in the registry directory, not the
+//! directory itself. A registration carries the key that catalog publishes, pinned on the user's consent
+//! (`AMB-D-389`, [`Source`]), and that pin is the root an install off it verifies against; a catalog that
+//! publishes no key can be browsed, and nothing on it installs. A name the official catalog carries wins
+//! the merge either way, so what a browse shows and what an install resolves are the one view.
 
 use crate::config::Paths;
 use crate::error::{Error, Result};
@@ -222,7 +225,8 @@ pub fn fresh(paths: &Paths) -> Result<Catalog> {
 // The official catalog is one URL cached in one file; a registered third-party catalog is another URL
 // cached in its own file beside it (`AMB-T-1980`). The mechanism is the same for both, so the functions
 // that fetch, cache and fall back take the cache file as an argument — the `paths`-shaped functions above
-// are the official-catalog spellings of these, and `discover` drives the third-party ones.
+// are the official-catalog spellings of these, and the fold behind `discover` / `for_install` drives the
+// registered ones.
 
 /// [`cached`] against a named cache file.
 fn cached_at(cache_file: &std::path::Path) -> Option<Catalog> {

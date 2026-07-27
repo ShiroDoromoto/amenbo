@@ -55,9 +55,20 @@ const (
 
 // registeredPlugins is what this catalog offers. Two, not one: a badge and a provenance filter are
 // about telling shelves apart, and a single row of each reads as a coincidence rather than a rule.
-var registeredPlugins = []struct{ name, desc, category string }{
-	{"standup", "Post the day's finished tasks to the team channel", "workflow"},
-	{"burndown", "Chart what is left in the current milestone", "report"},
+//
+// Each carries the two declarations an opened detail draws — the event it is woken for, and the one
+// setting it will ask for — because the detail document is the only thing on that panel that came
+// from this shelf. Everything above it (the name, the description, the badge) is the entry, which the
+// list already held; the scope line under it is a phrase of the interface and reads the same whatever
+// document was fetched. So with a bare document there is nothing on screen that says the panel opened
+// against *this* catalog rather than against nothing at all — which is exactly the reading
+// `verification/scenarios/plugin-detail.yaml` is written for. The setting's label is free text an
+// author wrote, so it is a word only this catalog can put there — and it deliberately says nothing
+// the description above it already says, since a reading satisfied by the row's own line would pass
+// against a panel where the document never arrived.
+var registeredPlugins = []struct{ name, desc, category, event, askKey, askLabel string }{
+	{"standup", "Post the day's finished tasks to the team channel", "workflow", "task.done", "channel", "Channel webhook"},
+	{"burndown", "Chart what is left in the current milestone", "report", "task.status_changed", "milestone", "Milestone name"},
 }
 
 // registeredCatalogDocs is every document this catalog serves, keyed by the path it answers at.
@@ -75,6 +86,10 @@ func registeredCatalogDocs() map[string][]byte {
 			"name":      p.name,
 			"payload_v": 1,
 			"scope":     "project",
+			"events":    []string{p.event},
+			"config": []map[string]any{
+				{"key": p.askKey, "label": p.askLabel, "required": true},
+			},
 		})
 		docs[registeredCatalogDir+"/plugins/"+p.name+".json"] = detail
 		sum := sha256.Sum256(detail)

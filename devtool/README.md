@@ -360,6 +360,13 @@ off, the badge would read the same whether the merge folded or did nothing, and
 nothing in the CLI reads an entry's own claim back. It is what
 `verification/scenarios/plugin-browse.yaml` is looked at for.
 
+**Each of them declares an event and a setting**, in its own detail document —
+the second document a catalog is served as, fetched when a row is opened. The
+panel above it is drawn from the entry the list already had, and the scope line
+under it is a phrase of the interface, so those declarations are the only thing
+on an opened plugin that says which catalog's document was fetched. That is what
+`verification/scenarios/plugin-detail.yaml` is looked at for.
+
 **`--fresh` runs against a throwaway store** (`AMENBO_HOME`), so every cache
 starts cold. Without it a catalog fetch is answered from disk for an hour and a
 repository's figures for six, so the fake world is usually never asked and an

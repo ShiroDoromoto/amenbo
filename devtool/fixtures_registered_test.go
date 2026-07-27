@@ -76,6 +76,32 @@ func TestRegisteredCatalogEntriesMatchTheirDetails(t *testing.T) {
 	}
 }
 
+// TestRegisteredCatalogDetailsCarryWhatThePanelDraws holds the half of the document an opened plugin
+// is looked at for. A detail that declared nothing would still open, and the panel would still come
+// up — drawn entirely out of the entry the list already had — so a fetch that stopped reaching this
+// catalog would look the same as one that reached it.
+func TestRegisteredCatalogDetailsCarryWhatThePanelDraws(t *testing.T) {
+	docs := registeredCatalogDocs()
+	for _, p := range registeredPlugins {
+		var detail struct {
+			Events []string `json:"events"`
+			Config []struct {
+				Key   string `json:"key"`
+				Label string `json:"label"`
+			} `json:"config"`
+		}
+		if err := json.Unmarshal(docs[registeredCatalogDir+"/plugins/"+p.name+".json"], &detail); err != nil {
+			t.Fatal(err)
+		}
+		if len(detail.Events) != 1 || detail.Events[0] != p.event {
+			t.Errorf("%s is woken for %v, want [%s]", p.name, detail.Events, p.event)
+		}
+		if len(detail.Config) != 1 || detail.Config[0].Key != p.askKey || detail.Config[0].Label != p.askLabel {
+			t.Errorf("%s asks for %v, want the one setting %q labelled %q", p.name, detail.Config, p.askKey, p.askLabel)
+		}
+	}
+}
+
 // TestDevStoreDirFollowsTheBundle holds the CLI to the same store as the GUI beside it. Getting this
 // wrong is silent in both directions: the catalog is registered in a store nobody has open, and the
 // window comes up looking exactly as it did before.

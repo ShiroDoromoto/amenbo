@@ -477,6 +477,20 @@ const REGISTRY: &[OpSpec] = &[
     // catalog, `plugin list` per installed manifest, and an entry's own claim reaches a person only
     // through the market screen. That is why the scenario carrying this is written for the screen.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "browsed", required: &["name", "source", "official"], refs: &[], strings: &["name", "source"], binds: false },
+    // One row opened, and what the catalog's own detail document says installing it would mean. A
+    // catalog is served as two documents, and the detail is fetched only when someone opens a row —
+    // from whichever catalog served that row, which is the reach a merged view has to get right and
+    // the list alone never exercises.
+    //
+    // `declares` is one line of that document the panel prints back: an event the plugin is woken
+    // for, or the label of a setting it will ask for. Both are the author's own words, which is what
+    // makes them readable — everything else on the panel is either the entry (which the list already
+    // held) or a phrase of the interface, and neither says which document was fetched.
+    //
+    // GUI only, for the same reason `browsed` is: no CLI reads a catalog's detail document. `plugin
+    // list` answers per installed manifest, and installing off a registered catalog needs a signed
+    // asset — so before an install, the panel is where the declaration is.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "detail", required: &["name", "source", "declares"], refs: &[], strings: &["name", "source", "declares"], binds: false },
     // The author's own door, before anything is installed anywhere: a manifest file is held up to the
     // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
     // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.

@@ -179,6 +179,9 @@ impl Instructor {
     /// interface, so it reads the same whatever language the app is in. The official badge is a word
     /// of the interface, so an `official: true` line has no text to derive and is left for a
     /// `Review`.
+    ///
+    /// `detail` follows that same line: what it expects is the declaration the step named, which the
+    /// catalog's document carries in the author's own words — an event id, or a setting's label.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -188,6 +191,9 @@ impl Instructor {
             }
             (Domain::Plugin, "browsed") if !official(with) => {
                 Some(Expectation { text: arg_str(with, "source")?.to_string(), present: true })
+            }
+            (Domain::Plugin, "detail") => {
+                Some(Expectation { text: arg_str(with, "declares")?.to_string(), present: true })
             }
             _ => None,
         }
@@ -244,6 +250,12 @@ impl Instructor {
                     ),
                 }
             }
+            (Domain::Plugin, "detail") => format!(
+                "Open the plugin market, open the row for \"{}\" off the catalog \"{}\", and confirm what it says installing it would mean names \"{}\".",
+                req(with, "name")?,
+                req(with, "source")?,
+                req(with, "declares")?
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -583,6 +595,30 @@ steps:
         let exp = ins.expectation(&s.steps[0]).expect("a not-official row names its shelf");
         assert_eq!(exp, Expectation { text: "In-house catalog".to_string(), present: true });
         assert!(ins.expectation(&s.steps[1]).is_none(), "the official badge is an interface word");
+    }
+
+    /// The detail line: opening a row off a registered catalog fetches that catalog's own document,
+    /// and what is sent to OCR is the declaration the step named — the author's words, so the reading
+    /// does not turn on which language the app is in.
+    #[test]
+    fn a_detail_assert_expects_the_declaration_it_names() {
+        let yaml = r#"
+id: x
+title: y
+drivers: [gui]
+steps:
+  - type: assert
+    domain: plugin
+    op: detail
+    with: { name: standup, source: In-house catalog, declares: Channel webhook }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let line = ins.render(&s.steps[0]).unwrap();
+        assert!(line.contains("\"standup\"") && line.contains("\"In-house catalog\""), "got: {line}");
+
+        let exp = ins.expectation(&s.steps[0]).expect("a detail assert is OCR-judged");
+        assert_eq!(exp, Expectation { text: "Channel webhook".to_string(), present: true });
     }
 
     #[test]

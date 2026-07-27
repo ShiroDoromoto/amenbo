@@ -1651,6 +1651,9 @@ pub fn decision_list(
         /// Currency as carried by the row (a projection derived from the edges). Both the filter and
         /// the card read it.
         current: bool,
+        /// The ids of the decisions that superseded it, as the row carried them — the edges `current`
+        /// is a projection over. The card spells them into refs.
+        superseded_by: Vec<i64>,
     }
     let mut entries: Vec<Entry> = rows
         .into_iter()
@@ -1666,7 +1669,13 @@ pub fn decision_list(
                 ..Default::default()
             };
             let project = r.project_name.map(|name| crate::view::ProjectRef { id: r.project_id, name });
-            Entry { decision, project, linked_task_count: r.linked_task_count, current: r.current }
+            Entry {
+                decision,
+                project,
+                linked_task_count: r.linked_task_count,
+                current: r.current,
+                superseded_by: r.superseded_by,
+            }
         })
         .filter(|e| filter.matches(&e.decision, e.current, linked_to_task.as_deref(), comment_text_hits.as_deref()))
         .collect();
@@ -1691,6 +1700,7 @@ pub fn decision_list(
                 e.project.clone(),
                 e.linked_task_count,
                 e.current,
+                &e.superseded_by,
             )
         })
         .collect();

@@ -56,7 +56,7 @@ app/                  the desktop GUI shown above (React + Vite front end; Tauri
 assets/               the logo, the CLI demo and its script, the GUI screenshot
 verification/         black-box checks of an installed build, run before a release
                       (its own cargo workspace, so `make test` never pulls it in)
-devtool/              optional Go helper: a throwaway worktree, and a dev GUI, per task
+devtool/              optional Go helper: a throwaway dev GUI per task, and a fake outside world
 guards/               one invariant apiece, asserted over the tree by `make test` and CI
 scripts/              the shell the Makefile calls out to: build, sign, notarise, verify
 ```
@@ -108,7 +108,7 @@ rustup show        # rust-toolchain.toml is applied on the next cargo command
 files select the exact version above that.
 
 Go appears in the tree, but it is not a third toolchain to install: it builds only
-`devtool/`, the optional helper that stamps out a git worktree per task (see
+`devtool/`, the optional helper that gives a task its own throwaway dev GUI (see
 [devtool/README.md](devtool/README.md)). Nothing else reads it, so amenbo builds,
 tests and ships without Go — `make devtool` is the only target that asks for it.
 

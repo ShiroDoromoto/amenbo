@@ -40,7 +40,7 @@ func taskDevBundle(id string) string { return "amenbo (dev " + id + ")" }
 
 // taskIDFromCheckout names the task a checkout belongs to, and "" for the main one. A task worktree
 // sits at `<repo-name>-worktrees/<id>` (see paths), so the directory name is the id — read back
-// through the same canonical form task start pinned it to, or a hand-made directory beside the real
+// through the same canonical form every other route takes, or a hand-made directory beside the real
 // ones would be taken for a task.
 func taskIDFromCheckout(root string) string {
 	if !strings.HasSuffix(filepath.Base(filepath.Dir(root)), "-worktrees") {
@@ -191,8 +191,8 @@ func scanTaskDevGUIs(home, appsDir string, liveIDs []string) []taskDevGUIInstanc
 }
 
 // taskDevGUIPaths lists everything an instance occupies on disk, in the order teardown removes it.
-// Naming the set once is what keeps `task finish` and any future report reading the same disk; the
-// two roots are arguments so a test can point the whole set at a temp dir.
+// Naming the set once is what keeps `devgui rm` and the sweep reading the same disk; the two roots
+// are arguments so a test can point the whole set at a temp dir.
 func taskDevGUIPaths(home, appsDir, id string) []string {
 	return []string{
 		filepath.Join(appsDir, taskDevBundle(id)+".app"),
@@ -200,12 +200,28 @@ func taskDevGUIPaths(home, appsDir, id string) []string {
 	}
 }
 
+// devGUISeed resolves task id's checkout and seeds the instance from there. The checkout has to
+// exist: an instance is a task's, and a number with nothing checked out under it is a typo rather
+// than a task to build for. Errors here are the caller's to see — the build that runs this is about
+// to open a screen on the store, so a store that was not seeded has to be said out loud.
+func devGUISeed(id string) error {
+	_, worktree, err := paths(id)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(worktree); err != nil {
+		return fmt.Errorf("no checkout for task %s (%s missing)", id, worktree)
+	}
+	provisionTaskDevGUI(worktree, id)
+	return nil
+}
+
 // provisionTaskDevGUI seeds the instance's app-data by cloning the shared dev store, so it opens on
 // the setup grown in the shared app rather than an empty one — the same move a release rehearsal
-// makes with a clone of the production store. It is best-effort in the sense the npm install is: by
-// the time it runs the reservation, worktree and branch are all in place, so nothing here may fail a
-// start. An app-data already sitting there is left alone; it is the session's own work from an
-// earlier start, and a fresh clone would throw it away.
+// makes with a clone of the production store. Every arm of it reports and returns: a store that
+// could not be cloned leaves an instance that opens empty, which is a worse screen to verify but
+// never a reason to fail the build that asked. An app-data already sitting there is left alone; it
+// is the session's own work, and a fresh clone would throw it away.
 func provisionTaskDevGUI(worktree, id string) {
 	if runtime.GOOS != "darwin" {
 		return
@@ -236,8 +252,8 @@ func provisionTaskDevGUI(worktree, id string) {
 
 // removeTaskDevGUI deletes the instance: the installed bundle and its app-data both. This is the
 // half of the arrangement that has to hold — an instance is ~38MB of bundle plus a store, so one
-// left behind per task is how a disk fills quietly. It reports each path it removed and never fails
-// the teardown, which by this point has already taken the worktree and branch.
+// left behind per task is how a disk fills quietly. It reports each path it removed and never fails,
+// because it is the last step of a teardown whose other halves are already gone.
 func removeTaskDevGUI(id string) {
 	if runtime.GOOS != "darwin" {
 		return
@@ -247,7 +263,7 @@ func removeTaskDevGUI(id string) {
 		return
 	}
 	if !stopTaskDevGUI(id) {
-		logf("  %s is still running — quit it, then `devtool devgui sweep --yes` reclaims it", taskDevBundle(id))
+		logf("  %s is still running — quit it, then `devtool devgui rm %s` reclaims it", taskDevBundle(id), id)
 		return
 	}
 	reclaim(taskDevGUIPaths(home, macAppsDir, id))
@@ -404,9 +420,9 @@ func reclaim(paths []string) {
 }
 
 // devGUISweep reports every per-task instance on this machine and, with `apply`, reclaims the ones
-// no worktree claims any more. It exists because `task finish` is the only thing that deletes an
-// instance, and a session that dies — or one that never runs it — leaves ~38MB of bundle plus a
-// store behind under a number nobody will type again.
+// no worktree claims any more. It exists because an instance outlives the checkout it belongs to: a
+// session that dies — or one that ends without `devgui rm` — leaves ~38MB of bundle plus a store
+// behind under a number nobody will type again.
 //
 // **A live instance is never touched, and never offered.** That is the same hands-off line a
 // pre-existing worktree draws: the worktree is the evidence a session owns this number, and whether
@@ -426,7 +442,7 @@ func devGUISweep(apply bool) error {
 	if err != nil {
 		return err
 	}
-	root, _, _, err := paths("0") // the id is unused: this only needs the main repo root
+	root, _, err := paths("0") // the id is unused: this only needs the main repo root
 	if err != nil {
 		return err
 	}

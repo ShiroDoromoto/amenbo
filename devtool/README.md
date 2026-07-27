@@ -3,12 +3,11 @@
 amenbo's portable developer-support CLI — a single static Go binary (no runtime,
 no venv) you can drop into any project regardless of its language.
 
-It stamps out and tears down **per-task git worktrees** — and, on macOS, the
-task's own throwaway **dev GUI** — so several implementation sessions can run in
-parallel without stepping on each other, it measures what a diff does to the
-`amenbo agent --json` entry, and it stands up a **fake outside world** the dev
-GUI can be verified against — including the failures the real one will not
-produce on demand.
+On macOS it gives a task its own throwaway **dev GUI** — bundle, app-data and
+all — so several implementation sessions can run in parallel without installing
+over each other, it measures what a diff does to the `amenbo agent --json`
+entry, and it stands up a **fake outside world** the dev GUI can be verified
+against — including the failures the real one will not produce on demand.
 
 ## Build
 
@@ -23,18 +22,24 @@ make devtool        # builds to ~/.cargo/bin/devtool
 
 ## Model
 
-A task's worktree lives **outside the repo**, in a sibling dir:
+The checkout a task is written in is a git worktree **outside the repo**, in a
+sibling dir, cut by amenbo's official `worktree` plugin:
 
 ```
 <repo>/../<repo-name>-worktrees/<id>/    git worktree checkout on task/<id>
 ```
 
-Outside-the-repo is deliberate — the worktree is a **pure development
-environment**. Two concerns are kept physically apart:
+devtool reads that layout and cuts none of it. Three tools, three jobs, and none
+of them reaching into another's: **amenbo** holds the backlog, the **`worktree`
+plugin** holds git, and **devtool** holds the one piece of isolation neither can
+give — a GUI bundle, which is installed machine-wide and so cannot live in a
+checkout at all.
 
-- **Project management** (status / comment / done) → the **prod
-  `amenbo` binary, run from the MAIN repo**, against the real backlog. devtool's
-  own reservation does exactly this (prod binary, anchored to the main worktree root).
+Outside-the-repo is what makes the checkout a **pure development environment**.
+Two concerns are kept physically apart:
+
+- **Project management** (status / comment / done) → the **prod `amenbo` binary,
+  run from the MAIN repo**, against the real backlog.
 - **Debug verification** (does my code work) → the worktree's **dev build**
   against a **throwaway store** (e.g. `make verify`), inside the worktree.
 
@@ -59,7 +64,7 @@ permanent place a grown setup (plugins, catalog, projects) lives.
 | header badge | `DEV` | `DEV AMB-T-<id>` |
 | the CLI it names | `amenbo-dev` | `amenbo-dev` — it installs none of its own |
 | built by | `make install-gui-dev` | `make install-gui-dev AMB-T-ID=<id>` |
-| deleted by | nothing — it is permanent | `devtool task finish <id>` |
+| deleted by | nothing — it is permanent | `devtool devgui rm <id>` |
 
 Each build runs under an executable name of its own — production keeps
 `amenbo-app` — so a name reaches one app and not another: `pgrep -x
@@ -75,63 +80,42 @@ So **verify a task in its own app**: with no hand reaching the shared bundle,
 two parallel sessions cannot install over each other, and the collision is gone
 by construction rather than by taking turns.
 
-What the instance opens on is the shared dev store as it was when the task
-started. Anything a screen needs *beyond* that is put there with
-[`task cli`](#devtool-task-cli-id---no-build----amenbo-args) below, in the
+What the instance opens on is the shared dev store as it stood when the bundle
+was built. Anything a screen needs *beyond* that is put there with
+[`devgui cli`](#devtool-devgui-cli-id---no-build----amenbo-args) below, in the
 instance's own store — never in the shared one, which no task may edit.
 
-devtool provisions and deletes the instance; the Makefile builds it. That split
-is deliberate — a bundle costs minutes to build and ~38MB on disk, so only the
-tasks that actually look at a GUI pay for one. Beyond seeding that instance's
-app-data, devtool provisions no amenbo store of its own.
+devtool seeds and reclaims the instance; the Makefile builds it. That split is
+deliberate — a bundle costs minutes to build and ~38MB on disk, so only the
+tasks that actually look at a GUI pay for one. Beyond that instance's app-data,
+devtool provisions no amenbo store of its own.
 
 All of this is macOS-only, which is where the dev GUI is installed at all;
-elsewhere `task start` / `task finish` simply do not mention it.
+elsewhere the `devgui` commands are no-ops.
 
 ## Commands
 
-### `devtool task start <id> [--base main] [--no-reserve] [--no-deps]`
+### `devtool devgui seed <id>`
 
-1. Reserves `<id>` (`task status <id> in_progress`, prod amenbo from the main
-   repo) and verifies status is `in_progress`. Double-work is guarded by
-   `status` alone, so `in_progress` **is** the reservation, and a same-status
-   re-reserve is idempotent.
-2. Adds a git worktree at `<repo>/../<repo-name>-worktrees/<id>` on a fresh
-   branch `task/<id>` branched from `--base` (default `main`).
-3. For a GUI checkout (`app/package.json` present) runs a **best-effort**
-   `npm ci` in `app/` so the worktree is ready for `npm run typecheck/build/test`
-   without a manual install. Each worktree keeps its own real (gitignored)
-   `node_modules` — no symlink — so parallel sessions stay isolated. It never
-   fails `task start`: a missing npm, offline registry, or failed install only
-   warns. Skip it with `--no-deps`.
-4. For a GUI checkout on macOS, seeds the app-data of the task's own dev GUI
-   (`work.amenbo.amenbo-dev-<id>`) by cloning the shared dev store, so the
-   instance opens on the setup grown in the shared app rather than an empty one.
-   Best-effort in the same sense as the `npm ci`, and an app-data already sitting
-   there is left alone. The bundle itself is not built here — that is
-   `make install-gui-dev AMB-T-ID=<id>`, run only when the task needs to look at it.
-5. Prints an eval-able `cd` to **stdout** (diagnostics go to stderr):
+Clones the shared dev store into the app-data of task `<id>`'s own dev GUI
+(`work.amenbo.amenbo-dev-<id>`), so the instance opens on the setup grown in the
+shared app rather than an empty one.
 
-```sh
-eval "$(devtool task start <id>)"   # cd into the worktree
-```
+`make install-gui-dev AMB-T-ID=<id>` runs this, so a task that builds its
+instance the ordinary way never types it. Details:
 
-`--no-reserve` skips the reservation and only verifies an existing one (e.g. the
-task is already `in_progress`).
+- **An app-data already sitting there is left alone.** It is the session's own
+  work, and a fresh clone would throw it away.
+- **A number with no checkout under it is refused.** An instance belongs to a
+  task being written somewhere; app-data under a number no worktree claims is
+  precisely what the sweep goes looking for.
+- **Everything past that reports and carries on.** No shared store to clone, or
+  a clone that failed, leaves an instance that opens empty — a poorer screen to
+  verify, never a reason to fail the build that asked.
+- The bundle itself is not built here; that is the Makefile's, and only the
+  tasks that look at a GUI pay for one.
 
-It refuses to start when the reservation is not yours to take, and the refusal says
-which case it is — because the two look the same on disk and only one of them is
-yours to clear:
-
-- **the worktree exists and the backlog holds the task `in_progress`** — another
-  session is on it. Take a different task; do not look inside the worktree, judge
-  whether it is stale, or delete it.
-- **the worktree exists and the task is not `in_progress`** — a worktree you left
-  behind. `devtool task finish <id>`.
-- **the reservation was rejected (`already_reserved`)** — another session reserved it
-  first. The reservation is a compare-and-swap, so it only takes from `todo`.
-
-### `devtool task cli <id> [--no-build] -- <amenbo args…>`
+### `devtool devgui cli <id> [--no-build] -- <amenbo args…>`
 
 Runs an amenbo command against **the store the task's own dev GUI reads**, so a
 screen can be given something to show. A dev GUI shows what is in its store: a
@@ -139,8 +123,8 @@ rejected task, a card with a due date, a plugin in some state all have to be
 *put there* before the screen that renders them can be looked at.
 
 ```sh
-devtool task cli 696 -- --actor human --project myproj task add --title 'due today' --due today
-devtool task cli 696 -- --actor human --project myproj task reject 5 --reason 'out of scope'
+devtool devgui cli 696 -- --actor human --project myproj task add --title 'due today' --due today
+devtool devgui cli 696 -- --actor human --project myproj task reject 5 --reason 'out of scope'
 ```
 
 The CLI is the **worktree's own** `target/debug/amenbo` — rebuilt first, unless
@@ -148,8 +132,8 @@ The CLI is the **worktree's own** `target/debug/amenbo` — rebuilt first, unles
 task that was not being built anyway: the app-data name is fixed at build time
 (`AMENBO_APP_NAME`), but what it selects is a *directory*, and `AMENBO_HOME`
 names the same one at run time — the seam `make verify` already isolates
-through. Before this existed the only way in was to rebuild the CLI with
-`AMENBO_APP_NAME=amenbo-dev-<id>`: two minutes, for a binary one task could use.
+through. The other way in is to rebuild the CLI with
+`AMENBO_APP_NAME=amenbo-dev-<id>`: two minutes, for a binary one task can use.
 
 Details worth knowing:
 
@@ -157,8 +141,8 @@ Details worth knowing:
   as a flag of devtool's.
 - **The exit code is amenbo's**, so a seeding step that failed fails visibly.
 - **It runs in the store's own directory.** Relative paths resolve there, and a
-  `bind` writes its `.amenbo` beside the store it points into — which teardown
-  reclaims with the rest of the instance. In the worktree that same pointer
+  `bind` writes its `.amenbo` beside the store it points into — which `devgui
+  rm` reclaims with the rest of the instance. In the worktree that same pointer
   would be a live one for *any* amenbo run there, the production binary
   included, which is the reach the worktree is kept outside the repo to deny.
 - **The binary still introduces itself by its own channel** (it was not built
@@ -171,29 +155,6 @@ Details worth knowing:
   moment it opened.
 
 macOS only, like everything else about the per-task instance.
-
-### `devtool task finish <id> [--base main] [--force] [--reset]`
-
-Safely tears it down. Without `--force` it **refuses** unless:
-
-- the worktree has no uncommitted changes, **and**
-- branch `task/<id>` is merged into `--base`.
-
-Then it removes the worktree and deletes the branch, and prunes the
-`<repo>/../<repo-name>-worktrees` base dir once it holds no other worktree. It
-also deletes the task's dev GUI — the `/Applications` bundle **and** its
-app-data, naming each path it removed. Those live outside the worktree, so this
-is where they are reclaimed; skipping it costs ~38MB per task, forever
-(`devgui sweep` is the way back for a task that skipped it).
-
-A **running** instance is asked to quit first, and if it will not, both halves
-are left where they are. Deleting the store under a running instance does not
-remove it — it writes the store back on the way out, and the teardown that
-reported it reclaimed reads as green while the leftover returns minutes later.
-`--reset` also returns the task to `todo` (`amenbo task status <id> todo`;
-otherwise the `in_progress` status is left as-is — finish your task with
-`amenbo task done <id>`). `finish` works whether you run it from the main
-checkout or from inside the worktree.
 
 ### `devtool devgui pid [<id>] [--front]`
 
@@ -220,12 +181,25 @@ is in front, in practice the **production** one.
 - Nothing running is a **non-zero exit** with the build command named, not an
   empty answer that reads as a pid of zero.
 
+### `devtool devgui rm <id>`
+
+Deletes one task's instance: the `/Applications` bundle **and** its app-data,
+naming each path it removed. Both live outside the checkout, so removing the
+worktree leaves them where they are — skipping this costs ~38MB per task,
+forever, and `devgui sweep` is the way back for a task that skipped it.
+
+A **running** instance is asked to quit first, and if it will not, both halves
+are left where they are. Deleting the store under a running instance does not
+remove it — the instance writes its store back on the way out, and the removal
+that reported it reclaimed reads as green while the leftover returns minutes
+later.
+
 ### `devtool devgui sweep [--yes]`
 
 Lists every per-task dev GUI on this machine and says which ones no worktree
-claims any more. `task finish` is the only other thing that deletes an instance,
-so a session that died — or one that never ran it — leaves ~38MB of bundle plus a
-store behind under a number nobody will type again.
+claims any more. An instance outlives the checkout it belongs to, so a session
+that died — or one that ended without `devgui rm` — leaves ~38MB of bundle plus
+a store behind under a number nobody will type again.
 
 - **An instance a worktree still owns is never touched, and never offered.** That
   is the same hands-off line a pre-existing worktree draws elsewhere: the
@@ -236,7 +210,7 @@ store behind under a number nobody will type again.
 - Reporting is the default; `--yes` reclaims. What goes is a store, and the
   report is the review.
 - A running instance is asked to quit and skipped if it will not (see
-  `task finish` above).
+  `devgui rm` above).
 
 Only the digits form an instance: a hand-made `amenbo (dev wip).app` is
 somebody's own, and the shared `amenbo (dev)` app is permanent.
@@ -383,8 +357,6 @@ against the real API stay.
 
 ## Env
 
-- `AMENBO_BIN` — backlog binary for `status`/`show` (default `amenbo`). Set to
-  `amenbo-dev` to drive an isolated store in tests.
-- `AMENBO_HOME` — not read, **set**: `task cli` puts the task's own store there
+- `AMENBO_HOME` — not read, **set**: `devgui cli` puts the task's own store there
   for the CLI it runs. It is amenbo's own isolation seam, the same one
   `make verify` points at a mktemp store.

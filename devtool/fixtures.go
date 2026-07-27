@@ -658,8 +658,8 @@ func insideBundle(app string) string {
 
 // mustFixturesDir is THIS checkout's fixture tree — the worktree the command runs in, not the main
 // one. Fixtures are tracked files a task edits like any other, and the dev GUI a task verifies is the
-// one it built here, so both belong to the checkout in hand (`task start` / `finish` anchor to the
-// main root because a worktree is what they manage; this is the other case).
+// one it built here, so both belong to the checkout in hand (the devgui commands anchor to the main
+// root because a per-machine instance is what they manage; this is the other case).
 func mustFixturesDir() string {
 	return filepath.Join(mustTreeRoot(), fixturesSubdir)
 }

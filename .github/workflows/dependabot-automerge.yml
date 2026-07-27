@@ -31,13 +31,14 @@ permissions:
   pull-requests: write
 
 jobs:
-  # The GUI shell crate is `exclude`d from the workspace and carries a lockfile of its own, but it
-  # reaches core through a path dependency: a workspace bump changes what that lock resolves to, and
-  # Dependabot's PR does not open the file. Merged as-is, main's copy points at a resolution that is
-  # no longer real, and the next person to build the app wears the churn.
+  # The GUI shell crate and the verification harness are both `exclude`d from the workspace and
+  # carry lockfiles of their own, but they reach core through a path dependency: a workspace bump
+  # changes what those locks resolve to, and Dependabot's PR does not open the files. Merged as-is,
+  # main's copies point at a resolution that is no longer real, and the next person to run cargo
+  # over one of them wears the churn.
   #
-  # So the bump is completed here, before it lands: re-resolve, and push the result onto the same
-  # branch. `cargo metadata` rewrites the lock without compiling, so this costs seconds and needs
+  # So the bump is completed here, before it lands: re-resolve both, and push the result onto the
+  # same branch. `cargo metadata` rewrites a lock without compiling, so this costs seconds and needs
   # none of the Tauri system libs.
   #
   # It runs ahead of the merge rather than as a CI job because CI's token is read-only on a
@@ -46,9 +47,10 @@ jobs:
   # below can follow immediately: the run that went green and the tree being merged differ only by a
   # lockfile cargo derived from the manifests CI already judged.
   #
-  # A human's PR is held to the same contract by CI's `app-lock` job, which fails instead of pushing.
+  # A human's PR is held to the same contract by CI's `out-of-workspace-locks` job, which fails
+  # instead of pushing.
   lockstep:
-    name: Bring the app crate's lockfile along
+    name: Bring the out-of-workspace lockfiles along
     runs-on: ubuntu-latest
     if: >-
       github.event.workflow_run.event == 'pull_request' &&
@@ -63,7 +65,7 @@ jobs:
 
       # The same ownership check the merge job makes: the actor above says who triggered CI, this
       # says who owns the branch about to be written to.
-      - name: Push the re-resolved lockfile if it moved
+      - name: Push the re-resolved lockfiles if they moved
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -77,18 +79,19 @@ jobs:
             exit 0
           fi
           cargo metadata --manifest-path app/src-tauri/Cargo.toml --format-version 1 > /dev/null
-          if git diff --quiet -- app/src-tauri/Cargo.lock; then
-            echo "app/src-tauri/Cargo.lock already follows the workspace"
+          cargo metadata --manifest-path verification/Cargo.toml --format-version 1 > /dev/null
+          if git diff --quiet -- app/src-tauri/Cargo.lock verification/Cargo.lock; then
+            echo "the out-of-workspace lockfiles already follow the workspace"
             exit 0
           fi
           # GitHub's documented identity for a commit an action authored. The leading number is the
           # bot account's id, which is what ties the commit to it rather than to a stranger.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/src-tauri/Cargo.lock
-          git commit -m "chore(deps): follow the workspace in the app crate's lockfile"
+          git add app/src-tauri/Cargo.lock verification/Cargo.lock
+          git commit -m "chore(deps): follow the workspace in the out-of-workspace lockfiles"
           git push origin "HEAD:${BRANCH}"
-          echo "pushed the re-resolved lockfile onto ${BRANCH} (PR #${pr})"
+          echo "pushed the re-resolved lockfiles onto ${BRANCH} (PR #${pr})"
 
   merge:
     name: Merge green Dependabot PRs

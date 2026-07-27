@@ -3885,20 +3885,31 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
         }
         DimensionCmd::Set { task, dimension, value } => {
             let tid = resolve_task(store, &task).map_err(CliError::from)?;
-            let did = store.resolve_dimension(None, &dimension).map_err(CliError::from)?;
+            let did = resolve_axis_of_task(store, tid, &dimension)?;
             let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
             let (tv, changed) = store.set_task_dimension_value(tid, vid).map_err(CliError::from)?;
             write_envelope(flags, "dimension.set", "task_dimension_value", serde_json::to_value(&tv).unwrap(), None, !changed, format!("✓ Set value on task {}", task_label(tid)));
         }
         DimensionCmd::Unset { task, dimension, value } => {
             let tid = resolve_task(store, &task).map_err(CliError::from)?;
-            let did = store.resolve_dimension(None, &dimension).map_err(CliError::from)?;
+            let did = resolve_axis_of_task(store, tid, &dimension)?;
             let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
             let removed = store.unset_task_dimension_value(tid, vid).map_err(CliError::from)?;
             write_envelope(flags, "dimension.unset", "task_dimension_value", json!({ "task_id": tid, "value_id": vid, "removed": removed }), None, !removed, format!("✓ Cleared value on task {}", task_label(tid)));
         }
     }
     Ok(0)
+}
+
+/// Resolve the axis named by `dimension set` / `unset` **inside the task's own project**. An axis belongs to
+/// one project and an assignment never crosses projects, so the task — resolved a line above — is what says
+/// which axis a bare name means; without it, a name a second project happens to use as well reads as
+/// `ambiguous` when only one of the two could ever have been assigned here. Same narrowing `task add --dim`
+/// already does ([`resolve_dim_pairs`]). An unfiled task has no project to narrow by, so its axis resolves
+/// across the store as before.
+fn resolve_axis_of_task(store: &Store, task_id: i64, reference: &str) -> Result<i64, CliError> {
+    let project_id = store.task(task_id).map_err(CliError::from)?.and_then(|t| t.project_id);
+    store.resolve_dimension(project_id, reference).map_err(CliError::from)
 }
 
 // ───────────────────────── task ─────────────────────────

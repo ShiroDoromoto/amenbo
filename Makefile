@@ -156,7 +156,7 @@ help:
 	@echo "make codesign-cert - one-time: create a stable self-signed certificate so install-dev/gui-dev stop re-prompting the keychain on every rebuild (macOS)"
 	@echo "make schema-freeze - write the store's current shape to store_engine/schema_frozen/v<latest>.sql and name it in frozen() (run it after appending a migration step, which is what bumps the version)"
 	@echo "make schema-renumber - after a merge left two steps on the same version number, move the trailing steps back into ascending order and freeze the number the last one lands on (the steps' own tests are yours)"
-	@echo "make lock         - re-resolve app/src-tauri/Cargo.lock (the GUI shell is outside the workspace, so a workspace bump leaves its lock behind; CI fails a PR whose lock is stale)"
+	@echo "make lock         - re-resolve the lockfiles outside the workspace (app/src-tauri/Cargo.lock and verification/Cargo.lock): both reach core by path, so a workspace bump leaves them behind; CI fails a PR whose lock is stale"
 	@echo "make hooks        - enable the git hooks (core.hooksPath=.githooks): pre-commit runs the tree guards over the staged diff, commit-msg holds the message to the same vocabulary"
 	@echo "make devtool      - build the optional parallel-development helper to ~/.cargo/bin/devtool (needs Go; amenbo itself builds and tests without it)"
 	@echo "make gui          - build the prod GUI (amenbo.app / work.amenbo.app)"
@@ -179,16 +179,18 @@ schema-freeze:
 schema-renumber:
 	cargo run -q -p amenbo-core --example freeze-schema -- --renumber
 
-## Re-resolve the lockfile of the GUI shell crate. That crate sits outside the workspace but reaches
-## core through a path dependency, so a workspace bump changes what its lock resolves to — while the
-## commit that made the bump never touches the file. Left alone the two drift apart silently, and the
-## next person to build the app finds the churn in their working tree instead. `cargo metadata`
-## re-resolves and rewrites the lock without compiling anything, so this needs none of the Tauri
-## system libraries and takes seconds. CI runs the same command and fails if the file moves.
+## Re-resolve the lockfiles that sit outside the workspace — the GUI shell crate's and the
+## verification harness's. Both reach core through a path dependency, so a workspace bump changes
+## what they resolve to, while the commit that made the bump never touches either file. Left alone
+## they drift apart silently, and the next person to run cargo over one of them finds the churn in
+## their working tree instead. `cargo metadata` re-resolves and rewrites a lock without compiling
+## anything, so this needs none of the Tauri system libraries and takes seconds. CI runs the same
+## two commands and fails if either file moves.
 lock:
 	cargo metadata --manifest-path app/src-tauri/Cargo.toml --format-version 1 >/dev/null
-	@git --no-pager diff --stat -- app/src-tauri/Cargo.lock
-	@echo "→ app/src-tauri/Cargo.lock re-resolved (commit it if it moved)"
+	cargo metadata --manifest-path verification/Cargo.toml --format-version 1 >/dev/null
+	@git --no-pager diff --stat -- app/src-tauri/Cargo.lock verification/Cargo.lock
+	@echo "→ app/src-tauri/Cargo.lock and verification/Cargo.lock re-resolved (commit what moved)"
 
 ## Tree guards: point the git hooks at .githooks.
 hooks:

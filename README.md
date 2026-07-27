@@ -190,8 +190,8 @@ override the location (useful for tests and explicit setups).
 <details>
 <summary>Per-OS installers, in-place CLI self-update, and verifying a download</summary>
 
-amenbo ships as a single per-OS installer that carries both the GUI and the CLI
-(macOS `.pkg`, Windows NSIS, Linux `.deb`/`.rpm`), published on this repository's
+On macOS and Windows amenbo ships as a single installer that carries both the GUI and
+the CLI (a `.pkg` and an NSIS `.exe`), published on this repository's
 [Releases](https://github.com/ShiroDoromoto/amenbo/releases). Download the one for
 your platform and run it — it installs the desktop app and puts the `amenbo` CLI on
 your PATH in one step. The macOS `.pkg` is signed with an Apple Developer ID and
@@ -199,20 +199,21 @@ notarized, so it installs and launches with no warning. The Windows installer is
 yet signed, so its first run shows SmartScreen's **More info** → **Run anyway**; once
 approved it does not recur.
 
-On Linux the `.deb`/`.rpm` are the system-wide route — they install to `/usr/bin`
-and put both the GUI and the CLI on PATH. A Linux GUI **AppImage** is published
-alongside as well: a single self-contained file that needs no root — place it on
-your PATH yourself (e.g. `~/.local/bin`) and run it. It carries the GUI only (use
-the CLI installer or the `.deb`/`.rpm` for the `amenbo` command).
+On Linux the GUI is an **AppImage**, published on the same page: a single
+self-contained file that needs no root — place it on your PATH yourself (e.g.
+`~/.local/bin`) and run it. It carries the GUI only; the `amenbo` command comes from
+the CLI installer, which is per-user too.
 
-If you move from the `.deb`/`.rpm` to the per-user AppImage/CLI, retire the old
-system-wide copy yourself — the per-user build cannot (it is not root): `sudo apt
-remove amenbo` on Debian/Ubuntu, or `dpkg -r amenbo` / `rpm -e amenbo` elsewhere.
-The CLI reminds you once while a `/usr/bin` copy is still present; on the stock PATH
-`~/.local/bin` wins, so a leftover copy is harmless beyond the version skew.
+If a system-wide `.deb`/`.rpm` from an older release is still installed, retire it
+yourself when you move to the per-user AppImage/CLI — the per-user build cannot (it is
+not root): `sudo apt remove amenbo` on Debian/Ubuntu, or `dpkg -r amenbo` / `rpm -e
+amenbo` elsewhere. The CLI reminds you once while a `/usr/bin` copy is still present;
+on the stock PATH `~/.local/bin` wins, so a leftover copy is harmless beyond the
+version skew.
 
 To update, download the latest installer and run it again — it replaces both the
-desktop app and the CLI at once. amenbo notices when a newer version is out (see the
+desktop app and the CLI at once (on Linux the new AppImage replaces the GUI, and the
+CLI updates on its own path). amenbo notices when a newer version is out (see the
 update check below) and points you at that installer. A **standalone CLI** (installed
 without the desktop app) can also update itself in place: `amenbo update --apply`
 downloads the new CLI over TLS and swaps this binary — no installer, no elevation. A

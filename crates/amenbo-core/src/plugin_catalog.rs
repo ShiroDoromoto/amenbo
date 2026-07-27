@@ -885,11 +885,14 @@ impl Discovery {
 /// an official plugin in what the user sees. Each entry keeps the catalog it came from
 /// ([`DiscoveredEntry`]), which the fold is the only place that still knows.
 ///
-/// **A recommendation survives the merge only from the official index.** `featured` is hand curation
-/// (`AMB-D-347`), and the reader's question is "does the amenbo team recommend this?" — a catalog anyone
-/// can publish answering it for its own entries would mean self-promotion into the one ordering that is
-/// supposed to be a judgement. So the flag is cleared for every third-party entry here, once, rather than
-/// left for each face to remember: what a face reads is already the answer.
+/// **The badge and the recommendation survive the merge only from the official index.** Both are the
+/// index's word rather than the author's (`AMB-D-347`): `official` says the amenbo team wrote the plugin,
+/// which the official index's CI establishes and refuses to take on a manifest's say-so, and `featured` is
+/// that index's hand curation. A catalog anyone can publish is not where either question is answered —
+/// letting it answer them for its own entries would hand out the strongest mark a reader trusts, and
+/// self-promotion into the one ordering that is supposed to be a judgement. So both are cleared for every
+/// third-party entry here, once, rather than left for each face to remember: what a face reads is already
+/// the answer.
 pub fn discover(paths: &Paths) -> Discovery {
     merge(paths, fresh_to)
 }
@@ -930,9 +933,9 @@ pub fn cached_view(paths: &Paths) -> Discovery {
 /// Fold the official catalog and every registered one into a single view, each catalog read by `read`.
 ///
 /// The two callers differ only in that function ([`fresh_to`] for a browse, [`load_to`] for an install),
-/// and in nothing else: same order, same official-wins rule, same clearing of `featured`. Keeping the
-/// fold in one place is what stops the view an install resolves against from drifting away from the one
-/// the user was looking at when they chose.
+/// and in nothing else: same order, same official-wins rule, same clearing of the marks only the official
+/// index grants. Keeping the fold in one place is what stops the view an install resolves against from
+/// drifting away from the one the user was looking at when they chose.
 fn merge(paths: &Paths, read: impl Fn(&str, &std::path::Path) -> Result<Catalog>) -> Discovery {
     let mut entries: Vec<DiscoveredEntry> = Vec::new();
     let mut sources_meta: Vec<DiscoveredSource> = Vec::new();
@@ -953,6 +956,7 @@ fn merge(paths: &Paths, read: impl Fn(&str, &std::path::Path) -> Result<Catalog>
                     if entries.iter().any(|e| e.entry.name == entry.name) {
                         dropped.push(Dropped::Duplicate { name: entry.name });
                     } else {
+                        entry.official &= official;
                         entry.featured &= official;
                         entries.push(DiscoveredEntry {
                             entry,
@@ -1573,6 +1577,28 @@ mod tests {
         assert!(
             !discovery.entries[1].entry.featured,
             "a catalog anyone can publish does not get to recommend itself"
+        );
+    }
+
+    /// Nor can it call its own entries official: the badge says the amenbo team wrote the plugin, which
+    /// is the official index's to establish (`AMB-D-347`), so the merge keeps it only from there.
+    #[test]
+    fn discover_keeps_the_official_badge_only_from_the_official_catalog() {
+        let paths = paths_at("discover-official");
+        let mut official = entry_json("worktree");
+        official["official"] = serde_json::json!(true);
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![official])).unwrap();
+        let src = "https://example.invalid/third/catalog.json";
+        register(&paths, src, None, None);
+        let mut boasting = entry_json("extra");
+        boasting["official"] = serde_json::json!(true);
+        write_cache_at(&source_cache_file(&paths, src), &catalog_json(vec![boasting])).unwrap();
+
+        let discovery = discover(&paths);
+        assert!(discovery.entries[0].entry.official, "the official index's own badge stands");
+        assert!(
+            !discovery.entries[1].entry.official,
+            "a catalog anyone can publish does not get to wear the badge"
         );
     }
 

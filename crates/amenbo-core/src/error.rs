@@ -9,7 +9,7 @@
 //! - **GUI (a localized human surface)** — Tauri commands return failures as a structured `CmdError`
 //!   (`app/src-tauri/src/error.rs`) carrying `code()` (the stable code), `to_string()` (the Japanese
 //!   `Display`), [`Error::message_en`] (English) and `fields` for interpolation; the front end
-//!   (`errLabel` in `app/src/core/i18n.ts`) maps `code` onto per-language templates. A code with no
+//!   (`errLabel` in `app/src/core/i18n/index.ts`) maps `code` onto per-language templates. A code with no
 //!   template falls back to the Japanese `Display` / the English `message_en`.
 //!
 //! The free-prose variants (`NotFound` / `Invalid` / `Conflict` / `FormatAhead` / `StoreBusy`) carry a

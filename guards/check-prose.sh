@@ -24,7 +24,7 @@
 # internal-ref already encodes (its pattern excludes a backtick on either side).
 #
 # Source is deliberately absent, and stays absent. Its literals are half of a
-# bilingual product — `Msg::new`'s EN/JA pairs, i18n.ts's phrasebook, a Japanese
+# bilingual product — `Msg::new`'s EN/JA pairs, i18n's per-language dictionaries, a Japanese
 # test fixture — where Japanese is the feature, not a leak. No pattern separates
 # those from a genuine slip, so english-only cannot be pointed at them. What is
 # judged here is the complement: the files where any Japanese at all is a slip.

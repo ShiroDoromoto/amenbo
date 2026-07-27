@@ -583,7 +583,7 @@ pub struct Snapshot {
 pub struct StartupHealthDto {
     /// The problems doctor found (orphaned or dangling references, and so on). No prose sentence
     /// rides along — the GUI composes one from the kind and params in `config.language`
-    /// (`src/core/i18n.ts`), so we hand these over as the same [`DoctorIssueDto`] the doctor screen
+    /// (`src/core/i18n/`), so we hand these over as the same [`DoctorIssueDto`] the doctor screen
     /// uses.
     issues: Vec<DoctorIssueDto>,
 }
@@ -704,7 +704,7 @@ fn due_label(d: NaiveDate, lang: &str) -> String {
 }
 
 /// The relative-time label (just now, N minutes ago, ...), in the reader's language. The English
-/// wording of "just now" matches `act.justNow` in app/src/core/i18n.ts, which the browser fallback
+/// wording of "just now" matches `act.justNow` in app/src/core/i18n/locales/en.ts, which the browser fallback
 /// uses for the same spot.
 fn ago_label(at: &Timestamp, lang: &str) -> String {
     let secs = (chrono::Utc::now() - at.0).num_seconds().max(0) as u64;
@@ -743,7 +743,7 @@ fn nameless_title(lang: &str) -> &'static str {
 
 /// Turn a system event into the line the GUI shows. Under Tauri the wording is chosen here; the
 /// browser fallback goes through tf() in mutations.ts. Keys and wording must stay in step with
-/// act.* in app/src/core/i18n.ts.
+/// act.* in app/src/core/i18n/locales/.
 fn render_event(ev: &serde_json::Value, title: &str, lang: &str) -> EventDto {
     let kind = ev
         .get("kind")
@@ -3942,7 +3942,7 @@ pub fn forget_orphan_bindings() -> Result<u32, CmdError> {
 /// `kind` (the id of a message template) and `params` (what differs), and the surface composes the
 /// sentence a person reads (the GUI localizes it by `config.language`; the CLI is always English).
 /// The GUI's message table, and the affordances for how to fix each issue, live in
-/// `src/core/i18n.ts`, and they point at affordances that really exist in the GUI (the repair button
+/// `src/core/i18n/locales/`, and they point at affordances that really exist in the GUI (the repair button
 /// under Settings > Integrity, the folder list in project settings).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]

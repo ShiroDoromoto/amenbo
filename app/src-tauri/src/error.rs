@@ -2,7 +2,7 @@
 //! defined here. i18n is settled at the reader, so instead of a bare string we carry a stable machine `code`
 //! (canonically [`amenbo_core::Error::code`]), a human sentence in each language (`message` is the Japanese
 //! `Display`, `message_en` the English one), and per-code `fields` for interpolation. The front end (`errLabel`
-//! in `app/src/core/i18n.ts`) maps `code` to a per-language template, falling back to `message`/`message_en`
+//! in `app/src/core/i18n/index.ts`) maps `code` to a per-language template, falling back to `message`/`message_en`
 //! for codes that have no template.
 
 use serde::Serialize;

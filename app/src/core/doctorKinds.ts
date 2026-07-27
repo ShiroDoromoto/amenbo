@@ -4,7 +4,7 @@
 // `amenbo_core::doctor::DoctorIssueKind` (`as_str()` / `ALL` / `param_keys()` in
 // `crates/amenbo-core/src/doctor.rs`). core holds no sentence — it returns only the kind (the id of a message
 // template) and the params (the specifics), and each surface composes the sentence to read (the GUI localises
-// through the DOCTOR table in `i18n.ts`; the CLI is English-only).
+// through the `doctor` section of each dictionary in `i18n/locales/`; the CLI is English-only).
 //
 // This is the sole TS definition of the kinds the webview sees. The Rust↔TS parity test in `doctorKinds.test.ts`
 // catches drift in both the set of kinds and the params a template may interpolate (`param_keys`).

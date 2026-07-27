@@ -3568,6 +3568,60 @@ fn a_premise_is_read_first_and_its_overturn_names_what_to_revisit() {
     assert_eq!(after["builds_on"][0]["superseded_by"], amenbo_core::idref::decision(successor.parse().unwrap()), "names the successor");
 }
 
+/// A listing row says **who** overturned a decision, not merely that something did. `current` is a
+/// projection over the supersedes edges; `superseded_by` is those edges themselves, so a reader who finds
+/// a row historicised can go straight to the decision that replaced it, from the listing and without
+/// opening anything. Read off the same edges in the same pass, the two can never come to disagree.
+#[test]
+fn a_decision_listing_row_names_what_superseded_it() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.a_project();
+
+    let add = |title: &str| -> String {
+        id_str(&cli.json(&["decision", "add", "--project", &pid, "--title", title, "--json"])["decision"]["id"])
+    };
+    let old = add("旧: 目録は同梱する");
+    let newer = add("新: 目録は取りに行く");
+    let untouched = add("無関係: 削除は物理削除にする");
+
+    let row = |list: &Value, id: &str| -> Value {
+        list["decisions"]
+            .as_array()
+            .expect("the listing carries its rows")
+            .iter()
+            .find(|d| id_str(&d["id"]) == id)
+            .unwrap_or_else(|| panic!("no row for decision {id}"))
+            .clone()
+    };
+    let named = |r: &Value| -> Vec<String> {
+        r["superseded_by"].as_array().expect("always an array").iter().map(id_str).collect()
+    };
+
+    // With no edge drawn, every row is current and names nobody — the field is present, not omitted.
+    let before = cli.json(&["decision", "list", "--json"]);
+    for id in [&old, &newer, &untouched] {
+        assert_eq!(row(&before, id)["current"], true, "nothing has been overturned yet");
+        assert!(named(&row(&before, id)).is_empty(), "and so no row names a successor");
+    }
+
+    cli.json(&["decision", "supersede", &newer, "--replaces", &old, "--json"]);
+
+    let after = cli.json(&["decision", "list", "--json"]);
+    let overturned = row(&after, &old);
+    assert_eq!(overturned["current"], false, "the projection still says it was replaced");
+    assert_eq!(
+        named(&overturned),
+        vec![amenbo_core::idref::decision(newer.parse().unwrap())],
+        "and the row names the decision that replaced it, as its conversational ref"
+    );
+    // The successor, and a decision no edge touches, stay empty — the projection and the edges agree.
+    for id in [&newer, &untouched] {
+        assert_eq!(row(&after, id)["current"], true);
+        assert!(named(&row(&after, id)).is_empty());
+    }
+}
+
 /// `.amenbo` does not say which store to open — it **is** the AI's reach. Rows outside the binding are never
 /// shown to the AI: seeing them pulls their content into the session context, from where it bleeds into
 /// summaries, memory and commit messages. Humans are not confined; the overview is theirs.

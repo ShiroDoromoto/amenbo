@@ -255,6 +255,11 @@ pub struct DecisionCompact {
     /// Is this current, i.e. is it not pointed at by a live `supersedes` edge? A derived projection, never
     /// a stored flag.
     pub current: bool,
+    /// The decisions that superseded this one, as conversational refs (`AMB-D-<n>`), in the order the
+    /// edges were drawn — the fact `current` is a projection over, carried by the row itself so a reader
+    /// can go to *which* decision overturned it. Refs rather than [`DecisionRef`]s because a listing
+    /// resolves no titles: the row says where to look, and `decision show` is where it is read.
+    pub superseded_by: Vec<String>,
     pub decided_at: Option<Timestamp>,
     pub created_at: Timestamp,
     /// How many live tasks are linked to it.
@@ -307,14 +312,16 @@ pub fn decision_display_ref(d: &Decision) -> String {
 }
 
 /// Assemble a decision card without reaching into the store. The caller supplies `project` (the project's
-/// `Ref`) and `linked_task_count` (how many live tasks are linked), which is what lets the engine's
-/// indexed read-model SQL ([`crate::query::decision_list`]) build the same card without a per-decision
-/// scan.
+/// `Ref`), `linked_task_count` (how many live tasks are linked) and `superseded_by` (the ids of the
+/// decisions that overturned it), which is what lets the engine's indexed read-model SQL
+/// ([`crate::query::decision_list`]) build the same card without a per-decision scan. The successors
+/// arrive as ids and are spelled into refs here, so no caller can spell them its own way.
 pub fn decision_compact_with(
     d: &Decision,
     project: Option<ProjectRef>,
     linked_task_count: usize,
     current: bool,
+    superseded_by: &[i64],
 ) -> DecisionCompact {
     DecisionCompact {
         id: d.id,
@@ -325,6 +332,7 @@ pub fn decision_compact_with(
         r#ref: decision_display_ref(d),
         project,
         current,
+        superseded_by: superseded_by.iter().map(|id| crate::idref::decision(*id)).collect(),
         decided_at: d.decided_at,
         created_at: d.created_at,
         linked_task_count,

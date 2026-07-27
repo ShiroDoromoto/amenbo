@@ -1607,10 +1607,51 @@ pub struct DecisionRow {
     pub status: String,
     /// Currency, derived: no decision holds a `supersedes` edge at this one.
     pub current: bool,
+    /// The live decisions that superseded this one, in the order the edges were drawn — the reverse view
+    /// `decision show` carries, brought down onto the list row. Empty ⇔ `current`: both are read off the
+    /// same edges ([`supersessions`], [`superseded`]), so the two cannot come to disagree.
+    pub superseded_by: Vec<i64>,
     pub decided_at: Option<String>,
     pub created_at: String,
     /// Links to tasks (live links to live tasks).
     pub linked_task_count: usize,
+}
+
+/// Every live supersession, keyed by the decision it overturned — `target id → successor ids`, in the
+/// order the edges were drawn. Read once for a whole listing, which is what keeps [`decision_list`] free
+/// of a seek per row; the same reverse view [`decision_reverse_edges`] serves one decision at a time.
+/// `project_id` narrows it to the rows the listing itself carries, so the map never outgrows them, and
+/// liveness is the source join exactly as in [`superseded`] — a dangling edge is no supersession here
+/// either, because its target is not a row.
+fn supersessions(conn: &Connection, project_id: Option<i64>) -> Result<HashMap<i64, Vec<i64>>> {
+    const E: col::decision_edge::Cols = col::decision_edge::of("e");
+    const S: col::decision::Cols = col::decision::of("s");
+    const TD: col::decision::Cols = col::decision::of("t");
+    let mut sel = Select::new();
+    let (target, source) = (sel.col(E.target_decision_id), sel.col(S.id));
+    let mut wheres = vec![word(E.kind, crate::model::DecisionEdgeKind::Supersedes.as_str())];
+    if let Some(pid) = project_id {
+        wheres.push(Pred::eq(TD.project_id, pid));
+    }
+    let pred = Pred::all(wheres);
+    let mut sql = Sql::from(&sel, E.table);
+    sql.join(S.table, same(S.id, E.decision_id))
+        .join(TD.table, same(TD.id, E.target_decision_id))
+        .push_where(pred.as_ref())
+        .order_by([Sort::by(E.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((target.get(r)?, source.get(r)?))
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<(i64, i64)>>>()
+        .map_err(StoreEngineError::from)?;
+    let mut out: HashMap<i64, Vec<i64>> = HashMap::new();
+    for (target, source) in rows {
+        out.entry(target).or_default().push(source);
+    }
+    Ok(out)
 }
 
 /// The decisions (optionally scoped to one project) for `decision list`, served from the read-model
@@ -1642,6 +1683,8 @@ pub fn decision_list(
             .join(T.table, same(T.id, L.task_id))
             .filter(same(L.decision_id, D.id)),
     );
+    // Who overturned each row, read in one pass beside the rows themselves.
+    let successors = supersessions(conn, project_id)?;
     let scope = project_id.map(|pid| Pred::eq(D.project_id, pid));
     let mut sql = Sql::from(&sel, D.table);
     // Returned in `id` order: the caller's sort is stable, so this is what breaks its ties.
@@ -1650,14 +1693,16 @@ pub fn decision_list(
         .order_by([Sort::by(D.id)]);
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let map_row = |r: &Row| {
+        let id = id.get(r)?;
         Ok(DecisionRow {
-            id: id.get(r)?,
+            id,
             project_id: pid.get(r)?,
             project_name: project_name.get(r)?,
             title: title.get(r)?,
             body: body.get(r)?,
             status: status.get(r)?,
             current: current.get(r)?,
+            superseded_by: successors.get(&id).cloned().unwrap_or_default(),
             decided_at: decided_at.get(r)?,
             created_at: created_at.get(r)?,
             linked_task_count: linked_task_count.get(r)? as usize,

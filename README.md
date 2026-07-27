@@ -154,10 +154,11 @@ make shell-gate                        # the shell leg on its own (every tracked
 cargo nextest run --features scale,e2e # core/cli only, without the doctest + GUI legs
 ```
 
-The Tauri host crate sits outside the workspace with a lockfile of its own, but it reaches
-core through a path dependency — so a workspace bump moves what that lock resolves to
-without touching the file. CI's `app-lock` job fails a pull request whose copy is behind;
-`make lock` re-resolves it (seconds, nothing is compiled) and the result is yours to commit.
+The Tauri host crate and the verification harness each sit outside the workspace with a
+lockfile of their own, but both reach core through a path dependency — so a workspace bump
+moves what those locks resolve to without touching the files. CI's `out-of-workspace-locks`
+job fails a pull request whose copies are behind; `make lock` re-resolves both (seconds,
+nothing is compiled) and the result is yours to commit.
 Dependabot's own bumps are repaired for it, ahead of the merge, so the auto-merge keeps
 working — see `lockstep` in `.github/workflows/dependabot-automerge.yml`.
 

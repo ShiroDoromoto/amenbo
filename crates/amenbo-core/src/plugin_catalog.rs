@@ -44,6 +44,7 @@
 
 use crate::config::Paths;
 use crate::error::{Error, Result};
+use crate::plugin_installed::Origin;
 use crate::plugin_validate::{validate_list_entry, Problem};
 use crate::plugin_wire::{Detail, ListEntry};
 use serde::Deserialize;
@@ -801,6 +802,15 @@ pub struct DiscoveredEntry {
 }
 
 impl DiscoveredEntry {
+    /// Where an install taken from this entry came from — what is recorded beside it, and what an update
+    /// looks it up by ([`crate::plugin_installed::Origin`]).
+    pub fn origin(&self) -> Origin {
+        match self.listed {
+            true => Origin::Official,
+            false => Origin::Catalog(self.source.clone()),
+        }
+    }
+
     /// The trust root this entry's asset must verify against (`AMB-D-389`): amenbo's own key for the
     /// official catalog, the pinned key for a registered one.
     ///
@@ -836,6 +846,11 @@ pub struct Discovery {
     /// Every entry across the merged catalogs, official first then each source in registration order, with
     /// a name that already appeared dropped in favour of the earlier one.
     pub entries: Vec<DiscoveredEntry>,
+    /// The entries a name clash hid — what a later catalog offered under a name an earlier one had
+    /// already taken. They are out of the browse list on purpose (one name, one row), and kept because an
+    /// install is not undone by a name changing hands: a plugin taken off one of these shelves still has
+    /// that shelf to be updated from ([`Discovery::find_from`]).
+    pub shadowed: Vec<DiscoveredEntry>,
     /// Each catalog that went into the merge, and what it contributed.
     pub sources: Vec<DiscoveredSource>,
     /// Entries dropped during the merge: each catalog's own intake drops ([`Dropped`]), plus a
@@ -863,6 +878,7 @@ impl Discovery {
                     key: key.map(str::to_string),
                 })
                 .collect(),
+            shadowed: Vec::new(),
             sources: Vec::new(),
             dropped: catalog.dropped,
         }
@@ -877,6 +893,32 @@ impl Discovery {
     /// third-party entry.
     pub fn find(&self, name: &str) -> Option<&DiscoveredEntry> {
         self.entries.iter().find(|e| e.entry.name == name)
+    }
+
+    /// Find one entry by name **on one shelf** — what an update resolves against, so a build is only ever
+    /// replaced from the catalog the install came from ([`crate::plugin_installed::Origin`]).
+    ///
+    /// Where [`find`](Discovery::find) takes the merged view's word on who owns a name, this refuses to
+    /// re-open that question: an install already answered it, and a catalog that started publishing the
+    /// name afterwards is not the publisher of what is on disk. So a name the recorded catalog no longer
+    /// carries is `None` — no update — rather than the same name from somewhere else.
+    ///
+    /// An origin of `None` is an install that records none, and it is looked up **on the official shelf**.
+    /// That is the careful reading of a gap rather than a guess at it: nothing else can be established
+    /// about such an install, and the official catalog is the one shelf that already won every name clash,
+    /// so a plugin installed from it is unaffected and one installed elsewhere stops updating — visibly —
+    /// instead of quietly updating from whichever catalog now claims the name.
+    ///
+    /// The [`shadowed`](Discovery::shadowed) entries are searched too, and that is not a loophole but the
+    /// same rule: a plugin installed from a catalog whose name another one has since taken over is still
+    /// that catalog's plugin, and the fold's winner — the entry the user would install today — is
+    /// deliberately *not* what replaces it.
+    pub fn find_from(&self, name: &str, origin: Option<&Origin>) -> Option<&DiscoveredEntry> {
+        let origin = origin.cloned().unwrap_or(Origin::Official);
+        self.entries
+            .iter()
+            .chain(self.shadowed.iter())
+            .find(|e| e.entry.name == name && e.origin() == origin)
     }
 }
 
@@ -940,8 +982,13 @@ pub fn cached_view(paths: &Paths) -> Discovery {
 /// and in nothing else: same order, same official-wins rule, same clearing of the marks only the official
 /// index grants. Keeping the fold in one place is what stops the view an install resolves against from
 /// drifting away from the one the user was looking at when they chose.
+///
+/// A name a later catalog repeats is recorded as a [`Dropped::Duplicate`] and set aside in
+/// [`Discovery::shadowed`] rather than thrown away: it is out of the list because a name gets one row,
+/// not because that catalog stopped publishing it, and an update resolving by origin still has to find it.
 fn merge(paths: &Paths, read: impl Fn(&str, &std::path::Path) -> Result<Catalog>) -> Discovery {
     let mut entries: Vec<DiscoveredEntry> = Vec::new();
+    let mut shadowed: Vec<DiscoveredEntry> = Vec::new();
     let mut sources_meta: Vec<DiscoveredSource> = Vec::new();
     let mut dropped: Vec<Dropped> = Vec::new();
 
@@ -957,18 +1004,22 @@ fn merge(paths: &Paths, read: impl Fn(&str, &std::path::Path) -> Result<Catalog>
                 let offered = catalog.entries.len();
                 dropped.extend(catalog.dropped);
                 for mut entry in catalog.entries {
-                    if entries.iter().any(|e| e.entry.name == entry.name) {
-                        dropped.push(Dropped::Duplicate { name: entry.name });
-                    } else {
-                        entry.official &= official;
-                        entry.featured &= official;
-                        entries.push(DiscoveredEntry {
-                            entry,
-                            source: url.clone(),
-                            source_name: name.clone(),
-                            listed: official,
-                            key: key.clone(),
-                        });
+                    let taken = entries.iter().any(|e| e.entry.name == entry.name);
+                    if taken {
+                        dropped.push(Dropped::Duplicate { name: entry.name.clone() });
+                    }
+                    entry.official &= official;
+                    entry.featured &= official;
+                    let discovered = DiscoveredEntry {
+                        entry,
+                        source: url.clone(),
+                        source_name: name.clone(),
+                        listed: official,
+                        key: key.clone(),
+                    };
+                    match taken {
+                        true => shadowed.push(discovered),
+                        false => entries.push(discovered),
                     }
                 }
                 (true, offered)
@@ -998,7 +1049,7 @@ fn merge(paths: &Paths, read: impl Fn(&str, &std::path::Path) -> Result<Catalog>
         );
     }
 
-    Discovery { entries, sources: sources_meta, dropped }
+    Discovery { entries, shadowed, sources: sources_meta, dropped }
 }
 
 #[cfg(test)]
@@ -1640,6 +1691,56 @@ mod tests {
             "checked against the key that catalog was pinned with"
         );
         assert!(view.find("nothing-here").is_none());
+    }
+
+    /// The seam this whole change exists for: two catalogs offering the same name, and an install
+    /// resolving back to the one it actually came from rather than to the one that won the fold.
+    #[test]
+    fn an_origin_resolves_on_its_own_shelf_and_not_the_winner_of_the_name() {
+        let paths = paths_at("origin-resolution");
+        let src = "https://example.invalid/third/catalog.json";
+        register(&paths, src, Some(KEY_A), None);
+        // The registered catalog has `extra` to itself, and also offers a `worktree` the official
+        // catalog carries — which the fold hides behind the official one.
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
+        write_cache_at(
+            &source_cache_file(&paths, src),
+            &catalog_json(vec![entry_json("worktree"), entry_json("extra")]),
+        )
+        .unwrap();
+        let view = cached_view(&paths);
+        let from_src = Origin::Catalog(src.to_string());
+
+        // An install off the registered shelf goes back to it, hidden name and all.
+        let hidden = view.find_from("worktree", Some(&from_src)).expect("its own shelf still has it");
+        assert_eq!(hidden.source, src);
+        assert!(!hidden.listed, "not the official entry that won the browse list");
+        assert_eq!(view.find("worktree").expect("browsing").source, catalog_url(), "the fold is unchanged");
+
+        // And an official install is never answered by the registered catalog's entry of the same name.
+        let official = view.find_from("worktree", Some(&Origin::Official)).expect("resolvable");
+        assert!(official.listed);
+        assert!(
+            view.find_from("extra", Some(&Origin::Official)).is_none(),
+            "a name only the registered catalog carries is not on the official shelf"
+        );
+    }
+
+    /// An install that records no origin is looked for on the official shelf — never on a registered
+    /// catalog that happens to carry the name now.
+    #[test]
+    fn an_install_with_no_recorded_origin_is_looked_for_on_the_official_shelf() {
+        let paths = paths_at("origin-unrecorded");
+        let src = "https://example.invalid/third/catalog.json";
+        register(&paths, src, Some(KEY_A), None);
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
+        write_cache_at(&source_cache_file(&paths, src), &catalog_json(vec![entry_json("extra")]))
+            .unwrap();
+
+        let view = cached_view(&paths);
+        assert!(view.find_from("worktree", None).is_some(), "the official catalog answers");
+        assert!(view.find("extra").is_some(), "browsing finds it");
+        assert!(view.find_from("extra", None).is_none(), "resolving an unrecorded install does not");
     }
 
     /// A listing reads every catalog's cache, not just the official one: a plugin installed from a

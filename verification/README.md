@@ -204,6 +204,12 @@ screen nobody stood on — a red nobody can tell from a real one, or worse, a gr
 reason end of input is a failure and not a nod: a stepped run with nothing left to hold it would walk
 the rest of the scenario off one screen and report it as though it had been driven.
 
+The moves themselves are written in the scenario, not in a note beside it. Getting from one screen
+to the next is an action step like any other (`folder open-existing-card`, `folder choose-project`),
+and it earns the two things a note never can: the screen it arrives at is shot, so the middle of the
+road is evidence rather than something taken on trust, and the assert after it cannot be reached by a
+hand tidying the screen while the run is held. `ways-in.yaml` is the road written that way.
+
 Everything the wait prints — the step just captured, and the prompt — goes to stderr, so `--json`
 still leaves one machine-readable line on stdout. A driver that is not a person keeps its side open
 through a pipe:
@@ -358,6 +364,11 @@ of the CLI's: linking a folder to a project is one command to type, and on scree
 open, a project to answer for and a folder to pick. Written once for both, one of the two comes out
 bent. Where the two roads really are the same ground, write it in both — the duplication is small
 next to a file where the screen's half quietly went stale.
+
+Some ops exist for one road only, and the registry carries them all the same: opening a card and
+answering which project it asks for are moves a screen's road is made of and a terminal's has none
+of, so they are written in `steps_gui` and the CLI driver maps neither. A driver maps the ops it
+meets; one it does not meet is not its to map.
 
 Bindings belong to the road they are made on. A `target:` in `steps_gui` resolves against
 `steps_gui` alone, because the two lists are never walked in one run.

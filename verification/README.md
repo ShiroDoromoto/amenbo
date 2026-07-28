@@ -58,11 +58,13 @@ Adding a line to the set:
 4. When a feature goes, its file goes with it.
 
 **One kind of line has no capability to be filed under**: what only the screen ever says. An entry's
-own `official` claim is read back nowhere in the CLI, and neither is the request a new project hands
-the reader to paste — so the capability list names no command for either, and no file can be named
-after one. Such a line gets a file of its own, `drivers: [gui]`, named after what it looks at
-(`plugin-browse.yaml`, `first-loop.yaml`). It is not a second file for a capability — it is the file
-for a line the capability list cannot reach — and the count treats it as neither covered nor stray.
+own `official` claim is read back nowhere in the CLI, neither is the request a new project hands the
+reader to paste, and neither is whether the ways in a reader is offered are the interface's own to
+carry out — so the capability list names no command for any of them, and no file can be named after
+one. Such a line gets a file of its own, `drivers: [gui]`, named after what it looks at
+(`plugin-browse.yaml`, `first-loop.yaml`, `ways-in.yaml`). It is not a second file for a capability
+— it is the file for a line the capability list cannot reach — and the count treats it as neither
+covered nor stray.
 
 What is covered and what is not is counted, not eyeballed — `verify-coverage` (below) reads the
 capability list out of the shipped binary and names every capability with no file to its name.

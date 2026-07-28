@@ -459,6 +459,21 @@ const REGISTRY: &[OpSpec] = &[
     // a `Review` — and is written down for exactly that reason: an arrangement is what a build
     // reorders without a single assert going red.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "first-loop-order", required: &["order"], refs: &[], strings: &["order"], binds: false },
+    // The ways in a reader is offered before there is a folder to work in: raise a project, or open
+    // one this device already holds. Both are the interface's own to carry out, and what says so is
+    // that neither hands over anything to type — `absent` names the words a card pointing at a
+    // terminal would carry, and they have to be nowhere on the screen.
+    //
+    // GUI only, and not by omission: a folder linked from a terminal is a folder linked, so a card
+    // that hands over the command leaves behind exactly the rows the one that links it does. There
+    // is no read to ask, and the screen is the only witness.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "ways-in", required: &["absent"], refs: &[], strings: &["absent"], binds: false },
+    // The second of those ways, opened: it asks which project the folder is to be linked to, and the
+    // choices are the projects this device holds. `project` names the one the card is left asking
+    // for. It is a `Review` rather than a reading: the same name sits in the list of projects down
+    // the side of every screen, and a reading says which words are on a shot and not which part of
+    // it they came from — so the card is what an eye is shown, and the shot is what it is closed by.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "open-existing", required: &["project"], refs: &[], strings: &["project"], binds: false },
     // What is on this machine and whose gate is open (`enabled` asks the gate; without it the
     // question is only whether the plugin is there at all), what the last call returned on its own
     // stdout, and what the execution log kept of a run.

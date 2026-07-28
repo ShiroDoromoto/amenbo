@@ -211,6 +211,13 @@ impl Instructor {
     /// AI to read, which is a file name in any language the app is in. Its sibling `first-loop-order`
     /// names an order instead, and an order is not something a reading settles — which words are on a
     /// shot is all OCR answers — so that one is left for a `Review`.
+    ///
+    /// `ways-in` is the one assert judged the other way round: what it names is a command, and a
+    /// command is the same words in any language, so the reading has to come back without it. Its
+    /// sibling `open-existing` names a project, and a reading answers which words are on a shot and
+    /// never which part of the window they came from — the same name is in the list of projects
+    /// down the side of every screen, so a reading of it would pass wherever the run was pointed.
+    /// That one is a `Review`, closed by an eye on the shot.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -226,6 +233,9 @@ impl Instructor {
             }
             (Domain::Folder, "first-loop") => {
                 Some(Expectation { text: arg_str(with, "hands_over")?.to_string(), present: true })
+            }
+            (Domain::Folder, "ways-in") => {
+                Some(Expectation { text: arg_str(with, "absent")?.to_string(), present: false })
             }
             _ => None,
         }
@@ -295,6 +305,14 @@ impl Instructor {
             (Domain::Folder, "first-loop-order") => format!(
                 "Confirm the screen is arranged in this order: {}.",
                 req(with, "order")?
+            ),
+            (Domain::Folder, "ways-in") => format!(
+                "Confirm the screen offers two ways in — raise a project, and open one this device already holds — and that each is carried out here: \"{}\" is nowhere on the screen.",
+                req(with, "absent")?
+            ),
+            (Domain::Folder, "open-existing") => format!(
+                "Open the card for a project this device already holds, and confirm it asks which project to link the folder to — with \"{}\", one of the projects on this device, chosen in it.",
+                req(with, "project")?
             ),
             _ => return Err(unmapped(domain, op)),
         })
@@ -706,6 +724,36 @@ steps:
         assert_eq!(fold("入れたあとに設定するもの: Channel webhook (必須)"), "入れたあとに設定するもの channel webhook 必須");
         // What is not there is still not there.
         assert!(!fold("some other card").contains(&fold("SEED")));
+    }
+
+    /// The ways in: the judged one is judged by what must **not** be read back — a command is the
+    /// same words in any language, so a screen carrying one is the failure. The project the card
+    /// asks for is a name the side of every screen carries too, so that one is left for an eye.
+    #[test]
+    fn a_ways_in_assert_expects_the_command_to_be_absent() {
+        let yaml = r#"
+id: x
+title: y
+drivers: [gui]
+steps:
+  - type: assert
+    domain: folder
+    op: ways-in
+    with: { absent: "bind --project" }
+  - type: assert
+    domain: folder
+    op: open-existing
+    with: { project: Greenhouse }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("\"bind --project\"") && lines[0].contains("two ways in"), "got: {}", lines[0]);
+        assert!(lines[1].contains("\"Greenhouse\"") && lines[1].contains("which project"), "got: {}", lines[1]);
+
+        let exp = ins.expectation(&s.steps[0]).expect("the command is what must not be read back");
+        assert_eq!(exp, Expectation { text: "bind --project".to_string(), present: false });
+        assert!(ins.expectation(&s.steps[1]).is_none(), "a name the whole window carries is not a reading");
     }
 
     #[test]

@@ -8,31 +8,44 @@
 //! kept.
 //!
 //! Usage: `verify-gui <scenario.yaml> (--pid <pid> | --winid <id>) [--app <name>]
-//!                    [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--json]`
+//!                    [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--step] [--json]`
 //!   `--pid`      pid of the running GUI app; its window is resolved via uiauto (gives bounds too)
 //!   `--winid`    a window id to shoot directly, skipping uiauto (bounds unknown)
 //!   `--app`      bring this app to the front before shooting (e.g. `amenbo (dev)`)
 //!   `--evidence` where the shots + manifest land (default: a fresh dir under the temp tree)
 //!   `--uiauto`   path to uiauto.swift (default: app/scripts/uiauto/uiauto.swift in the repo)
 //!   `--ocr`      path to ocr.swift (default: the ocr.swift beside this crate)
+//!   `--step`     stop after each step's shot and wait for a line on stdin before the next
 //!   `--json`     emit the manifest path, verdict and step count as JSON instead of the summary
+//!
+//! Without `--step` the run shoots every step back to back, which is one screen photographed as
+//! many times as the scenario is long. `--step` is what lets a scenario carry a screen that moves:
+//! it hands the run back after each shot, and whoever is driving — a person, or an AI calling
+//! uiauto — carries out the next step and sends a line to say the screen is standing where the
+//! scenario says it should. Waiting on a line rather than on a clock is the whole point: a run held
+//! for a fixed number of seconds shoots whatever is on screen when the clock runs out, so a step
+//! that took a moment longer is filed as evidence of a screen nobody stood on. Everything the wait
+//! says goes to stderr, so a `--json` run is still one line of JSON on stdout.
 //!
 //! Exit code is the machine signal: 0 when every OCR-judged assert passed and every step was
 //! captured, non-zero on a failed assert, a load failure, or a capture/OCR failure. A `Review`
 //! step (an assert OCR cannot judge) does not fail the run — a human closes it from the evidence.
 
+use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use amenbo_verify_gui::{activate, ocr, resolve_window, walk, write_manifest, Verdict, Window};
+use amenbo_verify_gui::{
+    activate, ocr, resolve_window, walk, write_manifest, StepRecord, Verdict, Window,
+};
 
 fn main() -> ExitCode {
     let opts = match Opts::parse(std::env::args().skip(1)) {
         Ok(o) => o,
         Err(msg) => {
             eprintln!("verify-gui: {msg}");
-            eprintln!("usage: verify-gui <scenario.yaml> (--pid <pid> | --winid <id>) [--app <name>] [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--json]");
+            eprintln!("usage: verify-gui <scenario.yaml> (--pid <pid> | --winid <id>) [--app <name>] [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--step] [--json]");
             return ExitCode::from(2);
         }
     };
@@ -79,10 +92,16 @@ fn run(opts: &Opts) -> Result<bool, String> {
         .clone()
         .unwrap_or_else(|| default_evidence_dir(&scenario.id));
 
+    if opts.step {
+        eprintln!("stepping: {} step(s) — the run stops after each shot", scenario.steps.len());
+    }
+
     let capture_bin =
         std::env::var_os("AMENBO_GUI_CAPTURE_BIN").unwrap_or_else(|| "screencapture".into());
     let winid = window.id.clone();
     let ocr_swift = opts.ocr.clone();
+    let stepping = opts.step;
+    let stdin = std::io::stdin();
     let outcome = walk(
         &scenario,
         &evidence,
@@ -102,6 +121,7 @@ fn run(opts: &Opts) -> Result<bool, String> {
             }
         },
         |image| ocr(image, &ocr_swift),
+        |record| if stepping { hand_back(&stdin, record) } else { Ok(()) },
     )?;
 
     let manifest = write_manifest(&evidence, &scenario, &window, &outcome)?;
@@ -120,19 +140,51 @@ fn run(opts: &Opts) -> Result<bool, String> {
         println!("window:   {} ({}x{})", window.id, window.w, window.h);
         println!("evidence: {}", evidence.display());
         for r in &outcome.records {
-            let mark = match r.verdict {
-                Verdict::Action => "·",
-                Verdict::Pass => "✓",
-                Verdict::Fail => "✗",
-                Verdict::Review => "?",
-            };
-            println!("  {mark} {:02} [{}] {}", r.index + 1, r.kind, r.instruction);
-            println!("        → {}", r.screenshot);
+            println!("{}", step_lines(r));
         }
         println!("manifest: {}", manifest.display());
         println!("VERDICT:  {}", if outcome.passed { "green" } else { "red" });
     }
     Ok(outcome.passed)
+}
+
+/// One step as the summary prints it: its verdict mark, number, kind and instruction, and the shot
+/// it left behind. The same two lines a stepped run hands back at each boundary, so what an operator
+/// reads mid-run and what the summary reports afterwards are the one rendering.
+fn step_lines(r: &StepRecord) -> String {
+    let mark = match r.verdict {
+        Verdict::Action => "·",
+        Verdict::Pass => "✓",
+        Verdict::Fail => "✗",
+        Verdict::Review => "?",
+    };
+    format!(
+        "  {mark} {:02} [{}] {}\n        → {}",
+        r.index + 1,
+        r.kind,
+        r.instruction,
+        r.screenshot
+    )
+}
+
+/// Hold the run at a step boundary: show the step whose shot is now on disk, then wait for one line
+/// on stdin saying the screen has been moved on to the next one. It writes to stderr so a `--json`
+/// run keeps stdout to its one machine-readable line, and a line is all it asks for — the content is
+/// the operator's to use as a note to themselves.
+///
+/// End of input is a failure rather than a nod. A run asked to step with nothing left to hold it
+/// would walk the rest of the scenario off whichever screen was up, and file those shots as evidence
+/// of steps nobody carried out.
+fn hand_back(stdin: &std::io::Stdin, record: &StepRecord) -> Result<(), String> {
+    eprintln!("{}", step_lines(record));
+    eprint!("  … carry out the next step on screen, then press Enter: ");
+    let _ = std::io::stderr().flush();
+    let mut line = String::new();
+    match stdin.lock().read_line(&mut line) {
+        Ok(0) => Err("stdin reached end of input — a stepped run needs one line per step".into()),
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("could not read the go-ahead from stdin: {e}")),
+    }
 }
 
 /// A fresh evidence dir under the temp tree, named for the scenario and the wall clock so two
@@ -153,6 +205,7 @@ struct Opts {
     evidence: Option<PathBuf>,
     uiauto: PathBuf,
     ocr: PathBuf,
+    step: bool,
     json: bool,
 }
 
@@ -165,11 +218,13 @@ impl Opts {
         let mut evidence = None;
         let mut uiauto = None;
         let mut ocr = None;
+        let mut step = false;
         let mut json = false;
         let mut it = args.peekable();
         while let Some(a) = it.next() {
             match a.as_str() {
                 "--json" => json = true,
+                "--step" => step = true,
                 "--pid" => {
                     let v = it.next().ok_or("--pid needs a number")?;
                     pid = Some(v.parse::<i64>().map_err(|_| format!("--pid `{v}` is not a number"))?);
@@ -195,6 +250,7 @@ impl Opts {
             evidence,
             uiauto: uiauto.unwrap_or_else(default_uiauto),
             ocr: ocr.unwrap_or_else(default_ocr),
+            step,
             json,
         })
     }

@@ -13,10 +13,10 @@
 #
 # What this wants in front of it is a device with a project on it: the open card is offered where
 # there is something to open, and the choices it lists are what the store holds. Stand the project
-# named below in the store the build under test opens (`devtool devgui cli`), go to the getting
-# started screen, open the second card and choose that project in it — the run shoots its steps back
-# to back off the screen it is pointed at, so the state both are taken from is the one left in front
-# of it.
+# named below in the store the build under test opens (`devtool devgui cli`) and go to the getting
+# started screen. The two steps are read off two screens, so drive it stepped (`--step`): the first
+# shot is the screen as a reader arrives at it, and the run then hands back — open the second card
+# and choose that project in it before releasing the second shot.
 id: ways-in
 title: Both ways in are the app's own to carry out — raise a project, or open one this device holds — and neither hands over a command to type
 drivers: [gui]

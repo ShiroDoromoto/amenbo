@@ -20,7 +20,8 @@
 //!
 //! The pure part — turning a step into an instruction and an expectation, and walking a scenario
 //! into per-step evidence with a verdict — is separated from the side effects (running
-//! `swift`/`osascript`/`screencapture`) so the walk is testable with injected capture and OCR.
+//! `swift`/`osascript`/`screencapture`) so the walk is testable with injected capture, OCR and
+//! step-boundary wait.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -400,19 +401,29 @@ pub struct WalkOutcome {
 
 /// Walk a scenario step by step: capture one screenshot per step into `evidence_dir`, and for an
 /// assert OCR can judge, read the shot back and decide `Pass`/`Fail` against the expected text.
-/// Both side effects are injected — `capture` shells out to `screencapture`, `read_text` to
-/// `ocr.swift`; a test passes closures that only touch/return fixtures — so the walk is verifiable
-/// without a GUI. A capture failure aborts the walk (a missing shot is missing evidence); the
-/// recognized text of each judged step is written next to its shot as evidence of the reading.
-pub fn walk<C, O>(
+/// Every side effect is injected — `capture` shells out to `screencapture`, `read_text` to
+/// `ocr.swift`, `pause` holds the walk at a step boundary; a test passes closures that only
+/// touch/return fixtures — so the walk is verifiable without a GUI. A capture failure aborts the
+/// walk (a missing shot is missing evidence); the recognized text of each judged step is written
+/// next to its shot as evidence of the reading.
+///
+/// `pause` is what lets one scenario carry a screen that moves: it is called with the record just
+/// finished, **after** that step's shot is on disk and before the next step is taken, so the
+/// evidence of where the run stood is written down before anyone is asked to move the screen on.
+/// It is not called after the last step — nothing follows it to hold the screen for. A pause that
+/// fails aborts the walk, since a run that cannot be held is one whose remaining shots would all
+/// come off the same screen.
+pub fn walk<C, O, P>(
     scenario: &Scenario,
     evidence_dir: &Path,
     mut capture: C,
     mut read_text: O,
+    mut pause: P,
 ) -> Result<WalkOutcome, String>
 where
     C: FnMut(&Path) -> Result<(), String>,
     O: FnMut(&Path) -> Result<String, String>,
+    P: FnMut(&StepRecord) -> Result<(), String>,
 {
     std::fs::create_dir_all(evidence_dir)
         .map_err(|e| format!("could not create evidence dir {}: {e}", evidence_dir.display()))?;
@@ -454,7 +465,7 @@ where
             _ => (Verdict::Action, None),
         };
 
-        records.push(StepRecord {
+        let record = StepRecord {
             index: i,
             kind,
             domain: domain.to_string(),
@@ -464,7 +475,12 @@ where
             verdict,
             expected,
             found,
-        });
+        };
+        if i + 1 < scenario.steps.len() {
+            pause(&record)
+                .map_err(|e| format!("step {}: waiting for the next step failed: {e}", i + 1))?;
+        }
+        records.push(record);
     }
     Ok(WalkOutcome { records, passed })
 }
@@ -786,6 +802,7 @@ steps:
             },
             // The board OCRs to text that contains the seed title.
             |_| Ok("me-ai board\nSEED\nsome other card".to_string()),
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -818,6 +835,7 @@ steps:
             &dir,
             |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok("an empty board with no such card".to_string()),
+            |_| Ok(()),
         )
         .expect("walk");
 
@@ -833,9 +851,60 @@ steps:
         let s = load(SCENARIO);
         let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-fail-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let err = walk(&s, &dir, |_| Err("no screen".to_string()), |_| Ok(String::new()))
+        let err = walk(&s, &dir, |_| Err("no screen".to_string()), |_| Ok(String::new()), |_| Ok(()))
             .unwrap_err();
         assert!(err.contains("step 1") && err.contains("no screen"), "got: {err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The stepped run: the walk is held at every boundary but the last, and what it hands over is
+    /// the step whose shot is already on disk — so an operator moving the screen on is moving it
+    /// away from evidence already written, never from a step still to be captured.
+    #[test]
+    fn a_pause_holds_every_step_boundary_but_the_last() {
+        let s = load(SCENARIO);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-step-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let held: RefCell<Vec<(usize, bool)>> = RefCell::new(Vec::new());
+        let outcome = walk(
+            &s,
+            &dir,
+            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| Ok("me-ai board\nSEED".to_string()),
+            |r| {
+                held.borrow_mut().push((r.index, dir.join(&r.screenshot).is_file()));
+                Ok(())
+            },
+        )
+        .expect("walk");
+
+        assert_eq!(outcome.records.len(), 3);
+        assert_eq!(
+            *held.borrow(),
+            vec![(0, true), (1, true)],
+            "held after each step's shot, and not after the last step"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A wait that cannot be held is an execution failure, not a nod: were it swallowed, the rest of
+    /// the run would shoot the screen the operator was still standing on and report it as stepped.
+    #[test]
+    fn a_pause_failure_aborts_the_walk() {
+        let s = load(SCENARIO);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-step-red-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let err = walk(
+            &s,
+            &dir,
+            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| Ok(String::new()),
+            |_| Err("nobody is watching".to_string()),
+        )
+        .unwrap_err();
+        assert!(err.contains("step 1") && err.contains("nobody is watching"), "got: {err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

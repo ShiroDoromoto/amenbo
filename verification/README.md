@@ -230,6 +230,44 @@ chooses where the shots and manifest land (default: a fresh dir under the temp t
 captured, non-zero on a failed assert or a load/capture/OCR failure — a `Review` step is closed by
 a human from the evidence, not by the exit code.
 
+### `--step` — a scenario whose screen moves
+
+By default the run shoots its steps back to back, which photographs one prepared screen as many
+times as the scenario is long: a line whose state advances — open the card, answer which project,
+pick the folder, read the linked screen — cannot be written as one scenario, only prepared for
+outside it and asserted at the end.
+
+`--step` stops the run after each step's shot and waits for a line on stdin. Between the two, the
+screen belongs to whoever is driving: carry out the next step by hand, or with uiauto's `click` /
+`type` / `key`, and send the line when the screen is standing where the scenario says it should. The
+stop is **after** the shot, never before — the evidence of where the run stood is on disk before
+anyone is invited to move on — and there is no stop after the last step, which has nothing following
+it to hold the screen for. Leave the flag off and nothing changes, so an unattended run stays
+unattended.
+
+The wait is on a line and not on a clock on purpose. A run held for a fixed number of seconds shoots
+whatever is up when the clock runs out, so a step that took a moment longer is filed as evidence of a
+screen nobody stood on — a red nobody can tell from a real one, or worse, a green. For the same
+reason end of input is a failure and not a nod: a stepped run with nothing left to hold it would walk
+the rest of the scenario off one screen and report it as though it had been driven.
+
+Everything the wait prints — the step just captured, and the prompt — goes to stderr, so `--json`
+still leaves one machine-readable line on stdout. A driver that is not a person keeps its side open
+through a pipe:
+
+```sh
+cd verification
+mkfifo /tmp/go
+cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/ways-in.yaml \
+  --app "amenbo (dev $ID)" --pid "$(devtool devgui pid "$ID")" --step --json < /tmp/go &
+exec 3>/tmp/go   # hold the writing side open — otherwise the first echo closes it, which is the end
+                 # of input, and the run stops rather than carrying on to the next step
+# … drive the screen to the next step (uiauto), then release the next shot:
+echo >&3
+# … and when the last step has been shot, let it go:
+exec 3>&-
+```
+
 ## Scenario format
 
 A scenario is an `id`, a human `title`, an optional `description`, an optional `drivers`

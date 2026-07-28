@@ -1384,14 +1384,15 @@ pub struct DecisionFilter {
     /// `decision_task_link`). Symmetric with `decision:` on the `task list` side: it makes the
     /// decision ⇄ task relation **traversable by query**.
     pub task: Option<u32>,
-    /// `decided_before:<date>` — accepted on or before this day (`decided_at`'s date ≤ date; the day
-    /// itself is **included**). "What had been decided as of some point in time" is not a feature of
-    /// its own: it falls out of composing this ordinary filter key with `superseded:`. Decisions never
-    /// accepted (proposed / rejected, with no `decided_at`) match neither direction.
+    /// `decided_before:<date>` — accepted on or before this day (the day `decided_at` fell on where
+    /// the reader is ≤ date; the day itself is **included**). "What had been decided as of some point
+    /// in time" is not a feature of its own: it falls out of composing this ordinary filter key with
+    /// `superseded:`. Decisions never accepted (proposed / rejected, with no `decided_at`) match
+    /// neither direction.
     pub decided_before: Option<NaiveDate>,
-    /// `decided_after:<date>` — accepted on or after this day (`decided_at`'s date ≥ date; the day
-    /// itself is **included**). The counterpart of `decided_before`: give both and you have a span,
-    /// inclusive at each end.
+    /// `decided_after:<date>` — accepted on or after this day (the day `decided_at` fell on where the
+    /// reader is ≥ date; the day itself is **included**). The counterpart of `decided_before`: give
+    /// both and you have a span, inclusive at each end.
     pub decided_after: Option<NaiveDate>,
 }
 
@@ -1497,7 +1498,7 @@ impl DecisionFilter {
         // Acceptance time. A decision that was never accepted has no date, so it matches neither
         // direction.
         if self.decided_before.is_some() || self.decided_after.is_some() {
-            let Some(decided) = d.decided_at.map(|t| t.0.date_naive()) else {
+            let Some(decided) = d.decided_at.map(|t| t.local_date()) else {
                 return false;
             };
             if self.decided_before.is_some_and(|d0| decided > d0) {

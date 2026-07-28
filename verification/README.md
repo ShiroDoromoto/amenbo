@@ -13,7 +13,7 @@ verification/
   scenarios/   the single source of truth (YAML). Every driver walks its own road through these.
   fixtures/    text a scenario cannot hold itself (a file carrying an amenbo ref for the lint)
   core/        the scenario schema + validating loader (crate `amenbo-scenario`, `lint` + `emit` bins)
-  cli/         CLI driver + runner + coverage count — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
+  cli/         CLI driver + runner — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
   gui/         mac harness — scenario → screen checklist + screencapture + Vision OCR verdict (crate `amenbo-verify-gui`)
 ```
 
@@ -32,42 +32,23 @@ workspace black-box-drives the shipped binary, so it reads process env raw (`AME
 `AMENBO_GUI_CAPTURE_BIN`) rather than through `amenbo_core::env`, which it has no dependency on.
 A plain `cargo clippy --all-targets` in this directory fails on those lines and on nothing else.
 
-## One scenario file per capability
+## One scenario per path a reader walks
 
-The scenario set is not a pile that grows by one file per feature. **Its size is pinned to the
-capability list `amenbo agent --json` prints**: one file per capability, holding every line that
-capability owns. Then the count only moves when amenbo's own capability list moves, and a changed
-behaviour turns exactly one file red.
+A scenario is **one goal and the steps that reach it** — the path a reader actually walks, not a
+feature out of a list. What this gate defends is the release, and what a release breaks is a path.
 
-- **The file is named after the capability's first command**, spaces to dashes — the capability
-  "Assign a task to a person or that person's AI" leads with `task assign`, so its file is
-  `task-assign.yaml`. The scenario's `id` is the file's stem. The prose of a capability gets
-  reworded; the command it leads with is the stable handle, and it is the handle a coverage count
-  matches on.
-- **A line belongs to the capability whose command it exists to prove** — the operation under test,
-  not the read it is checked with. Every line ends by reading something back, so `task field` and
-  `task listed` show up all over the set; they are the assert vocabulary, not the owner. A line that
-  reserves a task and reads its status back belongs to `task-status.yaml`.
+- **The file is named after the path**, and the scenario's `id` is the file's stem. Nothing pins the
+  set's size or its names to amenbo's own capability list: that list stays the feature inventory
+  `amenbo agent --json` prints, and it is not the denominator of anything here.
+- **A step belongs to the path it is on**, whichever commands it takes on the way. A path crosses
+  several capabilities by definition — that is what makes it a path — so the question a step answers
+  is "does this get the reader to the goal", never "which command owns this line".
+- **A goal both the CLI and the screen can reach is one file**, carrying both roads. A goal only one
+  of them can reach — what only the screen ever says, what has no screen at all — gets that driver's
+  file alone, and is not a gap in the other.
 
-Adding a line to the set:
-
-1. Find the capability it proves, and open that file.
-2. **Write the steps into it.** Do not add a file — a second file for a capability that has one is
-   the pile coming back.
-3. Only when no file answers for it — the capability itself is new — start one.
-4. When a feature goes, its file goes with it.
-
-**One kind of line has no capability to be filed under**: what only the screen ever says. An entry's
-own `official` claim is read back nowhere in the CLI, neither is the request a new project hands the
-reader to paste, and neither is whether the ways in a reader is offered are the interface's own to
-carry out — so the capability list names no command for any of them, and no file can be named after
-one. Such a line gets a file of its own, carrying a `steps_gui` road alone, named after what it
-looks at (`plugin-browse.yaml`, `first-loop.yaml`, `ways-in.yaml`). It is not a second file for a capability
-— it is the file for a line the capability list cannot reach — and the count treats it as neither
-covered nor stray.
-
-What is covered and what is not is counted, not eyeballed — `verify-coverage` (below) reads the
-capability list out of the shipped binary and names every capability with no file to its name.
+The set is kept honest by the hand that changes the product, not by a count: add, change or drop a
+path a reader walks, and its scenario is written, fixed or dropped in the same session.
 
 One rule sits above all of that: **a line that needs an op the registry does not have is not written
 here at all.** Growing the registry means growing every driver's mapping with it, which is its own
@@ -101,7 +82,7 @@ directly. `--keep` leaves the throwaway store in place for inspection.
 **One thing does leave the box.** `plugin install` resolves the official catalog over the network,
 picks this platform's asset and verifies its signature against the key built into the binary — a
 layer that exists only in a shipped build, and one no local fixture can stand in for without the
-count reading "covered" over the very thing it exists to catch. The plugin scenarios therefore need
+run reading green over the very thing it exists to catch. The plugin scenarios therefore need
 the network and an intact catalog — the ones that install one, and the one that reads the browsing
 view back — and they are the only ones that do.
 
@@ -141,34 +122,6 @@ The exit code is the roll-up — `0` when every scenario that ran is green, non-
 or errored — so a release gate reads it directly. The `--json` aggregate carries `total` / `passed`
 / `failed` / `skipped` / `green` plus each scenario's own report (or its error, or the drivers
 whose roads it carries).
-
-## Coverage
-
-`verify-coverage` counts the scenario set against the capabilities amenbo declares. The denominator
-is not kept here: it is the `capabilities` list the **shipped binary** prints from `agent --json`, so
-it grows the moment amenbo does and the count notices with nobody remembering to update it. The
-numerator is the file names — one per capability, named after the command that capability leads with.
-
-```sh
-cd verification
-# what a release's stock-take reads, against a specific binary:
-cargo run -p amenbo-verify-cli --bin verify-coverage -- --bin /path/to/amenbo
-# the same inventory as JSON, for splitting the gaps into tasks:
-cargo run -p amenbo-verify-cli --bin verify-coverage -- --json
-```
-
-It reports four things: capabilities with no file (**uncovered**), files answering for no capability
-(**unowned** — a leftover from a capability that went, or a name that never matched one), files
-written for the screen alone (**screen_only** — a `steps_gui` road and no `steps_cli` one, counted
-apart because the denominator is what the CLI declares and a line the CLI cannot read has no command to be named
-after), and files whose `id` has drifted from their name (**misfiled** — the name is what the count
-matches on, the id is what a report prints, and a file where they disagree is filed as one capability
-and reported as another).
-
-**A gap is not a failure**: the exit code is 0 whether or not the set is complete. An uncovered line
-is work to file, not a reason to hold a release — a gate that blocked on it would only teach everyone
-to skip the gate. Non-zero means the count could not be taken at all (the binary would not run, the
-directory would not be read).
 
 ## GUI harness (mac)
 

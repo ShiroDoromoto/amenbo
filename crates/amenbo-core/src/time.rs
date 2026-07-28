@@ -7,7 +7,7 @@
 //!   `2026-07-28` in Tokyo and in London (`AMB-D-429`). What that makes zone-dependent is only where
 //!   the relative forms count from — see [`today`].
 
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::{Error, Result};
@@ -33,6 +33,24 @@ impl Timestamp {
     /// for relative-time display.
     pub fn parse_rfc3339(s: &str) -> Option<Self> {
         DateTime::parse_from_rfc3339(s).ok().map(|d| Timestamp(d.with_timezone(&Utc)))
+    }
+
+    /// The calendar day this instant fell on **for the reader**, on this machine's clock.
+    ///
+    /// This is the only shape in which an instant may be compared with a day someone named
+    /// (`--since today`, `decided_after:today`): a day comes from [`today`] and is local, so reading
+    /// the instant's UTC date instead asks two different calendars the same question. Nine hours
+    /// separate them in Tokyo, and between midnight and nine in the morning the two disagree — which
+    /// is exactly when something accepted a minute ago drops out of "accepted today".
+    pub fn local_date(&self) -> NaiveDate {
+        self.date_in(&Local)
+    }
+
+    /// [`Timestamp::local_date`] with the zone said out loud, which is the only way a test can stand
+    /// east of UTC: the reader's zone is whatever the machine is set to, and a run in UTC cannot tell
+    /// the right answer from the wrong one.
+    fn date_in<Tz: TimeZone>(&self, tz: &Tz) -> NaiveDate {
+        self.0.with_timezone(tz).date_naive()
     }
 }
 
@@ -70,6 +88,33 @@ impl<'de> Deserialize<'de> for Timestamp {
 /// morning would land on today. Timestamps are a different thing and stay UTC ([`Timestamp`]).
 pub fn today() -> NaiveDate {
     Local::now().date_naive()
+}
+
+/// The instant the reader's day `d` begins, in UTC.
+///
+/// The counterpart of [`Timestamp::local_date`] for a comparison that cannot be made in Rust: stored
+/// instants are UTC text of one fixed width, so a query cuts them lexicographically, and the cut has
+/// to be the instant the named day starts *here* rather than the bare `YYYY-MM-DD` — which is UTC's
+/// midnight, and so the wrong hour everywhere else.
+pub fn local_day_start_utc(d: NaiveDate) -> Timestamp {
+    day_start_in(d, &Local)
+}
+
+/// [`local_day_start_utc`] with the zone said out loud — the testable half, as on
+/// [`Timestamp::local_date`].
+fn day_start_in<Tz: TimeZone>(d: NaiveDate, tz: &Tz) -> Timestamp {
+    let midnight = d.and_hms_opt(0, 0, 0).expect("midnight is a civil time every day has");
+    // Two days a year a zone has no single answer. Where the clock repeated the hour, the earlier of
+    // the two is where the day began; where it jumped over midnight altogether, the day begins when
+    // the clock lands, an hour on.
+    let start = tz
+        .from_local_datetime(&midnight)
+        .earliest()
+        .or_else(|| tz.from_local_datetime(&(midnight + Duration::hours(1))).earliest());
+    match start {
+        Some(t) => Timestamp(t.with_timezone(&Utc)),
+        None => Timestamp(DateTime::from_naive_utc_and_offset(midnight, Utc)),
+    }
 }
 
 /// Interpret a date expression. `base` is the day a relative form counts from — normally today.
@@ -110,5 +155,33 @@ mod tests {
     #[test]
     fn today_is_the_machines_own_day() {
         assert_eq!(today(), Local::now().date_naive());
+    }
+
+    /// What just happened happened today, at every hour of the day. The two sides of every
+    /// instant-against-a-day comparison have to come from one calendar, and this is the seam where
+    /// they meet: `now()` is UTC, `today()` is local, and reading the instant's UTC date puts the
+    /// small hours of a day east of UTC on the day before.
+    #[test]
+    fn an_instant_falls_on_the_day_the_reader_is_living_in() {
+        assert_eq!(Timestamp::now().local_date(), today());
+    }
+
+    /// The same seam, read from a zone east of UTC, where the answer differs: half past eleven at
+    /// night in London is already the next morning in Tokyo, and the reader there is living in the
+    /// later day. A run on a machine set to UTC — every CI box — cannot see this from
+    /// [`Timestamp::local_date`] alone, since there the two calendars agree.
+    #[test]
+    fn a_day_east_of_utc_has_already_turned_over() {
+        let tokyo = chrono::FixedOffset::east_opt(9 * 3600).expect("+09:00 is a zone offset");
+        let late_in_london =
+            Timestamp::parse_rfc3339("2026-07-28T23:30:00Z").expect("a well-formed instant");
+        assert_eq!(
+            late_in_london.date_in(&tokyo),
+            NaiveDate::from_ymd_opt(2026, 7, 29).expect("a real day")
+        );
+
+        // And the cut a query makes for that Tokyo day starts nine hours before UTC's own midnight.
+        let day = NaiveDate::from_ymd_opt(2026, 7, 29).expect("a real day");
+        assert_eq!(day_start_in(day, &tokyo).to_rfc3339_z(), "2026-07-28T15:00:00Z");
     }
 }

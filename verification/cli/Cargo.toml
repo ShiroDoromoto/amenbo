@@ -20,10 +20,6 @@ path = "src/main.rs"
 name = "verify-all"
 path = "src/bin/verify_all.rs"
 
-[[bin]]
-name = "verify-coverage"
-path = "src/bin/coverage.rs"
-
 [dependencies]
 amenbo-scenario = { path = "../core" }
 # The loopback host a scenario stands a catalog on. It lives in the main workspace beside the tests

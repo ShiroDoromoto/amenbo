@@ -893,8 +893,8 @@ steps:
         assert!(errs.iter().any(|e| e.message.contains("does not produce a binding")));
     }
 
-    /// A scenario that says nothing about drivers is a CLI scenario — the set aims at coverage there,
-    /// so that is the answer for a line that does not go out of its way to ask for the screen.
+    /// A scenario that says nothing about drivers is a CLI scenario — that set carries the paths
+    /// thickly, so it is the answer for a line that does not go out of its way to ask for the screen.
     #[test]
     fn a_scenario_that_names_no_driver_is_cli_only() {
         let s = load_str(GOOD).expect("parses");

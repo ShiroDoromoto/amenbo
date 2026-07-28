@@ -26,7 +26,7 @@
 //! `required` uses), so it removes the machine default / project override / secret rather than storing a
 //! blank. There is thus one door for both set and unset.
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::plugin_manifest::ConfigField;
 use crate::store::Store;
 
@@ -55,12 +55,22 @@ pub enum Scope {
 /// value is exempt — it is the clear path, checked before this is reached.
 pub fn check_value(value: &str) -> Result<()> {
     if value.len() > MAX_CONFIG_VALUE_BYTES {
-        return Err(Error::invalid(
-            format!("config value too large ({} bytes; max {})", value.len(), MAX_CONFIG_VALUE_BYTES),
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "config value too large ({} bytes; max {})",
+                value.len(),
+                MAX_CONFIG_VALUE_BYTES
+            ))
+            .coded(ErrorCode::InvalidPluginConfigValueTooLarge)
+            .with("size", value.len())
+            .with("max", MAX_CONFIG_VALUE_BYTES),
         ));
     }
     if value.chars().any(|c| c.is_control()) {
-        return Err(Error::invalid("config value must not contain control characters"));
+        return Err(Error::Invalid(
+            Msg::new("config value must not contain control characters")
+                .coded(ErrorCode::InvalidPluginConfigValueControlChars),
+        ));
     }
     Ok(())
 }

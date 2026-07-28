@@ -43,7 +43,7 @@
 //! the merge either way, so what a browse shows and what an install resolves are the one view.
 
 use crate::config::Paths;
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::plugin_installed::Origin;
 use crate::plugin_validate::{validate_list_entry, Problem};
 use crate::plugin_wire::{Detail, ListEntry};
@@ -139,14 +139,21 @@ fn catalog_url() -> String {
 /// catalog usable, because one bad manifest is not a reason to have no catalog.
 pub fn parse(json: &str) -> Result<Catalog> {
     let envelope: Envelope = serde_json::from_str(json).map_err(|e| {
-        Error::invalid(format!("the plugin catalog is not readable: {e}"))
+        Error::Invalid(
+            Msg::new(format!("the plugin catalog is not readable: {e}"))
+                .coded(ErrorCode::InvalidCatalogUnreadable)
+                .with("reason", e),
+        )
     })?;
     if envelope.catalog_v > SUPPORTED_CATALOG_V {
-        return Err(Error::invalid(
-            format!(
+        return Err(Error::Invalid(
+            Msg::new(format!(
                 "this plugin catalog is version {} — newer than this amenbo understands ({SUPPORTED_CATALOG_V}). Update amenbo.",
                 envelope.catalog_v
-            ),
+            ))
+            .coded(ErrorCode::InvalidCatalogVersionAhead)
+            .with("version", envelope.catalog_v)
+            .with("supported", SUPPORTED_CATALOG_V),
         ));
     }
 
@@ -379,23 +386,34 @@ fn detail_to(catalog_url: &str, cache_file: &std::path::Path, entry: &ListEntry)
 fn read_detail(json: &str, entry: &ListEntry) -> Result<Detail> {
     if let Some(sum) = &entry.detail_sum {
         crate::plugin_provenance::verify_checksum(json.as_bytes(), sum).map_err(|_| {
-            Error::invalid(
-                format!(
+            Error::Invalid(
+                Msg::new(format!(
                     "the catalog's detail for '{}' is not the document the catalog listed ({sum})",
                     entry.name
-                ),
+                ))
+                .coded(ErrorCode::InvalidCatalogDetailSwapped)
+                .with("name", &entry.name)
+                .with("checksum", sum),
             )
         })?;
     }
     let detail: Detail = serde_json::from_str(json).map_err(|e| {
-        Error::invalid(format!("the catalog's detail for '{}' is not readable: {e}", entry.name))
+        Error::Invalid(
+            Msg::new(format!("the catalog's detail for '{}' is not readable: {e}", entry.name))
+                .coded(ErrorCode::InvalidCatalogDetailUnreadable)
+                .with("name", &entry.name)
+                .with("reason", e),
+        )
     })?;
     if detail.name != entry.name {
-        return Err(Error::invalid(
-            format!(
+        return Err(Error::Invalid(
+            Msg::new(format!(
                 "the catalog's detail for '{}' names another plugin ('{}')",
                 entry.name, detail.name
-            ),
+            ))
+            .coded(ErrorCode::InvalidCatalogDetailNamesOther)
+            .with("name", &entry.name)
+            .with("other", &detail.name),
         ));
     }
     Ok(detail)
@@ -584,11 +602,18 @@ impl SourceProbe {
 pub fn probe_source(paths: &Paths, url: &str) -> Result<SourceProbe> {
     let url = url.trim();
     if !(url.starts_with("http://") || url.starts_with("https://")) {
-        return Err(Error::invalid(format!("a catalog URL must start with http:// or https://: {url}")));
+        return Err(Error::Invalid(
+            Msg::new(format!("a catalog URL must start with http:// or https://: {url}"))
+                .coded(ErrorCode::InvalidCatalogUrlScheme)
+                .with("url", url),
+        ));
     }
     if url == catalog_url() {
-        return Err(Error::invalid(
-            "that is the official catalog's URL — it is always included and cannot be registered as a third-party source".to_string(),
+        return Err(Error::Invalid(
+            Msg::new(
+                "that is the official catalog's URL — it is always included and cannot be registered as a third-party source",
+            )
+            .coded(ErrorCode::InvalidCatalogUrlOfficial),
         ));
     }
     let existing = sources(paths).into_iter().find(|s| s.url == url);
@@ -621,10 +646,14 @@ fn check_pin(url: &str, pinned: Option<&str>, served: Option<&str>) -> Result<()
         return Ok(());
     }
     let (was, now) = (fingerprint_of(pinned), fingerprint_of(served));
-    Err(Error::invalid(
-        format!(
+    Err(Error::Invalid(
+        Msg::new(format!(
             "{url} now publishes a different key ({now}, pinned: {was}). amenbo will not accept it on the old consent — unregister the catalog and register it again to trust the new key."
-        ),
+        ))
+        .coded(ErrorCode::InvalidCatalogKeyRotated)
+        .with("url", url)
+        .with("serving", &now)
+        .with("pinned", &was),
     ))
 }
 
@@ -642,7 +671,11 @@ fn fingerprint_of(key: &str) -> String {
 fn published_key(catalog_url: &str) -> Result<Option<String>> {
     match fetch(&key_url(catalog_url)) {
         Ok(text) => crate::plugin_provenance::read_public_key(&text).map(Some).map_err(|e| {
-            Error::invalid(format!("{}: {e}", key_url(catalog_url)))
+            Error::Invalid(
+                Msg::new(format!("{}: {e}", key_url(catalog_url)))
+                    .coded(ErrorCode::InvalidCatalogKeyDocument)
+                    .with("url", key_url(catalog_url)),
+            )
         }),
         Err(_) => Ok(None),
     }
@@ -796,11 +829,15 @@ impl DiscoveredEntry {
         }
         match &self.key {
             Some(key) => Ok(crate::plugin_provenance::TrustRoot::pinned(key.clone())),
-            None => Err(Error::invalid(
-                format!(
+            None => Err(Error::Invalid(
+                Msg::new(format!(
                     "'{}' comes from {} ({}), which publishes no signing key — nothing from it can be installed. Ask its publisher for a catalog-key.pub, then register the catalog again.",
                     self.entry.name, self.source_name, self.source
-                ),
+                ))
+                .coded(ErrorCode::InvalidCatalogKeyAbsent)
+                .with("name", &self.entry.name)
+                .with("source", &self.source_name)
+                .with("url", &self.source),
             )),
         }
     }

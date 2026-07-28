@@ -578,6 +578,98 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_decision_self_supersede: "A decision cannot supersede itself.",
   invalid_decision_self_amend: "A decision cannot amend itself.",
   invalid_decision_self_builds_on: "A decision cannot stand on itself.",
+
+  // The plugin screens. Almost nothing that goes wrong here is the reader's doing — it is a catalog
+  // document, an asset off the network, or an install a later update rewrote — so each sentence says
+  // which of those it was, and what is left to do about it. Where a library's own words are the only
+  // detail there is, they ride in as {reason} and stay English inside the translated frame.
+  not_found_plugin_in_catalog: "The catalog holds no plugin named “{name}”.",
+  not_found_plugin_installed: "The plugin “{name}” is not installed.",
+  not_found_plugin_build_official:
+    "The official catalog does not list “{name}”, so there is no build to update to.",
+  not_found_plugin_build_origin_unknown:
+    "“{name}” does not record which catalog it came from, and the official catalog does not list it. Remove it and install it again so its origin is recorded.",
+  not_found_plugin_build_source_gone:
+    "“{name}” was installed from {url}, which is no longer registered. Register that catalog again to update from it — a plugin is only updated from where it came from.",
+  not_found_plugin_build_source_silent:
+    "“{name}” was installed from {url}, which did not answer and has nothing cached, so there is nothing to compare its build against.",
+  not_found_plugin_build_delisted:
+    "“{name}” was installed from {url}, which no longer lists it, so there is no build to update to.",
+  not_found_plugin_rollback_build:
+    "“{name}” has no earlier build kept: it was never updated, or a rollback has already used the one that was.",
+  conflict_plugin_installed: "“{name}” is already installed on this device.",
+  conflict_plugin_install_broken:
+    "A broken install of “{name}” is in the way ({reason}). Remove it first.",
+  invalid_catalog_unreadable: "The plugin catalog could not be read ({reason}).",
+  invalid_catalog_version_ahead:
+    "This catalog is version {version}, newer than this amenbo understands ({supported}). Update amenbo.",
+  invalid_catalog_detail_swapped:
+    "The catalog's detail page for “{name}” is not the document the catalog listed.",
+  invalid_catalog_detail_unreadable:
+    "The catalog's detail page for “{name}” could not be read ({reason}).",
+  invalid_catalog_detail_names_other:
+    "The catalog's detail page for “{name}” describes another plugin (“{other}”).",
+  invalid_catalog_url_scheme: "A catalog address has to start with http:// or https:// ({url}).",
+  invalid_catalog_url_official:
+    "That is the official catalog's address. It is always included and cannot be registered again.",
+  invalid_catalog_key_rotated:
+    "{url} now publishes a different signing key ({serving}, pinned: {pinned}). Unregister the catalog and register it again to look at the new key before trusting it.",
+  invalid_catalog_key_document:
+    "The document at {url} is not a signing key (it holds no minisign public key line).",
+  invalid_catalog_key_absent:
+    "“{name}” comes from {source} ({url}), which publishes no signing key, so nothing from it can be installed. Ask its publisher for a catalog-key.pub, then register the catalog again.",
+  invalid_plugin_entry: "The catalog's entry for “{name}” is not valid ({problem}).",
+  invalid_plugin_entry_dropped:
+    "The catalog's entry for “{name}” is not valid and was left out ({problem}).",
+  invalid_plugin_entry_duplicate: "The catalog carries more than one entry named “{name}”.",
+  invalid_plugin_os_unsupported: "“{name}” does not support {os}. It supports: {supported}.",
+  invalid_plugin_asset_absent:
+    "“{name}” says it supports {os}, but publishes nothing this device can run ({platform}).",
+  invalid_plugin_asset_empty: "What the catalog serves for “{name}” is empty.",
+  invalid_plugin_asset_zip_off_windows:
+    "What the catalog serves for “{name}” is a zip, which is only taken on Windows. It has to be published as a .tar.gz, or as the program itself.",
+  invalid_plugin_asset_tar_unreadable:
+    "What the catalog serves for “{name}” is not a readable .tar.gz ({reason}).",
+  invalid_plugin_asset_zip_unreadable:
+    "What the catalog serves for “{name}” is not a readable zip ({reason}).",
+  invalid_plugin_asset_without_program:
+    "What the catalog serves for “{name}” holds no “{program}” inside it.",
+  invalid_plugin_manifest_unwritable: "“{name}” could not be written to this device ({reason}).",
+  invalid_plugin_checksum_format:
+    "The catalog records a checksum in a form amenbo does not know ({checksum}).",
+  invalid_plugin_checksum_mismatch:
+    "The bytes served are not the ones the catalog recorded, so nothing was installed.",
+  invalid_plugin_checksum_length: "A checksum is 64 hex characters; this one is {length}.",
+  invalid_plugin_checksum_not_hex: "The checksum the catalog records is not hex ({digest}).",
+  invalid_plugin_key_malformed: "The catalog's signing key could not be read ({reason}).",
+  invalid_plugin_signature_malformed: "The signature over this plugin could not be read ({reason}).",
+  invalid_plugin_signature_mismatch:
+    "This plugin's signature does not check out against {key}, so nothing was installed.",
+  invalid_plugin_unsigned:
+    "The catalog listing this plugin signed nothing, so where the program came from cannot be established.",
+  invalid_plugin_manifest_malformed: "“{name}” has an unreadable manifest at {path} ({reason}).",
+  invalid_plugin_manifest_names_other: "“{name}” has a manifest describing another plugin (“{other}”).",
+  invalid_plugin_program_absent: "“{name}” has no program at {path}.",
+  invalid_plugin_update_platform: "Plugins cannot name {os}, so “{name}” cannot be updated here.",
+  invalid_plugin_rollback_manifest_absent:
+    "“{name}” kept an earlier program but no description beside it ({reason}), and a rollback needs both.",
+  invalid_plugin_rollback_manifest_unparsable:
+    "The description kept beside “{name}”'s earlier build will not read ({reason}).",
+  invalid_plugin_project_required:
+    "This plugin is switched on per project, and no project is in context.",
+  invalid_plugin_settings_required:
+    "“{name}” cannot be switched on until its required settings are filled in: {settings}.",
+  invalid_plugin_config_value_too_large: "This value is {size} bytes, over the {max}-byte limit.",
+  invalid_plugin_config_value_control_chars: "A setting cannot hold control characters.",
+  // One refusal over the verdict that caused it. `{reasons}` is the part below, written from its own
+  // template — the same three verdicts read under both of these sentences.
+  invalid_plugin_incompatible: "“{name}” does not run on this amenbo: {reasons}.",
+  invalid_plugin_update_incompatible:
+    "The build of “{name}” the catalog publishes does not run on this amenbo ({reasons}). Nothing was replaced — the installed build is untouched.",
+  plugin_incompatible_payload:
+    "it reads event payload v{plugin}, and this amenbo speaks v{amenbo}",
+  plugin_incompatible_amenbo_old: "it needs amenbo {min} or newer, and this is {running}",
+  plugin_incompatible_floor_unreadable: "the minimum amenbo version it names cannot be read (“{min}”)",
 };
 
 // doctor issue kind → template (`{name}` interpolated from the issue's params).

@@ -138,7 +138,7 @@ steps:
     op: rollback
     with:
       name: worktree
-      refused: not_found
+      refused: not_found_plugin_rollback_build
 
   # Removal takes everything the plugin left — its directory, its settings, the consent it was
   # given — so the listing is the machine's own answer that nothing is left over.

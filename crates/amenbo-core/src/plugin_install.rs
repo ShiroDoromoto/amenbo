@@ -54,7 +54,7 @@
 use std::path::PathBuf;
 
 use crate::config::{is_reserved_plugin_name, Paths};
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::plugin_catalog::{self, DiscoveredEntry, Discovery, Dropped};
 use crate::plugin_installed;
 use crate::plugin_manifest::{Manifest, Platform};
@@ -129,7 +129,12 @@ pub(crate) fn catalog_manifest(paths: &Paths, found: &DiscoveredEntry) -> Result
     let problems = validate_manifest(&manifest);
     if let Some(first) = problems.first() {
         let first = format!("{}: {}", first.location, first.message.en());
-        return Err(Error::invalid(format!("the catalog's entry for '{}' is not valid ({first})", entry.name)));
+        return Err(Error::Invalid(
+            Msg::new(format!("the catalog's entry for '{}' is not valid ({first})", entry.name))
+                .coded(ErrorCode::InvalidPluginEntry)
+                .with("name", &entry.name)
+                .with("problem", &first),
+        ));
     }
     Ok(manifest)
 }
@@ -174,17 +179,30 @@ fn resolve<'a>(view: &'a Discovery, name: &str) -> Result<&'a DiscoveredEntry> {
                     .first()
                     .map(|p| format!("{}: {}", p.location, p.message.en()))
                     .unwrap_or_default();
-                return Err(Error::invalid(
-                    format!("the catalog's entry for '{name}' is not valid and was dropped ({first})"),
+                return Err(Error::Invalid(
+                    Msg::new(format!(
+                        "the catalog's entry for '{name}' is not valid and was dropped ({first})"
+                    ))
+                    .coded(ErrorCode::InvalidPluginEntryDropped)
+                    .with("name", name)
+                    .with("problem", &first),
                 ));
             }
             Dropped::Duplicate { name: dropped_name } if dropped_name == name => {
-                return Err(Error::invalid(format!("the catalog carries more than one entry named '{name}'")));
+                return Err(Error::Invalid(
+                    Msg::new(format!("the catalog carries more than one entry named '{name}'"))
+                        .coded(ErrorCode::InvalidPluginEntryDuplicate)
+                        .with("name", name),
+                ));
             }
             _ => {}
         }
     }
-    Err(Error::not_found(format!("no plugin named '{name}' in the catalog")))
+    Err(Error::NotFound(
+        Msg::new(format!("no plugin named '{name}' in the catalog"))
+            .coded(ErrorCode::NotFoundPluginInCatalog)
+            .with("name", name),
+    ))
 }
 
 /// Refuse to install over a name this machine already holds (`AMB-D-360`) — no silent overwrite, in
@@ -194,10 +212,23 @@ fn resolve<'a>(view: &'a Discovery, name: &str) -> Result<&'a DiscoveredEntry> {
 /// stood in the way of a retry.
 fn refuse_an_overwrite(paths: &Paths, name: &str) -> Result<()> {
     match plugin_installed::read(paths, name) {
-        Ok(_) => Err(Error::conflict(format!("plugin '{name}' is already installed on this machine"))),
-        Err(e) if e.code() == "not_found" => Ok(()),
-        Err(e) => Err(Error::conflict(
-            format!("a broken install of '{name}' is in the way ({}) — uninstall it first", e.message_en()),
+        Ok(_) => Err(Error::Conflict(
+            Msg::new(format!("plugin '{name}' is already installed on this machine"))
+                .coded(ErrorCode::ConflictPluginInstalled)
+                .with("name", name),
+        )),
+        // The one refusal that means "nothing is there": the home holds no manifest. It is matched on
+        // the code rather than the sentence, and on the code that names *this* refusal — the family
+        // `not_found` would also swallow "the catalog does not list it", which is not this question.
+        Err(e) if e.error_code() == ErrorCode::NotFoundPluginInstalled => Ok(()),
+        Err(e) => Err(Error::Conflict(
+            Msg::new(format!(
+                "a broken install of '{name}' is in the way ({}) — uninstall it first",
+                e.message_en()
+            ))
+            .coded(ErrorCode::ConflictPluginInstallBroken)
+            .with("name", name)
+            .with("reason", e.message_en()),
         )),
     }
 }
@@ -212,7 +243,16 @@ fn refuse_another_platform(manifest: &Manifest) -> Result<Platform> {
     }
     let supported: Vec<&str> = manifest.os.iter().map(|os| os.as_str()).collect();
     let supported = supported.join(", ");
-    Err(Error::invalid(format!("plugin '{}' does not support {here} (it supports: {supported})", manifest.name)))
+    Err(Error::Invalid(
+        Msg::new(format!(
+            "plugin '{}' does not support {here} (it supports: {supported})",
+            manifest.name
+        ))
+        .coded(ErrorCode::InvalidPluginOsUnsupported)
+        .with("name", &manifest.name)
+        .with("os", here)
+        .with("supported", &supported),
+    ))
 }
 
 /// This platform's distributable, or the refusal that the entry claims the OS yet publishes nothing this
@@ -223,13 +263,17 @@ fn refuse_another_platform(manifest: &Manifest) -> Result<Platform> {
 /// to stop rather than reach for another platform's bytes.
 fn published_for(manifest: &Manifest, here: Platform) -> Result<crate::plugin_manifest::Asset> {
     manifest.asset_for(here).ok_or_else(|| {
-        Error::invalid(
-            format!(
+        Error::Invalid(
+            Msg::new(format!(
                 "plugin '{}' lists {} but publishes no asset for {}",
                 manifest.name,
                 here.os.as_str(),
                 here.token()
-            ),
+            ))
+            .coded(ErrorCode::InvalidPluginAssetAbsent)
+            .with("name", &manifest.name)
+            .with("os", here.os.as_str())
+            .with("platform", here.token()),
         )
     })
 }
@@ -257,7 +301,11 @@ fn download(url: &str) -> Result<Vec<u8>> {
 /// which is the part a signature cannot bound.
 fn unpack_program(asset: &[u8], name: &str) -> Result<Vec<u8>> {
     if asset.is_empty() {
-        return Err(Error::invalid(format!("the asset for plugin '{name}' is empty")));
+        return Err(Error::Invalid(
+            Msg::new(format!("the asset for plugin '{name}' is empty"))
+                .coded(ErrorCode::InvalidPluginAssetEmpty)
+                .with("name", name),
+        ));
     }
     if asset.starts_with(&GZIP_MAGIC) {
         return from_tar_gz(asset, name);
@@ -269,10 +317,12 @@ fn unpack_program(asset: &[u8], name: &str) -> Result<Vec<u8>> {
         }
         #[cfg(not(windows))]
         {
-            return Err(Error::invalid(
-                format!(
+            return Err(Error::Invalid(
+                Msg::new(format!(
                     "the asset for plugin '{name}' is a zip — a zip is only taken on Windows; publish it as a .tar.gz, or as the executable itself"
-                ),
+                ))
+                .coded(ErrorCode::InvalidPluginAssetZipOffWindows)
+                .with("name", name),
             ));
         }
     }
@@ -289,7 +339,12 @@ fn from_tar_gz(asset: &[u8], name: &str) -> Result<Vec<u8>> {
 
     let wanted = plugin_installed::program_file_name(name);
     let unreadable = |e: std::io::Error| {
-        Error::invalid(format!("the asset for plugin '{name}' is not a readable .tar.gz: {e}"))
+        Error::Invalid(
+            Msg::new(format!("the asset for plugin '{name}' is not a readable .tar.gz: {e}"))
+                .coded(ErrorCode::InvalidPluginAssetTarUnreadable)
+                .with("name", name)
+                .with("reason", e),
+        )
     };
 
     let gz = flate2::read::GzDecoder::new(asset);
@@ -308,7 +363,12 @@ fn from_tar_gz(asset: &[u8], name: &str) -> Result<Vec<u8>> {
         entry.take(MAX_ASSET_BYTES).read_to_end(&mut program).map_err(unreadable)?;
         return Ok(program);
     }
-    Err(Error::invalid(format!("the asset for plugin '{name}' holds no '{wanted}' entry")))
+    Err(Error::Invalid(
+        Msg::new(format!("the asset for plugin '{name}' holds no '{wanted}' entry"))
+            .coded(ErrorCode::InvalidPluginAssetWithoutProgram)
+            .with("name", name)
+            .with("program", &wanted),
+    ))
 }
 
 /// The Windows path: read the plugin's executable out of a zip — the entry whose **file name** is the
@@ -324,7 +384,12 @@ fn from_zip(asset: &[u8], name: &str) -> Result<Vec<u8>> {
 
     let wanted = plugin_installed::program_file_name(name);
     let unreadable = |e: String| {
-        Error::invalid(format!("the asset for plugin '{name}' is not a readable zip: {e}"))
+        Error::Invalid(
+            Msg::new(format!("the asset for plugin '{name}' is not a readable zip: {e}"))
+                .coded(ErrorCode::InvalidPluginAssetZipUnreadable)
+                .with("name", name)
+                .with("reason", &e),
+        )
     };
 
     let mut zip =
@@ -345,7 +410,12 @@ fn from_zip(asset: &[u8], name: &str) -> Result<Vec<u8>> {
             .map_err(|e| unreadable(e.to_string()))?;
         return Ok(program);
     }
-    Err(Error::invalid(format!("the asset for plugin '{name}' holds no '{wanted}' entry")))
+    Err(Error::Invalid(
+        Msg::new(format!("the asset for plugin '{name}' holds no '{wanted}' entry"))
+            .coded(ErrorCode::InvalidPluginAssetWithoutProgram)
+            .with("name", name)
+            .with("program", &wanted),
+    ))
 }
 
 /// Lay the plugin down in the layout [`plugin_installed`] reads: the executable (marked runnable on
@@ -374,7 +444,12 @@ pub(crate) fn place(paths: &Paths, manifest: &Manifest, program: &[u8]) -> Resul
     }
 
     let json = serde_json::to_string_pretty(manifest).map_err(|e| {
-        Error::invalid(format!("the manifest for plugin '{name}' cannot be written out: {e}"))
+        Error::Invalid(
+            Msg::new(format!("the manifest for plugin '{name}' cannot be written out: {e}"))
+                .coded(ErrorCode::InvalidPluginManifestUnwritable)
+                .with("name", name)
+                .with("reason", e),
+        )
     })?;
     std::fs::write(plugin_installed::manifest_path(paths, name), json)?;
 
@@ -486,7 +561,7 @@ mod tests {
     #[test]
     fn an_unlisted_name_is_not_found() {
         let view = view_of(vec![entry_json("worktree")]);
-        assert_eq!(resolve(&view, "slack").unwrap_err().code(), "not_found");
+        assert_eq!(resolve(&view, "slack").unwrap_err().code(), "not_found_plugin_in_catalog");
     }
 
     /// The trust root follows the catalog the entry came from (`AMB-D-389`): amenbo's own key for the
@@ -514,7 +589,7 @@ mod tests {
     fn a_catalog_with_no_pinned_key_cannot_be_installed_from() {
         let view = served_view(vec![entry_json("worktree")], false, None);
         let err = resolve(&view, "worktree").unwrap().trust_root().unwrap_err();
-        assert_eq!(err.code(), "invalid_value");
+        assert_eq!(err.code(), "invalid_catalog_key_absent");
         assert!(format!("{err:?}").contains("no signing key"), "the reason is said: {err:?}");
     }
 
@@ -527,7 +602,7 @@ mod tests {
         let view = view_of(vec![invalid]);
 
         let err = resolve(&view, "slack").unwrap_err();
-        assert_eq!(err.code(), "invalid_value");
+        assert_eq!(err.code(), "invalid_plugin_entry_dropped");
         assert!(format!("{err:?}").contains("dropped"), "the drop is the answer: {err:?}");
     }
 
@@ -539,7 +614,7 @@ mod tests {
         place(&paths, &manifest("worktree"), b"#!/bin/sh\n").unwrap();
 
         let err = refuse_an_overwrite(&paths, "worktree").unwrap_err();
-        assert_eq!(err.code(), "conflict");
+        assert_eq!(err.code(), "conflict_plugin_installed");
     }
 
     /// A home left behind by an install that did not finish (no manifest) is not an install: the retry
@@ -573,7 +648,7 @@ mod tests {
         .unwrap();
 
         let err = refuse_an_overwrite(&paths, "worktree").unwrap_err();
-        assert_eq!(err.code(), "conflict");
+        assert_eq!(err.code(), "conflict_plugin_install_broken");
         assert!(format!("{err:?}").contains("uninstall"), "the way out is named: {err:?}");
     }
 

@@ -139,7 +139,7 @@ steps:
     op: catalog-add
     with:
       target: in-house
-      refused: invalid_value
+      refused: invalid_catalog_key_rotated
 
   # And the refusal left the registration alone. Being turned away is not being unregistered — the
   # catalog stays in the view, still trusted on the key it was consented to.
@@ -185,7 +185,7 @@ steps:
     op: catalog-add
     with:
       target: in-house
-      refused: invalid_value
+      refused: invalid_catalog_key_rotated
 
   # A catalog that publishes no key is not an error, it is a lesser offer: nothing is being trusted,
   # so nothing is asked, and it joins the view with nothing pinned on it. What it costs is installing

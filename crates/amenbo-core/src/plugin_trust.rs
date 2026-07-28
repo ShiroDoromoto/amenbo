@@ -33,7 +33,7 @@
 //! **Not the CLI, not the GUI.** Those faces (`AMB-T-1979` / `AMB-T-1985`) call in here after they have the
 //! manifest and the resolved values; the state model and its gate are here so both drive them the same way.
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::plugin_manifest::{ConfigField, Scope};
 use crate::store::Store;
 
@@ -82,8 +82,11 @@ pub fn gate_for(declared: Scope, project: Option<i64>) -> Result<Gate> {
     match declared {
         Scope::Machine => Ok(Gate::Machine),
         Scope::Project => project.map(Gate::Project).ok_or_else(|| {
-            Error::invalid(
-                "this plugin is enabled per project, and no project is in context — run it in a bound folder",
+            Error::Invalid(
+                Msg::new(
+                    "this plugin is enabled per project, and no project is in context — run it in a bound folder",
+                )
+                .coded(ErrorCode::InvalidPluginProjectRequired),
             )
         }),
     }
@@ -193,11 +196,14 @@ fn refuse_missing_required(
     if missing.is_empty() {
         return Ok(());
     }
-    Err(Error::invalid(
-        format!(
+    Err(Error::Invalid(
+        Msg::new(format!(
             "plugin '{plugin}' cannot be enabled: required setting(s) not provided: {}",
             missing.join(", ")
-        ),
+        ))
+        .coded(ErrorCode::InvalidPluginSettingsRequired)
+        .with("name", plugin)
+        .with("settings", missing.join(", ")),
     ))
 }
 

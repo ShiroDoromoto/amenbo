@@ -1,0 +1,166 @@
+# Calling a plugin, using what it hands back, and finding out afterwards whether it did anything.
+#
+# The contract on the way out is that **stdout belongs to the plugin**: the return value is meant to
+# be consumed — `eval "$(amenbo plugin run worktree start 42)"` — so amenbo prints no courtesy line
+# into it, and its own voice, plus the plugin's diagnostics, go to stderr beside it. A single line of
+# amenbo's leaking into that stream corrupts the value at the caller, and nothing but a call to the
+# shipped binary can show whether the two streams really came apart.
+#
+# The reading on the way back is the execution log, and it exists because a hook is fire-and-forget:
+# nobody waits on it, and nothing fails when it fails, so silence has no other explanation anywhere in
+# amenbo. The log is machine-local and deliberately kept out of the shared timeline — which means a
+# release that shipped it broken would look exactly like a release that shipped it working. The same
+# command answers for what has *not* run: what is queued for each plugin, and whether anything is
+# working it. That half has no other reading anywhere — what never ran wrote no line.
+#
+# The subject is the official `worktree` plugin's `start` / `finish`, which return the `cd` into a
+# checkout of the task's own. It resolves everything from the repository it is called in, which is the
+# folder amenbo is bound to — a real one for a real plugin.
+#
+# A call that fails is not driven here: a plugin exiting non-zero is a failed call, and the driver
+# reads that as the run erroring out rather than as an assert coming back false. Asserting a refusal
+# is its own piece of work.
+id: call-a-plugin-and-see-what-it-did
+title: An enabled plugin is called with a task's id, what it prints comes back as the value, every call lands in the execution log, and removing the plugin takes its rows with it
+description: >
+  Install and enable the official `worktree` plugin on a machine where it has never run, and read the
+  log say so — "it never ran" and "it ran and said nothing" are different diagnoses. Call its command
+  face for a task this scenario just registered, read the returned value for the shape the contract
+  promises — the way into the checkout — and read the call back off the log as having ended cleanly.
+  Take the checkout away again, and read that call back too. Then leave the plugin answering slowly,
+  fire an event it subscribes to, and read the backlog: one event waiting, with a runner on it.
+  Finally remove the plugin and confirm the log no longer answers for it.
+steps_cli:
+  # The plugin resolves everything it does from the repository it is called in, so there has to be
+  # one — the same shape the folder a person binds amenbo to has.
+  - type: action
+    domain: repo
+    op: git-init
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # The gate has to be open before a command face answers at all: an explicit call is still a call,
+  # so an installed-but-shut plugin refuses rather than running.
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  # Installed and enabled, but nothing has been asked of it yet. An empty log is a real answer.
+  - type: assert
+    domain: plugin
+    op: ran
+    with:
+      name: worktree
+      present: false
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — given a checkout of its own by a plugin
+    as: seed
+
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: start
+      task: seed
+
+  # What came back is the plugin's own stdout: one `cd` line into the checkout it made. amenbo's
+  # account of what happened rode the other stream, and is not in here.
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: "cd "
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: "-worktrees/"
+
+  - type: assert
+    domain: plugin
+    op: ran
+    with:
+      name: worktree
+      outcome: ok
+
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: finish
+      task: seed
+
+  - type: assert
+    domain: plugin
+    op: ran
+    with:
+      name: worktree
+      outcome: ok
+
+  # The command answers for delivery as well as for runs, and a plugin that has kept up owes nothing:
+  # an empty backlog is what a working delivery layer looks like, and it is the reading every line
+  # below is a departure from.
+  - type: assert
+    domain: plugin
+    op: waiting
+    with:
+      name: worktree
+      count: 0
+
+  # Now the other half — what has not run. A row leaves a queue the moment its plugin replies, so the
+  # only backlog there is is the one a plugin is still working, and the driver leaves this one taking
+  # its time. Ten seconds is the window the two asserts below read in, not a wait the run makes.
+  - type: action
+    domain: plugin
+    op: slow-program
+    with:
+      name: worktree
+      seconds: 10
+
+  # A status change is an event this plugin subscribes to, so this queues one for it. Nothing here
+  # waits on the plugin: the runner is a process of its own and the command returns to us at once.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: in_progress
+
+  # One event owed, and a runner holding the queue — which is the ordinary "it is taking a while", and
+  # the reading a person opens this command for. The count alone would not say that much: the same one
+  # event with nothing running it is a queue nobody is on, a different diagnosis entirely.
+  - type: assert
+    domain: plugin
+    op: waiting
+    with:
+      name: worktree
+      count: 1
+      running: true
+
+  # And the log is part of what a removal clears. A plugin that is gone but still shows runs would
+  # read as one that is still there.
+  - type: action
+    domain: plugin
+    op: uninstall
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: ran
+    with:
+      name: worktree
+      present: false

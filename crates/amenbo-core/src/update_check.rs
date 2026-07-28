@@ -13,6 +13,12 @@
 //! and swapping the binary in place — is [`crate::self_update`]'s job (the standalone CLI), which
 //! reuses the [`LatestRelease`] fetched here.
 //!
+//! One channel is outside all of that: a **development build never queries at all**
+//! ([`is_disabled`]). Its version is normally *behind* what production's manifest names, so every
+//! answer this module could hand it is either an offer to install production over itself or a claim
+//! to be current that it cannot make. Withholding the material closes both, for every caller, with
+//! no traffic.
+//!
 //! The module does nothing but query and fetch. Comparing the fetched version against the running
 //! binary to derive `update_available` is the caller's job (it is folded into
 //! [`crate::store::VersionStatus`]).
@@ -156,17 +162,24 @@ struct CacheEnvelope {
     release: LatestRelease,
 }
 
-/// Whether the query is **disabled**: either the config is off (`enabled = false`), or the
-/// `AMENBO_UPDATE_CHECK` env var asks for it to be off. The env var wins over the config — it is the
-/// hard kill switch. Kept pure by taking the env value as an argument; [`is_disabled`] above is what
-/// reads the environment.
-fn disabled(enabled: bool, env_off: bool) -> bool {
-    !enabled || env_off
+/// Whether the query is **disabled**: the build is on the development channel, or the config is off
+/// (`enabled = false`), or the `AMENBO_UPDATE_CHECK` env var asks for it to be off. The env var wins
+/// over the config — it is the hard kill switch — and the channel wins over both, being a fact of
+/// the build rather than a preference: there is no answer a dev build could act on (see the module
+/// header). Kept pure by taking all three as arguments; [`is_disabled`] below is what reads the
+/// environment and the channel.
+fn disabled(enabled: bool, env_off: bool, dev_channel: bool) -> bool {
+    dev_channel || !enabled || env_off
 }
 
-/// Whether the query is disabled, effectively — the config toggle and the env override combined.
+/// Whether the query is disabled, effectively — the channel, the config toggle and the env override
+/// combined.
 pub fn is_disabled(enabled: bool) -> bool {
-    disabled(enabled, crate::env::update_check_disabled())
+    disabled(
+        enabled,
+        crate::env::update_check_disabled(),
+        crate::config::Paths::is_dev_channel(),
+    )
 }
 
 /// Whether a cache entry is fresh: it is, while less than [`CACHE_TTL_SECS`] has passed since the
@@ -226,7 +239,8 @@ fn fetch(url: &str) -> Option<LatestRelease> {
 /// Return the newest published release. **On by default; honours the config's disable knob; timed
 /// out; silent on failure; caches its result.**
 ///
-/// - `enabled` is [`crate::config::Config::update_check`]. Disabled means `None` immediately, with
+/// - `enabled` is [`crate::config::Config::update_check`]. Disabled — by that toggle, by the env
+///   kill switch, or by being a development build ([`is_disabled`]) — means `None` immediately, with
 ///   no traffic.
 /// - A fresh cache entry (within the TTL) is returned as-is, again with no traffic.
 /// - If the entry is stale or absent, we query upstream exactly once, with a timeout, and update the
@@ -425,11 +439,15 @@ mod tests {
     }
 
     #[test]
-    fn disabled_by_config_or_env() {
-        assert!(disabled(false, false), "config off means disabled");
-        assert!(disabled(true, true), "the env override wins over config, so disabled");
-        assert!(disabled(false, true), "both off, disabled");
-        assert!(!disabled(true, false), "config on with no env override means enabled");
+    fn disabled_by_channel_config_or_env() {
+        assert!(disabled(false, false, false), "config off means disabled");
+        assert!(disabled(true, true, false), "the env override wins over config, so disabled");
+        assert!(disabled(false, true, false), "both off, disabled");
+        assert!(!disabled(true, false, false), "config on with no env override means enabled");
+        // The channel is a fact of the build, so it outranks every preference: a dev build is
+        // disabled however the toggle and the env var are set.
+        assert!(disabled(true, false, true), "a dev build is disabled with everything else on");
+        assert!(disabled(false, true, true), "a dev build stays disabled when the rest is off too");
     }
 
     #[test]

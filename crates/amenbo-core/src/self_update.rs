@@ -9,6 +9,13 @@
 //! beside the GUI `amenbo-app.exe` in the NSIS `$INSTDIR` on Windows — and [`is_gui_managed`] detects
 //! either shape so this module refuses, never corrupting a signed bundle or an installer-managed copy.
 //!
+//! A **development build** is outside this entirely: [`apply`] refuses it
+//! ([`SelfUpdateError::DevChannel`]), because the archive it would fetch is the shipped CLI, and
+//! installing that over `amenbo-dev` leaves a binary that reads production's app-data under the dev
+//! name. [`rollback`] is deliberately *not* gated on the channel — restoring the copy an earlier
+//! apply retained is the offline way back **out** of that swap, and refusing it would take the
+//! recovery away from the only build that could need it.
+//!
 //! The archive is a gzip'd tar on mac/linux and a zip on Windows; [`extract_amenbo_binary`] reads the
 //! `amenbo` / `amenbo.exe` entry out of whichever this platform ships.
 //!
@@ -26,13 +33,19 @@ use std::path::{Path, PathBuf};
 /// is generous enough to never clip a real release yet bounds a misbehaving endpoint.
 const MAX_ARCHIVE_BYTES: u64 = 256 * 1024 * 1024;
 
-/// The reason a self-update did not complete. `UpToDate` and `GuiManaged` are **not failures** — they
-/// are the two "correctly declined" outcomes the CLI reports plainly; the rest are genuine errors.
+/// The reason a self-update did not complete. `UpToDate`, `GuiManaged` and `DevChannel` are **not
+/// failures** — they are the three "correctly declined" outcomes the CLI reports plainly; the rest
+/// are genuine errors.
 #[derive(Debug, thiserror::Error)]
 pub enum SelfUpdateError {
     /// The running binary is already at or ahead of the latest published version — nothing to do.
     #[error("already up to date (running {running})")]
     UpToDate { running: String },
+    /// The running binary is a **development build**. The release it would fetch is production's, so
+    /// applying it would replace the binary under test with the shipped one — a dev build moves
+    /// forward by being rebuilt, never by updating.
+    #[error("{channel} is a development build; it does not update itself")]
+    DevChannel { channel: String },
     /// The running binary lives inside a desktop `.app` bundle (a GUI-managed shim). Replacing it here
     /// would corrupt the bundle; the desktop updater owns replacement instead.
     #[error("this amenbo is managed by the desktop app; update it from there")]
@@ -175,16 +188,27 @@ fn update_named(url: &str) -> String {
 }
 
 /// Download the CLI archive, verify it is newer, extract the `amenbo` binary, and swap it into the
-/// running executable's place. Returns [`Applied`] on success; the caller reports the two declined
-/// outcomes ([`SelfUpdateError::UpToDate`], [`SelfUpdateError::GuiManaged`]) as plain messages and the
-/// rest as errors. Touches no store — a CLI-only user updates without a binding.
+/// running executable's place. Returns [`Applied`] on success; the caller reports the three declined
+/// outcomes ([`SelfUpdateError::DevChannel`], [`SelfUpdateError::UpToDate`],
+/// [`SelfUpdateError::GuiManaged`]) as plain messages and the rest as errors. Touches no store — a
+/// CLI-only user updates without a binding.
 ///
-/// The order matters: the cheap, offline guards (downgrade, GUI-managed, platform) run **before** any
-/// network I/O, so a no-op update stays silent and traffic-free.
+/// The order matters: the cheap, offline guards (channel, downgrade, GUI-managed, platform) run
+/// **before** any network I/O, so a no-op update stays silent and traffic-free.
 pub fn apply(latest: &LatestRelease) -> Result<Applied, SelfUpdateError> {
     let running = crate::agent::VERSION;
 
-    // Downgrade guard first — the whole point is monotonic versions, and it costs nothing.
+    // The channel before the versions: a development build is behind production as a matter of
+    // course, so "newer" here means production itself, and swapping it in would leave a binary that
+    // opens production's app-data under the dev build's name. Nothing further down can tell the two
+    // apart — the archive is the shipped one either way — so this is refused rather than compared.
+    if crate::config::Paths::is_dev_channel() {
+        return Err(SelfUpdateError::DevChannel {
+            channel: crate::config::Paths::APP_NAME.to_string(),
+        });
+    }
+
+    // Downgrade guard next — the whole point is monotonic versions, and it costs nothing.
     if !latest.is_newer_than(running) {
         return Err(SelfUpdateError::UpToDate { running: running.to_string() });
     }

@@ -120,8 +120,16 @@ pub fn run() {
       // GUI self-update (desktop only; the plugin has no mobile target). It only exposes check /
       // download+install to the front end — the apply is a user action from the update banner, and
       // minisign verification is mandatory (the pubkey lives in tauri.conf.json's `plugins.updater`).
+      //
+      // A development build does not get it. The endpoint compiled in is production's manifest, and
+      // a dev build is normally behind what that manifest names, so an apply would overwrite the
+      // bundle under test with the production one. Not registering the plugin is the half that fails
+      // closed no matter who asks: the front end is never offered the update either (`upstream_release`
+      // in commands.rs), and neither half depends on the other holding.
       #[cfg(desktop)]
-      app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+      if !amenbo_core::config::Paths::is_dev_channel() {
+        app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+      }
       #[cfg(target_os = "macos")]
       macos_notify::init(app.handle().clone());
       let handle = app.handle().clone();

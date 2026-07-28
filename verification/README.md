@@ -168,8 +168,8 @@ but a pid is what uiauto takes (`devtool/README.md`). Inside a task worktree the
 with no argument the command answers for the dev GUI that checkout launches.
 
 A screen line sometimes needs a world the app cannot be talked into from its own interface. The
-browsing view is one: `plugin-browse.yaml` reads the badge on a row a **registered** catalog served,
-and no such catalog exists to register. `devtool fixtures gui` stands one and registers it in the
+browsing view is one: `plugin-from-a-catalog.yaml` reads the badge on a row a **registered** catalog
+served, and no such catalog exists to register. `devtool fixtures gui` stands one and registers it in the
 store the app opens (`devtool/README.md`), and `--app` points that at the build under test — the
 overrides it uses are the product's own, so the build is not a different one for having been asked.
 
@@ -208,7 +208,8 @@ The moves themselves are written in the scenario, not in a note beside it. Getti
 to the next is an action step like any other (`folder open-existing-card`, `folder choose-project`),
 and it earns the two things a note never can: the screen it arrives at is shot, so the middle of the
 road is evidence rather than something taken on trust, and the assert after it cannot be reached by a
-hand tidying the screen while the run is held. `ways-in.yaml` is the road written that way.
+hand tidying the screen while the run is held. The screen roads are written that way: `link-a-folder`
+walks the arrival screen, the card, the picker and the board it lands on.
 
 Everything the wait prints — the step just captured, and the prompt — goes to stderr, so `--json`
 still leaves one machine-readable line on stdout. A driver that is not a person keeps its side open
@@ -217,7 +218,7 @@ through a pipe:
 ```sh
 cd verification
 mkfifo /tmp/go
-cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/ways-in.yaml \
+cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml \
   --app "amenbo (dev $ID)" --pid "$(devtool devgui pid "$ID")" --step --json < /tmp/go &
 exec 3>/tmp/go   # hold the writing side open — otherwise the first echo closes it, which is the end
                  # of input, and the run stops rather than carrying on to the next step

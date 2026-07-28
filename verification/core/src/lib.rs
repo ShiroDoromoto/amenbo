@@ -400,6 +400,11 @@ const REGISTRY: &[OpSpec] = &[
     // since neither alone can be required here.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-add", required: &[], refs: &["target"], strings: &["url"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-remove", required: &[], refs: &["target"], strings: &["url"], binds: false },
+    // Opening one row of the browsing view — the move between the list and the panel under it, which
+    // is a move only a screen has. It names the shelf as well as the plugin because a name is a
+    // catalog's to give and two of them may serve one: which row is opened is the whole question the
+    // panel after it answers.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "open-entry", required: &["name", "source"], refs: &[], strings: &["name", "source"], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },

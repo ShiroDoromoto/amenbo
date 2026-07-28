@@ -272,6 +272,24 @@ impl Instructor {
                 "In that card, choose \"{}\" among the projects this device holds.",
                 req(with, "project")?
             ),
+            // Two ops the CLI drives as one command apiece, and the screen as one form apiece. They
+            // are the domain's own ops and not moves invented for the screen: what a road on screen
+            // needs of its own is a card to open, never a project to raise.
+            (Domain::Project, "create") => format!(
+                "Take the way in that raises a project, name it \"{}\", choose a folder for it, and create it.",
+                req(with, "name")?
+            ),
+            // `dir` is a name and not a path here as it is everywhere else: which folder is linked is
+            // the run's to decide, and what the scenario writes down is what to call the one it picked.
+            (Domain::Folder, "bind") => format!(
+                "In the folder picker that opens, choose a folder for this project — the road calls it \"{}\" — and open it.",
+                req(with, "dir")?
+            ),
+            (Domain::Plugin, "open-entry") => format!(
+                "Open the row for \"{}\", the one served by the catalog \"{}\".",
+                req(with, "name")?,
+                req(with, "source")?
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -298,15 +316,15 @@ impl Instructor {
                 let source = req(with, "source")?;
                 match official(with) {
                     true => format!(
-                        "Open the plugin market and confirm the row for \"{name}\", off the catalog \"{source}\", wears the official badge."
+                        "Confirm the market's row for \"{name}\", off the catalog \"{source}\", wears the official badge."
                     ),
                     false => format!(
-                        "Open the plugin market and confirm the row for \"{name}\" is badged \"{source}\" — the catalog that served it — and not as official."
+                        "Confirm the market's row for \"{name}\" is badged \"{source}\" — the catalog that served it — and not as official."
                     ),
                 }
             }
             (Domain::Plugin, "detail") => format!(
-                "Open the plugin market, open the row for \"{}\" off the catalog \"{}\", and confirm what it says installing it would mean names \"{}\".",
+                "Confirm the panel open under \"{}\" — the row the catalog \"{}\" served — says installing it would mean \"{}\".",
                 req(with, "name")?,
                 req(with, "source")?,
                 req(with, "declares")?
@@ -330,6 +348,14 @@ impl Instructor {
             _ => return Err(unmapped(domain, op)),
         })
     }
+}
+
+/// A scenario's screen road as the instructions it renders into — what [`walk`] derives step by
+/// step, without the shooting. A road nobody can render is a road nobody can walk, and that answer
+/// should not have to wait for a person to be standing in front of a screen.
+pub fn instructions(scenario: &Scenario) -> Result<Vec<String>, String> {
+    let mut instructor = Instructor::new();
+    scenario.steps(Driver::Gui).iter().map(|s| instructor.render(s)).collect()
 }
 
 fn unmapped(domain: Domain, op: &str) -> String {
@@ -685,13 +711,19 @@ steps_gui:
 
     /// The detail line: opening a row off a registered catalog fetches that catalog's own document,
     /// and what is sent to OCR is the declaration the step named — the author's words, so the reading
-    /// does not turn on which language the app is in.
+    /// does not turn on which language the app is in. Opening the row is the step between the two
+    /// readings, and it names the shelf as well as the plugin, since which row was opened is the
+    /// whole question the panel answers.
     #[test]
     fn a_detail_assert_expects_the_declaration_it_names() {
         let yaml = r#"
 id: x
 title: y
 steps_gui:
+  - type: action
+    domain: plugin
+    op: open-entry
+    with: { name: standup, source: In-house catalog }
   - type: assert
     domain: plugin
     op: detail
@@ -699,11 +731,37 @@ steps_gui:
 "#;
         let s = load(yaml);
         let mut ins = Instructor::new();
-        let line = ins.render(&s.steps(Driver::Gui)[0]).unwrap();
-        assert!(line.contains("\"standup\"") && line.contains("\"In-house catalog\""), "got: {line}");
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("Open the row") && lines[0].contains("\"In-house catalog\""), "got: {}", lines[0]);
+        assert!(lines[1].contains("\"standup\"") && lines[1].contains("\"In-house catalog\""), "got: {}", lines[1]);
 
-        let exp = ins.expectation(&s.steps(Driver::Gui)[0]).expect("a detail assert is OCR-judged");
+        let exp = ins.expectation(&s.steps(Driver::Gui)[1]).expect("a detail assert is OCR-judged");
         assert_eq!(exp, Expectation { text: "Channel webhook".to_string(), present: true });
+    }
+
+    /// Where the screen has a form for what the CLI does with a command, the road takes the domain's
+    /// own op and the harness renders it as that form. Nothing is invented for the screen here — what
+    /// a screen road needs of its own is a card to open, never a project to raise.
+    #[test]
+    fn the_screen_renders_a_domain_op_as_the_form_it_is_carried_out_on() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Seedbed }
+  - type: action
+    domain: folder
+    op: bind
+    with: { dir: greenhouse }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("\"Seedbed\"") && lines[0].contains("raises a project"), "got: {}", lines[0]);
+        assert!(lines[1].contains("\"greenhouse\"") && lines[1].contains("folder picker"), "got: {}", lines[1]);
     }
 
     /// The first loop: what OCR is sent looking for is the file name the handed-over request tells

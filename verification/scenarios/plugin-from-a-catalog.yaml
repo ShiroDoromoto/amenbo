@@ -1,0 +1,53 @@
+# What a plugin off a shelf of one's own is, read the way a reader reads it — the row, and then the
+# panel under it — before anything of it is installed.
+#
+# A catalog's own document carries an `official` flag per entry, and the badge is the strongest claim
+# a row can wear. It is not the entry's to make: a catalog anyone may register can put the flag on
+# everything it serves, so the merge clears it on everything but the official index's own. Nothing in
+# the CLI reads it back — `plugin catalog list` answers per catalog, `plugin list` per installed
+# manifest — so a merge that stopped clearing it would ship looking exactly like one that did.
+#
+# Opening the row is where the reach is decided. A catalog is served as two documents: the list every
+# row is drawn from, and one detail document per plugin, fetched only when someone opens it — from
+# whichever catalog served that row, and not the official index, where the name is not listed at all
+# and the panel would come up with the entry alone and nothing under it. The detail is where
+# installing stops being a name and a description: the events the plugin will be woken for, and the
+# settings it will ask for, in the author's own words. Nothing outside the official index is reviewed
+# by anybody, so those declarations are the whole of what a reader has to go on.
+#
+# Hence a road written for the screen alone. What it needs is a registered catalog whose entries claim
+# to be official, which the fake world serves and registers (`devtool fixtures gui`, and `--app`
+# points it at the build under test): both of its plugins claim the badge, so a merge that stopped
+# folding takes this shelf's name off both rows rather than one. Start the run on the market screen,
+# and drive it stepped (`--step`) — the panel opens between the two readings.
+id: plugin-from-a-catalog
+title: A plugin a registered catalog serves is badged with that catalog, and opens its detail from that catalog
+description: >
+  Look at the market with a catalog of one's own registered, then open one of its rows. The row says
+  where it came from — the name that catalog was given at registration — and not "official", which
+  the catalog's document claims for every entry on it and which no shelf outside the official index
+  can grant itself. What comes up under the row is that catalog's own detail document: the setting
+  the plugin will ask for, in the words its author wrote.
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: browsed
+    with:
+      name: standup
+      source: In-house catalog
+      official: false
+
+  - type: action
+    domain: plugin
+    op: open-entry
+    with:
+      name: standup
+      source: In-house catalog
+
+  - type: assert
+    domain: plugin
+    op: detail
+    with:
+      name: standup
+      source: In-house catalog
+      declares: Channel webhook

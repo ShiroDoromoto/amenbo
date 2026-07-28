@@ -62,8 +62,8 @@ const (
 // list already held; the scope line under it is a phrase of the interface and reads the same whatever
 // document was fetched. So with a bare document there is nothing on screen that says the panel opened
 // against *this* catalog rather than against nothing at all — which is exactly the reading
-// `verification/scenarios/plugin-detail.yaml` is written for. The setting's label is free text an
-// author wrote, so it is a word only this catalog can put there — and it deliberately says nothing
+// `verification/scenarios/plugin-from-a-catalog.yaml` is written for. The setting's label is free
+// text an author wrote, so it is a word only this catalog can put there — and it deliberately says nothing
 // the description above it already says, since a reading satisfied by the row's own line would pass
 // against a panel where the document never arrived.
 var registeredPlugins = []struct{ name, desc, category, event, askKey, askLabel string }{

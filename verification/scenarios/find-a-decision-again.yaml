@@ -1,7 +1,7 @@
 # Finding a decision again. A store's decisions are read by narrowing, never by dumping the corpus,
 # so the filter is not a convenience on top of the listing — it is how anyone reaches a decision they
 # did not just write. This line holds both arms a reader actually types: the keyword, and the status.
-id: decision-list
+id: find-a-decision-again
 title: A decision is found by keyword and by status, and the ones that do not match stay out
 description: >
   Record two decisions on different subjects and settle one of them, then ask for each by keyword and

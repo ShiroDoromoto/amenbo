@@ -64,9 +64,9 @@ knows the domain vocabulary, not the build under test.
 ```sh
 cd verification
 # drive a specific binary (e.g. the CLI extracted from a release .pkg):
-cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-assign.yaml --bin /path/to/amenbo
+cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/delegate-to-ai.yaml --bin /path/to/amenbo
 # or the `amenbo` on PATH (the installed CLI), with a machine-readable result:
-cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/task-assign.yaml --json
+cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/delegate-to-ai.yaml --json
 ```
 
 `--bin` (and `$AMENBO_BIN`) takes a relative path as well — `--bin ../target/debug/amenbo` to point
@@ -111,7 +111,7 @@ cd verification
 # every scenario under scenarios/ (the default), against a specific binary:
 cargo run -p amenbo-verify-cli --bin verify-all -- --bin /path/to/amenbo
 # a chosen subset (files and/or directories), with a machine-readable aggregate:
-cargo run -p amenbo-verify-cli --bin verify-all -- scenarios/task-add.yaml scenarios/task-assign.yaml --json
+cargo run -p amenbo-verify-cli --bin verify-all -- scenarios/shape-a-task.yaml scenarios/delegate-to-ai.yaml --json
 ```
 
 A scenario with no `steps_cli` road is **skipped**: printed as skipped, counted apart, and left
@@ -144,20 +144,20 @@ The Linux container carries no toolchain, so it can't read the scenario itself. 
 (`make verify-gui-linux`) resolves the scenario through the `emit` bin and passes the card — the
 `listed`/present title — into the container as `AMENBO_E2E_CARD`. tesseract reads the words but not
 every glyph, so that path matches the title on its alphanumerics, not verbatim. `SCENARIO` selects
-which scenario drives it (default `scenarios/task-assign.yaml`).
+which scenario drives it (default `scenarios/delegate-to-ai.yaml`).
 
 ```sh
 cd verification
 # the crate's JSON face over the validated model — a shell consumer reads it through jq,
 # never by reparsing YAML:
-cargo run -p amenbo-scenario --bin emit -- scenarios/task-assign.yaml
+cargo run -p amenbo-scenario --bin emit -- scenarios/delegate-to-ai.yaml
 ```
 
 ```sh
 cd verification
 ID=2147   # the task whose own dev GUI you built and opened
 # front the dev GUI, resolve its window via uiauto (by pid), and shoot one shot per step:
-cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/task-assign.yaml \
+cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/delegate-to-ai.yaml \
   --app "amenbo (dev $ID)" --pid "$(devtool devgui pid "$ID")"
 ```
 
@@ -295,8 +295,8 @@ reference out of every `.yaml`, and the lint has nothing to find unless a file r
 so the file carries it and the scenario names the file.
 
 ```yaml
-id: task-assign
-title: A task handed to me-ai is stamped as the AI's and surfaces in the me-ai todo listing
+id: delegate-to-ai
+title: Work handed to me-ai reaches the next session's mailbox and is held by one session alone
 steps_cli:
   - { type: action, domain: task, op: create, with: { title: SEED }, as: seed }
   - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
@@ -388,7 +388,7 @@ set:
 ```sh
 cd verification && cargo run -p amenbo-scenario --bin lint
 # or against specific files:
-cargo run -p amenbo-scenario --bin lint -- scenarios/task-assign.yaml
+cargo run -p amenbo-scenario --bin lint -- scenarios/delegate-to-ai.yaml
 ```
 
 Non-zero exit on any parse or validation failure, so it drops into a make target or CI.

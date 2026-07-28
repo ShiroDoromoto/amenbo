@@ -6,7 +6,7 @@
 # its own question. That promotion draws no link at all: nothing about the discussion it came out of
 # makes the new record depend on it, and the record it was raised from is left alone. So both sides
 # are walked here, and what separates them is what each one brings with it.
-id: decision-promote
+id: raise-a-decision-out-of-a-comment
 title: A comment promoted into a decision keeps its words, and brings the task it was said on — or, raised off another decision, nothing at all
 description: >
   Say something on a task's timeline, promote that comment into a decision, and read back the body

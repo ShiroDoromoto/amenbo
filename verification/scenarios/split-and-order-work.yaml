@@ -1,0 +1,187 @@
+# There are no subtasks: larger work is split into tasks and ordered with edges, and the edge has
+# teeth — while the blocker is open the dependent is not ready, it is gone from where fresh work is
+# taken, and the reserve that would start it early is turned away by name. This walks the edge both
+# ways, because an edge that cannot be taken back is a trap: the proof that it is gone is the blocker
+# reopening without the dependent noticing. And it walks the other terminal too — work decided
+# against has to release what was waiting on it exactly as finished work does, or the second half
+# stays stuck behind a decision already taken.
+id: split-and-order-work
+title: The half that comes second is held back until the first one ends, cannot be started early, and is released for good when the edge is dropped
+description: >
+  Register two tasks, make one wait on the other, and read the dependent's readiness as the blocker
+  is finished, the edge dropped and the blocker reopened. Readiness is derived, never stored, so what
+  is checked here is the derivation the shipped build performs, not a flag someone set — and the
+  reserve is named by number rather than picked out of a listing, since the guard sits in the write
+  path and filtering past it is not what keeps the work from being started early.
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the half that has to come first
+    as: blocker
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the half that waits
+    as: dependent
+
+  - type: action
+    domain: task
+    op: depend
+    with:
+      target: dependent
+      on: blocker
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dependent
+      field: ready
+      equals: false
+
+  # Not ready means out of reach, not merely labelled: it is gone from where fresh work is taken.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: dependent
+      present: false
+
+  # And naming it by number gets no further. Nobody holds this one — its own declared premise is
+  # unmet — so the guard that turns the reserve away is a different one from the double-work guard.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: dependent
+      status: in_progress
+      refused: not_ready
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dependent
+      field: status
+      equals: todo
+
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: blocker
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dependent
+      field: ready
+      equals: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: dependent
+      present: true
+
+  # The premise settled, the same reserve goes through. What held it was the declaration, not a state
+  # the task was left stuck in — a guard that refused afterwards would strand the work.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: dependent
+      status: in_progress
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dependent
+      field: status
+      equals: in_progress
+
+  - type: action
+    domain: task
+    op: undepend
+    with:
+      target: dependent
+      on: blocker
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dependent
+      field: blocked_by
+      equals: []
+
+  # The edge is gone, not just satisfied: reopening the blocker leaves the dependent ready. Were the
+  # undepend a no-op, this is the step that would say so.
+  - type: action
+    domain: task
+    op: reopen
+    with:
+      target: blocker
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dependent
+      field: ready
+      equals: true
+
+  # The other terminal on the far side of an edge. A blocker that is dropped rather than carried out
+  # is just as settled, and the work behind it has to move.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the half that was dropped
+    as: dropped
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — waiting on the one that was dropped
+    as: waiting
+
+  - type: action
+    domain: task
+    op: depend
+    with:
+      target: waiting
+      on: dropped
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "ready:yes"
+      target: waiting
+      present: false
+
+  - type: action
+    domain: task
+    op: reject
+    with:
+      target: dropped
+      reason: SCENARIO — decided against, and what waited on it moves anyway
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "ready:yes"
+      target: waiting
+      present: true

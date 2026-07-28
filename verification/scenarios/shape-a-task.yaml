@@ -1,21 +1,33 @@
-# Everything a task carries besides its state: what it is called, what it says, when it is due, when
-# it may start, and how it ranks. Two of those are not decoration — a start day still ahead holds the
-# task unready, and priority is what the mailbox sorts on — so this reads each field back off the
-# store rather than trusting the write to have exited zero.
-id: task-update
-title: A task's fields are set, read back, and taken away again
+# The road from "there is something to do" to a task that says what it is. Registering it takes
+# nothing but a title, and the state it lands in is what every later line builds on; everything else
+# — what it says, when it is due, when it may start, how it ranks — is filled in afterwards, and can
+# be taken away again. Two of those fields are not decoration: a start day still ahead holds the task
+# unready, and priority is what the mailbox sorts on. So each one is read back off the store rather
+# than trusted to a write that exited zero.
+id: shape-a-task
+title: A task registered with nothing but a title starts todo, is filled in field by field, and can be emptied again
 description: >
-  Set title, notes, due date and priority on a registered task and read each one back; declare a
-  start day still ahead and watch readiness go with it; then clear the start day and the priority
-  and read the absence back. Clearing is its own command, and a field that will not clear is a field
-  the user cannot take back.
+  Register a task with only a title and read the state it starts in. Set title, notes, due date and
+  priority, and read each one back — off the task's own page, and through the listing that filters on
+  them. Declare a start day still ahead and watch readiness go with it. Then clear the start day and
+  the priority and read the absence back: clearing is its own command, and a field that will not
+  clear is a field the user cannot take back.
 steps_cli:
+  # Nothing but a title, and it is already a task in a state: todo, with nothing else said.
   - type: action
     domain: task
     op: create
     with:
-      title: SCENARIO SEED — before editing
+      title: SCENARIO SEED — freshly registered
     as: seed
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo
 
   - type: action
     domain: task

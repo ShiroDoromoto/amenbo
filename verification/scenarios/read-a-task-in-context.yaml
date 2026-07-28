@@ -1,7 +1,7 @@
 # A task's own page is where its context is read: not just its fields, but what it waits on, what
 # waits on it, what has been said about it, and the decision it rests on. Those four come from four
 # different tables, and the page is the one place they have to arrive together.
-id: task-show
+id: read-a-task-in-context
 title: A task's page carries what it waits on, what waits on it, what was said, and what it rests on
 description: >
   Build a small neighbourhood around one task — a blocker, a comment, a linked decision — and read

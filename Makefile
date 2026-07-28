@@ -319,7 +319,7 @@ dist-gui-linux:
 ## The scenario that drives verify-gui-linux. The check reads its `steps_gui` road — the screen is
 ## what it judges — and that road's listed/present title is the card it writes and OCRs back;
 ## override to point the Linux check at another scenario.
-SCENARIO ?= verification/scenarios/task-assign.yaml
+SCENARIO ?= verification/scenarios/delegate-to-ai.yaml
 
 ## Exercise "another process writes → the screen updates" on a real Linux GUI app. Put the AppImage
 ## that dist-gui-linux built into a container with Xvfb and launch it, write via the CLI, and take

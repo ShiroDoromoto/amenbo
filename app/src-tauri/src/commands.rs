@@ -1070,6 +1070,12 @@ fn store_file() -> Option<std::path::PathBuf> {
     amenbo_core::config::Paths::resolve().ok().map(|p| p.store_file)
 }
 
+/// The config file (`config.json`), which sits in the same directory as the store and so is already
+/// covered by the watcher. It is the signature's third leg — see [`store_signature_string`].
+fn config_file() -> Option<std::path::PathBuf> {
+    amenbo_core::config::Paths::resolve().ok().map(|p| p.config_file)
+}
+
 /// A file's identity (mtime, size). **Not for detecting changes** — its only job is to tell whether
 /// the file itself was swapped out from under us (see [`store_signature_string`] below).
 fn file_identity(p: &std::path::Path) -> (u128, u64) {
@@ -1103,8 +1109,9 @@ fn watch() -> &'static std::sync::Mutex<Watch> {
     })
 }
 
-/// The store's change signature, on two legs: **`PRAGMA data_version` plus the identity of the main
-/// file**. `data_version` is the value SQLite guarantees will tell you that **some connection has
+/// The store's change signature, on three legs: **`PRAGMA data_version`, the identity of the main
+/// file, and the identity of `config.json`**. `data_version` is the value SQLite guarantees will
+/// tell you that **some connection has
 /// committed**; in WAL mode an external writer's commit lands only in `-wal` and never moves the
 /// main file's mtime, so guessing from mtime/size would miss the arrival entirely (system events
 /// number themselves in the same transaction — a DB commit — so there is no need to stat the ledger
@@ -1115,6 +1122,14 @@ fn watch() -> &'static std::sync::Mutex<Watch> {
 /// the connection we are holding would go on reading a dead inode where nobody will ever commit
 /// again, so when mtime/size moves we reopen it. That degrades cleanly into "the whole file changed
 /// → gap → refetch everything".
+///
+/// The third leg is `config.json`, which is not in the database at all: it is written straight to
+/// disk (`Store::save_config`) and so moves neither `data_version` nor the store file. It needs a leg
+/// of its own because the watcher already sees it — `config.json` shares the store's directory, so
+/// the kernel wakes us for it, and this gate is the only thing that can tell that wake apart from a
+/// spurious one. Without the leg, a language, a theme or a default view set from the CLI — the AI's
+/// ordinary route, run beside a GUI somebody has open — would reach the screen only at the next
+/// restart, and not even on focus return, since the focus catch-up asks this same question.
 fn store_signature_string() -> String {
     let Some(path) = store_file() else { return String::new() };
     let Ok(mut w) = watch().lock() else { return String::new() };
@@ -1130,7 +1145,8 @@ fn store_signature_string() -> String {
         .as_ref()
         .and_then(|s| amenbo_core::store_engine::read::data_version(s.read_model().conn()).ok())
         .unwrap_or(0);
-    format!("{}:{}:{}", file.0, file.1, version)
+    let config = config_file().map(|p| file_identity(&p)).unwrap_or((0, 0));
+    format!("{}:{}:{}:{}:{}", file.0, file.1, version, config.0, config.1)
 }
 
 /// The signature (`store_signature_string`) the GUI uses to filter out the `store-changed` events
@@ -1843,9 +1859,10 @@ pub fn mailbox_triggered_at(task_ids: Vec<i64>) -> Result<Vec<(i64, String)>, Cm
     Ok(out)
 }
 
-/// Tell the front end, via `store-changed`, that the store file (`store.sqlite` and its WAL sidecar
-/// `-wal`) has moved — this is how writes from another process (the AI, the CLI, another session)
-/// reach the GUI. **Waking up is left to the kernel**: the OS-specific watching and coalescing live
+/// Tell the front end, via `store-changed`, that the app's data on disk (`store.sqlite` and its WAL
+/// sidecar `-wal`, plus the `config.json` beside them) has moved — this is how writes from another
+/// process (the AI, the CLI, another session) reach the GUI.
+/// **Waking up is left to the kernel**: the OS-specific watching and coalescing live
 /// in [`crate::store_watch`], and all that happens here is "once woken, check whether it really
 /// changed, then emit", with `store_signature_string` answering from `PRAGMA data_version` plus the
 /// file's identity (file watching also fires on things that mean nothing to us, such as SHM updates
@@ -5687,6 +5704,35 @@ mod tests {
         assert_ne!(before, store_signature_string(), "an external writer's commit moves the signature");
 
         assert!(!store_signature_string().contains('|'), "does not mix in the `|` separator");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// `config.json` is written straight to disk, never through a write transaction, so it moves
+    /// neither `data_version` nor the store file. The signature has to carry it on a leg of its own:
+    /// the watcher is woken for the file already (it shares the store's directory), and with nothing
+    /// in the signature to show for it that wake is dropped as spurious — which is a language set
+    /// from the CLI sitting unread in a GUI somebody has open, until the next restart.
+    #[test]
+    fn store_signature_moves_when_the_config_file_is_written_from_outside() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("config-sig");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        Store::open().unwrap();
+        let before = store_signature_string();
+        assert!(!before.is_empty(), "a signature is produced when a store exists");
+
+        let paths = amenbo_core::config::Paths::resolve().unwrap();
+        let mut config = amenbo_core::config::Config::load(&paths.config_file);
+        config.set("language", "de").unwrap();
+        config.save(&paths.config_file).unwrap();
+
+        assert_ne!(
+            before,
+            store_signature_string(),
+            "a config written outside the database moves the signature"
+        );
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

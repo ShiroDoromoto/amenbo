@@ -148,7 +148,8 @@ export async function drainChanges(): Promise<DrainedChanges> {
     for (const s of folded.scopes) scopes.add(s);
     if (!res.more) {
       cursor = at;
-      // Not a single row, yet the store changed: a write that never reaches the feed (a whole-file swap).
+      // Not a single row, yet the signature moved: a write that never reaches the feed — a whole-file
+      // swap, or config.json, which is not in the database at all. Both want the full re-read a gap asks for.
       return scopes.size === 0 ? GAP() : { scopes, gap: false };
     }
   }

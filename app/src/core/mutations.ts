@@ -846,10 +846,11 @@ export async function fileToAvatarDataUrl(file: File, size = 96): Promise<string
 }
 
 /**
- * Change the user's language (`config.language`) after the fact. `config.json` lives outside the store,
- * so watch_store never sees the write; instead the `loadSnapshot` that follows the ack re-reads the
- * snapshot's language and re-renders i18n **without a restart**. Outside Tauri (browser) it just swaps
- * the cached language.
+ * Change the user's language (`config.language`) after the fact. What re-renders i18n **without a
+ * restart** is the `loadSnapshot` that follows the ack, which re-reads the snapshot's language — and
+ * because that load also records the store signature, the `store-changed` our own write now raises
+ * (config.json is part of that signature) is filtered out as ours rather than costing a second
+ * re-read. Outside Tauri (browser) it just swaps the cached language.
  */
 export async function setLanguage(language: string): Promise<void> {
   if (inTauri()) return invokeAck("config_set_language", { language });

@@ -13,6 +13,7 @@ import {
   agoLabel, dueLabel, formatDay, formatDayTime, formatNumber, monthLabel, weekdayLabels,
 } from "./format";
 import { tf, tn } from "./index";
+import { de } from "./locales/de";
 
 const NOW = new Date("2026-06-21T12:00:00Z").getTime();
 const ago = (secs: number) => new Date(NOW - secs * 1000).toISOString();
@@ -92,12 +93,21 @@ describe("a quantity", () => {
   // Every number a sentence interpolates is a quantity, so the one place they all pass through does
   // this — no caller has to remember to.
   it("is formatted on its way into a sentence", () => {
-    // German has no dictionary in this build, so the sentence itself falls back to English — and the
-    // number is still German. The two are separate answers: the words come from the language, the
-    // digits from the locale.
+    // The words come from the language and the digits from the locale, and they are separate
+    // answers — so the German number survives a sentence German has no translation for. The two
+    // keys are taken out of the German dictionary to make that state, since the language is
+    // translated in full.
     snap.language = "de";
-    expect(tf("cal.more", { n: 1234 })).toBe("+1.234 more");
-    expect(tn("act.nTasks", 1234)).toBe("1.234 tasks");
+    const held = { more: de.ui["cal.more"], tasks: de.ui["act.nTasks.other"] };
+    delete de.ui["cal.more"];
+    delete de.ui["act.nTasks.other"];
+    try {
+      expect(tf("cal.more", { n: 1234 })).toBe("+1.234 more");
+      expect(tn("act.nTasks", 1234)).toBe("1.234 tasks");
+    } finally {
+      de.ui["cal.more"] = held.more;
+      de.ui["act.nTasks.other"] = held.tasks;
+    }
   });
 });
 

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../snapshot", () => ({ getSnapshot: () => ({ language: null, dateLocale: null }) }));
 
 import { pluralCategory, tn } from "./index";
+import { ru } from "./locales/ru";
 
 describe("pluralCategory", () => {
   it("splits English at one and leaves Japanese undivided", () => {
@@ -32,10 +33,17 @@ describe("tn", () => {
     expect(tn("act.nTasks", 1, "ja")).toBe("タスク1件");
   });
 
-  // Russian has no dictionary in this build, so every arm falls to English — where `few` does not
-  // exist. The sentence still has to come out as a sentence.
+  // Three asks Russian for `few`. Take that arm away, as a dictionary that stopped after `one` and
+  // `other` would have it, and the count lands on the language's own `other` — a sentence that
+  // reads a little wrong, rather than a key at the reader.
   it("falls to the other arm when the one asked for is not written", () => {
-    expect(tn("act.nTasks", 3, "ru")).toBe("3 tasks");
+    const held = ru.ui["act.nTasks.few"];
+    delete ru.ui["act.nTasks.few"];
+    try {
+      expect(tn("act.nTasks", 3, "ru")).toBe(ru.ui["act.nTasks.other"]!.replace("{n}", "3"));
+    } finally {
+      ru.ui["act.nTasks.few"] = held;
+    }
   });
 
   // The one thing a fallback must never do is print the key at the reader.

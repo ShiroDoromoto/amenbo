@@ -466,11 +466,34 @@ fn version_unbound(flags: &Flags) -> Result<i32, CliError> {
 /// `upstream` is whatever startup already fetched (which does honour the config); reuse it when present,
 /// query otherwise (a warm cache means no traffic). Callable from outside a binding, so it never touches
 /// the store.
+///
+/// A development build answers differently, and before any of that: the installer this would open is
+/// production's, and the manifest it would name a version from is withheld from a dev build
+/// (`update_check::is_disabled`), which would leave it saying "no newer version detected" about a
+/// build that is normally behind. So it says what is true instead, opens nothing, and sends no traffic.
 fn update_cmd(
     flags: &Flags,
     upstream: Option<amenbo_core::update_check::LatestRelease>,
     print: bool,
 ) -> Result<i32, CliError> {
+    if Paths::is_dev_channel() {
+        if flags.json {
+            print_json(&json!({
+                "action": "update",
+                "current_version": agent::VERSION,
+                // Nothing was queried, so claim nothing about upstream — do not pad these.
+                "latest_version": serde_json::Value::Null,
+                "update_available": false,
+                "reason": "dev_channel",
+                "url": serde_json::Value::Null,
+                "opened": false,
+            }));
+        } else {
+            human(flags, format!("{} is a development build — it does not update itself.", Paths::command_name()));
+            human(flags, "Rebuild it from source (`make install-dev`) to move it forward.");
+        }
+        return Ok(0);
+    }
     let latest = match upstream {
         Some(rel) => Some(rel),
         None => amenbo_core::update_check::check(true),
@@ -510,9 +533,10 @@ fn update_cmd(
 /// `amenbo update --apply`: self-update the standalone CLI in place. Downloads this platform's CLI
 /// archive over TLS, checks version monotonicity, and swaps the running binary — no installer, no
 /// elevation. Reuses whatever startup already fetched (`upstream`), querying otherwise. Callable from
-/// outside a binding (a CLI-only user updates without a store), so it never touches the store. The two
-/// "correctly declined" outcomes (already current / GUI-managed) are reported as plain messages with a
-/// zero exit; genuine failures (download, extract, swap, no archive) are errors.
+/// outside a binding (a CLI-only user updates without a store), so it never touches the store. The
+/// three "correctly declined" outcomes (already current / GUI-managed / a development build) are
+/// reported as plain messages with a zero exit; genuine failures (download, extract, swap, no archive)
+/// are errors.
 fn self_update_cmd(
     flags: &Flags,
     upstream: Option<amenbo_core::update_check::LatestRelease>,
@@ -523,6 +547,27 @@ fn self_update_cmd(
         None => amenbo_core::update_check::check(true),
     };
     let Some(latest) = latest else {
+        // A development build has no manifest to read by design — it is withheld from the channel
+        // (`update_check::is_disabled`), not unreachable — so name the channel rather than the
+        // network. `self_update::apply` refuses it as well; this is the half that words it, and it
+        // sits ahead of the fetch so the reason reported is the real one.
+        if Paths::is_dev_channel() {
+            let declined = SelfUpdateError::DevChannel { channel: Paths::APP_NAME.to_string() };
+            if flags.json {
+                print_json(&json!({
+                    "action": "self_update",
+                    "updated": false,
+                    "reason": "dev_channel",
+                    "current_version": agent::VERSION,
+                    "latest_version": serde_json::Value::Null,
+                    "message": declined.to_string(),
+                }));
+            } else {
+                human(flags, declined.to_string());
+                human(flags, "Rebuild it from source (`make install-dev`) to move it forward.");
+            }
+            return Ok(0);
+        }
         return Err(CliError {
             code: "io_error",
             message: "could not reach the release manifest to check for an update".to_string(),
@@ -549,13 +594,15 @@ fn self_update_cmd(
             }
             Ok(0)
         }
-        // Not failures: already current, or a GUI-managed CLI that the desktop app updates. Report
-        // plainly with a zero exit.
-        Err(e @ (SelfUpdateError::UpToDate { .. } | SelfUpdateError::GuiManaged { .. })) => {
+        // Not failures: already current, a GUI-managed CLI that the desktop app updates, or a
+        // development build, which is refused whatever manifest it was handed. Report plainly with a
+        // zero exit.
+        Err(e @ (SelfUpdateError::UpToDate { .. } | SelfUpdateError::GuiManaged { .. } | SelfUpdateError::DevChannel { .. })) => {
             if flags.json {
                 let (updated, reason) = match &e {
                     SelfUpdateError::UpToDate { .. } => (false, "up_to_date"),
                     SelfUpdateError::GuiManaged { .. } => (false, "gui_managed"),
+                    SelfUpdateError::DevChannel { .. } => (false, "dev_channel"),
                     _ => unreachable!(),
                 };
                 print_json(&json!({

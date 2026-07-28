@@ -1287,12 +1287,12 @@ pub fn cli_command_name() -> &'static str {
 #[tauri::command]
 pub fn open_logs_dir() -> Result<(), CmdError> {
     let dir = crate::diag::logs_dir()
-        .ok_or_else(|| CmdError::from("ログの保存先を特定できません".to_string()))?;
+        .ok_or_else(|| CmdError::from("cannot work out where the logs are kept".to_string()))?;
     if !dir.is_dir() {
-        return Err(format!("ログはまだありません（{}）", dir.display()).into());
+        return Err(format!("there are no logs yet ({})", dir.display()).into());
     }
     os_open(&dir.to_string_lossy())
-        .map_err(|e| format!("'{}' を開けません: {e}", dir.display()).into())
+        .map_err(|e| format!("cannot open '{}': {e}", dir.display()).into())
 }
 
 /// The paged read behind history mode. Skips `offset` items newest-first and returns the next
@@ -1924,7 +1924,7 @@ pub fn task_add(
 pub fn task_status(id: i64, status: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         let new_status = TaskStatus::parse(&status)
-            .ok_or_else(|| format!("status '{status}' は不正です（todo / in_progress / done / blocked / rejected）"))?;
+            .ok_or_else(|| format!("status '{status}' is not one of todo / in_progress / done / blocked / rejected"))?;
         let current = store.task(id)?.map(|t| t.status);
         if current != Some(new_status) || new_status == TaskStatus::InProgress {
             let old = current.unwrap_or_default();
@@ -2133,7 +2133,7 @@ pub struct AttachmentDto {
 pub fn attachments_for(target_type: String, target_id: i64) -> Result<Vec<AttachmentDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("attachments_for");
     if amenbo_core::model::AttachmentTarget::parse(&target_type).is_none() {
-        return Err(format!("添付先種別 '{target_type}' は不正です（task / decision / task_comment / decision_comment）").into());
+        return Err(format!("attachment target '{target_type}' is not one of task / decision / task_comment / decision_comment").into());
     }
     let found = find_in_store(|store| {
         let read_model = store.read_model();
@@ -2175,12 +2175,12 @@ pub fn attachment_add(
     path: String,
 ) -> Result<WriteAck, CmdError> {
     let target = amenbo_core::model::AttachmentTarget::parse(&target_type)
-        .ok_or_else(|| format!("添付先種別 '{target_type}' は不正です（task / decision / task_comment / decision_comment）"))?;
+        .ok_or_else(|| format!("attachment target '{target_type}' is not one of task / decision / task_comment / decision_comment"))?;
     with_store_mut(|store| {
         let src = std::path::Path::new(&path);
-        let meta = std::fs::metadata(src).map_err(|e| format!("ファイル '{path}' を読めません: {e}"))?;
+        let meta = std::fs::metadata(src).map_err(|e| format!("cannot read the file '{path}': {e}"))?;
         if !meta.is_file() {
-            return Err(format!("'{path}' は通常ファイルではありません").into());
+            return Err(format!("'{path}' is not a regular file").into());
         }
         let filename = src
             .file_name()
@@ -2228,7 +2228,7 @@ pub fn attachment_add_bytes(
     bytes: Vec<u8>,
 ) -> Result<WriteAck, CmdError> {
     let target = amenbo_core::model::AttachmentTarget::parse(&target_type)
-        .ok_or_else(|| format!("添付先種別 '{target_type}' は不正です（task / decision / task_comment / decision_comment）"))?;
+        .ok_or_else(|| format!("attachment target '{target_type}' is not one of task / decision / task_comment / decision_comment"))?;
     let filename = if filename.trim().is_empty() { "attachment".to_string() } else { filename };
     with_store_mut(|store| {
         let mime = amenbo_core::blob::mime_from_filename(&filename);
@@ -2270,9 +2270,9 @@ pub fn attachment_add_bytes(
 pub fn attachment_open(url: String) -> Result<(), CmdError> {
     let url = url.trim().to_string();
     if !amenbo_core::ops::attachment::is_web_url(&url) {
-        return Err(format!("この URL は開けません（http/https/mailto のみ）: {url}").into());
+        return Err(format!("this URL cannot be opened (http, https and mailto only): {url}").into());
     }
-    os_open(&url).map_err(|e| format!("'{url}' を開けません: {e}").into())
+    os_open(&url).map_err(|e| format!("cannot open '{url}': {e}").into())
 }
 
 /// Write a blob attachment to the path the user picked — "download", and the only way to take an
@@ -2284,7 +2284,7 @@ pub fn attachment_open(url: String) -> Result<(), CmdError> {
 #[tauri::command]
 pub fn attachment_save(blob_hash: String, dest: String) -> Result<(), CmdError> {
     let bytes = blob_bytes(&blob_hash)?;
-    std::fs::write(&dest, &bytes).map_err(|e| format!("'{dest}' へ書けません: {e}").into())
+    std::fs::write(&dest, &bytes).map_err(|e| format!("cannot write to '{dest}': {e}").into())
 }
 
 /// A blob's contents, by hash, out of this device's blob store — the read both attachment faces
@@ -2294,12 +2294,7 @@ fn blob_bytes(hash: &str) -> Result<Vec<u8>, CmdError> {
     let paths = amenbo_core::config::Paths::resolve()?;
     let blobs =
         amenbo_core::blob::BlobStore::at(paths.base_dir.join(amenbo_core::blob::BLOBS_SUBDIR));
-    if !blobs.has(hash) {
-        return Err(format!("blob {hash} の実体がこの端末にありません").into());
-    }
-    blobs
-        .read(hash)
-        .map_err(|e| format!("blob {hash} を読めません: {e}").into())
+    blobs.read(hash).map_err(CmdError::from)
 }
 
 /// Open a path or URL in the OS's default application (macOS `open`, Windows `cmd /C start`,
@@ -2334,9 +2329,9 @@ fn os_open(target: &str) -> std::io::Result<()> {
 #[tauri::command]
 pub fn reveal_folder(path: String) -> Result<(), CmdError> {
     if !std::path::Path::new(&path).is_dir() {
-        return Err(format!("フォルダが見つかりません: {path}").into());
+        return Err(format!("folder not found: {path}").into());
     }
-    os_open(&path).map_err(|e| format!("'{path}' を開けません: {e}").into())
+    os_open(&path).map_err(|e| format!("cannot open '{path}': {e}").into())
 }
 
 /// One of the "what next" affordances on the project-created screen: open the bound folder in a
@@ -2346,7 +2341,7 @@ pub fn reveal_folder(path: String) -> Result<(), CmdError> {
 #[tauri::command]
 pub fn open_terminal(path: String) -> Result<(), CmdError> {
     if !std::path::Path::new(&path).is_dir() {
-        return Err(format!("フォルダが見つかりません: {path}").into());
+        return Err(format!("folder not found: {path}").into());
     }
     #[cfg(target_os = "macos")]
     let mut cmd = {
@@ -2368,7 +2363,7 @@ pub fn open_terminal(path: String) -> Result<(), CmdError> {
     };
     cmd.status()
         .map(|_| ())
-        .map_err(|e| format!("ターミナルを開けません: {e}").into())
+        .map_err(|e| format!("cannot open a terminal: {e}").into())
 }
 
 /// Delete an attachment for good. The blob's bytes stay until nothing references them and are
@@ -2381,7 +2376,7 @@ pub fn attachment_remove(
     target_id: i64,
 ) -> Result<WriteAck, CmdError> {
     let target = amenbo_core::model::AttachmentTarget::parse(&target_type)
-        .ok_or_else(|| format!("添付先種別 '{target_type}' は不正です（task / decision / task_comment / decision_comment）"))?;
+        .ok_or_else(|| format!("attachment target '{target_type}' is not one of task / decision / task_comment / decision_comment"))?;
     with_store_mut(|store| {
         store.remove_attachment(id)?;
         Ok(())
@@ -2580,12 +2575,12 @@ pub fn decision_set_link(decision_id: i64, task_id: i64, link: bool) -> Result<W
 pub fn decision_promote(comment_id: i64, title: String) -> Result<WriteAck, CmdError> {
     let (decision_id, task_id) = with_store_mut(|store| {
         let c = store.task_comment(comment_id)?
-            .ok_or_else(|| format!("コメント '{comment_id}' が見つかりません"))?;
+            .ok_or_else(|| format!("comment '{comment_id}' was not found"))?;
         let task_id = c.task_id;
         let body = c.text.clone();
         let project_id = store.task(task_id)?
             .and_then(|t| t.project_id)
-            .ok_or_else(|| "コメントのタスクにプロジェクトがありません".to_string())?;
+            .ok_or_else(|| "the comment's task belongs to no project".to_string())?;
         let d = store.add_decision(amenbo_core::ops::decision::NewDecision {
             title, body, project_id,
         })?;
@@ -2641,7 +2636,7 @@ pub fn task_set_priority(id: i64, priority: Option<String>) -> Result<WriteAck, 
                     "high" => Priority::High,
                     "medium" => Priority::Medium,
                     "low" => Priority::Low,
-                    other => return Err(format!("priority '{other}' は不正です（high / medium / low）").into()),
+                    other => return Err(format!("priority '{other}' is not one of high / medium / low").into()),
                 };
                 amenbo_core::ops::task::TaskPatch {
                     priority: Some(pri),
@@ -2858,7 +2853,7 @@ pub fn project_update(
         let view = match view {
             Some(v) => Some(
                 amenbo_core::model::View::parse(&v)
-                    .ok_or_else(|| format!("ビュー '{v}' は不正です（list / board / calendar / timeline）"))?,
+                    .ok_or_else(|| format!("view '{v}' is not one of list / board / calendar / timeline"))?,
             ),
             None => None,
         };
@@ -2888,12 +2883,12 @@ pub fn project_move(
         "top" => amenbo_core::ops::Position::Top,
         "bottom" => amenbo_core::ops::Position::Bottom,
         "before" => amenbo_core::ops::Position::Before(
-            anchor_id.ok_or("position 'before' は anchor_id（並べ替え先）が必要です")?,
+            anchor_id.ok_or("position 'before' needs an anchor_id to place against")?,
         ),
         "after" => amenbo_core::ops::Position::After(
-            anchor_id.ok_or("position 'after' は anchor_id（並べ替え先）が必要です")?,
+            anchor_id.ok_or("position 'after' needs an anchor_id to place against")?,
         ),
-        other => return Err(format!("position '{other}' は不正です（top / bottom / before / after）").into()),
+        other => return Err(format!("position '{other}' is not one of top / bottom / before / after").into()),
     };
     with_store_mut(|store| {
         store.project_move(
@@ -3025,7 +3020,7 @@ pub fn project_unbind_folder(dir: String) -> Result<WriteAck, CmdError> {
     let marker = target.join(".amenbo");
     if marker.is_file() {
         std::fs::remove_file(&marker)
-            .map_err(|e| CmdError::from(format!("{} を削除できません: {e}", marker.display())))?;
+            .map_err(|e| CmdError::from(format!("cannot remove {}: {e}", marker.display())))?;
     }
     let _ = amenbo_core::agents::remove_from_dir(&target);
     let store = open_store()?;
@@ -3255,7 +3250,7 @@ pub fn task_assign(id: i64, kind: Option<String>) -> Result<WriteAck, CmdError> 
         let kind_arg = match kind.as_deref() {
             Some("ai") => Some(ActorKind::Ai),
             Some("human") => Some(ActorKind::Human),
-            Some(other) => return Err(format!("facet '{other}' は不正です（human / ai）").into()),
+            Some(other) => return Err(format!("facet '{other}' is not one of human / ai").into()),
             None => None,
         };
         let noop = store.task(id)?.is_some_and(|t| t.assignee_kind == kind_arg);
@@ -3421,7 +3416,7 @@ pub fn set_facet_names(human_name: Option<String>, ai_name: Option<String>) -> R
     let human = human_name.as_deref().map(str::trim).filter(|s| !s.is_empty());
     let ai = ai_name.as_deref().map(str::trim).filter(|s| !s.is_empty());
     if human.is_none() && ai.is_none() {
-        return Err("表示名は空にできません。".into());
+        return Err("a display name cannot be empty".into());
     }
     write_facet_names(human, ai)?;
     Ok(WriteAck::new(&[]))
@@ -3488,7 +3483,7 @@ pub async fn migration_retry(app: tauri::AppHandle) -> Result<(), CmdError> {
         }
     })
     .await
-    .map_err(|e| CmdError::from(format!("移行のやり直しに失敗しました: {e}")))?;
+    .map_err(|e| CmdError::from(format!("retrying the migration did not finish: {e}")))?;
     Ok(())
 }
 
@@ -3612,7 +3607,7 @@ pub async fn run_backup(window: tauri::Window, path: String) -> Result<BackupRep
     tauri::async_runtime::spawn_blocking(move || -> Result<BackupReportDto, CmdError> {
         let Some(source) = amenbo_core::archive::enumerate_store() else {
             return Err(CmdError::from(
-                "この端末にバックアップ対象のストアがありません。".to_string(),
+                "this device holds no store to back up".to_string(),
             ));
         };
         let mut progress = progress_sink(window);
@@ -3621,7 +3616,7 @@ pub async fn run_backup(window: tauri::Window, path: String) -> Result<BackupRep
         Ok(BackupReportDto { path: report.path, bytes: report.bytes as usize })
     })
     .await
-    .map_err(|e| CmdError::from(format!("まるごとバックアップの実行に失敗しました: {e}")))?
+    .map_err(|e| CmdError::from(format!("the backup did not finish: {e}")))?
 }
 
 /// "Restore everything" under Settings > Data (**destructive**). Swaps the whole store for the one
@@ -3656,7 +3651,7 @@ pub async fn run_restore(window: tauri::Window, path: String) -> Result<RestoreR
         })
     })
     .await
-    .map_err(|e| CmdError::from(format!("まるごと復元の実行に失敗しました: {e}")))?
+    .map_err(|e| CmdError::from(format!("the restore did not finish: {e}")))?
 }
 
 /// The progress sink for export (the sibling of [`progress_sink`]). It emits `data-progress` only
@@ -3716,7 +3711,7 @@ pub async fn run_export(window: tauri::Window, path: String) -> Result<ExportRep
         amenbo_core::export::export_bundle(&out, &mut progress).map_err(CmdError::from)
     })
     .await
-    .map_err(|e| CmdError::from(format!("エクスポートの実行に失敗しました: {e}")))??;
+    .map_err(|e| CmdError::from(format!("the export did not finish: {e}")))??;
 
     Ok(ExportReportDto {
         path: report.path,
@@ -4190,7 +4185,7 @@ pub fn doctor_fix() -> Result<DoctorFixDto, CmdError> {
 #[tauri::command]
 pub fn open_latest_installer() -> Result<String, CmdError> {
     let url = amenbo_core::update_check::resolve_update_url();
-    os_open(&url).map_err(|e| -> CmdError { format!("インストーラ URL を開けません: {e}").into() })?;
+    os_open(&url).map_err(|e| -> CmdError { format!("cannot open the installer URL: {e}").into() })?;
     Ok(url)
 }
 
@@ -4320,7 +4315,7 @@ pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
         })
     })
     .await
-    .map_err(|e| -> CmdError { format!("プラグインカタログの取得に失敗しました: {e}").into() })?
+    .map_err(|e| -> CmdError { format!("fetching the plugin catalog did not finish: {e}").into() })?
 }
 
 /// What registering a catalog would mean, worked out before anything is written (`AMB-D-389`) — the
@@ -4367,7 +4362,7 @@ pub async fn plugin_catalog_probe_source(url: String) -> Result<PluginCatalogPro
         })
     })
     .await
-    .map_err(|e| -> CmdError { format!("配布元を調べられませんでした: {e}").into() })?
+    .map_err(|e| -> CmdError { format!("probing the source did not finish: {e}").into() })?
 }
 
 /// Judge the agreement the screen took against the pin that is about to be written (`AMB-D-389`).
@@ -4440,7 +4435,7 @@ pub async fn plugin_catalog_add_source(
         Ok(amenbo_core::plugin_catalog::add_source(&paths, &probe, name.as_deref())?)
     })
     .await
-    .map_err(|e| -> CmdError { format!("配布元を登録できませんでした: {e}").into() })?
+    .map_err(|e| -> CmdError { format!("registering the source did not finish: {e}").into() })?
 }
 
 /// Unregister a third-party catalog and drop its cached copy (`AMB-D-347`). Returns `false` when the
@@ -4506,7 +4501,7 @@ pub async fn plugin_repo_facts(repo: String) -> Result<PluginRepoFactsDto, CmdEr
         })
     })
     .await
-    .map_err(|e| -> CmdError { format!("GitHub の情報取得に失敗しました: {e}").into() })?
+    .map_err(|e| -> CmdError { format!("fetching from GitHub did not finish: {e}").into() })?
 }
 
 /// Read the detail document for the **one** plugin a user opened (`AMB-D-385`).
@@ -4559,7 +4554,7 @@ pub async fn plugin_detail(name: String) -> Result<Option<PluginDetailDto>, CmdE
         }))
     })
     .await
-    .map_err(|e| -> CmdError { format!("プラグインの詳細取得に失敗しました: {e}").into() })?
+    .map_err(|e| -> CmdError { format!("fetching the plugin's detail did not finish: {e}").into() })?
 }
 
 /// One setting a plugin's author declared, and what this machine currently holds for it
@@ -4788,7 +4783,7 @@ pub async fn plugin_install(
         install_row(&store, &installed, project_id)
     })
     .await
-    .map_err(|e| -> CmdError { format!("プラグインのインストールに失敗しました: {e}").into() })?
+    .map_err(|e| -> CmdError { format!("installing the plugin did not finish: {e}").into() })?
 }
 
 /// Move one installed plugin's gate — the GUI's `plugin enable` / `plugin disable`, through the one
@@ -5037,7 +5032,7 @@ pub async fn plugin_updates() -> Result<Vec<PluginUpdateDto>, CmdError> {
             .collect()
     })
     .await
-    .map_err(|e| -> CmdError { format!("プラグインの更新確認に失敗しました: {e}").into() })?
+    .map_err(|e| -> CmdError { format!("checking for a plugin update did not finish: {e}").into() })?
 }
 
 /// Put the catalog's build of one plugin in place (`AMB-D-359`) — the GUI's `plugin update <name>`, the
@@ -5063,7 +5058,7 @@ pub async fn plugin_update_apply(name: String) -> Result<bool, CmdError> {
         Ok(applied.is_some())
     })
     .await
-    .map_err(|e| -> CmdError { format!("プラグインの更新に失敗しました: {e}").into() })?
+    .map_err(|e| -> CmdError { format!("updating the plugin did not finish: {e}").into() })?
 }
 
 /// Apply every update the catalog holds, one plugin at a time (`AMB-D-359`) — the banner's "update all".
@@ -5095,7 +5090,7 @@ pub async fn plugin_update_apply_all() -> Result<Vec<PluginUpdateOutcomeDto>, Cm
             .collect())
     })
     .await
-    .map_err(|e| -> CmdError { format!("プラグインの更新に失敗しました: {e}").into() })?
+    .map_err(|e| -> CmdError { format!("updating the plugin did not finish: {e}").into() })?
 }
 
 /// Put the build the last update replaced back (`AMB-D-359`) — the GUI's `plugin rollback <name>`, and the

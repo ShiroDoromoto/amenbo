@@ -25,6 +25,14 @@ import { fr } from "./locales/fr";
 import { de } from "./locales/de";
 import { it } from "./locales/it";
 import { ru } from "./locales/ru";
+import { hi } from "./locales/hi";
+import { id } from "./locales/id";
+import { vi } from "./locales/vi";
+import { th } from "./locales/th";
+import { tr } from "./locales/tr";
+import { pl } from "./locales/pl";
+import { nl } from "./locales/nl";
+import { uk } from "./locales/uk";
 import { currentLang, type Lang } from "./lang";
 import { formatNumber } from "./format";
 
@@ -36,9 +44,9 @@ export {
 export type { ViewKind } from "./keys";
 
 /**
- * Every dictionary this build carries. Partial on purpose: a supported language with no file yet
- * resolves to English everywhere, which is how a language arrives one file at a time rather than
- * all nineteen at once.
+ * Every dictionary this build carries — one file per supported language, nineteen of them. The type
+ * stays partial because that is the runtime guarantee underneath: a language this map does not hold
+ * resolves to English everywhere instead of breaking a screen.
  *
  * Exported because the coverage gate has to read what the app actually loads: a list of languages
  * kept beside this one would go stale the first time a dictionary is added, and the gate would then
@@ -46,6 +54,7 @@ export type { ViewKind } from "./keys";
  */
 export const DICTIONARIES: Partial<Record<Lang, Translation>> = {
   en, ja, "zh-Hans": zhHans, "zh-Hant": zhHant, ko, es, "pt-BR": ptBR, fr, de, it, ru,
+  hi, id, vi, th, tr, pl, nl, uk,
 };
 
 /** The UI string this language has for the key, else the English one. */

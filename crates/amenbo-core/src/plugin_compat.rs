@@ -66,7 +66,7 @@ pub enum Incompatibility {
 }
 
 impl Incompatibility {
-    /// The English sentence — what a log line and the error's English half both say.
+    /// The sentence — what a log line and the refusal it turns into both say.
     fn en(&self) -> String {
         match self {
             Self::Payload { plugin, amenbo } => format!(
@@ -81,43 +81,21 @@ impl Incompatibility {
         }
     }
 
-    /// The Japanese sentence — the error's other half.
-    fn ja(&self) -> String {
-        match self {
-            Self::Payload { plugin, amenbo } => format!(
-                "プラグインが読むペイロード規約は v{plugin} で、この amenbo は v{amenbo} です"
-            ),
-            Self::AmenboTooOld { min, running } => {
-                format!("amenbo {min} 以上が必要ですが、この amenbo は {running} です")
-            }
-            Self::UnreadableFloor { min } => {
-                format!("下限として宣言された amenbo 版を読み取れません（'{min}'）")
-            }
-        }
-    }
-
     /// Turn the verdict into the refusal a named plugin's caller returns (`plugin enable`).
     pub fn into_error(self, plugin: &str) -> Error {
-        Error::invalid(
-            format!("plugin '{plugin}' is not compatible with this amenbo: {}", self.en()),
-            format!("プラグイン '{plugin}' はこの amenbo と互換がありません：{}", self.ja()),
-        )
+        Error::invalid(format!("plugin '{plugin}' is not compatible with this amenbo: {}", self.en()))
     }
 
     /// Turn the verdict into the refusal an **update** returns (`plugin update`). The difference from
     /// [`into_error`](Self::into_error) is what the reader has to know afterwards: the verdict is about
     /// the build the catalog is offering, and refusing it changes nothing — the installed plugin keeps
-    /// running as it was (`AMB-D-359`, failing safe). Rendered separately rather than as a suffix,
-    /// because the wording differs in both languages.
+    /// running as it was (`AMB-D-359`, failing safe). Written out separately rather than bolted on as a
+    /// suffix, because the whole sentence reads differently.
     pub fn into_update_error(self, plugin: &str) -> Error {
         Error::invalid(
             format!(
                 "the build of '{plugin}' the catalog publishes does not run on this amenbo ({}) — nothing was replaced, and the installed build is untouched",
                 self.en()
-            ),
-            format!(
-                "カタログが配布している '{plugin}' の版はこの amenbo では動きません（{}）——何も差し替えていないので、インストール済みの版はそのままです",
-                self.ja()
             ),
         )
     }

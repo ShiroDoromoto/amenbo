@@ -1949,10 +1949,7 @@ pub fn task_reject(id: i64, reason: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         let reason = reason.trim();
         if reason.is_empty() {
-            return Err(amenbo_core::Error::invalid(
-                "a rejection needs its reason — say why the task will not be done",
-                "却下の理由は必須です（なぜやらないと決めたのかを書く）",
-            )
+            return Err(amenbo_core::Error::invalid("a rejection needs its reason — say why the task will not be done")
             .into());
         }
         let old = store.task(id)?.map(|t| t.status).unwrap_or_default();
@@ -2815,10 +2812,7 @@ pub fn project_get(project_id: i64) -> Result<ProjectSettingsDto, CmdError> {
     let read_model = store.read_model();
     let row = amenbo_core::store_engine::read::project_settings(read_model.conn(), project_id)?
         .ok_or_else(|| {
-            amenbo_core::Error::not_found(
-                format!("project '{project_id}' not found"),
-                format!("プロジェクト '{project_id}' が見つかりません"),
-            )
+            amenbo_core::Error::not_found(format!("project '{project_id}' not found"))
         })?;
     Ok(ProjectSettingsDto {
         id: row.id,
@@ -2991,10 +2985,7 @@ pub fn project_bind_folder(project_id: i64, dir: String) -> Result<WriteAck, Cmd
     use amenbo_core::binding::find_upward_ancestor;
     let path = std::path::Path::new(&dir);
     if !path.is_dir() {
-        return Err(CmdError::from(amenbo_core::Error::not_found(
-            format!("folder not found: {dir}"),
-            format!("フォルダが見つかりません: {dir}"),
-        )));
+        return Err(CmdError::from(amenbo_core::Error::not_found(format!("folder not found: {dir}"))));
     }
     let cwd = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     if let Some((bound_dir, _)) = find_upward_ancestor(&cwd) {
@@ -3158,16 +3149,10 @@ pub fn dimension_value_set_period(
     with_store_mut(|store| {
         let value = store
             .dimension_value(value_id)?
-            .ok_or_else(|| amenbo_core::Error::not_found(
-                format!("dimension value '{value_id}' not found"),
-                format!("次元の値 '{value_id}' が見つかりません"),
-            ))?;
+            .ok_or_else(|| amenbo_core::Error::not_found(format!("dimension value '{value_id}' not found")))?;
         let role = store.dimension(value.dimension_id)?.map(|d| d.role);
         if !matches!(role, Some(amenbo_core::model::DimensionRole::TimeAxis)) {
-            return Err(amenbo_core::Error::invalid(
-                "only a time-axis dimension's values carry a period",
-                "期間を持てるのは時間軸の次元の値だけです",
-            )
+            return Err(amenbo_core::Error::invalid("only a time-axis dimension's values carry a period")
             .into());
         }
         store.dimension_value_update(value_id, None, Some((start, end)))?;
@@ -3182,10 +3167,7 @@ fn parse_iso_date(s: Option<&str>) -> Result<Option<NaiveDate>, CmdError> {
     match s.map(str::trim).filter(|s| !s.is_empty()) {
         None => Ok(None),
         Some(s) => NaiveDate::parse_from_str(s, "%Y-%m-%d").map(Some).map_err(|_| {
-            CmdError::from(amenbo_core::Error::invalid(
-                format!("'{s}' is not a date (expected YYYY-MM-DD)"),
-                format!("'{s}' は日付ではありません（YYYY-MM-DD 形式）"),
-            ))
+            CmdError::from(amenbo_core::Error::invalid(format!("'{s}' is not a date (expected YYYY-MM-DD)")))
         }),
     }
 }
@@ -4898,7 +4880,6 @@ pub fn plugin_config_set(
             let known = if declared.is_empty() { "none".to_string() } else { declared.join(", ") };
             CmdError::from(amenbo_core::Error::invalid(
                 format!("plugin '{name}' declares no setting '{key}' (it declares: {known})"),
-                format!("プラグイン '{name}' に設定 '{key}' はありません（宣言されているのは: {known}）"),
             ))
         })?;
         let scope = match project_id {
@@ -5151,10 +5132,6 @@ fn refuse_update_leaving_required_unset(
         format!(
             "the new build of '{name}' needs setting(s) not provided: {}. Set them first, then update — the build in place is unchanged",
             missing.join(", ")
-        ),
-        format!(
-            "'{name}' の新しい版は未入力の必須設定を要求します（{}）。先に設定してから更新してください——今の版はそのまま変わりません",
-            missing.join("、")
         ),
     ))
 }
@@ -5889,8 +5866,7 @@ mod tests {
             .err()
             .expect("reservation is rejected when the premise is unmet");
         assert_eq!(err.code, "not_ready", "code reaches the webview as not_ready");
-        assert!(err.message.contains("先行"), "the Japanese reason names the blocker task: {}", err.message);
-        assert!(err.message_en.contains("blocker"), "the English reason names it too: {}", err.message_en);
+        assert!(err.message_en.contains("blocker"), "the reason names the blocker: {}", err.message_en);
 
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
         assert_eq!(card(dependent).status, "todo", "a rejected reservation does not move the column (no rollback needed)");

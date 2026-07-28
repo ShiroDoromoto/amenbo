@@ -92,28 +92,20 @@ fn check(conn: &Connection, reach: Reach, bound: i64, target: WriteTarget) -> Re
         // A new entity has no id yet, so we check the place it would go. "No project" (the inbox) is
         // outside a narrowed reach — nobody should be able to create an entity they can no longer touch.
         WriteTarget::NewIn(Some(project)) => reach.check(&crate::idref::project(project), Some(project)),
-        WriteTarget::NewIn(None) => Err(cannot_create(
-            bound,
-            "outside any project",
-            "どのプロジェクトにも属さない場所",
-        )),
+        WriteTarget::NewIn(None) => Err(cannot_create(bound, "outside any project")),
         // A new project is by definition outside the binding: it could be created but never touched
         // again. We do not leave that asymmetry standing.
-        WriteTarget::NewProject => Err(cannot_create(bound, "a new project", "新しいプロジェクト")),
+        WriteTarget::NewProject => Err(cannot_create(bound, "a new project")),
     }
 }
 
 /// The wording for a creation that is out of reach. It says "you cannot create it there", never "it does
 /// not exist" (the same discipline as [`crate::reach`]).
-fn cannot_create(bound: i64, en_what: &str, ja_what: &str) -> Error {
+fn cannot_create(bound: i64, en_what: &str) -> Error {
     Error::out_of_reach(
         format!(
             "Creating {en_what} is outside project #{bound}, the project this folder is bound to — an AI \
              reaches only the project its .amenbo names. Ask a human to run this."
-        ),
-        format!(
-            "{ja_what}を作ることは、このフォルダが束縛しているプロジェクト #{bound} の外です — AI が到達 \
-             できるのは .amenbo が指すプロジェクトだけです。人間に実行してもらってください。"
         ),
     )
 }

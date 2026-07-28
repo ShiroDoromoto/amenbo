@@ -63,11 +63,6 @@ pub fn ensure_may_migrate() -> Result<()> {
          amenbo to migrate, point this build at an isolated store with AMENBO_HOME=<dir>, or — if \
          this build is deliberately the one that must do it — re-run it once with \
          AMENBO_ALLOW_UNSTAMPED_MIGRATE=1",
-        "移行を拒否しました：この amenbo はリリース用ワークフローが作ったビルドではなく、本番ストアを\
-         移行するとリリース済みの amenbo では開けない状態まで進んでしまいます。移行はリリース済みの \
-         amenbo で行うか、AMENBO_HOME=<dir> でこのビルドを隔離したストアに向けてください。この\
-         ビルドで移行することが意図なら、AMENBO_ALLOW_UNSTAMPED_MIGRATE=1 を付けてもう一度だけ\
-         実行してください",
     ))
 }
 

@@ -61,18 +61,12 @@ pub const CATALOG_PUBLIC_KEY: &str = "RWSgV8uCt8tyYg74JbwBblWoE+g7bxSGvK8blkKW7g
 /// constant-time.
 pub fn verify_checksum(bytes: &[u8], checksum: &str) -> Result<()> {
     let hex = checksum.strip_prefix(CHECKSUM_PREFIX).ok_or_else(|| {
-        Error::invalid(
-            format!("unsupported checksum format (expected '{CHECKSUM_PREFIX}<hex>'): {checksum}"),
-            format!("チェックサム形式が不正です（'{CHECKSUM_PREFIX}<hex>' が必要）：{checksum}"),
-        )
+        Error::invalid(format!("unsupported checksum format (expected '{CHECKSUM_PREFIX}<hex>'): {checksum}"))
     })?;
     let expected = decode_sha256_hex(hex)?;
     let actual = Sha256::digest(bytes);
     if actual.as_slice() != expected.as_slice() {
-        return Err(Error::invalid(
-            "asset checksum mismatch: the bytes are not what the manifest recorded",
-            "asset のチェックサムが一致しません：実体が manifest の記録と異なります",
-        ));
+        return Err(Error::invalid("asset checksum mismatch: the bytes are not what the manifest recorded"));
     }
     Ok(())
 }
@@ -81,18 +75,12 @@ pub fn verify_checksum(bytes: &[u8], checksum: &str) -> Result<()> {
 fn decode_sha256_hex(hex: &str) -> Result<[u8; 32]> {
     let hex = hex.trim();
     if hex.len() != 64 {
-        return Err(Error::invalid(
-            format!("a sha256 digest is 64 hex chars, got {}", hex.len()),
-            format!("sha256 ダイジェストは 64 桁の hex です（実際は {} 桁）", hex.len()),
-        ));
+        return Err(Error::invalid(format!("a sha256 digest is 64 hex chars, got {}", hex.len())));
     }
     let mut out = [0u8; 32];
     for (i, byte) in out.iter_mut().enumerate() {
         *byte = u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16).map_err(|_| {
-            Error::invalid(
-                format!("checksum digest is not valid hex: {hex}"),
-                format!("チェックサムのダイジェストが不正な hex です：{hex}"),
-            )
+            Error::invalid(format!("checksum digest is not valid hex: {hex}"))
         })?;
     }
     Ok(out)
@@ -106,23 +94,14 @@ fn decode_sha256_hex(hex: &str) -> Result<[u8; 32]> {
 /// bytes and the key all refuse.
 pub fn verify_signature(bytes: &[u8], signature: &str, public_key: &str) -> Result<()> {
     let pk = PublicKey::from_base64(public_key).map_err(|e| {
-        Error::invalid(
-            format!("invalid catalog public key: {e}"),
-            format!("カタログ公開鍵が不正です：{e}"),
-        )
+        Error::invalid(format!("invalid catalog public key: {e}"))
     })?;
     let sig = Signature::decode(signature).map_err(|e| {
-        Error::invalid(
-            format!("malformed plugin signature: {e}"),
-            format!("プラグイン署名の形式が不正です：{e}"),
-        )
+        Error::invalid(format!("malformed plugin signature: {e}"))
     })?;
-    let (key_en, key_ja) = key_named(public_key);
+    let key = key_named(public_key);
     pk.verify(bytes, &sig, false).map_err(|e| {
-        Error::invalid(
-            format!("plugin signature does not verify against {key_en}: {e}"),
-            format!("プラグイン署名を{key_ja}で検証できません：{e}"),
-        )
+        Error::invalid(format!("plugin signature does not verify against {key}: {e}"))
     })
 }
 
@@ -133,19 +112,13 @@ pub fn verify_signature(bytes: &[u8], signature: &str, public_key: &str) -> Resu
 /// what they are looking at: an official asset that fails is a broken publish, while a registered
 /// catalog's is a publisher signing with something other than what its own catalog offered. The
 /// fingerprint is the handle both sides can quote — the same short form a registration showed.
-fn key_named(public_key: &str) -> (String, String) {
+fn key_named(public_key: &str) -> String {
     if public_key == CATALOG_PUBLIC_KEY {
-        return ("the amenbo catalog key".to_string(), "amenbo のカタログ鍵".to_string());
+        return "the amenbo catalog key".to_string();
     }
     match key_fingerprint(public_key) {
-        Ok(fp) => (
-            format!("the key pinned for the catalog this plugin came from ({fp})"),
-            format!("このプラグインの配布元に pin した鍵（{fp}）"),
-        ),
-        Err(_) => (
-            "the key its catalog was pinned with".to_string(),
-            "その配布元に pin した鍵".to_string(),
-        ),
+        Ok(fp) => format!("the key pinned for the catalog this plugin came from ({fp})"),
+        Err(_) => "the key its catalog was pinned with".to_string(),
     }
 }
 
@@ -168,7 +141,6 @@ pub fn verify_asset(
     let signature = signature.ok_or_else(|| {
         Error::invalid(
             "plugin asset is unsigned: it carries no signature from the catalog listing it, so its origin cannot be verified",
-            "プラグイン asset が未署名です：それを載せたカタログの署名が無く、出所を検証できません",
         )
     })?;
     verify_signature(bytes, signature, public_key)?;
@@ -234,10 +206,7 @@ pub fn read_public_key(text: &str) -> Result<String> {
         .find(|line| !line.is_empty() && PublicKey::from_base64(line).is_ok())
         .map(str::to_string)
         .ok_or_else(|| {
-            Error::invalid(
-                "no minisign public key in the document (expected the key line of a .pub file)",
-                "minisign 公開鍵が見つかりません（.pub ファイルの鍵の行が必要です）",
-            )
+            Error::invalid("no minisign public key in the document (expected the key line of a .pub file)")
         })
 }
 
@@ -256,14 +225,11 @@ pub fn key_fingerprint(public_key: &str) -> Result<String> {
     // Parse first: the fingerprint is read out of raw bytes, so the key has to be a key before its
     // bytes mean anything.
     PublicKey::from_base64(public_key).map_err(|e| {
-        Error::invalid(
-            format!("invalid catalog public key: {e}"),
-            format!("カタログ公開鍵が不正です：{e}"),
-        )
+        Error::invalid(format!("invalid catalog public key: {e}"))
     })?;
     let raw = base64::engine::general_purpose::STANDARD
         .decode(public_key.trim())
-        .map_err(|e| Error::invalid(format!("public key is not base64: {e}"), format!("公開鍵が base64 ではありません：{e}")))?;
+        .map_err(|e| Error::invalid(format!("public key is not base64: {e}")))?;
     // `Ed` + an 8-byte little-endian key id + the 32-byte key; minisign prints the id big-endian.
     Ok(raw[2..10].iter().rev().map(|b| format!("{b:02X}")).collect())
 }

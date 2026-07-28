@@ -156,10 +156,7 @@ pub fn plan_space(source: &StoreSource, dest: &Path) -> Result<SpacePlan> {
     }
     let dir = dest.parent().unwrap_or_else(|| Path::new("."));
     let available_bytes = fs2::available_space(dir).map_err(|e| {
-        Error::invalid(
-            format!("cannot read free space at {}: {e}", dir.display()),
-            format!("{} の空き容量を読めません: {e}", dir.display()),
-        )
+        Error::invalid(format!("cannot read free space at {}: {e}", dir.display()))
     })?;
     Ok(SpacePlan {
         archive_bytes,
@@ -192,9 +189,6 @@ pub fn ensure_space(plan: &SpacePlan, dest: &Path) -> Result<()> {
     Err(Error::invalid(
         format!(
             "not enough free space for the pre-migration backup: needs ~{need} MiB (archive ~{archive} MiB + staging ~{staging} MiB), but only ~{free} MiB is free at {dir}. free up space and run the migration again — nothing has been changed"
-        ),
-        format!(
-            "移行前バックアップの空き容量が足りません: 約 {need} MiB 必要です（アーカイブ 約 {archive} MiB ＋ 一時領域 約 {staging} MiB）が、{dir} の空きは 約 {free} MiB です。空き容量を確保してから移行をやり直してください（まだ何も変更していません）"
         ),
     ))
 }
@@ -405,18 +399,12 @@ fn roll_back(
             format!(
                 "the migration failed and your store was rolled back to how it was before it started: {failure}. the pre-migration backup is kept at {at}"
             ),
-            format!(
-                "移行に失敗したため、開始前の状態へ丸ごと戻しました: {failure}（移行前バックアップは {at} に残しています）"
-            ),
         ),
         Err(rollback) => {
             let cmd = crate::config::Paths::command_name();
             Error::invalid(
                 format!(
                     "the migration failed ({failure}) and rolling back failed too ({rollback}). your store may be half-migrated — restore it from the pre-migration backup at {at} (`{cmd} restore {at}`)"
-                ),
-                format!(
-                    "移行に失敗し（{failure}）、開始前の状態へ戻すことにも失敗しました（{rollback}）。ストアが移行途中のままの可能性があります——移行前バックアップ {at} から復元してください（`{cmd} restore {at}`）"
                 ),
             )
         }

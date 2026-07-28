@@ -45,8 +45,8 @@ describe("formatAhead", () => {
   });
 
   it("keeps the refusal's own words — the only place the version that wrote the store is named", () => {
-    noteInvokeFailure({ code: "format_ahead", message: "新しい amenbo です", message_en: "written by a newer amenbo" });
-    expect(formatAheadDetail()).toEqual({ ja: "新しい amenbo です", en: "written by a newer amenbo" });
+    noteInvokeFailure({ code: "format_ahead", message: "written by a newer amenbo", message_en: "written by a newer amenbo" });
+    expect(formatAheadDetail()).toBe("written by a newer amenbo");
   });
 
   it("has no words to show when the rejection carried none (the screen still stands)", () => {

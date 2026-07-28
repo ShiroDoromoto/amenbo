@@ -133,10 +133,7 @@ fn api_url() -> String {
 fn checked_repo(repo: &str) -> Result<String> {
     let repo = repo.trim();
     let refused = || {
-        Error::invalid(
-            format!("not a GitHub repository reference (owner/name): {repo}"),
-            format!("GitHub のリポジトリ指定（owner/name）ではありません：{repo}"),
-        )
+        Error::invalid(format!("not a GitHub repository reference (owner/name): {repo}"))
     };
     let (owner, name) = repo.split_once('/').ok_or_else(refused)?;
     let usable = |part: &str| {

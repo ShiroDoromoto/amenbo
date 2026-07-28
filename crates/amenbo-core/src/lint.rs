@@ -233,7 +233,6 @@ pub fn staged_diff(dir: &Path) -> Result<String> {
     if !is_git_repo(dir) {
         return Err(Error::Invalid(Msg::new(
             "Not a git repository, so there is no staged diff to lint. Pass a file, or --stdin, to lint that text instead.",
-            "git リポジトリではないため、lint する staged diff がありません。ファイルか --stdin でテキストを渡してください。",
         )));
     }
     let out = crate::sys::command("git")
@@ -251,20 +250,14 @@ pub fn staged_diff(dir: &Path) -> Result<String> {
         ])
         .output()
         .map_err(|e| {
-            Error::Invalid(Msg::new(
-                format!("Cannot run git here: {e}"),
-                format!("ここで git を実行できません: {e}"),
-            ))
+            Error::Invalid(Msg::new(format!("Cannot run git here: {e}")))
         })?;
     if !out.status.success() {
         // git's first line says what went wrong; the rest is usually usage text, and an error message is
         // not the place to reprint a manual.
         let stderr = String::from_utf8_lossy(&out.stderr);
         let detail = stderr.lines().next().unwrap_or("no detail").trim().to_string();
-        return Err(Error::Invalid(Msg::new(
-            format!("`git diff --cached` failed: {detail}"),
-            format!("`git diff --cached` が失敗しました: {detail}"),
-        )));
+        return Err(Error::Invalid(Msg::new(format!("`git diff --cached` failed: {detail}"))));
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }

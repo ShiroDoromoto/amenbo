@@ -28,9 +28,9 @@ use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
 /// The noun for the dimension entity (the English/Japanese pair used in not_found messages).
-pub(crate) const NOUN: Noun = Noun { en: "dimension", ja: "次元", code: ErrorCode::NotFoundDimension };
+pub(crate) const NOUN: Noun = Noun { en: "dimension", code: ErrorCode::NotFoundDimension };
 /// The noun for the dimension-value entity.
-pub(crate) const VALUE_NOUN: Noun = Noun { en: "dimension value", ja: "次元値", code: ErrorCode::NotFoundDimensionValue };
+pub(crate) const VALUE_NOUN: Noun = Noun { en: "dimension value", code: ErrorCode::NotFoundDimensionValue };
 
 /// The specification of a new dimension. The defaults — single-select, unordered, no role — are the
 /// bare shape of a user-defined axis. A time-axis phase is built by setting `role=TimeAxis`.
@@ -59,7 +59,7 @@ impl Default for NewDimension {
 
 pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimension> {
     if new.name.trim().is_empty() {
-        return Err(Error::invalid("a dimension name cannot be empty", "次元名は空にできません"));
+        return Err(Error::invalid("a dimension name cannot be empty"));
     }
     if read::project(tx.conn(), project_id)?.is_none() {
         return Err(crate::ops::project::NOUN.not_found(project_id.to_string()));
@@ -118,7 +118,7 @@ pub fn update(
 ) -> Result<Dimension> {
     if let Some(n) = name {
         if n.trim().is_empty() {
-            return Err(Error::invalid("a dimension name cannot be empty", "次元名は空にできません"));
+            return Err(Error::invalid("a dimension name cannot be empty"));
         }
     }
     let before = live_before(tx, id)?;
@@ -174,7 +174,7 @@ pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 
 pub fn value_add(tx: &WriteTx<'_>, dimension_id: i64, name: &str) -> Result<DimensionValue> {
     if name.trim().is_empty() {
-        return Err(Error::invalid("a dimension value name cannot be empty", "次元値名は空にできません"));
+        return Err(Error::invalid("a dimension value name cannot be empty"));
     }
     live_before(tx, dimension_id)?;
     // Placed at the bottom whether or not the axis is ordered; when unordered it is merely carried
@@ -199,7 +199,7 @@ pub fn value_add(tx: &WriteTx<'_>, dimension_id: i64, name: &str) -> Result<Dime
 
 pub fn value_rename(tx: &WriteTx<'_>, value_id: i64, name: &str) -> Result<DimensionValue> {
     if name.trim().is_empty() {
-        return Err(Error::invalid("a dimension value name cannot be empty", "次元値名は空にできません"));
+        return Err(Error::invalid("a dimension value name cannot be empty"));
     }
     let before = live_value_before(tx, value_id)?;
     live_before(tx, before.dimension_id)?;
@@ -222,10 +222,7 @@ pub fn value_set_dates(
 ) -> Result<DimensionValue> {
     if matches!((start_on, end_on), (Some(s), Some(e)) if s > e) {
         return Err(Error::Invalid(
-            Msg::new(
-                "a value's start date cannot be after its end date",
-                "値の開始日は終了日より後にできません",
-            )
+            Msg::new("a value's start date cannot be after its end date")
             .coded(ErrorCode::InvalidDimensionPeriodOrder),
         ));
     }
@@ -244,10 +241,7 @@ pub fn value_move(tx: &WriteTx<'_>, value_id: i64, pos: Position) -> Result<Dime
     let dimension = live_before(tx, before.dimension_id)?;
     if !dimension.ordered {
         return Err(Error::Invalid(
-            Msg::new(
-                "this dimension's values are unordered and cannot be reordered",
-                "この次元の値は順序を持たないため並べ替えできません",
-            )
+            Msg::new("this dimension's values are unordered and cannot be reordered")
             .coded(ErrorCode::InvalidDimensionValuesUnordered),
         ));
     }
@@ -297,7 +291,6 @@ pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensi
         task.project_id,
         Some(axis.project_id),
         "this classification",
-        "この分類",
     )?;
 
     // Idempotent noop when the same value is already assigned.

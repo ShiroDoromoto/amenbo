@@ -564,14 +564,10 @@ pub fn validate_avatar(key: &str, value: &str) -> Result<()> {
     if value.len() > AVATAR_MAX_BYTES {
         return Err(crate::error::Error::invalid(
             format!("{key} image too large ({} KB; max {} KB)", value.len() / 1024, AVATAR_MAX_BYTES / 1024),
-            format!("{key} の画像が大きすぎます（{} KB・上限 {} KB）", value.len() / 1024, AVATAR_MAX_BYTES / 1024),
         ));
     }
     if !value.starts_with("data:image/") {
-        return Err(crate::error::Error::invalid(
-            format!("{key} must be a data:image/… URL"),
-            format!("{key} は data:image/… 形式の画像データが必要です"),
-        ));
+        return Err(crate::error::Error::invalid(format!("{key} must be a data:image/… URL")));
     }
     Ok(())
 }
@@ -579,10 +575,7 @@ pub fn validate_avatar(key: &str, value: &str) -> Result<()> {
 /// Parse the value of `config set attachment.*`: a byte count, as a non-negative decimal integer.
 fn parse_bytes(key: &str, value: &str) -> crate::error::Result<u64> {
     value.trim().parse::<u64>().map_err(|_| {
-        crate::error::Error::invalid(
-            format!("{key} must be a non-negative byte count; '{value}' is invalid"),
-            format!("{key} はバイト数（非負整数）。'{value}' は不正"),
-        )
+        crate::error::Error::invalid(format!("{key} must be a non-negative byte count; '{value}' is invalid"))
     })
 }
 
@@ -789,7 +782,6 @@ impl Config {
                     other => {
                         return Err(crate::error::Error::invalid(
                             format!("default_view must be list|board|calendar|timeline; '{other}' is invalid"),
-                            format!("default_view は list|board|calendar|timeline。'{other}' は不正"),
                         ))
                     }
                 };
@@ -839,7 +831,6 @@ impl Config {
                     other => {
                         return Err(crate::error::Error::invalid(
                             format!("ai_allow_project_ops must be true|false; '{other}' is invalid"),
-                            format!("ai_allow_project_ops は true|false。'{other}' は不正"),
                         ))
                     }
                 };
@@ -851,7 +842,6 @@ impl Config {
                     other => {
                         return Err(crate::error::Error::invalid(
                             format!("onboarded must be true|false; '{other}' is invalid"),
-                            format!("onboarded は true|false。'{other}' は不正"),
                         ))
                     }
                 };
@@ -863,7 +853,6 @@ impl Config {
                     other => {
                         return Err(crate::error::Error::invalid(
                             format!("startup_integrity_check must be true|false; '{other}' is invalid"),
-                            format!("startup_integrity_check は true|false。'{other}' は不正"),
                         ))
                     }
                 };
@@ -875,7 +864,6 @@ impl Config {
                     other => {
                         return Err(crate::error::Error::invalid(
                             format!("update_check must be true|false; '{other}' is invalid"),
-                            format!("update_check は true|false。'{other}' は不正"),
                         ))
                     }
                 };
@@ -888,7 +876,6 @@ impl Config {
                     other => {
                         return Err(crate::error::Error::invalid(
                             format!("perf_log must be off|budget-only|verbose; '{other}' is invalid"),
-                            format!("perf_log は off|budget-only|verbose。'{other}' は不正"),
                         ))
                     }
                 };
@@ -901,7 +888,6 @@ impl Config {
             other => {
                 return Err(crate::error::Error::invalid(
                     format!("unknown config key '{other}' (known: default_view / language / date_locale / human_name / ai_name / human_avatar / ai_avatar / ai_allow_project_ops / onboarded / startup_integrity_check / update_check / perf_log / attachment.image_max / attachment.audio_max / attachment.video_max / attachment.document_max / attachment.other_max)"),
-                    format!("未知の設定キー '{other}'（既知: default_view / language / date_locale / human_name / ai_name / human_avatar / ai_avatar / ai_allow_project_ops / onboarded / startup_integrity_check / update_check / perf_log / attachment.image_max / attachment.audio_max / attachment.video_max / attachment.document_max / attachment.other_max）"),
                 ))
             }
         }

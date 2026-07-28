@@ -105,7 +105,7 @@ pub fn reach_from_env() -> Result<Option<Reach>> {
     }
 }
 
-/// A [`REACH_ENV`] value amenbo did not write, in both languages.
+/// A [`REACH_ENV`] value amenbo did not write.
 fn unreadable(value: &str) -> Error {
     // The ref's shape, spelled by the module that owns every ref's spelling rather than by a literal here.
     let project_ref = format!("{}-{}-<n>", idref::NAMESPACE, RefKind::Project.code());
@@ -113,11 +113,6 @@ fn unreadable(value: &str) -> Error {
         format!(
             "{REACH_ENV}='{value}' is not a reach amenbo wrote — it is set when amenbo launches a plugin, \
              and holds '{ALL_REACH}' or a project's {project_ref} ref. Unset it to run outside a plugin."
-        ),
-        format!(
-            "{REACH_ENV}='{value}' は amenbo が書いた見える範囲ではありません——これは amenbo が \
-             プラグインを起動するときに設定され、'{ALL_REACH}' かプロジェクトの {project_ref} 参照が \
-             入ります。プラグイン以外で実行するなら、この変数を外してください。"
         ),
     )
 }

@@ -12,7 +12,7 @@ use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
 /// The word for this entity (the English/Japanese pair a `not_found` message is phrased with).
-pub(crate) const NOUN: Noun = Noun { en: "project", ja: "プロジェクト", code: ErrorCode::NotFoundProject };
+pub(crate) const NOUN: Noun = Noun { en: "project", code: ErrorCode::NotFoundProject };
 
 pub struct NewProject {
     pub name: String,
@@ -27,7 +27,7 @@ pub struct NewProject {
 /// `project_by_slug` unique index throws out whichever commits second.
 pub fn add(tx: &WriteTx<'_>, input: NewProject) -> Result<Project> {
     if input.name.trim().is_empty() {
-        return Err(Error::invalid("a project name cannot be empty", "プロジェクト名は空にできません"));
+        return Err(Error::invalid("a project name cannot be empty"));
     }
     let sibs = read::project_siblings(tx.conn(), None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
@@ -70,7 +70,7 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: ProjectPatch) -> Result<Project>
     let mut p = before.clone();
     if let Some(name) = patch.name {
         if name.trim().is_empty() {
-            return Err(Error::invalid("a project name cannot be empty", "プロジェクト名は空にできません"));
+            return Err(Error::invalid("a project name cannot be empty"));
         }
         p.name = name;
     }

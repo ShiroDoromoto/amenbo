@@ -1,5 +1,6 @@
 // A Tauri command reports failure as a structured CmdError (src-tauri/error.rs). The front end maps the code to a
-// per-language template, falling back to message (ja) / message_en (en) for codes that have no template.
+// per-language template, falling back to the sentence core wrote — English, whoever is reading — for codes that
+// have no template (`AMB-D-413`).
 import { describe, it, expect } from "vitest";
 import { CORE_SENTENCE_ERROR_CODES, TAURI_ERROR_CODES } from "../errorCodes";
 import { errLabel, errText, type CmdError } from "./index";
@@ -7,22 +8,22 @@ import { en } from "./locales/en";
 
 const bindingStale: CmdError = {
   code: "binding_stale",
-  message: "プロジェクトの紐付け先ディレクトリが見つかりません: /gone",
+  message: "the linked project directory was not found: /gone",
   message_en: "the linked project directory was not found: /gone",
   fields: { path: "/gone" },
 };
 
 const ambiguous: CmdError = {
   code: "ambiguous_id",
-  message: "ID 'ab' は曖昧です。候補: [\"abc\", \"abd\"]",
+  message: "id 'ab' is ambiguous. candidates: [\"abc\", \"abd\"]",
   message_en: "id 'ab' is ambiguous. candidates: [\"abc\", \"abd\"]",
   fields: { prefix: "ab", candidates: ["abc", "abd"] },
 };
 
-// A free-form variant (no template). It simply falls back to message/message_en.
+// A free-form variant (no template). It simply falls back to the sentence core wrote.
 const notFound: CmdError = {
   code: "not_found",
-  message: "タスク 'X' が見つかりません",
+  message: "task 'X' not found",
   message_en: "task 'X' not found",
   fields: null,
 };
@@ -31,7 +32,7 @@ const notFound: CmdError = {
 // the prose the reader gets is written here rather than in Rust (`AMB-D-413`).
 const notFoundTask: CmdError = {
   code: "not_found_task",
-  message: "タスク 'AMB-T-12' が見つかりません",
+  message: "task 'AMB-T-12' not found",
   message_en: "task 'AMB-T-12' not found",
   fields: { ref: "AMB-T-12" },
 };
@@ -66,8 +67,8 @@ describe("errLabel", () => {
     expect(errLabel(nestedTree, "ja")).not.toBe(nestedTree.message);
   });
 
-  it("a code with no template falls back to the per-language message", () => {
-    expect(errLabel(notFound, "ja")).toBe("タスク 'X' が見つかりません");
+  it("a code with no template falls back to the sentence core wrote, whatever the reader's language", () => {
+    expect(errLabel(notFound, "ja")).toBe("task 'X' not found");
     expect(errLabel(notFound, "en")).toBe("task 'X' not found");
   });
 

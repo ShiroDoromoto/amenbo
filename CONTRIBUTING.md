@@ -42,9 +42,9 @@ cannot see a value, so `description = "…"` answered to no one). It reads a fen
 block as prose too, so a code span — not a fence — is where an identifier of the form
 the docs describe belongs.
 
-Source is exempt, deliberately. Its strings are half of a bilingual product — the
-user-facing messages and the i18n phrasebook are meant to be Japanese — so English is
-asked of the comments there, not the literals.
+Source is exempt, deliberately. Its strings are half of a localized product — the GUI
+dictionaries and the i18n phrasebook are meant to carry every language they cover — so
+English is asked of the comments there, not the literals.
 
 ## License
 

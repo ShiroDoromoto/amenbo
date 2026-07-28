@@ -57,14 +57,10 @@ pub fn check_value(value: &str) -> Result<()> {
     if value.len() > MAX_CONFIG_VALUE_BYTES {
         return Err(Error::invalid(
             format!("config value too large ({} bytes; max {})", value.len(), MAX_CONFIG_VALUE_BYTES),
-            format!("設定値が大きすぎます（{} バイト・上限 {}）", value.len(), MAX_CONFIG_VALUE_BYTES),
         ));
     }
     if value.chars().any(|c| c.is_control()) {
-        return Err(Error::invalid(
-            "config value must not contain control characters",
-            "設定値に制御文字を含めることはできません",
-        ));
+        return Err(Error::invalid("config value must not contain control characters"));
     }
     Ok(())
 }
@@ -72,15 +68,11 @@ pub fn check_value(value: &str) -> Result<()> {
 /// Enforce the identifier floor on a plugin name or field key: non-empty and within the byte cap.
 fn check_ident(kind: &str, s: &str) -> Result<()> {
     if s.is_empty() {
-        return Err(Error::invalid(
-            format!("plugin config {kind} must not be empty"),
-            format!("プラグイン設定の{kind}は空にできません"),
-        ));
+        return Err(Error::invalid(format!("plugin config {kind} must not be empty")));
     }
     if s.len() > MAX_CONFIG_IDENT_BYTES {
         return Err(Error::invalid(
             format!("plugin config {kind} too long ({} bytes; max {})", s.len(), MAX_CONFIG_IDENT_BYTES),
-            format!("プラグイン設定の{kind}が長すぎます（{} バイト・上限 {}）", s.len(), MAX_CONFIG_IDENT_BYTES),
         ));
     }
     Ok(())

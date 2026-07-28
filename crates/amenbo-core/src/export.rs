@@ -67,7 +67,7 @@ struct ExportHeader {
 
 /// Error returned when a progress callback asks to cancel a streaming export.
 fn cancelled() -> Error {
-    Error::invalid("export cancelled", "エクスポートがキャンセルされました")
+    Error::invalid("export cancelled")
 }
 
 /// Serialize `value` as JSON straight to `w` (bounded — one value, not the whole document).
@@ -391,10 +391,7 @@ pub fn export_json(
 ) -> Result<()> {
     let db_path = crate::config::resolve_store_file(&crate::config::Paths::user_base());
     if !db_path.is_file() {
-        return Err(Error::invalid(
-            "nothing to export: this device holds no store",
-            "エクスポートするものがありません: この端末にストアがありません",
-        ));
+        return Err(Error::invalid("nothing to export: this device holds no store"));
     }
     export_json_from(&db_path, w, progress)
 }
@@ -435,10 +432,7 @@ pub fn export_bundle_from(
         let empty = dest.is_dir()
             && std::fs::read_dir(dest).map(|mut d| d.next().is_none()).unwrap_or(false);
         if !empty {
-            return Err(Error::invalid(
-                format!("cannot export into {}: it already exists", dest.display()),
-                format!("{} は既にあります。エクスポート先には空の場所を指定してください。", dest.display()),
-            ));
+            return Err(Error::invalid(format!("cannot export into {}: it already exists", dest.display())));
         }
     }
 
@@ -480,10 +474,7 @@ pub fn export_bundle(
     let base = crate::config::Paths::user_base();
     let db_path = crate::config::resolve_store_file(&base);
     if !db_path.is_file() {
-        return Err(Error::invalid(
-            "nothing to export: this device holds no store",
-            "エクスポートするものがありません: この端末にストアがありません",
-        ));
+        return Err(Error::invalid("nothing to export: this device holds no store"));
     }
     export_bundle_from(&db_path, &base.join(crate::blob::BLOBS_SUBDIR), dest, progress)
 }
@@ -590,7 +581,7 @@ mod export_tests {
         let mut buf = Vec::new();
         let mut cb = |_p: &Progress| ControlFlow::Break(());
         let err = export_json_from(&store_file(&a), &mut buf, &mut cb).unwrap_err();
-        assert!(err.to_string().contains("cancel") || err.to_string().contains("キャンセル"));
+        assert!(err.to_string().contains("cancel"));
     }
 
     /// Cancelling reaches the copying. A store with a handful of attachments has far fewer than
@@ -644,7 +635,7 @@ mod export_tests {
         };
         let err =
             export_bundle_from(&store_file(&a), &big, &dest, &mut cb).unwrap_err();
-        assert!(err.to_string().contains("cancel") || err.to_string().contains("キャンセル"));
+        assert!(err.to_string().contains("cancel"));
         assert!(!dest.exists(), "a cancelled export leaves no half-written directory");
     }
 
@@ -893,7 +884,7 @@ mod export_tests {
             &mut crate::progress::ignore,
         )
         .unwrap_err();
-        assert!(err.to_string().contains("exists") || err.to_string().contains("あります"));
+        assert!(err.to_string().contains("exists"));
         assert!(dest.join("mine.txt").is_file(), "the refusal touched nothing");
     }
 

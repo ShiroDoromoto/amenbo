@@ -45,10 +45,7 @@ impl Secrets {
     pub fn load(path: &Path) -> Result<Secrets> {
         match std::fs::read_to_string(path) {
             Ok(raw) => serde_json::from_str(&raw).map_err(|e| {
-                Error::invalid(
-                    format!("plugin secret file is malformed ({}): {e}", path.display()),
-                    format!("プラグインの秘密ファイルが壊れています（{}）: {e}", path.display()),
-                )
+                Error::invalid(format!("plugin secret file is malformed ({}): {e}", path.display()))
             }),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Secrets::default()),
             Err(e) => Err(Error::from(e)),
@@ -179,7 +176,7 @@ mod tests {
 
         let err = Secrets::load(&path).unwrap_err().to_string();
         assert!(
-            err.contains("malformed") || err.contains("壊れて"),
+            err.contains("malformed"),
             "a corrupt secret file must error rather than default to empty (which would erase it): {err}"
         );
     }

@@ -54,10 +54,6 @@ fn ensure_truth_source_in_place(base: &std::path::Path) -> Result<()> {
              and this build reads one database and can no longer fold that layout. install amenbo 0.1.9 (the last \
              build that folds), run `amenbo migrate` there, then update again (nothing is lost: the data is \
              untouched where it is, and that migration backs the store up before it moves anything)",
-            "この端末のストアは統合前のレイアウト（`stores/` の N ストア ＋ `root/`）のままです。このビルドは単一の \
-             データベースを読み、この形をもう畳めません。amenbo 0.1.9（畳み込みを行う最後の版）を入れて `amenbo \
-             migrate` を実行してから、改めて更新してください（失われるものはありません: データはそのまま残っており、 \
-             その移行は動かす前にストアをバックアップします）",
         ));
     }
     if !base.join(crate::config::LEGACY_STORE_FILE_NAME).exists() {
@@ -69,10 +65,6 @@ fn ensure_truth_source_in_place(base: &std::path::Path) -> Result<()> {
          pre-consolidation shape behind it. install amenbo 0.1.9 (the last build that migrates it), run \
          `amenbo migrate` there, then update again (nothing is lost: that migration backs the store up before \
          it moves anything)",
-        "この端末のストアは旧称（`oplog.sqlite`）のままです。統合より前から書き込みで開かれていない世代で、この \
-         ビルドはリネームもしなければ、その先の統合前の形も読めません。amenbo 0.1.9（移行を行う最後の版）を入れて \
-         `amenbo migrate` を実行してから、改めて更新してください（失われるものはありません: その移行は動かす前に \
-         ストアをバックアップします）",
     ))
 }
 
@@ -109,25 +101,16 @@ pub(crate) fn ensure_format_supported(stamp: &crate::store_engine::FormatStamp) 
     // format version (`format_version_set_by`) is, by definition, an app version that can open this
     // store — no network needed. Older stores that carry no name fall back to the generic "reinstall
     // from the latest installer".
-    let (en_fix, ja_fix) = match stamp.set_by.as_deref() {
-        Some(app) => (
-            format!("use amenbo {app} or newer — that is the version that wrote this store"),
-            format!("amenbo {app} 以降を使ってください（このストアを書いたのがその版です）"),
-        ),
+    let fix = match stamp.set_by.as_deref() {
+        Some(app) => format!("use amenbo {app} or newer — that is the version that wrote this store"),
         None => {
             let cmd = crate::config::Paths::command_name();
-            (
-                format!("reinstall from the latest installer (GUI + CLI ship together) or run `{cmd} update`"),
-                format!("最新インストーラで入れ直すか `{cmd} update` を実行してください（GUI と CLI は一体配布）"),
-            )
+            format!("reinstall from the latest installer (GUI + CLI ship together) or run `{cmd} update`")
         }
     };
     Err(Error::format_ahead(
         format!(
-            "this store was updated by a newer amenbo (format v{store_format}); this build supports up to v{max}. restart amenbo — if it is already running, it is still the old process. if restarting does not help, {en_fix}. there is no downgrade: to go back, restore the pre-migration backup the update left behind"
-        ),
-        format!(
-            "このストアは新しい amenbo（format v{store_format}）で更新されています。このビルドは v{max} まで対応です。amenbo を再起動してください（起動中なら、それはまだ旧いプロセスです）。再起動しても直らなければ、{ja_fix}。版を下げる道はありません——戻すなら、更新時に残した移行前バックアップから復元してください"
+            "this store was updated by a newer amenbo (format v{store_format}); this build supports up to v{max}. restart amenbo — if it is already running, it is still the old process. if restarting does not help, {fix}. there is no downgrade: to go back, restore the pre-migration backup the update left behind"
         ),
     ))
 }
@@ -158,9 +141,6 @@ fn legacy_keyed_refusal() -> Error {
          integer-keyed shape and can no longer re-key one. install amenbo 0.1.9 (the last build that \
          migrates it), run `amenbo migrate` there, then update again (nothing is lost: that migration \
          backs the store up before it moves anything)",
-        "このストアは統合前の世代です（行がまだ ULID キー）。このビルドは INTEGER キーの形を読み、再キーはもう \
-         できません。amenbo 0.1.9（移行を行う最後の版）を入れて `amenbo migrate` を実行してから、改めて更新して \
-         ください（失われるものはありません: その移行は動かす前にストアをバックアップします）",
     )
 }
 
@@ -305,7 +285,6 @@ impl Store {
         if at_rest.exists && !at_rest.plaintext {
             return Err(crate::error::Error::invalid(
                 "this store is still encrypted at rest; open it once with an older build that still carries the at-rest key to migrate it to plaintext before using this build",
-                "このストアはまだ at-rest 暗号化されています。at-rest 鍵を持つ旧いビルドで一度開いて平文へ移行してから、このビルドで使ってください",
             ));
         }
         // The version gate. If the store has been migrated forward past what the running binary
@@ -503,10 +482,7 @@ impl Store {
         // binary's `amenbo init` would rewrite a newer store's schema before it even got to answer
         // "already initialized".
         if crate::store_engine::probe_is_populated(&db_path) {
-            return Err(Error::conflict(
-                "this store is already initialized",
-                "この store は既に初期化済みです",
-            ));
+            return Err(Error::conflict("this store is already initialized"));
         }
         // Lift an identity from the old vault layout to sit under `base` before deciding whether to
         // mint one — do it the other way round and a store whose display name lives in the old layout

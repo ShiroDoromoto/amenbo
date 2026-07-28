@@ -40,7 +40,6 @@ fn validated_sha(sha: &str) -> Result<String> {
         Err(Error::Invalid(
             Msg::new(
                 "a commit sha must be full-length lower-case hex (40 for SHA-1, 64 for SHA-256) — not a short sha, branch, tag or revision",
-                "コミット SHA は完全形の小文字 hex（SHA-1 は 40 桁・SHA-256 は 64 桁）である必要があります ── 短縮 SHA・ブランチ・タグ・revision は不可",
             )
             .coded(ErrorCode::InvalidCommitSha),
         ))

@@ -807,7 +807,6 @@ fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
                     "location": p.location,
                     "code": p.code.as_str(),
                     "message": p.message.en(),
-                    "message_ja": p.message.ja(),
                 })
             })
             .collect();
@@ -1041,7 +1040,6 @@ fn plugin_config_field(
     let known = if declared.is_empty() { "none".to_string() } else { declared.join(", ") };
     Err(CliError::from(amenbo_core::Error::invalid(
         format!("plugin '{}' declares no setting '{key}' (it declares: {known})", plugin.name),
-        format!("プラグイン '{}' に設定 '{key}' はありません（宣言されているのは: {known}）", plugin.name),
     )))
 }
 
@@ -1722,11 +1720,6 @@ fn refuse_update_leaving_required_unset(
             missing.join(", "),
             Paths::command_name()
         ),
-        format!(
-            "'{name}' の新しい版は未入力の必須設定を要求します（{}）。先に設定してから更新してください——今の版はそのまま変わりません：`{} plugin config set {name} <key> <value>`",
-            missing.join("、"),
-            Paths::command_name()
-        ),
     ))
 }
 
@@ -1913,13 +1906,6 @@ fn plugin_run_cmd(
             };
             Err(CliError::from(amenbo_core::Error::invalid(
                 format!("plugin '{name}' {how} — its return value was discarded"),
-                format!(
-                    "プラグイン '{name}' は{}——戻り値は使いませんでした",
-                    match code {
-                        Some(code) => format!("終了コード {code} で終わりました"),
-                        None => "シグナルで終了しました".to_string(),
-                    }
-                ),
             )))
         }
     }
@@ -3749,7 +3735,6 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
         }
         Err(CliError::from(amenbo_core::Error::invalid(
             "only a time-axis dimension's values carry a period; mark the axis with --time-axis first",
-            "期間を持てるのは時間軸の次元の値だけです。先に --time-axis で軸に印を付けてください",
         )))
     }
     /// Build a value's new period from `--start`/`--end` (a new end) and `--clear-*` (open an end). An end
@@ -3807,7 +3792,7 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
                 .dimension(did)
                 .map_err(CliError::from)?
                 
-                .ok_or_else(|| { let r = dimension_label(did); CliError::from(amenbo_core::Error::not_found(format!("dimension '{r}' not found"), format!("次元 '{r}' が見つかりません"))) })?;
+                .ok_or_else(|| { let r = dimension_label(did); CliError::from(amenbo_core::Error::not_found(format!("dimension '{r}' not found"))) })?;
             let vals: Vec<_> = store.dimension_values(did).map_err(CliError::from)?;
             if flags.json {
                 print_json(&json!({ "dimension": serde_json::to_value(&d).unwrap(), "values": serde_json::to_value(&vals).unwrap() }));
@@ -3905,7 +3890,7 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
                 ensure_time_axis(store, did)?;
             }
             let cur = store.dimension_value(vid).map_err(CliError::from)?.ok_or_else(|| {
-                CliError::from(amenbo_core::Error::not_found(format!("dimension value '{vid}' not found"), format!("次元の値 '{vid}' が見つかりません")))
+                CliError::from(amenbo_core::Error::not_found(format!("dimension value '{vid}' not found")))
             })?;
             let period = touches_period
                 .then(|| merged_period(&cur, start_on, end_on, clear_start, clear_end));
@@ -4019,14 +4004,11 @@ fn project_required(store: &Store) -> CliError {
     if projects.is_empty() {
         return CliError::from(amenbo_core::Error::invalid(
             "--project is required, but no projects exist yet — create one first",
-            "--project は必須ですが、プロジェクトがまだありません — まず1つ作成してください",
         ));
     }
     let en = projects.iter().map(|p| format!("{} ({})", p.name, p.id)).collect::<Vec<_>>().join(", ");
-    let ja = projects.iter().map(|p| format!("「{}」({})", p.name, p.id)).collect::<Vec<_>>().join("、");
     CliError::from(amenbo_core::Error::invalid(
         format!("--project is required. existing projects: {en}. pass --project <id|name>"),
-        format!("--project は必須です。既存プロジェクト: {ja}。--project <id|名前> を指定してください"),
     ))
 }
 
@@ -4049,14 +4031,12 @@ fn resolve_dim_pairs(store: &Store, project_id: i64, pairs: &[String]) -> Result
         let Some((axis, value)) = pair.split_once('=') else {
             return Err(CliError::from(amenbo_core::Error::invalid(
                 format!("--dim takes <axis>=<value> (e.g. --dim \"Category=bug\"), got `{pair}`"),
-                format!("--dim は <軸>=<値> の形式です（例: --dim \"カテゴリー=バグ\"）。受け取った値: `{pair}`"),
             )));
         };
         let dimension_id = store.resolve_dimension(Some(project_id), axis).map_err(CliError::from)?;
         if axes.contains(&dimension_id) {
             return Err(CliError::from(amenbo_core::Error::invalid(
                 format!("--dim names the axis `{axis}` twice — an axis holds one value, so pass it once"),
-                format!("--dim で軸「{axis}」を2度指定しています。軸は単一選択なので1度だけ指定してください"),
             )));
         }
         axes.push(dimension_id);
@@ -4216,10 +4196,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
     match sub {
         TaskCmd::Add { title, project, due, start, priority, notes, to, ai, dim } => {
             if ai && to.is_none() {
-                return Err(CliError::from(amenbo_core::Error::invalid(
-                    "--ai requires --to",
-                    "--ai は --to と併せて使います",
-                )));
+                return Err(CliError::from(amenbo_core::Error::invalid("--ai requires --to")));
             }
             // After the argument checks: a rejected invocation should not have drained the pipe first.
             let notes = body_arg(notes)?;

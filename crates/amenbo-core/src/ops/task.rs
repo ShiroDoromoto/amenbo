@@ -22,7 +22,7 @@ use crate::view::ReserveBlocker;
 use crate::time::Timestamp;
 
 /// This entity's word (the English/Japanese pair for `not_found` messages).
-pub(crate) const NOUN: Noun = Noun { en: "task", ja: "タスク", code: ErrorCode::NotFoundTask };
+pub(crate) const NOUN: Noun = Noun { en: "task", code: ErrorCode::NotFoundTask };
 
 /// Which kind a type-prefixed reference names — the code in `AMB-T-<n>` / `AMB-D-<n>`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -80,7 +80,7 @@ pub struct NewTask {
 /// high-water mark and **take the same number**.
 pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
     if input.title.trim().is_empty() {
-        return Err(Error::invalid("a task title cannot be empty", "タスクのタイトルは空にできません"));
+        return Err(Error::invalid("a task title cannot be empty"));
     }
     let now = Timestamp::now();
 
@@ -148,7 +148,7 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: TaskPatch) -> Result<Task> {
     let mut t = before.clone();
     if let Some(title) = patch.title {
         if title.trim().is_empty() {
-            return Err(Error::invalid("a task title cannot be empty", "タスクのタイトルは空にできません"));
+            return Err(Error::invalid("a task title cannot be empty"));
         }
         t.title = title;
     }
@@ -205,22 +205,18 @@ fn subject(tx: &WriteTx<'_>, id: i64) -> String {
 /// projection, so only the successor lets us say "relink it" about a decision that is still `accepted` yet no
 /// longer current.
 fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
-    let mut en = Vec::new();
-    let mut ja = Vec::new();
+    let mut reasons = Vec::new();
     for b in blockers {
         match b {
             ReserveBlocker::OpenBlocker { label } => {
-                en.push(format!("blocker {label} is not done"));
-                ja.push(format!("先行タスク {label} が未完了です"));
+                reasons.push(format!("blocker {label} is not done"));
             }
             ReserveBlocker::UnsettledPremise { label, superseded_by: Some(succ), .. } => {
-                en.push(format!("premise {label} was superseded by {succ} — relink it"));
-                ja.push(format!("根拠 {label} は {succ} に置き換わっています。link を張り替えてください"));
+                reasons.push(format!("premise {label} was superseded by {succ} — relink it"));
             }
             ReserveBlocker::UnsettledPremise { label, status, superseded_by: None } => match status {
                 DecisionStatus::Rejected => {
-                    en.push(format!("premise {label} was rejected — the task needs rethinking"));
-                    ja.push(format!("根拠 {label} は却下されています。タスクの見直しが必要です"));
+                    reasons.push(format!("premise {label} was rejected — the task needs rethinking"));
                 }
                 // `proposed` (not settled). "It was superseded" is caught by the arm above (successor
                 // present) — currency is a derived projection and never surfaces in status, so a premise that
@@ -228,27 +224,20 @@ fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
                 // (`reserve_blockers` judges on `unsettled_premise`, which lets an accepted premise
                 // that nothing supersedes through).
                 DecisionStatus::Proposed | DecisionStatus::Accepted => {
-                    en.push(format!("premise {label} is not settled — wait for the ruling, or unlink it"));
-                    ja.push(format!("根拠 {label} が未確定です。裁定を待つか link を外してください"));
+                    reasons.push(format!("premise {label} is not settled — wait for the ruling, or unlink it"));
                 }
             },
             // There is no force. Starting early means the declared day is wrong, so the way through is
             // to correct the declaration — which is what the advice names, rather than a flag that would
             // let the declaration rot into decoration.
             ReserveBlocker::NotStartedYet { start_on } => {
-                en.push(format!(
+                reasons.push(format!(
                     "it is not due to start until {start_on} — run `task update {subject} --start today` if that is wrong"
-                ));
-                ja.push(format!(
-                    "着手日 {start_on} がまだ来ていません（宣言が誤っているなら `task update {subject} --start today`）"
                 ));
             }
         }
     }
-    Error::not_ready(
-        format!("cannot reserve task {subject}: {}", en.join("; ")),
-        format!("タスク {subject} を予約できません: {}", ja.join("・")),
-    )
+    Error::not_ready(format!("cannot reserve task {subject}: {}", reasons.join("; ")))
 }
 
 /// Set the status. `status` is the single source of truth for completion, and whether a task is done is
@@ -278,7 +267,6 @@ pub fn set_status(tx: &WriteTx<'_>, id: i64, status: TaskStatus) -> Result<Task>
         return Err(Error::AlreadyReserved(
             Msg::new(
                 format!("cannot reserve task {subject}: it is '{cur}', not 'todo' (reserve is todo → in_progress; another session may hold it)"),
-                format!("タスク {subject} を予約できません: 現在 '{cur}' です（予約は todo → in_progress のみ・別セッションが着手済みの可能性）"),
             )
             // The status is not sent: naming it would put an English token ('in_progress') inside the
             // reader's sentence, and what the sentence has to say is that it is not `todo`.
@@ -362,7 +350,7 @@ pub fn move_to(
 
     let proj = target_project
         .or(before.project_id)
-        .ok_or_else(|| Error::invalid("a target project is required (specify --project)", "配置先プロジェクトが必要です（--project を指定してください）"))?;
+        .ok_or_else(|| Error::invalid("a target project is required (specify --project)"))?;
 
     // An edge that was legal within one project becomes a crossing as soon as one of its ends moves. A guard
     // at creation time alone cannot hold the invariant, so re-check the edges against the destination. If one
@@ -374,7 +362,6 @@ pub fn move_to(
     {
         return Err(Error::invalid(
             "moving this task there would leave an edge crossing projects — detach its dependencies / decision links / dimension values first",
-            "このタスクをそこへ移すと、プロジェクトを跨ぐエッジが残ります ── 先に依存／決定リンク／次元の値を外してください",
         ));
     }
 
@@ -523,7 +510,6 @@ mod tests {
             let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("blocker AMB-T-2 is not done"), "{}", err.message_en());
-            assert!(err.to_string().contains("先行タスク AMB-T-2 が未完了です"), "{err}");
             assert_eq!(status_of(tx, tid), TaskStatus::Todo, "rejected, and the status has not moved");
 
             // Once the blocker is done the premise holds, and the reservation goes through.
@@ -543,7 +529,6 @@ mod tests {
             let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("premise AMB-D-1 is not settled"), "{}", err.message_en());
-            assert!(err.to_string().contains("根拠 AMB-D-1 が未確定です"), "{err}");
 
             // accepted: the premise is alive, so the reservation goes through.
             crate::ops::decision::accept(tx, proposed, None).unwrap();
@@ -556,7 +541,6 @@ mod tests {
             let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("premise AMB-D-1 was superseded by AMB-D-2"), "{}", err.message_en());
-            assert!(err.to_string().contains("根拠 AMB-D-1 は AMB-D-2 に置き換わっています"), "{err}");
 
             // rejected: the task itself needs rethinking.
             crate::ops::decision::unlink(tx, proposed, tid).unwrap();
@@ -565,7 +549,6 @@ mod tests {
             crate::ops::decision::link(tx, rejected, tid).unwrap();
             let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
             assert!(err.message_en().contains("premise AMB-D-3 was rejected"), "{}", err.message_en());
-            assert!(err.to_string().contains("根拠 AMB-D-3 は却下されています"), "{err}");
 
             // Unlink the premise and the task is startable at once — that is the way out.
             crate::ops::decision::unlink(tx, rejected, tid).unwrap();
@@ -669,7 +652,6 @@ mod tests {
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("not due to start until"), "{}", err.message_en());
             assert!(err.message_en().contains("--start today"), "the way through is named: {}", err.message_en());
-            assert!(err.to_string().contains("着手日"), "{err}");
             assert_eq!(status_of(tx, tid), TaskStatus::Todo, "rejected, and the status has not moved");
 
             // Correcting the declaration is the way through — the same move the message names.

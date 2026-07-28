@@ -90,13 +90,10 @@ pub fn add_url(
 ) -> Result<Attachment> {
     let url = url.trim();
     if url.is_empty() {
-        return Err(Error::invalid("a url attachment needs a url", "url 添付には url が必要です"));
+        return Err(Error::invalid("a url attachment needs a url"));
     }
     if !is_web_url(url) {
-        return Err(Error::invalid(
-            "a url attachment must be http, https or mailto",
-            "url 添付は http / https / mailto のみです",
-        ));
+        return Err(Error::invalid("a url attachment must be http, https or mailto"));
     }
     let now = Timestamp::now();
     let a = Attachment {

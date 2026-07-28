@@ -4,25 +4,22 @@
 //!
 //! i18n layering:
 //! The machine/agent surface (`--json`'s `code`) is a fixed-English contract, and `code()` here is its
-//! canonical source. Human-facing wording has two surfaces:
-//! - **CLI (an all-English contract surface)** — use [`Error::message_en`].
-//! - **GUI (a localized human surface)** — Tauri commands return failures as a structured `CmdError`
-//!   (`app/src-tauri/src/error.rs`) carrying `code()` (the stable code), `to_string()` (the Japanese
-//!   `Display`), [`Error::message_en`] (English) and `fields` for interpolation; the front end
-//!   (`errLabel` in `app/src/core/i18n/index.ts`) maps `code` onto per-language templates. A code with no
-//!   template falls back to the Japanese `Display` / the English `message_en`.
+//! canonical source. **The prose is English too, everywhere** — there is one sentence per failure, the
+//! `Display` one, and [`Error::message_en`] is the name the CLI's all-English surface calls it by. No
+//! second language is written here: nineteen of them cannot be, and the side that holds the dictionary is
+//! the side that can write them (`AMB-D-396` / `AMB-D-413`).
+//!
+//! The GUI reads that dictionary instead of this prose. Tauri commands return failures as a structured
+//! `CmdError` (`app/src-tauri/src/error.rs`) carrying `code()` (the stable code), the sentence, and
+//! `fields` for interpolation; the front end (`errLabel` in `app/src/core/i18n/index.ts`) maps `code` onto
+//! per-language templates. A code with no template falls back to the English sentence, which is the same
+//! answer an untranslated key gets.
 //!
 //! Which is why a code has two grains ([`ErrorCode`]). A template can only be written for a code that means
 //! one sentence, so the refusals the GUI shows a person carry a **sentence** code ([`Msg::coded`]) and send
 //! the values that sentence is built from ([`Msg::with`]) instead of only the prose. Everything else keeps
 //! its variant's **family** code and reads in English, which is the settled answer for a surface no one is
 //! translating (`AMB-D-413`).
-//!
-//! The free-prose variants (`NotFound` / `Invalid` / `Conflict` / `FormatAhead` / `StoreBusy`) carry a
-//! [`Msg`] payload so they can hold both languages at once. Detail that is already English because it
-//! came from a library (`Storage` / `Io` / `Json`), and detail that is already structured
-//! (`AmbiguousId` and friends), keeps its payload as-is: the language difference is absorbed entirely
-//! by the prefix template.
 
 use std::path::Path;
 
@@ -79,30 +76,28 @@ impl Fields {
     }
 }
 
-/// An error message that holds both languages. `Display` (the GUI's human surface) is Japanese; the CLI
-/// uses [`Msg::en`].
+/// An error message: one sentence, in English. It is what the CLI contracts to print, and what a reader
+/// gets wherever no dictionary was consulted — a second language is not written here, because nineteen of
+/// them cannot be and the side holding the dictionary is the side that can (`AMB-D-396` / `AMB-D-413`).
 ///
-/// Dynamic detail (ids and the like) is interpolated into both sentences by the caller — the same value
-/// in each.
+/// Dynamic detail (ids and the like) is interpolated into the sentence by the caller.
 ///
 /// A message may also **name itself**: [`Msg::coded`] pins a fine-grained [`ErrorCode`] to this one
 /// sentence, and [`Msg::with`] sends the values that sentence is built from alongside it. That pair is
-/// what lets the GUI compose the sentence in the reader's language instead of showing the Japanese or
-/// English one written here (`AMB-D-413`). A message that names nothing keeps its variant's coarse code
-/// and falls back to the sentence, which is the answer for every surface the GUI does not show.
+/// what lets the GUI compose the sentence in the reader's language instead of showing the English one
+/// written here (`AMB-D-413`). A message that names nothing keeps its variant's coarse code and falls
+/// back to the sentence, which is the answer for every surface the GUI does not show.
 #[derive(Debug, Clone)]
 pub struct Msg {
     en: String,
-    ja: String,
     code: Option<ErrorCode>,
     fields: Fields,
 }
 
 impl Msg {
-    pub fn new(en: impl Into<String>, ja: impl Into<String>) -> Self {
+    pub fn new(en: impl Into<String>) -> Self {
         Msg {
             en: en.into(),
-            ja: ja.into(),
             code: None,
             fields: Fields::default(),
         }
@@ -121,14 +116,9 @@ impl Msg {
         self
     }
 
-    /// The English sentence, for the CLI's all-English surface.
+    /// The sentence.
     pub fn en(&self) -> &str {
         &self.en
-    }
-
-    /// The Japanese sentence, for the GUI's localized human surface.
-    pub fn ja(&self) -> &str {
-        &self.ja
     }
 
     /// The code naming this one sentence, if it names itself.
@@ -143,9 +133,8 @@ impl Msg {
 }
 
 impl std::fmt::Display for Msg {
-    /// Renders Japanese, for the GUI's human surface (`to_string()`).
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.ja)
+        f.write_str(&self.en)
     }
 }
 
@@ -155,7 +144,7 @@ pub enum Error {
     NotFound(Msg),
 
     /// An abbreviated id matched more than one entity; the candidates are listed back.
-    #[error("ID '{prefix}' は曖昧です。候補: {candidates:?}")]
+    #[error("id '{prefix}' is ambiguous. candidates: {candidates:?}")]
     AmbiguousId {
         prefix: String,
         candidates: Vec<String>,
@@ -188,7 +177,7 @@ pub enum Error {
     OutOfReach(Msg),
 
     /// The path a project→dir binding points at is gone. We do not quietly go and work somewhere else.
-    #[error("プロジェクトの紐付け先ディレクトリが見つかりません: {0}")]
+    #[error("the linked project directory was not found: {0}")]
     BindingStale(String),
 
     /// The store has been migrated forward past this build's [`crate::model::FORMAT_VERSION`] — an **old
@@ -201,16 +190,16 @@ pub enum Error {
     #[error("{0}")]
     FormatAhead(Msg),
 
-    #[error("入出力エラー: {0}")]
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("JSON の解析に失敗しました: {0}")]
+    #[error("failed to parse JSON: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("ストア（engine）の操作に失敗しました: {0}")]
+    #[error("store (engine) operation failed: {0}")]
     Storage(String),
 
-    #[error("ストアは別のプロセスが使用中です: {0}")]
+    #[error("the store is in use by another process: {0}")]
     StoreBusy(Msg),
 }
 
@@ -427,60 +416,43 @@ impl Error {
         }
     }
 
-    /// The English message for the CLI's all-English surface (`--json`'s `message`, and human prose).
-    /// The GUI uses the Japanese `Display` (`to_string()`) instead.
+    /// The message for the CLI's all-English surface (`--json`'s `message`, and human prose). It is the
+    /// `Display` sentence under the name that surface knows it by — there is only ever one sentence, so
+    /// writing a second English rendering here would be a second place for it to drift.
     pub fn message_en(&self) -> String {
-        match self {
-            Error::NotFound(m) => m.en().to_string(),
-            Error::AmbiguousId { prefix, candidates } => {
-                format!("id '{prefix}' is ambiguous. candidates: {candidates:?}")
-            }
-            Error::Invalid(m) => m.en().to_string(),
-            Error::Conflict(m) => m.en().to_string(),
-            Error::AlreadyReserved(m) => m.en().to_string(),
-            Error::NotReady(m) => m.en().to_string(),
-            Error::OutOfReach(m) => m.en().to_string(),
-            Error::BindingStale(p) => {
-                format!("the linked project directory was not found: {p}")
-            }
-            Error::FormatAhead(m) => m.en().to_string(),
-            Error::Io(e) => format!("I/O error: {e}"),
-            Error::Json(e) => format!("failed to parse JSON: {e}"),
-            Error::Storage(s) => format!("store (engine) operation failed: {s}"),
-            Error::StoreBusy(m) => format!("the store is in use by another process: {m}", m = m.en()),
-        }
+        self.to_string()
     }
 
-    pub fn invalid(en: impl Into<String>, ja: impl Into<String>) -> Self {
-        Error::Invalid(Msg::new(en, ja))
+    pub fn invalid(en: impl Into<String>) -> Self {
+        Error::Invalid(Msg::new(en))
     }
 
-    pub fn not_found(en: impl Into<String>, ja: impl Into<String>) -> Self {
-        Error::NotFound(Msg::new(en, ja))
+    pub fn not_found(en: impl Into<String>) -> Self {
+        Error::NotFound(Msg::new(en))
     }
 
-    pub fn conflict(en: impl Into<String>, ja: impl Into<String>) -> Self {
-        Error::Conflict(Msg::new(en, ja))
+    pub fn conflict(en: impl Into<String>) -> Self {
+        Error::Conflict(Msg::new(en))
     }
 
-    pub fn already_reserved(en: impl Into<String>, ja: impl Into<String>) -> Self {
-        Error::AlreadyReserved(Msg::new(en, ja))
+    pub fn already_reserved(en: impl Into<String>) -> Self {
+        Error::AlreadyReserved(Msg::new(en))
     }
 
-    pub fn not_ready(en: impl Into<String>, ja: impl Into<String>) -> Self {
-        Error::NotReady(Msg::new(en, ja))
+    pub fn not_ready(en: impl Into<String>) -> Self {
+        Error::NotReady(Msg::new(en))
     }
 
-    pub fn out_of_reach(en: impl Into<String>, ja: impl Into<String>) -> Self {
-        Error::OutOfReach(Msg::new(en, ja))
+    pub fn out_of_reach(en: impl Into<String>) -> Self {
+        Error::OutOfReach(Msg::new(en))
     }
 
-    pub fn format_ahead(en: impl Into<String>, ja: impl Into<String>) -> Self {
-        Error::FormatAhead(Msg::new(en, ja))
+    pub fn format_ahead(en: impl Into<String>) -> Self {
+        Error::FormatAhead(Msg::new(en))
     }
 
-    pub fn store_busy(en: impl Into<String>, ja: impl Into<String>) -> Self {
-        Error::StoreBusy(Msg::new(en, ja))
+    pub fn store_busy(en: impl Into<String>) -> Self {
+        Error::StoreBusy(Msg::new(en))
     }
 }
 
@@ -491,14 +463,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cli_message_is_english_gui_display_is_japanese() {
-        let e = Error::not_found("task 'X' not found", "タスク 'X' が見つかりません");
+    fn there_is_one_sentence_and_it_is_english() {
+        let e = Error::not_found("task 'X' not found");
         // The machine contract: the code stays fixed English.
         assert_eq!(e.code(), "not_found");
-        // The CLI's all-English surface.
-        assert_eq!(e.message_en(), "task 'X' not found");
-        // The GUI's localized human surface (the to_string() a Tauri command returns) is Japanese.
-        assert_eq!(e.to_string(), "タスク 'X' が見つかりません");
+        // The prose face and the CLI's name for it are the same sentence — no second rendering to drift.
+        assert_eq!(e.to_string(), "task 'X' not found");
+        assert_eq!(e.message_en(), e.to_string());
     }
 
     #[test]
@@ -567,7 +538,7 @@ mod tests {
         // A refusal the GUI shows names itself, and sends what the sentence is about apart from the
         // sentence — that pair is what the dictionary side needs to write it in a third language.
         let e = Error::NotFound(
-            Msg::new("task 'AMB-T-12' not found", "タスク 'AMB-T-12' が見つかりません")
+            Msg::new("task 'AMB-T-12' not found")
                 .coded(ErrorCode::NotFoundTask)
                 .with("ref", "AMB-T-12"),
         );
@@ -577,23 +548,34 @@ mod tests {
 
         // A message that names no sentence keeps the family code, and carries no values: its whole
         // answer is the prose, which is what a reader gets where no template exists.
-        let plain = Error::not_found("task 'X' not found", "タスク 'X' が見つかりません");
+        let plain = Error::not_found("task 'X' not found");
         assert_eq!(plain.code(), "not_found");
         assert!(plain.fields().is_none());
     }
 
     #[test]
-    fn structured_variants_render_both_languages() {
-        // Already-structured detail absorbs the language difference in the prefix template alone.
+    fn structured_variants_read_in_english_too() {
+        // The variants that carry no `Msg` write their prose in the `#[error]` template, which is the one
+        // place their sentence could still have been left in another language.
         let e = Error::AmbiguousId { prefix: "01K".into(), candidates: vec!["a".into(), "b".into()] };
         assert_eq!(e.code(), "ambiguous_id");
-        assert!(e.message_en().contains("is ambiguous"));
-        assert!(e.to_string().contains("は曖昧です"));
+        assert!(e.to_string().contains("is ambiguous"));
 
-        // Detail that arrives from a library already in English rides both surfaces as-is.
+        // Detail that arrives from a library is already English, and the prefix no longer changes that.
         let storage = Error::Storage("engine write failed".into());
         assert_eq!(storage.code(), "storage_error");
-        assert!(storage.message_en().starts_with("store (engine) operation failed"));
-        assert!(storage.to_string().starts_with("ストア（engine）の操作に失敗"));
+        assert!(storage.to_string().starts_with("store (engine) operation failed"));
+
+        for e in [
+            e,
+            storage,
+            Error::BindingStale("/gone".into()),
+            Error::Json(serde_json::from_str::<i32>("{").unwrap_err()),
+        ] {
+            assert!(
+                !e.to_string().chars().any(|c| ('\u{3040}'..='\u{30ff}').contains(&c)),
+                "no kana in a core sentence: {e}"
+            );
+        }
     }
 }

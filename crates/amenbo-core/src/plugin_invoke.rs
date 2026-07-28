@@ -102,9 +102,6 @@ pub fn prepare(
             format!(
                 "plugin '{name}' is installed but not enabled — `{cmd} plugin enable {name}` opens its gate"
             ),
-            format!(
-                "プラグイン '{name}' はインストール済みですが有効ではありません——`{cmd} plugin enable {name}` で門を開いてください"
-            ),
         ));
     }
 

@@ -249,7 +249,6 @@ impl CapacityPolicy {
             return Err(Error::Invalid(
                 Msg::new(
                     format!("attachment is {size} bytes, over the {} per-file limit of {max} bytes", class.as_str()),
-                    format!("添付が {size} バイトで、{} の per-file 上限 {max} バイトを超えています", class.as_str()),
                 )
                 .coded(ErrorCode::InvalidAttachmentTooLarge)
                 .with("size", size)
@@ -520,10 +519,7 @@ impl BlobStore {
 
     fn missing(hash: &str) -> Error {
         Error::NotFound(
-            Msg::new(
-                format!("blob {hash} is not stored locally"),
-                format!("blob {hash} はローカルに存在しません"),
-            )
+            Msg::new(format!("blob {hash} is not stored locally"))
             .coded(ErrorCode::NotFoundBlob)
             .with("hash", hash),
         )

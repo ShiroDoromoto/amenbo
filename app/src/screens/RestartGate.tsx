@@ -81,7 +81,7 @@ export function RestartGate() {
           <p className="muted">{t("restart.stuck.intro", lang)}</p>
           {detail && (
             <pre className="restart__detail" style={{ whiteSpace: "pre-wrap" }}>
-              {lang === "ja" ? detail.ja : detail.en}
+              {detail}
             </pre>
           )}
           <p className="muted">{t("restart.stuck.how", lang)}</p>

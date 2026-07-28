@@ -154,30 +154,18 @@ pub fn program_path(paths: &Paths, name: &str) -> PathBuf {
 /// broken install the caller must be told about, not one silently treated as absent.
 pub fn read(paths: &Paths, name: &str) -> Result<InstalledPlugin> {
     if is_reserved_plugin_name(name) {
-        return Err(Error::invalid(
-            format!("'{name}' is not a plugin name (it is reserved for the registry cache)"),
-            format!("'{name}' はプラグイン名ではありません（カタログのキャッシュ用に予約されています）"),
-        ));
+        return Err(Error::invalid(format!("'{name}' is not a plugin name (it is reserved for the registry cache)")));
     }
     let manifest_file = manifest_path(paths, name);
     let raw = match std::fs::read_to_string(&manifest_file) {
         Ok(raw) => raw,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err(Error::not_found(
-                format!("plugin '{name}' is not installed"),
-                format!("プラグイン '{name}' はインストールされていません"),
-            ));
+            return Err(Error::not_found(format!("plugin '{name}' is not installed")));
         }
         Err(e) => return Err(Error::from(e)),
     };
     let manifest: Manifest = serde_json::from_str(&raw).map_err(|e| {
-        Error::invalid(
-            format!("plugin '{name}' has a malformed manifest ({}): {e}", manifest_file.display()),
-            format!(
-                "プラグイン '{name}' の manifest が壊れています（{}）: {e}",
-                manifest_file.display()
-            ),
-        )
+        Error::invalid(format!("plugin '{name}' has a malformed manifest ({}): {e}", manifest_file.display()))
     })?;
     if manifest.name != name {
         return Err(Error::invalid(
@@ -185,18 +173,11 @@ pub fn read(paths: &Paths, name: &str) -> Result<InstalledPlugin> {
                 "plugin '{name}' has a manifest naming a different plugin ('{}')",
                 manifest.name
             ),
-            format!(
-                "プラグイン '{name}' の manifest が別のプラグイン（'{}'）を名乗っています",
-                manifest.name
-            ),
         ));
     }
     let program = program_path(paths, name);
     if !program.exists() {
-        return Err(Error::invalid(
-            format!("plugin '{name}' has no executable at {}", program.display()),
-            format!("プラグイン '{name}' の実行ファイルがありません（{}）", program.display()),
-        ));
+        return Err(Error::invalid(format!("plugin '{name}' has no executable at {}", program.display())));
     }
     Ok(InstalledPlugin { name: name.to_string(), program, manifest, origin: origin(paths, name) })
 }

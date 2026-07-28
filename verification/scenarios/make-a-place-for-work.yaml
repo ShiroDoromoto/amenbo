@@ -1,0 +1,177 @@
+# Where work is kept. A project is the only place a task can sit, so this is the road walked before
+# any other: register one, correct what it ended up called, put it where it should sit among the
+# rest, and file work into it. The counts are the half a reader trusts without opening anything — a
+# project that does not count what it holds makes the listing lie about where the work is.
+id: make-a-place-for-work
+title: A project is registered, corrected, placed in the listing, and counts the work filed into it
+description: >
+  Register a project and read it back under the name it was given, then correct that name and its
+  notes on the same row. A second project says where a newly added one lands in the listing, and
+  sending the first to the top and back says the order is the store's to keep — the key it keeps it
+  by is opaque, so the listing is the only place a reorder is visible. Tasks are then filed in and
+  one of them finished, and the counts are read off the project: total, completed and incomplete are
+  what a person picks a place of work from without opening it.
+steps_cli:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: SCENARIO PROJECT — the place work is kept
+    as: pj
+
+  # Readable back under the name it was given, and in the listing a person picks from.
+  - type: assert
+    domain: project
+    op: field
+    with:
+      target: pj
+      field: name
+      equals: SCENARIO PROJECT — the place work is kept
+
+  - type: assert
+    domain: project
+    op: listed
+    with:
+      target: pj
+      present: true
+
+  # Nothing is filed here yet, and an empty project is counted as empty rather than left blank.
+  - type: assert
+    domain: project
+    op: field
+    with:
+      target: pj
+      field: task_counts.total
+      equals: 0
+
+  # A second one, which is what makes the listing an order at all — and a newly added project is
+  # appended after the projects already there.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: SCENARIO PROJECT — registered second
+    as: later
+
+  - type: assert
+    domain: project
+    op: listed
+    with:
+      target: later
+      position: last
+
+  # Edited in place: the fields it names change, and the row is the same row.
+  - type: action
+    domain: project
+    op: update
+    with:
+      target: pj
+      name: SCENARIO PROJECT — renamed
+      notes: what this place is for
+
+  - type: assert
+    domain: project
+    op: field
+    with:
+      target: pj
+      field: name
+      equals: SCENARIO PROJECT — renamed
+
+  - type: assert
+    domain: project
+    op: field
+    with:
+      target: pj
+      field: notes
+      equals: what this place is for
+
+  # Order is the store's to keep, so where it sits is the only place the reorder is visible.
+  - type: action
+    domain: project
+    op: move
+    with:
+      target: pj
+      position: top
+
+  - type: assert
+    domain: project
+    op: listed
+    with:
+      target: pj
+      position: first
+
+  - type: action
+    domain: project
+    op: move
+    with:
+      target: pj
+      position: bottom
+
+  - type: assert
+    domain: project
+    op: listed
+    with:
+      target: pj
+      position: last
+
+  # Work filed here, one piece of it finished — which is what makes the project a place and not a
+  # label.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — still to do
+    as: piled
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — carried out
+    as: cleared
+
+  - type: action
+    domain: task
+    op: move
+    with:
+      target: piled
+      project: pj
+
+  - type: action
+    domain: task
+    op: move
+    with:
+      target: cleared
+      project: pj
+
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: cleared
+
+  # The counts follow the tasks, both halves apart: a total that moves while the split behind it
+  # stands still is the failure this reads for.
+  - type: assert
+    domain: project
+    op: field
+    with:
+      target: pj
+      field: task_counts.total
+      equals: 2
+
+  - type: assert
+    domain: project
+    op: field
+    with:
+      target: pj
+      field: task_counts.completed
+      equals: 1
+
+  - type: assert
+    domain: project
+    op: field
+    with:
+      target: pj
+      field: task_counts.incomplete
+      equals: 1

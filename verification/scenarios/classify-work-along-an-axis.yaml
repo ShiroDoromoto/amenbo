@@ -1,0 +1,163 @@
+# How a project is cut into views without growing a field per question. The axis and its values are
+# only the half a person sets up; the half that matters to a reader is that filing a task under a
+# value is what the filter then finds. An assignment nothing can query is not a classification, so
+# every filing here is read back through `dim:<axis>=<value>` rather than off a field.
+id: classify-work-along-an-axis
+title: An axis is defined with its values, work is filed under one, and the filing is what the filter finds
+description: >
+  Define an axis and the values it offers, read the offer back, and file two tasks under different
+  values. Each filing is then looked for through the filter, both halves every time — the task it
+  should find and the one it should leave out. Re-filing one of them says the axis holds a single
+  value rather than piling them up, and taking the filing off says the task keeps living once it is
+  no longer filed under the axis at all.
+steps_cli:
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: medium
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: medium
+      value: print
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: medium
+      value: web
+
+  # What the axis offers is exactly what was added to it, which is asked from both sides: a value
+  # nobody defined must not be on offer either.
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: medium
+      present: true
+
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: medium
+      value: print
+      present: true
+
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: medium
+      value: video
+      present: false
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the printed piece
+    as: feature
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the online piece
+    as: banner
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: feature
+      dimension: medium
+      value: print
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: banner
+      dimension: medium
+      value: web
+
+  # Filed under one value, and found by it — the assignment is read back through the filter, not a
+  # field, and the other task standing outside the answer is half of what makes it an answer.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:medium=print"
+      target: feature
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:medium=print"
+      target: banner
+      present: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:medium=web"
+      target: banner
+      present: true
+
+  # Single-select: setting the other value replaces the first rather than piling up beside it.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: feature
+      dimension: medium
+      value: web
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:medium=print"
+      target: feature
+      present: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:medium=web"
+      target: feature
+      present: true
+
+  # Taken back off: the task keeps living, it is only no longer filed under the axis.
+  - type: action
+    domain: dimension
+    op: unset
+    with:
+      target: feature
+      dimension: medium
+      value: web
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:medium=web"
+      target: feature
+      present: false
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: feature
+      field: title
+      equals: SCENARIO SEED — the printed piece

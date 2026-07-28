@@ -16,6 +16,15 @@ import type { Priority, Status } from "../../mock/types";
 import type { DoctorTemplate, Translation, UiKey, ViewKind } from "./keys";
 import { en } from "./locales/en";
 import { ja } from "./locales/ja";
+import { zhHans } from "./locales/zh-Hans";
+import { zhHant } from "./locales/zh-Hant";
+import { ko } from "./locales/ko";
+import { es } from "./locales/es";
+import { ptBR } from "./locales/pt-BR";
+import { fr } from "./locales/fr";
+import { de } from "./locales/de";
+import { it } from "./locales/it";
+import { ru } from "./locales/ru";
 import { currentLang, type Lang } from "./lang";
 import { formatNumber } from "./format";
 
@@ -35,7 +44,9 @@ export type { ViewKind } from "./keys";
  * kept beside this one would go stale the first time a dictionary is added, and the gate would then
  * pass by not looking.
  */
-export const DICTIONARIES: Partial<Record<Lang, Translation>> = { en, ja };
+export const DICTIONARIES: Partial<Record<Lang, Translation>> = {
+  en, ja, "zh-Hans": zhHans, "zh-Hant": zhHant, ko, es, "pt-BR": ptBR, fr, de, it, ru,
+};
 
 /** The UI string this language has for the key, else the English one. */
 function ui(key: string, lang: Lang): string | undefined {

@@ -411,14 +411,8 @@ const ui = {
   // The stand-in for a target whose name is past recovering: it was deleted, and the ledger row
   // that carried the name is gone too. The backend sends an empty title and this fills the gap.
   "act.nameless": "(deleted)",
-  // Relative time, and the due chip. Both are worded from a bare timestamp the backend sends.
-  "ago.justNow": "just now",
-  "ago.minutes.one": "{n} minute ago", "ago.minutes.other": "{n} minutes ago",
-  "ago.hours.one": "{n} hour ago", "ago.hours.other": "{n} hours ago",
-  "ago.days.one": "{n} day ago", "ago.days.other": "{n} days ago",
-  "due.today": "Today", "due.tomorrow": "Tomorrow", "due.yesterday": "Yesterday",
-  "due.inDays.one": "In {n} day", "due.inDays.other": "In {n} days",
-  "due.daysAgo.one": "{n} day ago", "due.daysAgo.other": "{n} days ago",
+  // Relative time and the due chip are not written here: "3 days ago" and "tomorrow" are `Intl`'s
+  // to word, from the bare timestamp the backend sends (see core/i18n/format).
   // app / shell chrome
   "app.loadError": "Failed to load data.", "app.loading": "Loading…",
   // lint hook consent: the question amenbo asks before writing into .git/hooks

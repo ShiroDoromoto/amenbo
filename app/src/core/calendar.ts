@@ -2,8 +2,9 @@
 // building the month grid, laying out the gantt axis — lives here, so that the `.tsx` side (CalendarView,
 // TimelineView) does nothing but draw the result. A due date is a calendar day (`YYYY-MM-DD`), so day arithmetic
 // runs on the UTC epoch to keep it out of the timezone's reach (no off-by-one from a local DST shift or offset).
+// The headings drawn beside this grid — the month, the weekdays — are not here: they are formatting, and
+// `Intl` writes them (core/i18n/format).
 import type { TaskCard } from "../mock/types";
-import type { Lang } from "./i18n";
 
 // Split a "YYYY-MM-DD" (its first 10 characters) into [year, month(1-12), day].
 export function parseYmd(s: string): [number, number, number] {
@@ -138,24 +139,4 @@ export function timelineModel(tasks: TaskCard[], today: string): TimelineModel {
   });
 
   return { rows, noDue, axisStart, axisEnd, spanDays, todayPct: pctOf(today) };
-}
-
-// ───────────────────────── Display labels ─────────────────────────
-
-const MONTHS_EN = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-// The month heading (year, month=0..11).
-export function monthLabel(year: number, month: number, lang: Lang): string {
-  return lang === "ja" ? `${year}年${month + 1}月` : `${MONTHS_EN[month]} ${year}`;
-}
-
-// The weekday headings (weekStart=0 starts the week on Sunday).
-export function weekdayLabels(lang: Lang, weekStart = 0): string[] {
-  const base = lang === "ja"
-    ? ["日", "月", "火", "水", "木", "金", "土"]
-    : ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-  return [...base.slice(weekStart), ...base.slice(0, weekStart)];
 }

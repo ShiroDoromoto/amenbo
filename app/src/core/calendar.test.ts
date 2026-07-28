@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   parseYmd, fmtDate, todayStr, daysBetween, addDays, shiftMonth,
   monthMatrix, dueKind, groupByDue, relativeDays, timelineModel,
-  monthLabel, weekdayLabels,
 } from "./calendar";
 import type { TaskCard } from "../mock/types";
 
@@ -143,18 +142,5 @@ describe("timelineModel", () => {
     expect(m.noDue).toHaveLength(1);
     expect(m.axisStart).toBe("2026-06-20");
     expect(m.axisEnd).toBe("2026-06-22");
-  });
-});
-
-describe("labels", () => {
-  it("monthLabel is language-specific", () => {
-    expect(monthLabel(2026, 5, "ja")).toBe("2026年6月");
-    expect(monthLabel(2026, 5, "en")).toBe("June 2026");
-  });
-
-  it("weekdayLabels rotate by weekStart", () => {
-    expect(weekdayLabels("ja")).toEqual(["日", "月", "火", "水", "木", "金", "土"]);
-    expect(weekdayLabels("ja", 1)).toEqual(["月", "火", "水", "木", "金", "土", "日"]);
-    expect(weekdayLabels("en")[0]).toBe("Su");
   });
 });

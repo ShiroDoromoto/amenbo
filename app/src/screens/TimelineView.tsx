@@ -1,6 +1,6 @@
 import type { TaskCard } from "../mock/types";
 import { timelineModel, todayStr, relativeDays } from "../core/calendar";
-import { t, tf } from "../core/i18n";
+import { formatNumber, t, tf } from "../core/i18n";
 import { BlockedChips, PriorityDot } from "../components/atoms";
 import { isClosed } from "../core/status";
 
@@ -86,7 +86,7 @@ export function TimelineView({ tasks, selectedTaskId, onSelectTask }: {
 
       {m.noDue.length > 0 && (
         <div className="cal__nodue">
-          <span className="cal__nodue-label">{t("cal.noDue")}（{m.noDue.length}）</span>
+          <span className="cal__nodue-label">{t("cal.noDue")}（{formatNumber(m.noDue.length)}）</span>
           {m.noDue.slice(0, NODUE_CAP).map((tk) => (
             <button
               key={tk.id}

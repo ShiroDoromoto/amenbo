@@ -17,8 +17,13 @@ import type { DoctorTemplate, Translation, UiKey, ViewKind } from "./keys";
 import { en } from "./locales/en";
 import { ja } from "./locales/ja";
 import { currentLang, type Lang } from "./lang";
+import { formatNumber } from "./format";
 
 export { currentLang, dateLocale, DEFAULT_LANG, guessLang, langEndonym, LANGS, normalizeLang, type Lang } from "./lang";
+// Dates, times and numbers are not dictionary entries — `Intl` writes them (see ./format).
+export {
+  agoLabel, dueLabel, formatDay, formatDayTime, formatNumber, monthLabel, weekdayLabels,
+} from "./format";
 export type { ViewKind } from "./keys";
 
 /**
@@ -105,8 +110,17 @@ export interface DoctorIssueLike {
   params: Record<string, string>;
 }
 
+/**
+ * Fills a sentence's `{name}` placeholders. A number goes through `Intl` on the way in: every number
+ * a template interpolates is a quantity — a count, a page, a percentage — and a quantity is written
+ * the way the reader's locale writes one.
+ */
 function fill(tmpl: string, params: Record<string, string | number>): string {
-  return tmpl.replace(/\{(\w+)\}/g, (_, k) => (k in params ? String(params[k]) : `{${k}}`));
+  return tmpl.replace(/\{(\w+)\}/g, (_, k) => {
+    if (!(k in params)) return `{${k}}`;
+    const v = params[k];
+    return typeof v === "number" ? formatNumber(v) : v;
+  });
 }
 
 /**
@@ -171,32 +185,6 @@ export function pluralCategory(n: number, lang: Lang = currentLang()): Intl.LDML
 export function tn(base: string, n: number, lang: Lang = currentLang()): string {
   const template = ui(`${base}.${pluralCategory(n, lang)}`, lang) ?? ui(`${base}.other`, lang);
   return fill(template ?? `${base}.other`, { n });
-}
-
-/** How long ago, from a timestamp — the wording under every comment and activity line. */
-export function agoLabel(at: string, lang: Lang = currentLang(), now: number = Date.now()): string {
-  const secs = Math.max(0, Math.floor((now - new Date(at).getTime()) / 1000));
-  if (secs < 60) return t("ago.justNow", lang);
-  if (secs < 3600) return tn("ago.minutes", Math.floor(secs / 60), lang);
-  if (secs < 86400) return tn("ago.hours", Math.floor(secs / 3600), lang);
-  return tn("ago.days", Math.floor(secs / 86400), lang);
-}
-
-/**
- * The due chip's wording, from the bare date core holds. Days are counted in whole calendar days
- * from today, so "tomorrow" means the next date rather than 24 hours from now — which is what a due
- * date means to the person who set it.
- */
-export function dueLabel(due: string, lang: Lang = currentLang(), today: Date = new Date()): string {
-  // A due date is a day. Anything a caller has attached to it is cut off first, the same way
-  // `dueKind` colours the chip, so the two never disagree about which day this is.
-  const at = new Date(`${due.slice(0, 10)}T00:00:00`);
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const diff = Math.round((at.getTime() - start.getTime()) / 86_400_000);
-  if (diff === 0) return t("due.today", lang);
-  if (diff === 1) return t("due.tomorrow", lang);
-  if (diff === -1) return t("due.yesterday", lang);
-  return diff > 0 ? tn("due.inDays", diff, lang) : tn("due.daysAgo", -diff, lang);
 }
 
 /**

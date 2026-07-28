@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Markdown } from "../components/Markdown";
 import { PluginGate } from "../components/PluginGate";
-import { errText, t, tf } from "../core/i18n";
+import { errText, formatNumber, t, tf } from "../core/i18n";
 import { openExternalUrl } from "../core/mutations";
 import {
   pluginLayer,
@@ -97,9 +97,9 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
             {tf("plugins.openRepo", { repo: entry.repo })}
           </button>
           {loading && <span className="faint">{t("plugins.factsLoading")}</span>}
-          {facts?.stars != null && <span>★ {facts.stars.toLocaleString()}</span>}
+          {facts?.stars != null && <span>★ {formatNumber(facts.stars)}</span>}
           {facts?.downloads != null && (
-            <span>{tf("plugins.downloads", { count: facts.downloads.toLocaleString() })}</span>
+            <span>{tf("plugins.downloads", { count: facts.downloads })}</span>
           )}
         </div>
         {/* Three different silences, and they are not the same news: too many requests means wait, a

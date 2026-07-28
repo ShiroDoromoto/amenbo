@@ -398,13 +398,6 @@ export const ja: Translation = {
     "act.nTasks.other": "タスク{n}件",
     "act.nDecisions.other": "決定{n}件",
     "act.nameless": "（削除済み）",
-    "ago.justNow": "たった今",
-    "ago.minutes.other": "{n}分前",
-    "ago.hours.other": "{n}時間前",
-    "ago.days.other": "{n}日前",
-    "due.today": "今日", "due.tomorrow": "明日", "due.yesterday": "昨日",
-    "due.inDays.other": "{n}日後",
-    "due.daysAgo.other": "{n}日前",
     "app.loadError": "データを読み込めませんでした。", "app.loading": "読み込み中…",
     // lint hook consent: the question amenbo asks before writing into .git/hooks
     "hooks.title": "コミットに amenbo の参照が混ざらないようにしますか？",

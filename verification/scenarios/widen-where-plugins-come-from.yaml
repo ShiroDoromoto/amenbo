@@ -10,7 +10,7 @@
 # second needs one, because a key is served, never written down: the run stands its own catalog on the
 # loopback (`catalog-stand`), which is the only way to walk what is pinned, what a rotation meets, and
 # what a catalog publishing no key is allowed to be.
-id: plugin-catalog-list
+id: widen-where-plugins-come-from
 title: A third-party catalog joins the browsing view beside the official one, unreachable and all, is trusted on the key it publishes, and can be taken back off
 description: >
   Read the browsing view as it comes: the official catalog, alone and reached. Register a third-party

@@ -260,6 +260,18 @@ impl Instructor {
             (Domain::Decision, "create") => {
                 format!("Create a decision titled \"{}\".", req(with, "title")?)
             }
+            // The moves that carry the screen from one shot to the next. They read as what to do and
+            // not as what to confirm, because that is what they are — the shot they leave behind is
+            // the screen after the move, which is how a road across screens is proven walked rather
+            // than assumed.
+            (Domain::Folder, "open-existing-card") => {
+                "Open the card that links this folder to a project this device already holds."
+                    .to_string()
+            }
+            (Domain::Folder, "choose-project") => format!(
+                "In that card, choose \"{}\" among the projects this device holds.",
+                req(with, "project")?
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -312,7 +324,7 @@ impl Instructor {
                 req(with, "absent")?
             ),
             (Domain::Folder, "open-existing") => format!(
-                "Open the card for a project this device already holds, and confirm it asks which project to link the folder to — with \"{}\", one of the projects on this device, chosen in it.",
+                "Confirm the open card asks which project to link the folder to — with \"{}\", one of the projects on this device, chosen in it.",
                 req(with, "project")?
             ),
             _ => return Err(unmapped(domain, op)),
@@ -743,6 +755,10 @@ steps_gui:
     /// The ways in: the judged one is judged by what must **not** be read back — a command is the
     /// same words in any language, so a screen carrying one is the failure. The project the card
     /// asks for is a name the side of every screen carries too, so that one is left for an eye.
+    ///
+    /// Between the two asserts sit the moves that get from the first screen to the second, written
+    /// as steps of their own: each is an instruction to carry out, and the shot each leaves behind
+    /// is the screen it arrived at.
     #[test]
     fn a_ways_in_assert_expects_the_command_to_be_absent() {
         let yaml = r#"
@@ -753,6 +769,13 @@ steps_gui:
     domain: folder
     op: ways-in
     with: { absent: "bind --project" }
+  - type: action
+    domain: folder
+    op: open-existing-card
+  - type: action
+    domain: folder
+    op: choose-project
+    with: { project: Greenhouse }
   - type: assert
     domain: folder
     op: open-existing
@@ -762,11 +785,13 @@ steps_gui:
         let mut ins = Instructor::new();
         let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
         assert!(lines[0].contains("\"bind --project\"") && lines[0].contains("two ways in"), "got: {}", lines[0]);
-        assert!(lines[1].contains("\"Greenhouse\"") && lines[1].contains("which project"), "got: {}", lines[1]);
+        assert!(lines[1].contains("Open the card") && lines[1].contains("already holds"), "got: {}", lines[1]);
+        assert!(lines[2].contains("\"Greenhouse\"") && lines[2].contains("choose"), "got: {}", lines[2]);
+        assert!(lines[3].contains("\"Greenhouse\"") && lines[3].contains("which project"), "got: {}", lines[3]);
 
         let exp = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the command is what must not be read back");
         assert_eq!(exp, Expectation { text: "bind --project".to_string(), present: false });
-        assert!(ins.expectation(&s.steps(Driver::Gui)[1]).is_none(), "a name the whole window carries is not a reading");
+        assert!(ins.expectation(&s.steps(Driver::Gui)[3]).is_none(), "a name the whole window carries is not a reading");
     }
 
     #[test]

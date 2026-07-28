@@ -13,10 +13,14 @@
 #
 # What this wants in front of it is a device with a project on it: the open card is offered where
 # there is something to open, and the choices it lists are what the store holds. Stand the project
-# named below in the store the build under test opens (`devtool devgui cli`) and go to the getting
-# started screen. The two steps are read off two screens, so drive it stepped (`--step`): the first
-# shot is the screen as a reader arrives at it, and the run then hands back — open the second card
-# and choose that project in it before releasing the second shot.
+# named below in the store the build under test opens (`devtool devgui cli`), and start the run on
+# the getting started screen — the one screen nothing here can move to, since the first shot is
+# taken before anyone is handed the run.
+#
+# Everything after it is a step: the road crosses two screens, so drive it stepped (`--step`) and
+# carry out each move at the hand-back before it. What that buys is the card as it opens, shot
+# between the two asserts — and an assert that can no longer be reached by tidying the screen while
+# the run is held.
 id: ways-in
 title: Both ways in are the app's own to carry out — raise a project, or open one this device holds — and neither hands over a command to type
 description: >
@@ -30,6 +34,16 @@ steps_gui:
     op: ways-in
     with:
       absent: "bind --project"
+
+  - type: action
+    domain: folder
+    op: open-existing-card
+
+  - type: action
+    domain: folder
+    op: choose-project
+    with:
+      project: Greenhouse
 
   - type: assert
     domain: folder

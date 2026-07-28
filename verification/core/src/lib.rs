@@ -307,6 +307,21 @@ const REGISTRY: &[OpSpec] = &[
     // does today writes one — it is the state a repair exists for, so a scenario about the repair has
     // to put the folder in it, the way `repo write-file` puts a file a person already had.
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "legacy-pointer", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // The moves a screen's road is made of where a terminal's road has none. Linking a folder to a
+    // project is one command to type; on screen it is a card that opens, and that then asks which of
+    // this device's projects the folder is to be linked to. Both are written down as steps rather
+    // than as a note beside the file, and for two reasons: a move nobody wrote down is a move nobody
+    // shoots, so the card as it opens is evidence that exists nowhere else — and an assert reached by
+    // a hand quietly tidying the screen between shots passes without the run ever proving it could
+    // get there.
+    //
+    // A screen road alone: there is no card to open in a terminal, so the CLI driver never meets
+    // these and maps neither.
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "open-existing-card", required: &[], refs: &[], strings: &[], binds: false },
+    // Which project is answered by name, the way a person answers it — the card lists what the store
+    // holds, and a name is what they read there. It is not a binding: nothing in a screen road made
+    // this project, it was already on the device before the run started.
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "choose-project", required: &["project"], refs: &[], strings: &["project"], binds: false },
     // Hanging bytes or a link on a record. Each `attach` names either a `file` the run wrote or a
     // `url`, and binds the attachment, since managing one afterwards means naming it.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "attach", required: &["target"], refs: &["target"], strings: &["file", "url", "name"], binds: true },
@@ -474,9 +489,10 @@ const REGISTRY: &[OpSpec] = &[
     // that hands over the command leaves behind exactly the rows the one that links it does. There
     // is no read to ask, and the screen is the only witness.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "ways-in", required: &["absent"], refs: &[], strings: &["absent"], binds: false },
-    // The second of those ways, opened: it asks which project the folder is to be linked to, and the
-    // choices are the projects this device holds. `project` names the one the card is left asking
-    // for. It is a `Review` rather than a reading: the same name sits in the list of projects down
+    // The second of those ways, once the steps above have opened it and answered it: it asks which
+    // project the folder is to be linked to, and the choices are the projects this device holds.
+    // `project` names the one the card is left asking for. It is a `Review` rather than a reading:
+    // the same name sits in the list of projects down
     // the side of every screen, and a reading says which words are on a shot and not which part of
     // it they came from — so the card is what an eye is shown, and the shot is what it is closed by.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "open-existing", required: &["project"], refs: &[], strings: &["project"], binds: false },

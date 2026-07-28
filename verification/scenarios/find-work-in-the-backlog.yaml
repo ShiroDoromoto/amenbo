@@ -1,7 +1,7 @@
 # The listing is how anyone finds anything, so the filter is the surface everything else is reached
 # through: a filter that quietly matches nothing does not look broken, it looks like an empty
 # backlog. Each key here is checked twice over — the task it should match, and one it should not.
-id: task-list
+id: find-work-in-the-backlog
 title: The filter finds the task it names and leaves the other one out
 description: >
   Two tasks, told apart by priority, wording, state and assignee, are then looked for through each

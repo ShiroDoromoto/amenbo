@@ -1,0 +1,247 @@
+# Delegation, the line amenbo exists for. The road runs from work nobody holds to a session holding
+# it and reporting back: handed to me-ai, found in the mailbox the next session opens, held by one
+# session and refused to the second, talked about on the one timeline the session after that will
+# read, and handed back when the machine it needs is somewhere else. The goal is one; the road to it
+# is written twice, since the CLI driver maps each step to a shipped-binary call and the GUI harness
+# maps it to a screen instruction. Neither road names a command line or a coordinate.
+id: delegate-to-ai
+title: Work handed to me-ai reaches the next session's mailbox, is held by one session alone, and carries its story on the timeline
+description: >
+  Hand a task to me-ai and read it back the two ways the next session meets it — the assignee the
+  store kept, and the me-ai / todo / ready listing that session opens with. Reserve it, and have a
+  second session try the same reserve. Leave the state of play on the timeline, say it better, take
+  it back. Then park the task on an external stall and hand it back to the mailbox it came from, so
+  the next session finds it where it looked the first time.
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — handed to me-ai
+    as: seed
+
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: seed
+      assignee: me-ai
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: assignee_kind
+      equals: ai
+
+  # The mailbox itself, filter for filter: this is what the next session opens with, and a write that
+  # lands but never surfaces here is a task nobody will ever pick up.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "assignee:me-ai status:todo ready:yes"
+      target: seed
+      present: true
+
+  # Reserve it: todo → in_progress, the compare-and-swap two sessions race on.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: in_progress
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: in_progress
+
+  # The guard's teeth: a second session's reserve of what is already held is turned away, by that
+  # name. A no-op here would let both sessions walk off believing they hold it.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: in_progress
+      refused: already_reserved
+
+  # And it leaves the holder holding it — a refused write that half-landed would be worse than one
+  # that went through.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: in_progress
+
+  # The other half of the guard: what is held is no longer offered as fresh work.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo"
+      target: seed
+      present: false
+
+  # The timeline is how this session hands over to the next, so what matters is not only that a note
+  # posts: a wrong one has to be fixable in place, and a mistaken one has to be takeable back.
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — what this session found
+    as: note
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — what this session found
+      present: true
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: num_comments
+      equals: 1
+
+  - type: action
+    domain: comment
+    op: edit
+    with:
+      target: note
+      text: SCENARIO — what this session found, said better
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — what this session found, said better
+      present: true
+
+  # Rewritten in place: the old wording is gone, and no second comment was posted in its stead.
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — what this session found
+      present: false
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: num_comments
+      equals: 1
+
+  - type: action
+    domain: comment
+    op: rm
+    with:
+      target: note
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — what this session found, said better
+      present: false
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: num_comments
+      equals: 0
+
+  # An external stall — the one thing `blocked` is for. Its reason lands on the timeline as a
+  # comment, which is what the count reads back on a timeline the delete just emptied.
+  - type: action
+    domain: task
+    op: block
+    with:
+      target: seed
+      reason: SCENARIO — waiting on a machine this session does not have
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: blocked
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: num_comments
+      equals: 1
+
+  # The stall cleared: handed back, it is offered as fresh work again — in the same mailbox the road
+  # started in, which is the only place its return is any use.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: todo
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "assignee:me-ai status:todo ready:yes"
+      target: seed
+      present: true
+
+# The GUI's representative road, and it walks the same ground on purpose: a card another process
+# wrote has to appear on the board, which is the one hop no CLI run can see. Both OCR harnesses
+# drive this file.
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — handed to me-ai
+    as: seed
+
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: seed
+      assignee: me-ai
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: assignee_kind
+      equals: ai
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "assignee:me-ai status:todo"
+      target: seed
+      present: true

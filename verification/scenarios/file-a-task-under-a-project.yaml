@@ -1,7 +1,7 @@
 # A task belongs to exactly one project, and the same command that re-homes it decides where in that
 # project it lands. Order is the store's to keep and the key it keeps it by is opaque, so the only
 # honest way to read a reorder back is the listing itself.
-id: task-move
+id: file-a-task-under-a-project
 title: A task re-homed to another project lands there, and moving it to the top puts it first
 description: >
   Create a second project, move two tasks into it, and read back the project each one reports —

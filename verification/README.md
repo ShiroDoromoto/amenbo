@@ -222,7 +222,7 @@ overrides it uses are the product's own, so the build is not a different one for
 
 uiauto is the input primitive, called here, never moved: `window <pid>` yields the id
 `screencapture -l` needs and the window bounds (in the manifest) an operator uses to turn a shot's
-pixel into a click point, and its `click` / `type` / `key` carry out the action steps the
+pixel into a click point, and its `click` / `dblclick` / `type` / `key` carry out the action steps the
 checklist names. Bring the app to the front first (`--app`, or by hand) — uiauto skips a window
 behind another Space. `--winid <id>` shoots a window directly, skipping uiauto; `--evidence <dir>`
 chooses where the shots and manifest land (default: a fresh dir under the temp tree); `--ocr

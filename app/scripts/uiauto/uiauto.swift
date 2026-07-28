@@ -12,6 +12,7 @@
 // Usage:
 //   swift uiauto.swift window <pid>      the app's window id and bounds (the id goes to `screencapture -l`)
 //   swift uiauto.swift click <x> <y>     left-click at a screen point
+//   swift uiauto.swift dblclick <x> <y>  double-click at a screen point (what opens a file dialog's row)
 //   swift uiauto.swift type "text"       type into the focused element (Unicode direct, so no IME)
 //   swift uiauto.swift key <keycode>     one virtual keycode (36=Return / 48=Tab / 53=Esc / 125=Down / 126=Up)
 //   swift uiauto.swift trusted           whether the accessibility permission is granted (prompts if not)
@@ -54,18 +55,40 @@ func windows(pid: Int) {
     if !found { fail("no window for pid \(pid) — is the app running and on screen?") }
 }
 
-func click(x: Double, y: Double) {
-    let p = CGPoint(x: x, y: y)
-    // Move once before pressing, so an element that expects a hover first (a button's hover state)
-    // is not missed.
+/// Move onto the point before pressing, so an element that expects a hover first (a button's hover
+/// state) is not missed.
+func hover(_ p: CGPoint) {
     CGEvent(mouseEventSource: src, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left)?
         .post(tap: .cghidEventTap)
     usleep(120_000)
-    CGEvent(mouseEventSource: src, mouseType: .leftMouseDown, mouseCursorPosition: p, mouseButton: .left)?
-        .post(tap: .cghidEventTap)
-    usleep(60_000)
-    CGEvent(mouseEventSource: src, mouseType: .leftMouseUp, mouseCursorPosition: p, mouseButton: .left)?
-        .post(tap: .cghidEventTap)
+}
+
+/// One down/up at a point, saying which press of a run it is. That number is the whole difference
+/// between two clicks and a double click: the events are otherwise identical, and what is listening
+/// reads the count off the field rather than timing the pair itself.
+func press(at p: CGPoint, clickState: Int64) {
+    for phase in [CGEventType.leftMouseDown, CGEventType.leftMouseUp] {
+        let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: .left)
+        e?.setIntegerValueField(.mouseEventClickState, value: clickState)
+        e?.post(tap: .cghidEventTap)
+        usleep(60_000)
+    }
+}
+
+func click(x: Double, y: Double) {
+    let p = CGPoint(x: x, y: y)
+    hover(p)
+    press(at: p, clickState: 1)
+}
+
+/// A native open/save dialog opens the row you are pointing at on a double click and on nothing else
+/// — a single click only selects it, and Return does not reach that dialog from here at all. So
+/// picking a file out of one needs this.
+func doubleClick(x: Double, y: Double) {
+    let p = CGPoint(x: x, y: y)
+    hover(p)
+    press(at: p, clickState: 1)
+    press(at: p, clickState: 2)
 }
 
 /// type sends the string itself rather than keycodes. It bypasses the IME, so any script goes in as-is.
@@ -88,7 +111,7 @@ func key(_ code: CGKeyCode) {
 }
 
 let args = CommandLine.arguments
-guard args.count >= 2 else { fail("usage: uiauto <window|click|type|key|trusted> …") }
+guard args.count >= 2 else { fail("usage: uiauto <window|click|dblclick|type|key|trusted> …") }
 
 switch args[1] {
 case "window":
@@ -97,6 +120,9 @@ case "window":
 case "click":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: uiauto click <x> <y>") }
     click(x: x, y: y)
+case "dblclick":
+    guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: uiauto dblclick <x> <y>") }
+    doubleClick(x: x, y: y)
 case "type":
     guard args.count == 3 else { fail("usage: uiauto type <text>") }
     type(args[2])

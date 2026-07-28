@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { currentLang, doctorText, errText, t, tf, type Lang } from "../core/i18n";
+import { currentLang, doctorText, errText, langEndonym, LANGS, t, tf, type Lang } from "../core/i18n";
 import { getSnapshot, subscribe } from "../core/snapshot";
 import {
   bindFolder, cancelDataOp, fetchDoctorReport, fetchStoreLocations, fileToAvatarDataUrl, listenDataProgress,
@@ -71,9 +71,12 @@ function LanguageSetting() {
   return (
     <div className="settings__row">
       <span className="settings__k">{t("settings.language")}</span>
+      {/* The same nineteen the setup step offers, under the same names — each language written the
+          way it writes itself. */}
       <select className="btn" value={lang} onChange={change}>
-        <option value="ja">日本語</option>
-        <option value="en">English</option>
+        {LANGS.map((l) => (
+          <option key={l} value={l} lang={l}>{langEndonym(l)}</option>
+        ))}
       </select>
     </div>
   );

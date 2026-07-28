@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../snapshot", () => ({ getSnapshot: () => ({ language: null, dateLocale: null }) }));
 
-import { DEFAULT_LANG, guessLang, LANGS, normalizeLang } from "./index";
+import { DEFAULT_LANG, guessLang, langEndonym, LANGS, normalizeLang } from "./index";
 
 describe("normalizeLang", () => {
   it("carries nineteen languages, and English is where they fall back to", () => {
@@ -72,5 +72,26 @@ describe("guessLang", () => {
   it("is English when nothing in the list is carried, and when there is no list", () => {
     expect(guessLang(["ca", "eu", "gl"])).toBe("en");
     expect(guessLang([])).toBe("en");
+  });
+});
+
+// The picker's labels. Nothing else in the app is left untranslated on purpose: the reader looking
+// at this list has not chosen a language yet, so each line has to be readable to the one person it
+// is for.
+describe("langEndonym", () => {
+  it("names every language, in that language's own script", () => {
+    for (const lang of LANGS) {
+      expect(langEndonym(lang).trim(), lang).not.toBe("");
+    }
+    expect(langEndonym("ja")).toBe("日本語");
+    expect(langEndonym("en")).toBe("English");
+    expect(langEndonym("uk")).toBe("Українська");
+  });
+
+  // Chinese and Portuguese are carried as two entries and one; a label that named only the language
+  // would leave the reader choosing between two identical lines.
+  it("says which Chinese and which Portuguese each line is", () => {
+    expect(langEndonym("zh-Hans")).not.toBe(langEndonym("zh-Hant"));
+    expect(langEndonym("pt-BR")).toContain("Brasil");
   });
 });

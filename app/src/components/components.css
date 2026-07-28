@@ -605,6 +605,11 @@ button.feed__target:hover { color: var(--c-accent); }
 .setup__hero h2 { margin: var(--s-3) 0 var(--s-1); }
 .setup__step { min-height: 120px; }
 .setup__q { font-weight: var(--fw-bold); margin-bottom: var(--s-3); }
+/* The language step lists all nineteen, so it scrolls in place instead of growing the modal. Two
+   columns keep the list short enough that the reader sees most of it at once. */
+.setup__langs { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); max-height: 15rem; overflow-y: auto; padding: var(--s-1); }
+.setup__lang { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); cursor: pointer; text-align: left; }
+.setup__lang--on { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); }
 .setup__choices { display: flex; gap: var(--s-3); flex-wrap: wrap; }
 .setup__choice { padding: var(--s-3) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); cursor: pointer; }
 .setup__choice--on { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); }

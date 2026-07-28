@@ -90,6 +90,24 @@ export function currentLang(): Lang {
 }
 
 /**
+ * What each language calls itself. This is the only text in the app that must not be translated: the
+ * list is read by someone who has not chosen a language yet, so a reader who knows no English finds
+ * their own line by recognizing its script. Chinese and Portuguese say which one they are, because
+ * the pair is what the reader is choosing between.
+ */
+const LANG_ENDONYM: Record<Lang, string> = {
+  en: "English", ja: "日本語", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", ko: "한국어",
+  es: "Español", "pt-BR": "Português (Brasil)", fr: "Français", de: "Deutsch", it: "Italiano",
+  ru: "Русский", hi: "हिन्दी", id: "Bahasa Indonesia", vi: "Tiếng Việt", th: "ไทย", tr: "Türkçe",
+  pl: "Polski", nl: "Nederlands", uk: "Українська",
+};
+
+/** What this language calls itself — the label to offer it under. */
+export function langEndonym(lang: Lang): string {
+  return LANG_ENDONYM[lang];
+}
+
+/**
  * The locale each language writes its dates in, when nothing else is asked for. A language names
  * words and a locale names formats, so each is paired with the region whose conventions its readers
  * are likeliest to expect.

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { getSnapshot } from "../core/snapshot";
 import { saveOnboarding } from "../core/mutations";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
-import { guessLang, normalizeLang, t, type Lang } from "../core/i18n";
+import { guessLang, langEndonym, LANGS, normalizeLang, t, type Lang } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
 
 // During setup the UI language has to switch as it is picked, so labels are looked up in the language
@@ -16,6 +16,12 @@ import { isEnterSubmit } from "../core/keys";
 // written to config.human_name/ai_name.
 const DEFAULT_HUMAN_NAMES = ["人間", "Human", "ローカルユーザー", "Local user"];
 const DEFAULT_AI_NAMES = ["AI"];
+
+// The opening offer is whatever the OS suggested, which can be the last line of nineteen. A
+// selection below the fold reads as no selection at all, so the list opens on it. Declared once so
+// React re-runs it only when the selected line changes, and called defensively because a test
+// renderer has no layout to scroll.
+const scrollSelectedIntoView = (el: HTMLButtonElement | null) => el?.scrollIntoView?.({ block: "nearest" });
 
 function identiconColor(seed: string): string {
   let h = 0;
@@ -60,14 +66,21 @@ export function OnboardingSetup() {
   const steps = [
     <div key="lang" className="setup__step">
       <div className="setup__q">{t("setup.langQ", lang)}</div>
-      <div className="setup__choices">
-        {(["ja", "en"] as Lang[]).map((l) => (
+      {/* Nineteen of them, so the list scrolls rather than wrapping across the modal. Each line is
+          the language's own name, which is the only thing a reader who has not chosen yet can
+          recognize. */}
+      <div className="setup__langs" role="listbox" aria-label={t("setup.langQ", lang)}>
+        {LANGS.map((l) => (
           <button
             key={l}
-            className={`setup__choice ${lang === l ? "setup__choice--on" : ""}`}
+            role="option"
+            aria-selected={lang === l}
+            lang={l}
+            className={`setup__lang ${lang === l ? "setup__lang--on" : ""}`}
+            ref={lang === l ? scrollSelectedIntoView : undefined}
             onClick={() => setLang(l)}
           >
-            {l === "ja" ? "日本語" : "English"}
+            {langEndonym(l)}
           </button>
         ))}
       </div>

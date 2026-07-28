@@ -1,0 +1,242 @@
+# The path a reader walks before standing on a decision: is this still true, and what does it rest
+# on? A decision is never rewritten when it stops holding — a successor replaces it and the older one
+# stays readable — and what it took as given is drawn as an edge of its own. Currency is *derived*
+# from those edges rather than stored, so an edge drawn at the wrong target is undone by taking it
+# back, and the older decision has to get its standing back on its own.
+id: read-whether-a-decision-still-holds
+title: A decision is read back with what replaced it, what it replaced and the premise under it — and an edge drawn at the wrong target is taken back
+description: >
+  Build the smallest shape that has all three — a premise, an older policy, and the successor that
+  replaces it — then read every side back: the successor's own card, the replaced decision naming
+  what took over, and the premise naming who would want revisiting if it were overturned. Then undo
+  each edge and read the same sides again: the replaced decision stands once more, and the premise is
+  named by nobody. A chain that came out of the shipped build broken sends the next piece of work
+  onto rotten ground.
+steps_cli:
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — the store is one file on the device
+    as: premise
+
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: premise
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — the policy being replaced
+    as: old
+
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: old
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — the policy that replaces it
+    as: new
+
+  # The body is written while the decision is still proposed; accepting freezes it, and superseding
+  # accepts. So it is set — and read back — before the edges are drawn.
+  - type: action
+    domain: decision
+    op: edit
+    with:
+      target: new
+      body: The rule this decision settles, as the reader will find it.
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: new
+      field: body
+      equals: The rule this decision settles, as the reader will find it.
+
+  - type: action
+    domain: decision
+    op: supersede
+    with:
+      target: new
+      replaces: old
+
+  - type: action
+    domain: decision
+    op: builds-on
+    with:
+      target: new
+      on: premise
+
+  # Drawn a second time: a scenario is replayed and re-run, so the command has to take it, and the
+  # reading afterwards is unchanged.
+  - type: action
+    domain: decision
+    op: builds-on
+    with:
+      target: new
+      on: premise
+
+  # The successor's own card: settled — superseding accepts — unreplaced, and carrying both relations.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: new
+      field: status
+      equals: accepted
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "superseded:no"
+      target: new
+      present: true
+
+  - type: assert
+    domain: decision
+    op: edge
+    with:
+      target: new
+      kind: supersedes
+      other: old
+      present: true
+
+  - type: assert
+    domain: decision
+    op: edge
+    with:
+      target: new
+      kind: builds_on
+      other: premise
+      present: true
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: new
+      field: builds_on.0.name
+      equals: SCENARIO DECISION — the store is one file on the device
+
+  # The replaced decision, read from its own side: still accepted — the row is not touched — and
+  # naming what replaced it.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: old
+      field: status
+      equals: accepted
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "superseded:yes"
+      target: old
+      present: true
+
+  - type: assert
+    domain: decision
+    op: edge
+    with:
+      target: old
+      kind: superseded_by
+      other: new
+      present: true
+
+  # The premise names its impact radius: overturn this one and the decision above wants revisiting.
+  # That reverse direction is the one a reader consults before touching a premise.
+  - type: assert
+    domain: decision
+    op: edge
+    with:
+      target: premise
+      kind: built_on_by
+      other: new
+      present: true
+
+  # And the premise itself is untouched — the edge is a reading order, not a correction of the older
+  # decision, so nothing draws a supersedes edge at it.
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "superseded:no"
+      target: premise
+      present: true
+
+  # Taking an edge back. This is a correction, not a change of mind: superseding a decision back
+  # would be a new decision, whereas an edge aimed at the wrong target is a miswiring with nothing to
+  # remember. A pair carries one edge, so naming the pair is how it is named.
+  - type: action
+    domain: decision
+    op: unlink
+    with:
+      target: new
+      from: old
+
+  # Gone from both sides of the pair.
+  - type: assert
+    domain: decision
+    op: edge
+    with:
+      target: new
+      kind: supersedes
+      other: old
+      present: false
+
+  - type: assert
+    domain: decision
+    op: edge
+    with:
+      target: old
+      kind: superseded_by
+      other: new
+      present: false
+
+  # And standing again, because the edge is the whole of it: there was never a flag to write back.
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "superseded:yes"
+      target: old
+      present: false
+
+  # The same command, on the other kind of edge.
+  - type: action
+    domain: decision
+    op: unlink
+    with:
+      target: new
+      from: premise
+
+  - type: assert
+    domain: decision
+    op: edge
+    with:
+      target: new
+      kind: builds_on
+      other: premise
+      present: false
+
+  - type: assert
+    domain: decision
+    op: edge
+    with:
+      target: premise
+      kind: built_on_by
+      other: new
+      present: false

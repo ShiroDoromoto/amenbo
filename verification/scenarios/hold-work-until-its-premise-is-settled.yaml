@@ -2,7 +2,7 @@
 # premise is unsettled the task is not ready, and accepting the decision is what releases it. That
 # is one rule enforced across two objects, so a shipped build can break it in the gap between them —
 # which is exactly what no build-time test of either half would see.
-id: decision-link
+id: hold-work-until-its-premise-is-settled
 title: A task linked to a proposed decision is held back until that decision is accepted
 description: >
   Register a task, record the decision it rests on, and link them — then read the task's readiness

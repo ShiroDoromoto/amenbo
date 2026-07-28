@@ -1,16 +1,16 @@
-# A decision's whole lifecycle: written down as a proposal, worked on while it is still one, and
-# then ruled on — accepted, reopened and accepted again, replaced by a successor, or turned down.
-# What the shipped build has to get right is the order: the body is editable up to acceptance, and
-# the status the store keeps afterwards is what every reader downstream trusts.
-id: decision-accept
-title: A decision is proposed, accepted, reopened for a second look, replaced — and another is turned down
+# The path a why takes from being written down to being settled. A decision arrives as a proposal,
+# is worked on while it is still one, and is then ruled on — accepted, taken back for a second look
+# and accepted again, or turned down. What the shipped build has to get right is the order: the body
+# is the reader's to change up to acceptance, and the status the store keeps afterwards is what every
+# reader downstream trusts.
+id: record-a-decision
+title: A why is written down as a proposal, worked on while it is one, and ruled on — accepted, reopened, or turned down
 description: >
-  Walk one decision through every ruling it can meet, reading the store back after each: accepted
-  (which freezes the body), reopened (which lifts the freeze), and superseded (which leaves it
-  readable, with the chain on both ends). A second decision takes the third
-  ruling, rejection, whose reason lands on the timeline rather than in a field of its own.
-  Acceptance is what other work waits on, so the status these lines read is the one a task's
-  readiness is derived from.
+  Record a decision, read back that it starts unsettled, write its body, and walk it through the
+  rulings it can meet: accepted (which freezes the body), reopened (which lifts the freeze so it can
+  be said better), and accepted again. A second decision takes the other ruling, rejection, whose
+  reason lands on the timeline rather than in a field of its own. Acceptance is what other work waits
+  on, so the status these lines read is the one a task's readiness is derived from.
 steps_cli:
   - type: action
     domain: decision
@@ -114,75 +114,7 @@ steps_cli:
       field: status
       equals: accepted
 
-  # Superseding is how a settled decision is replaced rather than rewritten: the old one stays,
-  # readable and accepted, and gains an edge naming what replaced it. Both ends carry the chain,
-  # since a reader arriving at either has to be able to walk to the other.
-  - type: action
-    domain: decision
-    op: create
-    with:
-      title: SCENARIO SEED — the ruling that replaces the first
-    as: successor
-
-  - type: action
-    domain: decision
-    op: supersede
-    with:
-      target: successor
-      replaces: rec
-
-  - type: assert
-    domain: decision
-    op: field
-    with:
-      target: successor
-      field: status
-      equals: accepted
-
-  - type: assert
-    domain: decision
-    op: listed
-    with:
-      filter: "superseded:no"
-      target: successor
-      present: true
-
-  - type: assert
-    domain: decision
-    op: listed
-    with:
-      filter: "superseded:yes"
-      target: rec
-      present: true
-
-  # Replaced, not deleted: what it decided is still there to read.
-  - type: assert
-    domain: decision
-    op: field
-    with:
-      target: rec
-      field: status
-      equals: accepted
-
-  - type: assert
-    domain: decision
-    op: edge
-    with:
-      target: rec
-      kind: superseded_by
-      other: successor
-      present: true
-
-  - type: assert
-    domain: decision
-    op: edge
-    with:
-      target: successor
-      kind: supersedes
-      other: rec
-      present: true
-
-  # The third ruling: turned down. A rejected proposal never settles anything, and the reason it was
+  # The other ruling: turned down. A rejected proposal never settles anything, and the reason it was
   # turned down lands on its timeline — there is no field for it, because it is a thing said.
   - type: action
     domain: decision

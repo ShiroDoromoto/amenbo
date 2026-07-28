@@ -2,7 +2,7 @@
 # point of the decision timeline — it is where the reasoning for accepting, and everything said
 # afterwards, has to be able to land — so the line that matters is a comment posted after the
 # freeze.
-id: decision-comment-add
+id: discuss-a-decision-after-it-is-settled
 title: A decision's timeline stays open after the body freezes, and its comments can be fixed or taken back
 description: >
   Comment on a proposed decision, accept it, and comment again — then rewrite one comment and delete

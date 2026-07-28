@@ -26,6 +26,8 @@ const hoisted = vi.hoisted(() => ({
   restoreArchive: null as string | null,
   /** The report `runRestore` comes back with. */
   restoreReport: { previousSavedTo: null, blobs: 0, superseded: 0, migration: null } as RestoreReportDto,
+  /** What `fetchDevBadge` answers — the badge text on a development build, null on a shipped one. */
+  devBadge: null as string | null,
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -65,6 +67,7 @@ vi.mock("../core/mutations", () => {
     runRestore: () => Promise.resolve(hoisted.restoreReport),
     cancelDataOp: noop,
     setFacetNames: noop, setFacetAvatar: noop, setLanguage: noop, setPerfLog: noop, setUpdateCheck: noop,
+    fetchDevBadge: () => Promise.resolve(hoisted.devBadge),
   };
 });
 
@@ -110,6 +113,17 @@ function restored(over: Partial<RestoreReportDto> = {}): RestoreReportDto {
   return { previousSavedTo: null, blobs: 0, superseded: 0, migration: null, ...over };
 }
 
+/** The section headings, as a reader meets them going down the screen. Read as elements rather than
+ *  searched for in the page text, since one label is a prefix of another in some languages. */
+function sectionTitles(): string[] {
+  return [...container.querySelectorAll(".settings__h")].map((h) => h.textContent ?? "");
+}
+
+/** The label of every setting row, read the same way and for the same reason. */
+function rowLabels(): string[] {
+  return [...container.querySelectorAll(".settings__k")].map((k) => k.textContent ?? "");
+}
+
 /** A button found by its label, or null if there is none. */
 function buttonByLabel(label: string): HTMLButtonElement | null {
   return ([...container.querySelectorAll("button")].find((b) => b.textContent === label) ?? null) as HTMLButtonElement | null;
@@ -124,6 +138,7 @@ beforeEach(() => {
   hoisted.resyncs = [];
   hoisted.restoreArchive = null;
   hoisted.restoreReport = restored();
+  hoisted.devBadge = null;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -296,5 +311,24 @@ describe("Settings > Data (whole-store restore; the completion view says exactly
     await act(async () => buttonByLabel(t("settings.restoreBtn"))!.click());
     // A prefix of the sentence, so this catches it whichever arm the count would have picked.
     expect(container.textContent).not.toContain(tn("settings.restoreSwept", 0).slice(0, 30));
+  });
+});
+
+describe("Settings > Updates (a control only a shipped build can honour)", () => {
+  it("a shipped build is offered the switch, under its own section", async () => {
+    await render();
+    expect(sectionTitles()).toContain(t("settings.updates"));
+    expect(rowLabels()).toContain(t("settings.updateCheck"));
+  });
+
+  it("a development build gets neither the switch nor an empty section over it", async () => {
+    hoisted.devBadge = "DEV";
+    await render();
+    expect(rowLabels()).not.toContain(t("settings.updateCheck"));
+    // The heading goes with it: a section whose only control is gone is a title over nothing.
+    expect(sectionTitles()).not.toContain(t("settings.updates"));
+    // The sections around it stay, so this is one section leaving and not the screen giving up.
+    expect(rowLabels()).toContain(t("settings.perfLog"));
+    expect(rowLabels()).toContain(t("settings.dataPath"));
   });
 });

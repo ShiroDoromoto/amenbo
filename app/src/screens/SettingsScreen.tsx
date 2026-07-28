@@ -6,6 +6,7 @@ import {
   openLogsDir, pickBackupPath, pickExportPath, pickRestoreArchive, resyncManagedBlocks, runBackup, runDoctorFix,
   runExport, runRestore, setFacetNames, setLanguage, setFacetAvatar, setPerfLog, setUpdateCheck,
 } from "../core/mutations";
+import { useIsDevBuild } from "../core/devChannel";
 import { doctorRepair, groupDoctorIssues, type DoctorRepair } from "../core/doctorKinds";
 import { confirmDialog } from "../core/dialog";
 import type { DoctorReportDto, StoreLocationsDto, DataProgressDto } from "../bindings/bindings";
@@ -20,6 +21,7 @@ import { isEnterSubmit } from "../core/keys";
 // single local one, so there is no section for sharing, syncing, keys or members.
 export function SettingsScreen() {
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
+  const devBuild = useIsDevBuild();
   const changeTheme = (p: ThemePref) => { setThemePref(p); setTheme(p); };
 
   return (
@@ -41,9 +43,14 @@ export function SettingsScreen() {
         <LanguageSetting />
       </Category>
 
-      <Category title={t("settings.updates")}>
-        <UpdateCheckSetting />
-      </Category>
+      {/* A development build carries no update section. Its one control is a switch core does not read
+          — the check is withheld from the channel outright — so what would be left is a heading over a
+          setting that claims a check nothing runs. */}
+      {!devBuild && (
+        <Category title={t("settings.updates")}>
+          <UpdateCheckSetting />
+        </Category>
+      )}
 
       <Category title={t("settings.developer")}>
         <PerfLogSetting />
@@ -548,7 +555,12 @@ function PerfLogSetting() {
 /** Turn the update check (config.update_check) on or off. It subscribes to updateCheck in the snapshot,
  *  so once setUpdateCheck lands (loadSnapshot notifies) both the control and the upstream update banner
  *  follow. Off means upstream's latest.json is never queried, and the banner can then only be raised by
- *  a version mismatch between our own surfaces. */
+ *  a version mismatch between our own surfaces.
+ *
+ *  Only a shipped build draws this. Core withholds the query from a development channel outright
+ *  (`update_check::is_disabled`), so there the switch would write a value nothing reads, leaving "on" to
+ *  claim a check that never runs — which is why the section holding it is not built on that channel, the
+ *  same reasoning that keeps the menu item that would run one from being built. */
 function UpdateCheckSetting() {
   const on = useSyncExternalStore(subscribe, () => getSnapshot().updateCheck);
   const change = (e: React.ChangeEvent<HTMLSelectElement>) => { void setUpdateCheck(e.target.value === "on"); };

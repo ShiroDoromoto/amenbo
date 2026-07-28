@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 use serde::Serialize;
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::progress::{Phase, Progress};
 use crate::store_engine::schema::{Dataset, DATASETS};
 use crate::time::Timestamp;
@@ -432,7 +432,11 @@ pub fn export_bundle_from(
         let empty = dest.is_dir()
             && std::fs::read_dir(dest).map(|mut d| d.next().is_none()).unwrap_or(false);
         if !empty {
-            return Err(Error::invalid(format!("cannot export into {}: it already exists", dest.display())));
+            return Err(Error::Invalid(
+                Msg::new(format!("cannot export into {}: it already exists", dest.display()))
+                    .coded(ErrorCode::InvalidExportDestExists)
+                    .with("path", dest.display()),
+            ));
         }
     }
 

@@ -560,6 +560,18 @@ export const fr: Translation = {
     invalid_decision_self_supersede: "Une décision ne peut pas se remplacer elle-même.",
     invalid_decision_self_amend: "Une décision ne peut pas s'amender elle-même.",
     invalid_decision_self_builds_on: "Une décision ne peut pas reposer sur elle-même.",
+    invalid_backup_dest_is_dir: "{path} est un dossier. Une sauvegarde s'écrit dans un seul fichier — indiquez un nom de fichier.",
+    invalid_backup_dest_exists: "{path} existe déjà, et une sauvegarde n'écrase rien — choisissez un autre nom.",
+    invalid_restore_source_is_dir: "{path} est un dossier. La restauration prend un fichier de sauvegarde.",
+    invalid_restore_not_an_archive: "{path} n'est pas un fichier de sauvegarde amenbo.",
+    invalid_restore_missing_snapshot: "{path} ne contient aucune donnée — le fichier de sauvegarde est endommagé. Rien n'a été changé ici.",
+    invalid_restore_layout_too_old: "Cette sauvegarde est dans un format plus ancien (v{layout}) ; cette version lit v{min} et au-delà. Restaurez-la avec l'amenbo qui l'a écrite. Rien n'a été changé.",
+    invalid_restore_layout_too_new: "Cette sauvegarde est dans un format plus récent (v{layout}) ; cette version lit jusqu'à v{max}. Mettez amenbo à jour et réessayez. Rien n'a été changé.",
+    invalid_restore_archive_newer: "Cette sauvegarde vient d'amenbo v{app}, dont les données sont en v{found} — au-delà de la v{max} que lit cette version. Utilisez amenbo v{app} ou plus récent. Rien n'a été changé.",
+    invalid_export_dest_exists: "{path} existe déjà. L'export crée un nouveau dossier — choisissez un nom libre.",
+    invalid_migration_no_space: "Il n'y a pas assez d'espace libre pour la sauvegarde d'avant la mise à jour : il faut ~{need} Mio (archive ~{archive} Mio + espace de travail ~{staging} Mio), et il reste ~{free} Mio sur {dir}. Libérez de la place et réessayez — rien n'a encore été changé.",
+    invalid_migration_rolled_back: "La mise à jour a échoué et vos données ont été remises exactement comme elles étaient ({failure}). La sauvegarde prise avant le début est conservée dans {at}.",
+    invalid_migration_rollback_failed: "La mise à jour a échoué ({failure}), et la remise en état aussi ({rollback}). Vos données sont peut-être à moitié mises à jour — restaurez la sauvegarde d'avant la mise à jour, dans {at}.",
   },
 
   doctor: {

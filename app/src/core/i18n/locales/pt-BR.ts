@@ -559,6 +559,18 @@ export const ptBR: Translation = {
     invalid_decision_self_supersede: "Uma decisão não pode substituir a si mesma.",
     invalid_decision_self_amend: "Uma decisão não pode emendar a si mesma.",
     invalid_decision_self_builds_on: "Uma decisão não pode se apoiar em si mesma.",
+    invalid_backup_dest_is_dir: "{path} é uma pasta. Um backup é escrito em um único arquivo — informe um nome de arquivo.",
+    invalid_backup_dest_exists: "{path} já existe, e um backup não sobrescreve nada — escolha outro nome.",
+    invalid_restore_source_is_dir: "{path} é uma pasta. Restaurar usa um arquivo de backup.",
+    invalid_restore_not_an_archive: "{path} não é um arquivo de backup do amenbo.",
+    invalid_restore_missing_snapshot: "{path} não contém dados — o arquivo de backup está danificado. Nada aqui foi alterado.",
+    invalid_restore_layout_too_old: "Este backup está em um formato mais antigo (v{layout}); esta versão lê da v{min} em diante. Restaure-o com o amenbo que o escreveu. Nada foi alterado.",
+    invalid_restore_layout_too_new: "Este backup está em um formato mais novo (v{layout}); esta versão lê até a v{max}. Atualize o amenbo e tente de novo. Nada foi alterado.",
+    invalid_restore_archive_newer: "Este backup veio do amenbo v{app}, cujos dados estão na v{found} — além da v{max} que esta versão lê. Use o amenbo v{app} ou mais novo. Nada foi alterado.",
+    invalid_export_dest_exists: "{path} já existe. A exportação cria uma pasta nova — escolha um nome livre.",
+    invalid_migration_no_space: "Não há espaço livre suficiente para o backup anterior à atualização: são necessários ~{need} MiB (arquivo ~{archive} MiB + área de trabalho ~{staging} MiB), e há ~{free} MiB livres em {dir}. Libere espaço e tente de novo — nada foi alterado ainda.",
+    invalid_migration_rolled_back: "A atualização falhou e seus dados voltaram exatamente como estavam ({failure}). O backup feito antes de começar está em {at}.",
+    invalid_migration_rollback_failed: "A atualização falhou ({failure}), e devolver seus dados também ({rollback}). Eles podem estar atualizados pela metade — restaure o backup feito antes da atualização, em {at}.",
   },
 
   doctor: {

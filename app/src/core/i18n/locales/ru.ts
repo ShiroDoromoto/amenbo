@@ -571,6 +571,18 @@ export const ru: Translation = {
     invalid_decision_self_supersede: "Решение не может заменить само себя.",
     invalid_decision_self_amend: "Решение не может изменить само себя.",
     invalid_decision_self_builds_on: "Решение не может опираться на само себя.",
+    invalid_backup_dest_is_dir: "{path} — это папка. Резервная копия пишется в один файл: укажите имя файла.",
+    invalid_backup_dest_exists: "{path} уже существует, а резервная копия ничего не перезаписывает: выберите другое имя.",
+    invalid_restore_source_is_dir: "{path} — это папка. Для восстановления нужен файл резервной копии.",
+    invalid_restore_not_an_archive: "{path} не является файлом резервной копии amenbo.",
+    invalid_restore_missing_snapshot: "В {path} нет данных — файл резервной копии повреждён. Здесь ничего не изменено.",
+    invalid_restore_layout_too_old: "Эта копия в более старом формате (v{layout}); эта версия читает v{min} и новее. Восстановите её тем amenbo, который её записал. Ничего не изменено.",
+    invalid_restore_layout_too_new: "Эта копия в более новом формате (v{layout}); эта версия читает до v{max}. Обновите amenbo и попробуйте снова. Ничего не изменено.",
+    invalid_restore_archive_newer: "Эта копия сделана amenbo v{app}, её данные на v{found} — дальше v{max}, которую читает эта версия. Возьмите amenbo v{app} или новее. Ничего не изменено.",
+    invalid_export_dest_exists: "{path} уже существует. Экспорт создаёт новую папку: выберите свободное имя.",
+    invalid_migration_no_space: "Не хватает свободного места для копии перед обновлением: нужно ~{need} МиБ (архив ~{archive} МиБ + рабочее место ~{staging} МиБ), а свободно ~{free} МиБ в {dir}. Освободите место и попробуйте снова — пока ничего не изменено.",
+    invalid_migration_rolled_back: "Обновление не удалось, и ваши данные вернулись ровно в прежнее состояние ({failure}). Копия, снятая перед началом, лежит в {at}.",
+    invalid_migration_rollback_failed: "Обновление не удалось ({failure}), и вернуть данные тоже не вышло ({rollback}). Они могут быть обновлены наполовину — восстановите копию, снятую перед обновлением, из {at}.",
   },
 
   doctor: {

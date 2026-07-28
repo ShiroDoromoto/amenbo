@@ -530,6 +530,18 @@ export const tr: Translation = {
     invalid_decision_self_supersede: "Bir karar kendi yerine geçemez.",
     invalid_decision_self_amend: "Bir karar kendini değiştiremez.",
     invalid_decision_self_builds_on: "Bir karar kendine dayanamaz.",
+    invalid_backup_dest_is_dir: "{path} bir klasör. Yedek tek bir dosyaya yazılır — bir dosya adı verin.",
+    invalid_backup_dest_exists: "{path} zaten var ve yedek hiçbir şeyin üzerine yazmaz — başka bir ad seçin.",
+    invalid_restore_source_is_dir: "{path} bir klasör. Geri yükleme tek bir yedek dosyası alır.",
+    invalid_restore_not_an_archive: "{path} bir amenbo yedek dosyası değil.",
+    invalid_restore_missing_snapshot: "{path} veri taşımıyor — yedek dosyası bozuk. Burada hiçbir şey değişmedi.",
+    invalid_restore_layout_too_old: "Bu yedek eski bir biçimde (v{layout}); bu sürüm v{min} ve sonrasını okur. Onu yazan amenbo ile geri yükleyin. Hiçbir şey değişmedi.",
+    invalid_restore_layout_too_new: "Bu yedek daha yeni bir biçimde (v{layout}); bu sürüm en fazla v{max} okur. amenbo'yu güncelleyip yeniden deneyin. Hiçbir şey değişmedi.",
+    invalid_restore_archive_newer: "Bu yedek amenbo v{app} tarafından yazıldı; verisi v{found}, bu sürümün okuduğu v{max} sürümünün ötesinde. amenbo v{app} ya da daha yenisini kullanın. Hiçbir şey değişmedi.",
+    invalid_export_dest_exists: "{path} zaten var. Dışa aktarma yeni bir klasör oluşturur — boşta olan bir ad seçin.",
+    invalid_migration_no_space: "Güncelleme öncesi yedek için yeterli boş alan yok: ~{need} MiB gerekiyor (arşiv ~{archive} MiB + çalışma alanı ~{staging} MiB), {dir} konumunda ~{free} MiB boş. Yer açıp yeniden deneyin — henüz hiçbir şey değişmedi.",
+    invalid_migration_rolled_back: "Güncelleme başarısız oldu ve verileriniz tam olarak eski hâline döndürüldü ({failure}). Başlamadan önce alınan yedek {at} konumunda duruyor.",
+    invalid_migration_rollback_failed: "Güncelleme başarısız oldu ({failure}) ve geri alma da ({rollback}). Verileriniz yarı güncellenmiş olabilir — güncelleme öncesi yedeği {at} konumundan geri yükleyin.",
   },
 
   doctor: {

@@ -302,6 +302,29 @@ pub enum ErrorCode {
     InvalidDecisionSelfSupersede,
     InvalidDecisionSelfAmend,
     InvalidDecisionSelfBuildsOn,
+
+    // Backup, restore and export — the refusals a person meets by choosing the wrong path or the wrong
+    // file, which is every refusal these three surfaces raise that is not the store itself being broken.
+    // The path rides as a field: it is the one part of the sentence no dictionary can hold.
+    InvalidBackupDestIsDir,
+    InvalidBackupDestExists,
+    InvalidRestoreSourceIsDir,
+    InvalidRestoreNotAnArchive,
+    InvalidRestoreMissingSnapshot,
+    // An archive this build cannot read, in either direction. Each names the version it found against
+    // the one it can take, so the reader can tell "restore this with the amenbo that wrote it" from
+    // "update amenbo and try again" — and the newer-store gate names the very build to run.
+    InvalidRestoreLayoutTooOld,
+    InvalidRestoreLayoutTooNew,
+    InvalidRestoreArchiveNewer,
+    InvalidExportDestExists,
+
+    // The startup migration, whose screen is the whole window — there is no app behind it and nothing
+    // else for the reader to go on. The failures carry their numbers and paths as fields; the inner
+    // reason (`failure` / `rollback`) stays English prose, being whatever went wrong underneath.
+    InvalidMigrationNoSpace,
+    InvalidMigrationRolledBack,
+    InvalidMigrationRollbackFailed,
 }
 
 impl ErrorCode {
@@ -346,6 +369,18 @@ impl ErrorCode {
             ErrorCode::InvalidDecisionSelfSupersede => "invalid_decision_self_supersede",
             ErrorCode::InvalidDecisionSelfAmend => "invalid_decision_self_amend",
             ErrorCode::InvalidDecisionSelfBuildsOn => "invalid_decision_self_builds_on",
+            ErrorCode::InvalidBackupDestIsDir => "invalid_backup_dest_is_dir",
+            ErrorCode::InvalidBackupDestExists => "invalid_backup_dest_exists",
+            ErrorCode::InvalidRestoreSourceIsDir => "invalid_restore_source_is_dir",
+            ErrorCode::InvalidRestoreNotAnArchive => "invalid_restore_not_an_archive",
+            ErrorCode::InvalidRestoreMissingSnapshot => "invalid_restore_missing_snapshot",
+            ErrorCode::InvalidRestoreLayoutTooOld => "invalid_restore_layout_too_old",
+            ErrorCode::InvalidRestoreLayoutTooNew => "invalid_restore_layout_too_new",
+            ErrorCode::InvalidRestoreArchiveNewer => "invalid_restore_archive_newer",
+            ErrorCode::InvalidExportDestExists => "invalid_export_dest_exists",
+            ErrorCode::InvalidMigrationNoSpace => "invalid_migration_no_space",
+            ErrorCode::InvalidMigrationRolledBack => "invalid_migration_rolled_back",
+            ErrorCode::InvalidMigrationRollbackFailed => "invalid_migration_rollback_failed",
         }
     }
 
@@ -389,6 +424,18 @@ impl ErrorCode {
         ErrorCode::InvalidDecisionSelfSupersede,
         ErrorCode::InvalidDecisionSelfAmend,
         ErrorCode::InvalidDecisionSelfBuildsOn,
+        ErrorCode::InvalidBackupDestIsDir,
+        ErrorCode::InvalidBackupDestExists,
+        ErrorCode::InvalidRestoreSourceIsDir,
+        ErrorCode::InvalidRestoreNotAnArchive,
+        ErrorCode::InvalidRestoreMissingSnapshot,
+        ErrorCode::InvalidRestoreLayoutTooOld,
+        ErrorCode::InvalidRestoreLayoutTooNew,
+        ErrorCode::InvalidRestoreArchiveNewer,
+        ErrorCode::InvalidExportDestExists,
+        ErrorCode::InvalidMigrationNoSpace,
+        ErrorCode::InvalidMigrationRolledBack,
+        ErrorCode::InvalidMigrationRollbackFailed,
     ];
 }
 
@@ -561,6 +608,18 @@ mod tests {
             "invalid_decision_self_supersede",
             "invalid_decision_self_amend",
             "invalid_decision_self_builds_on",
+            "invalid_backup_dest_is_dir",
+            "invalid_backup_dest_exists",
+            "invalid_restore_source_is_dir",
+            "invalid_restore_not_an_archive",
+            "invalid_restore_missing_snapshot",
+            "invalid_restore_layout_too_old",
+            "invalid_restore_layout_too_new",
+            "invalid_restore_archive_newer",
+            "invalid_export_dest_exists",
+            "invalid_migration_no_space",
+            "invalid_migration_rolled_back",
+            "invalid_migration_rollback_failed",
         ]
         .into_iter()
         .collect();

@@ -531,6 +531,18 @@ export const hi: Translation = {
     invalid_decision_self_supersede: "कोई निर्णय स्वयं को प्रतिस्थापित नहीं कर सकता।",
     invalid_decision_self_amend: "कोई निर्णय स्वयं में संशोधन नहीं कर सकता।",
     invalid_decision_self_builds_on: "कोई निर्णय स्वयं पर आधारित नहीं हो सकता।",
+    invalid_backup_dest_is_dir: "{path} एक फ़ोल्डर है। बैकअप एक ही फ़ाइल में लिखा जाता है — फ़ाइल का नाम बताइए।",
+    invalid_backup_dest_exists: "{path} पहले से मौजूद है, और बैकअप उसे मिटाकर नहीं लिखता — कोई दूसरा नाम चुनिए।",
+    invalid_restore_source_is_dir: "{path} एक फ़ोल्डर है। बहाली के लिए एक बैकअप फ़ाइल चाहिए।",
+    invalid_restore_not_an_archive: "{path} amenbo की बैकअप फ़ाइल नहीं है।",
+    invalid_restore_missing_snapshot: "{path} में कोई डेटा नहीं है — बैकअप फ़ाइल क्षतिग्रस्त है। यहाँ कुछ भी नहीं बदला गया।",
+    invalid_restore_layout_too_old: "यह बैकअप पुराने प्रारूप (v{layout}) में है; यह संस्करण v{min} और उसके बाद वाले पढ़ता है। जिस amenbo ने इसे लिखा, उसी से बहाल कीजिए। कुछ भी नहीं बदला गया।",
+    invalid_restore_layout_too_new: "यह बैकअप नए प्रारूप (v{layout}) में है; यह संस्करण v{max} तक पढ़ता है। amenbo अद्यतन करके फिर कोशिश कीजिए। कुछ भी नहीं बदला गया।",
+    invalid_restore_archive_newer: "यह बैकअप amenbo v{app} का बनाया हुआ है, जिसका डेटा v{found} पर है — इस संस्करण के पढ़ने योग्य v{max} से आगे। amenbo v{app} या नया इस्तेमाल कीजिए। कुछ भी नहीं बदला गया।",
+    invalid_export_dest_exists: "{path} पहले से मौजूद है। निर्यात नया फ़ोल्डर बनाता है — कोई खाली नाम चुनिए।",
+    invalid_migration_no_space: "अद्यतन से पहले के बैकअप के लिए पर्याप्त खाली जगह नहीं है: ~{need} MiB चाहिए (संग्रह ~{archive} MiB + अस्थायी ~{staging} MiB), और {dir} पर ~{free} MiB खाली है। जगह खाली करके फिर कोशिश कीजिए — अभी कुछ भी नहीं बदला गया है।",
+    invalid_migration_rolled_back: "अद्यतन विफल रहा और आपका डेटा ठीक पहले जैसा लौटा दिया गया ({failure})। शुरू होने से पहले लिया गया बैकअप {at} पर रखा है।",
+    invalid_migration_rollback_failed: "अद्यतन विफल रहा ({failure}), और डेटा वापस लौटाना भी ({rollback})। वह आधा-अधूरा अद्यतन हो सकता है — अद्यतन से पहले का बैकअप {at} से बहाल कीजिए।",
   },
 
   doctor: {

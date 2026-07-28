@@ -568,6 +568,18 @@ export const pl: Translation = {
     invalid_decision_self_supersede: "Decyzja nie może zastąpić samej siebie.",
     invalid_decision_self_amend: "Decyzja nie może zmienić samej siebie.",
     invalid_decision_self_builds_on: "Decyzja nie może opierać się na samej sobie.",
+    invalid_backup_dest_is_dir: "{path} to folder. Kopia zapasowa zapisuje się do jednego pliku — podaj nazwę pliku.",
+    invalid_backup_dest_exists: "{path} już istnieje, a kopia zapasowa niczego nie nadpisuje — wybierz inną nazwę.",
+    invalid_restore_source_is_dir: "{path} to folder. Przywracanie bierze jeden plik kopii zapasowej.",
+    invalid_restore_not_an_archive: "{path} nie jest plikiem kopii zapasowej amenbo.",
+    invalid_restore_missing_snapshot: "{path} nie zawiera danych — plik kopii zapasowej jest uszkodzony. Tutaj nic nie zostało zmienione.",
+    invalid_restore_layout_too_old: "Ta kopia jest w starszym formacie (v{layout}); ta wersja czyta v{min} i nowsze. Przywróć ją tym amenbo, które ją zapisało. Nic nie zostało zmienione.",
+    invalid_restore_layout_too_new: "Ta kopia jest w nowszym formacie (v{layout}); ta wersja czyta do v{max}. Zaktualizuj amenbo i spróbuj ponownie. Nic nie zostało zmienione.",
+    invalid_restore_archive_newer: "Ta kopia pochodzi z amenbo v{app}, którego dane są na v{found} — poza v{max}, którą czyta ta wersja. Użyj amenbo v{app} lub nowszego. Nic nie zostało zmienione.",
+    invalid_export_dest_exists: "{path} już istnieje. Eksport tworzy nowy folder — wybierz nazwę, która jest wolna.",
+    invalid_migration_no_space: "Za mało wolnego miejsca na kopię sprzed aktualizacji: potrzeba ~{need} MiB (archiwum ~{archive} MiB + miejsce robocze ~{staging} MiB), a wolne jest ~{free} MiB w {dir}. Zwolnij miejsce i spróbuj ponownie — nic jeszcze nie zostało zmienione.",
+    invalid_migration_rolled_back: "Aktualizacja nie powiodła się, a Twoje dane wróciły dokładnie do stanu sprzed niej ({failure}). Kopia zrobiona przed startem leży w {at}.",
+    invalid_migration_rollback_failed: "Aktualizacja nie powiodła się ({failure}) i cofnięcie zmian również ({rollback}). Dane mogą być zaktualizowane w połowie — przywróć kopię sprzed aktualizacji, z {at}.",
   },
 
   doctor: {

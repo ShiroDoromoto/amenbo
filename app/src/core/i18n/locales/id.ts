@@ -533,6 +533,18 @@ export const id: Translation = {
     invalid_decision_self_supersede: "Sebuah keputusan tidak bisa menggantikan dirinya sendiri.",
     invalid_decision_self_amend: "Sebuah keputusan tidak bisa mengubah dirinya sendiri.",
     invalid_decision_self_builds_on: "Sebuah keputusan tidak bisa berpijak pada dirinya sendiri.",
+    invalid_backup_dest_is_dir: "{path} adalah folder. Cadangan ditulis ke satu berkas — sebutkan nama berkas.",
+    invalid_backup_dest_exists: "{path} sudah ada, dan pencadangan tidak menimpa apa pun — pilih nama lain.",
+    invalid_restore_source_is_dir: "{path} adalah folder. Pemulihan mengambil satu berkas cadangan.",
+    invalid_restore_not_an_archive: "{path} bukan berkas cadangan amenbo.",
+    invalid_restore_missing_snapshot: "{path} tidak memuat data — berkas cadangan itu rusak. Di sini tidak ada yang diubah.",
+    invalid_restore_layout_too_old: "Cadangan ini dalam format lama (v{layout}); versi ini membaca v{min} ke atas. Pulihkan dengan amenbo yang menulisnya. Tidak ada yang diubah.",
+    invalid_restore_layout_too_new: "Cadangan ini dalam format yang lebih baru (v{layout}); versi ini membaca hingga v{max}. Perbarui amenbo lalu coba lagi. Tidak ada yang diubah.",
+    invalid_restore_archive_newer: "Cadangan ini berasal dari amenbo v{app}, yang datanya di v{found} — melewati v{max} yang dibaca versi ini. Pakai amenbo v{app} atau yang lebih baru. Tidak ada yang diubah.",
+    invalid_export_dest_exists: "{path} sudah ada. Ekspor membuat folder baru — pilih nama yang belum terpakai.",
+    invalid_migration_no_space: "Ruang kosong tidak cukup untuk cadangan sebelum pembaruan: butuh ~{need} MiB (arsip ~{archive} MiB + ruang kerja ~{staging} MiB), sedangkan tersedia ~{free} MiB di {dir}. Kosongkan ruang lalu coba lagi — belum ada yang diubah.",
+    invalid_migration_rolled_back: "Pembaruan gagal dan data Anda dikembalikan persis seperti semula ({failure}). Cadangan yang diambil sebelum mulai tersimpan di {at}.",
+    invalid_migration_rollback_failed: "Pembaruan gagal ({failure}), dan mengembalikan data juga gagal ({rollback}). Data mungkin terbarui setengah jalan — pulihkan cadangan sebelum pembaruan, di {at}.",
   },
 
   doctor: {

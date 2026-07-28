@@ -532,6 +532,18 @@ export const th: Translation = {
     invalid_decision_self_supersede: "การตัดสินใจแทนที่ตัวเองไม่ได้",
     invalid_decision_self_amend: "การตัดสินใจแก้ไขตัวเองไม่ได้",
     invalid_decision_self_builds_on: "การตัดสินใจอ้างอิงตัวเองเป็นฐานไม่ได้",
+    invalid_backup_dest_is_dir: "{path} เป็นโฟลเดอร์ การสำรองข้อมูลจะเขียนเป็นไฟล์เดียว — โปรดระบุชื่อไฟล์",
+    invalid_backup_dest_exists: "{path} มีอยู่แล้ว และการสำรองข้อมูลจะไม่เขียนทับ — โปรดเลือกชื่ออื่น",
+    invalid_restore_source_is_dir: "{path} เป็นโฟลเดอร์ การกู้คืนต้องใช้ไฟล์สำรองหนึ่งไฟล์",
+    invalid_restore_not_an_archive: "{path} ไม่ใช่ไฟล์สำรองของ amenbo",
+    invalid_restore_missing_snapshot: "{path} ไม่มีข้อมูลอยู่ — ไฟล์สำรองเสียหาย ที่นี่ยังไม่มีอะไรถูกเปลี่ยน",
+    invalid_restore_layout_too_old: "ไฟล์สำรองนี้เป็นรูปแบบเก่า (v{layout}) รุ่นนี้อ่านได้ตั้งแต่ v{min} ขึ้นไป โปรดกู้คืนด้วย amenbo รุ่นที่เขียนมัน ยังไม่มีอะไรถูกเปลี่ยน",
+    invalid_restore_layout_too_new: "ไฟล์สำรองนี้เป็นรูปแบบใหม่กว่า (v{layout}) รุ่นนี้อ่านได้ถึง v{max} โปรดอัปเดต amenbo แล้วลองใหม่ ยังไม่มีอะไรถูกเปลี่ยน",
+    invalid_restore_archive_newer: "ไฟล์สำรองนี้มาจาก amenbo v{app} ซึ่งข้อมูลอยู่ที่ v{found} เกิน v{max} ที่รุ่นนี้อ่านได้ โปรดใช้ amenbo v{app} ขึ้นไป ยังไม่มีอะไรถูกเปลี่ยน",
+    invalid_export_dest_exists: "{path} มีอยู่แล้ว การส่งออกจะสร้างโฟลเดอร์ใหม่ — โปรดเลือกชื่อที่ยังว่าง",
+    invalid_migration_no_space: "พื้นที่ว่างไม่พอสำหรับการสำรองก่อนอัปเดต: ต้องใช้ราว {need} MiB (ไฟล์เก็บถาวรราว {archive} MiB + พื้นที่พักราว {staging} MiB) แต่ {dir} เหลือว่างราว {free} MiB โปรดเพิ่มพื้นที่ว่างแล้วลองใหม่ — ยังไม่มีอะไรถูกเปลี่ยน",
+    invalid_migration_rolled_back: "การอัปเดตล้มเหลว และข้อมูลของคุณถูกคืนกลับเหมือนเดิมทุกอย่าง ({failure}) ไฟล์สำรองที่เก็บไว้ก่อนเริ่มอยู่ที่ {at}",
+    invalid_migration_rollback_failed: "การอัปเดตล้มเหลว ({failure}) และการคืนข้อมูลกลับก็ล้มเหลวด้วย ({rollback}) ข้อมูลอาจอัปเดตไปครึ่งทาง — โปรดกู้คืนจากไฟล์สำรองก่อนอัปเดตที่ {at}",
   },
 
   doctor: {

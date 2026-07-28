@@ -532,6 +532,18 @@ export const nl: Translation = {
     invalid_decision_self_supersede: "Een besluit kan zichzelf niet vervangen.",
     invalid_decision_self_amend: "Een besluit kan zichzelf niet wijzigen.",
     invalid_decision_self_builds_on: "Een besluit kan niet op zichzelf steunen.",
+    invalid_backup_dest_is_dir: "{path} is een map. Een back-up wordt naar één bestand geschreven — geef een bestandsnaam op.",
+    invalid_backup_dest_exists: "{path} bestaat al, en een back-up overschrijft niets — kies een andere naam.",
+    invalid_restore_source_is_dir: "{path} is een map. Terugzetten gebruikt één back-upbestand.",
+    invalid_restore_not_an_archive: "{path} is geen amenbo-back-upbestand.",
+    invalid_restore_missing_snapshot: "{path} bevat geen gegevens — het back-upbestand is beschadigd. Hier is niets gewijzigd.",
+    invalid_restore_layout_too_old: "Deze back-up staat in een ouder formaat (v{layout}); deze versie leest v{min} en nieuwer. Zet hem terug met de amenbo die hem schreef. Er is niets gewijzigd.",
+    invalid_restore_layout_too_new: "Deze back-up staat in een nieuwer formaat (v{layout}); deze versie leest tot en met v{max}. Werk amenbo bij en probeer het opnieuw. Er is niets gewijzigd.",
+    invalid_restore_archive_newer: "Deze back-up komt van amenbo v{app}, waarvan de gegevens op v{found} staan — voorbij de v{max} die deze versie leest. Gebruik amenbo v{app} of nieuwer. Er is niets gewijzigd.",
+    invalid_export_dest_exists: "{path} bestaat al. Exporteren maakt een nieuwe map — kies een naam die nog vrij is.",
+    invalid_migration_no_space: "Er is te weinig vrije ruimte voor de back-up van vóór het bijwerken: er is ~{need} MiB nodig (archief ~{archive} MiB + werkruimte ~{staging} MiB), en er is ~{free} MiB vrij op {dir}. Maak ruimte vrij en probeer het opnieuw — er is nog niets gewijzigd.",
+    invalid_migration_rolled_back: "Het bijwerken is mislukt en je gegevens staan weer precies zoals ze stonden ({failure}). De back-up van vóór de start staat in {at}.",
+    invalid_migration_rollback_failed: "Het bijwerken is mislukt ({failure}), en het terugzetten ook ({rollback}). Je gegevens zijn mogelijk half bijgewerkt — zet de back-up van vóór het bijwerken terug, in {at}.",
   },
 
   doctor: {

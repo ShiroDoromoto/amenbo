@@ -578,6 +578,23 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_decision_self_supersede: "A decision cannot supersede itself.",
   invalid_decision_self_amend: "A decision cannot amend itself.",
   invalid_decision_self_builds_on: "A decision cannot stand on itself.",
+
+  // Settings > Data, and the startup update screen. What a person meets there is the path or the
+  // file they chose, or a disk with no room left — so the sentence names it, and says whether
+  // anything was changed. The inner reason a failed update carries ({failure} / {rollback}) is
+  // whatever went wrong underneath, and stays in core's English.
+  invalid_backup_dest_is_dir: "{path} is a folder. A backup is written as one file — give a file name.",
+  invalid_backup_dest_exists: "{path} already exists, and a backup overwrites nothing — choose another name.",
+  invalid_restore_source_is_dir: "{path} is a folder. Restoring takes one backup file.",
+  invalid_restore_not_an_archive: "{path} is not an amenbo backup file.",
+  invalid_restore_missing_snapshot: "{path} carries no data — the backup file is damaged. Nothing here was changed.",
+  invalid_restore_layout_too_old: "This backup is in an older format (v{layout}); this version reads v{min} and later. Restore it with the amenbo that wrote it. Nothing was changed.",
+  invalid_restore_layout_too_new: "This backup is in a newer format (v{layout}); this version reads up to v{max}. Update amenbo and try again. Nothing was changed.",
+  invalid_restore_archive_newer: "This backup came from amenbo v{app}, whose data is at v{found} — past the v{max} this version reads. Use amenbo v{app} or later. Nothing was changed.",
+  invalid_export_dest_exists: "{path} already exists. Export makes a new folder — choose a name that is free.",
+  invalid_migration_no_space: "There is not enough free space for the backup taken before updating: ~{need} MiB is needed (archive ~{archive} MiB + staging ~{staging} MiB), and ~{free} MiB is free at {dir}. Free up space and try again — nothing has been changed yet.",
+  invalid_migration_rolled_back: "The update failed and your data was put back exactly as it was ({failure}). The backup taken before it started is kept at {at}.",
+  invalid_migration_rollback_failed: "The update failed ({failure}), and putting your data back failed too ({rollback}). It may be half updated — restore the backup taken before the update, at {at}.",
 };
 
 // doctor issue kind → template (`{name}` interpolated from the issue's params).

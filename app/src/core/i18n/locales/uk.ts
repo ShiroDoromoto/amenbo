@@ -568,6 +568,18 @@ export const uk: Translation = {
     invalid_decision_self_supersede: "Рішення не може замінити само себе.",
     invalid_decision_self_amend: "Рішення не може змінити само себе.",
     invalid_decision_self_builds_on: "Рішення не може спиратися на само себе.",
+    invalid_backup_dest_is_dir: "{path} — це папка. Резервна копія пишеться в один файл: вкажіть ім'я файлу.",
+    invalid_backup_dest_exists: "{path} вже існує, а резервна копія нічого не перезаписує: виберіть іншу назву.",
+    invalid_restore_source_is_dir: "{path} — це папка. Для відновлення потрібен файл резервної копії.",
+    invalid_restore_not_an_archive: "{path} не є файлом резервної копії amenbo.",
+    invalid_restore_missing_snapshot: "У {path} немає даних — файл резервної копії пошкоджено. Тут нічого не змінено.",
+    invalid_restore_layout_too_old: "Ця копія в старішому форматі (v{layout}); ця версія читає v{min} і новіші. Відновіть її тим amenbo, який її записав. Нічого не змінено.",
+    invalid_restore_layout_too_new: "Ця копія в новішому форматі (v{layout}); ця версія читає до v{max}. Оновіть amenbo і спробуйте ще раз. Нічого не змінено.",
+    invalid_restore_archive_newer: "Ця копія зроблена amenbo v{app}, її дані на v{found} — далі за v{max}, яку читає ця версія. Візьміть amenbo v{app} або новіший. Нічого не змінено.",
+    invalid_export_dest_exists: "{path} вже існує. Експорт створює нову папку: виберіть вільну назву.",
+    invalid_migration_no_space: "Бракує вільного місця для копії перед оновленням: потрібно ~{need} МіБ (архів ~{archive} МіБ + робоче місце ~{staging} МіБ), а вільно ~{free} МіБ у {dir}. Звільніть місце і спробуйте ще раз — поки нічого не змінено.",
+    invalid_migration_rolled_back: "Оновлення не вдалося, і ваші дані повернуто рівно в попередній стан ({failure}). Копія, знята перед початком, лежить у {at}.",
+    invalid_migration_rollback_failed: "Оновлення не вдалося ({failure}), і повернути дані теж не вийшло ({rollback}). Вони можуть бути оновлені наполовину — відновіть копію, зняту перед оновленням, із {at}.",
   },
 
   doctor: {

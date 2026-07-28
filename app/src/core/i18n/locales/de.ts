@@ -549,6 +549,18 @@ export const de: Translation = {
     invalid_decision_self_supersede: "Eine Entscheidung kann sich nicht selbst ersetzen.",
     invalid_decision_self_amend: "Eine Entscheidung kann sich nicht selbst ändern.",
     invalid_decision_self_builds_on: "Eine Entscheidung kann nicht auf sich selbst aufbauen.",
+    invalid_backup_dest_is_dir: "{path} ist ein Ordner. Eine Sicherung wird als eine einzelne Datei geschrieben — gib einen Dateinamen an.",
+    invalid_backup_dest_exists: "{path} gibt es bereits, und eine Sicherung überschreibt nichts — wähle einen anderen Namen.",
+    invalid_restore_source_is_dir: "{path} ist ein Ordner. Zum Wiederherstellen wird eine Sicherungsdatei gewählt.",
+    invalid_restore_not_an_archive: "{path} ist keine amenbo-Sicherungsdatei.",
+    invalid_restore_missing_snapshot: "{path} enthält keine Daten — die Sicherungsdatei ist beschädigt. Hier wurde nichts geändert.",
+    invalid_restore_layout_too_old: "Diese Sicherung liegt in einem älteren Format vor (v{layout}); diese Version liest v{min} und neuer. Stelle sie mit dem amenbo wieder her, das sie geschrieben hat. Es wurde nichts geändert.",
+    invalid_restore_layout_too_new: "Diese Sicherung liegt in einem neueren Format vor (v{layout}); diese Version liest bis v{max}. Aktualisiere amenbo und versuche es erneut. Es wurde nichts geändert.",
+    invalid_restore_archive_newer: "Diese Sicherung stammt aus amenbo v{app}, dessen Daten auf v{found} stehen — jenseits von v{max}, das diese Version liest. Nimm amenbo v{app} oder neuer. Es wurde nichts geändert.",
+    invalid_export_dest_exists: "{path} gibt es bereits. Der Export legt einen neuen Ordner an — wähle einen noch freien Namen.",
+    invalid_migration_no_space: "Für die Sicherung vor der Aktualisierung ist zu wenig Platz frei: nötig sind ~{need} MiB (Archiv ~{archive} MiB + Arbeitsbereich ~{staging} MiB), frei sind ~{free} MiB unter {dir}. Schaffe Platz und versuche es erneut — es wurde noch nichts geändert.",
+    invalid_migration_rolled_back: "Die Aktualisierung ist fehlgeschlagen, und deine Daten stehen wieder genau wie zuvor ({failure}). Die Sicherung von davor liegt unter {at}.",
+    invalid_migration_rollback_failed: "Die Aktualisierung ist fehlgeschlagen ({failure}), und das Zurücksetzen ebenfalls ({rollback}). Deine Daten sind womöglich halb aktualisiert — stelle die Sicherung von vor der Aktualisierung wieder her, unter {at}.",
   },
 
   doctor: {

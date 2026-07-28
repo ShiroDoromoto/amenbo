@@ -527,6 +527,18 @@ export const ko: Translation = {
     invalid_decision_self_supersede: "결정은 자기 자신을 대체할 수 없습니다.",
     invalid_decision_self_amend: "결정은 자기 자신을 개정할 수 없습니다.",
     invalid_decision_self_builds_on: "결정은 자기 자신을 전제로 삼을 수 없습니다.",
+    invalid_backup_dest_is_dir: "{path}은(는) 폴더입니다. 백업은 파일 하나로 쓰므로 파일 이름을 지정해 주세요.",
+    invalid_backup_dest_exists: "{path}은(는) 이미 있습니다. 백업은 기존 파일을 덮어쓰지 않으니 다른 이름을 지정해 주세요.",
+    invalid_restore_source_is_dir: "{path}은(는) 폴더입니다. 복원에는 백업 파일 하나가 필요합니다.",
+    invalid_restore_not_an_archive: "{path}은(는) amenbo 백업 파일이 아닙니다.",
+    invalid_restore_missing_snapshot: "{path}에 데이터가 없습니다. 백업 파일이 손상되었습니다(이 기기는 아무것도 바뀌지 않았습니다).",
+    invalid_restore_layout_too_old: "이 백업은 예전 형식(v{layout})입니다. 이 버전은 v{min} 이후만 읽습니다. 그 백업을 쓴 amenbo로 복원해 주세요. 바뀐 것은 없습니다.",
+    invalid_restore_layout_too_new: "이 백업은 새 형식(v{layout})입니다. 이 버전은 v{max}까지 읽습니다. amenbo를 갱신한 뒤 다시 시도해 주세요. 바뀐 것은 없습니다.",
+    invalid_restore_archive_newer: "이 백업은 amenbo v{app}이 쓴 것으로, 데이터가 v{found}입니다. 이 버전이 읽는 v{max}를 넘습니다. amenbo v{app} 이후로 복원해 주세요. 바뀐 것은 없습니다.",
+    invalid_export_dest_exists: "{path}은(는) 이미 있습니다. 내보내기는 새 폴더를 만드니 아직 없는 이름을 지정해 주세요.",
+    invalid_migration_no_space: "갱신 전 백업을 둘 공간이 모자랍니다. 약 {need} MiB가 필요한데(보관 파일 약 {archive} MiB + 준비 공간 약 {staging} MiB), {dir}에는 약 {free} MiB만 남아 있습니다. 공간을 비우고 다시 시도해 주세요. 아직 아무것도 바뀌지 않았습니다.",
+    invalid_migration_rolled_back: "갱신에 실패해 데이터를 시작 전 상태로 되돌렸습니다({failure}). 시작 전에 받아 둔 백업은 {at}에 있습니다.",
+    invalid_migration_rollback_failed: "갱신에 실패했고({failure}) 되돌리기도 실패했습니다({rollback}). 데이터가 절반만 갱신되었을 수 있습니다. 갱신 전 백업 {at}에서 복원해 주세요.",
   },
 
   doctor: {

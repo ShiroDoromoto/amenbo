@@ -63,6 +63,24 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_decision_self_supersede",
   "invalid_decision_self_amend",
   "invalid_decision_self_builds_on",
+  // Settings > Data (back up / restore / export), where every refusal a person meets is about the path
+  // or the file they chose. What the store itself being broken raises — a failed `integrity_check`, a
+  // snapshot missing a column — keeps its family code: those name SQLite's own tables back at the
+  // reader, and no sentence written here would tell them any more than core's already does.
+  "invalid_backup_dest_is_dir",
+  "invalid_backup_dest_exists",
+  "invalid_restore_source_is_dir",
+  "invalid_restore_not_an_archive",
+  "invalid_restore_missing_snapshot",
+  "invalid_restore_layout_too_old",
+  "invalid_restore_layout_too_new",
+  "invalid_restore_archive_newer",
+  "invalid_export_dest_exists",
+  // The startup migration screen, which is the whole window — the reader has nothing else to go on,
+  // and the way back is what the sentence has to name.
+  "invalid_migration_no_space",
+  "invalid_migration_rolled_back",
+  "invalid_migration_rollback_failed",
 ] as const;
 
 /** Every code core can emit (`amenbo_core::ErrorCode::ALL`), at both grains. */

@@ -552,6 +552,18 @@ export const ja: Translation = {
     invalid_decision_self_supersede: "決定は自分自身を置き換えられません。",
     invalid_decision_self_amend: "決定は自分自身を改訂できません。",
     invalid_decision_self_builds_on: "決定は自分自身を前提にできません。",
+    invalid_backup_dest_is_dir: "{path} はフォルダです。バックアップは単一ファイルに書き出すので、ファイル名を指定してください。",
+    invalid_backup_dest_exists: "{path} は既にあります。バックアップは既存ファイルを上書きしません。別の名前を指定してください。",
+    invalid_restore_source_is_dir: "{path} はフォルダです。復元にはバックアップファイルを1つ指定してください。",
+    invalid_restore_not_an_archive: "{path} は amenbo のバックアップファイルではありません。",
+    invalid_restore_missing_snapshot: "{path} にデータが入っていません。バックアップファイルが壊れています（この端末は何も変更していません）。",
+    invalid_restore_layout_too_old: "このバックアップは古い形式（v{layout}）です。この版が読めるのは v{min} 以降です。書き出した版の amenbo で復元してください（何も変更していません）。",
+    invalid_restore_layout_too_new: "このバックアップは新しい形式（v{layout}）です。この版が読めるのは v{max} までです。amenbo を更新してからやり直してください（何も変更していません）。",
+    invalid_restore_archive_newer: "このバックアップは新しい版の amenbo（v{app}）が書き出したもので、データは v{found}、この版が読めるのは v{max} までです。amenbo v{app} 以降で復元してください（何も変更していません）。",
+    invalid_export_dest_exists: "{path} は既にあります。エクスポートは新しいフォルダを作るので、まだ無い名前を指定してください。",
+    invalid_migration_no_space: "更新前バックアップの空き容量が足りません。必要 約 {need} MiB（アーカイブ 約 {archive} MiB ＋ 一時領域 約 {staging} MiB）に対し、{dir} の空きは 約 {free} MiB です。空きを作ってやり直してください（まだ何も変更していません）。",
+    invalid_migration_rolled_back: "更新に失敗し、データは開始前の状態へ戻しました（{failure}）。更新前バックアップは {at} にあります。",
+    invalid_migration_rollback_failed: "更新に失敗し（{failure}）、元へ戻すのも失敗しました（{rollback}）。データが中途半端な状態の可能性があります。更新前バックアップ {at} から復元してください。",
   },
 
   doctor: {

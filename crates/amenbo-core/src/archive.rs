@@ -77,7 +77,7 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{sqlite_at, Error, Result};
+use crate::error::{sqlite_at, Error, ErrorCode, Msg, Result};
 use crate::progress::{Phase, Progress};
 use crate::store_engine::migrate::{self as chain, Step};
 use crate::swap_lock;
@@ -401,12 +401,21 @@ pub fn backup_from(
     // file, and `export` — right next to it — takes a directory, so a directory here is a plausible
     // mistake, not a careless one.
     if dest.is_dir() {
-        return Err(Error::invalid(
-            format!("destination is a directory — backup writes one archive file: {}", dest.display()),
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "destination is a directory — backup writes one archive file: {}",
+                dest.display()
+            ))
+            .coded(ErrorCode::InvalidBackupDestIsDir)
+            .with("path", dest.display()),
         ));
     }
     if dest.exists() {
-        return Err(Error::invalid(format!("refusing to overwrite existing archive: {}", dest.display())));
+        return Err(Error::Invalid(
+            Msg::new(format!("refusing to overwrite existing archive: {}", dest.display()))
+                .coded(ErrorCode::InvalidBackupDestExists)
+                .with("path", dest.display()),
+        ));
     }
 
     let stage = staging_dir(dest)?;
@@ -657,8 +666,13 @@ pub fn read_manifest(archive: &Path) -> Result<ArchiveManifest> {
     // fails, so without this the user gets the OS's `Is a directory` and has to work out which of
     // the two paths it means.
     if archive.is_dir() {
-        return Err(Error::invalid(
-            format!("that is a directory — restore takes one archive file: {}", archive.display()),
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "that is a directory — restore takes one archive file: {}",
+                archive.display()
+            ))
+            .coded(ErrorCode::InvalidRestoreSourceIsDir)
+            .with("path", archive.display()),
         ));
     }
     let mut ar = tar::Archive::new(File::open(archive)?);
@@ -674,7 +688,11 @@ pub fn read_manifest(archive: &Path) -> Result<ArchiveManifest> {
             return Ok(serde_json::from_slice(&buf)?);
         }
     }
-    Err(Error::invalid(format!("archive has no `{MANIFEST_ENTRY}` — not a valid .amenbo-backup archive")))
+    Err(Error::Invalid(
+        Msg::new(format!("archive has no `{MANIFEST_ENTRY}` — not a valid .amenbo-backup archive"))
+            .coded(ErrorCode::InvalidRestoreNotAnArchive)
+            .with("path", archive.display()),
+    ))
 }
 
 /// Refuse an archive whose container layout this build does not read — in **both** directions, before the
@@ -684,17 +702,23 @@ pub fn read_manifest(archive: &Path) -> Result<ArchiveManifest> {
 /// disaster-recovery tool, dropping them silently is worse than refusing (no partial application).
 fn ensure_layout_readable(layout: u32) -> Result<()> {
     if layout < MIN_ARCHIVE_LAYOUT_VERSION {
-        return Err(Error::invalid(
-            format!(
+        return Err(Error::Invalid(
+            Msg::new(format!(
                 "this archive uses layout v{layout} — it was written before the consolidation, and this build reads v{MIN_ARCHIVE_LAYOUT_VERSION} and later. Restore it with the amenbo that wrote it (nothing here was changed)"
-            ),
+            ))
+            .coded(ErrorCode::InvalidRestoreLayoutTooOld)
+            .with("layout", layout)
+            .with("min", MIN_ARCHIVE_LAYOUT_VERSION),
         ));
     }
     if layout > ARCHIVE_LAYOUT_VERSION {
-        return Err(Error::invalid(
-            format!(
+        return Err(Error::Invalid(
+            Msg::new(format!(
                 "this archive uses layout v{layout} — this build reads up to v{ARCHIVE_LAYOUT_VERSION}. update to the latest amenbo — nothing was changed"
-            ),
+            ))
+            .coded(ErrorCode::InvalidRestoreLayoutTooNew)
+            .with("layout", layout)
+            .with("max", ARCHIVE_LAYOUT_VERSION),
         ));
     }
     Ok(())
@@ -754,10 +778,14 @@ fn preflight_generation_gate(manifest: &ArchiveManifest) -> Result<()> {
         // version reads its own store — so the refusal can say which amenbo to run instead of "the latest",
         // which nobody can act on offline.
         let app = &manifest.producer_app_version;
-        return Err(Error::invalid(
-            format!(
+        return Err(Error::Invalid(
+            Msg::new(format!(
                 "this archive was produced by a newer amenbo (v{app}) — its store is at format v{found}, past the v{max} this build reads. use amenbo {app} or newer — nothing was changed"
-            ),
+            ))
+            .coded(ErrorCode::InvalidRestoreArchiveNewer)
+            .with("app", app)
+            .with("found", found)
+            .with("max", max),
         ));
     }
     Ok(())
@@ -822,7 +850,11 @@ fn extract_snapshot(
 
     let staged = stage.join(SNAPSHOT_ENTRY);
     if !staged.is_file() {
-        return Err(Error::invalid(format!("archive is missing the store snapshot (`{SNAPSHOT_ENTRY}`)")));
+        return Err(Error::Invalid(
+            Msg::new(format!("archive is missing the store snapshot (`{SNAPSHOT_ENTRY}`)"))
+                .coded(ErrorCode::InvalidRestoreMissingSnapshot)
+                .with("path", archive.display()),
+        ));
     }
     Ok(staged)
 }
@@ -1810,11 +1842,14 @@ mod tests {
 
         let err = restore_into(&archive, "20260708T000000Z", &live_db, &mut crate::progress::ignore)
             .unwrap_err();
-        assert_eq!(err.code(), "invalid_value");
+        assert_eq!(err.code(), "invalid_restore_layout_too_old");
         assert!(
             err.to_string().contains("layout v4"),
             "the refusal names the layout it found and the way out: {err}"
         );
+        // …and it sends that layout apart from the prose, so the screen writes the sentence itself.
+        let fields: Vec<_> = err.fields().expect("the values ride along").iter().collect();
+        assert_eq!(fields, vec![("layout", "4"), ("min", "5")]);
         assert_eq!(live_tasks(&live_db), 1, "the live store is untouched");
         assert!(
             !live.join("store.pre-restore-20260708T000000Z.sqlite").exists(),

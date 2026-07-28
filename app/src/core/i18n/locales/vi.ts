@@ -532,6 +532,18 @@ export const vi: Translation = {
     invalid_decision_self_supersede: "Một quyết định không thể thay thế chính nó.",
     invalid_decision_self_amend: "Một quyết định không thể sửa đổi chính nó.",
     invalid_decision_self_builds_on: "Một quyết định không thể dựa trên chính nó.",
+    invalid_backup_dest_is_dir: "{path} là một thư mục. Bản sao lưu được ghi vào một tệp duy nhất — hãy đặt tên tệp.",
+    invalid_backup_dest_exists: "{path} đã tồn tại, và bản sao lưu không ghi đè lên nó — hãy chọn tên khác.",
+    invalid_restore_source_is_dir: "{path} là một thư mục. Phục hồi cần một tệp sao lưu.",
+    invalid_restore_not_an_archive: "{path} không phải tệp sao lưu của amenbo.",
+    invalid_restore_missing_snapshot: "{path} không chứa dữ liệu — tệp sao lưu đã hỏng. Ở đây không có gì bị thay đổi.",
+    invalid_restore_layout_too_old: "Bản sao lưu này ở định dạng cũ (v{layout}); bản này đọc từ v{min} trở đi. Hãy phục hồi bằng chính amenbo đã ghi nó. Không có gì bị thay đổi.",
+    invalid_restore_layout_too_new: "Bản sao lưu này ở định dạng mới hơn (v{layout}); bản này đọc tới v{max}. Hãy cập nhật amenbo rồi thử lại. Không có gì bị thay đổi.",
+    invalid_restore_archive_newer: "Bản sao lưu này đến từ amenbo v{app}, dữ liệu ở v{found} — vượt quá v{max} mà bản này đọc được. Hãy dùng amenbo v{app} trở lên. Không có gì bị thay đổi.",
+    invalid_export_dest_exists: "{path} đã tồn tại. Xuất sẽ tạo một thư mục mới — hãy chọn tên còn trống.",
+    invalid_migration_no_space: "Không đủ chỗ trống cho bản sao lưu trước khi cập nhật: cần ~{need} MiB (kho ~{archive} MiB + chỗ dựng ~{staging} MiB), còn trống ~{free} MiB tại {dir}. Hãy dọn chỗ rồi thử lại — vẫn chưa có gì bị thay đổi.",
+    invalid_migration_rolled_back: "Cập nhật thất bại và dữ liệu của bạn đã được đưa về đúng như trước ({failure}). Bản sao lưu lấy trước khi bắt đầu nằm ở {at}.",
+    invalid_migration_rollback_failed: "Cập nhật thất bại ({failure}), và việc đưa dữ liệu trở lại cũng thất bại ({rollback}). Dữ liệu có thể mới cập nhật một nửa — hãy phục hồi bản sao lưu trước khi cập nhật, tại {at}.",
   },
 
   doctor: {

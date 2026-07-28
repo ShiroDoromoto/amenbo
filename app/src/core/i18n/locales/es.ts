@@ -560,6 +560,18 @@ export const es: Translation = {
     invalid_decision_self_supersede: "Una decisión no puede sustituirse a sí misma.",
     invalid_decision_self_amend: "Una decisión no puede enmendarse a sí misma.",
     invalid_decision_self_builds_on: "Una decisión no puede apoyarse en sí misma.",
+    invalid_backup_dest_is_dir: "{path} es una carpeta. La copia de seguridad se escribe en un solo archivo: indica un nombre de archivo.",
+    invalid_backup_dest_exists: "{path} ya existe y la copia de seguridad no sobrescribe nada: elige otro nombre.",
+    invalid_restore_source_is_dir: "{path} es una carpeta. Para restaurar hay que elegir un archivo de copia de seguridad.",
+    invalid_restore_not_an_archive: "{path} no es un archivo de copia de seguridad de amenbo.",
+    invalid_restore_missing_snapshot: "{path} no contiene datos: el archivo de copia de seguridad está dañado. Aquí no se cambió nada.",
+    invalid_restore_layout_too_old: "Esta copia está en un formato antiguo (v{layout}); esta versión lee v{min} y posteriores. Restáurala con el amenbo que la escribió. No se cambió nada.",
+    invalid_restore_layout_too_new: "Esta copia está en un formato más nuevo (v{layout}); esta versión lee hasta v{max}. Actualiza amenbo y vuelve a intentarlo. No se cambió nada.",
+    invalid_restore_archive_newer: "Esta copia viene de amenbo v{app}, cuyos datos están en v{found}, más allá de la v{max} que lee esta versión. Usa amenbo v{app} o posterior. No se cambió nada.",
+    invalid_export_dest_exists: "{path} ya existe. La exportación crea una carpeta nueva: elige un nombre libre.",
+    invalid_migration_no_space: "No hay espacio libre suficiente para la copia previa a la actualización: hacen falta ~{need} MiB (archivo ~{archive} MiB + espacio de trabajo ~{staging} MiB) y hay ~{free} MiB libres en {dir}. Libera espacio y vuelve a intentarlo: todavía no se ha cambiado nada.",
+    invalid_migration_rolled_back: "La actualización falló y tus datos quedaron exactamente como estaban ({failure}). La copia tomada antes de empezar está en {at}.",
+    invalid_migration_rollback_failed: "La actualización falló ({failure}) y devolver tus datos también ({rollback}). Pueden haber quedado a medio actualizar: restaura la copia previa a la actualización, en {at}.",
   },
 
   doctor: {

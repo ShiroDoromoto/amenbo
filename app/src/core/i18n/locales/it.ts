@@ -560,6 +560,18 @@ export const it: Translation = {
     invalid_decision_self_supersede: "Una decisione non può sostituire sé stessa.",
     invalid_decision_self_amend: "Una decisione non può emendare sé stessa.",
     invalid_decision_self_builds_on: "Una decisione non può poggiare su sé stessa.",
+    invalid_backup_dest_is_dir: "{path} è una cartella. Un backup viene scritto in un unico file: indica un nome di file.",
+    invalid_backup_dest_exists: "{path} esiste già e un backup non sovrascrive nulla: scegli un altro nome.",
+    invalid_restore_source_is_dir: "{path} è una cartella. Il ripristino prende un file di backup.",
+    invalid_restore_not_an_archive: "{path} non è un file di backup di amenbo.",
+    invalid_restore_missing_snapshot: "{path} non contiene dati: il file di backup è danneggiato. Qui non è stato cambiato nulla.",
+    invalid_restore_layout_too_old: "Questo backup è in un formato più vecchio (v{layout}); questa versione legge dalla v{min} in poi. Ripristinalo con l'amenbo che l'ha scritto. Non è stato cambiato nulla.",
+    invalid_restore_layout_too_new: "Questo backup è in un formato più recente (v{layout}); questa versione legge fino alla v{max}. Aggiorna amenbo e riprova. Non è stato cambiato nulla.",
+    invalid_restore_archive_newer: "Questo backup viene da amenbo v{app}, i cui dati sono alla v{found} — oltre la v{max} che questa versione legge. Usa amenbo v{app} o successivo. Non è stato cambiato nulla.",
+    invalid_export_dest_exists: "{path} esiste già. L'esportazione crea una cartella nuova: scegli un nome libero.",
+    invalid_migration_no_space: "Non c'è abbastanza spazio libero per il backup prima dell'aggiornamento: servono ~{need} MiB (archivio ~{archive} MiB + area di lavoro ~{staging} MiB) e sono liberi ~{free} MiB su {dir}. Libera spazio e riprova: non è ancora stato cambiato nulla.",
+    invalid_migration_rolled_back: "L'aggiornamento è fallito e i tuoi dati sono tornati esattamente com'erano ({failure}). Il backup preso prima dell'inizio è conservato in {at}.",
+    invalid_migration_rollback_failed: "L'aggiornamento è fallito ({failure}) e anche il ripristino ({rollback}). I dati potrebbero essere aggiornati a metà: ripristina il backup preso prima dell'aggiornamento, in {at}.",
   },
 
   doctor: {

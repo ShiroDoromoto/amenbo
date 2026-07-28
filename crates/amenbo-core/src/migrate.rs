@@ -53,7 +53,7 @@ use serde::Serialize;
 
 use crate::archive::{self, ARCHIVE_EXT, BackupReport, StoreSource};
 use crate::config::Paths;
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::progress::Progress;
 use crate::store_engine::migrate::{self as chain, Run, Step, STEPS};
 use crate::store_engine::{probe_format_version, probe_is_legacy_keyed, StoreEngine};
@@ -186,10 +186,16 @@ pub fn ensure_space(plan: &SpacePlan, dest: &Path) -> Result<()> {
         mib(plan.available_bytes),
     );
     let dir = dest.parent().unwrap_or(dest).display().to_string();
-    Err(Error::invalid(
-        format!(
+    Err(Error::Invalid(
+        Msg::new(format!(
             "not enough free space for the pre-migration backup: needs ~{need} MiB (archive ~{archive} MiB + staging ~{staging} MiB), but only ~{free} MiB is free at {dir}. free up space and run the migration again — nothing has been changed"
-        ),
+        ))
+        .coded(ErrorCode::InvalidMigrationNoSpace)
+        .with("need", need)
+        .with("archive", archive)
+        .with("staging", staging)
+        .with("free", free)
+        .with("dir", &dir),
     ))
 }
 
@@ -395,17 +401,26 @@ fn roll_back(
 ) -> Error {
     let at = archive_path.display();
     match archive::rewind_into(archive_path, &format!("{stamp}-migration-failed"), db_path, progress) {
-        Ok(_) => Error::invalid(
-            format!(
+        Ok(_) => Error::Invalid(
+            Msg::new(format!(
                 "the migration failed and your store was rolled back to how it was before it started: {failure}. the pre-migration backup is kept at {at}"
-            ),
+            ))
+            .coded(ErrorCode::InvalidMigrationRolledBack)
+            .with("failure", failure)
+            .with("at", &at),
         ),
         Err(rollback) => {
             let cmd = crate::config::Paths::command_name();
-            Error::invalid(
-                format!(
+            // The CLI hint (`amenbo restore …`) is in the prose alone, not in the fields: a screen
+            // writing this sentence from its own template points at the way back it actually has.
+            Error::Invalid(
+                Msg::new(format!(
                     "the migration failed ({failure}) and rolling back failed too ({rollback}). your store may be half-migrated — restore it from the pre-migration backup at {at} (`{cmd} restore {at}`)"
-                ),
+                ))
+                .coded(ErrorCode::InvalidMigrationRollbackFailed)
+                .with("failure", failure)
+                .with("rollback", &rollback)
+                .with("at", &at),
             )
         }
     }

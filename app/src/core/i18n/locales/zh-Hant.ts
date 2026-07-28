@@ -528,6 +528,18 @@ export const zhHant: Translation = {
     invalid_decision_self_supersede: "決策不能取代自身。",
     invalid_decision_self_amend: "決策不能修訂自身。",
     invalid_decision_self_builds_on: "決策不能以自身為前提。",
+    invalid_backup_dest_is_dir: "{path} 是資料夾。備份會寫進單一檔案——請指定檔名。",
+    invalid_backup_dest_exists: "{path} 已存在，備份不會覆寫它——請換一個名稱。",
+    invalid_restore_source_is_dir: "{path} 是資料夾。還原需要選一個備份檔。",
+    invalid_restore_not_an_archive: "{path} 不是 amenbo 的備份檔。",
+    invalid_restore_missing_snapshot: "{path} 裡沒有資料——備份檔已損毀（本機未做任何變更）。",
+    invalid_restore_layout_too_old: "這個備份是舊格式（v{layout}）；本版本只讀 v{min} 以後。請用寫出它的那個 amenbo 還原。未做任何變更。",
+    invalid_restore_layout_too_new: "這個備份是新格式（v{layout}）；本版本最多讀到 v{max}。請更新 amenbo 後再試。未做任何變更。",
+    invalid_restore_archive_newer: "這個備份來自 amenbo v{app}，其資料為 v{found}，超過本版本可讀的 v{max}。請使用 amenbo v{app} 或更新版本。未做任何變更。",
+    invalid_export_dest_exists: "{path} 已存在。匯出會新建一個資料夾——請換一個尚未占用的名稱。",
+    invalid_migration_no_space: "更新前備份的空間不足：需要約 {need} MiB（壓縮檔約 {archive} MiB ＋ 暫存約 {staging} MiB），而 {dir} 只剩約 {free} MiB。請騰出空間後再試——目前尚未變更任何資料。",
+    invalid_migration_rolled_back: "更新失敗，資料已回到開始前的樣子（{failure}）。開始前的備份保存在 {at}。",
+    invalid_migration_rollback_failed: "更新失敗（{failure}），回復也失敗了（{rollback}）。資料可能只更新了一半——請從更新前的備份 {at} 還原。",
   },
 
   doctor: {

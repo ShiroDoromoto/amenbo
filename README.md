@@ -4,7 +4,7 @@
 
 # amenbo
 
-**A task & project manager where an AI and a human collaborate on one machine.**
+**Task management for AI agents — the record lives outside the AI.**
 
 <!-- The badges belong on one line of source: a single newline is a hard break in GFM, so one per line
      would stack them into a column. -->
@@ -16,8 +16,24 @@
 
 **[amenbo.work](https://amenbo.work/en/)** — the site: what this is for, and the installers.
 
-- **Local, single-store** — your data lives on your machine in a single SQLite store, and can be exported at any time.
-- **CLI-first & AI-agent-friendly** — a Rust core library does the domain work; the CLI is a thin shell on top of it.
+The context you build up with an AI is locked inside that AI. amenbo keeps it on your
+machine instead: tasks and decisions as connected records in one SQLite store, which an
+agent writes through the CLI and you read in the desktop app.
+
+- **Outside the agent** — the record belongs to the store, not to a session, so it does
+  not reset when the agent you are working with changes. It is one SQLite file on your
+  machine, and `amenbo export` writes all of it out whenever you want.
+- **Connected records** — tasks carry dependency edges, decisions cross-link to the tasks
+  they bear on, and `task reject --reason` keeps why something was dropped.
+- **The spec is in the binary** — `amenbo agent --json` is what an agent reads to work
+  here: how to work in this folder, plus every command's flags, arguments and examples.
+  It ships with the build, so there is no command reference to drift out of date.
+- **The folder is the boundary** — an agent started in a folder you bound operates that
+  folder's project, and reading or writing another project's tasks, decisions or comments
+  is refused with `out_of_reach`. One machine holds every project you have.
+- **Safe to write from two places at once** — concurrent writers to the store are
+  serialized by an exclusive file lock, and the database runs in WAL mode.
+- **CLI-first** — a Rust core library does the domain work; the CLI is a thin shell on top of it.
 
 > Status: the core, the CLI, and a desktop GUI are implemented. The store is a
 > local SQLite database — the single source of truth. There is no server and

@@ -68,6 +68,7 @@ Usage:
   devtool devgui seed      <id>
   devtool devgui cli       <id> [--no-build] -- <amenbo args…>
   devtool devgui pid       [<id>] [--front]
+  devtool devgui shot      [<id>] [--no-front]
   devtool devgui rm        <id>
   devtool devgui sweep     [--yes]
   devtool agent size       [--base main] [--json]
@@ -95,6 +96,14 @@ devgui pid   print the pid of a running dev GUI, for 'uiauto window <pid>' to
              Without an <id> it answers for the dev GUI this checkout launches
              (a task worktree's own instance ahead of the shared app); --front
              activates it first, since uiauto skips a window behind a Space.
+devgui shot  capture that instance's own window and print the png's path, with
+             the window's origin and size on the line after it. It names the
+             window to screencapture (-l, from 'uiauto window <pid>') instead of
+             shooting a display, so a window on a second monitor is not somebody
+             else's screen; and it drops the shadow (-o), so the png's top-left
+             is the window origin and a pixel read off the shot converts to a
+             click point. It fronts the instance first, since a window behind a
+             Space cannot be located at all; --no-front leaves the front alone.
 devgui rm    delete one task's instance — the installed bundle and its app-data
              both. They live outside the worktree, so removing the checkout
              leaves them behind; run this when the task is finished.
@@ -145,9 +154,9 @@ func parseAroundID(fs *flag.FlagSet, args []string) (id string, extra []string) 
 }
 
 // devGUICmd dispatches the `devgui` subcommands: the two that stand one task's instance up and take
-// it down, the seeding CLI, the pid lookup, and the report the machine-wide reclaim is the review
-// for. `pid` takes an optional id (without one it answers for the checkout in hand); `sweep` takes
-// none — the point there is the instances nobody named.
+// it down, the seeding CLI, the pid lookup, the window shot, and the report the machine-wide reclaim
+// is the review for. `pid` and `shot` take an optional id (without one they answer for the checkout
+// in hand); `sweep` takes none — the point there is the instances nobody named.
 func devGUICmd(args []string) {
 	if len(args) == 0 {
 		usage()
@@ -213,6 +222,26 @@ func devGUICmd(args []string) {
 			id = mustID(id)
 		}
 		if err := devGUIShowPID(id, *front); err != nil {
+			logf("devtool: %v", err)
+			os.Exit(1)
+		}
+	case "shot":
+		// Fronting is the default here and opt-in for `pid`: a window behind another Space is not
+		// on-screen, so it cannot be located at all, and one nobody fronted is shot with whatever
+		// is over it. `--no-front` is for the caller who is capturing a state that fronting would
+		// disturb.
+		fs := flag.NewFlagSet("devgui shot", flag.ExitOnError)
+		noFront := fs.Bool("no-front", false, "shoot the instance where it is, without bringing it to the front")
+		id, extra := parseAroundID(fs, args[1:])
+		if len(extra) > 0 {
+			logf("devtool: devgui shot takes one id at most, got extra argument(s): %s", strings.Join(extra, " "))
+			usage()
+			os.Exit(2)
+		}
+		if id != "" {
+			id = mustID(id)
+		}
+		if err := devGUIShot(id, !*noFront); err != nil {
 			logf("devtool: %v", err)
 			os.Exit(1)
 		}

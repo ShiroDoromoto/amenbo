@@ -271,3 +271,50 @@ func TestCopyTreeCarriesTheContentsAndSkipsWhatIsNotAFile(t *testing.T) {
 		t.Error("the symlink was copied; it should have been skipped")
 	}
 }
+
+// TestParseUIAutoWindowReadsTheBoundsUIAutoPrints holds the shot to uiauto's output format. The two
+// sides meet on one line of text, and a mismatch does not fail loudly: the shot would be of some
+// other rectangle, or the origin printed beside it would send a click somewhere nobody meant.
+func TestParseUIAutoWindowReadsTheBoundsUIAutoPrints(t *testing.T) {
+	windows, err := parseUIAutoWindow("12345 0 38 1512 944\n")
+	if err != nil {
+		t.Fatalf("parseUIAutoWindow: %v", err)
+	}
+	if len(windows) != 1 {
+		t.Fatalf("windows = %d, want 1", len(windows))
+	}
+	got := windows[0]
+	if got != (devGUIWindow{id: 12345, x: 0, y: 38, w: 1512, h: 944}) {
+		t.Errorf("window = %+v, want the id, origin and size uiauto printed", got)
+	}
+}
+
+// TestParseUIAutoWindowKeepsEveryWindowInOrder pins that a second window is not silently dropped:
+// the caller shoots the first and says how many there were, which is what makes a shot of the wrong
+// one visible instead of merely wrong.
+func TestParseUIAutoWindowKeepsEveryWindowInOrder(t *testing.T) {
+	windows, err := parseUIAutoWindow("1 0 0 800 600\n2 100 50 400 300\n")
+	if err != nil {
+		t.Fatalf("parseUIAutoWindow: %v", err)
+	}
+	if len(windows) != 2 || windows[0].id != 1 || windows[1].id != 2 {
+		t.Errorf("windows = %+v, want both, in the order uiauto listed them", windows)
+	}
+}
+
+// TestParseUIAutoWindowRefusesWhatItCannotRead is the other half: an answer that is not the format,
+// and the empty answer uiauto gives for a window behind another Space. Both have to come back as an
+// error — a zero window id would shoot the whole screen, which is the mistake this command exists to
+// end.
+func TestParseUIAutoWindowRefusesWhatItCannotRead(t *testing.T) {
+	for name, out := range map[string]string{
+		"nothing on screen": "",
+		"short line":        "12345 0 38\n",
+		"unnumbered id":     "win1 0 38 1512 944\n",
+		"unnumbered bounds": "12345 0 38 wide 944\n",
+	} {
+		if _, err := parseUIAutoWindow(out); err == nil {
+			t.Errorf("%s: parseUIAutoWindow(%q) = nil error, want a refusal", name, out)
+		}
+	}
+}

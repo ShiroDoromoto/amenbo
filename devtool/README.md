@@ -74,7 +74,8 @@ The badge is how you tell them apart *inside* the window: it sits in the header,
 so it survives a cropped screenshot, and production carries none at all. To
 reach one without a click, ask for its pid (`devgui pid` below) and drive that
 pid — the badge tells you afterwards what you shot, the pid decides beforehand
-what you shoot.
+what you shoot. Shooting it is `devgui shot`, which walks that same pid to the
+window and captures only it.
 
 So **verify a task in its own app**: with no hand reaching the shared bundle,
 two parallel sessions cannot install over each other, and the collision is gone
@@ -180,6 +181,37 @@ is in front, in practice the **production** one.
   a shot of a window nobody fronted is a shot of whatever is over it.
 - Nothing running is a **non-zero exit** with the build command named, not an
   empty answer that reads as a pid of zero.
+
+### `devtool devgui shot [<id>] [--no-front]`
+
+Captures the instance's **own window** and prints, on stdout, the png's path and
+the window's origin and size:
+
+```sh
+devtool devgui shot 696
+# /var/folders/…/amenbo-devgui-696-2751829313.png
+# 0 38 1512 944
+```
+
+It is the three steps above, assembled: resolve the pid, ask
+`uiauto window <pid>` for the window id and bounds, and hand that id to
+`screencapture -l`. Each step has a way to go wrong that costs a shot to notice.
+
+- **It names the window, not a display.** `screencapture -x` takes the *main*
+  one, so a window on a second monitor comes back as somebody else's screen.
+- **It drops the shadow** (`-o`). The shadow is asymmetric, so with it there the
+  png's pixels stop corresponding to screen points by any fixed offset. Without
+  it the png's top-left **is** the window origin, and uiauto's arithmetic —
+  halve the pixel on Retina, add the origin — lands on the thing you clicked.
+- **The origin comes back with the path**, so a point read off the shot converts
+  to a click point without asking `uiauto window` again about a window that may
+  since have moved.
+- **It fronts the instance first**, the opposite default from `pid`: a window
+  behind another Space is not on-screen at all, so it cannot even be located.
+  `--no-front` is for capturing a state that fronting would disturb.
+- Screen recording has to be granted to the terminal running this, or
+  `screencapture` writes nothing — which comes back as a non-zero exit saying
+  so, not as an empty png.
 
 ### `devtool devgui rm <id>`
 

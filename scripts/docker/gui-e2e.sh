@@ -26,6 +26,22 @@ CARD="${AMENBO_E2E_CARD:?AMENBO_E2E_CARD must be set (the scenario-derived card 
 norm() { tr '[:upper:]' '[:lower:]' | tr -c '[:alnum:]' ' ' | tr -s ' '; }
 NEEDLE="$(printf '%s' "$CARD" | norm)"
 
+# tesseract reads the screen line by line, straight across. A title too long for its card wraps,
+# and whatever sits to the left of that second line — the sidebar — is read between the halves,
+# so the title's words arrive in order but not adjacent. Match them as a subsequence: every word
+# present, in order, with anything allowed in the gaps. A title the CLI never wrote still fails,
+# since its words are not all up there to be found.
+has_words() {
+  local hay=" $1 " w
+  for w in $2; do
+    case "$hay" in
+      *" $w "*) hay=" ${hay#*" $w "}" ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
+}
+
 export AMENBO_HOME=/root/amenbo-home   # a throwaway store; never the real app-data tree
 export AMENBO_UPDATE_CHECK=0
 export DISPLAY=:99
@@ -76,10 +92,10 @@ tesseract /out/1-before.png /out/1-before 2>/dev/null
 tesseract /out/2-after.png /out/2-after 2>/dev/null
 before="$(norm < /out/1-before.txt)"
 after="$(norm < /out/2-after.txt)"
-if [[ "$before" == *"$NEEDLE"* ]]; then
+if has_words "$before" "$NEEDLE"; then
   echo "✗ '$CARD' was on the board BEFORE the CLI wrote it — the check proves nothing"; exit 1
 fi
-if [[ "$after" != *"$NEEDLE"* ]]; then
+if ! has_words "$after" "$NEEDLE"; then
   echo "✗ the webview repainted but the '$CARD' card is not on the board"
   echo "  (what OCR read:)"; cat /out/2-after.txt; exit 1
 fi

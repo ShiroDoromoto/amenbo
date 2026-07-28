@@ -3,7 +3,7 @@ import type { TaskCard } from "../mock/types";
 import {
   monthMatrix, groupByDue, todayStr, shiftMonth, dueKind, parseYmd,
 } from "../core/calendar";
-import { formatNumber, monthLabel, t, tf, weekdayLabels } from "../core/i18n";
+import { monthLabel, t, tf, weekdayLabels } from "../core/i18n";
 import { BlockedChips } from "../components/atoms";
 import { isClosed } from "../core/status";
 
@@ -92,7 +92,7 @@ export function CalendarView({ tasks, selectedTaskId, onSelectTask }: {
 
       {noDue.length > 0 && (
         <div className="cal__nodue">
-          <span className="cal__nodue-label">{t("cal.noDue")}（{formatNumber(noDue.length)}）</span>
+          <span className="cal__nodue-label">{tf("cal.noDue", { n: noDue.length })}</span>
           {noDue.slice(0, NODUE_CAP).map((tk) => (
             <button
               key={tk.id}

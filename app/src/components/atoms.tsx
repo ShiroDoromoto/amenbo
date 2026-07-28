@@ -65,7 +65,7 @@ export function FacetAvatar({ actor, showName }: { actor: Actor; showName?: bool
   const avatar = actor.avatar
     ?? getSnapshot().roster.find((a) => a.kind === actor.kind)?.avatar;
   return (
-    <span className="facet" title={`${actor.name}（${isAi ? t("facet.ai") : t("facet.human")}）`}>
+    <span className="facet" title={tf("facet.named", { name: actor.name, facet: t(isAi ? "facet.ai" : "facet.human") })}>
       <span className="facet__base" style={{ borderColor: facetColor(actor.kind) }}>
         {avatar
           ? <img className="facet__img" src={avatar} alt="" width={18} height={18} />

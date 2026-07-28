@@ -77,7 +77,7 @@
 use std::path::PathBuf;
 
 use crate::config::Paths;
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::plugin_catalog::{self, DiscoveredEntry, Discovery};
 use crate::plugin_installed::Origin;
 use crate::plugin_manifest::{Manifest, Platform};
@@ -328,8 +328,14 @@ pub fn apply(
     // Unreachable on a platform amenbo ships for, and a refusal rather than "nothing to do" if it ever is
     // reached: a caller who named a plugin is owed the reason, not a silent no-op.
     let here = Platform::here().ok_or_else(|| {
-        Error::invalid(
-            format!("plugin manifests cannot name {}, so '{name}' cannot be updated here", std::env::consts::OS),
+        Error::Invalid(
+            Msg::new(format!(
+                "plugin manifests cannot name {}, so '{name}' cannot be updated here",
+                std::env::consts::OS
+            ))
+            .coded(ErrorCode::InvalidPluginUpdatePlatform)
+            .with("name", name)
+            .with("os", std::env::consts::OS),
         )
     })?;
     let view = plugin_catalog::for_install(paths)?;
@@ -365,25 +371,48 @@ fn no_build_for(view: &Discovery, name: &str, origin: Option<&Origin>) -> Error 
     let url = match origin {
         Some(Origin::Catalog(url)) => url,
         Some(Origin::Official) => {
-            return Error::not_found(
-                format!("the official catalog does not list a plugin named '{name}', so there is no build to update to"),
+            return Error::NotFound(
+                Msg::new(format!(
+                    "the official catalog does not list a plugin named '{name}', so there is no build to update to"
+                ))
+                .coded(ErrorCode::NotFoundPluginBuildOfficial)
+                .with("name", name),
             )
         }
         None => {
-            return Error::not_found(
-                format!("'{name}' does not record which catalog it came from, so it is looked for in the official catalog, which does not list it. Uninstall and install it again to record where it comes from."),
+            return Error::NotFound(
+                Msg::new(format!(
+                    "'{name}' does not record which catalog it came from, so it is looked for in the official catalog, which does not list it. Uninstall and install it again to record where it comes from."
+                ))
+                .coded(ErrorCode::NotFoundPluginBuildOriginUnknown)
+                .with("name", name),
             )
         }
     };
     match view.sources.iter().find(|s| &s.url == url) {
-        None => Error::not_found(
-            format!("'{name}' was installed from {url}, which is no longer a registered catalog — register it again to update from it (amenbo updates a plugin only from the catalog it came from)"),
+        None => Error::NotFound(
+            Msg::new(format!(
+                "'{name}' was installed from {url}, which is no longer a registered catalog — register it again to update from it (amenbo updates a plugin only from the catalog it came from)"
+            ))
+            .coded(ErrorCode::NotFoundPluginBuildSourceGone)
+            .with("name", name)
+            .with("url", url),
         ),
-        Some(source) if !source.reachable => Error::not_found(
-            format!("'{name}' was installed from {url}, which did not answer and has nothing cached — there is nothing to compare its build against"),
+        Some(source) if !source.reachable => Error::NotFound(
+            Msg::new(format!(
+                "'{name}' was installed from {url}, which did not answer and has nothing cached — there is nothing to compare its build against"
+            ))
+            .coded(ErrorCode::NotFoundPluginBuildSourceSilent)
+            .with("name", name)
+            .with("url", url),
         ),
-        Some(_) => Error::not_found(
-            format!("'{name}' was installed from {url}, which no longer lists it — there is no build to update to (amenbo updates a plugin only from the catalog it came from)"),
+        Some(_) => Error::NotFound(
+            Msg::new(format!(
+                "'{name}' was installed from {url}, which no longer lists it — there is no build to update to (amenbo updates a plugin only from the catalog it came from)"
+            ))
+            .coded(ErrorCode::NotFoundPluginBuildDelisted)
+            .with("name", name)
+            .with("url", url),
         ),
     }
 }
@@ -527,8 +556,12 @@ pub fn rollback(paths: &Paths, name: &str) -> Result<RolledBack> {
     let backup_program = backup_path(paths, name);
     let backup_manifest = backup_manifest_path(paths, name);
     if !backup_program.exists() {
-        return Err(Error::not_found(
-            format!("plugin '{name}' has no retained build to roll back to — it was not updated, or a rollback already used it"),
+        return Err(Error::NotFound(
+            Msg::new(format!(
+                "plugin '{name}' has no retained build to roll back to — it was not updated, or a rollback already used it"
+            ))
+            .coded(ErrorCode::NotFoundPluginRollbackBuild)
+            .with("name", name),
         ));
     }
 
@@ -536,12 +569,22 @@ pub fn rollback(paths: &Paths, name: &str) -> Result<RolledBack> {
     // new manifest would describe the old build with the wrong checksum, config schema and floor.
     let program = std::fs::read(&backup_program)?;
     let raw = std::fs::read_to_string(&backup_manifest).map_err(|e| {
-        Error::invalid(
-            format!("plugin '{name}' has a retained binary but no manifest beside it ({e}) — the pair a rollback needs is incomplete"),
+        Error::Invalid(
+            Msg::new(format!(
+                "plugin '{name}' has a retained binary but no manifest beside it ({e}) — the pair a rollback needs is incomplete"
+            ))
+            .coded(ErrorCode::InvalidPluginRollbackManifestAbsent)
+            .with("name", name)
+            .with("reason", e),
         )
     })?;
     let manifest: Manifest = serde_json::from_str(&raw).map_err(|e| {
-        Error::invalid(format!("plugin '{name}' has a retained manifest that will not parse: {e}"))
+        Error::Invalid(
+            Msg::new(format!("plugin '{name}' has a retained manifest that will not parse: {e}"))
+                .coded(ErrorCode::InvalidPluginRollbackManifestUnparsable)
+                .with("name", name)
+                .with("reason", e),
+        )
     })?;
 
     let placed = plugin_install::place(paths, &manifest, &program)?;
@@ -787,7 +830,7 @@ mod tests {
         };
 
         let gone = no_build_for(&empty(), "worktree", from.as_ref());
-        assert_eq!(gone.code(), "not_found");
+        assert_eq!(gone.code(), "not_found_plugin_build_source_gone");
         assert!(format!("{gone:?}").contains("register it again"), "unregistered: {gone:?}");
 
         let silent = no_build_for(&view_with_source(src, false), "worktree", from.as_ref());
@@ -1069,7 +1112,7 @@ mod tests {
             &Origin::Official,
         )
             .unwrap_err();
-        assert_eq!(err.code(), "invalid_value");
+        assert_eq!(err.code(), "invalid_plugin_update_incompatible");
         assert!(format!("{err:?}").contains("99.0.0"), "the floor is named: {err:?}");
 
         assert_eq!(std::fs::read(plugin_installed::program_path(&paths, "worktree")).unwrap(), b"old");
@@ -1082,7 +1125,7 @@ mod tests {
     #[test]
     fn updating_something_not_installed_is_not_found() {
         let paths = paths_at("absent");
-        assert_eq!(apply(&paths, "worktree", |_| Ok(())).unwrap_err().code(), "not_found");
+        assert_eq!(apply(&paths, "worktree", |_| Ok(())).unwrap_err().code(), "not_found_plugin_installed");
     }
 
     // ---- rolling one back ----
@@ -1117,7 +1160,7 @@ mod tests {
         rollback(&paths, "worktree").unwrap();
         assert!(!backup_path(&paths, "worktree").exists(), "the retained binary is gone");
         assert!(!backup_manifest_path(&paths, "worktree").exists(), "and its manifest with it");
-        assert_eq!(rollback(&paths, "worktree").unwrap_err().code(), "not_found");
+        assert_eq!(rollback(&paths, "worktree").unwrap_err().code(), "not_found_plugin_rollback_build");
     }
 
     /// A plugin that was never updated has no retained build: the rollback says so and changes nothing.
@@ -1126,7 +1169,7 @@ mod tests {
         let paths = paths_at("rollback-fresh");
         install_on_disk(&paths, &manifest("worktree", "aa"), b"only");
 
-        assert_eq!(rollback(&paths, "worktree").unwrap_err().code(), "not_found");
+        assert_eq!(rollback(&paths, "worktree").unwrap_err().code(), "not_found_plugin_rollback_build");
         assert_eq!(std::fs::read(plugin_installed::program_path(&paths, "worktree")).unwrap(), b"only");
     }
 
@@ -1134,7 +1177,7 @@ mod tests {
     #[test]
     fn rolling_back_something_not_installed_is_not_found() {
         let paths = paths_at("rollback-absent");
-        assert_eq!(rollback(&paths, "worktree").unwrap_err().code(), "not_found");
+        assert_eq!(rollback(&paths, "worktree").unwrap_err().code(), "not_found_plugin_installed");
     }
 
     /// The gate, the settings and the secrets are keyed elsewhere: a rollback restores the two files it

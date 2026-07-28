@@ -30,7 +30,7 @@
 //! This module is verification only: it does not fetch, download, or store. The caller supplies the bytes
 //! (from the network at install, or from disk at run) and the manifest fields.
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use minisign_verify::{PublicKey, Signature};
 use sha2::{Digest, Sha256};
 
@@ -61,12 +61,21 @@ pub const CATALOG_PUBLIC_KEY: &str = "RWSgV8uCt8tyYg74JbwBblWoE+g7bxSGvK8blkKW7g
 /// constant-time.
 pub fn verify_checksum(bytes: &[u8], checksum: &str) -> Result<()> {
     let hex = checksum.strip_prefix(CHECKSUM_PREFIX).ok_or_else(|| {
-        Error::invalid(format!("unsupported checksum format (expected '{CHECKSUM_PREFIX}<hex>'): {checksum}"))
+        Error::Invalid(
+            Msg::new(format!(
+                "unsupported checksum format (expected '{CHECKSUM_PREFIX}<hex>'): {checksum}"
+            ))
+            .coded(ErrorCode::InvalidPluginChecksumFormat)
+            .with("checksum", checksum),
+        )
     })?;
     let expected = decode_sha256_hex(hex)?;
     let actual = Sha256::digest(bytes);
     if actual.as_slice() != expected.as_slice() {
-        return Err(Error::invalid("asset checksum mismatch: the bytes are not what the manifest recorded"));
+        return Err(Error::Invalid(
+            Msg::new("asset checksum mismatch: the bytes are not what the manifest recorded")
+                .coded(ErrorCode::InvalidPluginChecksumMismatch),
+        ));
     }
     Ok(())
 }
@@ -75,12 +84,20 @@ pub fn verify_checksum(bytes: &[u8], checksum: &str) -> Result<()> {
 fn decode_sha256_hex(hex: &str) -> Result<[u8; 32]> {
     let hex = hex.trim();
     if hex.len() != 64 {
-        return Err(Error::invalid(format!("a sha256 digest is 64 hex chars, got {}", hex.len())));
+        return Err(Error::Invalid(
+            Msg::new(format!("a sha256 digest is 64 hex chars, got {}", hex.len()))
+                .coded(ErrorCode::InvalidPluginChecksumLength)
+                .with("length", hex.len()),
+        ));
     }
     let mut out = [0u8; 32];
     for (i, byte) in out.iter_mut().enumerate() {
         *byte = u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16).map_err(|_| {
-            Error::invalid(format!("checksum digest is not valid hex: {hex}"))
+            Error::Invalid(
+                Msg::new(format!("checksum digest is not valid hex: {hex}"))
+                    .coded(ErrorCode::InvalidPluginChecksumNotHex)
+                    .with("digest", hex),
+            )
         })?;
     }
     Ok(out)
@@ -94,14 +111,27 @@ fn decode_sha256_hex(hex: &str) -> Result<[u8; 32]> {
 /// bytes and the key all refuse.
 pub fn verify_signature(bytes: &[u8], signature: &str, public_key: &str) -> Result<()> {
     let pk = PublicKey::from_base64(public_key).map_err(|e| {
-        Error::invalid(format!("invalid catalog public key: {e}"))
+        Error::Invalid(
+            Msg::new(format!("invalid catalog public key: {e}"))
+                .coded(ErrorCode::InvalidPluginKeyMalformed)
+                .with("reason", e),
+        )
     })?;
     let sig = Signature::decode(signature).map_err(|e| {
-        Error::invalid(format!("malformed plugin signature: {e}"))
+        Error::Invalid(
+            Msg::new(format!("malformed plugin signature: {e}"))
+                .coded(ErrorCode::InvalidPluginSignatureMalformed)
+                .with("reason", e),
+        )
     })?;
     let key = key_named(public_key);
     pk.verify(bytes, &sig, false).map_err(|e| {
-        Error::invalid(format!("plugin signature does not verify against {key}: {e}"))
+        Error::Invalid(
+            Msg::new(format!("plugin signature does not verify against {key}: {e}"))
+                .coded(ErrorCode::InvalidPluginSignatureMismatch)
+                .with("key", &key)
+                .with("reason", e),
+        )
     })
 }
 
@@ -139,8 +169,11 @@ pub fn verify_asset(
     public_key: &str,
 ) -> Result<()> {
     let signature = signature.ok_or_else(|| {
-        Error::invalid(
-            "plugin asset is unsigned: it carries no signature from the catalog listing it, so its origin cannot be verified",
+        Error::Invalid(
+            Msg::new(
+                "plugin asset is unsigned: it carries no signature from the catalog listing it, so its origin cannot be verified",
+            )
+            .coded(ErrorCode::InvalidPluginUnsigned),
         )
     })?;
     verify_signature(bytes, signature, public_key)?;

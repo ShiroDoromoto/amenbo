@@ -36,7 +36,7 @@
 use std::path::PathBuf;
 
 use crate::config::{is_reserved_plugin_name, Paths};
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::plugin_manifest::Manifest;
 use crate::plugin_subscribe::InstalledPlugin;
 
@@ -160,24 +160,45 @@ pub fn read(paths: &Paths, name: &str) -> Result<InstalledPlugin> {
     let raw = match std::fs::read_to_string(&manifest_file) {
         Ok(raw) => raw,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err(Error::not_found(format!("plugin '{name}' is not installed")));
+            return Err(Error::NotFound(
+                Msg::new(format!("plugin '{name}' is not installed"))
+                    .coded(ErrorCode::NotFoundPluginInstalled)
+                    .with("name", name),
+            ));
         }
         Err(e) => return Err(Error::from(e)),
     };
     let manifest: Manifest = serde_json::from_str(&raw).map_err(|e| {
-        Error::invalid(format!("plugin '{name}' has a malformed manifest ({}): {e}", manifest_file.display()))
+        Error::Invalid(
+            Msg::new(format!(
+                "plugin '{name}' has a malformed manifest ({}): {e}",
+                manifest_file.display()
+            ))
+            .coded(ErrorCode::InvalidPluginManifestMalformed)
+            .with("name", name)
+            .with("path", manifest_file.display())
+            .with("reason", e),
+        )
     })?;
     if manifest.name != name {
-        return Err(Error::invalid(
-            format!(
+        return Err(Error::Invalid(
+            Msg::new(format!(
                 "plugin '{name}' has a manifest naming a different plugin ('{}')",
                 manifest.name
-            ),
+            ))
+            .coded(ErrorCode::InvalidPluginManifestNamesOther)
+            .with("name", name)
+            .with("other", &manifest.name),
         ));
     }
     let program = program_path(paths, name);
     if !program.exists() {
-        return Err(Error::invalid(format!("plugin '{name}' has no executable at {}", program.display())));
+        return Err(Error::Invalid(
+            Msg::new(format!("plugin '{name}' has no executable at {}", program.display()))
+                .coded(ErrorCode::InvalidPluginProgramAbsent)
+                .with("name", name)
+                .with("path", program.display()),
+        ));
     }
     Ok(InstalledPlugin { name: name.to_string(), program, manifest, origin: origin(paths, name) })
 }
@@ -289,7 +310,7 @@ mod tests {
     fn an_absent_plugin_is_not_found() {
         let (paths, _dir) = paths_at("absent");
         let err = read(&paths, "worktree").unwrap_err();
-        assert_eq!(err.code(), "not_found");
+        assert_eq!(err.code(), "not_found_plugin_installed");
     }
 
     /// The manifest is the install marker: a home with an executable but no manifest is not installed.
@@ -300,7 +321,7 @@ mod tests {
         std::fs::create_dir_all(&home).unwrap();
         std::fs::write(home.join(program_file_name("worktree")), b"x").unwrap();
 
-        assert_eq!(read(&paths, "worktree").unwrap_err().code(), "not_found");
+        assert_eq!(read(&paths, "worktree").unwrap_err().code(), "not_found_plugin_installed");
         assert!(installed(&paths).unwrap().is_empty(), "and it is skipped by the scan");
     }
 

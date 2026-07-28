@@ -34,7 +34,7 @@
 
 use std::fmt;
 
-use crate::error::Error;
+use crate::error::{Error, ErrorCode, Msg};
 use crate::plugin_manifest::Manifest;
 use crate::plugin_payload;
 use crate::store::{parse_version, version_is_newer};
@@ -81,9 +81,38 @@ impl Incompatibility {
         }
     }
 
+    /// The verdict as one sentence that names itself — the reason under both refusals below.
+    ///
+    /// It rides as a [`Msg::part`] rather than as either refusal's own code, because the same three
+    /// verdicts read under two different sentences (enabling, and updating). Splitting them the other
+    /// way would be six codes saying three things.
+    fn reason(&self) -> Msg {
+        match self {
+            Self::Payload { plugin, amenbo } => Msg::new(self.en())
+                .coded(ErrorCode::PluginIncompatiblePayload)
+                .with("plugin", plugin)
+                .with("amenbo", amenbo),
+            Self::AmenboTooOld { min, running } => Msg::new(self.en())
+                .coded(ErrorCode::PluginIncompatibleAmenboOld)
+                .with("min", min)
+                .with("running", running),
+            Self::UnreadableFloor { min } => Msg::new(self.en())
+                .coded(ErrorCode::PluginIncompatibleFloorUnreadable)
+                .with("min", min),
+        }
+    }
+
     /// Turn the verdict into the refusal a named plugin's caller returns (`plugin enable`).
     pub fn into_error(self, plugin: &str) -> Error {
-        Error::invalid(format!("plugin '{plugin}' is not compatible with this amenbo: {}", self.en()))
+        Error::Invalid(
+            Msg::new(format!(
+                "plugin '{plugin}' is not compatible with this amenbo: {}",
+                self.en()
+            ))
+            .coded(ErrorCode::InvalidPluginIncompatible)
+            .with("name", plugin)
+            .part(self.reason()),
+        )
     }
 
     /// Turn the verdict into the refusal an **update** returns (`plugin update`). The difference from
@@ -92,11 +121,14 @@ impl Incompatibility {
     /// running as it was (`AMB-D-359`, failing safe). Written out separately rather than bolted on as a
     /// suffix, because the whole sentence reads differently.
     pub fn into_update_error(self, plugin: &str) -> Error {
-        Error::invalid(
-            format!(
+        Error::Invalid(
+            Msg::new(format!(
                 "the build of '{plugin}' the catalog publishes does not run on this amenbo ({}) — nothing was replaced, and the installed build is untouched",
                 self.en()
-            ),
+            ))
+            .coded(ErrorCode::InvalidPluginUpdateIncompatible)
+            .with("name", plugin)
+            .part(self.reason()),
         )
     }
 }

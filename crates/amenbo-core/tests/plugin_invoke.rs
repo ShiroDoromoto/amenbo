@@ -70,7 +70,7 @@ fn an_unknown_plugin_is_refused() {
     let store = store_with_plugin("invoke-unknown", "here", "#!/bin/sh\nexit 0\n");
 
     let err = plugin_invoke::call(&store, "elsewhere", &[], None).unwrap_err();
-    assert_eq!(err.code(), "not_found", "{}", err.message_en());
+    assert_eq!(err.code(), "not_found_plugin_installed", "{}", err.message_en());
 }
 
 /// The whole contract in one run: the caller's words reach argv untouched, stdout comes back as the return

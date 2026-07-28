@@ -1,0 +1,139 @@
+# The other end of a project's life. Archiving is the one move that takes a project out of the
+# everyday listing without destroying it, so both listings have to be asked to see that it moved
+# between them. Deleting is final, and it reaches outside the store: every folder pointing at the
+# project is released in the same breath, which is what keeps an AI launched in one of them from
+# being sent to a project that is no longer there.
+id: retire-a-project
+title: A project is archived out of the everyday listing and brought back, and deleting it releases the folder that pointed at it
+description: >
+  Archive a project and ask both listings — the everyday one, which must no longer carry it, and the
+  one that carries the archived, which must — then bring it back, since archiving is the reversible
+  end. Bind a folder to it and delete it: the row leaves both listings, the folder is loose again,
+  and the store is asked for the absence of the debris a delete that skipped a folder would leave.
+steps_cli:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: SCENARIO PROJECT — the one being retired
+    as: pj
+
+  # It starts in the everyday listing, which is what archiving has to move it out of.
+  - type: assert
+    domain: project
+    op: field
+    with:
+      target: pj
+      field: archived
+      equals: false
+
+  # Archived: gone from the everyday listing, still there in the one that carries the archived.
+  - type: action
+    domain: project
+    op: archive
+    with:
+      target: pj
+
+  - type: assert
+    domain: project
+    op: field
+    with:
+      target: pj
+      field: archived
+      equals: true
+
+  - type: assert
+    domain: project
+    op: listed
+    with:
+      target: pj
+      present: false
+
+  - type: assert
+    domain: project
+    op: listed
+    with:
+      target: pj
+      archived: true
+      present: true
+
+  # And brought back: archiving is reversible, unlike deleting.
+  - type: action
+    domain: project
+    op: unarchive
+    with:
+      target: pj
+
+  - type: assert
+    domain: project
+    op: field
+    with:
+      target: pj
+      field: archived
+      equals: false
+
+  - type: assert
+    domain: project
+    op: listed
+    with:
+      target: pj
+      present: true
+
+  # A folder pointed at the project that is about to go. Deleting reaches outside the store — this is
+  # the folder the teardown has to release, and the only way to see that it did.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: doomed
+      project: pj
+
+  - type: assert
+    domain: folder
+    op: bound
+    with:
+      dir: doomed
+      project: pj
+
+  # Deleted: gone from both listings, the everyday one and the one that carries the archived — which
+  # is the difference from archiving, where the row is still somewhere.
+  - type: action
+    domain: project
+    op: delete
+    with:
+      target: pj
+
+  - type: assert
+    domain: project
+    op: listed
+    with:
+      target: pj
+      present: false
+
+  - type: assert
+    domain: project
+    op: listed
+    with:
+      target: pj
+      archived: true
+      present: false
+
+  # The folder is loose again: its pointer is gone, so an AI launched there reaches nothing rather
+  # than a project that no longer exists.
+  - type: assert
+    domain: folder
+    op: bound
+    with:
+      dir: doomed
+      present: false
+
+  # And the store is left clean. `orphan_binding` is what `doctor` raises for a folder row no live
+  # project claims — the debris a delete would leave if the teardown skipped a folder — so asking for
+  # its absence here is what proves the release was recorded, not just carried out on disk.
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true
+      issue: orphan_binding
+      present: false

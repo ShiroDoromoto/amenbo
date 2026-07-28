@@ -206,7 +206,7 @@ steps_cli:
 # is left over only when the release itself fails part way, which a scenario driving the shipped
 # binary cannot arrange.
 #
-# So the face is covered from the other side: `project-add.yaml` binds a folder, deletes its project,
+# So the face is covered from the other side: `retire-a-project.yaml` binds a folder, deletes its project,
 # and asks `doctor` for the absence of `orphan_binding`. That is the assertion worth making — the
 # sweep has nothing to sweep because the delete cleans up after itself, and a delete that stopped
 # doing so would turn that line red.

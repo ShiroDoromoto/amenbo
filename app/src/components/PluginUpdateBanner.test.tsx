@@ -31,7 +31,7 @@ vi.mock("../core/pluginUpdates", async (importOriginal) => {
 
 import { PluginUpdateBanner } from "./PluginUpdateBanner";
 import { clearDismissedPluginUpdates } from "../core/pluginUpdates";
-import { t, tf } from "../core/i18n";
+import { t, tn, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -89,7 +89,7 @@ describe("offering what is waiting", () => {
     hoisted.updates = [offer({ name: "worktree" })];
     render();
 
-    expect(container.textContent).toContain(tf("plugins.updates.title", { count: 1 }));
+    expect(container.textContent).toContain(tn("plugins.updates.title", 1));
     expect(container.textContent).toContain("worktree");
     await act(async () => { button(t("plugins.updates.apply"))!.click(); });
     expect(hoisted.applied).toEqual(["worktree"]);

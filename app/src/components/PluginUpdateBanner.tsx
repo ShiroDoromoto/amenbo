@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { errText, t, tf } from "../core/i18n";
+import { errText, t, tn, tf } from "../core/i18n";
 import {
   applyAllPluginUpdates,
   applyPluginUpdate,
@@ -88,7 +88,7 @@ export function PluginUpdateBanner({ onOpenInstalled }: {
       <span className="healthbanner__icon" aria-hidden>🧩</span>
       <div className="healthbanner__body">
         <div className="healthbanner__title">
-          {tf("plugins.updates.title", { count: pending.length })}
+          {tn("plugins.updates.title", pending.length)}
         </div>
         {pending.length > 0 && (
           <div className="healthbanner__hint">

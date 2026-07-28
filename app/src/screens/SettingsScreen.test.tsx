@@ -69,7 +69,7 @@ vi.mock("../core/mutations", () => {
 });
 
 import { SettingsScreen } from "./SettingsScreen";
-import { doctorText, t, tf } from "../core/i18n";
+import { doctorText, t, tn, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -286,7 +286,7 @@ describe("Settings > Data (whole-store restore; the completion view says exactly
     hoisted.restoreReport = restored({ previousSavedTo: "/w/aside.sqlite", superseded: 2 });
     await render();
     await act(async () => buttonByLabel(t("settings.restoreBtn"))!.click());
-    expect(container.textContent).toContain(tf("settings.restoreSwept", { n: 2 }));
+    expect(container.textContent).toContain(tn("settings.restoreSwept", 2));
   });
 
   it("when there are no old rollback points to sweep, it does not say it removed any", async () => {
@@ -294,6 +294,7 @@ describe("Settings > Data (whole-store restore; the completion view says exactly
     hoisted.restoreReport = restored({ previousSavedTo: "/w/aside.sqlite" });
     await render();
     await act(async () => buttonByLabel(t("settings.restoreBtn"))!.click());
-    expect(container.textContent).not.toContain(t("settings.restoreSwept").slice(0, 8));
+    // A prefix of the sentence, so this catches it whichever arm the count would have picked.
+    expect(container.textContent).not.toContain(tn("settings.restoreSwept", 0).slice(0, 30));
   });
 });

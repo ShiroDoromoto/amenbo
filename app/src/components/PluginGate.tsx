@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { errText, t, tf } from "../core/i18n";
+import { errText, t, tn, tf } from "../core/i18n";
 import { setPluginEnabled, type PluginInstall } from "../core/pluginInstalls";
 
 /**
@@ -100,7 +100,7 @@ export function PluginGate({ install, projects, projectId, onProject, lead }: {
       {/* The one thing a disable does that cannot be undone: those events are not delivered late, and
           re-enabling starts from now (`AMB-D-399`). The CLI has always said it; this is the same line. */}
       {dropped > 0 && (
-        <div className="pluggate__note">{tf("plugins.droppedQueued", { count: dropped })}</div>
+        <div className="pluggate__note">{tn("plugins.droppedQueued", dropped)}</div>
       )}
       {asking && (
         <div className="pluggate__consent">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Pager, usePager } from "../components/Pager";
-import { errText, t, tf } from "../core/i18n";
+import { errText, t, tn, tf } from "../core/i18n";
 import {
   addCatalogSource, filterPlugins, pluginCategories, pluginLayer, pluginLayerLabel, probeCatalogSource,
   removeCatalogSource, sortPlugins, unreachableSources, usePluginCatalog,
@@ -161,7 +161,7 @@ export function PluginMarketScreen() {
         )}
         {unreachable.length > 0 && (
           <div style={{ color: "var(--c-warn)", padding: "var(--s-2) 0" }}>
-            {tf("plugins.unreachable", { count: unreachable.length })}
+            {tn("plugins.unreachable", unreachable.length)}
             <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{unreachable.join(" / ")}</div>
           </div>
         )}
@@ -169,7 +169,7 @@ export function PluginMarketScreen() {
             the list, and only saying so tells a short list from a complete one. */}
         {catalog.dropped > 0 && (
           <div className="faint" style={{ fontSize: "var(--fs-xs)", padding: "var(--s-2) 0" }}>
-            {tf("plugins.dropped", { count: catalog.dropped })}
+            {tn("plugins.dropped", catalog.dropped)}
           </div>
         )}
         {loading && catalog.entries.length === 0 && (
@@ -287,7 +287,7 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
             {s.fingerprint ? tf("plugins.sourceKey", { fp: s.fingerprint }) : t("plugins.sourceNoKey")}
           </span>
           <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
-            {s.reachable ? tf("plugins.offered", { count: s.offered }) : t("plugins.sourceDown")}
+            {s.reachable ? tn("plugins.offered", s.offered) : t("plugins.sourceDown")}
           </span>
           {!s.official && (
             <button className="feed__action" disabled={busy} onClick={() => void run(() => removeCatalogSource(s.url))}>

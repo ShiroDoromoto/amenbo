@@ -2,7 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { PluginConfigForm } from "../components/PluginConfigForm";
 import { PluginGate } from "../components/PluginGate";
 import { confirmDialog } from "../core/dialog";
-import { errText, t, tf } from "../core/i18n";
+import { errText, t, tn, tf } from "../core/i18n";
 import {
   uninstallPlugin,
   usePluginInstalls,
@@ -254,7 +254,7 @@ function InstalledRow({ install, update, projects, projectId, onProject, onRemov
                 anyone looking at that refusal is standing. */}
             {requiredUnset(install) > 0 && (
               <span className="chip chip--warn">
-                {tf("plugins.cfg.requiredUnset", { count: requiredUnset(install) })}
+                {tn("plugins.cfg.requiredUnset", requiredUnset(install))}
               </span>
             )}
           </div>

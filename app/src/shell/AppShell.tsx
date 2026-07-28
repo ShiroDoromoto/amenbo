@@ -28,7 +28,7 @@ import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sid
 import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollapsed";
 import { dismissUpdate, isUpdateDismissed, sessionDismissCovers, type SessionDismiss } from "../core/updateDismissed";
 import { RefNavProvider } from "../core/refNav";
-import { currentLang, doctorText, t, tf } from "../core/i18n";
+import { currentLang, doctorText, t, tn, tf } from "../core/i18n";
 import { fetchStaleManagedBlocks, resyncManagedBlocks, fetchOrphanBindings, forgetOrphanBindings, fetchPointerIssues, repairPointers, fetchHookNotices, openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
 import type { UpdateProgress } from "../core/mutations";
 import type { DoctorIssueDto, HookNoticeDto, StaleBlockDto } from "../bindings/bindings";
@@ -616,7 +616,7 @@ export function HealthBanner() {
       <div className="healthbanner" role="status">
         <span className="healthbanner__icon" aria-hidden>✓</span>
         <div className="healthbanner__body">
-          <div className="healthbanner__title">{tf("health.repaired", { count: repaired })}</div>
+          <div className="healthbanner__title">{tn("health.repaired", repaired)}</div>
         </div>
         <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
       </div>
@@ -703,7 +703,7 @@ function ManagedBlockBanner() {
       <span className="healthbanner__icon" aria-hidden>⚠</span>
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("managedBlock.title")}</div>
-        <div className="healthbanner__line">{tf("managedBlock.hint", { count: folderCount })}</div>
+        <div className="healthbanner__line">{tn("managedBlock.hint", folderCount)}</div>
       </div>
       <button className="healthbanner__action" onClick={onResync} disabled={busy}>
         {busy ? t("managedBlock.resyncing") : t("managedBlock.resync")}
@@ -768,7 +768,7 @@ function OrphanBindingBanner() {
       <span className="healthbanner__icon" aria-hidden>⚠</span>
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("orphanBinding.title")}</div>
-        <div className="healthbanner__line">{tf("orphanBinding.hint", { count: dirs.length })}</div>
+        <div className="healthbanner__line">{tn("orphanBinding.hint", dirs.length)}</div>
       </div>
       <button className="healthbanner__action" onClick={onForget} disabled={busy}>
         {busy ? t("orphanBinding.forgetting") : t("orphanBinding.forget")}

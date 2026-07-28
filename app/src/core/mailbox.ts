@@ -24,7 +24,7 @@ import { getInboxDataGeneration, inTauri, subscribe } from "./snapshot";
 import { loadInboxItems, type InboxItemBrief } from "./reads";
 import { loadNotified, addNotified } from "./mailboxNotified";
 import { invoke } from "./ipc";
-import { tf, t } from "./i18n";
+import { t, tn } from "./i18n";
 import { pushNotice } from "./notice";
 
 /**
@@ -131,7 +131,7 @@ let notifyFailureHintShown = false;
 async function notifyArrival(n: number): Promise<void> {
   if (!inTauri()) return;
   try {
-    await invoke("notify_os", { title: t("mailbox.notifyTitle"), body: tf("mailbox.notifyBody", { n }) });
+    await invoke("notify_os", { title: t("mailbox.notifyTitle"), body: tn("mailbox.notifyBody", n) });
   } catch (e) {
     console.error("[amenbo] OS notification (notify_os) failed:", e);
     if (!notifyFailureHintShown) {

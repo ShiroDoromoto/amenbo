@@ -19,7 +19,7 @@
 import { useEffect, useState } from "react";
 import type { DataProgressDto, MigrationStatusDto } from "../bindings/bindings";
 import { progressLabel, progressPct } from "../components/DataProgressModal";
-import { currentLang, errLabel, normalizeLang, t, tf, type Lang } from "../core/i18n";
+import { currentLang, errLabel, normalizeLang, t, tn, tf, type Lang } from "../core/i18n";
 import { invoke } from "../core/ipc";
 import { listenMigrationChanged, listenMigrationProgress, mib, retryMigration } from "../core/migration";
 import { inTauri } from "../core/snapshot";
@@ -143,7 +143,7 @@ function Done({
       )}
       {report.superseded.length > 0 && (
         <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>
-          {tf("migrate.superseded", { count: report.superseded.length }, lang)}
+          {tn("migrate.superseded", report.superseded.length, lang)}
         </div>
       )}
       <p className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("migrate.olderBuilds", lang)}</p>

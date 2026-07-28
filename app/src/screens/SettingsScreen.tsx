@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { currentLang, doctorText, errText, langEndonym, LANGS, t, tf, type Lang } from "../core/i18n";
+import { currentLang, doctorText, errText, langEndonym, LANGS, t, tn, tf, type Lang } from "../core/i18n";
 import { getSnapshot, subscribe } from "../core/snapshot";
 import {
   bindFolder, cancelDataOp, fetchDoctorReport, fetchStoreLocations, fileToAvatarDataUrl, listenDataProgress,
@@ -343,7 +343,7 @@ function BackupSetting() {
       const r = await runRestore(path);
       const lines = [tf("settings.restoreDone", { attachments: r.blobs })];
       if (r.previousSavedTo) lines.push(tf("settings.restoreAside", { path: r.previousSavedTo }));
-      if (r.superseded > 0) lines.push(tf("settings.restoreSwept", { n: r.superseded }));
+      if (r.superseded > 0) lines.push(tn("settings.restoreSwept", r.superseded));
       const m = r.migration;
       if (m) lines.push(tf("settings.restoreMigrated", { from: m.from, to: m.to, steps: m.applied.join(", ") }));
       setMsg(lines.join("\n"));

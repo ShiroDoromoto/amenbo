@@ -143,22 +143,43 @@ export function statusLabel(s: Status, lang: Lang = currentLang()): string {
   return DICTIONARIES[lang]?.status[s] ?? en.status[s];
 }
 
+/** Built once per language: selecting is cheap, constructing the rules is not. */
+const PLURAL_RULES = new Map<Lang, Intl.PluralRules>();
+
 /**
- * A counted noun, from the `.one` / `.other` pair under `base`. English needs the two forms and
- * Japanese writes one, so the pair is what a dictionary can express in both; a language whose plural
- * rules need more than a count of one will want `Intl.PluralRules` picking the arm instead.
+ * Which arm this language uses for this count. The rules are the platform's, not ours: English
+ * splits at one, Japanese and Korean never split at all, and Russian and Polish take a different
+ * form again at two-through-four and at the teens. Nineteen languages is nineteen sets of rules,
+ * and `Intl` already carries them all.
  */
-function counted(base: string, n: number, lang: Lang): string {
-  return tf(`${base}.${n === 1 ? "one" : "other"}`, { n }, lang);
+export function pluralCategory(n: number, lang: Lang = currentLang()): Intl.LDMLPluralRule {
+  let rules = PLURAL_RULES.get(lang);
+  if (!rules) {
+    rules = new Intl.PluralRules(lang);
+    PLURAL_RULES.set(lang, rules);
+  }
+  return rules.select(n);
+}
+
+/**
+ * A counted sentence: the arm of `base` this language uses for `n`, with `{n}` filled in.
+ *
+ * `other` is the arm every language has, so it is where a count falls when the arm its rules asked
+ * for is not translated — a Russian dictionary that stops after `one` and `other` reads a little
+ * wrong at three rather than printing a key at the reader.
+ */
+export function tn(base: string, n: number, lang: Lang = currentLang()): string {
+  const template = ui(`${base}.${pluralCategory(n, lang)}`, lang) ?? ui(`${base}.other`, lang);
+  return fill(template ?? `${base}.other`, { n });
 }
 
 /** How long ago, from a timestamp — the wording under every comment and activity line. */
 export function agoLabel(at: string, lang: Lang = currentLang(), now: number = Date.now()): string {
   const secs = Math.max(0, Math.floor((now - new Date(at).getTime()) / 1000));
   if (secs < 60) return t("ago.justNow", lang);
-  if (secs < 3600) return counted("ago.minutes", Math.floor(secs / 60), lang);
-  if (secs < 86400) return counted("ago.hours", Math.floor(secs / 3600), lang);
-  return counted("ago.days", Math.floor(secs / 86400), lang);
+  if (secs < 3600) return tn("ago.minutes", Math.floor(secs / 60), lang);
+  if (secs < 86400) return tn("ago.hours", Math.floor(secs / 3600), lang);
+  return tn("ago.days", Math.floor(secs / 86400), lang);
 }
 
 /**
@@ -175,7 +196,7 @@ export function dueLabel(due: string, lang: Lang = currentLang(), today: Date = 
   if (diff === 0) return t("due.today", lang);
   if (diff === 1) return t("due.tomorrow", lang);
   if (diff === -1) return t("due.yesterday", lang);
-  return diff > 0 ? counted("due.inDays", diff, lang) : counted("due.daysAgo", -diff, lang);
+  return diff > 0 ? tn("due.inDays", diff, lang) : tn("due.daysAgo", -diff, lang);
 }
 
 /**
@@ -223,8 +244,8 @@ export function eventText(
       if (tasks + decisions === 0) return tf("act.deleted", { title: name }, lang);
       return tf("act.deletedWith", {
         title: name,
-        tasks: counted("act.nTasks", tasks, lang),
-        decisions: counted("act.nDecisions", decisions, lang),
+        tasks: tn("act.nTasks", tasks, lang),
+        decisions: tn("act.nDecisions", decisions, lang),
       }, lang);
     }
     default:

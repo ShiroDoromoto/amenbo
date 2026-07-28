@@ -21,12 +21,52 @@ import { en } from "./locales/en";
 
 const SECTIONS = ["status", "priority", "view", "ui", "err", "doctor"] as const;
 
-/** The keys English has and this dictionary does not, as "section: key". */
-function untranslated(dict: Translation): string[] {
+const CATEGORIES = ["zero", "one", "two", "few", "many", "other"];
+
+/**
+ * The keys written as a counted sentence, read off the pair English writes them as. Both arms are
+ * asked for, because `other` alone is also how an ordinary key can end — the sidebar's "Other"
+ * section is not a plural of anything.
+ */
+const COUNTED = new Set(
+  Object.keys(en.ui)
+    .filter((key) => key.endsWith(".other"))
+    .map((key) => key.slice(0, -".other".length))
+    .filter((base) => `${base}.one` in en.ui),
+);
+
+/** The base a key is an arm of, or nothing where the key is not one. */
+function baseOfArm(key: string): string | undefined {
+  const cut = key.lastIndexOf(".");
+  if (cut < 0) return undefined;
+  const base = key.slice(0, cut);
+  return CATEGORIES.includes(key.slice(cut + 1)) && COUNTED.has(base) ? base : undefined;
+}
+
+/**
+ * The keys this language owes: English's, except that a counted sentence owes **its own** arms.
+ *
+ * Which arms those are is the language's business, not English's. Japanese writes one form and is
+ * owed nothing for `one`; Russian takes a third and a fourth form, and owes them even though English
+ * has nowhere to write them. Asking every language for English's two would demand a Japanese string
+ * that can never render and let a Russian one stop short of the arms it needs.
+ */
+function required(section: (typeof SECTIONS)[number], lang: string): string[] {
+  const keys = Object.keys(en[section]);
+  if (section !== "ui") return keys;
+  const categories = new Intl.PluralRules(lang).resolvedOptions().pluralCategories;
+  return [
+    ...keys.filter((key) => baseOfArm(key) === undefined),
+    ...[...COUNTED].flatMap((base) => categories.map((category) => `${base}.${category}`)),
+  ];
+}
+
+/** The keys this language owes and this dictionary does not have, as "section: key". */
+function untranslated(dict: Translation, lang: string): string[] {
   const gaps: string[] = [];
   for (const section of SECTIONS) {
     const theirs = dict[section] as Record<string, unknown>;
-    for (const key of Object.keys(en[section])) {
+    for (const key of required(section, lang)) {
       if (theirs[key] === undefined) gaps.push(`${section}: ${key}`);
     }
   }
@@ -63,11 +103,15 @@ function placeholders(template: string): string[] {
  */
 function driftedTemplates(dict: Translation): string[] {
   const theirs = strings(dict);
+  const english = strings(en);
   const drift: string[] = [];
-  for (const [at, english] of strings(en)) {
-    const translated = theirs.get(at);
-    if (translated === undefined) continue;
-    const want = placeholders(english);
+  for (const [at, translated] of theirs) {
+    // An arm English has nowhere to write — Russian's `few`, say — is held to English's `other`:
+    // the same sentence, about the same count.
+    const base = at.startsWith("ui: ") ? baseOfArm(at.slice("ui: ".length)) : undefined;
+    const reference = english.get(at) ?? (base ? english.get(`ui: ${base}.other`) : undefined);
+    if (reference === undefined) continue;
+    const want = placeholders(reference);
     const got = placeholders(translated);
     const lost = want.filter((p) => !got.includes(p));
     const invented = got.filter((p) => !want.includes(p));
@@ -80,7 +124,7 @@ function driftedTemplates(dict: Translation): string[] {
 describe("every dictionary this build carries is fully translated", () => {
   for (const [lang, dict] of Object.entries(DICTIONARIES)) {
     it(`${lang} has a string for every key English has`, () => {
-      const gaps = untranslated(dict);
+      const gaps = untranslated(dict, lang);
       // The count leads: a language that lands half-machine-translated shows as "312 keys", and the
       // list underneath says which ones.
       expect(gaps, `${lang}: ${gaps.length} untranslated key(s)`).toEqual([]);

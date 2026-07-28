@@ -19,10 +19,23 @@ export type Dictionary = typeof en;
 /** A UI-chrome key, written "area.name". */
 export type UiKey = keyof Dictionary["ui"];
 
+/** The base of a counted key — every one of them is written with an `other` arm, in every language. */
+type BaseOf<K> = K extends `${infer B}.other` ? B : never;
+
+/**
+ * The arms a counted key may be written in. English has two of them and asks for no more, but the
+ * arm a language uses is its own business: Russian takes a third form at two-through-four and a
+ * fourth in the teens, and those arms have to be writable in the Russian file without existing in
+ * the English one. Bounded to the bases English declares, so a misspelled key is still a type error.
+ */
+type PluralArm = `${BaseOf<UiKey>}.${Intl.LDMLPluralRule}`;
+
 /**
  * What one language file supplies. Every section is named, but each entry inside it is optional:
  * a key with no translation is rendered from English, so a half-written dictionary degrades to
  * English instead of breaking a screen. That is a guarantee about the running app, not a standard
  * for what may be committed — coverage.test.ts holds a dictionary that exists to the full key set.
  */
-export type Translation = { [S in keyof Dictionary]: Partial<Dictionary[S]> };
+export type Translation = { [S in keyof Dictionary]: Partial<Dictionary[S]> } & {
+  ui: Partial<Record<PluralArm, string>>;
+};

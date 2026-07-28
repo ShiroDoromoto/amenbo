@@ -92,7 +92,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
 });
 
 import { PluginInstalledScreen } from "./PluginInstalledScreen";
-import { t, tf } from "../core/i18n";
+import { t, tn, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -234,12 +234,12 @@ describe("moving a gate from the list", () => {
     hoisted.droppedQueued = 3;
     render();
     await act(async () => { button(t("plugins.disable"))!.click(); });
-    expect(container.textContent).toContain(tf("plugins.droppedQueued", { count: 3 }));
+    expect(container.textContent).toContain(tn("plugins.droppedQueued", 3));
 
     hoisted.droppedQueued = 0;
     render();
     await act(async () => { button(t("plugins.disable"))!.click(); });
-    expect(container.textContent).not.toContain(tf("plugins.droppedQueued", { count: 0 }));
+    expect(container.textContent).not.toContain(tn("plugins.droppedQueued", 0));
   });
 
   // A project-scoped gate has no device-wide answer to fall back on, so this screen names the project too.
@@ -310,7 +310,7 @@ describe("the settings form", () => {
     render();
 
     expect(button(t("plugins.cfg.open"))).toBeTruthy();
-    expect(container.textContent).toContain(tf("plugins.cfg.requiredUnset", { count: 1 }));
+    expect(container.textContent).toContain(tn("plugins.cfg.requiredUnset", 1));
     // The row that declares nothing has nothing to open.
     expect(rows()[1].textContent).not.toContain(t("plugins.cfg.open"));
   });

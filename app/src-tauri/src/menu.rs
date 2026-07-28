@@ -51,21 +51,30 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
 
   // A manual, on-demand update check that sits with About (the version affordance). Its click is
   // handled in lib.rs; no accelerator (checking is a rare, deliberate action).
-  let check_updates = MenuItem::with_id(
-    handle,
-    CHECK_UPDATES_ID,
-    if lang == "en" { "Check for Updates" } else { "更新を確認" },
-    true,
-    None::<&str>,
-  )?;
+  //
+  // A development build has no self-update to check on, so it carries no item either: the answer
+  // there could only ever be "up to date", which on a build that is normally behind production is a
+  // sentence that is not true. `upstream_release` in commands.rs is where that is decided.
+  let check_updates = if amenbo_core::config::Paths::is_dev_channel() {
+    None
+  } else {
+    Some(MenuItem::with_id(
+      handle,
+      CHECK_UPDATES_ID,
+      if lang == "en" { "Check for Updates" } else { "更新を確認" },
+      true,
+      None::<&str>,
+    )?)
+  };
 
   #[cfg(target_os = "macos")]
   {
     // The first submenu becomes the application menu; macOS localizes the predefined items itself.
-    let app_menu = SubmenuBuilder::new(handle, "amenbo")
-      .item(&about)
-      .separator()
-      .item(&check_updates)
+    let mut app_menu = SubmenuBuilder::new(handle, "amenbo").item(&about);
+    if let Some(check_updates) = &check_updates {
+      app_menu = app_menu.separator().item(check_updates);
+    }
+    let app_menu = app_menu
       .separator()
       .services()
       .separator()
@@ -102,10 +111,12 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
     let file_menu = SubmenuBuilder::new(handle, if lang == "en" { "File" } else { "ファイル" })
       .item(&quit)
       .build()?;
-    let help_menu = SubmenuBuilder::new(handle, if lang == "en" { "Help" } else { "ヘルプ" })
-      .item(&about)
-      .item(&check_updates)
-      .build()?;
+    let mut help_menu =
+      SubmenuBuilder::new(handle, if lang == "en" { "Help" } else { "ヘルプ" }).item(&about);
+    if let Some(check_updates) = &check_updates {
+      help_menu = help_menu.item(check_updates);
+    }
+    let help_menu = help_menu.build()?;
     MenuBuilder::new(handle)
       .items(&[&file_menu, &help_menu])
       .build()

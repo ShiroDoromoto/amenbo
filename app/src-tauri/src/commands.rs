@@ -984,11 +984,7 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
     let first_snapshot = UPDATE_CHECK_REFRESHED
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_ok();
-    let upstream = if first_snapshot {
-        amenbo_core::update_check::check_fresh(config.update_check)
-    } else {
-        amenbo_core::update_check::check(config.update_check)
-    };
+    let upstream = upstream_release(config.update_check, first_snapshot);
 
     let mut startup_health = StartupHealthDto::default();
     let mut version_status = VersionStatusDto::default();
@@ -1144,6 +1140,34 @@ pub fn store_signature() -> String {
     store_signature_string()
 }
 
+/// The published release this build measures itself against, or `None` when there is none to have.
+/// Every update-available answer the GUI gives is computed from this, so it is the one place the
+/// question "is this build even in the self-update business" is asked.
+///
+/// **A development build is not.** Its endpoint is production's manifest and its version is normally
+/// *behind* what that manifest names, so an offer taken here would replace the bundle under test
+/// with the production one — identifier, executable name and app-data all — and the developer would
+/// be clicking production from then on. Withholding the material is what keeps the offer from ever
+/// being raised: no banner to press, no "up to date" note claiming something this build cannot know,
+/// and no traffic to fetch either. The plugin that would perform the swap is withheld too (`lib.rs`),
+/// so the two halves fail closed independently.
+///
+/// `fresh` bypasses the TTL cache — the first snapshot after process start, and the menu's manual
+/// check — exactly as [`amenbo_core::update_check::check_fresh`] describes.
+fn upstream_release(
+    enabled: bool,
+    fresh: bool,
+) -> Option<amenbo_core::update_check::LatestRelease> {
+    if amenbo_core::config::Paths::is_dev_channel() {
+        return None;
+    }
+    if fresh {
+        amenbo_core::update_check::check_fresh(enabled)
+    } else {
+        amenbo_core::update_check::check(enabled)
+    }
+}
+
 /// Just the update-available state, without assembling a whole snapshot. The GUI asks this on every
 /// focus return, which is the moment the user starts using the app again; the snapshot cannot serve
 /// that, since it is only rebuilt when the store itself has moved, and someone who only reads never
@@ -1156,7 +1180,7 @@ pub fn version_status() -> Result<VersionStatusDto, CmdError> {
     let config = amenbo_core::config::Paths::resolve()
         .map(|p| amenbo_core::config::Config::load(&p.config_file))
         .unwrap_or_default();
-    let upstream = amenbo_core::update_check::check(config.update_check);
+    let upstream = upstream_release(config.update_check, false);
     let mut dto = VersionStatusDto::default();
     with_store_read(|store| {
         dto.absorb(store, upstream.as_ref());
@@ -1174,9 +1198,12 @@ pub fn version_status() -> Result<VersionStatusDto, CmdError> {
 /// the whole point of the manual action; only the env kill switch silences it. Returns the same
 /// [`VersionStatusDto`]: the menu path shows the update banner when it reports one and an "up to
 /// date" note when it does not.
+///
+/// The channel still decides, though ([`upstream_release`]) — which is why a development build does
+/// not carry the menu item that calls this (`menu.rs`).
 #[tauri::command]
 pub fn check_updates_fresh() -> Result<VersionStatusDto, CmdError> {
-    let upstream = amenbo_core::update_check::check_fresh(true);
+    let upstream = upstream_release(true, true);
     let mut dto = VersionStatusDto::default();
     with_store_read(|store| {
         dto.absorb(store, upstream.as_ref());

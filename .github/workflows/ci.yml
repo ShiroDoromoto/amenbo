@@ -596,11 +596,11 @@ jobs:
           guards/check-prose.sh
 
   tree-guards:
-    name: Tree guards (internal-note refs, test prose, CLI shim, change scopes)
+    name: Tree guards (internal-note refs, test prose, CLI shim, change scopes, CLI name, dev self-update)
     runs-on: ubuntu-latest
     # Backstop for the local pre-commit hook, which runs the first two scans over
-    # staged additions only. All have fixed patterns — no secret needed. The last two
-    # are the odd ones out: they assert an invariant across two sources rather than
+    # staged additions only. All have fixed patterns — no secret needed. The rest
+    # are the odd ones out: they assert an invariant across a whole tree rather than
     # scanning added lines, so they live in `make test` and here, not in pre-commit.
     steps:
       - uses: actions/checkout@v7
@@ -629,3 +629,8 @@ jobs:
         run: |
           chmod +x guards/check-cli-name.sh
           guards/check-cli-name.sh
+
+      - name: Assert the GUI asks which channel it is before self-updating
+        run: |
+          chmod +x guards/check-dev-selfupdate.sh
+          guards/check-dev-selfupdate.sh

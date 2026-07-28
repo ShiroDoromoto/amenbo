@@ -8,14 +8,12 @@ import { en } from "./locales/en";
 
 const bindingStale: CmdError = {
   code: "binding_stale",
-  message: "the linked project directory was not found: /gone",
   message_en: "the linked project directory was not found: /gone",
   fields: { path: "/gone" },
 };
 
 const ambiguous: CmdError = {
   code: "ambiguous_id",
-  message: "id 'ab' is ambiguous. candidates: [\"abc\", \"abd\"]",
   message_en: "id 'ab' is ambiguous. candidates: [\"abc\", \"abd\"]",
   fields: { prefix: "ab", candidates: ["abc", "abd"] },
 };
@@ -23,7 +21,6 @@ const ambiguous: CmdError = {
 // A free-form variant (no template). It simply falls back to the sentence core wrote.
 const notFound: CmdError = {
   code: "not_found",
-  message: "task 'X' not found",
   message_en: "task 'X' not found",
   fields: null,
 };
@@ -32,7 +29,6 @@ const notFound: CmdError = {
 // the prose the reader gets is written here rather than in Rust (`AMB-D-413`).
 const notFoundTask: CmdError = {
   code: "not_found_task",
-  message: "task 'AMB-T-12' not found",
   message_en: "task 'AMB-T-12' not found",
   fields: { ref: "AMB-T-12" },
 };
@@ -41,7 +37,6 @@ const notFoundTask: CmdError = {
 // gets is the template here, built from the fields.
 const nestedTree: CmdError = {
   code: "binding_nested_tree",
-  message: "this folder is already inside an amenbo-managed tree (bound at /work/repo); binding a subfolder would shadow that pointer",
   message_en: "this folder is already inside an amenbo-managed tree (bound at /work/repo); binding a subfolder would shadow that pointer",
   fields: { path: "/work/repo" },
 };
@@ -64,7 +59,7 @@ describe("errLabel", () => {
     expect(errLabel(nestedTree, "en")).toContain("bound at /work/repo");
     // The English it arrives with is what a reader gets only where no template exists, so the
     // Japanese above must not be it.
-    expect(errLabel(nestedTree, "ja")).not.toBe(nestedTree.message);
+    expect(errLabel(nestedTree, "ja")).not.toBe(nestedTree.message_en);
   });
 
   it("a code with no template falls back to the sentence core wrote, whatever the reader's language", () => {
@@ -94,7 +89,7 @@ describe("errText", () => {
   });
 
   it("a non-CmdError object falls back to String() (the check that avoids [object Object])", () => {
-    // An object that does not carry all of code/message/message_en is not treated as a structured error.
+    // An object that does not carry both code and message_en is not treated as a structured error.
     expect(errText({ foo: "bar" })).toBe("[object Object]");
   });
 });

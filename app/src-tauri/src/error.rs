@@ -11,32 +11,24 @@ use serde::Serialize;
 
 /// The structured error returned to the GUI (the `Err` type of a Tauri command).
 ///
-/// `serde` serialises it to `{ code, message, message_en, fields }`, and the front end's invoke
-/// receives that object as the rejection reason.
+/// `serde` serialises it to `{ code, message_en, fields }`, and the front end's invoke receives that
+/// object as the rejection reason.
 #[derive(Debug, Clone, Serialize)]
 pub struct CmdError {
     /// Stable machine-readable code (an i18n key; the contract is that it stays English). Core-originated codes come from [`amenbo_core::Error::code`].
     pub code: String,
-    /// The human-facing sentence (core's `Display`). English, like `message_en` — the two faces are one
-    /// sentence now that core writes no second language.
-    pub message: String,
-    /// The same sentence under the name the CLI surface knows it by
-    /// (core's [`amenbo_core::Error::message_en`]).
+    /// The sentence, in English — what a reader gets where no template covers the code. The `_en` is not
+    /// a leftover from a pair: it is the reminder that this is *not* the reader's language, so a use
+    /// site that reaches for it is visibly choosing the fallback over a template.
     pub message_en: String,
     /// Per-code structured values for interpolation (`null` for variants that have none).
     pub fields: serde_json::Value,
 }
 
 impl CmdError {
-    fn new(
-        code: impl Into<String>,
-        message: impl Into<String>,
-        message_en: impl Into<String>,
-        fields: serde_json::Value,
-    ) -> Self {
+    fn new(code: impl Into<String>, message_en: impl Into<String>, fields: serde_json::Value) -> Self {
         CmdError {
             code: code.into(),
-            message: message.into(),
             message_en: message_en.into(),
             fields,
         }
@@ -54,8 +46,7 @@ impl CmdError {
         message_en: impl Into<String>,
         fields: serde_json::Value,
     ) -> Self {
-        let message_en = message_en.into();
-        CmdError::new(code, message_en.clone(), message_en, fields)
+        CmdError::new(code, message_en, fields)
     }
 }
 
@@ -64,8 +55,8 @@ impl From<amenbo_core::Error> for CmdError {
         use amenbo_core::Error as E;
         // Structured variants surrender their interpolation fields (the front end drops them into the code's template).
         // The free-form variants (NotFound/Invalid/Conflict/...) carry theirs on the message, but only where the
-        // refusal names its own sentence (`Msg::coded`); the rest carry the whole sentence in message/message_en
-        // and nothing to interpolate, hence null.
+        // refusal names its own sentence (`Msg::coded`); the rest carry the whole sentence and nothing to
+        // interpolate, hence null.
         let fields = match &e {
             E::AmbiguousId { prefix, candidates } => {
                 serde_json::json!({ "prefix": prefix, "candidates": candidates })
@@ -78,7 +69,7 @@ impl From<amenbo_core::Error> for CmdError {
                 None => serde_json::Value::Null,
             },
         };
-        CmdError::new(e.code(), e.to_string(), e.message_en(), fields)
+        CmdError::new(e.code(), e.message_en(), fields)
     }
 }
 
@@ -91,9 +82,9 @@ impl From<amenbo_core::store_engine::StoreEngineError> for CmdError {
 
 impl From<String> for CmdError {
     /// An ad-hoc error from outside core (GUI-local handling). It has no stable code, so it gets the generic `"error"`,
-    /// and both sentence faces carry the one sentence it has.
+    /// and the sentence it came with is all it carries.
     fn from(s: String) -> Self {
-        CmdError::new("error", s.clone(), s, serde_json::Value::Null)
+        CmdError::new("error", s, serde_json::Value::Null)
     }
 }
 
@@ -104,9 +95,9 @@ impl From<&str> for CmdError {
 }
 
 impl std::fmt::Display for CmdError {
-    /// For `{e}` in logs and the like; prints the `message` face.
+    /// For `{e}` in logs and the like; prints the sentence.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
+        f.write_str(&self.message_en)
     }
 }
 
@@ -139,7 +130,6 @@ mod tests {
         assert_eq!(e.code, "not_found");
         assert!(e.fields.is_null(), "nothing to interpolate: {}", e.fields);
         assert_eq!(e.message_en, "task 'X' not found");
-        assert_eq!(e.message, e.message_en, "core writes one sentence, and both faces carry it");
     }
 
     /// A refusal this layer raises carries the code, the values, and one English sentence — and no
@@ -156,7 +146,6 @@ mod tests {
 
         assert_eq!(e.code, "binding_nested_tree");
         assert_eq!(e.fields["path"], "/work/repo", "the value the sentence is built from is sent apart from it");
-        assert_eq!(e.message, e.message_en, "there is one sentence, and it is the English one");
         assert!(
             !e.message_en.chars().any(|c| ('\u{3040}'..='\u{30ff}').contains(&c)),
             "no kana reaches the wire from here: {}",

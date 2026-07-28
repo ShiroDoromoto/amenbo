@@ -90,15 +90,14 @@ export function tf(
  */
 export interface CmdError {
   code: string;
-  message: string; // the sentence (core's Display) — English, same as message_en
-  message_en: string; // the same sentence, under the name the CLI surface knows it by
+  message_en: string; // the sentence, in English — the fallback, never the reader's language
   fields?: Record<string, unknown> | null;
 }
 
 function isCmdError(e: unknown): e is CmdError {
   if (typeof e !== "object" || e === null) return false;
   const o = e as Record<string, unknown>;
-  return typeof o.code === "string" && typeof o.message === "string" && typeof o.message_en === "string";
+  return typeof o.code === "string" && typeof o.message_en === "string";
 }
 
 /** Renders a CmdError as one line in the current UI language: code template, else the English sentence. */

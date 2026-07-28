@@ -94,8 +94,8 @@ function mockMutate(fn: (snap: Snapshot) => Snapshot): void {
  * shape, browser iteration agrees with the real store down to which operations get refused. A mock
  * that quietly lets everything through would leave the front end believing it works.
  */
-function mockErr(code: string, ja: string, en: string): CmdError {
-  return { code, message: ja, message_en: en };
+function mockErr(code: string, en: string): CmdError {
+  return { code, message_en: en };
 }
 
 /**
@@ -186,14 +186,12 @@ export async function setStatus(id: number, status: Status): Promise<void> {
     if (t.status !== "todo") {
       throw mockErr(
         "already_reserved",
-        `タスク ${t.ref} を予約できません: 現在 '${t.status}' です（予約は todo → in_progress のみ）`,
         `cannot reserve task ${t.ref}: it is '${t.status}', not 'todo' (reserve is todo → in_progress)`,
       );
     }
     if (!t.ready) {
       throw mockErr(
         "not_ready",
-        `タスク ${t.ref} を予約できません: 前提（先行タスク／根拠の決定）が未達です`,
         `cannot reserve task ${t.ref}: its premises (blockers / grounding decisions) are not met`,
       );
     }
@@ -225,7 +223,6 @@ export async function rejectTask(id: number, reason: string): Promise<void> {
   if (!text) {
     throw mockErr(
       "invalid_value",
-      "却下の理由は必須です（なぜやらないと決めたのかを書く）",
       "a rejection needs its reason — say why the task will not be done",
     );
   }

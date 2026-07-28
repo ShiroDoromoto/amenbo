@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { formatAheadDetail, isFormatAhead, noteInvokeFailure, resetFormatAheadForTest, subscribeFormatAhead } from "./formatAhead";
 
 /** Stands in for the reason a Tauri command rejects (the structured `CmdError`). */
-const cmdError = (code: string) => ({ code, message: "…", message_en: "…" });
+const cmdError = (code: string) => ({ code, message_en: "…" });
 
 describe("formatAhead", () => {
   beforeEach(() => resetFormatAheadForTest());
@@ -45,7 +45,7 @@ describe("formatAhead", () => {
   });
 
   it("keeps the refusal's own words — the only place the version that wrote the store is named", () => {
-    noteInvokeFailure({ code: "format_ahead", message: "written by a newer amenbo", message_en: "written by a newer amenbo" });
+    noteInvokeFailure({ code: "format_ahead", message_en: "written by a newer amenbo" });
     expect(formatAheadDetail()).toBe("written by a newer amenbo");
   });
 

@@ -11,7 +11,7 @@ const hoisted = vi.hoisted(() => ({
   /** The folders `openTerminal` was asked for. */
   opened: [] as string[],
   /** What `openTerminal` rejects with, when the environment has no terminal to open. */
-  terminalFails: null as { code: string; message: string; message_en: string } | null,
+  terminalFails: null as { code: string; message_en: string } | null,
   /** What the project's folders come back as. */
   folders: [] as Array<{ path: string; exists: boolean }>,
 }));
@@ -119,7 +119,7 @@ describe("the same loop, asked for by project", () => {
 
 describe("when the terminal will not open", () => {
   it("says so instead of failing silently", async () => {
-    hoisted.terminalFails = { code: "not_found", message: "開けません", message_en: "cannot open" };
+    hoisted.terminalFails = { code: "not_found", message_en: "cannot open" };
     render();
     await act(async () => { button(t("firstloop.s1btn"))!.click(); });
 
@@ -130,7 +130,7 @@ describe("when the terminal will not open", () => {
   // The walk has to keep going: the user opens their own terminal, so what they need is the folder
   // to cd into — handed over the same way the request is, ready to paste.
   it("hands over the folder's path to copy, so the loop still closes", async () => {
-    hoisted.terminalFails = { code: "not_found", message: "開けません", message_en: "cannot open" };
+    hoisted.terminalFails = { code: "not_found", message_en: "cannot open" };
     render("/w/mine");
     await act(async () => { button(t("firstloop.s1btn"))!.click(); });
 

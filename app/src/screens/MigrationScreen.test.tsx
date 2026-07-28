@@ -113,7 +113,6 @@ describe("MigrationScreen", () => {
         stage: "failed",
         error: {
           code: "invalid",
-          message: "the migration failed and your store was rolled back",
           message_en: "the migration failed and your store was rolled back",
           fields: null,
         },

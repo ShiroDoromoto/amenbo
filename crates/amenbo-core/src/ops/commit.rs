@@ -15,7 +15,7 @@
 //! task and goes when the task goes — deleted by [`crate::ops::task::delete_subtree`], which reads the
 //! anchors' ids first, rather than by a constraint that would take them where no code could see it.
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{ActorKind, TaskCommit};
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
@@ -37,9 +37,12 @@ fn validated_sha(sha: &str) -> Result<String> {
     if matches!(s.len(), 40 | 64) && s.bytes().all(|b| b.is_ascii_hexdigit()) {
         Ok(s)
     } else {
-        Err(Error::invalid(
-            "a commit sha must be full-length lower-case hex (40 for SHA-1, 64 for SHA-256) — not a short sha, branch, tag or revision",
-            "コミット SHA は完全形の小文字 hex（SHA-1 は 40 桁・SHA-256 は 64 桁）である必要があります ── 短縮 SHA・ブランチ・タグ・revision は不可",
+        Err(Error::Invalid(
+            Msg::new(
+                "a commit sha must be full-length lower-case hex (40 for SHA-1, 64 for SHA-256) — not a short sha, branch, tag or revision",
+                "コミット SHA は完全形の小文字 hex（SHA-1 は 40 桁・SHA-256 は 64 桁）である必要があります ── 短縮 SHA・ブランチ・タグ・revision は不可",
+            )
+            .coded(ErrorCode::InvalidCommitSha),
         ))
     }
 }
@@ -55,10 +58,7 @@ pub fn add(
     let sha = validated_sha(sha)?;
     // The task must be a live, existing row — this is what keeps a commit from dangling off nothing.
     if read::task(tx.conn(), task_id)?.is_none() {
-        return Err(Error::not_found(
-            format!("task '{task_id}' not found"),
-            format!("タスク '{task_id}' が見つかりません"),
-        ));
+        return Err(crate::ops::task::NOUN.not_found(task_id));
     }
     if let Some(id) = read::task_commit_id(tx.conn(), task_id, &sha)? {
         let existing = read::task_commit(tx.conn(), id)?

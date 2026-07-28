@@ -76,5 +76,5 @@ pub mod validate;
 pub mod view;
 pub mod worktree;
 
-pub use error::{Error, ErrorCode, Result};
+pub use error::{Error, ErrorCode, Fields, Msg, Result};
 pub use store::Store;

@@ -527,6 +527,31 @@ export const es: Translation = {
       "Registrar {url} significa confiar en su clave de firma ({serving}). Comprueba la huella antes de fijarla.",
     plugin_catalog_key_changed:
       "{url} publica ahora {serving}, no la {agreed} que se te mostró. Regístralo otra vez y comprueba la huella nueva.",
+
+    already_reserved:
+      "{ref} no está en “Pendiente”, así que no se puede reservar: puede que otra sesión ya la tenga.",
+    store_busy: "Se está restaurando o actualizando el almacén. Inténtalo de nuevo en un momento.",
+    not_found_task: "No se encontró la tarea {ref}.",
+    not_found_decision: "No se encontró la decisión {ref}.",
+    not_found_project: "No se encontró el proyecto {ref}.",
+    not_found_user: "No se encontró el usuario {ref}.",
+    not_found_comment: "No se encontró el comentario {ref}.",
+    not_found_dimension: "No se encontró la categoría {ref}.",
+    not_found_dimension_value: "No se encontró el valor de categoría {ref}.",
+    not_found_blob: "El archivo de este adjunto no está en este dispositivo ({hash}).",
+    invalid_commit_sha:
+      "Un SHA de commit son los 40 o 64 caracteres hexadecimales completos; un SHA corto, una rama, una etiqueta o una revisión no lo son.",
+    invalid_attachment_too_large: "Este archivo ocupa {size} bytes y supera el límite de {max} bytes para su tipo.",
+    invalid_dimension_period_order: "La fecha de inicio de un valor no puede ser posterior a su fecha de fin.",
+    invalid_dimension_values_unordered:
+      "Los valores de esta categoría no llevan orden, así que no se pueden reordenar.",
+    invalid_decision_edit_rejected: "{ref} fue rechazada, y una decisión rechazada no se puede editar.",
+    invalid_decision_accept_rejected: "{ref} fue rechazada, y una decisión rechazada no se puede aceptar.",
+    invalid_decision_reject_accepted: "{ref} está aceptada. Sustitúyela en lugar de rechazarla.",
+    invalid_decision_reopen_rejected: "{ref} fue rechazada, y una decisión rechazada no se puede reabrir.",
+    invalid_decision_self_supersede: "Una decisión no puede sustituirse a sí misma.",
+    invalid_decision_self_amend: "Una decisión no puede enmendarse a sí misma.",
+    invalid_decision_self_builds_on: "Una decisión no puede apoyarse en sí misma.",
   },
 
   doctor: {

@@ -10,8 +10,11 @@
 // forbidden; the Rust↔TS parity test in `errorCodes.test.ts` catches drift between the Rust source and this file.
 // The generic fallback `"error"` — an ad-hoc error with no stable code — is not part of the contract and is excluded.
 
-/** Codes from core (`amenbo_core::ErrorCode::ALL`). */
-export const CORE_ERROR_CODES = [
+/** The family codes — one per `amenbo_core::Error` variant, and what a failure carries when it says
+ * nothing finer about itself. They cover dozens of different sentences apiece, which is why they hold
+ * no template: nothing could be written that would be true of all of them. A reader gets the English
+ * sentence the command returned, which is the settled answer for a surface no one is translating. */
+export const CORE_FAMILY_ERROR_CODES = [
   "not_found",
   "ambiguous_id",
   "invalid_value",
@@ -26,6 +29,36 @@ export const CORE_ERROR_CODES = [
   "storage_error",
   "store_busy",
 ] as const;
+
+/** The sentence codes — one refusal each, so a dictionary can hold a template for it and the reader gets
+ * it in their own language (`AMB-D-413`). Which ones exist is decided by measurement: these are the
+ * refusals the GUI actually puts in front of a person. Every one of them owes a template
+ * (`i18n/errors.test.ts` holds them to it) — splitting a code off its family and then not writing the
+ * sentence would leave the reader exactly where they started. */
+export const CORE_SENTENCE_ERROR_CODES = [
+  "not_found_task",
+  "not_found_decision",
+  "not_found_project",
+  "not_found_user",
+  "not_found_comment",
+  "not_found_dimension",
+  "not_found_dimension_value",
+  "not_found_blob",
+  "invalid_commit_sha",
+  "invalid_attachment_too_large",
+  "invalid_dimension_period_order",
+  "invalid_dimension_values_unordered",
+  "invalid_decision_edit_rejected",
+  "invalid_decision_accept_rejected",
+  "invalid_decision_reject_accepted",
+  "invalid_decision_reopen_rejected",
+  "invalid_decision_self_supersede",
+  "invalid_decision_self_amend",
+  "invalid_decision_self_builds_on",
+] as const;
+
+/** Every code core can emit (`amenbo_core::ErrorCode::ALL`), at both grains. */
+export const CORE_ERROR_CODES = [...CORE_FAMILY_ERROR_CODES, ...CORE_SENTENCE_ERROR_CODES] as const;
 
 /** GUI-specific codes the Tauri command layer raises via `CmdError::coded(...)` — contexts core knows nothing about.
  * They come from the guards in `project_add_folder`, which makes a folder into a new project (an existing

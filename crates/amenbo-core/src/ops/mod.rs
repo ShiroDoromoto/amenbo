@@ -554,18 +554,29 @@ pub(crate) fn pick_anywhere(hits: Vec<Ref>, number: u32) -> Result<Ref> {
 /// An entity's name as an English/Japanese pair, so the `not_found` of `#N` / id resolution has a single
 /// source. Each ops module holds the word for its own entity once, as a `const NOUN`, and leaves message
 /// building to this.
+///
+/// The `code` is the same word again, in the form the GUI writes the sentence from (`AMB-D-413`). It sits
+/// here rather than at the call sites because the noun *is* the sentence: nothing of "task X was not found"
+/// survives into "dimension X was not found" except the id, so there is one code per entity and each one
+/// gets its own template.
 #[derive(Clone, Copy)]
 pub(crate) struct Noun {
     pub en: &'static str,
     pub ja: &'static str,
+    pub code: crate::error::ErrorCode,
 }
 
 impl Noun {
-    /// The bilingual error pair `<en> '<token>' not found`, with its Japanese counterpart.
+    /// The bilingual error pair `<en> '<token>' not found`, with its Japanese counterpart — and, for the
+    /// side that writes it in a third language, this entity's code and the token it could not find.
     pub fn not_found(self, token: impl std::fmt::Display) -> Error {
-        Error::not_found(
-            format!("{} '{token}' not found", self.en),
-            format!("{} '{token}' が見つかりません", self.ja),
+        Error::NotFound(
+            crate::error::Msg::new(
+                format!("{} '{token}' not found", self.en),
+                format!("{} '{token}' が見つかりません", self.ja),
+            )
+            .coded(self.code)
+            .with("ref", token),
         )
     }
 }

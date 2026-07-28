@@ -4,7 +4,8 @@
 //! [`crate::config::Config::roster`] derives the roster from those same two names. All that is left
 //! here is the noun used in not_found messages (the English/Japanese pair).
 
+use crate::error::ErrorCode;
 use crate::ops::Noun;
 
 /// This entity's noun (the English/Japanese pair used in not_found messages).
-pub(crate) const NOUN: Noun = Noun { en: "user", ja: "ユーザー" };
+pub(crate) const NOUN: Noun = Noun { en: "user", ja: "ユーザー", code: ErrorCode::NotFoundUser };

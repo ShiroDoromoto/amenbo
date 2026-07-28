@@ -498,6 +498,28 @@ export const zhHans: Translation = {
       "登记 {url} 意味着信任它的签名密钥（{serving}）。固定之前请先核对指纹。",
     plugin_catalog_key_changed:
       "{url} 现在公布的是 {serving}，而不是给你看过的 {agreed}。请重新登记，并核对新的指纹。",
+
+    already_reserved: "{ref} 不是“待办”，无法认领；可能已有另一个会话在处理。",
+    store_busy: "正在恢复或更新存储，请稍后重试。",
+    not_found_task: "找不到任务 {ref}。",
+    not_found_decision: "找不到决策 {ref}。",
+    not_found_project: "找不到项目 {ref}。",
+    not_found_user: "找不到用户 {ref}。",
+    not_found_comment: "找不到评论 {ref}。",
+    not_found_dimension: "找不到分类 {ref}。",
+    not_found_dimension_value: "找不到分类值 {ref}。",
+    not_found_blob: "该附件的文件不在本设备上（{hash}）。",
+    invalid_commit_sha: "提交 SHA 必须是完整的 40 位或 64 位十六进制；短 SHA、分支、标签或 revision 都不行。",
+    invalid_attachment_too_large: "该文件为 {size} 字节，超过此类文件 {max} 字节的上限。",
+    invalid_dimension_period_order: "值的开始日期不能晚于结束日期。",
+    invalid_dimension_values_unordered: "该分类的值没有顺序，无法重新排序。",
+    invalid_decision_edit_rejected: "{ref} 已被否决，被否决的决策无法编辑。",
+    invalid_decision_accept_rejected: "{ref} 已被否决，被否决的决策无法采纳。",
+    invalid_decision_reject_accepted: "{ref} 已采纳。请用“取代”而不是否决。",
+    invalid_decision_reopen_rejected: "{ref} 已被否决，被否决的决策无法重新讨论。",
+    invalid_decision_self_supersede: "决策不能取代自身。",
+    invalid_decision_self_amend: "决策不能修订自身。",
+    invalid_decision_self_builds_on: "决策不能以自身为前提。",
   },
 
   doctor: {

@@ -527,6 +527,31 @@ export const fr: Translation = {
       "Enregistrer {url}, c'est faire confiance à sa clé de signature ({serving}). Vérifiez l'empreinte avant qu'elle soit épinglée.",
     plugin_catalog_key_changed:
       "{url} publie désormais {serving}, et non la {agreed} qui vous a été montrée. Enregistrez-le à nouveau et vérifiez la nouvelle empreinte.",
+
+    already_reserved:
+      "{ref} n'est pas « À faire », donc impossible de la réserver — une autre session la tient peut-être déjà.",
+    store_busy: "Le magasin est en cours de restauration ou de mise à jour. Réessayez dans un instant.",
+    not_found_task: "Tâche {ref} introuvable.",
+    not_found_decision: "Décision {ref} introuvable.",
+    not_found_project: "Projet {ref} introuvable.",
+    not_found_user: "Utilisateur {ref} introuvable.",
+    not_found_comment: "Commentaire {ref} introuvable.",
+    not_found_dimension: "Catégorie {ref} introuvable.",
+    not_found_dimension_value: "Valeur de catégorie {ref} introuvable.",
+    not_found_blob: "Le fichier de cette pièce jointe n'est pas sur cet appareil ({hash}).",
+    invalid_commit_sha:
+      "Un SHA de commit, ce sont les 40 ou 64 caractères hexadécimaux complets ; un SHA court, une branche, une étiquette ou une révision n'en sont pas.",
+    invalid_attachment_too_large: "Ce fichier fait {size} octets et dépasse la limite de {max} octets pour ce type.",
+    invalid_dimension_period_order: "La date de début d'une valeur ne peut pas être postérieure à sa date de fin.",
+    invalid_dimension_values_unordered:
+      "Les valeurs de cette catégorie ne portent aucun ordre, elles ne peuvent donc pas être réordonnées.",
+    invalid_decision_edit_rejected: "{ref} a été rejetée, et une décision rejetée ne peut pas être modifiée.",
+    invalid_decision_accept_rejected: "{ref} a été rejetée, et une décision rejetée ne peut pas être acceptée.",
+    invalid_decision_reject_accepted: "{ref} est acceptée. Remplacez-la plutôt que de la rejeter.",
+    invalid_decision_reopen_rejected: "{ref} a été rejetée, et une décision rejetée ne peut pas être rouverte.",
+    invalid_decision_self_supersede: "Une décision ne peut pas se remplacer elle-même.",
+    invalid_decision_self_amend: "Une décision ne peut pas s'amender elle-même.",
+    invalid_decision_self_builds_on: "Une décision ne peut pas reposer sur elle-même.",
   },
 
   doctor: {

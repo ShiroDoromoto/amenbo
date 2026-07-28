@@ -36,7 +36,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 
 /// Subdirectory, under a store's data dir, holding that store's content-addressed blobs
 /// (`<store>/blobs/<hash>`). Shared with [`crate::store::Store::blobs`] and the whole-device
@@ -246,9 +246,14 @@ impl CapacityPolicy {
         let class = FileClass::of_mime(mime);
         let max = self.per_file_max(class);
         if size > max {
-            return Err(Error::invalid(
-                format!("attachment is {size} bytes, over the {} per-file limit of {max} bytes", class.as_str()),
-                format!("添付が {size} バイトで、{} の per-file 上限 {max} バイトを超えています", class.as_str()),
+            return Err(Error::Invalid(
+                Msg::new(
+                    format!("attachment is {size} bytes, over the {} per-file limit of {max} bytes", class.as_str()),
+                    format!("添付が {size} バイトで、{} の per-file 上限 {max} バイトを超えています", class.as_str()),
+                )
+                .coded(ErrorCode::InvalidAttachmentTooLarge)
+                .with("size", size)
+                .with("max", max),
             ));
         }
         Ok(())
@@ -514,9 +519,13 @@ impl BlobStore {
     }
 
     fn missing(hash: &str) -> Error {
-        Error::not_found(
-            format!("blob {hash} is not stored locally"),
-            format!("blob {hash} はローカルに存在しません"),
+        Error::NotFound(
+            Msg::new(
+                format!("blob {hash} is not stored locally"),
+                format!("blob {hash} はローカルに存在しません"),
+            )
+            .coded(ErrorCode::NotFoundBlob)
+            .with("hash", hash),
         )
     }
 }
@@ -663,7 +672,11 @@ mod tests {
     fn missing_blob_reads_as_not_found() {
         let (bs, _d) = store();
         let err = bs.read("deadbeef").unwrap_err();
-        assert_eq!(err.code(), "not_found");
+        // The code names this one sentence, and the hash rides beside it — the GUI writes "this
+        // attachment's file is not on this device" from the pair, in the reader's language.
+        assert_eq!(err.code(), "not_found_blob");
+        let fields: Vec<_> = err.fields().expect("the hash rides along").iter().collect();
+        assert_eq!(fields, vec![("hash", "deadbeef")]);
     }
 
     // ── Capacity management ──────────────────────────────────────────────────
@@ -697,10 +710,10 @@ mod tests {
     #[test]
     fn per_file_cap_is_loose_by_class_and_rejects_oversize() {
         let p = CapacityPolicy::default();
-        // A small image fits; one byte over its class cap is rejected with invalid_value.
+        // A small image fits; one byte over its class cap is rejected, and the refusal names itself.
         assert!(p.check_per_file(Some("image/png"), 10).is_ok());
         let err = p.check_per_file(Some("image/png"), p.image_max + 1).unwrap_err();
-        assert_eq!(err.code(), "invalid_value");
+        assert_eq!(err.code(), "invalid_attachment_too_large");
         // The cap is per class: a payload over the image cap still fits under the (larger) video cap.
         assert!(p.check_per_file(Some("video/mp4"), p.image_max + 1).is_ok());
         // Unknown/None classifies as `other` and uses its cap.
@@ -743,7 +756,7 @@ mod tests {
     fn read_range_missing_blob_is_not_found() {
         let (bs, _d) = store();
         let err = bs.read_range("deadbeef", 0, 10).unwrap_err();
-        assert_eq!(err.code(), "not_found");
+        assert_eq!(err.code(), "not_found_blob");
     }
 
     /// Minimal self-cleaning temp dir (no extra dev-dependency): a unique dir under the OS temp,

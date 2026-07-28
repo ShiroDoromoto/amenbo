@@ -62,13 +62,20 @@ impl From<amenbo_core::Error> for CmdError {
     fn from(e: amenbo_core::Error) -> Self {
         use amenbo_core::Error as E;
         // Structured variants surrender their interpolation fields (the front end drops them into the code's template).
-        // Free-form variants (NotFound/Invalid/Conflict/...) carry the whole sentence in message/message_en, hence null.
+        // The free-form variants (NotFound/Invalid/Conflict/...) carry theirs on the message, but only where the
+        // refusal names its own sentence (`Msg::coded`); the rest carry the whole sentence in message/message_en
+        // and nothing to interpolate, hence null.
         let fields = match &e {
             E::AmbiguousId { prefix, candidates } => {
                 serde_json::json!({ "prefix": prefix, "candidates": candidates })
             }
             E::BindingStale(path) => serde_json::json!({ "path": path }),
-            _ => serde_json::Value::Null,
+            _ => match e.fields() {
+                Some(f) => {
+                    serde_json::Value::Object(f.iter().map(|(k, v)| (k.to_string(), v.into())).collect())
+                }
+                None => serde_json::Value::Null,
+            },
         };
         CmdError::new(e.code(), e.to_string(), e.message_en(), fields)
     }
@@ -105,6 +112,36 @@ impl std::fmt::Display for CmdError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A core refusal that names its own sentence hands the webview that name and the values behind it,
+    /// not just the prose. Without this the front end would hold a template it could never fill: the code
+    /// would arrive and the `{ref}` would stay on screen as `{ref}`.
+    #[test]
+    fn a_core_error_that_names_its_sentence_surrenders_its_values() {
+        let e = CmdError::from(amenbo_core::Error::NotFound(
+            amenbo_core::Msg::new("task 'AMB-T-12' not found", "タスク 'AMB-T-12' が見つかりません")
+                .coded(amenbo_core::ErrorCode::NotFoundTask)
+                .with("ref", "AMB-T-12"),
+        ));
+
+        assert_eq!(e.code, "not_found_task");
+        assert_eq!(e.fields["ref"], "AMB-T-12");
+    }
+
+    /// The other side of it: a refusal that names nothing keeps its family code and sends no fields, so
+    /// the front end falls back to the sentence core wrote. That is the majority, and it has to keep
+    /// reading.
+    #[test]
+    fn a_core_error_that_names_nothing_carries_only_its_sentence() {
+        let e = CmdError::from(amenbo_core::Error::not_found(
+            "task 'X' not found",
+            "タスク 'X' が見つかりません",
+        ));
+
+        assert_eq!(e.code, "not_found");
+        assert!(e.fields.is_null(), "nothing to interpolate: {}", e.fields);
+        assert_eq!(e.message_en, "task 'X' not found");
+    }
 
     /// A refusal this layer raises carries the code, the values, and one English sentence — and no
     /// second language. Writing one here would be a dictionary in Rust, which is the thing that

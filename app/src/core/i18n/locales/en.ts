@@ -539,6 +539,33 @@ const err: Partial<Record<ErrorCode, string>> = {
     "Registering {url} means trusting its signing key ({serving}). Check the fingerprint before it is pinned.",
   plugin_catalog_key_changed:
     "{url} now publishes {serving}, not the {agreed} you were shown. Register it again and check the new fingerprint.",
+
+  // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
+  // their own was settled by measuring what the front end actually surfaces: a form the screen already
+  // guards (an empty title) never reaches a reader, and a code with no template here still reads — in
+  // English, off the message the command returned.
+  already_reserved: "{ref} is not “To do”, so it cannot be reserved — another session may already hold it.",
+  store_busy: "The store is being restored or updated. Try again in a moment.",
+  not_found_task: "Task {ref} was not found.",
+  not_found_decision: "Decision {ref} was not found.",
+  not_found_project: "Project {ref} was not found.",
+  not_found_user: "User {ref} was not found.",
+  not_found_comment: "Comment {ref} was not found.",
+  not_found_dimension: "Category {ref} was not found.",
+  not_found_dimension_value: "Category value {ref} was not found.",
+  not_found_blob: "This attachment's file is not on this device ({hash}).",
+  invalid_commit_sha:
+    "A commit SHA is the full 40 or 64 hex characters — a short SHA, a branch, a tag or a revision is not one.",
+  invalid_attachment_too_large: "This file is {size} bytes, over the {max}-byte limit for its kind.",
+  invalid_dimension_period_order: "A value's start date cannot fall after its end date.",
+  invalid_dimension_values_unordered: "This category's values carry no order, so they cannot be re-ordered.",
+  invalid_decision_edit_rejected: "{ref} was rejected, and a rejected decision cannot be edited.",
+  invalid_decision_accept_rejected: "{ref} was rejected, and a rejected decision cannot be accepted.",
+  invalid_decision_reject_accepted: "{ref} is accepted. Supersede it rather than rejecting it.",
+  invalid_decision_reopen_rejected: "{ref} was rejected, and a rejected decision cannot be reopened.",
+  invalid_decision_self_supersede: "A decision cannot supersede itself.",
+  invalid_decision_self_amend: "A decision cannot amend itself.",
+  invalid_decision_self_builds_on: "A decision cannot stand on itself.",
 };
 
 // doctor issue kind → template (`{name}` interpolated from the issue's params).

@@ -5,7 +5,7 @@
 //! ([`crate::activity_log`]), so it is emitted through [`crate::store::Store::add_system_event`] with
 //! payloads from [`crate::activity_log::event`].
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Result};
 use crate::model::{ActorKind, TaskComment};
 use crate::ops::{emit_create, emit_update, Noun};
 use crate::store_engine::{read, record, WriteTx};
@@ -13,7 +13,7 @@ use crate::time::Timestamp;
 
 /// The word for a comment (the English/Japanese pair for `not_found` messages). Whether the parent is a task
 /// or a decision is carried by the id, so one word suffices.
-pub(crate) const COMMENT_NOUN: Noun = Noun { en: "comment", ja: "コメント" };
+pub(crate) const COMMENT_NOUN: Noun = Noun { en: "comment", ja: "コメント", code: ErrorCode::NotFoundComment };
 
 /// Shared preamble for adding a comment: the empty-body check sits in one place, whatever the parent's kind
 /// (task / decision) — separate schemas, shared code. Returns the new comment's `now`; the caller takes the

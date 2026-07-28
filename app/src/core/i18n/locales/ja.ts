@@ -522,6 +522,28 @@ export const ja: Translation = {
       "{url} を登録すると、その署名鍵（{serving}）を信頼することになります。指紋を確かめてから登録してください。",
     plugin_catalog_key_changed:
       "{url} の鍵が、確認した指紋（{agreed}）から {serving} に変わりました。登録し直して、新しい指紋を確かめてください。",
+
+    already_reserved: "{ref} は「未着手」ではないため予約できません。別のセッションが着手済みかもしれません。",
+    store_busy: "ストアの復元／更新の最中です。少し待ってからやり直してください。",
+    not_found_task: "タスク {ref} が見つかりません。",
+    not_found_decision: "決定 {ref} が見つかりません。",
+    not_found_project: "プロジェクト {ref} が見つかりません。",
+    not_found_user: "ユーザー {ref} が見つかりません。",
+    not_found_comment: "コメント {ref} が見つかりません。",
+    not_found_dimension: "分類 {ref} が見つかりません。",
+    not_found_dimension_value: "分類の値 {ref} が見つかりません。",
+    not_found_blob: "この添付のファイルはこの端末にありません（{hash}）。",
+    invalid_commit_sha: "コミット SHA は 40 桁または 64 桁の hex 全体です。短縮 SHA・ブランチ・タグ・revision は使えません。",
+    invalid_attachment_too_large: "このファイルは {size} バイトで、この種類の上限 {max} バイトを超えています。",
+    invalid_dimension_period_order: "値の開始日は終了日より後にできません。",
+    invalid_dimension_values_unordered: "この分類の値は順序を持たないため、並べ替えできません。",
+    invalid_decision_edit_rejected: "{ref} は却下済みです。却下された決定は編集できません。",
+    invalid_decision_accept_rejected: "{ref} は却下済みです。却下された決定は採択できません。",
+    invalid_decision_reject_accepted: "{ref} は採択済みです。却下ではなく、置き換え（supersede）で扱ってください。",
+    invalid_decision_reopen_rejected: "{ref} は却下済みです。却下された決定は議論中に戻せません。",
+    invalid_decision_self_supersede: "決定は自分自身を置き換えられません。",
+    invalid_decision_self_amend: "決定は自分自身を改訂できません。",
+    invalid_decision_self_builds_on: "決定は自分自身を前提にできません。",
   },
 
   doctor: {

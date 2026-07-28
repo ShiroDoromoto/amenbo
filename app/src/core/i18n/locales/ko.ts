@@ -497,6 +497,28 @@ export const ko: Translation = {
       "{url}을(를) 등록한다는 것은 그 서명 열쇠({serving})를 믿는다는 뜻입니다. 고정하기 전에 지문을 확인하세요.",
     plugin_catalog_key_changed:
       "{url}이(가) 이제 보여 준 {agreed}가 아니라 {serving}을(를) 내놓습니다. 다시 등록하고 새 지문을 확인하세요.",
+
+    already_reserved: "{ref}은(는) ‘할 일’이 아니어서 맡을 수 없습니다. 다른 세션이 이미 진행 중일 수 있습니다.",
+    store_busy: "저장소를 복원하거나 갱신하는 중입니다. 잠시 후 다시 시도하세요.",
+    not_found_task: "작업 {ref}을(를) 찾을 수 없습니다.",
+    not_found_decision: "결정 {ref}을(를) 찾을 수 없습니다.",
+    not_found_project: "프로젝트 {ref}을(를) 찾을 수 없습니다.",
+    not_found_user: "사용자 {ref}을(를) 찾을 수 없습니다.",
+    not_found_comment: "댓글 {ref}을(를) 찾을 수 없습니다.",
+    not_found_dimension: "분류 {ref}을(를) 찾을 수 없습니다.",
+    not_found_dimension_value: "분류 값 {ref}을(를) 찾을 수 없습니다.",
+    not_found_blob: "이 첨부 파일의 실제 파일이 이 기기에 없습니다({hash}).",
+    invalid_commit_sha: "커밋 SHA는 40자 또는 64자 16진수 전체여야 합니다. 짧은 SHA·브랜치·태그·revision은 쓸 수 없습니다.",
+    invalid_attachment_too_large: "이 파일은 {size}바이트로, 이 종류의 상한 {max}바이트를 넘습니다.",
+    invalid_dimension_period_order: "값의 시작일은 종료일보다 뒤일 수 없습니다.",
+    invalid_dimension_values_unordered: "이 분류의 값에는 순서가 없어 재정렬할 수 없습니다.",
+    invalid_decision_edit_rejected: "{ref}은(는) 기각되었습니다. 기각된 결정은 편집할 수 없습니다.",
+    invalid_decision_accept_rejected: "{ref}은(는) 기각되었습니다. 기각된 결정은 채택할 수 없습니다.",
+    invalid_decision_reject_accepted: "{ref}은(는) 이미 채택되었습니다. 기각 대신 대체(supersede)하세요.",
+    invalid_decision_reopen_rejected: "{ref}은(는) 기각되었습니다. 기각된 결정은 다시 논의로 되돌릴 수 없습니다.",
+    invalid_decision_self_supersede: "결정은 자기 자신을 대체할 수 없습니다.",
+    invalid_decision_self_amend: "결정은 자기 자신을 개정할 수 없습니다.",
+    invalid_decision_self_builds_on: "결정은 자기 자신을 전제로 삼을 수 없습니다.",
   },
 
   doctor: {

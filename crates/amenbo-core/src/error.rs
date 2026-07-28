@@ -12,6 +12,12 @@
 //!   (`errLabel` in `app/src/core/i18n/index.ts`) maps `code` onto per-language templates. A code with no
 //!   template falls back to the Japanese `Display` / the English `message_en`.
 //!
+//! Which is why a code has two grains ([`ErrorCode`]). A template can only be written for a code that means
+//! one sentence, so the refusals the GUI shows a person carry a **sentence** code ([`Msg::coded`]) and send
+//! the values that sentence is built from ([`Msg::with`]) instead of only the prose. Everything else keeps
+//! its variant's **family** code and reads in English, which is the settled answer for a surface no one is
+//! translating (`AMB-D-413`).
+//!
 //! The free-prose variants (`NotFound` / `Invalid` / `Conflict` / `FormatAhead` / `StoreBusy`) carry a
 //! [`Msg`] payload so they can hold both languages at once. Detail that is already English because it
 //! came from a library (`Storage` / `Io` / `Json`), and detail that is already structured
@@ -55,15 +61,41 @@ pub(crate) fn engine_on(conn: &Connection) -> impl Fn(StoreEngineError) -> Error
     }
 }
 
+/// The values a sentence is built from, kept apart from the sentence itself so the side holding the
+/// dictionary can write it in its own language (`AMB-D-413`). Everything is stringified on the way in:
+/// a field is a value to drop into a template, never a number to compute with.
+#[derive(Debug, Clone, Default)]
+pub struct Fields(Vec<(&'static str, String)>);
+
+impl Fields {
+    /// The pairs, in the order they were added.
+    pub fn iter(&self) -> impl Iterator<Item = (&'static str, &str)> {
+        self.0.iter().map(|(k, v)| (*k, v.as_str()))
+    }
+
+    /// Are there none? (A sentence that needs no value still names itself with a code.)
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 /// An error message that holds both languages. `Display` (the GUI's human surface) is Japanese; the CLI
 /// uses [`Msg::en`].
 ///
 /// Dynamic detail (ids and the like) is interpolated into both sentences by the caller — the same value
 /// in each.
+///
+/// A message may also **name itself**: [`Msg::coded`] pins a fine-grained [`ErrorCode`] to this one
+/// sentence, and [`Msg::with`] sends the values that sentence is built from alongside it. That pair is
+/// what lets the GUI compose the sentence in the reader's language instead of showing the Japanese or
+/// English one written here (`AMB-D-413`). A message that names nothing keeps its variant's coarse code
+/// and falls back to the sentence, which is the answer for every surface the GUI does not show.
 #[derive(Debug, Clone)]
 pub struct Msg {
     en: String,
     ja: String,
+    code: Option<ErrorCode>,
+    fields: Fields,
 }
 
 impl Msg {
@@ -71,7 +103,22 @@ impl Msg {
         Msg {
             en: en.into(),
             ja: ja.into(),
+            code: None,
+            fields: Fields::default(),
         }
+    }
+
+    /// Pin the code that names **this sentence** rather than its variant's family, so a dictionary can
+    /// hold a template for it.
+    pub fn coded(mut self, code: ErrorCode) -> Self {
+        self.code = Some(code);
+        self
+    }
+
+    /// Send one of the values the sentence is built from, under the name the template interpolates it by.
+    pub fn with(mut self, key: &'static str, value: impl std::fmt::Display) -> Self {
+        self.fields.0.push((key, value.to_string()));
+        self
     }
 
     /// The English sentence, for the CLI's all-English surface.
@@ -82,6 +129,16 @@ impl Msg {
     /// The Japanese sentence, for the GUI's localized human surface.
     pub fn ja(&self) -> &str {
         &self.ja
+    }
+
+    /// The code naming this one sentence, if it names itself.
+    pub fn code(&self) -> Option<ErrorCode> {
+        self.code
+    }
+
+    /// The values the sentence is built from.
+    pub fn fields(&self) -> &Fields {
+        &self.fields
     }
 }
 
@@ -176,6 +233,14 @@ impl From<crate::store_engine::StoreEngineError> for Error {
 /// literals are never scattered through the code, so drift is contained structurally rather than by
 /// vigilance. Every producer goes through this type, and [`ErrorCode::ALL`] is the single source of truth
 /// the consumers' (CLI / GUI) parity tests check themselves against.
+///
+/// The registry holds codes at two grains. The **family** codes are one per [`enum@Error`] variant, and are
+/// what a failure carries when nothing finer is said about it. The **sentence** codes below them name one
+/// particular refusal — `not_found_task` rather than `not_found` — and exist so a dictionary can hold a
+/// template for it and write it in the reader's language (`AMB-D-413`). A sentence code is pinned on the
+/// message with [`Msg::coded`], and which failures deserve one is settled by measurement: the sentences the
+/// GUI actually shows a person get one, and everything else keeps its family code and falls back to the
+/// English prose the message carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorCode {
     NotFound,
@@ -191,6 +256,31 @@ pub enum ErrorCode {
     ParseError,
     StorageError,
     StoreBusy,
+
+    // `not_found`, one entity at a time. The entity is the whole sentence — "task X was not found" and
+    // "dimension X was not found" share nothing a template could reuse — so the noun rides the code
+    // rather than the fields (ops::Noun is where each one is pinned).
+    NotFoundTask,
+    NotFoundDecision,
+    NotFoundProject,
+    NotFoundUser,
+    NotFoundComment,
+    NotFoundDimension,
+    NotFoundDimensionValue,
+    NotFoundBlob,
+
+    // `invalid_value`, one refusal at a time.
+    InvalidCommitSha,
+    InvalidAttachmentTooLarge,
+    InvalidDimensionPeriodOrder,
+    InvalidDimensionValuesUnordered,
+    InvalidDecisionEditRejected,
+    InvalidDecisionAcceptRejected,
+    InvalidDecisionRejectAccepted,
+    InvalidDecisionReopenRejected,
+    InvalidDecisionSelfSupersede,
+    InvalidDecisionSelfAmend,
+    InvalidDecisionSelfBuildsOn,
 }
 
 impl ErrorCode {
@@ -211,6 +301,25 @@ impl ErrorCode {
             ErrorCode::ParseError => "parse_error",
             ErrorCode::StorageError => "storage_error",
             ErrorCode::StoreBusy => "store_busy",
+            ErrorCode::NotFoundTask => "not_found_task",
+            ErrorCode::NotFoundDecision => "not_found_decision",
+            ErrorCode::NotFoundProject => "not_found_project",
+            ErrorCode::NotFoundUser => "not_found_user",
+            ErrorCode::NotFoundComment => "not_found_comment",
+            ErrorCode::NotFoundDimension => "not_found_dimension",
+            ErrorCode::NotFoundDimensionValue => "not_found_dimension_value",
+            ErrorCode::NotFoundBlob => "not_found_blob",
+            ErrorCode::InvalidCommitSha => "invalid_commit_sha",
+            ErrorCode::InvalidAttachmentTooLarge => "invalid_attachment_too_large",
+            ErrorCode::InvalidDimensionPeriodOrder => "invalid_dimension_period_order",
+            ErrorCode::InvalidDimensionValuesUnordered => "invalid_dimension_values_unordered",
+            ErrorCode::InvalidDecisionEditRejected => "invalid_decision_edit_rejected",
+            ErrorCode::InvalidDecisionAcceptRejected => "invalid_decision_accept_rejected",
+            ErrorCode::InvalidDecisionRejectAccepted => "invalid_decision_reject_accepted",
+            ErrorCode::InvalidDecisionReopenRejected => "invalid_decision_reopen_rejected",
+            ErrorCode::InvalidDecisionSelfSupersede => "invalid_decision_self_supersede",
+            ErrorCode::InvalidDecisionSelfAmend => "invalid_decision_self_amend",
+            ErrorCode::InvalidDecisionSelfBuildsOn => "invalid_decision_self_builds_on",
         }
     }
 
@@ -230,6 +339,25 @@ impl ErrorCode {
         ErrorCode::ParseError,
         ErrorCode::StorageError,
         ErrorCode::StoreBusy,
+        ErrorCode::NotFoundTask,
+        ErrorCode::NotFoundDecision,
+        ErrorCode::NotFoundProject,
+        ErrorCode::NotFoundUser,
+        ErrorCode::NotFoundComment,
+        ErrorCode::NotFoundDimension,
+        ErrorCode::NotFoundDimensionValue,
+        ErrorCode::NotFoundBlob,
+        ErrorCode::InvalidCommitSha,
+        ErrorCode::InvalidAttachmentTooLarge,
+        ErrorCode::InvalidDimensionPeriodOrder,
+        ErrorCode::InvalidDimensionValuesUnordered,
+        ErrorCode::InvalidDecisionEditRejected,
+        ErrorCode::InvalidDecisionAcceptRejected,
+        ErrorCode::InvalidDecisionRejectAccepted,
+        ErrorCode::InvalidDecisionReopenRejected,
+        ErrorCode::InvalidDecisionSelfSupersede,
+        ErrorCode::InvalidDecisionSelfAmend,
+        ErrorCode::InvalidDecisionSelfBuildsOn,
     ];
 }
 
@@ -246,9 +374,42 @@ impl Error {
         self.error_code().as_str()
     }
 
-    /// Maps this error onto its contractual [`ErrorCode`] — variant→code and nothing else, no string
-    /// literals. CLI/GUI parity takes this type as its single source of truth.
+    /// Maps this error onto its contractual [`ErrorCode`], no string literals. A message that names its own
+    /// sentence wins over its variant's family code — that finer code is the whole point of pinning one, and
+    /// a variant covering thirty different refusals cannot say which one this is. CLI/GUI parity takes this
+    /// type as its single source of truth.
     pub fn error_code(&self) -> ErrorCode {
+        self.msg().and_then(Msg::code).unwrap_or_else(|| self.variant_code())
+    }
+
+    /// The values this error's sentence is built from, for the surface that composes it (`AMB-D-413`). Empty
+    /// for a message that names no sentence, and for the variants that carry no [`Msg`] at all — the latter
+    /// are already structured, and the Tauri layer reads their parts off the variant itself.
+    pub fn fields(&self) -> Option<&Fields> {
+        self.msg().map(Msg::fields).filter(|f| !f.is_empty())
+    }
+
+    /// The bilingual payload, for the variants that carry one.
+    fn msg(&self) -> Option<&Msg> {
+        match self {
+            Error::NotFound(m)
+            | Error::Invalid(m)
+            | Error::Conflict(m)
+            | Error::AlreadyReserved(m)
+            | Error::NotReady(m)
+            | Error::OutOfReach(m)
+            | Error::FormatAhead(m)
+            | Error::StoreBusy(m) => Some(m),
+            Error::AmbiguousId { .. }
+            | Error::BindingStale(_)
+            | Error::Io(_)
+            | Error::Json(_)
+            | Error::Storage(_) => None,
+        }
+    }
+
+    /// The family code of this variant, before any finer one the message names.
+    fn variant_code(&self) -> ErrorCode {
         match self {
             Error::NotFound(_) => ErrorCode::NotFound,
             Error::AmbiguousId { .. } => ErrorCode::AmbiguousId,
@@ -360,6 +521,25 @@ mod tests {
             "parse_error",
             "storage_error",
             "store_busy",
+            "not_found_task",
+            "not_found_decision",
+            "not_found_project",
+            "not_found_user",
+            "not_found_comment",
+            "not_found_dimension",
+            "not_found_dimension_value",
+            "not_found_blob",
+            "invalid_commit_sha",
+            "invalid_attachment_too_large",
+            "invalid_dimension_period_order",
+            "invalid_dimension_values_unordered",
+            "invalid_decision_edit_rejected",
+            "invalid_decision_accept_rejected",
+            "invalid_decision_reject_accepted",
+            "invalid_decision_reopen_rejected",
+            "invalid_decision_self_supersede",
+            "invalid_decision_self_amend",
+            "invalid_decision_self_builds_on",
         ]
         .into_iter()
         .collect();
@@ -380,6 +560,26 @@ mod tests {
                 "a code is lowercase snake_case: {s}"
             );
         }
+    }
+
+    #[test]
+    fn a_named_sentence_reports_its_own_code_and_its_values() {
+        // A refusal the GUI shows names itself, and sends what the sentence is about apart from the
+        // sentence — that pair is what the dictionary side needs to write it in a third language.
+        let e = Error::NotFound(
+            Msg::new("task 'AMB-T-12' not found", "タスク 'AMB-T-12' が見つかりません")
+                .coded(ErrorCode::NotFoundTask)
+                .with("ref", "AMB-T-12"),
+        );
+        assert_eq!(e.code(), "not_found_task", "the sentence's code wins over the variant's family");
+        let fields: Vec<_> = e.fields().expect("values ride along").iter().collect();
+        assert_eq!(fields, vec![("ref", "AMB-T-12")]);
+
+        // A message that names no sentence keeps the family code, and carries no values: its whole
+        // answer is the prose, which is what a reader gets where no template exists.
+        let plain = Error::not_found("task 'X' not found", "タスク 'X' が見つかりません");
+        assert_eq!(plain.code(), "not_found");
+        assert!(plain.fields().is_none());
     }
 
     #[test]

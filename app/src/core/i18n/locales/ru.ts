@@ -539,6 +539,30 @@ export const ru: Translation = {
       "Зарегистрировать {url} — значит довериться его ключу подписи ({serving}). Сверьте отпечаток, прежде чем он будет закреплён.",
     plugin_catalog_key_changed:
       "{url} теперь выдаёт {serving}, а не показанный вам {agreed}. Зарегистрируйте его заново и сверьте новый отпечаток.",
+
+    already_reserved:
+      "{ref} не в состоянии «К выполнению», поэтому взять её нельзя — возможно, ею уже занят другой сеанс.",
+    store_busy: "Хранилище восстанавливается или обновляется. Повторите попытку через минуту.",
+    not_found_task: "Задача {ref} не найдена.",
+    not_found_decision: "Решение {ref} не найдено.",
+    not_found_project: "Проект {ref} не найден.",
+    not_found_user: "Пользователь {ref} не найден.",
+    not_found_comment: "Комментарий {ref} не найден.",
+    not_found_dimension: "Категория {ref} не найдена.",
+    not_found_dimension_value: "Значение категории {ref} не найдено.",
+    not_found_blob: "Файла этого вложения нет на этом устройстве ({hash}).",
+    invalid_commit_sha:
+      "SHA коммита — это полные 40 или 64 шестнадцатеричных символа; короткий SHA, ветка, тег или revision не подойдут.",
+    invalid_attachment_too_large: "Этот файл занимает {size} байт и превышает предел в {max} байт для своего типа.",
+    invalid_dimension_period_order: "Дата начала значения не может быть позже даты окончания.",
+    invalid_dimension_values_unordered: "Значения этой категории не упорядочены, поэтому их нельзя переставить.",
+    invalid_decision_edit_rejected: "{ref} отклонено, а отклонённое решение нельзя редактировать.",
+    invalid_decision_accept_rejected: "{ref} отклонено, а отклонённое решение нельзя принять.",
+    invalid_decision_reject_accepted: "{ref} принято. Замените его, а не отклоняйте.",
+    invalid_decision_reopen_rejected: "{ref} отклонено, а отклонённое решение нельзя вернуть к обсуждению.",
+    invalid_decision_self_supersede: "Решение не может заменить само себя.",
+    invalid_decision_self_amend: "Решение не может изменить само себя.",
+    invalid_decision_self_builds_on: "Решение не может опираться на само себя.",
   },
 
   doctor: {

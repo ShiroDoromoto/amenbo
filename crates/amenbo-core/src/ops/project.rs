@@ -5,14 +5,14 @@
 //! taken) and its writes **inside that one transaction**. The transaction is opened by the write wrappers
 //! on [`crate::Store`] (`project_add` / `project_update` / …), and the CLI and GUI call nothing else.
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Result};
 use crate::model::{Project, View};
 use crate::ops::{emit_create, emit_update, place, Noun, Position};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
 /// The word for this entity (the English/Japanese pair a `not_found` message is phrased with).
-pub(crate) const NOUN: Noun = Noun { en: "project", ja: "プロジェクト" };
+pub(crate) const NOUN: Noun = Noun { en: "project", ja: "プロジェクト", code: ErrorCode::NotFoundProject };
 
 pub struct NewProject {
     pub name: String,

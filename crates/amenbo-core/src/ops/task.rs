@@ -12,7 +12,7 @@
 
 use chrono::NaiveDate;
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, DecisionStatus, Priority, Subtype, Task, TaskStatus,
 };
@@ -22,7 +22,7 @@ use crate::view::ReserveBlocker;
 use crate::time::Timestamp;
 
 /// This entity's word (the English/Japanese pair for `not_found` messages).
-pub(crate) const NOUN: Noun = Noun { en: "task", ja: "タスク" };
+pub(crate) const NOUN: Noun = Noun { en: "task", ja: "タスク", code: ErrorCode::NotFoundTask };
 
 /// Which kind a type-prefixed reference names — the code in `AMB-T-<n>` / `AMB-D-<n>`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -275,9 +275,15 @@ pub fn set_status(tx: &WriteTx<'_>, id: i64, status: TaskStatus) -> Result<Task>
         read::task_status(tx.conn(), id)?.ok_or_else(|| NOUN.not_found(id.to_string()))?;
     if status == TaskStatus::InProgress && current != TaskStatus::Todo {
         let (cur, subject) = (current.as_str(), subject(tx, id));
-        return Err(Error::already_reserved(
-            format!("cannot reserve task {subject}: it is '{cur}', not 'todo' (reserve is todo → in_progress; another session may hold it)"),
-            format!("タスク {subject} を予約できません: 現在 '{cur}' です（予約は todo → in_progress のみ・別セッションが着手済みの可能性）"),
+        return Err(Error::AlreadyReserved(
+            Msg::new(
+                format!("cannot reserve task {subject}: it is '{cur}', not 'todo' (reserve is todo → in_progress; another session may hold it)"),
+                format!("タスク {subject} を予約できません: 現在 '{cur}' です（予約は todo → in_progress のみ・別セッションが着手済みの可能性）"),
+            )
+            // The status is not sent: naming it would put an English token ('in_progress') inside the
+            // reader's sentence, and what the sentence has to say is that it is not `todo`.
+            .coded(ErrorCode::AlreadyReserved)
+            .with("ref", subject),
         ));
     }
     // A reservation only goes through once the declared premises hold: no open blocker, and every decision

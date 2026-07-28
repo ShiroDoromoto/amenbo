@@ -512,6 +512,35 @@ export const de: Translation = {
       "{url} einzutragen heißt, seinem Signaturschlüssel ({serving}) zu vertrauen. Prüfe den Fingerabdruck, bevor er festgelegt wird.",
     plugin_catalog_key_changed:
       "{url} veröffentlicht jetzt {serving} statt des gezeigten {agreed}. Trage es erneut ein und prüfe den neuen Fingerabdruck.",
+
+    already_reserved:
+      "{ref} ist nicht „Offen“ und lässt sich deshalb nicht übernehmen — vielleicht hat eine andere Sitzung sie schon.",
+    store_busy: "Der Speicher wird gerade wiederhergestellt oder aktualisiert. Versuche es gleich noch einmal.",
+    not_found_task: "Aufgabe {ref} wurde nicht gefunden.",
+    not_found_decision: "Entscheidung {ref} wurde nicht gefunden.",
+    not_found_project: "Projekt {ref} wurde nicht gefunden.",
+    not_found_user: "Benutzer {ref} wurde nicht gefunden.",
+    not_found_comment: "Kommentar {ref} wurde nicht gefunden.",
+    not_found_dimension: "Kategorie {ref} wurde nicht gefunden.",
+    not_found_dimension_value: "Kategoriewert {ref} wurde nicht gefunden.",
+    not_found_blob: "Die Datei dieses Anhangs liegt nicht auf diesem Gerät ({hash}).",
+    invalid_commit_sha:
+      "Ein Commit-SHA sind die vollen 40 oder 64 Hex-Zeichen — ein kurzer SHA, ein Branch, ein Tag oder eine Revision zählen nicht.",
+    invalid_attachment_too_large:
+      "Diese Datei hat {size} Bytes und überschreitet das Limit von {max} Bytes für ihre Art.",
+    invalid_dimension_period_order: "Das Startdatum eines Werts darf nicht nach seinem Enddatum liegen.",
+    invalid_dimension_values_unordered:
+      "Die Werte dieser Kategorie tragen keine Reihenfolge und lassen sich deshalb nicht umsortieren.",
+    invalid_decision_edit_rejected:
+      "{ref} wurde abgelehnt, und eine abgelehnte Entscheidung lässt sich nicht bearbeiten.",
+    invalid_decision_accept_rejected:
+      "{ref} wurde abgelehnt, und eine abgelehnte Entscheidung lässt sich nicht annehmen.",
+    invalid_decision_reject_accepted: "{ref} ist angenommen. Ersetze sie, statt sie abzulehnen.",
+    invalid_decision_reopen_rejected:
+      "{ref} wurde abgelehnt, und eine abgelehnte Entscheidung lässt sich nicht wieder öffnen.",
+    invalid_decision_self_supersede: "Eine Entscheidung kann sich nicht selbst ersetzen.",
+    invalid_decision_self_amend: "Eine Entscheidung kann sich nicht selbst ändern.",
+    invalid_decision_self_builds_on: "Eine Entscheidung kann nicht auf sich selbst aufbauen.",
   },
 
   doctor: {

@@ -15,7 +15,7 @@
 //! snapshot, the existence checks, and the read-then-write behind [`add`]'s `next_id`. Read the
 //! number outside the transaction and two writers will take the same one.
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, Decision, DecisionComment, DecisionEdge, DecisionEdgeKind, DecisionStatus,
     DecisionTaskLink,
@@ -25,7 +25,7 @@ use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
 /// This entity's noun (the English/Japanese pair used in not_found messages).
-pub(crate) const NOUN: Noun = Noun { en: "decision", ja: "決定" };
+pub(crate) const NOUN: Noun = Noun { en: "decision", ja: "決定", code: ErrorCode::NotFoundDecision };
 
 /// Append a comment to a decision record (written to its own `decision_comment` table).
 /// `decision_id` is a decision id the caller has already resolved. The empty-body check is shared
@@ -138,9 +138,13 @@ pub struct DecisionPatch {
 pub fn update(tx: &WriteTx<'_>, id: i64, patch: DecisionPatch) -> Result<Decision> {
     let before = live_before(tx, id)?;
     if before.status == DecisionStatus::Rejected {
-        return Err(Error::invalid(
-            format!("decision '{id}' is rejected and cannot be edited"),
-            format!("決定 '{id}' は却下済みのため編集できません"),
+        return Err(Error::Invalid(
+            Msg::new(
+                format!("decision '{id}' is rejected and cannot be edited"),
+                format!("決定 '{id}' は却下済みのため編集できません"),
+            )
+            .coded(ErrorCode::InvalidDecisionEditRejected)
+            .with("ref", crate::idref::decision(id)),
         ));
     }
     let mut d = before.clone();
@@ -176,9 +180,13 @@ pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<(
         DecisionStatus::Accepted => return Ok((before, false)), // idempotent: already settled, nothing changed
         DecisionStatus::Proposed => {}
         other => {
-            return Err(Error::invalid(
-                format!("decision '{id}' is {} and cannot be accepted", other.as_str()),
-                format!("決定 '{id}' は {} のため採択できません", other.as_str()),
+            return Err(Error::Invalid(
+                Msg::new(
+                    format!("decision '{id}' is {} and cannot be accepted", other.as_str()),
+                    format!("決定 '{id}' は {} のため採択できません", other.as_str()),
+                )
+                .coded(ErrorCode::InvalidDecisionAcceptRejected)
+                .with("ref", crate::idref::decision(id)),
             ))
         }
     }
@@ -207,9 +215,13 @@ pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
         DecisionStatus::Rejected => return Ok((before, false)), // idempotent: already rejected, nothing changed
         DecisionStatus::Proposed => {}
         other => {
-            return Err(Error::invalid(
-                format!("decision '{id}' is {} and cannot be rejected", other.as_str()),
-                format!("決定 '{id}' は {} のため却下できません", other.as_str()),
+            return Err(Error::Invalid(
+                Msg::new(
+                    format!("decision '{id}' is {} and cannot be rejected", other.as_str()),
+                    format!("決定 '{id}' は {} のため却下できません", other.as_str()),
+                )
+                .coded(ErrorCode::InvalidDecisionRejectAccepted)
+                .with("ref", crate::idref::decision(id)),
             ))
         }
     }
@@ -241,9 +253,13 @@ pub fn reopen(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
         DecisionStatus::Proposed => return Ok((before, false)), // idempotent (already editable)
         DecisionStatus::Accepted => {}
         other => {
-            return Err(Error::invalid(
-                format!("decision '{id}' is {} and cannot be reopened", other.as_str()),
-                format!("決定 '{id}' は {} のため議論中に戻せません", other.as_str()),
+            return Err(Error::Invalid(
+                Msg::new(
+                    format!("decision '{id}' is {} and cannot be reopened", other.as_str()),
+                    format!("決定 '{id}' は {} のため議論中に戻せません", other.as_str()),
+                )
+                .coded(ErrorCode::InvalidDecisionReopenRejected)
+                .with("ref", crate::idref::decision(id)),
             ))
         }
     }
@@ -284,9 +300,12 @@ pub fn supersede(
     decided_by: Option<String>,
 ) -> Result<(Decision, bool, bool)> {
     if new_id == old_id {
-        return Err(Error::invalid(
-            "a decision cannot supersede itself",
-            "決定は自分自身を置き換えられません",
+        return Err(Error::Invalid(
+            Msg::new(
+                "a decision cannot supersede itself",
+                "決定は自分自身を置き換えられません",
+            )
+            .coded(ErrorCode::InvalidDecisionSelfSupersede),
         ));
     }
     // Only check that the old side is alive; its row is never rewritten.
@@ -325,9 +344,12 @@ pub fn supersede(
 /// amend several old ones** (a DAG). Self-reference is rejected.
 pub fn amend(tx: &WriteTx<'_>, new_id: i64, old_id: i64) -> Result<Decision> {
     if new_id == old_id {
-        return Err(Error::invalid(
-            "a decision cannot amend itself",
-            "決定は自分自身を改訂できません",
+        return Err(Error::Invalid(
+            Msg::new(
+                "a decision cannot amend itself",
+                "決定は自分自身を改訂できません",
+            )
+            .coded(ErrorCode::InvalidDecisionSelfAmend),
         ));
     }
     // The target (the old side) must be alive.
@@ -350,9 +372,12 @@ pub fn amend(tx: &WriteTx<'_>, new_id: i64, old_id: i64) -> Result<Decision> {
 /// together"). One kind per pair — `decision_edge_pair` is UNIQUE.
 pub fn builds_on(tx: &WriteTx<'_>, new_id: i64, old_id: i64) -> Result<Decision> {
     if new_id == old_id {
-        return Err(Error::invalid(
-            "a decision cannot build on itself",
-            "決定は自分自身を前提にできません",
+        return Err(Error::Invalid(
+            Msg::new(
+                "a decision cannot build on itself",
+                "決定は自分自身を前提にできません",
+            )
+            .coded(ErrorCode::InvalidDecisionSelfBuildsOn),
         ));
     }
     // The premise (the old side) must be alive.

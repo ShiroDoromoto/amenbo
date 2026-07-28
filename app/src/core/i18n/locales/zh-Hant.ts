@@ -498,6 +498,28 @@ export const zhHant: Translation = {
       "登錄 {url} 表示信任它的簽署金鑰（{serving}）。釘住之前請先核對指紋。",
     plugin_catalog_key_changed:
       "{url} 現在公布的是 {serving}，而不是給你看過的 {agreed}。請重新登錄，並核對新的指紋。",
+
+    already_reserved: "{ref} 不是「待辦」，無法認領；可能已有另一個工作階段在處理。",
+    store_busy: "正在還原或更新儲存，請稍後再試。",
+    not_found_task: "找不到任務 {ref}。",
+    not_found_decision: "找不到決策 {ref}。",
+    not_found_project: "找不到專案 {ref}。",
+    not_found_user: "找不到使用者 {ref}。",
+    not_found_comment: "找不到留言 {ref}。",
+    not_found_dimension: "找不到分類 {ref}。",
+    not_found_dimension_value: "找不到分類值 {ref}。",
+    not_found_blob: "此附件的檔案不在這台裝置上（{hash}）。",
+    invalid_commit_sha: "提交 SHA 必須是完整的 40 或 64 位十六進位；短 SHA、分支、標籤或 revision 都不行。",
+    invalid_attachment_too_large: "此檔案為 {size} 位元組，超過這類檔案 {max} 位元組的上限。",
+    invalid_dimension_period_order: "值的開始日期不能晚於結束日期。",
+    invalid_dimension_values_unordered: "此分類的值沒有順序，無法重新排列。",
+    invalid_decision_edit_rejected: "{ref} 已遭否決，遭否決的決策無法編輯。",
+    invalid_decision_accept_rejected: "{ref} 已遭否決，遭否決的決策無法採納。",
+    invalid_decision_reject_accepted: "{ref} 已採納。請改用「取代」而非否決。",
+    invalid_decision_reopen_rejected: "{ref} 已遭否決，遭否決的決策無法重啟討論。",
+    invalid_decision_self_supersede: "決策不能取代自身。",
+    invalid_decision_self_amend: "決策不能修訂自身。",
+    invalid_decision_self_builds_on: "決策不能以自身為前提。",
   },
 
   doctor: {

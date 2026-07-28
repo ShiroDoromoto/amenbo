@@ -1,7 +1,7 @@
 // A Tauri command reports failure as a structured CmdError (src-tauri/error.rs). The front end maps the code to a
 // per-language template, falling back to message (ja) / message_en (en) for codes that have no template.
 import { describe, it, expect } from "vitest";
-import { TAURI_ERROR_CODES } from "../errorCodes";
+import { CORE_SENTENCE_ERROR_CODES, TAURI_ERROR_CODES } from "../errorCodes";
 import { errLabel, errText, type CmdError } from "./index";
 import { en } from "./locales/en";
 
@@ -25,6 +25,15 @@ const notFound: CmdError = {
   message: "タスク 'X' が見つかりません",
   message_en: "task 'X' not found",
   fields: null,
+};
+
+// The same failure once core names the sentence rather than the family: the id rides in the fields, and
+// the prose the reader gets is written here rather than in Rust (`AMB-D-413`).
+const notFoundTask: CmdError = {
+  code: "not_found_task",
+  message: "タスク 'AMB-T-12' が見つかりません",
+  message_en: "task 'AMB-T-12' not found",
+  fields: { ref: "AMB-T-12" },
 };
 
 // A refusal the Tauri layer raises itself. It carries no Japanese — the sentence a Japanese reader
@@ -61,6 +70,15 @@ describe("errLabel", () => {
     expect(errLabel(notFound, "ja")).toBe("タスク 'X' が見つかりません");
     expect(errLabel(notFound, "en")).toBe("task 'X' not found");
   });
+
+  it("writes a named sentence from its fields, in a language core carries no prose for", () => {
+    expect(errLabel(notFoundTask, "en")).toBe("Task AMB-T-12 was not found.");
+    expect(errLabel(notFoundTask, "ja")).toBe("タスク AMB-T-12 が見つかりません。");
+    // The third language is the whole point: core holds no Korean, so a sentence only exists there if
+    // the template does.
+    expect(errLabel(notFoundTask, "ko")).toContain("AMB-T-12");
+    expect(errLabel(notFoundTask, "ko")).not.toBe(notFoundTask.message_en);
+  });
 });
 
 describe("errText", () => {
@@ -87,6 +105,17 @@ describe("errText", () => {
 describe("the codes this layer raises itself", () => {
   it("all have an English template, which is where their sentence lives", () => {
     const missing = TAURI_ERROR_CODES.filter((code) => !en.err[code]);
+    expect(missing).toEqual([]);
+  });
+});
+
+// A sentence code exists for one reason: a template can be written for it. Splitting one off its family
+// and then leaving the dictionary empty gains nothing — the reader lands back on core's English, which is
+// exactly where the coarse code already left them. So the split and the sentence arrive together, and a
+// new one added without its prose fails here rather than reading as translated.
+describe("the codes core splits down to one sentence", () => {
+  it("all have an English template", () => {
+    const missing = CORE_SENTENCE_ERROR_CODES.filter((code) => !en.err[code]);
     expect(missing).toEqual([]);
   });
 });

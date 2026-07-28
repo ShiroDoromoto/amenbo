@@ -528,6 +528,29 @@ export const ptBR: Translation = {
       "Registrar {url} significa confiar na chave de assinatura dele ({serving}). Confira a impressão antes de fixá-la.",
     plugin_catalog_key_changed:
       "{url} agora publica {serving}, e não a {agreed} que foi mostrada a você. Registre de novo e confira a nova impressão.",
+
+    already_reserved: "{ref} não está em “A fazer”, então não dá para reservar — outra sessão pode já estar com ela.",
+    store_busy: "O armazenamento está sendo restaurado ou atualizado. Tente de novo em instantes.",
+    not_found_task: "Tarefa {ref} não encontrada.",
+    not_found_decision: "Decisão {ref} não encontrada.",
+    not_found_project: "Projeto {ref} não encontrado.",
+    not_found_user: "Usuário {ref} não encontrado.",
+    not_found_comment: "Comentário {ref} não encontrado.",
+    not_found_dimension: "Categoria {ref} não encontrada.",
+    not_found_dimension_value: "Valor de categoria {ref} não encontrado.",
+    not_found_blob: "O arquivo deste anexo não está neste dispositivo ({hash}).",
+    invalid_commit_sha:
+      "Um SHA de commit são os 40 ou 64 caracteres hexadecimais completos; um SHA curto, um branch, uma tag ou uma revisão não servem.",
+    invalid_attachment_too_large: "Este arquivo tem {size} bytes e passa do limite de {max} bytes para o tipo dele.",
+    invalid_dimension_period_order: "A data de início de um valor não pode ser depois da data de fim.",
+    invalid_dimension_values_unordered: "Os valores desta categoria não têm ordem, então não dá para reordená-los.",
+    invalid_decision_edit_rejected: "{ref} foi rejeitada, e uma decisão rejeitada não pode ser editada.",
+    invalid_decision_accept_rejected: "{ref} foi rejeitada, e uma decisão rejeitada não pode ser aceita.",
+    invalid_decision_reject_accepted: "{ref} está aceita. Substitua-a em vez de rejeitá-la.",
+    invalid_decision_reopen_rejected: "{ref} foi rejeitada, e uma decisão rejeitada não pode ser reaberta.",
+    invalid_decision_self_supersede: "Uma decisão não pode substituir a si mesma.",
+    invalid_decision_self_amend: "Uma decisão não pode emendar a si mesma.",
+    invalid_decision_self_builds_on: "Uma decisão não pode se apoiar em si mesma.",
   },
 
   doctor: {

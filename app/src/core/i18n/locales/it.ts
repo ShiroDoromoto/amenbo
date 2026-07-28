@@ -527,6 +527,31 @@ export const it: Translation = {
       "Registrare {url} significa fidarsi della sua chiave di firma ({serving}). Controlla l'impronta prima che venga fissata.",
     plugin_catalog_key_changed:
       "{url} ora pubblica {serving}, non la {agreed} che ti era stata mostrata. Registralo di nuovo e controlla la nuova impronta.",
+
+    already_reserved:
+      "{ref} non è in “Da fare”, quindi non si può prendere in carico — forse un'altra sessione la tiene già.",
+    store_busy: "L'archivio è in fase di ripristino o aggiornamento. Riprova tra un momento.",
+    not_found_task: "Attività {ref} non trovata.",
+    not_found_decision: "Decisione {ref} non trovata.",
+    not_found_project: "Progetto {ref} non trovato.",
+    not_found_user: "Utente {ref} non trovato.",
+    not_found_comment: "Commento {ref} non trovato.",
+    not_found_dimension: "Categoria {ref} non trovata.",
+    not_found_dimension_value: "Valore di categoria {ref} non trovato.",
+    not_found_blob: "Il file di questo allegato non è su questo dispositivo ({hash}).",
+    invalid_commit_sha:
+      "Uno SHA di commit sono i 40 o 64 caratteri esadecimali completi; uno SHA breve, un branch, un tag o una revisione non lo sono.",
+    invalid_attachment_too_large: "Questo file occupa {size} byte e supera il limite di {max} byte per il suo tipo.",
+    invalid_dimension_period_order: "La data di inizio di un valore non può essere successiva alla data di fine.",
+    invalid_dimension_values_unordered:
+      "I valori di questa categoria non hanno un ordine, quindi non si possono riordinare.",
+    invalid_decision_edit_rejected: "{ref} è stata respinta, e una decisione respinta non si può modificare.",
+    invalid_decision_accept_rejected: "{ref} è stata respinta, e una decisione respinta non si può accettare.",
+    invalid_decision_reject_accepted: "{ref} è accettata. Sostituiscila invece di respingerla.",
+    invalid_decision_reopen_rejected: "{ref} è stata respinta, e una decisione respinta non si può riaprire.",
+    invalid_decision_self_supersede: "Una decisione non può sostituire sé stessa.",
+    invalid_decision_self_amend: "Una decisione non può emendare sé stessa.",
+    invalid_decision_self_builds_on: "Una decisione non può poggiare su sé stessa.",
   },
 
   doctor: {

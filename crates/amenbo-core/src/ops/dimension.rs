@@ -18,7 +18,7 @@
 
 use chrono::NaiveDate;
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     Dimension, DimensionCardinality, DimensionRole, DimensionValue,
     TaskDimensionValue,
@@ -28,9 +28,9 @@ use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
 /// The noun for the dimension entity (the English/Japanese pair used in not_found messages).
-pub(crate) const NOUN: Noun = Noun { en: "dimension", ja: "次元" };
+pub(crate) const NOUN: Noun = Noun { en: "dimension", ja: "次元", code: ErrorCode::NotFoundDimension };
 /// The noun for the dimension-value entity.
-pub(crate) const VALUE_NOUN: Noun = Noun { en: "dimension value", ja: "次元値" };
+pub(crate) const VALUE_NOUN: Noun = Noun { en: "dimension value", ja: "次元値", code: ErrorCode::NotFoundDimensionValue };
 
 /// The specification of a new dimension. The defaults — single-select, unordered, no role — are the
 /// bare shape of a user-defined axis. A time-axis phase is built by setting `role=TimeAxis`.
@@ -221,9 +221,12 @@ pub fn value_set_dates(
     end_on: Option<NaiveDate>,
 ) -> Result<DimensionValue> {
     if matches!((start_on, end_on), (Some(s), Some(e)) if s > e) {
-        return Err(Error::invalid(
-            "a value's start date cannot be after its end date",
-            "値の開始日は終了日より後にできません",
+        return Err(Error::Invalid(
+            Msg::new(
+                "a value's start date cannot be after its end date",
+                "値の開始日は終了日より後にできません",
+            )
+            .coded(ErrorCode::InvalidDimensionPeriodOrder),
         ));
     }
     let before = live_value_before(tx, value_id)?;
@@ -240,9 +243,12 @@ pub fn value_move(tx: &WriteTx<'_>, value_id: i64, pos: Position) -> Result<Dime
     let before = live_value_before(tx, value_id)?;
     let dimension = live_before(tx, before.dimension_id)?;
     if !dimension.ordered {
-        return Err(Error::invalid(
-            "this dimension's values are unordered and cannot be reordered",
-            "この次元の値は順序を持たないため並べ替えできません",
+        return Err(Error::Invalid(
+            Msg::new(
+                "this dimension's values are unordered and cannot be reordered",
+                "この次元の値は順序を持たないため並べ替えできません",
+            )
+            .coded(ErrorCode::InvalidDimensionValuesUnordered),
         ));
     }
     let sibs = read::dimension_value_siblings(tx.conn(), dimension.id, Some(value_id))?;

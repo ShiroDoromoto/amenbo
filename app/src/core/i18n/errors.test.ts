@@ -41,6 +41,23 @@ const nestedTree: CmdError = {
   fields: { path: "/work/repo" },
 };
 
+// A refusal that is one sentence over a list of reasons. Core sends the reasons as parts, each naming
+// its own sentence, because how many there are is known only at the moment of refusing.
+const notReady: CmdError = {
+  code: "not_ready",
+  message_en:
+    "cannot reserve task AMB-T-12: blocker AMB-T-9 is not done; premise AMB-D-4 is not settled — wait for the ruling, or unlink it",
+  fields: { ref: "AMB-T-12" },
+  parts: [
+    { code: "not_ready_open_blocker", message_en: "blocker AMB-T-9 is not done", fields: { ref: "AMB-T-9" } },
+    {
+      code: "not_ready_premise_unsettled",
+      message_en: "premise AMB-D-4 is not settled — wait for the ruling, or unlink it",
+      fields: { ref: "AMB-D-4" },
+    },
+  ],
+};
+
 describe("errLabel", () => {
   it("interpolates a code that has a template with its fields (per language)", () => {
     expect(errLabel(bindingStale, "ja")).toBe("プロジェクトの紐付け先ディレクトリが見つかりません: /gone");
@@ -65,6 +82,25 @@ describe("errLabel", () => {
   it("a code with no template falls back to the sentence core wrote, whatever the reader's language", () => {
     expect(errLabel(notFound, "ja")).toBe("task 'X' not found");
     expect(errLabel(notFound, "en")).toBe("task 'X' not found");
+  });
+
+  it("writes each of a refusal's reasons from its own template and joins them the language's way", () => {
+    expect(errLabel(notReady, "en")).toBe(
+      "AMB-T-12 cannot be reserved yet: AMB-T-9 is not done; AMB-D-4 is not settled — wait for the ruling, or unlink it",
+    );
+    // Japanese joins a list with its own mark, and nothing of the English survives.
+    expect(errLabel(notReady, "ja")).toBe(
+      "AMB-T-12 はまだ予約できません: AMB-T-9 が完了していません、AMB-D-4 が未確定です。裁定を待つか link を外してください",
+    );
+    expect(errLabel(notReady, "ja")).not.toContain("is not done");
+  });
+
+  it("a reason whose code has no template falls back to its own English, not the whole message", () => {
+    const oneOff: CmdError = {
+      ...notReady,
+      parts: [{ code: "not_a_code", message_en: "something else stands in the way", fields: null }],
+    };
+    expect(errLabel(oneOff, "ja")).toBe("AMB-T-12 はまだ予約できません: something else stands in the way");
   });
 
   it("writes a named sentence from its fields, in a language core carries no prose for", () => {

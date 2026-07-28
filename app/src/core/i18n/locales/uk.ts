@@ -475,6 +475,7 @@ export const uk: Translation = {
     "orphanBinding.forgetting": "Забуваю…",
     "orphanBinding.done": "Залишені прив'язки папок забуто.",
     "common.equiv": "Рівносильно:", "common.otherSession": "інша сесія",
+    "err.reasonSep": "; ",
     "common.loadMore": "Завантажити ще (ще {n})",
     "id.copyTip": "Натисніть, щоб скопіювати ідентифікатор завдання", "id.copied": "Скопійовано",
     "facet.human": "Людина", "facet.ai": "ШІ", "facet.named": "{name} ({facet})",
@@ -540,6 +541,12 @@ export const uk: Translation = {
 
     already_reserved:
       "{ref} не має статусу «До виконання», тож взяти його не можна — можливо, ним уже зайнятий інший сеанс.",
+    not_ready: "{ref} ще не можна зарезервувати: {reasons}",
+    not_ready_open_blocker: "{ref} не завершено",
+    not_ready_premise_superseded: "{ref} замінено на {successor} — прив'яжіть це завдання до новішого",
+    not_ready_premise_rejected: "{ref} відхилено, тож завдання треба переосмислити",
+    not_ready_premise_unsettled: "{ref} не вирішено — дочекайтеся рішення або відв'яжіть його",
+    not_ready_not_started: "воно починається аж {start} — змініть дату початку, якщо вона хибна",
     store_busy: "Сховище відновлюється або оновлюється. Спробуйте ще раз за хвилину.",
     not_found_task: "Завдання {ref} не знайдено.",
     not_found_decision: "Рішення {ref} не знайдено.",

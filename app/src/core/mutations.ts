@@ -12,7 +12,7 @@ import { applySnapshot, getSnapshot, inTauri, loadSnapshot, type Snapshot } from
 import { applyPerfConfig, invoke } from "./ipc";
 import { invalidateAllQueries, invalidateQueries, type QueryKey } from "./query";
 import { type AttachTargetType } from "./reads";
-import { t, tf, type CmdError } from "./i18n";
+import { t, tf, type CmdError, type CmdErrorPart } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
 import type { ActivityTargetDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
@@ -94,8 +94,45 @@ function mockMutate(fn: (snap: Snapshot) => Snapshot): void {
  * shape, browser iteration agrees with the real store down to which operations get refused. A mock
  * that quietly lets everything through would leave the front end believing it works.
  */
-function mockErr(code: string, en: string): CmdError {
-  return { code, message_en: en };
+function mockErr(
+  code: string,
+  en: string,
+  structured?: { fields?: Record<string, unknown>; parts?: CmdErrorPart[] },
+): CmdError {
+  return { code, message_en: en, ...structured };
+}
+
+/**
+ * The reasons a reservation is refused, in the shape core sends them (`ops::task::not_ready`). The mock
+ * has the same three premises on the card, so it names the same three reasons; a decision the mock holds
+ * no ref for is named by its title, which is the only handle it has. English is written here only as the
+ * fallback for a reader whose language has no template — the sentence they actually get is the template.
+ */
+function notReadyParts(t: TaskCard): CmdErrorPart[] {
+  const parts: CmdErrorPart[] = [];
+  for (const b of t.blockedBy) {
+    parts.push({
+      code: "not_ready_open_blocker",
+      message_en: `blocker ${b.name} is not done`,
+      fields: { ref: b.name },
+    });
+  }
+  for (const d of t.blockedByDecisions) {
+    const ref = d.ref ?? d.name ?? String(d.id);
+    parts.push({
+      code: "not_ready_premise_unsettled",
+      message_en: `premise ${ref} is not settled — wait for the ruling, or unlink it`,
+      fields: { ref },
+    });
+  }
+  if (t.notStartedUntil) {
+    parts.push({
+      code: "not_ready_not_started",
+      message_en: `it is not due to start until ${t.notStartedUntil}`,
+      fields: { start: t.notStartedUntil },
+    });
+  }
+  return parts;
 }
 
 /**
@@ -187,12 +224,19 @@ export async function setStatus(id: number, status: Status): Promise<void> {
       throw mockErr(
         "already_reserved",
         `cannot reserve task ${t.ref}: it is '${t.status}', not 'todo' (reserve is todo → in_progress)`,
+        { fields: { ref: t.ref } },
       );
     }
     if (!t.ready) {
+      // Both refusals carry what their template interpolates. Sending the code without the values would
+      // put `{ref}` on screen — the template is found either way, and the fields are the only thing that
+      // can fill it. The reasons the mock can name come from the same three premises core derives
+      // readiness from, so browser iteration agrees on *why* as well as on *whether*.
+      const parts = notReadyParts(t);
       throw mockErr(
         "not_ready",
         `cannot reserve task ${t.ref}: its premises (blockers / grounding decisions) are not met`,
+        { fields: { ref: t.ref }, parts },
       );
     }
   }

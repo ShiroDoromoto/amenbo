@@ -9,10 +9,24 @@
 
 use serde::Serialize;
 
+/// One of the sentences a refusal is composed of: its own code, its own values, and the English it
+/// falls back to. A refusal carries these when what it has to say is a sentence **plus a list** whose
+/// length only the refusal knows — the reasons a reservation was turned away, say. Joining them is the
+/// front end's to do, in the punctuation the reader's language joins with.
+#[derive(Debug, Clone, Serialize)]
+pub struct CmdErrorPart {
+    /// The code naming this one sentence, so the front end can look up its template.
+    pub code: String,
+    /// The English sentence, for a part whose code has no template.
+    pub message_en: String,
+    /// The values this sentence is built from (`null` when it needs none).
+    pub fields: serde_json::Value,
+}
+
 /// The structured error returned to the GUI (the `Err` type of a Tauri command).
 ///
-/// `serde` serialises it to `{ code, message_en, fields }`, and the front end's invoke receives that
-/// object as the rejection reason.
+/// `serde` serialises it to `{ code, message_en, fields, parts }`, and the front end's invoke receives
+/// that object as the rejection reason.
 #[derive(Debug, Clone, Serialize)]
 pub struct CmdError {
     /// Stable machine-readable code (an i18n key; the contract is that it stays English). Core-originated codes come from [`amenbo_core::Error::code`].
@@ -23,6 +37,11 @@ pub struct CmdError {
     pub message_en: String,
     /// Per-code structured values for interpolation (`null` for variants that have none).
     pub fields: serde_json::Value,
+    /// The sentences this refusal is composed of, in reading order. Empty for the great majority,
+    /// which say one thing and are done — and a boxed slice rather than a `Vec` because this type is
+    /// the `Err` of every command's `Result`: its width is paid on the calls that succeed too, and the
+    /// list is fixed the moment the refusal is built.
+    pub parts: Box<[CmdErrorPart]>,
 }
 
 impl CmdError {
@@ -31,6 +50,7 @@ impl CmdError {
             code: code.into(),
             message_en: message_en.into(),
             fields,
+            parts: Box::default(),
         }
     }
 
@@ -69,7 +89,25 @@ impl From<amenbo_core::Error> for CmdError {
                 None => serde_json::Value::Null,
             },
         };
-        CmdError::new(e.code(), e.message_en(), fields)
+        let mut out = CmdError::new(e.code(), e.message_en(), fields);
+        out.parts = e.parts().iter().map(part_of).collect();
+        out
+    }
+}
+
+/// One of a message's parts, on the wire. A part always names its own code — a part that named nothing
+/// would arrive as a sentence the front end could only print in English, which is the whole thing this
+/// avoids — so the fallback here is unreachable in practice and kept only so the mapping is total.
+fn part_of(m: &amenbo_core::Msg) -> CmdErrorPart {
+    CmdErrorPart {
+        code: m.code().map(|c| c.as_str().to_string()).unwrap_or_else(|| "error".to_string()),
+        message_en: m.en().to_string(),
+        fields: match m.fields().is_empty() {
+            true => serde_json::Value::Null,
+            false => serde_json::Value::Object(
+                m.fields().iter().map(|(k, v)| (k.to_string(), v.into())).collect(),
+            ),
+        },
     }
 }
 
@@ -118,6 +156,29 @@ mod tests {
 
         assert_eq!(e.code, "not_found_task");
         assert_eq!(e.fields["ref"], "AMB-T-12");
+    }
+
+    /// A refusal composed of several sentences surrenders each one whole — its code and its values — rather
+    /// than the English it happens to read as. Folding them into one string here is what would put English
+    /// inside a reader's line, which is the thing the parts exist to avoid.
+    #[test]
+    fn a_refusal_with_several_reasons_surrenders_each_reason_on_its_own() {
+        let e = CmdError::from(amenbo_core::Error::NotReady(
+            amenbo_core::Msg::new("cannot reserve task AMB-T-12: blocker AMB-T-9 is not done")
+                .coded(amenbo_core::ErrorCode::NotReady)
+                .with("ref", "AMB-T-12")
+                .part(
+                    amenbo_core::Msg::new("blocker AMB-T-9 is not done")
+                        .coded(amenbo_core::ErrorCode::NotReadyOpenBlocker)
+                        .with("ref", "AMB-T-9"),
+                ),
+        ));
+
+        assert_eq!(e.code, "not_ready");
+        assert_eq!(e.fields["ref"], "AMB-T-12");
+        assert_eq!(e.parts.len(), 1);
+        assert_eq!(e.parts[0].code, "not_ready_open_blocker");
+        assert_eq!(e.parts[0].fields["ref"], "AMB-T-9");
     }
 
     /// The other side of it: a refusal that names nothing keeps its family code and sends no fields, so

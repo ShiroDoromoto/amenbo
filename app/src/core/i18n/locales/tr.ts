@@ -437,6 +437,7 @@ export const tr: Translation = {
     "orphanBinding.forgetting": "Unutuluyor…",
     "orphanBinding.done": "Artık klasör bağları unutuldu.",
     "common.equiv": "Eşdeğeri:", "common.otherSession": "başka bir oturum",
+    "err.reasonSep": "; ",
     "common.loadMore": "Daha getir ({n} tane daha)",
     "id.copyTip": "İş kimliğini kopyalamak için tıklayın", "id.copied": "Kopyalandı",
     "facet.human": "İnsan", "facet.ai": "Yapay zekâ", "facet.named": "{name} ({facet})",
@@ -502,6 +503,12 @@ export const tr: Translation = {
 
     already_reserved:
       "{ref} “Yapılacak” durumunda değil, bu yüzden üstlenilemez — başka bir oturum onu çoktan almış olabilir.",
+    not_ready: "{ref} henüz üstlenilemez: {reasons}",
+    not_ready_open_blocker: "{ref} bitmedi",
+    not_ready_premise_superseded: "{ref} yerini {successor} aldı — bu işi yenisine bağlayın",
+    not_ready_premise_rejected: "{ref} reddedildi, bu iş yeniden düşünülmeli",
+    not_ready_premise_unsettled: "{ref} karara bağlanmadı — kararı bekleyin ya da bağı kaldırın",
+    not_ready_not_started: "{start} tarihinden önce başlamıyor — tarih yanlışsa başlangıç gününü değiştirin",
     store_busy: "Depo geri yükleniyor ya da güncelleniyor. Birazdan yeniden deneyin.",
     not_found_task: "{ref} işi bulunamadı.",
     not_found_decision: "{ref} kararı bulunamadı.",

@@ -10,7 +10,7 @@
 // silent by construction, coverage.test.ts counts it at build time and fails on a dictionary that
 // does not cover the English key set.
 import type { EventDto } from "../../bindings/bindings";
-import { type ErrorCode, isErrorCode } from "../errorCodes";
+import { isErrorCode } from "../errorCodes";
 import { type DoctorIssueKind, isDoctorIssueKind } from "../doctorKinds";
 import type { Priority, Status } from "../../mock/types";
 import type { DoctorTemplate, Translation, UiKey, ViewKind } from "./keys";
@@ -92,6 +92,19 @@ export interface CmdError {
   code: string;
   message_en: string; // the sentence, in English — the fallback, never the reader's language
   fields?: Record<string, unknown> | null;
+  /**
+   * The sentences this refusal is composed of, where what it has to say is a sentence **plus a list**
+   * whose length only the refusal knows — the reasons a reservation was turned away. Each names its own
+   * code, so each is written from its own template; the outer template drops the lot into `{reasons}`.
+   */
+  parts?: CmdErrorPart[] | null;
+}
+
+/** One of a refusal's composed sentences (`CmdErrorPart` in src-tauri/error.rs). */
+export interface CmdErrorPart {
+  code: string;
+  message_en: string;
+  fields?: Record<string, unknown> | null;
 }
 
 function isCmdError(e: unknown): e is CmdError {
@@ -100,19 +113,42 @@ function isCmdError(e: unknown): e is CmdError {
   return typeof o.code === "string" && typeof o.message_en === "string";
 }
 
-/** Renders a CmdError as one line in the current UI language: code template, else the English sentence. */
+/** The template this language holds for a code, else English's, else nothing. */
+function errTemplate(code: string, lang: Lang): string | undefined {
+  if (!isErrorCode(code)) return undefined;
+  return DICTIONARIES[lang]?.err[code] ?? en.err[code];
+}
+
+/** Fills an error template's `{name}` placeholders. An array is written as a list; a value that never
+ * arrived is left as `{name}`, so a template asking for what nobody sent shows up rather than vanishing. */
+function fillFields(tmpl: string, fields: Record<string, unknown> | null | undefined): string {
+  const f = fields ?? {};
+  return tmpl.replace(/\{(\w+)\}/g, (_, k) => {
+    const v = f[k];
+    if (v === undefined || v === null) return `{${k}}`;
+    return Array.isArray(v) ? v.join(", ") : String(v);
+  });
+}
+
+/**
+ * Renders a CmdError as one line in the current UI language: code template, else the English sentence.
+ *
+ * A refusal carrying `parts` is written the same way twice over — each part from its own template, and
+ * the joined result handed to the outer one as `{reasons}`. The separator comes from the dictionary too
+ * (`err.reasonSep`): a list of reasons is punctuation, and English's "; " is not every language's.
+ */
 export function errLabel(err: CmdError, lang: Lang = currentLang()): string {
-  const code: ErrorCode | undefined = isErrorCode(err.code) ? err.code : undefined;
-  const tmpl = code && (DICTIONARIES[lang]?.err[code] ?? en.err[code]);
-  if (tmpl) {
-    const f = err.fields ?? {};
-    return tmpl.replace(/\{(\w+)\}/g, (_, k) => {
-      const v = (f as Record<string, unknown>)[k];
-      if (v === undefined || v === null) return `{${k}}`;
-      return Array.isArray(v) ? v.join(", ") : String(v);
-    });
-  }
-  return err.message_en;
+  const tmpl = errTemplate(err.code, lang);
+  if (!tmpl) return err.message_en;
+  const parts = err.parts ?? [];
+  if (parts.length === 0) return fillFields(tmpl, err.fields);
+  const reasons = parts
+    .map((p) => {
+      const sub = errTemplate(p.code, lang);
+      return sub ? fillFields(sub, p.fields) : p.message_en;
+    })
+    .join(t("err.reasonSep", lang));
+  return fillFields(tmpl, { ...(err.fields ?? {}), reasons });
 }
 
 /**

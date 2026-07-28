@@ -466,6 +466,7 @@ export const fr: Translation = {
     "orphanBinding.forgetting": "Oubli…",
     "orphanBinding.done": "Les liaisons de dossier restantes ont été oubliées.",
     "common.equiv": "Équivaut à :", "common.otherSession": "une autre session",
+    "err.reasonSep": "; ",
     "common.loadMore": "Charger plus ({n} de plus)",
     "id.copyTip": "Cliquez pour copier l'ID de la tâche", "id.copied": "Copié",
     "facet.human": "Humain", "facet.ai": "IA", "facet.named": "{name} ({facet})",
@@ -531,6 +532,12 @@ export const fr: Translation = {
 
     already_reserved:
       "{ref} n'est pas « À faire », donc impossible de la réserver — une autre session la tient peut-être déjà.",
+    not_ready: "{ref} ne peut pas encore être réservée : {reasons}",
+    not_ready_open_blocker: "{ref} n'est pas terminée",
+    not_ready_premise_superseded: "{ref} a été remplacée par {successor} — reliez cette tâche à la plus récente",
+    not_ready_premise_rejected: "{ref} a été rejetée, cette tâche est donc à repenser",
+    not_ready_premise_unsettled: "{ref} n'est pas tranchée — attendez la décision ou retirez le lien",
+    not_ready_not_started: "elle ne commence que le {start} — changez la date de début si ce n'est pas la bonne",
     store_busy: "Le magasin est en cours de restauration ou de mise à jour. Réessayez dans un instant.",
     not_found_task: "Tâche {ref} introuvable.",
     not_found_decision: "Décision {ref} introuvable.",

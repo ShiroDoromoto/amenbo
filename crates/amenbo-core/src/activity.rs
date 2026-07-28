@@ -277,7 +277,7 @@ fn system_rows(ledger: &Ledger, f: &Filter, tasks: Option<&TaskIndex>, need: Opt
         .newest_first()
         .take_while(|l| stop_below.map(|cur_id| l.id > cur_id).unwrap_or(true))
         .filter(|l| f.task_id.is_none() || (l.task == f.task_id))
-        .filter(|l| f.since.map(|d| l.at.0.date_naive() >= d).unwrap_or(true))
+        .filter(|l| f.since.map(|d| l.at.local_date() >= d).unwrap_or(true))
         .filter(|l| after_ok(f.after, Seq::Activity, l.at, l.id))
         .filter(|l| f.author_kind.map(|a| l.actor == Some(a)).unwrap_or(true))
         .filter(|l| line_project_ok(l, f, tasks))
@@ -376,9 +376,11 @@ fn task_comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> Resu
     let pred = Pred::all(
         [
             f.task_id.map(|t| Pred::eq(C.task_id, t)),
-            // `created_at` is fixed-width `%Y-%m-%dT%H:%M:%SZ`, so a lexicographic `>=` against the bare
-            // day is the day boundary.
-            f.since.map(|d| Pred::cmp(C.created_at, ">=", d.format("%Y-%m-%d").to_string())),
+            // `created_at` is fixed-width `%Y-%m-%dT%H:%M:%SZ`, so a lexicographic `>=` against the
+            // instant the reader's day begins is the day boundary.
+            f.since.map(|d| {
+                Pred::cmp(C.created_at, ">=", crate::time::local_day_start_utc(d).to_rfc3339_z())
+            }),
             after_pred(f.after, Seq::Activity, C.created_at, C.id),
             f.author_kind.map(|a| Pred::eq(C.author_kind, a.as_str())),
             f.project_id.map(|p| Pred::eq(T.project_id, p)),
@@ -460,7 +462,9 @@ fn decision_comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> 
     let pred = Pred::all(
         [
             // The day boundary, as a lexicographic cut on the fixed-width instant (as on the task side).
-            f.since.map(|d| Pred::cmp(C.created_at, ">=", d.format("%Y-%m-%d").to_string())),
+            f.since.map(|d| {
+                Pred::cmp(C.created_at, ">=", crate::time::local_day_start_utc(d).to_rfc3339_z())
+            }),
             after_pred(f.after, Seq::DecisionComment, C.created_at, C.id),
             f.author_kind.map(|a| Pred::eq(C.author_kind, a.as_str())),
             f.project_id.map(|p| Pred::eq(D.project_id, p)),

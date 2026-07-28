@@ -5830,8 +5830,8 @@ mod tests {
     /// Pins that one wing of the reservation guard — **a reservation is refused while its premises
     /// are unmet** — holds on the GUI path too. `task_status` **passes core's error straight
     /// through**, and the front end's mutator puts the exception in a toast (`run` in `store.tsx`),
-    /// so as long as `code` stays `not_ready` and `message` / `message_en` state **the reason and
-    /// the way out**, a drop on the kanban board becomes a toast that says why. Let that slip and,
+    /// so as long as `code` stays `not_ready` and `message_en` states **the reason and the way
+    /// out**, a drop on the kanban board becomes a toast that says why. Let that slip and,
     /// from the GUI, it turns into "I dragged it and it silently snapped back". A card's column is
     /// drawn from the source of truth (`status`), so a refused reservation never moved the column in
     /// the first place — no optimistic-update rollback is needed. Also pins that the status does not
@@ -7659,6 +7659,6 @@ mod tests {
         assert_eq!(silent.code, "plugin_catalog_consent_required", "silence does not pin a key");
         let stale = agreed_pin(&probe_of(Some(fp), None), Some("0000000000000000")).unwrap_err();
         assert_eq!(stale.code, "plugin_catalog_key_changed", "a key that moved under the screen");
-        assert!(stale.message.contains(fp), "the refusal names what is served now: {}", stale.message);
+        assert!(stale.message_en.contains(fp), "the refusal names what is served now: {}", stale.message_en);
     }
 }

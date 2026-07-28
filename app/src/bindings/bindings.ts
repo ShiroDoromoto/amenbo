@@ -440,7 +440,7 @@ report: MigrationDoneDto | null,
  * Why the run failed (`failed`). The same structured error every store open now refuses with, so the
  * screen localises it exactly like any other (`errLabel`).
  */
-error: { code: string; message: string; message_en: string; fields: Record<string, unknown> | null } | null, };
+error: { code: string; message_en: string; fields: Record<string, unknown> | null } | null, };
 
 /**
  * Where one task sits (project only — classification lives on the dimension axes). The real data

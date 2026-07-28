@@ -51,7 +51,7 @@ pub struct MigrationStatusDto {
     pub report: Option<MigrationDoneDto>,
     /// Why the run failed (`failed`). The same structured error every store open now refuses with, so the
     /// screen localises it exactly like any other (`errLabel`).
-    #[ts(type = "{ code: string; message: string; message_en: string; fields: Record<string, unknown> | null } | null")]
+    #[ts(type = "{ code: string; message_en: string; fields: Record<string, unknown> | null } | null")]
     pub error: Option<CmdError>,
 }
 

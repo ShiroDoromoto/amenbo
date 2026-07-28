@@ -96,11 +96,10 @@ function mockMutate(fn: (snap: Snapshot) => Snapshot): void {
  */
 function mockErr(
   code: string,
-  ja: string,
   en: string,
   structured?: { fields?: Record<string, unknown>; parts?: CmdErrorPart[] },
 ): CmdError {
-  return { code, message: ja, message_en: en, ...structured };
+  return { code, message_en: en, ...structured };
 }
 
 /**
@@ -224,7 +223,6 @@ export async function setStatus(id: number, status: Status): Promise<void> {
     if (t.status !== "todo") {
       throw mockErr(
         "already_reserved",
-        `タスク ${t.ref} を予約できません: 現在 '${t.status}' です（予約は todo → in_progress のみ）`,
         `cannot reserve task ${t.ref}: it is '${t.status}', not 'todo' (reserve is todo → in_progress)`,
         { fields: { ref: t.ref } },
       );
@@ -237,7 +235,6 @@ export async function setStatus(id: number, status: Status): Promise<void> {
       const parts = notReadyParts(t);
       throw mockErr(
         "not_ready",
-        `タスク ${t.ref} を予約できません: 前提（先行タスク／根拠の決定）が未達です`,
         `cannot reserve task ${t.ref}: its premises (blockers / grounding decisions) are not met`,
         { fields: { ref: t.ref }, parts },
       );
@@ -270,7 +267,6 @@ export async function rejectTask(id: number, reason: string): Promise<void> {
   if (!text) {
     throw mockErr(
       "invalid_value",
-      "却下の理由は必須です（なぜやらないと決めたのかを書く）",
       "a rejection needs its reason — say why the task will not be done",
     );
   }

@@ -1,0 +1,147 @@
+# The end of the road, and there are two of them. Carried out and decided against both close a task,
+# and only one of them means the work happened — so a build that files them as one event tells every
+# later reader that something was done which never was. Neither ending is a wall, either: reopening
+# is how a task that was closed too early comes back, and what a reader has instead of the work a
+# rejected task never got is the reason left on its timeline.
+id: finish-a-task
+title: A task ends either carried out or decided against, the two read apart, and a closed task can be reopened
+description: >
+  Finish a task and read the ending back three ways — the status, the completed flag the listings
+  filter on, and its disappearance from where fresh work is taken. Reopen it and watch all three come
+  back. Then end the other task the other way, with the reason the command insists on, and read that
+  the store closed it without claiming it was carried out.
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — carried out
+    as: done_one
+
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: done_one
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: done_one
+      field: status
+      equals: done
+
+  # `completed` is the flag the listings filter on, and `done` has to move both.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: done_one
+      field: completed
+      equals: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "done:true"
+      target: done_one
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo"
+      target: done_one
+      present: false
+
+  # Closed too early: reopening puts it back where fresh work is taken, with the flag cleared behind
+  # it. A reopen that left `completed` standing would leave the task invisible to the listings.
+  - type: action
+    domain: task
+    op: reopen
+    with:
+      target: done_one
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: done_one
+      field: status
+      equals: todo
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: done_one
+      field: completed
+      equals: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: done_one
+      present: true
+
+  # The other way a task ends: not carried out, decided against.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — decided against
+    as: dropped
+
+  - type: action
+    domain: task
+    op: reject
+    with:
+      target: dropped
+      reason: SCENARIO — decided against, and here is why
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dropped
+      field: status
+      equals: rejected
+
+  # Closed, but not carried out — the whole point of splitting the two terminals.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: dropped
+      field: completed
+      equals: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "done:true"
+      target: dropped
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo"
+      target: dropped
+      present: false
+
+  # The reason is required by the command because it is what a later reader has instead of the work:
+  # it lands on the timeline, where the next session is already looking.
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: dropped
+      text: SCENARIO — decided against, and here is why

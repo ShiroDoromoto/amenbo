@@ -1,7 +1,7 @@
 # A public commit carries no store-local reference, so the chain from history back to a task is one
 # amenbo keeps at its own end: the SHA is recorded on the task, and the task is found by the SHA.
 # Both directions are walked here, since a recorded SHA nothing can look up is a chain with one end.
-id: task-commit-add
+id: anchor-a-task-to-history
 title: A task keeps the commit SHAs that carried it out, and is found by any one of them
 description: >
   Record two commit SHAs on a task, look the task up by one of them, then forget that one and read

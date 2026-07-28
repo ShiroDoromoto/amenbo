@@ -1,4 +1,4 @@
-id: task-attach
+id: attach-evidence
 title: A file and a link hang on a task, a decision and a comment, and the bytes come back out unchanged
 description: >
   The one place amenbo carries bytes. Ingesting a file resolves a path, writes a blob under the store

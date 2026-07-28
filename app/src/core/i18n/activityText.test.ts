@@ -1,14 +1,12 @@
-// The wording of a timeline line, a relative time and a due chip. The backend sends the kind and
-// the values and no prose at all, so everything a reader sees on these three surfaces is written
-// here — which makes this the only place the wording can be pinned, in both languages.
+// The wording of a timeline line. The backend sends the kind and the values and no prose at all, so
+// everything a reader sees on this surface is written here — which makes this the only place the
+// wording can be pinned, in both languages. (A relative time and a due chip come off the same bare
+// values, but no dictionary words them: they are `Intl`'s, and format.test.ts holds them.)
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../snapshot", () => ({ getSnapshot: () => ({ language: "ja", dateLocale: null }) }));
 
-import { agoLabel, dueLabel, eventText, targetTitle } from "./index";
-
-const NOW = new Date("2026-06-21T12:00:00Z").getTime();
-const ago = (secs: number) => new Date(NOW - secs * 1000).toISOString();
+import { eventText, targetTitle } from "./index";
 
 describe("a system event as a line", () => {
   it("names the status a task moved to, not merely that it moved", () => {
@@ -51,46 +49,5 @@ describe("a system event as a line", () => {
     expect(targetTitle("", "en")).toBe("(deleted)");
     expect(targetTitle("生きているタスク", "ja")).toBe("生きているタスク");
     expect(eventText({ kind: "task.deleted" }, "", "en")).toBe("Deleted “(deleted)”");
-  });
-});
-
-describe("how long ago", () => {
-  it("words the gap in the largest unit that fits", () => {
-    expect(agoLabel(ago(5), "en", NOW)).toBe("just now");
-    expect(agoLabel(ago(60), "en", NOW)).toBe("1 minute ago");
-    expect(agoLabel(ago(120), "en", NOW)).toBe("2 minutes ago");
-    expect(agoLabel(ago(3600), "en", NOW)).toBe("1 hour ago");
-    expect(agoLabel(ago(86_400 * 3), "en", NOW)).toBe("3 days ago");
-    expect(agoLabel(ago(5), "ja", NOW)).toBe("たった今");
-    expect(agoLabel(ago(120), "ja", NOW)).toBe("2分前");
-    expect(agoLabel(ago(86_400 * 3), "ja", NOW)).toBe("3日前");
-  });
-
-  // A row written a moment ago can carry a timestamp a hair ahead of this clock. "in -0 minutes"
-  // would be the tell; the gap is floored at zero instead.
-  it("does not run backwards on a timestamp from just ahead", () => {
-    expect(agoLabel(new Date(NOW + 2000).toISOString(), "en", NOW)).toBe("just now");
-  });
-});
-
-describe("the due chip", () => {
-  // Local noon, so the day is the same one whatever timezone the test runs in.
-  const today = new Date(2026, 5, 21, 12, 0, 0);
-
-  it("counts whole calendar days, so tomorrow is the next date", () => {
-    expect(dueLabel("2026-06-21", "en", today)).toBe("Today");
-    expect(dueLabel("2026-06-22", "en", today)).toBe("Tomorrow");
-    expect(dueLabel("2026-06-20", "en", today)).toBe("Yesterday");
-    expect(dueLabel("2026-06-23", "en", today)).toBe("In 2 days");
-    expect(dueLabel("2026-06-18", "en", today)).toBe("3 days ago");
-    expect(dueLabel("2026-06-21", "ja", today)).toBe("今日");
-    expect(dueLabel("2026-06-23", "ja", today)).toBe("2日後");
-    expect(dueLabel("2026-06-18", "ja", today)).toBe("3日前");
-  });
-
-  // The chip colours by the day alone (`dueKind`); the wording has to cut the same way, or a date
-  // carrying a time would read "tomorrow" under a chip coloured for today.
-  it("judges by the day even when a time is attached", () => {
-    expect(dueLabel("2026-06-21T23:00:00Z", "en", today)).toBe("Today");
   });
 });

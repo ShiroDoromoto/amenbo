@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { addComment, deleteProject, deleteTask, rejectTask, setStatus } from "./mutations";
-import { agoLabel, t } from "./i18n";
+import { agoLabel } from "./i18n";
 import { applySnapshot, getSnapshot, type Snapshot } from "./snapshot";
 import type { TaskCard } from "../mock/types";
 
@@ -160,7 +160,9 @@ describe("addComment (browser-loop mock)", () => {
     expect(s.tasks[0].comments).toBe(1);
     expect(s.activity[0].kind).toBe("comment");
     expect(s.activity[0].text).toBe("やります");
-    expect(agoLabel(s.activity[0].at)).toBe(t("ago.justNow")); // Never a hard-coded string — it would leak through an English UI
+    // Stamped with now, checked against now — never against a literal, which would pin one language's
+    // wording into a test about the ledger.
+    expect(agoLabel(s.activity[0].at)).toBe(agoLabel(new Date().toISOString()));
   });
 
   it("does not push onto a nonexistent task (core rejects it on the foreign key)", async () => {

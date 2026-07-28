@@ -3,7 +3,7 @@ import { type Decision, type DecisionStatus } from "../core/snapshot";
 import { addDecision } from "../core/mutations";
 import { useDecisionPage, useDecisionSearchIds } from "../core/reads";
 import { Pager, usePager } from "../components/Pager";
-import { dateLocale, errText, t, tf } from "../core/i18n";
+import { errText, formatDay, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
 import { parseRefQuery } from "../core/filters";
 
@@ -153,11 +153,7 @@ function statusColor(s: DecisionStatus): string {
 // Format the decision date (decidedAt, else createdAt) as a calendar date, in the locale dates are
 // written in (`dateLocale`). An invalid value formats as empty.
 function decidedLabel(d: Decision): string {
-  const at = d.decidedAt ?? d.createdAt;
-  const dt = new Date(at);
-  if (Number.isNaN(dt.getTime())) return "";
-  const locale = dateLocale();
-  return new Intl.DateTimeFormat(locale, { year: "numeric", month: "numeric", day: "numeric" }).format(dt);
+  return formatDay(new Date(d.decidedAt ?? d.createdAt));
 }
 
 // The list is a compact overview: a row carries the ref, the title, the status and the decision date,

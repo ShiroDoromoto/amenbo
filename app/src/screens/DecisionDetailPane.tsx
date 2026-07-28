@@ -14,7 +14,7 @@ import {
 import { confirmDialog } from "../core/dialog";
 import { isClosed } from "../core/status";
 import { isEnterSubmit } from "../core/keys";
-import { errText, statusLabel, t, tf } from "../core/i18n";
+import { errText, formatNumber, statusLabel, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
 
 // Colour of the status badge — keep it matching DecisionsScreen's statusColor. The badge says the status
@@ -295,7 +295,7 @@ export function DecisionDetailPane({
           <div className="detail__sep" />
 
           <div>
-            <div className="detail__section-h">{t("dec.comments")} · 💬 {comments.length}</div>
+            <div className="detail__section-h">{t("dec.comments")} · 💬 {formatNumber(comments.length)}</div>
             {comments.length === 0 ? (
               <div className="faint" style={{ marginTop: 6, fontSize: "var(--fs-sm)" }}>{t("detail.noComments")}</div>
             ) : (

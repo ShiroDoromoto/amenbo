@@ -19,17 +19,22 @@ import {
 import { confirmDialog } from "../core/dialog";
 import { previewKind } from "../core/attachmentView";
 import { Markdown } from "./Markdown";
-import { t, tf } from "../core/i18n";
+import { formatNumber, t, tf } from "../core/i18n";
 
+// A size a reader can take in: the largest unit the byte count fills, to one decimal while that
+// decimal still says something. The digits go through `Intl` because the separator is the locale's —
+// half a megabyte is `0.5 MB` in English and `0,5 MB` in German.
 function humanSize(n: bigint | number | null): string {
   if (n === null) return "";
   const bytes = Number(n);
-  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024) return `${formatNumber(bytes)} B`;
   const units = ["KB", "MB", "GB", "TB"];
   let v = bytes / 1024;
   let i = 0;
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+  const digits = v >= 10 ? 0 : 1;
+  const size = formatNumber(v, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return `${size} ${units[i]}`;
 }
 
 /** The preview itself, dispatched on mime. A missing blob, a url-mode attachment and an unsupported type each get their own display. */

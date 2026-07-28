@@ -51,14 +51,14 @@ describe("DueChip", () => {
     expect(chip()?.className).toContain("due--today");
   });
 
-  // The wording follows the UI language, which with nothing set is English.
+  // The wording is `Intl`'s, in the locale dates are written in — English here, nothing being set.
   it("words the date rather than printing it", () => {
     render("2026-06-22");
-    expect(chip()?.textContent).toContain("Tomorrow");
+    expect(chip()?.textContent).toContain("tomorrow");
     render("2026-06-21");
-    expect(chip()?.textContent).toContain("Today");
+    expect(chip()?.textContent).toContain("today");
     render("2026-06-25");
-    expect(chip()?.textContent).toContain("In 4 days");
+    expect(chip()?.textContent).toContain("in 4 days");
   });
 
   it("draws nothing without a due date", () => {

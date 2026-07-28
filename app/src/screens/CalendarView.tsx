@@ -1,10 +1,9 @@
 import { useState } from "react";
 import type { TaskCard } from "../mock/types";
 import {
-  monthMatrix, monthLabel, weekdayLabels, groupByDue, todayStr,
-  shiftMonth, dueKind, parseYmd,
+  monthMatrix, groupByDue, todayStr, shiftMonth, dueKind, parseYmd,
 } from "../core/calendar";
-import { currentLang, t, tf } from "../core/i18n";
+import { formatNumber, monthLabel, t, tf, weekdayLabels } from "../core/i18n";
 import { BlockedChips } from "../components/atoms";
 import { isClosed } from "../core/status";
 
@@ -29,12 +28,11 @@ export function CalendarView({ tasks, selectedTaskId, onSelectTask }: {
   const [ty, tm] = parseYmd(today); // tm is 1..12
   // The month on screen (month is 0..11), starting on today's.
   const [{ year, month }, setYM] = useState({ year: ty, month: tm - 1 });
-  const lang = currentLang();
 
   const weeks = monthMatrix(year, month);
   const byDue = groupByDue(tasks);
   const noDue = tasks.filter((tk) => !tk.due);
-  const weekdays = weekdayLabels(lang);
+  const weekdays = weekdayLabels();
 
   const go = (delta: number) => setYM((s) => shiftMonth(s.year, s.month, delta));
   const goToday = () => setYM({ year: ty, month: tm - 1 });
@@ -43,7 +41,7 @@ export function CalendarView({ tasks, selectedTaskId, onSelectTask }: {
     <div className="cal">
       <div className="cal__head">
         <button className="cal__nav" onClick={() => go(-1)} title={t("cal.prevMonth")}>◀</button>
-        <span className="cal__month">{monthLabel(year, month, lang)}</span>
+        <span className="cal__month">{monthLabel(year, month)}</span>
         <button className="cal__nav" onClick={() => go(1)} title={t("cal.nextMonth")}>▶</button>
         <button className="cal__todaybtn" onClick={goToday}>{t("cal.today")}</button>
       </div>
@@ -94,7 +92,7 @@ export function CalendarView({ tasks, selectedTaskId, onSelectTask }: {
 
       {noDue.length > 0 && (
         <div className="cal__nodue">
-          <span className="cal__nodue-label">{t("cal.noDue")}（{noDue.length}）</span>
+          <span className="cal__nodue-label">{t("cal.noDue")}（{formatNumber(noDue.length)}）</span>
           {noDue.slice(0, NODUE_CAP).map((tk) => (
             <button
               key={tk.id}

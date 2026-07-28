@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { Actor, Priority, Status, TaskCard } from "../mock/types";
 import type { PremiseChangeDto } from "../bindings/bindings";
 import { dueKind, todayStr } from "../core/calendar";
-import { dateLocale, dueLabel, priorityLabel, statusLabel, t, tf } from "../core/i18n";
+import { dueLabel, formatDayTime, formatNumber, priorityLabel, statusLabel, t, tf } from "../core/i18n";
 import { isEnterSubmit } from "../core/keys";
 import { getSnapshot } from "../core/snapshot";
 import { pushNotice } from "../core/notice";
@@ -244,7 +244,7 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
           title={tf("block.deps", { names })}
           aria-label={tf("block.deps", { names })}
         >
-          {compact ? "⛔" : `⛔ ${deps.length}`}
+          {compact ? "⛔" : `⛔ ${formatNumber(deps.length)}`}
         </span>
       )}
       {decisions.length > 0 && (
@@ -254,7 +254,7 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
           title={tf("block.decisions", { refs })}
           aria-label={tf("block.decisions", { refs })}
         >
-          {compact ? "⚠" : `⚠ ${decisions.length}`}
+          {compact ? "⚠" : `⚠ ${formatNumber(decisions.length)}`}
         </span>
       )}
       {task.notStartedUntil && (
@@ -312,7 +312,7 @@ export function PremiseChangedChip({ task, compact = false }: { task: TaskCard; 
   const cls = compact ? "chip--blockglyph" : "chip chip--premise";
   return (
     <span className={cls} role="img" title={tf("premise.changed", { detail })} aria-label={tf("premise.changed", { detail })}>
-      {compact ? "🔔" : `🔔 ${count}`}
+      {compact ? "🔔" : `🔔 ${formatNumber(count)}`}
     </span>
   );
 }
@@ -385,12 +385,8 @@ export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
  */
 export function TriggeredAtChip({ at }: { at?: string | null }) {
   if (!at) return null;
-  const d = new Date(at);
-  if (Number.isNaN(d.getTime())) return null;
-  const locale = dateLocale();
-  const label = new Intl.DateTimeFormat(locale, {
-    month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
-  }).format(d);
+  const label = formatDayTime(new Date(at));
+  if (!label) return null;
   return <span className="chip" title={at}>⏱ {label}</span>;
 }
 

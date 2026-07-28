@@ -3,8 +3,8 @@
 # is per-tier and not the precedence a run applies, so each tier is asked for its own answer.
 #
 # Like every line that installs a plugin, this one goes to the catalog over the network on purpose
-# (see `plugin-list.yaml`): the settings are a face of a plugin that is really there.
-id: plugin-config-set
+# (see `put-a-plugin-on-the-machine.yaml`): the settings are a face of a plugin that is really there.
+id: tell-a-plugin-what-it-needs-to-know
 title: A plugin's setting is filled in at the machine tier, overridden for the project, taken back, and never invented — and a secret one reaches the run it is for and nowhere else, until a removal takes it
 description: >
   Install the official `worktree` plugin, fill in the setting its manifest declares, and read it back.

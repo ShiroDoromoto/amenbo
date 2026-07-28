@@ -568,7 +568,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .onboard__steptitle { font-weight: var(--fw-bold); margin-bottom: 2px; }
 .onboard__cmd, .onboard__step code { font-family: var(--font-mono); font-size: var(--fs-sm); background: var(--c-surface-sunken); border-radius: var(--r-sm); padding: 1px var(--s-2); }
 .onboard__cmd { display: inline-block; margin-top: var(--s-2); color: var(--c-accent-text); }
-/* The empty state's primary actions (create / join). Clicking one copies its CLI command. */
+/* The empty state's primary actions (create / open). Each moves on inside the app. */
 .onboard__actions { display: flex; gap: var(--s-3); justify-content: center; margin-top: var(--s-5); flex-wrap: wrap; }
 .onboard__action {
   display: flex; align-items: flex-start; gap: var(--s-3); text-align: left;
@@ -585,8 +585,15 @@ button.feed__target:hover { color: var(--c-accent); }
    lifts it a little above the rest. */
 .onboard__action--primary { border-color: var(--c-accent); }
 .onboard__go { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-accent-text); margin-top: var(--s-2); }
-/* The tag marking a CLI card (open / join) as a terminal operation. */
-.onboard__cli-tag { font-size: var(--fs-2xs, 10px); font-weight: var(--fw-normal); color: var(--c-text-muted); background: var(--c-surface-sunken); border-radius: var(--r-sm); padding: 0 var(--s-2); }
+/* The open card once it is asking which project: the same card, now holding controls of its own, so it
+   stops behaving like one big button (no pointer, no hover) and takes the width its select needs. */
+.onboard__action--open { cursor: default; flex-basis: 320px; max-width: 100%; }
+.onboard__action--open:hover { border-color: var(--c-border-strong); background: var(--c-surface); }
+.onboard__action--open .onboard__action-body { flex: 1; gap: var(--s-2); }
+.onboard__field { display: flex; flex-direction: column; gap: var(--s-1); margin-top: var(--s-2); }
+.onboard__select { padding: var(--s-2); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); }
+.onboard__actionrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.onboard__error { color: var(--c-danger); font-size: var(--fs-xs); }
 /* The heading of the reference section. */
 .onboard__stepshead { margin-bottom: var(--s-2); }
 .onboard__stepstitle { margin: 0 0 var(--s-1); }

@@ -440,6 +440,7 @@ export const id: Translation = {
     "orphanBinding.forgetting": "Melupakan…",
     "orphanBinding.done": "Tautan folder yang tersisa sudah dilupakan.",
     "common.equiv": "Setara dengan:", "common.otherSession": "sesi lain",
+    "err.reasonSep": "; ",
     "common.loadMore": "Muat lagi ({n} lagi)",
     "id.copyTip": "Klik untuk menyalin ID tugas", "id.copied": "Tersalin",
     "facet.human": "Manusia", "facet.ai": "AI", "facet.named": "{name} ({facet})",
@@ -505,6 +506,12 @@ export const id: Translation = {
 
     already_reserved:
       "{ref} tidak berstatus “Akan dikerjakan”, jadi tidak bisa diambil — mungkin sesi lain sudah memegangnya.",
+    not_ready: "{ref} belum bisa dipesan: {reasons}",
+    not_ready_open_blocker: "{ref} belum selesai",
+    not_ready_premise_superseded: "{ref} digantikan oleh {successor} — tautkan tugas ini ke yang lebih baru",
+    not_ready_premise_rejected: "{ref} ditolak, jadi tugas ini perlu dipikirkan ulang",
+    not_ready_premise_unsettled: "{ref} belum selesai diputuskan — tunggu putusannya atau lepaskan tautannya",
+    not_ready_not_started: "tugas ini baru mulai {start} — ubah tanggal mulai kalau itu keliru",
     store_busy: "Penyimpanan sedang dipulihkan atau diperbarui. Coba lagi sebentar lagi.",
     not_found_task: "Tugas {ref} tidak ditemukan.",
     not_found_decision: "Keputusan {ref} tidak ditemukan.",

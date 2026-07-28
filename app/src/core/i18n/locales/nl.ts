@@ -437,6 +437,7 @@ export const nl: Translation = {
     "orphanBinding.forgetting": "Bezig met vergeten…",
     "orphanBinding.done": "De overgebleven mapkoppelingen zijn vergeten.",
     "common.equiv": "Gelijk aan:", "common.otherSession": "een andere sessie",
+    "err.reasonSep": "; ",
     "common.loadMore": "Meer laden (nog {n})",
     "id.copyTip": "Klik om de taak-ID te kopiëren", "id.copied": "Gekopieerd",
     "facet.human": "Mens", "facet.ai": "AI", "facet.named": "{name} ({facet})",
@@ -502,6 +503,12 @@ export const nl: Translation = {
 
     already_reserved:
       "{ref} staat niet op “Te doen” en kan dus niet worden opgepakt — een andere sessie heeft hem misschien al.",
+    not_ready: "{ref} kan nog niet gereserveerd worden: {reasons}",
+    not_ready_open_blocker: "{ref} is niet klaar",
+    not_ready_premise_superseded: "{ref} is vervangen door {successor} — koppel deze taak aan de nieuwere",
+    not_ready_premise_rejected: "{ref} is afgewezen, dus deze taak moet opnieuw doordacht worden",
+    not_ready_premise_unsettled: "{ref} is nog niet beslecht — wacht de uitspraak af of ontkoppel hem",
+    not_ready_not_started: "hij begint pas op {start} — pas de startdatum aan als die niet klopt",
     store_busy: "De opslag wordt hersteld of bijgewerkt. Probeer het zo meteen opnieuw.",
     not_found_task: "Taak {ref} is niet gevonden.",
     not_found_decision: "Besluit {ref} is niet gevonden.",

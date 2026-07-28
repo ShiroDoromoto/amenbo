@@ -466,6 +466,7 @@ export const it: Translation = {
     "orphanBinding.forgetting": "In corso…",
     "orphanBinding.done": "I collegamenti di cartella rimasti sono stati dimenticati.",
     "common.equiv": "Equivale a:", "common.otherSession": "un'altra sessione",
+    "err.reasonSep": "; ",
     "common.loadMore": "Carica altri ({n} in più)",
     "id.copyTip": "Fai clic per copiare l'ID dell'attività", "id.copied": "Copiato",
     "facet.human": "Persona", "facet.ai": "IA", "facet.named": "{name} ({facet})",
@@ -531,6 +532,12 @@ export const it: Translation = {
 
     already_reserved:
       "{ref} non è in “Da fare”, quindi non si può prendere in carico — forse un'altra sessione la tiene già.",
+    not_ready: "{ref} non si può ancora prenotare: {reasons}",
+    not_ready_open_blocker: "{ref} non è finita",
+    not_ready_premise_superseded: "{ref} è stata sostituita da {successor}: collega questa attività alla più recente",
+    not_ready_premise_rejected: "{ref} è stata respinta, quindi questa attività va ripensata",
+    not_ready_premise_unsettled: "{ref} non è risolta: aspetta la decisione o togli il collegamento",
+    not_ready_not_started: "non comincia prima del {start}: cambia la data di inizio se non è quella giusta",
     store_busy: "L'archivio è in fase di ripristino o aggiornamento. Riprova tra un momento.",
     not_found_task: "Attività {ref} non trovata.",
     not_found_decision: "Decisione {ref} non trovata.",

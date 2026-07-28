@@ -466,6 +466,7 @@ export const es: Translation = {
     "orphanBinding.forgetting": "Olvidando…",
     "orphanBinding.done": "Se olvidaron los vínculos de carpeta sobrantes.",
     "common.equiv": "Equivale a:", "common.otherSession": "otra sesión",
+    "err.reasonSep": "; ",
     "common.loadMore": "Cargar más ({n} más)",
     "id.copyTip": "Pulsa para copiar el ID de la tarea", "id.copied": "Copiado",
     "facet.human": "Persona", "facet.ai": "IA", "facet.named": "{name} ({facet})",
@@ -531,6 +532,12 @@ export const es: Translation = {
 
     already_reserved:
       "{ref} no está en “Pendiente”, así que no se puede reservar: puede que otra sesión ya la tenga.",
+    not_ready: "{ref} todavía no se puede reservar: {reasons}",
+    not_ready_open_blocker: "{ref} no está terminada",
+    not_ready_premise_superseded: "{ref} fue reemplazada por {successor}: enlaza esta tarea con la más reciente",
+    not_ready_premise_rejected: "{ref} fue rechazada, así que hay que replantear esta tarea",
+    not_ready_premise_unsettled: "{ref} está sin resolver: espera la decisión o quita el enlace",
+    not_ready_not_started: "no empieza hasta el {start}: cambia la fecha de inicio si no es correcta",
     store_busy: "Se está restaurando o actualizando el almacén. Inténtalo de nuevo en un momento.",
     not_found_task: "No se encontró la tarea {ref}.",
     not_found_decision: "No se encontró la decisión {ref}.",

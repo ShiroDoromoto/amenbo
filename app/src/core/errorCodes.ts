@@ -36,6 +36,14 @@ export const CORE_FAMILY_ERROR_CODES = [
  * (`i18n/errors.test.ts` holds them to it) — splitting a code off its family and then not writing the
  * sentence would leave the reader exactly where they started. */
 export const CORE_SENTENCE_ERROR_CODES = [
+  // The reasons under `not_ready`. They arrive as the refusal's `parts` rather than as its code — a
+  // reservation can be turned away for several reasons at once, and how many is known only at the
+  // moment of refusing, so each reason is written from its own template and the front end joins them.
+  "not_ready_open_blocker",
+  "not_ready_premise_superseded",
+  "not_ready_premise_rejected",
+  "not_ready_premise_unsettled",
+  "not_ready_not_started",
   "not_found_task",
   "not_found_decision",
   "not_found_project",

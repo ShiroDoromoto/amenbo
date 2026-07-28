@@ -87,11 +87,19 @@ impl Fields {
 /// what lets the GUI compose the sentence in the reader's language instead of showing the English one
 /// written here (`AMB-D-413`). A message that names nothing keeps its variant's coarse code and falls
 /// back to the sentence, which is the answer for every surface the GUI does not show.
+///
+/// Some refusals are not one sentence but one sentence **plus a list of reasons**, and how many
+/// reasons there are is only known at the moment of refusing — a reservation turned away because two
+/// blockers stand and a premise is unsettled says three things at once. No single template can be
+/// written for that, so those reasons ride as [`Msg::part`]s: each names its own sentence and carries
+/// its own values, and the side holding the dictionary writes each one and joins them with the
+/// punctuation its language joins with.
 #[derive(Debug, Clone)]
 pub struct Msg {
     en: String,
     code: Option<ErrorCode>,
     fields: Fields,
+    parts: Vec<Msg>,
 }
 
 impl Msg {
@@ -100,6 +108,7 @@ impl Msg {
             en: en.into(),
             code: None,
             fields: Fields::default(),
+            parts: Vec::new(),
         }
     }
 
@@ -116,6 +125,14 @@ impl Msg {
         self
     }
 
+    /// Add one of the sentences this one is composed of, in the order it is to be read. A part names
+    /// its own code and carries its own values, so the dictionary writes it like any other sentence —
+    /// what it cannot be is a string composed here, which would be English inside the reader's line.
+    pub fn part(mut self, part: Msg) -> Self {
+        self.parts.push(part);
+        self
+    }
+
     /// The sentence.
     pub fn en(&self) -> &str {
         &self.en
@@ -129,6 +146,12 @@ impl Msg {
     /// The values the sentence is built from.
     pub fn fields(&self) -> &Fields {
         &self.fields
+    }
+
+    /// The sentences this one is composed of, in reading order. Empty for the great majority, which
+    /// are one sentence and nothing else.
+    pub fn parts(&self) -> &[Msg] {
+        &self.parts
     }
 }
 
@@ -258,6 +281,15 @@ pub enum ErrorCode {
     NotFoundDimensionValue,
     NotFoundBlob,
 
+    // The reasons a reservation is turned away. `not_ready` is one refusal, but the reasons under it
+    // are a list whose length is only known at the moment of refusing, so each reason names itself
+    // and rides as a part of the message (see `Msg::part`).
+    NotReadyOpenBlocker,
+    NotReadyPremiseSuperseded,
+    NotReadyPremiseRejected,
+    NotReadyPremiseUnsettled,
+    NotReadyNotStarted,
+
     // `invalid_value`, one refusal at a time.
     InvalidCommitSha,
     InvalidAttachmentTooLarge,
@@ -298,6 +330,11 @@ impl ErrorCode {
             ErrorCode::NotFoundDimension => "not_found_dimension",
             ErrorCode::NotFoundDimensionValue => "not_found_dimension_value",
             ErrorCode::NotFoundBlob => "not_found_blob",
+            ErrorCode::NotReadyOpenBlocker => "not_ready_open_blocker",
+            ErrorCode::NotReadyPremiseSuperseded => "not_ready_premise_superseded",
+            ErrorCode::NotReadyPremiseRejected => "not_ready_premise_rejected",
+            ErrorCode::NotReadyPremiseUnsettled => "not_ready_premise_unsettled",
+            ErrorCode::NotReadyNotStarted => "not_ready_not_started",
             ErrorCode::InvalidCommitSha => "invalid_commit_sha",
             ErrorCode::InvalidAttachmentTooLarge => "invalid_attachment_too_large",
             ErrorCode::InvalidDimensionPeriodOrder => "invalid_dimension_period_order",
@@ -336,6 +373,11 @@ impl ErrorCode {
         ErrorCode::NotFoundDimension,
         ErrorCode::NotFoundDimensionValue,
         ErrorCode::NotFoundBlob,
+        ErrorCode::NotReadyOpenBlocker,
+        ErrorCode::NotReadyPremiseSuperseded,
+        ErrorCode::NotReadyPremiseRejected,
+        ErrorCode::NotReadyPremiseUnsettled,
+        ErrorCode::NotReadyNotStarted,
         ErrorCode::InvalidCommitSha,
         ErrorCode::InvalidAttachmentTooLarge,
         ErrorCode::InvalidDimensionPeriodOrder,
@@ -376,6 +418,13 @@ impl Error {
     /// are already structured, and the Tauri layer reads their parts off the variant itself.
     pub fn fields(&self) -> Option<&Fields> {
         self.msg().map(Msg::fields).filter(|f| !f.is_empty())
+    }
+
+    /// The sentences this error's message is composed of, for the surface that writes each one in the
+    /// reader's language ([`Msg::part`]). Empty for everything that says one thing and is done, which is
+    /// nearly all of it.
+    pub fn parts(&self) -> &[Msg] {
+        self.msg().map(Msg::parts).unwrap_or_default()
     }
 
     /// The bilingual payload, for the variants that carry one.
@@ -439,10 +488,6 @@ impl Error {
         Error::AlreadyReserved(Msg::new(en))
     }
 
-    pub fn not_ready(en: impl Into<String>) -> Self {
-        Error::NotReady(Msg::new(en))
-    }
-
     pub fn out_of_reach(en: impl Into<String>) -> Self {
         Error::OutOfReach(Msg::new(en))
     }
@@ -500,6 +545,11 @@ mod tests {
             "not_found_dimension",
             "not_found_dimension_value",
             "not_found_blob",
+            "not_ready_open_blocker",
+            "not_ready_premise_superseded",
+            "not_ready_premise_rejected",
+            "not_ready_premise_unsettled",
+            "not_ready_not_started",
             "invalid_commit_sha",
             "invalid_attachment_too_large",
             "invalid_dimension_period_order",

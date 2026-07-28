@@ -451,6 +451,7 @@ export const de: Translation = {
     "orphanBinding.forgetting": "Wird vergessen…",
     "orphanBinding.done": "Die übrig gebliebenen Ordnerverknüpfungen wurden vergessen.",
     "common.equiv": "Entspricht:", "common.otherSession": "eine andere Sitzung",
+    "err.reasonSep": "; ",
     "common.loadMore": "Mehr laden ({n} weitere)",
     "id.copyTip": "Klicken, um die Aufgaben-ID zu kopieren", "id.copied": "Kopiert",
     "facet.human": "Mensch", "facet.ai": "KI", "facet.named": "{name} ({facet})",
@@ -516,6 +517,12 @@ export const de: Translation = {
 
     already_reserved:
       "{ref} ist nicht „Offen“ und lässt sich deshalb nicht übernehmen — vielleicht hat eine andere Sitzung sie schon.",
+    not_ready: "{ref} kann noch nicht reserviert werden: {reasons}",
+    not_ready_open_blocker: "{ref} ist nicht erledigt",
+    not_ready_premise_superseded: "{ref} wurde von {successor} abgelöst — verknüpfe diese Aufgabe mit der neueren",
+    not_ready_premise_rejected: "{ref} wurde abgelehnt, diese Aufgabe muss also neu gedacht werden",
+    not_ready_premise_unsettled: "{ref} ist noch nicht entschieden — warte auf die Entscheidung oder löse die Verknüpfung",
+    not_ready_not_started: "sie beginnt erst am {start} — ändere das Startdatum, falls das nicht stimmt",
     store_busy: "Der Speicher wird gerade wiederhergestellt oder aktualisiert. Versuche es gleich noch einmal.",
     not_found_task: "Aufgabe {ref} wurde nicht gefunden.",
     not_found_decision: "Entscheidung {ref} wurde nicht gefunden.",

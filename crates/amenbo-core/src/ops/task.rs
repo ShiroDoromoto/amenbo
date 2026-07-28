@@ -200,23 +200,42 @@ fn subject(tx: &WriteTx<'_>, id: i64) -> String {
         .unwrap_or_else(|| format!("'{id}'"))
 }
 
-/// Build the body of a `not_ready` error: one code, with only the reason varying. For a premise that has been
-/// overruled, the advice keys off **whether a successor exists**, not off status: currency lives in a derived
-/// projection, so only the successor lets us say "relink it" about a decision that is still `accepted` yet no
-/// longer current.
+/// Build the body of a `not_ready` error: one refusal, over a list of reasons whose length is only known
+/// here. For a premise that has been overruled, the advice keys off **whether a successor exists**, not off
+/// status: currency lives in a derived projection, so only the successor lets us say "relink it" about a
+/// decision that is still `accepted` yet no longer current.
+///
+/// Each reason is built twice over, and both are the same act: an English sentence, which is what the CLI
+/// prints and what any surface holding no dictionary falls back to, and a code plus the values behind it, so
+/// the GUI can write that reason in the reader's language (`AMB-D-413`). The reasons ride as parts of the
+/// message rather than being folded into one string here — joining them is punctuation, and punctuation
+/// belongs to the language doing the reading.
 fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
     let mut reasons = Vec::new();
     for b in blockers {
         match b {
             ReserveBlocker::OpenBlocker { label } => {
-                reasons.push(format!("blocker {label} is not done"));
+                reasons.push(
+                    Msg::new(format!("blocker {label} is not done"))
+                        .coded(ErrorCode::NotReadyOpenBlocker)
+                        .with("ref", label),
+                );
             }
             ReserveBlocker::UnsettledPremise { label, superseded_by: Some(succ), .. } => {
-                reasons.push(format!("premise {label} was superseded by {succ} — relink it"));
+                reasons.push(
+                    Msg::new(format!("premise {label} was superseded by {succ} — relink it"))
+                        .coded(ErrorCode::NotReadyPremiseSuperseded)
+                        .with("ref", label)
+                        .with("successor", succ),
+                );
             }
             ReserveBlocker::UnsettledPremise { label, status, superseded_by: None } => match status {
                 DecisionStatus::Rejected => {
-                    reasons.push(format!("premise {label} was rejected — the task needs rethinking"));
+                    reasons.push(
+                        Msg::new(format!("premise {label} was rejected — the task needs rethinking"))
+                            .coded(ErrorCode::NotReadyPremiseRejected)
+                            .with("ref", label),
+                    );
                 }
                 // `proposed` (not settled). "It was superseded" is caught by the arm above (successor
                 // present) — currency is a derived projection and never surfaces in status, so a premise that
@@ -224,20 +243,38 @@ fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
                 // (`reserve_blockers` judges on `unsettled_premise`, which lets an accepted premise
                 // that nothing supersedes through).
                 DecisionStatus::Proposed | DecisionStatus::Accepted => {
-                    reasons.push(format!("premise {label} is not settled — wait for the ruling, or unlink it"));
+                    reasons.push(
+                        Msg::new(format!("premise {label} is not settled — wait for the ruling, or unlink it"))
+                            .coded(ErrorCode::NotReadyPremiseUnsettled)
+                            .with("ref", label),
+                    );
                 }
             },
             // There is no force. Starting early means the declared day is wrong, so the way through is
             // to correct the declaration — which is what the advice names, rather than a flag that would
-            // let the declaration rot into decoration.
+            // let the declaration rot into decoration. The English names the command that corrects it;
+            // the template the GUI writes from names the field on screen instead, because a person in
+            // front of a window has no command line in front of them.
             ReserveBlocker::NotStartedYet { start_on } => {
-                reasons.push(format!(
-                    "it is not due to start until {start_on} — run `task update {subject} --start today` if that is wrong"
-                ));
+                reasons.push(
+                    Msg::new(format!(
+                        "it is not due to start until {start_on} — run `task update {subject} --start today` if that is wrong"
+                    ))
+                    .coded(ErrorCode::NotReadyNotStarted)
+                    .with("start", start_on),
+                );
             }
         }
     }
-    Error::not_ready(format!("cannot reserve task {subject}: {}", reasons.join("; ")))
+    let sentence = format!(
+        "cannot reserve task {subject}: {}",
+        reasons.iter().map(Msg::en).collect::<Vec<_>>().join("; ")
+    );
+    let msg = reasons.into_iter().fold(
+        Msg::new(sentence).coded(ErrorCode::NotReady).with("ref", subject),
+        Msg::part,
+    );
+    Error::NotReady(msg)
 }
 
 /// Set the status. `status` is the single source of truth for completion, and whether a task is done is
@@ -553,6 +590,43 @@ mod tests {
             // Unlink the premise and the task is startable at once — that is the way out.
             crate::ops::decision::unlink(tx, rejected, tid).unwrap();
             assert_eq!(set_status(tx, tid, TaskStatus::InProgress).unwrap().status, TaskStatus::InProgress);
+        });
+    }
+
+    /// Several reasons at once is the shape no template can be written for, so the refusal sends them
+    /// apart: the English stays one line for the CLI, and each reason also travels as a part naming its
+    /// own sentence, so the side holding a dictionary writes each one and joins them itself (`AMB-D-413`).
+    #[test]
+    fn a_refusal_with_several_reasons_sends_each_of_them_named() {
+        with_numbered_task(|tx, pid, tid| {
+            let blocker = mk_task_in(tx, "do me first", Some(pid));
+            crate::ops::dependency::add(tx, tid, blocker, None).unwrap();
+            let proposed = new_decision(tx, pid, "まだ議論中");
+            crate::ops::decision::link(tx, proposed, tid).unwrap();
+
+            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            assert_eq!(err.code(), "not_ready");
+            assert_eq!(
+                err.fields().and_then(|f| f.iter().find(|(k, _)| *k == "ref").map(|(_, v)| v.to_string())),
+                Some("AMB-T-1".to_string()),
+                "the task refused is named on the refusal itself"
+            );
+
+            let codes: Vec<&str> = err.parts().iter().filter_map(|p| p.code()).map(ErrorCode::as_str).collect();
+            assert_eq!(codes, vec!["not_ready_open_blocker", "not_ready_premise_unsettled"]);
+
+            // Each reason carries what its own sentence is built from, so a template can be filled from it.
+            let refs: Vec<String> = err
+                .parts()
+                .iter()
+                .filter_map(|p| p.fields().iter().find(|(k, _)| *k == "ref").map(|(_, v)| v.to_string()))
+                .collect();
+            assert_eq!(refs, vec!["AMB-T-2".to_string(), "AMB-D-1".to_string()]);
+
+            // And the one-line English the CLI prints still says both.
+            let en = err.message_en();
+            assert!(en.contains("blocker AMB-T-2 is not done"), "{en}");
+            assert!(en.contains("premise AMB-D-1 is not settled"), "{en}");
         });
     }
 

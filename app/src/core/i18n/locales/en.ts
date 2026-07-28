@@ -467,6 +467,8 @@ const ui = {
   "orphanBinding.forgetting": "Forgetting…",
   "orphanBinding.done": "Forgot the leftover folder bindings.",
   "common.equiv": "Equivalent:", "common.otherSession": "another session",
+  // What joins the reasons under a refusal that has several (see errLabel's `parts`).
+  "err.reasonSep": "; ",
   "common.loadMore": "Load more ({n} more)",
   "id.copyTip": "Click to copy task ID", "id.copied": "Copied",
   "facet.human": "Human", "facet.ai": "AI", "facet.named": "{name} ({facet})",
@@ -546,6 +548,15 @@ const err: Partial<Record<ErrorCode, string>> = {
   // guards (an empty title) never reaches a reader, and a code with no template here still reads — in
   // English, off the message the command returned.
   already_reserved: "{ref} is not “To do”, so it cannot be reserved — another session may already hold it.",
+  // One refusal over a list of reasons. `{reasons}` is the parts, each written from its own template
+  // below and joined with `err.reasonSep`.
+  not_ready: "{ref} cannot be reserved yet: {reasons}",
+  not_ready_open_blocker: "{ref} is not done",
+  not_ready_premise_superseded: "{ref} was superseded by {successor}, so link this task to the newer one",
+  not_ready_premise_rejected: "{ref} was rejected, so this task needs rethinking",
+  not_ready_premise_unsettled: "{ref} is not settled — wait for the ruling, or unlink it",
+  // Core's English names the command that moves the day; a reader in the window has the field instead.
+  not_ready_not_started: "it does not start until {start} — change the start date if that is wrong",
   store_busy: "The store is being restored or updated. Try again in a moment.",
   not_found_task: "Task {ref} was not found.",
   not_found_decision: "Decision {ref} was not found.",

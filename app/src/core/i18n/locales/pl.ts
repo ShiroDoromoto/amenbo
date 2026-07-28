@@ -475,6 +475,7 @@ export const pl: Translation = {
     "orphanBinding.forgetting": "Zapominanie…",
     "orphanBinding.done": "Zapomniano o pozostałych powiązaniach folderów.",
     "common.equiv": "Odpowiednik:", "common.otherSession": "inna sesja",
+    "err.reasonSep": "; ",
     "common.loadMore": "Wczytaj więcej (jeszcze {n})",
     "id.copyTip": "Kliknij, aby skopiować identyfikator zadania", "id.copied": "Skopiowano",
     "facet.human": "Człowiek", "facet.ai": "SI", "facet.named": "{name} ({facet})",
@@ -540,6 +541,12 @@ export const pl: Translation = {
 
     already_reserved:
       "{ref} nie ma statusu „Do zrobienia”, więc nie można go zarezerwować — być może trzyma go już inna sesja.",
+    not_ready: "{ref} nie da się jeszcze zarezerwować: {reasons}",
+    not_ready_open_blocker: "{ref} nie jest ukończone",
+    not_ready_premise_superseded: "{ref} zostało zastąpione przez {successor} — powiąż to zadanie z nowszym",
+    not_ready_premise_rejected: "{ref} zostało odrzucone, więc zadanie wymaga przemyślenia",
+    not_ready_premise_unsettled: "{ref} jest nierozstrzygnięte — poczekaj na rozstrzygnięcie albo je odepnij",
+    not_ready_not_started: "zaczyna się dopiero {start} — zmień datę startu, jeśli to pomyłka",
     store_busy: "Magazyn jest przywracany lub aktualizowany. Spróbuj ponownie za chwilę.",
     not_found_task: "Nie znaleziono zadania {ref}.",
     not_found_decision: "Nie znaleziono decyzji {ref}.",

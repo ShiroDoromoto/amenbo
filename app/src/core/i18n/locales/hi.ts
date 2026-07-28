@@ -437,6 +437,7 @@ export const hi: Translation = {
     "orphanBinding.forgetting": "भुलाया जा रहा है…",
     "orphanBinding.done": "बची हुई फ़ोल्डर-कड़ियाँ भुला दी गईं।",
     "common.equiv": "समतुल्य:", "common.otherSession": "कोई और सत्र",
+    "err.reasonSep": "; ",
     "common.loadMore": "और लाएँ (और {n})",
     "id.copyTip": "काम की ID कॉपी करने के लिए क्लिक करें", "id.copied": "कॉपी हो गया",
     "facet.human": "मनुष्य", "facet.ai": "AI", "facet.named": "{name} ({facet})",
@@ -502,6 +503,12 @@ export const hi: Translation = {
 
     already_reserved:
       "{ref} “करना है” में नहीं है, इसलिए इसे लिया नहीं जा सकता — शायद कोई दूसरा सत्र इसे पहले ही ले चुका है।",
+    not_ready: "{ref} अभी आरक्षित नहीं की जा सकती: {reasons}",
+    not_ready_open_blocker: "{ref} पूरी नहीं हुई है",
+    not_ready_premise_superseded: "{ref} की जगह {successor} ने ले ली — इस काम को नए वाले से जोड़ें",
+    not_ready_premise_rejected: "{ref} अस्वीकृत हो गया, इसलिए इस काम पर फिर से सोचना होगा",
+    not_ready_premise_unsettled: "{ref} तय नहीं है — निर्णय की प्रतीक्षा करें या कड़ी हटाएँ",
+    not_ready_not_started: "यह {start} से पहले शुरू नहीं होती — तारीख़ ग़लत हो तो आरंभ तिथि बदलें",
     store_busy: "स्टोर बहाल या अपडेट किया जा रहा है। थोड़ी देर बाद फिर कोशिश करें।",
     not_found_task: "काम {ref} नहीं मिला।",
     not_found_decision: "निर्णय {ref} नहीं मिला।",

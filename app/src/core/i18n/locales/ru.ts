@@ -478,6 +478,7 @@ export const ru: Translation = {
     "orphanBinding.forgetting": "Забываем…",
     "orphanBinding.done": "Оставшиеся привязки папок забыты.",
     "common.equiv": "То же самое:", "common.otherSession": "другой сеанс",
+    "err.reasonSep": "; ",
     "common.loadMore": "Загрузить ещё (осталось {n})",
     "id.copyTip": "Нажмите, чтобы скопировать ID задачи", "id.copied": "Скопировано",
     "facet.human": "Человек", "facet.ai": "ИИ", "facet.named": "{name} ({facet})",
@@ -543,6 +544,12 @@ export const ru: Translation = {
 
     already_reserved:
       "{ref} не в состоянии «К выполнению», поэтому взять её нельзя — возможно, ею уже занят другой сеанс.",
+    not_ready: "{ref} пока нельзя взять в работу: {reasons}",
+    not_ready_open_blocker: "{ref} не завершена",
+    not_ready_premise_superseded: "{ref} заменена на {successor} — свяжите задачу с более новой",
+    not_ready_premise_rejected: "{ref} отклонена, поэтому задачу нужно продумать заново",
+    not_ready_premise_unsettled: "{ref} не решена — дождитесь решения или уберите связь",
+    not_ready_not_started: "она начинается только {start} — измените дату начала, если она неверна",
     store_busy: "Хранилище восстанавливается или обновляется. Повторите попытку через минуту.",
     not_found_task: "Задача {ref} не найдена.",
     not_found_decision: "Решение {ref} не найдено.",

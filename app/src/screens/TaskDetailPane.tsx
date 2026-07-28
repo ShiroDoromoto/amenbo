@@ -452,7 +452,7 @@ export function TaskDetailPane({
           </div>
 
           <div className="meta">
-            {t("detail.created")}: {task.createdBy ? `${task.createdBy.name}（${task.createdBy.kind === "ai" ? t("facet.ai") : t("facet.human")}）` : "—"} · id {task.id} · {t("detail.restoreHint")}
+            {t("detail.created")}: {task.createdBy ? tf("facet.named", { name: task.createdBy.name, facet: t(task.createdBy.kind === "ai" ? "facet.ai" : "facet.human") }) : "—"} · id {task.id} · {t("detail.restoreHint")}
           </div>
           <div className="detail__danger">
             <button className="btn btn--danger" onClick={removeTask} title={t("detail.deleteTip")}>🗑 {t("detail.delete")}</button>
@@ -473,7 +473,7 @@ export function TaskDetailPane({
                   <div className="feed__body">
                     <div className="feed__line">
                       <strong>{it.author.name}</strong>{" "}
-                      {it.kind === "comment" ? `「${it.text}」` : it.event && eventText(it.event, it.target.title)}
+                      {it.kind === "comment" ? tf("comment.quoted", { text: it.text ?? "" }) : it.event && eventText(it.event, it.target.title)}
                     </div>
                     <div className="feed__meta">
                       <span>{agoLabel(it.at)}{it.editedAt && <span className="faint"> · {t("comment.edited")} {agoLabel(it.editedAt)}</span>}</span>

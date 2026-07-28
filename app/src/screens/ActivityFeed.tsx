@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store/store";
 import { FacetAvatar } from "../components/atoms";
-import { agoLabel, eventText, t, targetTitle } from "../core/i18n";
+import { agoLabel, eventText, t, targetTitle, tf } from "../core/i18n";
 import { activityRowKey, dedupActivityRows, loadActivityPage } from "../core/activity";
 import { inTauri } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
@@ -159,7 +159,7 @@ export function ActivityFeed({
               <div className="feed__body">
                 <div className="feed__line">
                   <strong>{it.author.name}</strong>{" "}
-                  {it.kind === "comment" ? `「${it.text}」` : it.event && eventText(it.event, it.target.title)}
+                  {it.kind === "comment" ? tf("comment.quoted", { text: it.text ?? "" }) : it.event && eventText(it.event, it.target.title)}
                   {it.burstCount ? <span className="faint"> ⌄</span> : null}
                 </div>
                 <div className="feed__meta">

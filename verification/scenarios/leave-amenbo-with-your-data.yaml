@@ -2,7 +2,7 @@
 # with when they leave amenbo, so what matters is not that the command exits 0 but that the document
 # it wrote holds their work — records from every corner of the store, not just the one the export was
 # started from.
-id: export
+id: leave-amenbo-with-your-data
 title: Everything on the device comes out in one document — the task, the decision and the timeline alike
 description: >
   Seed a store the way real use fills it — a task, a decision, and a note on the task's timeline —

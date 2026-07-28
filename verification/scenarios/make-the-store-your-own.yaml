@@ -2,7 +2,7 @@
 # other scenario stands on: the display names decide whose name lands on a write, the language
 # decides what the guidance in a bound folder tells an AI to speak, and the identity is how a store
 # says whether it is the one it was raised as or a copy carried onto another machine.
-id: config
+id: make-the-store-your-own
 title: The store's settings are changed one key at a time, and it answers for who it is
 description: >
   Read the shipped defaults back, then change the keys a user actually reaches for — the view a

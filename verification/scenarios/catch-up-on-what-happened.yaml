@@ -1,7 +1,7 @@
 # The activity stream is the one place where what the store did and what people said are read as one
 # thing. A task's own history lands there without anyone writing it down, so what is under test is
 # that the stream is fed at all — and that narrowing it by kind still answers.
-id: activity
+id: catch-up-on-what-happened
 title: A task's events and comments arrive on one timeline, and each kind can be read on its own
 description: >
   Register a task, comment on it, and read the shared timeline scoped to that task — whole, then

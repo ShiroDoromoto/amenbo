@@ -5,7 +5,7 @@
 # The check is all of it. `--apply` downloads a new CLI and swaps the running binary, and `--rollback`
 # puts the kept one back: both replace a real file on the machine running the gate, whichever store
 # they are pointed at, so neither belongs in an unattended run.
-id: update
+id: learn-of-a-newer-amenbo
 title: Asking about an update reports this build and hands back an installer address without opening anything
 description: >
   The run is hermetic — `AMENBO_UPDATE_CHECK=0` keeps the release manifest off the network — so what

@@ -3,7 +3,7 @@
 # for — a dependency edge, a decision's link to the work it drives, a comment hanging off a task —
 # only exist once something has drawn them. Then the face that writes: something is put wrong, seen to
 # be reported, repaired, and seen to be gone.
-id: doctor
+id: put-the-store-right
 title: A store carrying real work reports sound — and what is left broken is reported, repaired, and gone
 description: >
   Build up the shape a real store has (two tasks with an edge between them, a decision linked to the

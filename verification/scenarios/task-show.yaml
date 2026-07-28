@@ -8,7 +8,7 @@ description: >
   it back off that task's own show output. The relationships are asserted by the name each side
   reports, so an edge recorded in one direction only is caught here rather than looking like an
   empty list.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

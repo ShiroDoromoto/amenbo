@@ -1,21 +1,24 @@
 //! amenbo-scenario — the schema and validating loader for pre-distribution
 //! verification scenarios.
 //!
-//! A scenario is the single source of truth: one declarative YAML file states a domain
-//! procedure plus its expected results, driver-independent. Every driver reads the SAME
-//! file — the CLI driver (`verification/cli`) maps each step to a shipped-binary
-//! invocation, the mac GUI harness (`verification/gui`) maps it to a screen instruction,
-//! the Linux OCR harness (`scripts/docker/gui-e2e.sh`) is fed the card title its host
-//! launcher (`make verify-gui-linux`) resolves through this crate's JSON face (the `emit`
-//! bin), since that container carries no toolchain to read the YAML itself. Nothing here
-//! knows about a command line or a pixel.
+//! A scenario is one declarative YAML file: what is being proved, stated once as the `title`,
+//! and the way there written per driver. `steps_cli` is the road the CLI driver
+//! (`verification/cli`) walks as shipped-binary invocations; `steps_gui` is the one the mac GUI
+//! harness (`verification/gui`) walks as screen instructions. The Linux OCR harness
+//! (`scripts/docker/gui-e2e.sh`) is fed the card title its host launcher (`make verify-gui-linux`)
+//! resolves through this crate's JSON face (the `emit` bin), since that container carries no
+//! toolchain to read the YAML itself. Nothing here knows about a command line or a pixel.
+//!
+//! Steps having an owner is what says which drivers run the file: a list with steps in it is that
+//! driver's to carry, an empty one is a road it is not asked to walk. There is no separate
+//! declaration to disagree with the steps.
 //!
 //! Two layers of checking, both surfaced as clear failures:
 //!   * [`load_str`] / [`load_file`] — the YAML must parse into the typed model
 //!     (`deny_unknown_fields` catches misspelled keys).
-//!   * [`Scenario::validate`] — the semantic pass: known ops only, required args present,
-//!     each arg of the type its op takes, and every `target:` resolving to an earlier
-//!     `as:` binding.
+//!   * [`Scenario::validate`] — the semantic pass, run over each driver's steps on its own:
+//!     known ops only, required args present, each arg of the type its op takes, and every
+//!     `target:` resolving to an earlier `as:` binding in the same list.
 
 use std::collections::HashSet;
 use std::fmt;
@@ -23,7 +26,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-/// A whole scenario: an ordered list of steps under an id and a human title.
+/// A whole scenario: one goal, under an id and a human title, and the ordered steps each driver
+/// takes to reach it.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Scenario {
@@ -34,21 +38,17 @@ pub struct Scenario {
     /// Optional longer prose (rationale, preconditions).
     #[serde(default)]
     pub description: Option<String>,
-    /// The drivers this scenario is written to be run through. **Absent means CLI alone**, which is
-    /// where a line belongs unless it is one of the few the screen is the only place to see.
-    ///
-    /// One scenario source, but not every driver has to copy every line: adding one costs a driver
-    /// what that driver costs. The CLI driver runs unattended and closes on an exit code, so its set
-    /// aims at the whole capability list; the GUI harnesses shoot the screen, read it back with OCR
-    /// and leave a `field` assert to a human eye, so theirs is a chosen few. Declaring it here keeps
-    /// the choice in the source of truth rather than in each driver's idea of what it should skip.
-    #[serde(default = "cli_only")]
-    pub drivers: Vec<Driver>,
-    /// The ordered steps. Must be non-empty.
-    pub steps: Vec<Step>,
+    /// The road the CLI driver walks. Empty means the CLI is not asked to walk one.
+    #[serde(default)]
+    pub steps_cli: Vec<Step>,
+    /// The road the GUI harnesses walk — written on its own because a screen's road is a different
+    /// shape, not a rendering of the CLI's. Linking a folder to a project is one command to type and
+    /// three things to do on screen; written once for both, one of the two comes out bent.
+    #[serde(default)]
+    pub steps_gui: Vec<Step>,
 }
 
-/// A driver a scenario can be run through — the harnesses that map the one source to their world.
+/// A driver a scenario can be run through — the harnesses that map the one goal to their world.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Driver {
@@ -60,6 +60,9 @@ pub enum Driver {
 }
 
 impl Driver {
+    /// Both drivers, in the order a report names them.
+    pub const ALL: [Driver; 2] = [Driver::Cli, Driver::Gui];
+
     /// The wire token, as it is written in a scenario.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -67,11 +70,14 @@ impl Driver {
             Driver::Gui => "gui",
         }
     }
-}
 
-/// The default driver set: the CLI alone.
-fn cli_only() -> Vec<Driver> {
-    vec![Driver::Cli]
+    /// The key this driver's steps are written under, for a message that has to name it.
+    pub fn steps_key(self) -> &'static str {
+        match self {
+            Driver::Cli => "steps_cli",
+            Driver::Gui => "steps_gui",
+        }
+    }
 }
 
 /// One step. `type` selects the variant; every step names the [`Domain`] object it
@@ -573,42 +579,57 @@ pub fn load_file(path: impl AsRef<Path>) -> Result<Scenario, LoadError> {
 // Semantic validation
 // ---------------------------------------------------------------------------
 
-/// A single semantic problem, anchored to the step that carries it (0-based, or `None`
-/// for a scenario-wide problem such as an empty id).
+/// A single semantic problem, anchored to the step that carries it (0-based) inside the driver's
+/// list it sits in. Both are `None` for a scenario-wide problem such as an empty id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationError {
+    /// Whose road the step is on. Two lists number from one apiece, so a step number alone would
+    /// name two places.
+    pub driver: Option<Driver>,
     pub step: Option<usize>,
     pub message: String,
 }
 
 impl fmt::Display for ValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.step {
-            Some(i) => write!(f, "step {}: {}", i + 1, self.message),
-            None => write!(f, "{}", self.message),
+        match (self.driver, self.step) {
+            (Some(d), Some(i)) => write!(f, "{} step {}: {}", d.steps_key(), i + 1, self.message),
+            _ => write!(f, "{}", self.message),
         }
     }
 }
 
 impl Scenario {
-    /// Whether this scenario is written to be run through `driver`.
+    /// The road `driver` walks. Empty when this scenario does not give it one.
+    pub fn steps(&self, driver: Driver) -> &[Step] {
+        match driver {
+            Driver::Cli => &self.steps_cli,
+            Driver::Gui => &self.steps_gui,
+        }
+    }
+
+    /// Whether this scenario is written to be run through `driver` — which is to say, whether it
+    /// hands that driver any steps.
     pub fn runs_on(&self, driver: Driver) -> bool {
-        self.drivers.contains(&driver)
+        !self.steps(driver).is_empty()
     }
 
-    /// The declared drivers as their wire tokens, for a message that has to name them.
+    /// The drivers that have a road here, as their wire tokens, for a message that has to name them.
     pub fn driver_tokens(&self) -> Vec<&'static str> {
-        self.drivers.iter().map(|d| d.as_str()).collect()
+        Driver::ALL.iter().filter(|d| self.runs_on(**d)).map(|d| d.as_str()).collect()
     }
 
-    /// Check the semantic rules the type system cannot: non-empty id/title/steps, a known
-    /// op for each step, its required args present and of the type it takes, and every
-    /// `target:` resolving to an earlier `as:` binding. Returns every problem found, not
+    /// Check the semantic rules the type system cannot: non-empty id/title, at least one driver's
+    /// road, a known op for each step, its required args present and of the type it takes, and
+    /// every `target:` resolving to an earlier `as:` binding. Returns every problem found, not
     /// just the first.
+    ///
+    /// Each driver's steps are checked on their own, bindings included: one road cannot name what
+    /// the other one made, because the two are never walked together.
     pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
         let mut errs = Vec::new();
-        let whole = |m: &str| ValidationError { step: None, message: m.to_string() };
-        let at = |i: usize, m: String| ValidationError { step: Some(i), message: m };
+        let whole =
+            |m: &str| ValidationError { driver: None, step: None, message: m.to_string() };
 
         if self.id.trim().is_empty() {
             errs.push(whole("id is empty"));
@@ -616,17 +637,30 @@ impl Scenario {
         if self.title.trim().is_empty() {
             errs.push(whole("title is empty"));
         }
-        if self.steps.is_empty() {
-            errs.push(whole("scenario has no steps"));
-        }
-        // A scenario no driver runs is one nothing keeps honest: it rots silently while the set it
+        // A scenario no driver walks is one nothing keeps honest: it rots silently while the set it
         // sits in reports green.
-        if self.drivers.is_empty() {
-            errs.push(whole("scenario names no driver to run it"));
+        if Driver::ALL.iter().all(|d| !self.runs_on(*d)) {
+            errs.push(whole("scenario has no steps — give at least one of `steps_cli` / `steps_gui` a road"));
         }
 
+        for driver in Driver::ALL {
+            self.validate_steps(driver, &mut errs);
+        }
+
+        if errs.is_empty() {
+            Ok(())
+        } else {
+            Err(errs)
+        }
+    }
+
+    /// One driver's road, checked end to end.
+    fn validate_steps(&self, driver: Driver, errs: &mut Vec<ValidationError>) {
+        let at =
+            |i: usize, m: String| ValidationError { driver: Some(driver), step: Some(i), message: m };
+
         let mut bound: HashSet<&str> = HashSet::new();
-        for (i, step) in self.steps.iter().enumerate() {
+        for (i, step) in self.steps(driver).iter().enumerate() {
             let spec = match lookup(step.kind(), step.domain(), step.op()) {
                 Some(s) => s,
                 None => {
@@ -708,12 +742,6 @@ impl Scenario {
                 }
             }
         }
-
-        if errs.is_empty() {
-            Ok(())
-        } else {
-            Err(errs)
-        }
     }
 }
 
@@ -733,7 +761,7 @@ mod tests {
     const GOOD: &str = r#"
 id: sample
 title: A task assigned to me-ai surfaces in the me-ai listing
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create
@@ -753,12 +781,12 @@ steps:
     fn good_scenario_loads_and_validates() {
         let s = load_str(GOOD).expect("parses");
         s.validate().expect("valid");
-        assert_eq!(s.steps.len(), 3);
+        assert_eq!(s.steps(Driver::Cli).len(), 3);
     }
 
     #[test]
     fn unknown_key_is_a_parse_error() {
-        let yaml = "id: x\ntitle: y\nbogus: 1\nsteps: []\n";
+        let yaml = "id: x\ntitle: y\nbogus: 1\nsteps_cli: []\n";
         assert!(load_str(yaml).is_err());
     }
 
@@ -767,7 +795,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: task
     op: frobnicate
@@ -782,7 +810,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: task
     op: assign
@@ -799,7 +827,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: decision
     op: create
@@ -819,7 +847,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create
@@ -836,7 +864,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create
@@ -858,7 +886,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create
@@ -877,7 +905,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create
@@ -893,34 +921,72 @@ steps:
         assert!(errs.iter().any(|e| e.message.contains("does not produce a binding")));
     }
 
-    /// A scenario that says nothing about drivers is a CLI scenario — the set aims at coverage there,
-    /// so that is the answer for a line that does not go out of its way to ask for the screen.
+    /// A scenario that writes only a CLI road is run by the CLI alone. There is nothing else to
+    /// read: the steps are the declaration.
     #[test]
-    fn a_scenario_that_names_no_driver_is_cli_only() {
+    fn a_scenario_with_only_a_cli_road_runs_on_the_cli_alone() {
         let s = load_str(GOOD).expect("parses");
         assert!(s.runs_on(Driver::Cli));
-        assert!(!s.runs_on(Driver::Gui), "the screen is asked for, never assumed");
+        assert!(!s.runs_on(Driver::Gui), "the screen walks a road, or it is not asked to");
+        assert_eq!(s.driver_tokens(), vec!["cli"]);
     }
 
     #[test]
-    fn a_declared_driver_set_is_read_back() {
-        let yaml = format!("drivers: [cli, gui]{GOOD}");
-        let s = load_str(&yaml).expect("parses");
+    fn a_road_for_each_driver_puts_both_on_it() {
+        let yaml = r#"
+id: x
+title: y
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+"#;
+        let s = load_str(yaml).expect("parses");
+        s.validate().expect("valid");
         assert!(s.runs_on(Driver::Cli) && s.runs_on(Driver::Gui));
         assert_eq!(s.driver_tokens(), vec!["cli", "gui"]);
     }
 
+    /// A road belongs to the driver that walks it, so a binding does not cross between the two —
+    /// the step that would read it is in a run the other list was never part of.
     #[test]
-    fn a_driver_outside_the_set_is_a_parse_error() {
-        let yaml = format!("drivers: [tui]{GOOD}");
+    fn a_binding_does_not_cross_from_one_road_to_the_other() {
+        let yaml = r#"
+id: x
+title: y
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+    as: seed
+steps_gui:
+  - type: action
+    domain: task
+    op: assign
+    with: { target: seed, assignee: me-ai }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.to_string()
+            == "steps_gui step 1: `target: seed` does not resolve to an earlier `as:` binding"));
+    }
+
+    #[test]
+    fn a_steps_key_outside_the_two_is_a_parse_error() {
+        let yaml = format!("steps_tui: []{GOOD}");
         assert!(load_str(&yaml).is_err(), "an unknown driver is a typo, not an extension point");
     }
 
     #[test]
-    fn naming_no_driver_at_all_is_rejected() {
-        let yaml = format!("drivers: []{GOOD}");
-        let errs = load_str(&yaml).unwrap().validate().unwrap_err();
-        assert!(errs.iter().any(|e| e.message.contains("no driver")));
+    fn a_scenario_with_no_road_at_all_is_rejected() {
+        let errs = load_str("id: x\ntitle: y\n").unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("no steps")));
     }
 
     /// The file a `store` action writes is named back through the one binding namespace every
@@ -931,7 +997,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: store
     op: backup
@@ -953,7 +1019,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: store
     op: restore
@@ -970,7 +1036,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: assert
     domain: store
     op: doctor
@@ -988,7 +1054,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create
@@ -1013,7 +1079,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create
@@ -1028,7 +1094,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: assert
     domain: store
     op: doctor
@@ -1045,7 +1111,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create
@@ -1056,9 +1122,11 @@ steps:
         assert!(errs.iter().any(|e| e.message.contains("produces nothing")));
     }
 
+    /// Written out and left empty is the same as never written: a road with nothing on it is not
+    /// one, whichever way the file says so.
     #[test]
-    fn empty_steps_is_rejected() {
-        let s = load_str("id: x\ntitle: y\nsteps: []\n").unwrap();
+    fn roads_written_out_but_empty_are_rejected() {
+        let s = load_str("id: x\ntitle: y\nsteps_cli: []\nsteps_gui: []\n").unwrap();
         let errs = s.validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("no steps")));
     }

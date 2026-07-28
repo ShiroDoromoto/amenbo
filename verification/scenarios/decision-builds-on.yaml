@@ -9,7 +9,7 @@ description: >
   standing one names what it rests on, and the premise names who would want revisiting. The edge is
   then drawn a second time, because a scenario is replayed and re-run and the command has to take
   that without refusing it; the reading afterwards is unchanged.
-steps:
+steps_cli:
   - type: action
     domain: decision
     op: create

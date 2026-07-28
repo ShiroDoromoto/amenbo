@@ -16,7 +16,7 @@ description: >
   saying what it is — while neither the backup nor the export carries the value at all. Then the two
   ends nothing else can see: a run is asked what it was handed, and answers with the secret; and a
   plugin removed with one still set is installed again, to be handed nothing.
-steps:
+steps_cli:
   - type: action
     domain: plugin
     op: install

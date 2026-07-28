@@ -17,12 +17,11 @@
 # `--app` pointing at the build under test), and the declarations below are theirs.
 id: plugin-detail
 title: A plugin a registered catalog serves opens its detail from that catalog
-drivers: [gui]
 description: >
   Open one row off a catalog of one's own registering. What comes up under it is that catalog's own
   detail document — the setting the plugin will ask for, in the words its author wrote — and not the
   empty panel a name the official index never listed would leave.
-steps:
+steps_gui:
   - type: assert
     domain: plugin
     op: detail

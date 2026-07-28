@@ -8,7 +8,7 @@ description: >
   by status. What is under test is the narrowing itself: a filter that returned everything, or that
   quietly returned nothing, reads as a green listing either way, so every arm is asserted from both
   sides — the decision that matches is present, the one that does not is absent.
-steps:
+steps_cli:
   - type: action
     domain: decision
     op: create

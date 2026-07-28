@@ -129,8 +129,9 @@ fn slug_of(command: &str) -> String {
 /// has drifted from its name.
 struct Owned {
     stems: BTreeSet<String>,
-    /// Files written for the screen alone (`drivers: [gui]`), which own no capability and are not
-    /// missing one either. The denominator here is the capability list the **CLI** declares, and a
+    /// Files written for the screen alone (a `steps_gui` road and no `steps_cli` one), which own no
+    /// capability and are not missing one either. The denominator here is the capability list the
+    /// **CLI** declares, and a
     /// line the CLI cannot read has no command to be named after — so counting such a file as a
     /// stray would report the set's own design as a leftover.
     screen_only: BTreeSet<String>,
@@ -163,7 +164,7 @@ fn scenario_files(dir: &Path) -> Result<Owned, String> {
             if scenario.id != stem {
                 owned.misfiled.push((stem.to_string(), scenario.id.clone()));
             }
-            answers_for_a_capability = scenario.drivers.contains(&amenbo_scenario::Driver::Cli);
+            answers_for_a_capability = scenario.runs_on(amenbo_scenario::Driver::Cli);
         }
         if answers_for_a_capability {
             owned.stems.insert(stem.to_string());

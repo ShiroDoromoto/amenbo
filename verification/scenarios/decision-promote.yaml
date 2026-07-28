@@ -14,7 +14,7 @@ description: >
   objects at once, which is exactly the shape a shipped build can half-carry. Then do it again from a
   decision's own timeline, on a project of its own: the words carry over the same way, the record is
   filed where the decision it was raised from is filed, and it arrives with no edge whatsoever.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

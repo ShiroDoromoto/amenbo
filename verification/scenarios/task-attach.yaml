@@ -6,7 +6,7 @@ description: >
   exists once there is an installed binary and a real store on disk. So the line ends by saving the
   blob back out and comparing it to what went in. `attach open` is deliberately left out: it hands the
   file to whatever the desktop opens it with, which is not something an unattended run should do.
-steps:
+steps_cli:
   # A file the person already has lying in their folder.
   - { type: action, domain: repo, op: write-file, with: { path: run.log, content: "line one\nline two\n" } }
 

@@ -26,7 +26,7 @@ description: >
   update onto it, and roll back — reading after each that the catalog does, then does not, then does
   again hold a build this machine is not on. Finally remove the plugin and confirm the machine is back
   where it started.
-steps:
+steps_cli:
   - type: action
     domain: plugin
     op: install

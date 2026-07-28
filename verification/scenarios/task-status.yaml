@@ -11,7 +11,7 @@ description: >
   status, and its disappearance from the listing the next session picks fresh work out of), and the
   two the guard turns away — a second reserve of what is already held, and a reserve of a task whose
   own declared premise is unmet.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

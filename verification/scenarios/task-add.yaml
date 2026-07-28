@@ -5,7 +5,7 @@ title: A newly registered task starts as todo
 description: >
   Create a task with nothing but a title, then read its status back. The write reaching the shipped
   store and the default it lands with are one step apart, so this line covers both.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

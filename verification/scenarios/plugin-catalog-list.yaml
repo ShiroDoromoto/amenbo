@@ -20,7 +20,7 @@ description: >
   that publishes a signing key: registering it pins that key, a rotation is refused rather than
   swallowed on the old consent, unregistering is what lets go of the pin — and a catalog that
   publishes no key registers all the same, with nothing pinned to install anything on.
-steps:
+steps_cli:
   # What a machine browses before anybody widens anything: the official catalog, and it answers.
   - type: assert
     domain: plugin

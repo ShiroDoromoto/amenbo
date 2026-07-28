@@ -4,7 +4,7 @@ description: >
   Classification is how a project is cut into views without growing a field per question. The axis and
   its values are one half; the half that matters to a reader is that filing a task under a value is
   what `dim:<axis>=<value>` finds — an assignment nothing can query is not a classification.
-steps:
+steps_cli:
   - { type: action, domain: dimension, op: create, with: { name: medium } }
   - { type: action, domain: dimension, op: value-add, with: { dimension: medium, value: print } }
   - { type: action, domain: dimension, op: value-add, with: { dimension: medium, value: web } }

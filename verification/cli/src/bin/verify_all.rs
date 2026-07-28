@@ -7,10 +7,10 @@
 //! scenario never sees another's state. A scenario that fails to load or whose binary errors is
 //! recorded as a red entry and the run continues — one broken scenario never hides the rest.
 //!
-//! **A scenario that does not name `cli` among its drivers is skipped**, named as such, and counted
-//! apart from the verdict — it is written for the screen, and driving its steps through the binary
-//! would judge a line nobody wrote for this driver. A run where that leaves nothing to do exits
-//! non-zero: an empty set is the one way a gate can be green without having verified anything.
+//! **A scenario that carries no `steps_cli` road is skipped**, named as such, and counted apart
+//! from the verdict — it is written for the screen, and there is nothing here for the binary to
+//! walk. A run where that leaves nothing to do exits non-zero: an empty set is the one way a gate
+//! can be green without having verified anything.
 //!
 //! Usage: `verify-all [<scenario-or-dir>...] [--bin <amenbo>] [--json] [--keep]`
 //!   positional  scenario `.yaml` files and/or directories to scan (default: `scenarios/`)
@@ -71,7 +71,7 @@ fn main() -> ExitCode {
 /// far (would not load, or its binary errored). Only the last of the three is a failure on its own.
 enum ScenarioResult {
     Ran { report: Report },
-    /// Loaded fine, but written for another driver — neither green nor red, just not this run's.
+    /// Loaded fine, but its roads are another driver's — neither green nor red, just not this run's.
     Skipped { path: PathBuf, id: String, drivers: String },
     Errored { path: PathBuf, error: String },
 }
@@ -80,8 +80,8 @@ impl ScenarioResult {
     fn passed(&self) -> bool {
         matches!(self, ScenarioResult::Ran { report, .. } if report.passed())
     }
-    /// What the roll-up turns red on. A skip is not a failure — it is a line this driver was never
-    /// asked to carry.
+    /// What the roll-up turns red on. A skip is not a failure — it is a road this driver was never
+    /// given.
     fn failed(&self) -> bool {
         match self {
             ScenarioResult::Ran { report } => !report.passed(),

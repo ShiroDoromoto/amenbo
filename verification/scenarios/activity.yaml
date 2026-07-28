@@ -7,7 +7,7 @@ description: >
   Register a task, comment on it, and read the shared timeline scoped to that task — whole, then
   narrowed to the system events and to what was written. The system side is fed by the store itself,
   so an empty answer there means the stream is not being written, not that nothing happened.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

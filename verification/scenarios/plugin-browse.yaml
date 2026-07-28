@@ -12,12 +12,11 @@
 # stopped folding takes this shelf's name off both rows rather than one.
 id: plugin-browse
 title: An entry a registered catalog serves is badged with that catalog, however loudly its own document claims to be official
-drivers: [gui]
 description: >
   Look at the market with a catalog of one's own registered. Its rows say where they came from — the
   name that catalog was given at registration — and not "official", which the catalog's document
   claims for every entry on it and which no shelf outside the official index can grant itself.
-steps:
+steps_gui:
   - type: assert
     domain: plugin
     op: browsed

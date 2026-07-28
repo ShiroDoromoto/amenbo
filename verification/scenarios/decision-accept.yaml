@@ -11,7 +11,7 @@ description: >
   ruling, rejection, whose reason lands on the timeline rather than in a field of its own.
   Acceptance is what other work waits on, so the status these lines read is the one a task's
   readiness is derived from.
-steps:
+steps_cli:
   - type: action
     domain: decision
     op: create

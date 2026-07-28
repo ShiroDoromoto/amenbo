@@ -11,7 +11,7 @@ description: >
   rests on. Resync that folder's guidance block and confirm a second pass finds nothing left to
   write, which is what makes the command safe to aim at every folder on the device. Finally unbind,
   and confirm the folder reaches nothing again.
-steps:
+steps_cli:
   # `init` in an unclaimed folder raises a project there and points the folder at it. The binding it
   # hands back is what the next step checks the pointer against.
   - type: action

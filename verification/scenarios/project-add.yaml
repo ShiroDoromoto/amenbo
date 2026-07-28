@@ -6,7 +6,7 @@ description: >
   without deleting it — so both listings have to be asked to prove it moved between them. Deleting is
   the other end: it destroys the row and reaches outside the store to release every folder that
   pointed at the project, which is why a folder is bound to it first and read back afterwards.
-steps:
+steps_cli:
   # Registered, and readable back under the name it was given.
   - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — the place work is kept }, as: pj }
   - { type: assert, domain: project, op: field, with: { target: pj, field: name, equals: SCENARIO PROJECT — the place work is kept } }

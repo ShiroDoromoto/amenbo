@@ -10,7 +10,7 @@ description: >
   command that can rename — reading each one back out of `config` afterwards. The identity is read
   last: the human name a rename moved, and the hardware check that says this store is running where
   it was raised rather than as a copy of somebody else's.
-steps:
+steps_cli:
   # The defaults a fresh store ships with. A default that moves quietly moves for everyone who
   # never set the key.
   - type: assert

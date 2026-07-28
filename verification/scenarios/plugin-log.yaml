@@ -19,7 +19,7 @@ description: >
   cleanly. Then leave the plugin answering slowly, fire an event it subscribes to, and read the
   backlog back: one event waiting, with a runner on it. Finally remove the plugin and confirm the log
   no longer answers for it.
-steps:
+steps_cli:
   # The plugin resolves everything it does from the repository it is called in, so there has to be
   # one — the same shape the folder a person binds amenbo to has.
   - type: action

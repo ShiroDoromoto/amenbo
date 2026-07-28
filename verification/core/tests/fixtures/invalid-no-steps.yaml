@@ -1,0 +1,5 @@
+# Invalid on purpose: a scenario that gives neither driver a road. Nothing walks it, so nothing keeps
+# it honest — it rots silently inside a set that keeps reporting green, and the loader refuses it
+# rather than carrying it.
+id: invalid-no-steps
+title: A scenario no driver is given a road through

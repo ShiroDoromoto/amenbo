@@ -8,7 +8,7 @@ description: >
   Comment on a proposed decision, accept it, and comment again — then rewrite one comment and delete
   the other, reading the timeline back each time. What is under test is that acceptance closes the
   body and nothing else.
-steps:
+steps_cli:
   - type: action
     domain: decision
     op: create

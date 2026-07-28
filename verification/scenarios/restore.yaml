@@ -9,7 +9,7 @@ description: >
   something added that was not in it, and something changed that was. Restoring is a replace, not a
   merge, so both have to come back to where the archive left them — the added task gone, the finished
   one open again — with the decision and the timeline intact and the restored store reporting sound.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

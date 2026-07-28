@@ -3,11 +3,11 @@
 # Asks the one question the other suites can't: when a SEPARATE process writes to the
 # store, does the running GUI's webview actually repaint?
 #
-# The card title this writes and looks for is NOT baked in here: it comes from the single
-# scenario source (verification/scenarios/), resolved on the host by `make verify-gui-linux`
-# through the `amenbo-scenario` crate and passed in as AMENBO_E2E_CARD — the container
-# carries no toolchain to read the YAML itself. Edit the scenario and this Linux check
-# follows, same as the CLI and mac drivers reading that one source.
+# The card title this writes and looks for is NOT baked in here: it comes from the scenario
+# source (verification/scenarios/), off the `steps_gui` road this check walks, resolved on
+# the host by `make verify-gui-linux` through the `amenbo-scenario` crate and passed in as
+# AMENBO_E2E_CARD — the container carries no toolchain to read the YAML itself. Edit that
+# road and this Linux check follows.
 #
 # Screenshots land in the mounted /out (host: ./dist/gui-e2e) — 1-before.png,
 # 2-after.png and their diff. The verdict is read off the picture by OCR, so this can run

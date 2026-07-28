@@ -14,7 +14,7 @@ description: >
   The repair is walked separately, and it is walked end to end — a fix that sweeps nothing looks
   exactly like a fix that works, so the problem is put there first and the same read that raised it
   is what says it went.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

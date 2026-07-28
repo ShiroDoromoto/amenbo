@@ -6,7 +6,7 @@ description: >
   non-zero exit is its answer rather than a failure — a caller wiring it into a hook reads that exit,
   so a build that stopped reporting it would pass silently while letting refs through. The text it is
   pointed at comes from `fixtures/lint/`, since a scenario file may not carry a bare ref itself.
-steps:
+steps_cli:
   # A ref on its way out is reported, and located: the line it sits on is what a person goes to.
   - { type: action, domain: repo, op: copy-fixture, with: { from: lint/decided.txt, path: message.txt } }
   - { type: assert, domain: repo, op: lint, with: { path: message.txt, hits: 1, line: 3 } }

@@ -6,7 +6,7 @@ title: A decision can be recorded on the shipped build
 description: >
   Record a decision and let the driver's own execution be the verdict: a step that errors fails the
   scenario. The line grows an assert of its own once the registry has one to grow it with.
-steps:
+steps_cli:
   - type: action
     domain: decision
     op: create

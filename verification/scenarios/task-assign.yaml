@@ -1,17 +1,48 @@
 # Delegation, the line amenbo exists for: a task handed to me-ai is stamped as the AI's, and it
-# surfaces in the mailbox the next session opens. Driver-independent: no command line, no
-# coordinates. The CLI driver maps each step to a shipped-binary call; the GUI harness maps it to a
-# screen instruction.
+# surfaces in the mailbox the next session opens. The goal is one; the road to it is written twice,
+# since the CLI driver maps each step to a shipped-binary call and the GUI harness maps it to a
+# screen instruction. Neither road names a command line or a coordinate.
 id: task-assign
 title: A task handed to me-ai is stamped as the AI's and surfaces in the me-ai todo listing
-# The GUI's representative line: a card another process wrote has to appear on the board, which is
-# the one hop no CLI run can see. Both OCR harnesses drive this file.
-drivers: [cli, gui]
 description: >
   Create a task, assign it to me-ai, then read it back two ways: the assignee the store kept, and
   the me-ai / todo listing the next session opens. This is the smallest end-to-end proof that a
   write lands and is readable back.
-steps:
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — handed to me-ai
+    as: seed
+
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: seed
+      assignee: me-ai
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: assignee_kind
+      equals: ai
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "assignee:me-ai status:todo"
+      target: seed
+      present: true
+
+# The GUI's representative road, and it walks the same ground on purpose: a card another process
+# wrote has to appear on the board, which is the one hop no CLI run can see. Both OCR harnesses
+# drive this file.
+steps_gui:
   - type: action
     domain: task
     op: create

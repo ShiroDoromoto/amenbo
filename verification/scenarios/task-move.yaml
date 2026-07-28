@@ -7,7 +7,7 @@ description: >
   Create a second project, move two tasks into it, and read back the project each one reports —
   then send the second to the top and read the listing's order. Re-homing and reordering ride the
   same command, and a build can carry one of them and lose the other.
-steps:
+steps_cli:
   - type: action
     domain: project
     op: create

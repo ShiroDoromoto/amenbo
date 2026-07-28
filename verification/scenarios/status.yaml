@@ -5,7 +5,7 @@ description: >
   in progress is the reservation — something a person declares, and no day can imply. So what proves
   the view is a task moving between the dated buckets as its days change, a reserved task standing in
   the in-progress section with no day on it at all, and everything leaving once it is done.
-steps:
+steps_cli:
   # Past its day: overdue, and nowhere else.
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — its day has gone }, as: late }
   - { type: action, domain: task, op: update, with: { target: late, due: "2020-01-01" } }

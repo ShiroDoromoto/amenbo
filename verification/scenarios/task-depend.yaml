@@ -8,7 +8,7 @@ description: >
   Register two tasks, make one wait on the other, and read the dependent's readiness as the blocker
   is finished, the edge dropped, and the blocker reopened. Readiness is derived, never stored, so
   what is checked here is the derivation the shipped build performs, not a flag someone set.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

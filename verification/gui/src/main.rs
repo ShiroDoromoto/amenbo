@@ -66,11 +66,11 @@ fn run(opts: &Opts) -> Result<bool, String> {
     let scenario = amenbo_scenario::lint_file(&opts.scenario)
         .map_err(|errs| format!("scenario does not load/validate:\n  {}", errs.join("\n  ")))?;
 
-    // The screen is asked for in the scenario, never assumed by the harness: shooting a line written
+    // The screen is asked for in the scenario, never assumed by the harness: shooting a road written
     // for the CLI would spend a human's eye on `Review` steps nobody meant to send here.
     if !scenario.runs_on(amenbo_scenario::Driver::Gui) {
         return Err(format!(
-            "`{}` is written for {} — add `gui` to its `drivers:` if the screen is where it belongs",
+            "`{}` carries a road for {} alone — write it a `steps_gui:` one if the screen is where it belongs",
             scenario.id,
             scenario.driver_tokens().join(", ")
         ));
@@ -93,7 +93,10 @@ fn run(opts: &Opts) -> Result<bool, String> {
         .unwrap_or_else(|| default_evidence_dir(&scenario.id));
 
     if opts.step {
-        eprintln!("stepping: {} step(s) — the run stops after each shot", scenario.steps.len());
+        eprintln!(
+            "stepping: {} step(s) — the run stops after each shot",
+            scenario.steps(amenbo_scenario::Driver::Gui).len()
+        );
     }
 
     let capture_bin =

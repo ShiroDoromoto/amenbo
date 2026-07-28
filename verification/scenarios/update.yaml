@@ -13,7 +13,7 @@ description: >
   rather than to an empty offer, reports no newer version instead of guessing at one, and opens
   nothing. That last one is the point of `--print`, and the reason a gate can run this at all: a
   check that launched a browser would take over the screen of whoever ran it.
-steps:
+steps_cli:
   # Nothing was opened. `--print` is the headless face of the command, and it has to stay one.
   - type: assert
     domain: store

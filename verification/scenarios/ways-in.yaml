@@ -19,13 +19,12 @@
 # and choose that project in it before releasing the second shot.
 id: ways-in
 title: Both ways in are the app's own to carry out — raise a project, or open one this device holds — and neither hands over a command to type
-drivers: [gui]
 description: >
   Stand where a reader with nothing linked yet arrives, and read what is offered. Two cards, and
   nothing on the screen to paste into a terminal. Open the second and it asks which of this device's
   projects the folder is to be linked to — the whole of what that card is for, and the step it takes
   before the folder picker.
-steps:
+steps_gui:
   - type: assert
     domain: folder
     op: ways-in

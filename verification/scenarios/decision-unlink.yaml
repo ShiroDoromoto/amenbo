@@ -9,7 +9,7 @@ description: >
   the pair and confirm it names nothing again — read both from its own card and from the listing
   that narrows by the edge. A builds_on edge is drawn and taken back the same way, to
   show the pair is what names the edge, whichever kind it carries.
-steps:
+steps_cli:
   - type: action
     domain: decision
     op: create

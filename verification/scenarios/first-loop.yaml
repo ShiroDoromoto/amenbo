@@ -22,13 +22,12 @@
 # card, and the card could be blank.
 id: first-loop
 title: The screen a new project ends on leads with the first loop, and the request it hands over names the file the AI is told to read
-drivers: [gui]
 description: >
   Stand at the last step of creating a project and read what it offers. The loop leads it — open a
   terminal, copy the request, watch the tasks arrive — and the request it hands over names AGENTS.md,
   which is what sends the reader's AI to learn amenbo before it writes anything. The moves that were
   there before the loop sit underneath it, and the way on to the board is last.
-steps:
+steps_gui:
   - type: assert
     domain: folder
     op: first-loop

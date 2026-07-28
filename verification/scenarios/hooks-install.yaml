@@ -5,7 +5,7 @@ description: >
   only place it can honestly be checked: the hook file has to land in a real `.git/hooks`, and the
   status has to read back what is actually in each slot. The run makes its own throwaway repository
   to write into — nothing here touches a repository anyone is working in.
-steps:
+steps_cli:
   # Before there is a repository at all there is no slot to report on.
   - { type: assert, domain: repo, op: hooks, with: { hook: pre-commit, state: no slot } }
 

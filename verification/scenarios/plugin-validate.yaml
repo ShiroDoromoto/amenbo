@@ -9,7 +9,7 @@ description: >
   rule at a time — an asset URL that is not https, and a file that does not even parse — and read back
   not just that it failed but which rule it failed on. A check that says "invalid" for the wrong
   reason is a check an author cannot act on.
-steps:
+steps_cli:
   - type: action
     domain: repo
     op: write-file

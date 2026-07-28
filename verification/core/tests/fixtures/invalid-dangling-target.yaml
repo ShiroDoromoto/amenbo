@@ -1,7 +1,7 @@
 # Rejected: `target: ghost` names no earlier `as:` binding.
 id: invalid-dangling-target
 title: a target that resolves to nothing
-steps:
+steps_cli:
   - type: action
     domain: task
     op: assign

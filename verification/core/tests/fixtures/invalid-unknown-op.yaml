@@ -1,7 +1,7 @@
 # Rejected: `frobnicate` is not a known task action op — the loader fails closed.
 id: invalid-unknown-op
 title: an op that does not exist
-steps:
+steps_cli:
   - type: action
     domain: task
     op: frobnicate

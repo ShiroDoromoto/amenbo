@@ -10,7 +10,7 @@ description: >
   on: the timeline is read back, and a second snapshot is taken to its own path. The destination of a
   backup must not already exist, so taking two is not a repetition — it is the ordinary case of
   keeping yesterday's archive while writing today's.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

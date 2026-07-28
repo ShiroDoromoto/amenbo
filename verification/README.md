@@ -4,13 +4,13 @@ This subsystem verifies the **shipped / installed** amenbo build as a black box,
 release goes out. It is deliberately separate from `make test`, which exercises the
 build-time workspace artifacts.
 
-The single source of truth is the set of **scenarios**: declarative YAML describing a
-domain procedure plus its expected results, with no command line or coordinates baked in.
-Every driver reads the same scenario and maps it to its own world.
+The single source of truth is the set of **scenarios**: declarative YAML naming what is being
+proved and the road each driver takes to prove it, with no command line or coordinates baked in.
+The goal is shared; the steps belong to the driver that walks them (`steps_cli` / `steps_gui`).
 
 ```
 verification/
-  scenarios/   the single source of truth (YAML). Every driver reads these.
+  scenarios/   the single source of truth (YAML). Every driver walks its own road through these.
   fixtures/    text a scenario cannot hold itself (a file carrying an amenbo ref for the lint)
   core/        the scenario schema + validating loader (crate `amenbo-scenario`, `lint` + `emit` bins)
   cli/         CLI driver + runner + coverage count — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
@@ -61,8 +61,8 @@ Adding a line to the set:
 own `official` claim is read back nowhere in the CLI, neither is the request a new project hands the
 reader to paste, and neither is whether the ways in a reader is offered are the interface's own to
 carry out — so the capability list names no command for any of them, and no file can be named after
-one. Such a line gets a file of its own, `drivers: [gui]`, named after what it looks at
-(`plugin-browse.yaml`, `first-loop.yaml`, `ways-in.yaml`). It is not a second file for a capability
+one. Such a line gets a file of its own, carrying a `steps_gui` road alone, named after what it
+looks at (`plugin-browse.yaml`, `first-loop.yaml`, `ways-in.yaml`). It is not a second file for a capability
 — it is the file for a line the capability list cannot reach — and the count treats it as neither
 covered nor stray.
 
@@ -133,14 +133,14 @@ cargo run -p amenbo-verify-cli --bin verify-all -- --bin /path/to/amenbo
 cargo run -p amenbo-verify-cli --bin verify-all -- scenarios/task-add.yaml scenarios/task-assign.yaml --json
 ```
 
-A scenario that does not name `cli` in its `drivers` is **skipped**: printed as skipped, counted
-apart, and left out of the verdict. If that leaves nothing to run, the exit is non-zero rather than
+A scenario with no `steps_cli` road is **skipped**: printed as skipped, counted apart, and left
+out of the verdict. If that leaves nothing to run, the exit is non-zero rather than
 an empty green — a gate that verified nothing must not read as one that verified everything.
 
 The exit code is the roll-up — `0` when every scenario that ran is green, non-zero when any is red
 or errored — so a release gate reads it directly. The `--json` aggregate carries `total` / `passed`
-/ `failed` / `skipped` / `green` plus each scenario's own report (or its error, or the drivers it
-was written for).
+/ `failed` / `skipped` / `green` plus each scenario's own report (or its error, or the drivers
+whose roads it carries).
 
 ## Coverage
 
@@ -159,8 +159,8 @@ cargo run -p amenbo-verify-cli --bin verify-coverage -- --json
 
 It reports four things: capabilities with no file (**uncovered**), files answering for no capability
 (**unowned** — a leftover from a capability that went, or a name that never matched one), files
-written for the screen alone (**screen_only** — `drivers: [gui]`, counted apart because the
-denominator is what the CLI declares and a line the CLI cannot read has no command to be named
+written for the screen alone (**screen_only** — a `steps_gui` road and no `steps_cli` one, counted
+apart because the denominator is what the CLI declares and a line the CLI cannot read has no command to be named
 after), and files whose `id` has drifted from their name (**misfiled** — the name is what the count
 matches on, the id is what a report prints, and a file where they disagree is filed as one capability
 and reported as another).
@@ -172,10 +172,10 @@ directory would not be read).
 
 ## GUI harness (mac)
 
-`verify-gui` reads the same scenario as a **screen checklist**, and only a scenario whose
-`drivers` name `gui` — it refuses the rest by name instead of shooting a line written for the
-binary. It bakes in no command line and no pixel: each step becomes a plain-language instruction of what to do or confirm on
-screen, the running GUI's window is located through `app/scripts/uiauto/uiauto.swift`, and every
+`verify-gui` walks a scenario's `steps_gui` road as a **screen checklist**, and only a scenario
+that has one — it refuses the rest by name instead of shooting a road written for the binary. It
+bakes in no command line and no pixel: each step becomes a plain-language instruction of what to do
+or confirm on screen, the running GUI's window is located through `app/scripts/uiauto/uiauto.swift`, and every
 step is captured with `screencapture -l <winid>` into an evidence directory (plus a
 `manifest.json` pairing each instruction, verdict and shot).
 
@@ -185,7 +185,7 @@ title — reads the shot back, and passes when that text is present (or absent, 
 false`). The recognized text is written next to the shot (`NN-…​.txt`) as evidence of the reading.
 An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`: its shot is
 kept for an AI/human eye and does not fail the run. tesseract stays the Linux container path
-(`scripts/docker/gui-e2e.sh`); each driver maps the one scenario source to its own world.
+(`scripts/docker/gui-e2e.sh`); each driver walks the road written for it.
 
 The Linux container carries no toolchain, so it can't read the scenario itself. Its host launcher
 (`make verify-gui-linux`) resolves the scenario through the `emit` bin and passes the card — the
@@ -270,8 +270,8 @@ exec 3>&-
 
 ## Scenario format
 
-A scenario is an `id`, a human `title`, an optional `description`, an optional `drivers`
-list, and an ordered list of `steps`. Each step is an `action` (changes state) or an
+A scenario is an `id`, a human `title`, an optional `description`, and an ordered list of steps
+under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
 `comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` / `plugin`) and an
 `op`, and carries named args under `with`. An action may bind its result with `as:`, and a later step
@@ -337,8 +337,11 @@ so the file carries it and the scenario names the file.
 ```yaml
 id: task-assign
 title: A task handed to me-ai is stamped as the AI's and surfaces in the me-ai todo listing
-drivers: [cli, gui]
-steps:
+steps_cli:
+  - { type: action, domain: task, op: create, with: { title: SEED }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: assert, domain: task, op: listed, with: { filter: "assignee:me-ai status:todo", target: seed, present: true } }
+steps_gui:
   - { type: action, domain: task, op: create, with: { title: SEED }, as: seed }
   - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
   - { type: assert, domain: task, op: listed, with: { filter: "assignee:me-ai status:todo", target: seed, present: true } }
@@ -389,24 +392,33 @@ fails** — that is the regression it exists to catch — and being refused for 
 fails too, since a different guard is not the one the line is about. A refused operation produces
 nothing, so it takes no `as:`.
 
-### `drivers` — which harnesses run this line
+### `steps_cli` / `steps_gui` — one goal, a road apiece
 
-`drivers` says which harnesses a scenario is written for. **Omit it and the scenario is
-CLI-only**, which is where a line belongs unless the screen is the only place it can break.
-The set is one source of truth, but a driver only carries what it was given: the CLI runner
-skips a scenario that does not name `cli`, and the GUI harness refuses one that does not
-name `gui` rather than spending an eye on `Review` steps nobody sent there.
+**Having steps is what says a driver runs this line.** There is nothing else to declare, so nothing
+that can disagree with the steps: the CLI runner skips a scenario with no `steps_cli` road, and the
+GUI harness refuses one with no `steps_gui` road rather than spending an eye on `Review` steps
+nobody sent there. A file with neither is refused by the lint — a scenario nothing walks rots while
+the set around it reports green.
 
-The asymmetry is what the field is for. A CLI line costs a process and an exit code, so that
-set aims at the whole capability list; a GUI line costs a screenshot, an OCR pass and a
-human reading the `field` asserts OCR cannot judge, so that set stays a chosen few. An empty
-list is refused — a scenario nothing runs rots while the set around it reports green.
+Write the road the driver actually travels. A screen's road is a different shape, not a rendering
+of the CLI's: linking a folder to a project is one command to type, and on screen it is a card to
+open, a project to answer for and a folder to pick. Written once for both, one of the two comes out
+bent. Where the two roads really are the same ground, write it in both — the duplication is small
+next to a file where the screen's half quietly went stale.
+
+Bindings belong to the road they are made on. A `target:` in `steps_gui` resolves against
+`steps_gui` alone, because the two lists are never walked in one run.
+
+Which roads a file carries is a cost question. A CLI line costs a process and an exit code, so that
+set aims wide; a GUI line costs a screenshot, an OCR pass and a human reading the `field` asserts
+OCR cannot judge, so that set stays a chosen few.
 
 ## Lint
 
 The loader checks both layers — the YAML parses into the typed model (misspelled keys are
 caught), and the semantic pass (known ops, required args, each arg of the type its op takes,
-every reference resolving to an earlier `as:`). Run it over the whole scenario set:
+every reference resolving to an earlier `as:` on the same road). Run it over the whole scenario
+set:
 
 ```sh
 cd verification && cargo run -p amenbo-scenario --bin lint

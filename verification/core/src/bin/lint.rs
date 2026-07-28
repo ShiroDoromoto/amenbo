@@ -25,7 +25,16 @@ fn main() -> ExitCode {
     let mut failed = 0usize;
     for path in &files {
         match lint_file(path) {
-            Ok(s) => println!("ok    {}  ({} step(s): {})", path.display(), s.steps.len(), s.id),
+            Ok(s) => {
+                // One line per file names each road it carries, since a file whose GUI steps went
+                // missing still lints clean on its CLI ones alone.
+                let roads: Vec<String> = amenbo_scenario::Driver::ALL
+                    .iter()
+                    .filter(|d| s.runs_on(**d))
+                    .map(|d| format!("{} {} step(s)", d.as_str(), s.steps(*d).len()))
+                    .collect();
+                println!("ok    {}  ({}: {})", path.display(), roads.join(", "), s.id);
+            }
             Err(errs) => {
                 failed += 1;
                 println!("FAIL  {}", path.display());

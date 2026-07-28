@@ -27,7 +27,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use amenbo_scenario::{Args, Domain, Scenario, Step};
+use amenbo_scenario::{Args, Domain, Driver, Scenario, Step};
 
 // ---------------------------------------------------------------------------
 // Locating and fronting the app (the side effects: swift / osascript)
@@ -432,7 +432,8 @@ where
     let mut records = Vec::new();
     let mut passed = true;
 
-    for (i, step) in scenario.steps.iter().enumerate() {
+    let steps = scenario.steps(Driver::Gui);
+    for (i, step) in steps.iter().enumerate() {
         let (kind, domain, op) = match step {
             Step::Action { domain, op, .. } => ("action", *domain, op.clone()),
             Step::Assert { domain, op, .. } => ("assert", *domain, op.clone()),
@@ -476,7 +477,7 @@ where
             expected,
             found,
         };
-        if i + 1 < scenario.steps.len() {
+        if i + 1 < steps.len() {
             pause(&record)
                 .map_err(|e| format!("step {}: waiting for the next step failed: {e}", i + 1))?;
         }
@@ -576,7 +577,7 @@ mod tests {
     const SCENARIO: &str = r#"
 id: sample
 title: A task assigned to me-ai surfaces in the listing
-steps:
+steps_gui:
   - type: action
     domain: task
     op: create
@@ -602,7 +603,7 @@ steps:
     fn instructions_read_a_bound_target_by_its_title() {
         let s = load(SCENARIO);
         let mut ins = Instructor::new();
-        let lines: Vec<String> = s.steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
         assert!(lines[0].contains("Create a task titled \"SEED\""));
         assert!(lines[1].contains("\"SEED\"") && lines[1].contains("me-ai"));
         assert!(lines[2].contains("\"SEED\"") && lines[2].contains("present in"));
@@ -612,10 +613,10 @@ steps:
     fn a_listed_assert_expects_the_bound_title_present() {
         let s = load(SCENARIO);
         let mut ins = Instructor::new();
-        for st in &s.steps {
+        for st in s.steps(Driver::Gui) {
             ins.render(st).unwrap();
         }
-        let exp = ins.expectation(&s.steps[2]).expect("listed has an expectation");
+        let exp = ins.expectation(&s.steps(Driver::Gui)[2]).expect("listed has an expectation");
         assert_eq!(exp, Expectation { text: "SEED".to_string(), present: true });
     }
 
@@ -624,7 +625,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-steps:
+steps_gui:
   - type: action
     domain: task
     op: create
@@ -637,8 +638,8 @@ steps:
 "#;
         let s = load(yaml);
         let mut ins = Instructor::new();
-        ins.render(&s.steps[0]).unwrap();
-        assert!(ins.expectation(&s.steps[1]).is_none(), "a field assert is not OCR-judged");
+        ins.render(&s.steps(Driver::Gui)[0]).unwrap();
+        assert!(ins.expectation(&s.steps(Driver::Gui)[1]).is_none(), "a field assert is not OCR-judged");
     }
 
     /// The badge line: an entry off a registered catalog reads as that catalog, and the name is what
@@ -649,8 +650,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-drivers: [gui]
-steps:
+steps_gui:
   - type: assert
     domain: plugin
     op: browsed
@@ -662,13 +662,13 @@ steps:
 "#;
         let s = load(yaml);
         let mut ins = Instructor::new();
-        let lines: Vec<String> = s.steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
         assert!(lines[0].contains("\"standup\"") && lines[0].contains("\"In-house catalog\""));
         assert!(lines[1].contains("wears the official badge"), "got: {}", lines[1]);
 
-        let exp = ins.expectation(&s.steps[0]).expect("a not-official row names its shelf");
+        let exp = ins.expectation(&s.steps(Driver::Gui)[0]).expect("a not-official row names its shelf");
         assert_eq!(exp, Expectation { text: "In-house catalog".to_string(), present: true });
-        assert!(ins.expectation(&s.steps[1]).is_none(), "the official badge is an interface word");
+        assert!(ins.expectation(&s.steps(Driver::Gui)[1]).is_none(), "the official badge is an interface word");
     }
 
     /// The detail line: opening a row off a registered catalog fetches that catalog's own document,
@@ -679,8 +679,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-drivers: [gui]
-steps:
+steps_gui:
   - type: assert
     domain: plugin
     op: detail
@@ -688,10 +687,10 @@ steps:
 "#;
         let s = load(yaml);
         let mut ins = Instructor::new();
-        let line = ins.render(&s.steps[0]).unwrap();
+        let line = ins.render(&s.steps(Driver::Gui)[0]).unwrap();
         assert!(line.contains("\"standup\"") && line.contains("\"In-house catalog\""), "got: {line}");
 
-        let exp = ins.expectation(&s.steps[0]).expect("a detail assert is OCR-judged");
+        let exp = ins.expectation(&s.steps(Driver::Gui)[0]).expect("a detail assert is OCR-judged");
         assert_eq!(exp, Expectation { text: "Channel webhook".to_string(), present: true });
     }
 
@@ -704,8 +703,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-drivers: [gui]
-steps:
+steps_gui:
   - type: assert
     domain: folder
     op: first-loop
@@ -717,13 +715,13 @@ steps:
 "#;
         let s = load(yaml);
         let mut ins = Instructor::new();
-        let lines: Vec<String> = s.steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
         assert!(lines[0].contains("\"AGENTS.md\"") && lines[0].contains("linked folder"), "got: {}", lines[0]);
         assert!(lines[1].contains("then the way on to the board"), "got: {}", lines[1]);
 
-        let exp = ins.expectation(&s.steps[0]).expect("the request's file name is OCR-judged");
+        let exp = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the request's file name is OCR-judged");
         assert_eq!(exp, Expectation { text: "AGENTS.md".to_string(), present: true });
-        assert!(ins.expectation(&s.steps[1]).is_none(), "an order is not something a reading settles");
+        assert!(ins.expectation(&s.steps(Driver::Gui)[1]).is_none(), "an order is not something a reading settles");
     }
 
     /// A title carrying an em dash is what the scenarios are actually written with, and Vision hands
@@ -750,8 +748,7 @@ steps:
         let yaml = r#"
 id: x
 title: y
-drivers: [gui]
-steps:
+steps_gui:
   - type: assert
     domain: folder
     op: ways-in
@@ -763,13 +760,13 @@ steps:
 "#;
         let s = load(yaml);
         let mut ins = Instructor::new();
-        let lines: Vec<String> = s.steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
         assert!(lines[0].contains("\"bind --project\"") && lines[0].contains("two ways in"), "got: {}", lines[0]);
         assert!(lines[1].contains("\"Greenhouse\"") && lines[1].contains("which project"), "got: {}", lines[1]);
 
-        let exp = ins.expectation(&s.steps[0]).expect("the command is what must not be read back");
+        let exp = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the command is what must not be read back");
         assert_eq!(exp, Expectation { text: "bind --project".to_string(), present: false });
-        assert!(ins.expectation(&s.steps[1]).is_none(), "a name the whole window carries is not a reading");
+        assert!(ins.expectation(&s.steps(Driver::Gui)[1]).is_none(), "a name the whole window carries is not a reading");
     }
 
     #[test]
@@ -807,7 +804,7 @@ steps:
         .expect("walk");
 
         assert!(outcome.passed, "the listed assert is green when SEED is on screen");
-        assert_eq!(*shots.borrow(), s.steps.len(), "one shot per step");
+        assert_eq!(*shots.borrow(), s.steps(Driver::Gui).len(), "one shot per step");
         let assert_rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
         assert_eq!(assert_rec.verdict, Verdict::Pass);
         assert_eq!(assert_rec.found, Some(true));

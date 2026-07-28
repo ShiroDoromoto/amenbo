@@ -9,7 +9,7 @@ description: >
   the older one it replaced. Then read each side back. Currency is derived from the edges rather than
   stored, so the superseded decision is asked what points at it — the one answer a
   reader takes everything else from.
-steps:
+steps_cli:
   - type: action
     domain: decision
     op: create

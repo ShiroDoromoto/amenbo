@@ -20,7 +20,7 @@ description: >
   scenario just registered. The returned value is read back and checked for the shape the contract
   promises — the way into the checkout — and the call that takes the checkout away again is read
   back off the execution log as having ended cleanly.
-steps:
+steps_cli:
   # The plugin resolves everything it does from the repository it is called in, so there has to be
   # one — the same shape the folder a person binds amenbo to has.
   - type: action

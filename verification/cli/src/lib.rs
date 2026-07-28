@@ -36,7 +36,7 @@ pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Repor
     let mut driver = Driver::new(bin, session)?;
 
     let mut report = Report::new(scenario);
-    for (i, step) in scenario.steps.iter().enumerate() {
+    for (i, step) in scenario.steps(amenbo_scenario::Driver::Cli).iter().enumerate() {
         let outcome = driver.exec(step)?; // an execution error aborts this scenario's run
         report.push(i, step, outcome);
     }

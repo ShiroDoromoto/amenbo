@@ -10,7 +10,7 @@ description: >
   another tool receives, so it is what is asserted against; asking amenbo what it exported would only
   ask the store the same question twice. The last line holds the other half of "one way": the export
   is a copy, and the store still has everything after it.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

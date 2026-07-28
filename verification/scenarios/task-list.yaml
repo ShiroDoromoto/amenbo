@@ -7,7 +7,7 @@ description: >
   Two tasks, told apart by priority, wording, state and assignee, are then looked for through each
   of those keys in turn. Both halves are asserted every time: a filter that returns everything
   passes a present-check as easily as a correct one does.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

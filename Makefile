@@ -316,9 +316,9 @@ dist-gui-linux:
 	@echo "→ Linux GUI bundle built (arch=$(LINUX_GUI_ARCH)):"
 	@ls -1 $(DIST_DIR)/amenbo-app-linux-*.AppImage
 
-## The scenario that drives verify-gui-linux — the single source every driver reads. Its
-## listed/present title is the card the check writes and OCRs back; override to point the
-## Linux check at another scenario.
+## The scenario that drives verify-gui-linux. The check reads its `steps_gui` road — the screen is
+## what it judges — and that road's listed/present title is the card it writes and OCRs back;
+## override to point the Linux check at another scenario.
 SCENARIO ?= verification/scenarios/task-assign.yaml
 
 ## Exercise "another process writes → the screen updates" on a real Linux GUI app. Put the AppImage
@@ -342,8 +342,8 @@ verify-gui-linux: $(GUI_APPIMAGE_HOST) $(CLI_LINUX_HOST)
 	  -t amenbo-linux-gui-e2e:latest scripts/docker/
 	rm -f scripts/docker/$(notdir $(GUI_APPIMAGE_HOST)) scripts/docker/$(notdir $(CLI_LINUX_HOST))
 	@card="$$(cargo run -q --manifest-path verification/Cargo.toml -p amenbo-scenario --bin emit -- $(SCENARIO) \
-	  | jq -r '([ .steps[] | select(.as != null) | {key: .as, value: .with.title} ] | from_entries) as $$labels \
-	    | ([ .steps[] | select(.type == "assert" and .op == "listed" and (.with.present != false)) | .with.target ] | .[0]) as $$tgt \
+	  | jq -r '([ .steps_gui[] | select(.as != null) | {key: .as, value: .with.title} ] | from_entries) as $$labels \
+	    | ([ .steps_gui[] | select(.type == "assert" and .op == "listed" and (.with.present != false)) | .with.target ] | .[0]) as $$tgt \
 	    | $$labels[$$tgt] // empty')"; \
 	  [ -n "$$card" ] || { echo "✗ $(SCENARIO) has no listed/present title to drive the GUI check"; exit 1; }; \
 	  echo "→ scenario card (from $(SCENARIO)): $$card"; \

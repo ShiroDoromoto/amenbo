@@ -7,7 +7,7 @@ description: >
   Record two commit SHAs on a task, look the task up by one of them, then forget that one and read
   back what is left. amenbo stores a SHA as an opaque string — it never reads git — so what this
   proves is the store's own round trip: recorded, listed, searchable, and removable one at a time.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

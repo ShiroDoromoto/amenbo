@@ -9,7 +9,7 @@ description: >
   start day still ahead and watch readiness go with it; then clear the start day and the priority
   and read the absence back. Clearing is its own command, and a field that will not clear is a field
   the user cannot take back.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

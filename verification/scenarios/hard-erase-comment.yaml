@@ -14,7 +14,7 @@ description: >
   than just a row in it. Then the other arm, back to back: an accepted decision's body is overwritten
   in place, and the decision is read back to see that it kept its number and its status while losing
   what was in it. Run as the human: this is human-gated maintenance and the AI actor is refused.
-steps:
+steps_cli:
   - type: action
     domain: task
     op: create

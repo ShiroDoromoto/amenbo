@@ -4,7 +4,7 @@ description: >
   The reading side of projects. The listing is what a person picks a place of work from, and the
   detail is what says how much is in it — a count that does not follow the tasks makes the listing
   lie about where the work is.
-steps:
+steps_cli:
   - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — registered first }, as: first }
   - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — registered second }, as: second }
 

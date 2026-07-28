@@ -330,7 +330,6 @@ pub fn apply(
     let here = Platform::here().ok_or_else(|| {
         Error::invalid(
             format!("plugin manifests cannot name {}, so '{name}' cannot be updated here", std::env::consts::OS),
-            format!("プラグインの manifest は {} を名指せないので、ここでは '{name}' を更新できません", std::env::consts::OS),
         )
     })?;
     let view = plugin_catalog::for_install(paths)?;
@@ -368,28 +367,23 @@ fn no_build_for(view: &Discovery, name: &str, origin: Option<&Origin>) -> Error 
         Some(Origin::Official) => {
             return Error::not_found(
                 format!("the official catalog does not list a plugin named '{name}', so there is no build to update to"),
-                format!("公式カタログにプラグイン '{name}' は無いので、更新先の版がありません"),
             )
         }
         None => {
             return Error::not_found(
                 format!("'{name}' does not record which catalog it came from, so it is looked for in the official catalog, which does not list it. Uninstall and install it again to record where it comes from."),
-                format!("'{name}' はどの配布元から入れたかを記録していないため公式カタログを見ますが、そこには載っていません。uninstall して install し直すと配布元が記録されます。"),
             )
         }
     };
     match view.sources.iter().find(|s| &s.url == url) {
         None => Error::not_found(
             format!("'{name}' was installed from {url}, which is no longer a registered catalog — register it again to update from it (amenbo updates a plugin only from the catalog it came from)"),
-            format!("'{name}' の配布元 {url} は登録が解除されています——更新するには登録し直してください（更新は install した配布元からのみ行います）"),
         ),
         Some(source) if !source.reachable => Error::not_found(
             format!("'{name}' was installed from {url}, which did not answer and has nothing cached — there is nothing to compare its build against"),
-            format!("'{name}' の配布元 {url} は応答せず、キャッシュもありません——版を比べる相手がありません"),
         ),
         Some(_) => Error::not_found(
             format!("'{name}' was installed from {url}, which no longer lists it — there is no build to update to (amenbo updates a plugin only from the catalog it came from)"),
-            format!("'{name}' の配布元 {url} は、もうこのプラグインを載せていません——更新先の版がありません（更新は install した配布元からのみ行います）"),
         ),
     }
 }
@@ -535,7 +529,6 @@ pub fn rollback(paths: &Paths, name: &str) -> Result<RolledBack> {
     if !backup_program.exists() {
         return Err(Error::not_found(
             format!("plugin '{name}' has no retained build to roll back to — it was not updated, or a rollback already used it"),
-            format!("プラグイン '{name}' に戻せる版がありません——更新していないか、既にロールバック済みです"),
         ));
     }
 
@@ -545,14 +538,10 @@ pub fn rollback(paths: &Paths, name: &str) -> Result<RolledBack> {
     let raw = std::fs::read_to_string(&backup_manifest).map_err(|e| {
         Error::invalid(
             format!("plugin '{name}' has a retained binary but no manifest beside it ({e}) — the pair a rollback needs is incomplete"),
-            format!("プラグイン '{name}' に退避バイナリはありますが manifest がありません（{e}）——ロールバックに必要な対が欠けています"),
         )
     })?;
     let manifest: Manifest = serde_json::from_str(&raw).map_err(|e| {
-        Error::invalid(
-            format!("plugin '{name}' has a retained manifest that will not parse: {e}"),
-            format!("プラグイン '{name}' の退避 manifest を読めません：{e}"),
-        )
+        Error::invalid(format!("plugin '{name}' has a retained manifest that will not parse: {e}"))
     })?;
 
     let placed = plugin_install::place(paths, &manifest, &program)?;

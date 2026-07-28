@@ -13,8 +13,8 @@ import type { ErrorCode } from "./errorCodes";
 /** The stable code core's version gate (`ensure_format_supported`) fails with. */
 const FORMAT_AHEAD: ErrorCode = "format_ahead";
 
-/** The refusal core wrote, in both languages — what the restart screen shows when restarting is not the answer. */
-export type FormatAheadDetail = { ja: string; en: string };
+/** The refusal core wrote — what the restart screen shows when restarting is not the answer. */
+export type FormatAheadDetail = string;
 
 let ahead = false;
 let detail: FormatAheadDetail | null = null;
@@ -30,10 +30,8 @@ export function noteInvokeFailure(e: unknown): void {
   // disk — but when it is not, this refusal is the only thing that names the version that wrote the store and
   // the way back (there is no downgrade, so that way is a restore from the pre-migration backup). Nothing else
   // reaching the screen can say it: every command that could ask is refused by the same gate.
-  const { message, message_en } = e as { message?: unknown; message_en?: unknown };
-  if (typeof message === "string" && typeof message_en === "string") {
-    detail = { ja: message, en: message_en };
-  }
+  const { message_en } = e as { message_en?: unknown };
+  if (typeof message_en === "string") detail = message_en;
   for (const fn of listeners) fn();
 }
 

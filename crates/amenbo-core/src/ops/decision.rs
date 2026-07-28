@@ -25,7 +25,7 @@ use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
 /// This entity's noun (the English/Japanese pair used in not_found messages).
-pub(crate) const NOUN: Noun = Noun { en: "decision", ja: "決定", code: ErrorCode::NotFoundDecision };
+pub(crate) const NOUN: Noun = Noun { en: "decision", code: ErrorCode::NotFoundDecision };
 
 /// Append a comment to a decision record (written to its own `decision_comment` table).
 /// `decision_id` is a decision id the caller has already resolved. The empty-body check is shared
@@ -95,10 +95,7 @@ pub struct NewDecision {
 /// write — read it outside and two concurrent writers take the same number.
 pub fn add(tx: &WriteTx<'_>, input: NewDecision) -> Result<Decision> {
     if input.title.trim().is_empty() {
-        return Err(Error::invalid(
-            "a decision title cannot be empty",
-            "決定のタイトルは空にできません",
-        ));
+        return Err(Error::invalid("a decision title cannot be empty"));
     }
     if read::project(tx.conn(), input.project_id)?.is_none() {
         return Err(crate::ops::project::NOUN.not_found(input.project_id.to_string()));
@@ -139,10 +136,7 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: DecisionPatch) -> Result<Decisio
     let before = live_before(tx, id)?;
     if before.status == DecisionStatus::Rejected {
         return Err(Error::Invalid(
-            Msg::new(
-                format!("decision '{id}' is rejected and cannot be edited"),
-                format!("決定 '{id}' は却下済みのため編集できません"),
-            )
+            Msg::new(format!("decision '{id}' is rejected and cannot be edited"))
             .coded(ErrorCode::InvalidDecisionEditRejected)
             .with("ref", crate::idref::decision(id)),
         ));
@@ -150,10 +144,7 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: DecisionPatch) -> Result<Decisio
     let mut d = before.clone();
     if let Some(title) = patch.title {
         if title.trim().is_empty() {
-            return Err(Error::invalid(
-                "a decision title cannot be empty",
-                "決定のタイトルは空にできません",
-            ));
+            return Err(Error::invalid("a decision title cannot be empty"));
         }
         d.title = title;
     }
@@ -181,10 +172,7 @@ pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<(
         DecisionStatus::Proposed => {}
         other => {
             return Err(Error::Invalid(
-                Msg::new(
-                    format!("decision '{id}' is {} and cannot be accepted", other.as_str()),
-                    format!("決定 '{id}' は {} のため採択できません", other.as_str()),
-                )
+                Msg::new(format!("decision '{id}' is {} and cannot be accepted", other.as_str()))
                 .coded(ErrorCode::InvalidDecisionAcceptRejected)
                 .with("ref", crate::idref::decision(id)),
             ))
@@ -216,10 +204,7 @@ pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
         DecisionStatus::Proposed => {}
         other => {
             return Err(Error::Invalid(
-                Msg::new(
-                    format!("decision '{id}' is {} and cannot be rejected", other.as_str()),
-                    format!("決定 '{id}' は {} のため却下できません", other.as_str()),
-                )
+                Msg::new(format!("decision '{id}' is {} and cannot be rejected", other.as_str()))
                 .coded(ErrorCode::InvalidDecisionRejectAccepted)
                 .with("ref", crate::idref::decision(id)),
             ))
@@ -254,10 +239,7 @@ pub fn reopen(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
         DecisionStatus::Accepted => {}
         other => {
             return Err(Error::Invalid(
-                Msg::new(
-                    format!("decision '{id}' is {} and cannot be reopened", other.as_str()),
-                    format!("決定 '{id}' は {} のため議論中に戻せません", other.as_str()),
-                )
+                Msg::new(format!("decision '{id}' is {} and cannot be reopened", other.as_str()))
                 .coded(ErrorCode::InvalidDecisionReopenRejected)
                 .with("ref", crate::idref::decision(id)),
             ))
@@ -301,10 +283,7 @@ pub fn supersede(
 ) -> Result<(Decision, bool, bool)> {
     if new_id == old_id {
         return Err(Error::Invalid(
-            Msg::new(
-                "a decision cannot supersede itself",
-                "決定は自分自身を置き換えられません",
-            )
+            Msg::new("a decision cannot supersede itself")
             .coded(ErrorCode::InvalidDecisionSelfSupersede),
         ));
     }
@@ -345,10 +324,7 @@ pub fn supersede(
 pub fn amend(tx: &WriteTx<'_>, new_id: i64, old_id: i64) -> Result<Decision> {
     if new_id == old_id {
         return Err(Error::Invalid(
-            Msg::new(
-                "a decision cannot amend itself",
-                "決定は自分自身を改訂できません",
-            )
+            Msg::new("a decision cannot amend itself")
             .coded(ErrorCode::InvalidDecisionSelfAmend),
         ));
     }
@@ -373,10 +349,7 @@ pub fn amend(tx: &WriteTx<'_>, new_id: i64, old_id: i64) -> Result<Decision> {
 pub fn builds_on(tx: &WriteTx<'_>, new_id: i64, old_id: i64) -> Result<Decision> {
     if new_id == old_id {
         return Err(Error::Invalid(
-            Msg::new(
-                "a decision cannot build on itself",
-                "決定は自分自身を前提にできません",
-            )
+            Msg::new("a decision cannot build on itself")
             .coded(ErrorCode::InvalidDecisionSelfBuildsOn),
         ));
     }
@@ -433,7 +406,6 @@ fn put_edge(
         Some(live_before(tx, decision_id)?.project_id),
         Some(live_before(tx, target_decision_id)?.project_id),
         "this decision edge",
-        "この決定間エッジ",
     )?;
     let now = Timestamp::now();
     if let Some(id) = read::decision_edge_id(tx.conn(), decision_id, target_decision_id)? {
@@ -517,7 +489,6 @@ pub fn link(
         Some(decision.project_id),
         task.project_id,
         "this decision-task link",
-        "この決定とタスクのリンク",
     )?;
     if let Some(id) = read::decision_task_link_id(tx.conn(), decision_id, task_id)? {
         let existing = read::decision_task_link(tx.conn(), id)?

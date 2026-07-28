@@ -18,10 +18,7 @@ use crate::view::{DecisionCompact, DecisionRef, Ref, TaskCompact};
 fn parse_filter_tokens(expr: &str, mut apply: impl FnMut(&str, &str) -> Result<()>) -> Result<()> {
     for token in expr.split_whitespace() {
         let (key, value) = token.split_once(':').ok_or_else(|| {
-            Error::invalid(
-                format!("filter '{token}' must be in key:value form"),
-                format!("フィルタ '{token}' は key:value 形式で指定してください"),
-            )
+            Error::invalid(format!("filter '{token}' must be in key:value form"))
         })?;
         apply(key, value)?;
     }
@@ -160,10 +157,7 @@ impl DimensionFilter {
     /// itself contain `=`.
     fn parse_axis_value(spec: &str) -> Result<DimensionFilter> {
         let invalid = || {
-            Error::invalid(
-                "dim must be <axis>=<value> (e.g. dim:Category=bug, dim:Category=none)",
-                "dim は <軸>=<値> の形式です（例: dim:カテゴリー=バグ・dim:カテゴリー=none）",
-            )
+            Error::invalid("dim must be <axis>=<value> (e.g. dim:Category=bug, dim:Category=none)")
         };
         let (axis, value) = spec.split_once('=').ok_or_else(invalid)?;
         if axis.trim().is_empty() {
@@ -198,10 +192,7 @@ impl DimensionFilter {
             None => {
                 let hits = read::time_axis_dimensions(conn).map_err(&oops)?;
                 if hits.is_empty() {
-                    return Err(Error::not_found(
-                        "no dimension is designated as the time axis",
-                        "時間軸に指名された次元がありません",
-                    ));
+                    return Err(Error::not_found("no dimension is designated as the time axis"));
                 }
                 hits
             }
@@ -287,7 +278,6 @@ impl NumberFilter {
         }
         Err(Error::invalid(
             "number must be a conversational ref like AMB-T-<n> or AMB-D-<n> (the bare <n> / #<n> / T-<n> are read too)",
-            "number は AMB-T-<n> / AMB-D-<n> のような会話用参照で指定してください（素の <n> / #<n> / T-<n> も読めます）",
         ))
     }
 
@@ -308,15 +298,9 @@ fn parse_cross_ref(value: &str, want_decision: bool) -> Result<u32> {
     let nf = NumberFilter::parse(value)?;
     if nf.require_decision.is_some_and(|is_decision| is_decision != want_decision) {
         return Err(if want_decision {
-            Error::invalid(
-                "decision must name a decision (AMB-D-<n> / D-<n> / <n>)",
-                "decision は決定を指します（AMB-D-<n> / D-<n> / <n>）",
-            )
+            Error::invalid("decision must name a decision (AMB-D-<n> / D-<n> / <n>)")
         } else {
-            Error::invalid(
-                "task must name a task (AMB-T-<n> / T-<n> / <n>)",
-                "task はタスクを指します（AMB-T-<n> / T-<n> / <n>）",
-            )
+            Error::invalid("task must name a task (AMB-T-<n> / T-<n> / <n>)")
         });
     }
     Ok(nf.number)
@@ -345,7 +329,7 @@ impl Filter {
                     f.done = Some(match value {
                         "true" => true,
                         "false" => false,
-                        _ => return Err(Error::invalid("done must be true / false", "done は true / false")),
+                        _ => return Err(Error::invalid("done must be true / false")),
                     })
                 }
                 "status" => {
@@ -355,7 +339,7 @@ impl Filter {
                     let mut statuses = Vec::new();
                     for part in value.split(',') {
                         let parsed = TaskStatus::parse(part).ok_or_else(|| {
-                            Error::invalid("status must be todo / in_progress / done / blocked / rejected", "status は todo / in_progress / done / blocked / rejected")
+                            Error::invalid("status must be todo / in_progress / done / blocked / rejected")
                         })?;
                         if !statuses.contains(&parsed) {
                             statuses.push(parsed);
@@ -380,10 +364,7 @@ impl Filter {
                         "future" => StartFilter::Future,
                         "none" => StartFilter::None,
                         _ => {
-                            return Err(Error::invalid(
-                                "start must be today / future / none",
-                                "start は today / future / none",
-                            ))
+                            return Err(Error::invalid("start must be today / future / none"))
                         }
                     })
                 }
@@ -393,7 +374,7 @@ impl Filter {
                         "medium" => Some(Priority::Medium),
                         "low" => Some(Priority::Low),
                         "none" => None,
-                        _ => return Err(Error::invalid("priority must be high / medium / low / none", "priority は high / medium / low / none")),
+                        _ => return Err(Error::invalid("priority must be high / medium / low / none")),
                     })
                 }
                 "project" => f.project_ref = Some(value.to_string()),
@@ -406,10 +387,7 @@ impl Filter {
                         "me" | "human" => AssigneeFilter::Me,
                         "me-ai" | "ai" => AssigneeFilter::MeAi,
                         _ => {
-                            return Err(Error::invalid(
-                                "assignee must be none / me / me-ai",
-                                "assignee は none / me / me-ai のいずれかです",
-                            ))
+                            return Err(Error::invalid("assignee must be none / me / me-ai"))
                         }
                     })
                 }
@@ -419,7 +397,7 @@ impl Filter {
                     f.ai = Some(match value {
                         "true" => true,
                         "false" => false,
-                        _ => return Err(Error::invalid("ai must be true / false", "ai は true / false")),
+                        _ => return Err(Error::invalid("ai must be true / false")),
                     })
                 }
                 // `ready:yes|no` and its alias `blocked:none|open` (synonyms).
@@ -427,14 +405,14 @@ impl Filter {
                     f.ready = Some(match value {
                         "yes" => true,
                         "no" => false,
-                        _ => return Err(Error::invalid("ready must be yes / no", "ready は yes / no")),
+                        _ => return Err(Error::invalid("ready must be yes / no")),
                     })
                 }
                 "blocked" => {
                     f.ready = Some(match value {
                         "none" => true,
                         "open" => false,
-                        _ => return Err(Error::invalid("blocked must be none / open", "blocked は none / open")),
+                        _ => return Err(Error::invalid("blocked must be none / open")),
                     })
                 }
                 // Traverse the decision ⇄ task link (symmetric with `task:` on `decision list`).
@@ -446,10 +424,7 @@ impl Filter {
                 "commit" => {
                     let sha = crate::ops::commit::normalize(value);
                     if sha.is_empty() {
-                        return Err(Error::invalid(
-                            "commit needs a sha (e.g. commit:<full 40/64-hex sha>)",
-                            "commit には SHA が必要です（例: commit:<完全形 40/64 桁 hex SHA>）",
-                        ));
+                        return Err(Error::invalid("commit needs a sha (e.g. commit:<full 40/64-hex sha>)"));
                     }
                     f.commit = Some(sha);
                 }
@@ -461,7 +436,6 @@ impl Filter {
                     let value = DimensionValueFilter::parse(value, || {
                         Error::invalid(
                             "time_axis must name a value of the time axis (e.g. time_axis:ops, time_axis:none)",
-                            "time_axis は時間軸の値を指定します（例: time_axis:ops・time_axis:none）",
                         )
                     })?;
                     f.dimensions.push(DimensionFilter { axis: None, value, resolved: None })
@@ -469,7 +443,6 @@ impl Filter {
                 other => {
                     return Err(Error::invalid(
                         format!("unknown filter key '{other}' (done/status/due/start/priority/project/text/number/ref/assignee/ai/ready/decision/commit/dim/time_axis)"),
-                        format!("未知のフィルタキー '{other}'（done/status/due/start/priority/project/text/number/ref/assignee/ai/ready/decision/commit/dim/time_axis）"),
                     ))
                 }
             }
@@ -873,10 +846,7 @@ pub fn project_detail(
         .map_err(crate::error::engine_on(conn))?
         
         .ok_or_else(|| {
-            Error::not_found(
-                format!("project '{project_id}' not found"),
-                format!("プロジェクト '{project_id}' が見つかりません"),
-            )
+            Error::not_found(format!("project '{project_id}' not found"))
         })?;
 
     let c = crate::store_engine::read::project_task_counts(conn, project_id, today)
@@ -994,7 +964,7 @@ pub fn comment_list(conn: &rusqlite::Connection, task_id: i64, offset: Option<us
     use crate::store_engine::read;
     let title = read::task_title(conn, task_id)
         .map_err(crate::error::engine_on(conn))?
-        .ok_or_else(|| Error::not_found(format!("task '{task_id}' not found"), format!("タスク '{task_id}' が見つかりません")))?;
+        .ok_or_else(|| Error::not_found(format!("task '{task_id}' not found")))?;
     // Rows arrive oldest-first (`read::comment_list` = `created_at ASC`). Slice out just the page
     // with offset/limit — O(result). `total_matched` is the count before paging.
     let rows = read::comment_list(conn, task_id)
@@ -1026,7 +996,7 @@ pub fn decision_comment_list(conn: &rusqlite::Connection, decision_id: i64, offs
     use crate::store_engine::read;
     let title = read::decision_title(conn, decision_id)
         .map_err(crate::error::engine_on(conn))?
-        .ok_or_else(|| Error::not_found(format!("decision '{decision_id}' not found"), format!("決定 '{decision_id}' が見つかりません")))?;
+        .ok_or_else(|| Error::not_found(format!("decision '{decision_id}' not found")))?;
     let rows = read::decision_comment_list(conn, decision_id)
         .map_err(crate::error::engine_on(conn))?;
     let (total_matched, rows) = paginate(rows, offset, limit);
@@ -1443,10 +1413,7 @@ impl DecisionFilter {
             match key {
                 "status" => {
                     f.status = Some(DecisionStatus::parse(value).ok_or_else(|| {
-                        Error::invalid(
-                            "status must be proposed / accepted / rejected",
-                            "status は proposed / accepted / rejected",
-                        )
+                        Error::invalid("status must be proposed / accepted / rejected")
                     })?)
                 }
                 "superseded" => {
@@ -1454,10 +1421,7 @@ impl DecisionFilter {
                         "yes" | "true" => true,
                         "no" | "false" => false,
                         _ => {
-                            return Err(Error::invalid(
-                                "superseded must be yes / no",
-                                "superseded は yes / no",
-                            ))
+                            return Err(Error::invalid("superseded must be yes / no"))
                         }
                     })
                 }
@@ -1473,7 +1437,6 @@ impl DecisionFilter {
                 other => {
                     return Err(Error::invalid(
                         format!("unknown filter key '{other}' (status/superseded/text/project/number/ref/task/decided_before/decided_after)"),
-                        format!("未知のフィルタキー '{other}'（status/superseded/text/project/number/ref/task/decided_before/decided_after）"),
                     ))
                 }
             }
@@ -1742,10 +1705,7 @@ pub fn decision_detail(
     let row = read::decision_detail(conn, decision_id)
         .map_err(crate::error::engine_on(conn))?
         .ok_or_else(|| {
-            Error::not_found(
-                format!("decision '{decision_id}' not found"),
-                format!("決定 '{decision_id}' が見つかりません"),
-            )
+            Error::not_found(format!("decision '{decision_id}' not found"))
         })?;
 
     let project = row.project_name.map(|name| crate::view::ProjectRef { id: row.project_id, name });
@@ -1825,10 +1785,7 @@ pub fn task_detail(
     let row = read::task_detail(conn, task_id)
         .map_err(crate::error::engine_on(conn))?
         .ok_or_else(|| {
-            Error::not_found(
-                format!("task '{task_id}' not found"),
-                format!("タスク '{task_id}' が見つかりません"),
-            )
+            Error::not_found(format!("task '{task_id}' not found"))
         })?;
 
     let parse_date =
@@ -1905,10 +1862,7 @@ pub fn premise_change_since(
     let row = read::premise_change_since(conn, task_id)
         .map_err(crate::error::engine_on(conn))?
         .ok_or_else(|| {
-            Error::not_found(
-                format!("task '{task_id}' not found"),
-                format!("タスク '{task_id}' が見つかりません"),
-            )
+            Error::not_found(format!("task '{task_id}' not found"))
         })?;
     Ok(crate::view::PremiseChange {
         added_blockers: row
@@ -1944,7 +1898,6 @@ fn sort_decisions(decisions: &mut [&crate::model::Decision], sort: &str) -> Resu
             other => {
                 return Err(Error::invalid(
                     format!("unknown sort key '{other}' (decided/created/number/title/status; - for descending)"),
-                    format!("未知の sort キー '{other}'（decided/created/number/title/status、-で降順）"),
                 ))
             }
         }
@@ -2316,8 +2269,8 @@ mod filter_tests {
         let bare = new_engine();
         let tx = &bare.write().unwrap();
         proj(tx, "時間軸の無い PJ");
-        assert!(err(tx, "time_axis:dev").contains("時間軸"), "no axis is designated as the time axis: {}", err(tx, "time_axis:dev"));
-        assert!(err(tx, "time_axis:none").contains("時間軸"), "the same for `=none`");
+        assert!(err(tx, "time_axis:dev").contains("time axis"), "no axis is designated as the time axis: {}", err(tx, "time_axis:dev"));
+        assert!(err(tx, "time_axis:none").contains("time axis"), "the same for `=none`");
     }
 
     /// The grammar of a filter value (`AMB-T-<n>` / `AMB-D-<n>`, or the bare `123` / `#123` / `T-123` /

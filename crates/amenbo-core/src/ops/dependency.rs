@@ -28,14 +28,14 @@ pub fn add(
     created_by_kind: Option<ActorKind>,
 ) -> Result<(TaskDependency, bool)> {
     if task_id == blocked_by_id {
-        return Err(Error::invalid("a task cannot depend on itself", "タスクは自分自身に依存できません"));
+        return Err(Error::invalid("a task cannot depend on itself"));
     }
     // Both ends must be live, existing tasks (this is what keeps edges from dangling).
     let Some(task) = read::task(tx.conn(), task_id)? else {
-        return Err(Error::not_found(format!("task '{task_id}' not found"), format!("タスク '{task_id}' が見つかりません")));
+        return Err(Error::not_found(format!("task '{task_id}' not found")));
     };
     let Some(blocker) = read::task(tx.conn(), blocked_by_id)? else {
-        return Err(Error::not_found(format!("blocker '{blocked_by_id}' not found"), format!("ブロッカー '{blocked_by_id}' が見つかりません")));
+        return Err(Error::not_found(format!("blocker '{blocked_by_id}' not found")));
     };
     // Naming a task in another project as a blocker means going off to read that task's notes and comments
     // — one project's context flowing into the other.
@@ -43,7 +43,6 @@ pub fn add(
         task.project_id,
         blocker.project_id,
         "this dependency",
-        "この依存",
     )?;
     if let Some(id) = read::dependency_id(tx.conn(), task_id, blocked_by_id)? {
         let existing = read::task_dependency(tx.conn(), id)?
@@ -54,7 +53,6 @@ pub fn add(
     if read::dependency_reaches(tx.conn(), blocked_by_id, task_id)? {
         return Err(Error::invalid(
             "this dependency would create a cycle (the blocker depends on this task directly or indirectly)",
-            "この依存は循環を作ります（ブロッカーが直接/間接にこのタスクへ依存しています）",
         ));
     }
     let now = Timestamp::now();

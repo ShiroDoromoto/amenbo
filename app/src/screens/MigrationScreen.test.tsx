@@ -113,13 +113,13 @@ describe("MigrationScreen", () => {
         stage: "failed",
         error: {
           code: "invalid",
-          message: "移行に失敗したため、開始前の状態へ丸ごと戻しました",
+          message: "the migration failed and your store was rolled back",
           message_en: "the migration failed and your store was rolled back",
           fields: null,
         },
       }),
     );
-    expect(host.textContent ?? "").toContain("開始前の状態へ丸ごと戻しました");
+    expect(host.textContent ?? "").toContain("the migration failed and your store was rolled back");
     await act(async () => host.querySelector("button")!.click());
     expect(hoisted.retries).toBe(1);
   });

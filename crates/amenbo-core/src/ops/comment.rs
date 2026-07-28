@@ -13,7 +13,7 @@ use crate::time::Timestamp;
 
 /// The word for a comment (the English/Japanese pair for `not_found` messages). Whether the parent is a task
 /// or a decision is carried by the id, so one word suffices.
-pub(crate) const COMMENT_NOUN: Noun = Noun { en: "comment", ja: "コメント", code: ErrorCode::NotFoundComment };
+pub(crate) const COMMENT_NOUN: Noun = Noun { en: "comment", code: ErrorCode::NotFoundComment };
 
 /// Shared preamble for adding a comment: the empty-body check sits in one place, whatever the parent's kind
 /// (task / decision) — separate schemas, shared code. Returns the new comment's `now`; the caller takes the
@@ -22,7 +22,7 @@ pub(crate) const COMMENT_NOUN: Noun = Noun { en: "comment", ja: "コメント", 
 /// `decision_comment` uses its own `next_id`) and this function does not know the parent table.
 pub(crate) fn prepare_comment(text: &str) -> Result<Timestamp> {
     if text.trim().is_empty() {
-        return Err(Error::invalid("a comment body cannot be empty", "コメント本文は空にできません"));
+        return Err(Error::invalid("a comment body cannot be empty"));
     }
     Ok(Timestamp::now())
 }

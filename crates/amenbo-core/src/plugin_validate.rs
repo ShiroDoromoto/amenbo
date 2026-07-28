@@ -181,21 +181,21 @@ impl Serialize for ProblemCode {
 }
 
 /// One thing wrong with a manifest. It names *where* (a field path like `name` or `config[2].key`), *what*
-/// rule broke ([`ProblemCode`], the machine token), and carries a bilingual sentence for a person
-/// ([`Msg`]). A validator run returns a `Vec` of these; empty means the manifest passed.
+/// rule broke ([`ProblemCode`], the machine token), and carries the sentence a person reads ([`Msg`]).
+/// A validator run returns a `Vec` of these; empty means the manifest passed.
 #[derive(Clone, Debug)]
 pub struct Problem {
     /// The field path the problem is at — `name`, `os`, `checksum`, `config[2].key`.
     pub location: String,
     /// The rule that broke — the stable token a machine reads.
     pub code: ProblemCode,
-    /// The sentence a person reads, in both languages.
+    /// The sentence a person reads.
     pub message: Msg,
 }
 
 impl Problem {
-    fn new(location: impl Into<String>, code: ProblemCode, en: impl Into<String>, ja: impl Into<String>) -> Self {
-        Problem { location: location.into(), code, message: Msg::new(en, ja) }
+    fn new(location: impl Into<String>, code: ProblemCode, en: impl Into<String>) -> Self {
+        Problem { location: location.into(), code, message: Msg::new(en) }
     }
 }
 
@@ -254,7 +254,7 @@ pub fn validate_plugin_id(name: &str) -> Vec<Problem> {
     let loc = "name";
 
     if name.is_empty() {
-        problems.push(Problem::new(loc, ProblemCode::Empty, "plugin name must not be empty", "プラグイン名は空にできません"));
+        problems.push(Problem::new(loc, ProblemCode::Empty, "plugin name must not be empty"));
         return problems; // nothing else is meaningful on an empty id
     }
     if name.len() < NAME_MIN_LEN {
@@ -262,7 +262,6 @@ pub fn validate_plugin_id(name: &str) -> Vec<Problem> {
             loc,
             ProblemCode::TooShort,
             format!("plugin name is too short ({} chars; min {NAME_MIN_LEN})", name.chars().count()),
-            format!("プラグイン名が短すぎます（{} 文字・下限 {NAME_MIN_LEN}）", name.chars().count()),
         ));
     }
     if name.len() > NAME_MAX_LEN {
@@ -270,7 +269,6 @@ pub fn validate_plugin_id(name: &str) -> Vec<Problem> {
             loc,
             ProblemCode::TooLong,
             format!("plugin name is too long ({} chars; max {NAME_MAX_LEN})", name.chars().count()),
-            format!("プラグイン名が長すぎます（{} 文字・上限 {NAME_MAX_LEN}）", name.chars().count()),
         ));
     }
     if !name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
@@ -278,7 +276,6 @@ pub fn validate_plugin_id(name: &str) -> Vec<Problem> {
             loc,
             ProblemCode::BadChars,
             "plugin name may use only lowercase ASCII letters, digits and '-'",
-            "プラグイン名に使えるのは小文字 ASCII 英数字と '-' だけです",
         ));
     }
     if !name.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
@@ -286,7 +283,6 @@ pub fn validate_plugin_id(name: &str) -> Vec<Problem> {
             loc,
             ProblemCode::MustStartLetter,
             "plugin name must start with a lowercase letter",
-            "プラグイン名は小文字英字で始める必要があります",
         ));
     }
     if name.starts_with('-') || name.ends_with('-') {
@@ -294,7 +290,6 @@ pub fn validate_plugin_id(name: &str) -> Vec<Problem> {
             loc,
             ProblemCode::HyphenEdge,
             "plugin name must not start or end with '-'",
-            "プラグイン名の先頭・末尾を '-' にはできません",
         ));
     }
     if name.contains("--") {
@@ -302,7 +297,6 @@ pub fn validate_plugin_id(name: &str) -> Vec<Problem> {
             loc,
             ProblemCode::DoubleHyphen,
             "plugin name must not contain '--'",
-            "プラグイン名に '--' を含めることはできません",
         ));
     }
     if is_reserved_plugin_name(name) || RESERVED_NAMES.contains(&name) {
@@ -310,7 +304,6 @@ pub fn validate_plugin_id(name: &str) -> Vec<Problem> {
             loc,
             ProblemCode::Reserved,
             format!("plugin name '{name}' is reserved"),
-            format!("プラグイン名 '{name}' は予約されています"),
         ));
     }
 
@@ -325,7 +318,6 @@ fn check_line(problems: &mut Vec<Problem>, field: &str, value: &str, max: usize)
             field,
             ProblemCode::Empty,
             format!("{field} must not be empty"),
-            format!("{field} は空にできません"),
         ));
         return;
     }
@@ -334,7 +326,6 @@ fn check_line(problems: &mut Vec<Problem>, field: &str, value: &str, max: usize)
             field,
             ProblemCode::ControlChar,
             format!("{field} must not contain control characters"),
-            format!("{field} に制御文字を含めることはできません"),
         ));
     }
     let len = value.chars().count();
@@ -343,7 +334,6 @@ fn check_line(problems: &mut Vec<Problem>, field: &str, value: &str, max: usize)
             field,
             ProblemCode::TooLong,
             format!("{field} is too long ({len} chars; max {max})"),
-            format!("{field} が長すぎます（{len} 文字・上限 {max}）"),
         ));
     }
 }
@@ -366,7 +356,6 @@ fn check_repo(problems: &mut Vec<Problem>, repo: &str) {
             "repo",
             ProblemCode::BadRepo,
             "repo must be 'owner/name' (GitHub coordinates)",
-            "repo は 'owner/name'（GitHub の座標）である必要があります",
         ));
     }
 }
@@ -408,7 +397,6 @@ fn check_assets(problems: &mut Vec<Problem>, m: &Manifest) {
                 "assets",
                 ProblemCode::AssetMismatch,
                 format!("os lists {} but assets has no distributable for it", os.as_str()),
-                format!("os が {} を挙げていますが、assets にその配布物がありません", os.as_str()),
             ));
         }
     }
@@ -419,7 +407,6 @@ fn check_assets(problems: &mut Vec<Problem>, m: &Manifest) {
                 at.clone(),
                 ProblemCode::AssetMismatch,
                 format!("assets publishes for {} but os does not list it", platform.token()),
-                format!("assets が {} 向けに配布していますが、os がそれを挙げていません", platform.token()),
             ));
         }
         check_url(problems, &format!("{at}.url"), &asset.url);
@@ -442,7 +429,6 @@ fn check_url(problems: &mut Vec<Problem>, location: &str, url: &str) {
             location,
             ProblemCode::BadUrl,
             "url must be an https:// URL",
-            "url は https:// の URL である必要があります",
         ));
     }
 }
@@ -458,7 +444,6 @@ fn check_checksum(problems: &mut Vec<Problem>, location: &str, checksum: &str) {
             location,
             ProblemCode::BadChecksum,
             "checksum must be 'sha256:' followed by 64 lowercase hex digits",
-            "checksum は 'sha256:' に続けて小文字16進64桁である必要があります",
         ));
     }
 }
@@ -481,7 +466,6 @@ fn check_min_amenbo(problems: &mut Vec<Problem>, min_amenbo: Option<&str>) {
             "min_amenbo",
             ProblemCode::BadVersion,
             format!("min_amenbo must be a version like '1.8.0', not '{min}'"),
-            format!("min_amenbo は '1.8.0' のようなバージョンである必要があります（'{min}' は不可）"),
         ));
     }
 }
@@ -494,7 +478,6 @@ fn check_os(problems: &mut Vec<Problem>, os: &[Os]) {
             "os",
             ProblemCode::EmptyOs,
             "os must list at least one operating system",
-            "os には対応OSを1つ以上挙げる必要があります",
         ));
         return;
     }
@@ -505,7 +488,6 @@ fn check_os(problems: &mut Vec<Problem>, os: &[Os]) {
                 "os",
                 ProblemCode::Duplicate,
                 format!("os lists '{}' more than once", os.as_str()),
-                format!("os に '{}' が重複しています", os.as_str()),
             ));
         }
     }
@@ -521,7 +503,6 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
             "config",
             ProblemCode::TooManyFields,
             format!("config declares too many fields ({}; max {MAX_CONFIG_FIELDS})", m.config.len()),
-            format!("config のフィールド数が多すぎます（{}・上限 {MAX_CONFIG_FIELDS}）", m.config.len()),
         ));
     }
     let total: usize = m.config.iter().map(|f| f.key.len() + f.label.len()).sum();
@@ -530,7 +511,6 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
             "config",
             ProblemCode::SchemaTooLarge,
             format!("config schema is too large ({total} bytes; max {MAX_CONFIG_SCHEMA_BYTES})"),
-            format!("config スキーマが大きすぎます（{total} バイト・上限 {MAX_CONFIG_SCHEMA_BYTES}）"),
         ));
     }
 
@@ -543,7 +523,6 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
                 format!("config[{i}].key"),
                 ProblemCode::Duplicate,
                 format!("config key '{}' is declared more than once", field.key),
-                format!("config キー '{}' が重複して宣言されています", field.key),
             ));
         }
     }
@@ -555,7 +534,7 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
 fn check_config_key(problems: &mut Vec<Problem>, i: usize, key: &str) {
     let loc = format!("config[{i}].key");
     if key.is_empty() {
-        problems.push(Problem::new(loc, ProblemCode::Empty, "config key must not be empty", "config キーは空にできません"));
+        problems.push(Problem::new(loc, ProblemCode::Empty, "config key must not be empty"));
         return;
     }
     if key.len() > MAX_CONFIG_IDENT_BYTES {
@@ -563,7 +542,6 @@ fn check_config_key(problems: &mut Vec<Problem>, i: usize, key: &str) {
             loc.clone(),
             ProblemCode::TooLong,
             format!("config key is too long ({} bytes; max {MAX_CONFIG_IDENT_BYTES})", key.len()),
-            format!("config キーが長すぎます（{} バイト・上限 {MAX_CONFIG_IDENT_BYTES}）", key.len()),
         ));
     }
     let well_formed = key.chars().next().is_some_and(|c| c.is_ascii_lowercase())
@@ -573,7 +551,6 @@ fn check_config_key(problems: &mut Vec<Problem>, i: usize, key: &str) {
             loc,
             ProblemCode::BadKey,
             "config key must be a lowercase identifier ([a-z][a-z0-9_]*)",
-            "config キーは小文字の識別子（[a-z][a-z0-9_]*）である必要があります",
         ));
     }
 }
@@ -598,7 +575,6 @@ fn check_events(problems: &mut Vec<Problem>, m: &Manifest) {
                 format!("events[{i}].faces"),
                 ProblemCode::EmptyFaces,
                 "a subscription's faces must not be empty",
-                "購読の faces は空にできません",
             ));
         }
         if sub.reply && sub.faces != [Face::Cli] {
@@ -606,7 +582,6 @@ fn check_events(problems: &mut Vec<Problem>, m: &Manifest) {
                 format!("events[{i}].reply"),
                 ProblemCode::ReplyNeedsCli,
                 "reply: true is only allowed when faces is exactly [cli]",
-                "reply: true は faces がちょうど [cli] のときだけ許されます",
             ));
         }
     }

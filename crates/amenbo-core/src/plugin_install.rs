@@ -129,10 +129,7 @@ pub(crate) fn catalog_manifest(paths: &Paths, found: &DiscoveredEntry) -> Result
     let problems = validate_manifest(&manifest);
     if let Some(first) = problems.first() {
         let first = format!("{}: {}", first.location, first.message.en());
-        return Err(Error::invalid(
-            format!("the catalog's entry for '{}' is not valid ({first})", entry.name),
-            format!("カタログの '{}' は検証に通りません（{first}）", entry.name),
-        ));
+        return Err(Error::invalid(format!("the catalog's entry for '{}' is not valid ({first})", entry.name)));
     }
     Ok(manifest)
 }
@@ -179,22 +176,15 @@ fn resolve<'a>(view: &'a Discovery, name: &str) -> Result<&'a DiscoveredEntry> {
                     .unwrap_or_default();
                 return Err(Error::invalid(
                     format!("the catalog's entry for '{name}' is not valid and was dropped ({first})"),
-                    format!("カタログの '{name}' は検証に通らず取り込み時に落とされました（{first}）"),
                 ));
             }
             Dropped::Duplicate { name: dropped_name } if dropped_name == name => {
-                return Err(Error::invalid(
-                    format!("the catalog carries more than one entry named '{name}'"),
-                    format!("カタログに '{name}' という名前のエントリが複数あります"),
-                ));
+                return Err(Error::invalid(format!("the catalog carries more than one entry named '{name}'")));
             }
             _ => {}
         }
     }
-    Err(Error::not_found(
-        format!("no plugin named '{name}' in the catalog"),
-        format!("カタログにプラグイン '{name}' はありません"),
-    ))
+    Err(Error::not_found(format!("no plugin named '{name}' in the catalog")))
 }
 
 /// Refuse to install over a name this machine already holds (`AMB-D-360`) — no silent overwrite, in
@@ -204,17 +194,10 @@ fn resolve<'a>(view: &'a Discovery, name: &str) -> Result<&'a DiscoveredEntry> {
 /// stood in the way of a retry.
 fn refuse_an_overwrite(paths: &Paths, name: &str) -> Result<()> {
     match plugin_installed::read(paths, name) {
-        Ok(_) => Err(Error::conflict(
-            format!("plugin '{name}' is already installed on this machine"),
-            format!("プラグイン '{name}' はこのマシンに既にインストールされています"),
-        )),
+        Ok(_) => Err(Error::conflict(format!("plugin '{name}' is already installed on this machine"))),
         Err(e) if e.code() == "not_found" => Ok(()),
         Err(e) => Err(Error::conflict(
             format!("a broken install of '{name}' is in the way ({}) — uninstall it first", e.message_en()),
-            format!(
-                "'{name}' の壊れたインストールが残っています（{}）——先に uninstall してください",
-                e.message_en()
-            ),
         )),
     }
 }
@@ -229,13 +212,7 @@ fn refuse_another_platform(manifest: &Manifest) -> Result<Platform> {
     }
     let supported: Vec<&str> = manifest.os.iter().map(|os| os.as_str()).collect();
     let supported = supported.join(", ");
-    Err(Error::invalid(
-        format!("plugin '{}' does not support {here} (it supports: {supported})", manifest.name),
-        format!(
-            "プラグイン '{}' は {here} に対応していません（対応: {supported}）",
-            manifest.name
-        ),
-    ))
+    Err(Error::invalid(format!("plugin '{}' does not support {here} (it supports: {supported})", manifest.name)))
 }
 
 /// This platform's distributable, or the refusal that the entry claims the OS yet publishes nothing this
@@ -249,12 +226,6 @@ fn published_for(manifest: &Manifest, here: Platform) -> Result<crate::plugin_ma
         Error::invalid(
             format!(
                 "plugin '{}' lists {} but publishes no asset for {}",
-                manifest.name,
-                here.os.as_str(),
-                here.token()
-            ),
-            format!(
-                "プラグイン '{}' は {} を挙げていますが、{} 向けの配布物がありません",
                 manifest.name,
                 here.os.as_str(),
                 here.token()
@@ -286,10 +257,7 @@ fn download(url: &str) -> Result<Vec<u8>> {
 /// which is the part a signature cannot bound.
 fn unpack_program(asset: &[u8], name: &str) -> Result<Vec<u8>> {
     if asset.is_empty() {
-        return Err(Error::invalid(
-            format!("the asset for plugin '{name}' is empty"),
-            format!("プラグイン '{name}' の asset が空です"),
-        ));
+        return Err(Error::invalid(format!("the asset for plugin '{name}' is empty")));
     }
     if asset.starts_with(&GZIP_MAGIC) {
         return from_tar_gz(asset, name);
@@ -304,9 +272,6 @@ fn unpack_program(asset: &[u8], name: &str) -> Result<Vec<u8>> {
             return Err(Error::invalid(
                 format!(
                     "the asset for plugin '{name}' is a zip — a zip is only taken on Windows; publish it as a .tar.gz, or as the executable itself"
-                ),
-                format!(
-                    "プラグイン '{name}' の asset が zip です——zip を受理するのは Windows だけです。.tar.gz か実行ファイルそのものとして配布してください"
                 ),
             ));
         }
@@ -324,10 +289,7 @@ fn from_tar_gz(asset: &[u8], name: &str) -> Result<Vec<u8>> {
 
     let wanted = plugin_installed::program_file_name(name);
     let unreadable = |e: std::io::Error| {
-        Error::invalid(
-            format!("the asset for plugin '{name}' is not a readable .tar.gz: {e}"),
-            format!("プラグイン '{name}' の asset を .tar.gz として読めません：{e}"),
-        )
+        Error::invalid(format!("the asset for plugin '{name}' is not a readable .tar.gz: {e}"))
     };
 
     let gz = flate2::read::GzDecoder::new(asset);
@@ -346,10 +308,7 @@ fn from_tar_gz(asset: &[u8], name: &str) -> Result<Vec<u8>> {
         entry.take(MAX_ASSET_BYTES).read_to_end(&mut program).map_err(unreadable)?;
         return Ok(program);
     }
-    Err(Error::invalid(
-        format!("the asset for plugin '{name}' holds no '{wanted}' entry"),
-        format!("プラグイン '{name}' の asset に '{wanted}' が入っていません"),
-    ))
+    Err(Error::invalid(format!("the asset for plugin '{name}' holds no '{wanted}' entry")))
 }
 
 /// The Windows path: read the plugin's executable out of a zip — the entry whose **file name** is the
@@ -365,10 +324,7 @@ fn from_zip(asset: &[u8], name: &str) -> Result<Vec<u8>> {
 
     let wanted = plugin_installed::program_file_name(name);
     let unreadable = |e: String| {
-        Error::invalid(
-            format!("the asset for plugin '{name}' is not a readable zip: {e}"),
-            format!("プラグイン '{name}' の asset を zip として読めません：{e}"),
-        )
+        Error::invalid(format!("the asset for plugin '{name}' is not a readable zip: {e}"))
     };
 
     let mut zip =
@@ -389,10 +345,7 @@ fn from_zip(asset: &[u8], name: &str) -> Result<Vec<u8>> {
             .map_err(|e| unreadable(e.to_string()))?;
         return Ok(program);
     }
-    Err(Error::invalid(
-        format!("the asset for plugin '{name}' holds no '{wanted}' entry"),
-        format!("プラグイン '{name}' の asset に '{wanted}' が入っていません"),
-    ))
+    Err(Error::invalid(format!("the asset for plugin '{name}' holds no '{wanted}' entry")))
 }
 
 /// Lay the plugin down in the layout [`plugin_installed`] reads: the executable (marked runnable on
@@ -407,10 +360,7 @@ pub(crate) fn place(paths: &Paths, manifest: &Manifest, program: &[u8]) -> Resul
     // the catalog. The catalog's own intake refuses this name and so does the validator; this is the
     // write boundary saying so too, because it is the one place where being wrong costs the cache.
     if is_reserved_plugin_name(name) {
-        return Err(Error::invalid(
-            format!("'{name}' is not a plugin name (it is reserved for the registry cache)"),
-            format!("'{name}' はプラグイン名ではありません（カタログのキャッシュ用に予約されています）"),
-        ));
+        return Err(Error::invalid(format!("'{name}' is not a plugin name (it is reserved for the registry cache)")));
     }
     let home = paths.plugin_dir(name);
     std::fs::create_dir_all(&home)?;
@@ -424,10 +374,7 @@ pub(crate) fn place(paths: &Paths, manifest: &Manifest, program: &[u8]) -> Resul
     }
 
     let json = serde_json::to_string_pretty(manifest).map_err(|e| {
-        Error::invalid(
-            format!("the manifest for plugin '{name}' cannot be written out: {e}"),
-            format!("プラグイン '{name}' の manifest を書き出せません：{e}"),
-        )
+        Error::invalid(format!("the manifest for plugin '{name}' cannot be written out: {e}"))
     })?;
     std::fs::write(plugin_installed::manifest_path(paths, name), json)?;
 

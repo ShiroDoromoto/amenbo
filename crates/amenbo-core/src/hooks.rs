@@ -543,10 +543,7 @@ pub struct InstallReport {
 /// every slot refused for that reason — is an error, the one case with nothing to show but [`guidance_line`].
 pub fn install(dir: &Path, cmd: &str) -> Result<InstallReport> {
     probe(dir).ok_or_else(|| {
-        Error::Invalid(Msg::new(
-            "Not a git repository, so there are no hooks to install.",
-            "git リポジトリではないため、インストールするフックがありません。",
-        ))
+        Error::Invalid(Msg::new("Not a git repository, so there are no hooks to install."))
     })?;
     let dir_path = hooks_dir(dir).expect("probe succeeded, so the hooks dir resolves");
     std::fs::create_dir_all(&dir_path).map_err(io_err)?;
@@ -586,10 +583,6 @@ pub fn install(dir: &Path, cmd: &str) -> Result<InstallReport> {
                 "amenbo cannot add its block to the hooks here without changing a file it does not own. Add these lines yourself:\n{}",
                 guidance_block(report.refused.clone(), cmd, "    ")
             ),
-            format!(
-                "ここのフックは、amenbo が所有していないファイルを変えずにはブロックを足せません。次の行をご自身で足してください:\n{}",
-                guidance_block(report.refused.clone(), cmd, "    ")
-            ),
         )));
     }
     Ok(report)
@@ -612,10 +605,7 @@ pub fn guidance_block(slots: Vec<HookSlot>, cmd: &str, indent: &str) -> String {
 /// over; the only failure is not being in a git repository at all.
 pub fn uninstall(dir: &Path) -> Result<Vec<HookSlot>> {
     let states = probe(dir).ok_or_else(|| {
-        Error::Invalid(Msg::new(
-            "Not a git repository, so there are no hooks to remove.",
-            "git リポジトリではないため、削除するフックがありません。",
-        ))
+        Error::Invalid(Msg::new("Not a git repository, so there are no hooks to remove."))
     })?;
     let dir_path = hooks_dir(dir).expect("probe succeeded, so the hooks dir resolves");
     let mut removed = Vec::new();
@@ -696,17 +686,11 @@ pub fn restore_blocks(dir: &Path, cmd: &str, consent: Option<HookConsent>, opted
 
 fn io_err_slot(slot: HookSlot, e: std::io::Error) -> Error {
     let name = slot.name();
-    Error::Invalid(Msg::new(
-        format!("Cannot write the {name} hook: {e}"),
-        format!("{name} フックを書けません: {e}"),
-    ))
+    Error::Invalid(Msg::new(format!("Cannot write the {name} hook: {e}")))
 }
 
 fn io_err(e: std::io::Error) -> Error {
-    Error::Invalid(Msg::new(
-        format!("Cannot write the hooks: {e}"),
-        format!("フックを書けません: {e}"),
-    ))
+    Error::Invalid(Msg::new(format!("Cannot write the hooks: {e}")))
 }
 
 /// git runs a hook only if it is executable. No-op off unix, where git for Windows reads the shebang and

@@ -85,13 +85,13 @@ export function tf(
 /**
  * The structured error a Tauri command rejects with (mirrors `CmdError` in src-tauri/error.rs).
  * Localization maps the stable `code` onto a template; a code with no template (the free-text
- * variants) falls back to the `message` (ja) / `message_en` that core returns — lossless, since
- * core carries both languages correctly.
+ * variants) falls back to the sentence core wrote, which is English — the same answer an
+ * untranslated key gets (`AMB-D-413`).
  */
 export interface CmdError {
   code: string;
-  message: string; // Japanese (core's Display)
-  message_en: string; // English
+  message: string; // the sentence (core's Display) — English, same as message_en
+  message_en: string; // the same sentence, under the name the CLI surface knows it by
   fields?: Record<string, unknown> | null;
 }
 
@@ -101,7 +101,7 @@ function isCmdError(e: unknown): e is CmdError {
   return typeof o.code === "string" && typeof o.message === "string" && typeof o.message_en === "string";
 }
 
-/** Renders a CmdError as one line in the current UI language: code template, else the message. */
+/** Renders a CmdError as one line in the current UI language: code template, else the English sentence. */
 export function errLabel(err: CmdError, lang: Lang = currentLang()): string {
   const code: ErrorCode | undefined = isErrorCode(err.code) ? err.code : undefined;
   const tmpl = code && (DICTIONARIES[lang]?.err[code] ?? en.err[code]);
@@ -113,7 +113,7 @@ export function errLabel(err: CmdError, lang: Lang = currentLang()): string {
       return Array.isArray(v) ? v.join(", ") : String(v);
     });
   }
-  return lang === "ja" ? err.message : err.message_en;
+  return err.message_en;
 }
 
 /**

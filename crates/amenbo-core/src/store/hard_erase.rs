@@ -86,20 +86,15 @@ impl Store {
             // Validate every target before mutating anything (all-or-nothing). Inside the transaction, so
             // the row a target names cannot leave between the check and the erase.
             for t in targets {
-                let (dataset, id, noun_en, noun_ja) = match t {
-                    HardEraseTarget::TaskComment { id } => {
-                        ("task_comment", id, "task comment", "タスクコメント")
-                    }
+                let (dataset, id, noun) = match t {
+                    HardEraseTarget::TaskComment { id } => ("task_comment", id, "task comment"),
                     HardEraseTarget::DecisionComment { id } => {
-                        ("decision_comment", id, "decision comment", "決定記録コメント")
+                        ("decision_comment", id, "decision comment")
                     }
-                    HardEraseTarget::DecisionBody { id, .. } => ("decision", id, "decision", "決定"),
+                    HardEraseTarget::DecisionBody { id, .. } => ("decision", id, "decision"),
                 };
                 if !crate::store_engine::read::record_exists(tx.conn(), dataset, *id)? {
-                    return Err(Error::not_found(
-                        format!("{noun_en} {id}"),
-                        format!("{noun_ja} {id}"),
-                    ));
+                    return Err(Error::not_found(format!("{noun} {id}")));
                 }
             }
 

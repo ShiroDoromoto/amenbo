@@ -49,12 +49,10 @@ pub(crate) fn guard_same_project(
     a: Option<i64>,
     b: Option<i64>,
     what: &str,
-    what_ja: &str,
 ) -> Result<()> {
     if crosses_projects(a, b) {
         return Err(Error::invalid(
             format!("{what} would cross projects — a project's context must not leak into another"),
-            format!("{what_ja}はプロジェクトを跨ぎます ── あるプロジェクトの文脈を別のプロジェクトへ流してはいけません"),
         ));
     }
     Ok(())
@@ -522,10 +520,7 @@ pub(crate) fn parse_id_ref(kind: crate::idref::RefKind, reference: &str) -> Opti
 
 pub(crate) fn pick(mut hits: Vec<Ref>, input: &str) -> Result<Ref> {
     match hits.len() {
-        0 => Err(Error::not_found(
-            format!("'{input}' not found"),
-            format!("'{input}' が見つかりません"),
-        )),
+        0 => Err(Error::not_found(format!("'{input}' not found"))),
         1 => Ok(hits.pop().unwrap()),
         _ => Err(Error::AmbiguousId {
             prefix: input.to_string(),
@@ -537,23 +532,16 @@ pub(crate) fn pick(mut hits: Vec<Ref>, input: &str) -> Result<Ref> {
 pub(crate) fn pick_anywhere(hits: Vec<Ref>, number: u32) -> Result<Ref> {
     let (task, decision) = (crate::idref::task(number.into()), crate::idref::decision(number.into()));
     match hits.len() {
-        0 => Err(Error::not_found(
-            format!("'{number}' names neither {task} nor {decision}"),
-            format!("'{number}' は {task} にも {decision} にも当たりません"),
-        )),
+        0 => Err(Error::not_found(format!("'{number}' names neither {task} nor {decision}"))),
         1 => Ok(hits.into_iter().next().unwrap()),
         // Numbers are device-global, so a bare number is ambiguous only across the two number spaces — a
         // task and a decision. Quote both refs: the kind code is exactly what disjoins them.
-        _ => Err(Error::invalid(
-            format!("{number} is both a task and a decision; use {task} or {decision}"),
-            format!("{number} はタスクと決定の両方にあります。{task} か {decision} で指定してください"),
-        )),
+        _ => Err(Error::invalid(format!("{number} is both a task and a decision; use {task} or {decision}"))),
     }
 }
 
-/// An entity's name as an English/Japanese pair, so the `not_found` of `#N` / id resolution has a single
-/// source. Each ops module holds the word for its own entity once, as a `const NOUN`, and leaves message
-/// building to this.
+/// An entity's name, so the `not_found` of `#N` / id resolution has a single source. Each ops module holds
+/// the word for its own entity once, as a `const NOUN`, and leaves message building to this.
 ///
 /// The `code` is the same word again, in the form the GUI writes the sentence from (`AMB-D-413`). It sits
 /// here rather than at the call sites because the noun *is* the sentence: nothing of "task X was not found"
@@ -562,19 +550,15 @@ pub(crate) fn pick_anywhere(hits: Vec<Ref>, number: u32) -> Result<Ref> {
 #[derive(Clone, Copy)]
 pub(crate) struct Noun {
     pub en: &'static str,
-    pub ja: &'static str,
     pub code: crate::error::ErrorCode,
 }
 
 impl Noun {
-    /// The bilingual error pair `<en> '<token>' not found`, with its Japanese counterpart — and, for the
-    /// side that writes it in a third language, this entity's code and the token it could not find.
+    /// The refusal `<en> '<token>' not found` — and, for the side that writes it in another language,
+    /// this entity's code and the token it could not find.
     pub fn not_found(self, token: impl std::fmt::Display) -> Error {
         Error::NotFound(
-            crate::error::Msg::new(
-                format!("{} '{token}' not found", self.en),
-                format!("{} '{token}' が見つかりません", self.ja),
-            )
+            crate::error::Msg::new(format!("{} '{token}' not found", self.en))
             .coded(self.code)
             .with("ref", token),
         )
@@ -620,10 +604,7 @@ impl Position {
     ) -> Result<Position> {
         let count = top as u8 + bottom as u8 + before.is_some() as u8 + after.is_some() as u8;
         if count > 1 {
-            return Err(Error::invalid(
-                "specify exactly one of --before / --after / --top / --bottom",
-                "--before / --after / --top / --bottom はいずれか 1 つだけ指定してください",
-            ));
+            return Err(Error::invalid("specify exactly one of --before / --after / --top / --bottom"));
         }
         Ok(match (top, bottom, before, after) {
             (_, _, Some(id), _) => Position::Before(id),
@@ -665,10 +646,7 @@ fn anchor_index(siblings: &[(i64, String)], id: i64) -> Result<usize> {
         .iter()
         .position(|(i, _)| *i == id)
         .ok_or_else(|| {
-            Error::not_found(
-                format!("reorder anchor '{id}' not found in the same ordering"),
-                format!("並べ替えアンカー '{id}' が同じ並びに見つかりません"),
-            )
+            Error::not_found(format!("reorder anchor '{id}' not found in the same ordering"))
         })
 }
 

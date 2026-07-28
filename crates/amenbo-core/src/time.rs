@@ -92,7 +92,7 @@ pub fn parse_date(input: &str, base: NaiveDate) -> Result<NaiveDate> {
     }
 
     NaiveDate::parse_from_str(s, "%Y-%m-%d")
-        .map_err(|_| Error::invalid(format!("date '{input}' must be in YYYY-MM-DD form (a real calendar date) or today/tomorrow/+3d, etc."), format!("日付 '{input}' は YYYY-MM-DD 形式（実在する暦日）か today/tomorrow/+3d 等で指定してください")))
+        .map_err(|_| Error::invalid(format!("date '{input}' must be in YYYY-MM-DD form (a real calendar date) or today/tomorrow/+3d, etc.")))
 }
 
 /// Render a date as a `YYYY-MM-DD` string.

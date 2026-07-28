@@ -63,10 +63,7 @@ impl Drop for SwapGuard {
 /// The bilingual `store_busy` a contended open surfaces: the store is mid-swap, so retrying in a
 /// moment succeeds. Its stable code (`store_busy`) is in the retryable set.
 fn busy() -> Error {
-    Error::store_busy(
-        "the store is being restored or migrated; try again in a moment",
-        "ストアの復元／移行の最中です。少し待ってから再実行してください",
-    )
+    Error::store_busy("the store is being restored or migrated; try again in a moment")
 }
 
 /// Translate a non-blocking lock attempt's failure: real contention (someone holds the lock) becomes the

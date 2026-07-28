@@ -3,9 +3,9 @@
 //! (canonically [`amenbo_core::Error::code`]) and per-code `fields` for interpolation. The front end (`errLabel`
 //! in `app/src/core/i18n/index.ts`) maps `code` to a per-language template and fills it from the fields.
 //!
-//! The two sentence faces are what a reader gets where no template exists. An error from core carries both of
-//! its own (`message` is the Japanese `Display`, `message_en` the English one); a refusal raised by this layer
-//! ([`CmdError::coded`]) writes only English, and its reader's sentence is the template.
+//! The sentence is what a reader gets where no template exists, and it is English wherever it comes from:
+//! core writes one (`AMB-D-413`), and a refusal raised by this layer ([`CmdError::coded`]) writes one too.
+//! The reader's own language comes from the template, never from here.
 
 use serde::Serialize;
 
@@ -17,10 +17,11 @@ use serde::Serialize;
 pub struct CmdError {
     /// Stable machine-readable code (an i18n key; the contract is that it stays English). Core-originated codes come from [`amenbo_core::Error::code`].
     pub code: String,
-    /// The human-facing Japanese sentence (core's `Display`). A `coded` error has no Japanese of its
-    /// own and repeats the English one here.
+    /// The human-facing sentence (core's `Display`). English, like `message_en` — the two faces are one
+    /// sentence now that core writes no second language.
     pub message: String,
-    /// The human-facing English sentence (core's [`amenbo_core::Error::message_en`]).
+    /// The same sentence under the name the CLI surface knows it by
+    /// (core's [`amenbo_core::Error::message_en`]).
     pub message_en: String,
     /// Per-code structured values for interpolation (`null` for variants that have none).
     pub fields: serde_json::Value,
@@ -45,9 +46,9 @@ impl CmdError {
     /// (`init_pointer_exists` and the like). `fields` are the specifics the code's template drops
     /// into its sentence — the path, the candidates, the URL, the fingerprint.
     ///
-    /// Only English is written here. The reader's sentence is the template the front end holds for
-    /// this code, in whatever language they read; the English one goes along as what a reader gets
-    /// when there is no template for it — the same answer an untranslated key gets.
+    /// The reader's sentence is the template the front end holds for this code, in whatever language
+    /// they read; the English one goes along as what a reader gets when there is no template for it —
+    /// the same answer an untranslated key gets.
     pub fn coded(
         code: impl Into<String>,
         message_en: impl Into<String>,
@@ -90,7 +91,7 @@ impl From<amenbo_core::store_engine::StoreEngineError> for CmdError {
 
 impl From<String> for CmdError {
     /// An ad-hoc error from outside core (GUI-local handling). It has no stable code, so it gets the generic `"error"`,
-    /// and both language faces carry the same sentence.
+    /// and both sentence faces carry the one sentence it has.
     fn from(s: String) -> Self {
         CmdError::new("error", s.clone(), s, serde_json::Value::Null)
     }
@@ -119,7 +120,7 @@ mod tests {
     #[test]
     fn a_core_error_that_names_its_sentence_surrenders_its_values() {
         let e = CmdError::from(amenbo_core::Error::NotFound(
-            amenbo_core::Msg::new("task 'AMB-T-12' not found", "タスク 'AMB-T-12' が見つかりません")
+            amenbo_core::Msg::new("task 'AMB-T-12' not found")
                 .coded(amenbo_core::ErrorCode::NotFoundTask)
                 .with("ref", "AMB-T-12"),
         ));
@@ -133,14 +134,12 @@ mod tests {
     /// reading.
     #[test]
     fn a_core_error_that_names_nothing_carries_only_its_sentence() {
-        let e = CmdError::from(amenbo_core::Error::not_found(
-            "task 'X' not found",
-            "タスク 'X' が見つかりません",
-        ));
+        let e = CmdError::from(amenbo_core::Error::not_found("task 'X' not found"));
 
         assert_eq!(e.code, "not_found");
         assert!(e.fields.is_null(), "nothing to interpolate: {}", e.fields);
         assert_eq!(e.message_en, "task 'X' not found");
+        assert_eq!(e.message, e.message_en, "core writes one sentence, and both faces carry it");
     }
 
     /// A refusal this layer raises carries the code, the values, and one English sentence — and no

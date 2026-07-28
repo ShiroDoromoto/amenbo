@@ -139,19 +139,12 @@ fn catalog_url() -> String {
 /// catalog usable, because one bad manifest is not a reason to have no catalog.
 pub fn parse(json: &str) -> Result<Catalog> {
     let envelope: Envelope = serde_json::from_str(json).map_err(|e| {
-        Error::invalid(
-            format!("the plugin catalog is not readable: {e}"),
-            format!("プラグインカタログを読み取れません：{e}"),
-        )
+        Error::invalid(format!("the plugin catalog is not readable: {e}"))
     })?;
     if envelope.catalog_v > SUPPORTED_CATALOG_V {
         return Err(Error::invalid(
             format!(
                 "this plugin catalog is version {} — newer than this amenbo understands ({SUPPORTED_CATALOG_V}). Update amenbo.",
-                envelope.catalog_v
-            ),
-            format!(
-                "このプラグインカタログは版 {} で、この amenbo が解釈できる版（{SUPPORTED_CATALOG_V}）より新しいです。amenbo を更新してください。",
                 envelope.catalog_v
             ),
         ));
@@ -391,27 +384,16 @@ fn read_detail(json: &str, entry: &ListEntry) -> Result<Detail> {
                     "the catalog's detail for '{}' is not the document the catalog listed ({sum})",
                     entry.name
                 ),
-                format!(
-                    "カタログの '{}' の詳細が、一覧の記載（{sum}）と一致しません",
-                    entry.name
-                ),
             )
         })?;
     }
     let detail: Detail = serde_json::from_str(json).map_err(|e| {
-        Error::invalid(
-            format!("the catalog's detail for '{}' is not readable: {e}", entry.name),
-            format!("カタログの '{}' の詳細を読み取れません：{e}", entry.name),
-        )
+        Error::invalid(format!("the catalog's detail for '{}' is not readable: {e}", entry.name))
     })?;
     if detail.name != entry.name {
         return Err(Error::invalid(
             format!(
                 "the catalog's detail for '{}' names another plugin ('{}')",
-                entry.name, detail.name
-            ),
-            format!(
-                "カタログの '{}' の詳細が別のプラグイン（'{}'）を名乗っています",
                 entry.name, detail.name
             ),
         ));
@@ -602,15 +584,11 @@ impl SourceProbe {
 pub fn probe_source(paths: &Paths, url: &str) -> Result<SourceProbe> {
     let url = url.trim();
     if !(url.starts_with("http://") || url.starts_with("https://")) {
-        return Err(Error::invalid(
-            format!("a catalog URL must start with http:// or https://: {url}"),
-            format!("カタログの URL は http:// か https:// で始まる必要があります：{url}"),
-        ));
+        return Err(Error::invalid(format!("a catalog URL must start with http:// or https://: {url}")));
     }
     if url == catalog_url() {
         return Err(Error::invalid(
             "that is the official catalog's URL — it is always included and cannot be registered as a third-party source".to_string(),
-            "それは公式カタログの URL です——常に含まれるため、サードパーティカタログとして登録できません。".to_string(),
         ));
     }
     let existing = sources(paths).into_iter().find(|s| s.url == url);
@@ -647,9 +625,6 @@ fn check_pin(url: &str, pinned: Option<&str>, served: Option<&str>) -> Result<()
         format!(
             "{url} now publishes a different key ({now}, pinned: {was}). amenbo will not accept it on the old consent — unregister the catalog and register it again to trust the new key."
         ),
-        format!(
-            "{url} の鍵が登録時と変わっています（現在 {now} / 登録時 {was}）。以前の同意のままでは受け入れません——登録を解除し、登録し直して新しい鍵を信頼してください。"
-        ),
     ))
 }
 
@@ -667,10 +642,7 @@ fn fingerprint_of(key: &str) -> String {
 fn published_key(catalog_url: &str) -> Result<Option<String>> {
     match fetch(&key_url(catalog_url)) {
         Ok(text) => crate::plugin_provenance::read_public_key(&text).map(Some).map_err(|e| {
-            Error::invalid(
-                format!("{}: {e}", key_url(catalog_url)),
-                format!("{}：{e}", key_url(catalog_url)),
-            )
+            Error::invalid(format!("{}: {e}", key_url(catalog_url)))
         }),
         Err(_) => Ok(None),
     }
@@ -827,10 +799,6 @@ impl DiscoveredEntry {
             None => Err(Error::invalid(
                 format!(
                     "'{}' comes from {} ({}), which publishes no signing key — nothing from it can be installed. Ask its publisher for a catalog-key.pub, then register the catalog again.",
-                    self.entry.name, self.source_name, self.source
-                ),
-                format!(
-                    "'{}' の配布元 {}（{}）は署名鍵を公開していないため、そこからは install できません。配布元に catalog-key.pub の公開を求め、登録し直してください。",
                     self.entry.name, self.source_name, self.source
                 ),
             )),

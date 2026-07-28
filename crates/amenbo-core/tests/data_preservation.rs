@@ -396,20 +396,18 @@ fn open_rejects_a_store_from_a_newer_binary_on_both_paths() {
         assert_eq!(read_format_version(engine.conn()).unwrap(), future, "set the version above the max");
     }
 
-    // Write path: hard error in both languages, with no destructive migration and no re-stamp.
+    // Write path: a hard error, with no destructive migration and no re-stamp.
     // (`Store` is not Debug, hence the match rather than `unwrap_err`.)
     let write_err = match Store::open_at(paths.clone()) {
         Ok(_) => panic!("a newer store should be refused on a write open"),
         Err(e) => e,
     };
     assert_eq!(write_err.code(), "format_ahead", "a stable code the GUI can branch to a dedicated screen on");
-    assert!(write_err.to_string().contains("新しい amenbo"), "Japanese surface: {write_err}");
-    assert!(write_err.message_en().contains("newer amenbo"), "English surface: {}", write_err.message_en());
+    assert!(write_err.message_en().contains("newer amenbo"), "the sentence: {}", write_err.message_en());
     assert!(write_err.message_en().contains(&format!("v{future}")), "names the store's version");
     // One installer ships everything, so a user at this gate already has the newer build: tell them
     // to restart, not to update.
-    assert!(write_err.to_string().contains("再起動"), "the Japanese surface starts with restart: {write_err}");
-    assert!(write_err.message_en().contains("restart amenbo"), "English surface: {}", write_err.message_en());
+    assert!(write_err.message_en().contains("restart amenbo"), "it says restart: {}", write_err.message_en());
 
     // Read path: refused too — a read reaches for the newer binary's schema just as a write does.
     let read_err = match Store::open_read_at(paths.clone()) {
@@ -417,8 +415,7 @@ fn open_rejects_a_store_from_a_newer_binary_on_both_paths() {
         Err(e) => e,
     };
     assert_eq!(read_err.code(), "format_ahead", "the read path returns the same code");
-    assert!(read_err.to_string().contains("新しい amenbo"), "Japanese surface: {read_err}");
-    assert!(read_err.message_en().contains("newer amenbo"), "English surface: {}", read_err.message_en());
+    assert!(read_err.message_en().contains("newer amenbo"), "the sentence: {}", read_err.message_en());
 
     // The gate neither damages nor waves through: the store's version is still `future` — a refused
     // open does not stamp it back down to ours.

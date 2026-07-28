@@ -114,11 +114,6 @@ impl Reach {
                          folder's .amenbo names ({bound}), and only there. Drop {what}; the binding \
                          already scopes this command."
                     ),
-                    format!(
-                        "{what} は人間のためのものです — AI はプロジェクトを選びません。フォルダの .amenbo が \
-                         指すプロジェクト（{bound}）の中だけで働きます。{what} を外してください——束縛が \
-                         既にこのコマンドの範囲を決めています。"
-                    ),
                 ))
             }
         }
@@ -144,11 +139,6 @@ fn out_of_reach(what: &str, bound: i64) -> Error {
              only the project its .amenbo names. Ask a human to run this, or work in the \
              folder bound to that project."
         ),
-        format!(
-            "{what} は、このフォルダが束縛しているプロジェクト {bound} の外です — AI が到達できるのは \
-             .amenbo が指すプロジェクトだけです。人間に実行してもらうか、そのプロジェクトに \
-             束縛されたフォルダで作業してください。"
-        ),
     )
 }
 
@@ -162,11 +152,6 @@ fn unbound() -> Error {
             "this folder is not bound to any project — an AI reaches only the project its .amenbo names, \
              so an unbound folder reaches nothing. Ask a human to bind it (`{cmd} bind --project \
              <name or id>`), or work in a folder that is already bound."
-        ),
-        format!(
-            "このフォルダはどのプロジェクトにも束縛されていません — AI が到達できるのは .amenbo が指す \
-             プロジェクトだけなので、束縛の無いフォルダからは何にも到達できません。人間に束縛して \
-             もらう（`{cmd} bind --project <name or id>`）か、既に束縛されたフォルダで作業してください。"
         ),
     )
 }

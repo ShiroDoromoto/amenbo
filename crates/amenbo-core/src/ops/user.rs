@@ -8,4 +8,4 @@ use crate::error::ErrorCode;
 use crate::ops::Noun;
 
 /// This entity's noun (the English/Japanese pair used in not_found messages).
-pub(crate) const NOUN: Noun = Noun { en: "user", ja: "ユーザー", code: ErrorCode::NotFoundUser };
+pub(crate) const NOUN: Noun = Noun { en: "user", code: ErrorCode::NotFoundUser };

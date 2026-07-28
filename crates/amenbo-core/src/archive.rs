@@ -229,10 +229,7 @@ fn read_generation(db_path: &Path) -> Result<(String, i64)> {
 pub(crate) fn snapshot_into(src: &Path, dest: &Path) -> Result<()> {
     let conn = Connection::open(src).map_err(sqlite_at(src))?;
     let dest_str = dest.to_str().ok_or_else(|| {
-        Error::invalid(
-            format!("snapshot path is not valid UTF-8: {}", dest.display()),
-            format!("スナップショットのパスが不正な UTF-8 です: {}", dest.display()),
-        )
+        Error::invalid(format!("snapshot path is not valid UTF-8: {}", dest.display()))
     })?;
     conn.execute("VACUUM INTO ?1", [dest_str]).map_err(sqlite_at(src))?;
     Ok(())
@@ -256,10 +253,7 @@ fn integrity_check(conn: &Connection, at: &Path) -> Result<()> {
         return Ok(());
     }
     let (file, problems) = (at.display(), problems.join("; "));
-    Err(Error::invalid(
-        format!("{file} failed integrity_check: {problems}"),
-        format!("{file} が integrity_check に失敗しました: {problems}"),
-    ))
+    Err(Error::invalid(format!("{file} failed integrity_check: {problems}")))
 }
 
 // ── the physical-schema probes ──
@@ -334,17 +328,13 @@ pub(crate) fn verify_snapshot_current_schema(path: &Path) -> Result<()> {
     for d in crate::store_engine::schema::DATASETS {
         if !has_table(&conn, path, d.table)? {
             let (file, table) = (path.display(), d.table);
-            return Err(Error::invalid(
-                format!("snapshot {file} is missing read-model table `{table}`"),
-                format!("スナップショット {file} に read-model テーブル `{table}` がありません"),
-            ));
+            return Err(Error::invalid(format!("snapshot {file} is missing read-model table `{table}`")));
         }
         let held = columns_of(&conn, path, d.table)?;
         if let Some(missing) = d.all_columns().map(|c| c.name).find(|c| !held.iter().any(|h| h == c)) {
             let (file, table) = (path.display(), d.table);
             return Err(Error::invalid(
                 format!("snapshot {file} table `{table}` is missing column `{missing}` — it is of an older generation than this build's read model"),
-                format!("スナップショット {file} のテーブル `{table}` に列 `{missing}` がありません（このビルドの read-model より古い世代です）"),
             ));
         }
         count_probe(&conn, path, d.table)?;
@@ -368,7 +358,6 @@ pub(crate) fn verify_snapshot_mirrors_source(snapshot: &Path, source: &Path) -> 
             let (snap, src) = (snapshot.display(), source.display());
             return Err(Error::invalid(
                 format!("snapshot {snap} is missing table `{table}`, which the store it copied ({src}) holds"),
-                format!("スナップショット {snap} に、写し元のストア（{src}）が持つテーブル `{table}` がありません"),
             ));
         }
         count_probe(&conn, snapshot, &table)?;
@@ -386,13 +375,13 @@ fn staging_dir(dest: &Path) -> Result<PathBuf> {
 
 /// Error returned when a progress callback asks to cancel a backup.
 fn backup_cancelled() -> Error {
-    Error::invalid("backup cancelled", "バックアップがキャンセルされました")
+    Error::invalid("backup cancelled")
 }
 
 /// Error returned when a progress callback asks to cancel a restore. Its own wording: a cancelled restore
 /// that says "backup cancelled" names an operation the user did not start.
 fn restore_cancelled() -> Error {
-    Error::invalid("restore cancelled", "復元がキャンセルされました")
+    Error::invalid("restore cancelled")
 }
 
 /// Back up this device's store into a single `.amenbo-backup` archive at `dest`.
@@ -414,14 +403,10 @@ pub fn backup_from(
     if dest.is_dir() {
         return Err(Error::invalid(
             format!("destination is a directory — backup writes one archive file: {}", dest.display()),
-            format!("宛先はディレクトリです。backup はアーカイブ 1 ファイルを作ります: {}", dest.display()),
         ));
     }
     if dest.exists() {
-        return Err(Error::invalid(
-            format!("refusing to overwrite existing archive: {}", dest.display()),
-            format!("既存のアーカイブを上書きしません: {}", dest.display()),
-        ));
+        return Err(Error::invalid(format!("refusing to overwrite existing archive: {}", dest.display())));
     }
 
     let stage = staging_dir(dest)?;
@@ -674,7 +659,6 @@ pub fn read_manifest(archive: &Path) -> Result<ArchiveManifest> {
     if archive.is_dir() {
         return Err(Error::invalid(
             format!("that is a directory — restore takes one archive file: {}", archive.display()),
-            format!("指定先はディレクトリです。restore はアーカイブ 1 ファイルを取ります: {}", archive.display()),
         ));
     }
     let mut ar = tar::Archive::new(File::open(archive)?);
@@ -690,10 +674,7 @@ pub fn read_manifest(archive: &Path) -> Result<ArchiveManifest> {
             return Ok(serde_json::from_slice(&buf)?);
         }
     }
-    Err(Error::invalid(
-        format!("archive has no `{MANIFEST_ENTRY}` — not a valid .amenbo-backup archive"),
-        format!("アーカイブに `{MANIFEST_ENTRY}` がありません（正しい .amenbo-backup アーカイブではありません）"),
-    ))
+    Err(Error::invalid(format!("archive has no `{MANIFEST_ENTRY}` — not a valid .amenbo-backup archive")))
 }
 
 /// Refuse an archive whose container layout this build does not read — in **both** directions, before the
@@ -707,18 +688,12 @@ fn ensure_layout_readable(layout: u32) -> Result<()> {
             format!(
                 "this archive uses layout v{layout} — it was written before the consolidation, and this build reads v{MIN_ARCHIVE_LAYOUT_VERSION} and later. Restore it with the amenbo that wrote it (nothing here was changed)"
             ),
-            format!(
-                "このアーカイブはレイアウト v{layout}（統合前に作られたもの）です。このビルドが読めるのは v{MIN_ARCHIVE_LAYOUT_VERSION} 以降です。作成した当時の amenbo で復元してください（ここでは何も変更していません）"
-            ),
         ));
     }
     if layout > ARCHIVE_LAYOUT_VERSION {
         return Err(Error::invalid(
             format!(
                 "this archive uses layout v{layout} — this build reads up to v{ARCHIVE_LAYOUT_VERSION}. update to the latest amenbo — nothing was changed"
-            ),
-            format!(
-                "このアーカイブはレイアウト v{layout}（このビルドが読めるのは v{ARCHIVE_LAYOUT_VERSION} まで）です。最新の amenbo へ更新してください（何も変更していません）"
             ),
         ));
     }
@@ -782,9 +757,6 @@ fn preflight_generation_gate(manifest: &ArchiveManifest) -> Result<()> {
         return Err(Error::invalid(
             format!(
                 "this archive was produced by a newer amenbo (v{app}) — its store is at format v{found}, past the v{max} this build reads. use amenbo {app} or newer — nothing was changed"
-            ),
-            format!(
-                "このアーカイブは新しい amenbo（v{app}）で作成されています（ストアは format v{found}・このビルドが読めるのは v{max} まで）。amenbo {app} 以降を使ってください（何も変更していません）"
             ),
         ));
     }
@@ -850,10 +822,7 @@ fn extract_snapshot(
 
     let staged = stage.join(SNAPSHOT_ENTRY);
     if !staged.is_file() {
-        return Err(Error::invalid(
-            format!("archive is missing the store snapshot (`{SNAPSHOT_ENTRY}`)"),
-            format!("アーカイブにストアのスナップショット（`{SNAPSHOT_ENTRY}`）がありません"),
-        ));
+        return Err(Error::invalid(format!("archive is missing the store snapshot (`{SNAPSHOT_ENTRY}`)")));
     }
     Ok(staged)
 }
@@ -1284,7 +1253,7 @@ mod tests {
         let dest = base.join(format!("backup.{ARCHIVE_EXT}"));
         std::fs::write(&dest, b"pre-existing").unwrap();
         let err = backup_from(&source(&a), &dest, &mut crate::progress::ignore).unwrap_err();
-        assert!(err.to_string().contains("overwrite") || err.to_string().contains("上書き"));
+        assert!(err.to_string().contains("overwrite"));
     }
 
     /// A source that is not a database fails with the path in the message. SQLite's own
@@ -1340,11 +1309,11 @@ mod tests {
 
         let mut cb = |_p: &Progress| ControlFlow::Continue(());
         let err = backup_from(&source(&a), &dir, &mut cb).unwrap_err().to_string();
-        assert!(err.contains("ディレクトリ"), "backup must say it is a directory: {err}");
-        assert!(!err.contains("既存のアーカイブ"), "and must not call it an archive: {err}");
+        assert!(err.contains("is a directory"), "backup must say it is a directory: {err}");
+        assert!(!err.contains("existing archive"), "and must not call it an archive: {err}");
 
         let err = read_manifest(&dir).unwrap_err().to_string();
-        assert!(err.contains("ディレクトリ"), "restore must say it is a directory: {err}");
+        assert!(err.contains("is a directory"), "restore must say it is a directory: {err}");
     }
 
     #[test]
@@ -1357,7 +1326,7 @@ mod tests {
         // Cancel on the very first tick.
         let mut cb = |_p: &Progress| ControlFlow::Break(());
         let err = backup_from(&source(&a), &dest, &mut cb).unwrap_err();
-        assert!(err.to_string().contains("backup") || err.to_string().contains("バックアップ"));
+        assert!(err.to_string().contains("backup"));
         assert!(!dest.exists(), "partial archive must be cleaned up on cancel");
     }
 
@@ -1380,7 +1349,7 @@ mod tests {
         let mut cb = |_p: &Progress| ControlFlow::Break(());
         let err = restore_into(&archive, "20260714T000000Z", &live_db, &mut cb).unwrap_err();
         assert!(
-            err.to_string().contains("restore") || err.to_string().contains("復元"),
+            err.to_string().contains("restore"),
             "a cancelled restore must not report a cancelled backup: {err}"
         );
         assert_eq!(live_tasks(&live_db), 1, "the live store is untouched");
@@ -1461,7 +1430,7 @@ mod tests {
         let err = restore_into(&archive, "20260714T000000Z", &live_db, &mut cb).unwrap_err();
 
         assert!(
-            err.to_string().contains("restore") || err.to_string().contains("復元"),
+            err.to_string().contains("restore"),
             "a cancelled unpacking is a cancelled restore: {err}"
         );
         assert!(
@@ -1843,7 +1812,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(err.code(), "invalid_value");
         assert!(
-            err.to_string().contains("layout v4") || err.to_string().contains("レイアウト v4"),
+            err.to_string().contains("layout v4"),
             "the refusal names the layout it found and the way out: {err}"
         );
         assert_eq!(live_tasks(&live_db), 1, "the live store is untouched");
@@ -1907,7 +1876,7 @@ mod tests {
 
         let err = restore_into(&archive, "s", &dest, &mut crate::progress::ignore).unwrap_err();
         assert!(
-            err.to_string().contains("newer amenbo") || err.to_string().contains("新しい amenbo"),
+            err.to_string().contains("newer amenbo"),
             "unexpected error: {err}"
         );
         assert_eq!(std::fs::read(&dest).unwrap(), b"LIVE-SENTINEL", "live tree must be untouched");
@@ -1956,7 +1925,7 @@ mod tests {
 
         let err = restore_into(&archive, "s", &dest, &mut crate::progress::ignore).unwrap_err();
         assert!(
-            err.to_string().contains("layout v") || err.to_string().contains("レイアウト v"),
+            err.to_string().contains("layout v"),
             "unexpected error: {err}"
         );
         assert_eq!(std::fs::read(&dest).unwrap(), b"LIVE-SENTINEL", "live tree must be untouched");

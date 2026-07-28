@@ -84,7 +84,6 @@ pub fn gate_for(declared: Scope, project: Option<i64>) -> Result<Gate> {
         Scope::Project => project.map(Gate::Project).ok_or_else(|| {
             Error::invalid(
                 "this plugin is enabled per project, and no project is in context — run it in a bound folder",
-                "このプラグインはプロジェクト単位で有効化します。プロジェクトの文脈がありません——バインド済みフォルダで実行してください",
             )
         }),
     }
@@ -198,10 +197,6 @@ fn refuse_missing_required(
         format!(
             "plugin '{plugin}' cannot be enabled: required setting(s) not provided: {}",
             missing.join(", ")
-        ),
-        format!(
-            "プラグイン '{plugin}' を有効化できません：必須設定が未入力です（{}）",
-            missing.join("、")
         ),
     ))
 }

@@ -1,0 +1,163 @@
+# The way back. Writing the snapshot and putting it back are one road walked in one run, because
+# split in two neither half proves anything: a backup checked only for existence and a restore
+# checked only against a store nobody diverged would both read green while the archive held nothing
+# usable. So the archive is written, the store is moved on from it in both directions a store can
+# move — a row added that was never in it, a row it held open now finished — and the restore has to
+# undo both.
+id: come-back-from-a-bad-change
+title: A snapshot is written beside the work and the store is put back to it — what the archive held returns, what came after is gone
+description: >
+  Fill a store, take a snapshot of it, and check the archive is on disk with bytes in it. Then carry
+  on: the rows and the timeline are read back untouched by the taking, and a second archive is
+  written to its own path — the destination of a backup must not already exist, so keeping
+  yesterday's while writing today's is the ordinary case, not a repetition. Then the way back, from
+  the first archive: restoring is a replace and not a merge, so the added task has to be gone and the
+  finished one open again, with the decision and the timeline intact and the restored store
+  reporting sound.
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — in the archive
+    as: seed
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — a note taken before the snapshot
+    as: note
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — settled before the snapshot
+    as: settled
+
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: settled
+
+  - type: action
+    domain: store
+    op: backup
+    as: monday
+
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: monday
+      present: true
+
+  # Taking a snapshot is a read: the store is exactly as it was, rows and timeline alike.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "done:false"
+      target: seed
+      present: true
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — a note taken before the snapshot
+      present: true
+
+  # Move on from the snapshot, both ways: a row the archive never saw, and a row it saw open.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — registered after the archive was written
+    as: afterwards
+
+  # Later, with more work in the store, another archive to its own path — and the first one still
+  # stands where it is, which is what keeping a week of them rests on.
+  - type: action
+    domain: store
+    op: backup
+    as: tuesday
+
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: tuesday
+      present: true
+
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: monday
+      present: true
+
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: seed
+
+  - type: action
+    domain: store
+    op: restore
+    with:
+      target: monday
+
+  # What the archive held is back, down to the state each row was in.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "done:false"
+      target: seed
+      present: true
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: SCENARIO — a note taken before the snapshot
+      present: true
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: settled
+      field: status
+      equals: accepted
+
+  # And what happened after it is not: a restore that merged would leave this one standing.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "done:false"
+      target: afterwards
+      present: false
+
+  # A store swapped underneath itself is only restored if it is also sound.
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true

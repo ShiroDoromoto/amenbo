@@ -3,7 +3,7 @@
 # reaching nothing, and one that lands on the wrong project lets it write where it was never sent.
 # Nothing about that is visible from inside the workspace's own tests: the pointer is a file the
 # shipped binary places in a real folder, and the folder is what answers for it.
-id: init
+id: point-a-folder-at-a-project
 title: A folder is given a project of its own, a second is pointed at one that exists, and the pointer can be taken back
 description: >
   Raise a project in a fresh folder with `init` and read the pointer back from inside it, then point

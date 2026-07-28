@@ -1,0 +1,63 @@
+# An id names something only someone holding this store can look up; anywhere else it is a reference
+# into nothing. Catching one before it lands there is a road with two halves: the lint a person aims
+# at a file, and the hooks that leave the same lint standing in front of every commit so nobody has
+# to remember. Neither half is worth much alone — a lint nobody runs catches nothing, and a hook
+# wired to a lint that misreports catches the wrong thing.
+#
+# The hooks half is also the one capability that writes into the user's own repository, so the
+# shipped build is the only place it can honestly be checked: the hook file has to land in a real
+# `.git/hooks`, and the status has to read back what is actually in each slot. The run makes its own
+# throwaway repository to write into — nothing here touches a repository anyone is working in.
+id: keep-a-ref-from-leaving-the-store
+title: A ref on its way out is reported before it lands, and the check can be left standing at every commit
+description: >
+  Point the lint at text and read what it reports: where the ref sits, every one of them rather than
+  the first, and what is deliberately left alone. Its non-zero exit is its answer rather than a
+  failure — a caller wiring it into a hook reads that exit, so a build that stopped reporting it
+  would pass silently while letting refs through. Then wire it: install the hooks into a real
+  repository, read back what is in each slot, re-run over amenbo's own hooks the way a newer build
+  lands, and take them out again. The text the lint is pointed at comes from `fixtures/lint/`, since
+  a scenario file may not carry a bare ref itself.
+steps_cli:
+  # A ref on its way out is reported, and located: the line it sits on is what a person goes to.
+  - { type: action, domain: repo, op: copy-fixture, with: { from: lint/decided.txt, path: message.txt } }
+  - { type: assert, domain: repo, op: lint, with: { path: message.txt, hits: 1, line: 3 } }
+
+  # Every one of them, not just the first — a report that stops early is one a person acts on twice.
+  - { type: action, domain: repo, op: copy-fixture, with: { from: lint/several.txt, path: many.txt } }
+  - { type: assert, domain: repo, op: lint, with: { path: many.txt, hits: 3, line: 2 } }
+
+  # Text with nothing of ours in it comes back clean, and with the exit that says so.
+  - { type: action, domain: repo, op: copy-fixture, with: { from: lint/clean.txt, path: clean.txt } }
+  - { type: assert, domain: repo, op: lint, with: { path: clean.txt, hits: 0 } }
+
+  # What is deliberately left alone: a bare number is a GitHub issue, and a ref carrying no namespace
+  # may be another tracker's. The namespace prefix is the whole test, so neither is ours to report.
+  - { type: action, domain: repo, op: copy-fixture, with: { from: lint/elsewhere.txt, path: elsewhere.txt } }
+  - { type: assert, domain: repo, op: lint, with: { path: elsewhere.txt, hits: 0 } }
+
+  # ── Leaving the check standing ───────────────────────────────────────────────────────────────
+  # Before there is a repository at all there is no slot to report on. The files the lint was
+  # pointed at are sitting in this same folder, and a folder holding files is not a repository.
+  - { type: assert, domain: repo, op: hooks, with: { hook: pre-commit, state: no slot } }
+
+  # With one, both slots are known and empty.
+  - { type: action, domain: repo, op: git-init }
+  - { type: assert, domain: repo, op: hooks, with: { hook: pre-commit, state: unwired } }
+  - { type: assert, domain: repo, op: hooks, with: { hook: commit-msg, state: unwired } }
+
+  # Installed: both slots now hold hooks amenbo wrote, and says so as its own rather than as a
+  # stranger's — which is what later lets it rewrite them and refuse to touch anyone else's.
+  - { type: action, domain: repo, op: hooks-install }
+  - { type: assert, domain: repo, op: hooks, with: { hook: pre-commit, state: managed } }
+  - { type: assert, domain: repo, op: hooks, with: { hook: commit-msg, state: managed } }
+
+  # Re-running over its own hooks is how a newer build's land, so it stays installed rather than
+  # refusing or doubling up.
+  - { type: action, domain: repo, op: hooks-install }
+  - { type: assert, domain: repo, op: hooks, with: { hook: pre-commit, state: managed } }
+
+  # And taken back out: the slots are empty again, which is what makes installing safe to try.
+  - { type: action, domain: repo, op: hooks-uninstall }
+  - { type: assert, domain: repo, op: hooks, with: { hook: pre-commit, state: unwired } }
+  - { type: assert, domain: repo, op: hooks, with: { hook: commit-msg, state: unwired } }

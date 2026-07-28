@@ -4,7 +4,7 @@
 # Both arms are here, and holding them in one line is deliberate: they each take a safety archive
 # named to the second, so a build that cannot write two in one second dies on the second arm — which
 # is exactly how the defect this line now guards was found (a fast machine failed, a slow one passed).
-id: hard-erase-comment
+id: erase-what-must-not-be-kept
 title: A comment leaves the store in full, a decision's body is redacted in place, and what sat beside them stays
 description: >
   Post two comments and read them back, then erase one and read the same timeline again — the assert

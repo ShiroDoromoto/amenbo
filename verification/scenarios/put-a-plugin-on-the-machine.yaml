@@ -17,7 +17,7 @@
 # install first. So the machine is left recording a build the catalog has moved past, and the build it
 # moves to is the real, signed, published one — the door an update walks is the install door, and that
 # is what this proves is wired.
-id: plugin-list
+id: put-a-plugin-on-the-machine
 title: A plugin is fetched from the catalog, sits there with its gate shut, is opened and shut again, moves onto the published build and back off it, and leaves nothing behind
 description: >
   Install the official `worktree` plugin from the catalog and read it back off the listing — present,

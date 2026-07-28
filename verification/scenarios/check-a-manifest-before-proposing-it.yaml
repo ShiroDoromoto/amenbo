@@ -2,7 +2,7 @@
 # up to the catalog rules before it is ever proposed for the catalog. It is the same reading amenbo
 # does at the install door, which is what makes a self-check worth anything — an author who passes
 # here does not meet a different answer later.
-id: plugin-validate
+id: check-a-manifest-before-proposing-it
 title: A manifest passes the catalog rules, and a broken one is turned down by the rule it broke
 description: >
   Write a manifest the way an author would, hold it up to the rules, and have it pass. Then break one

@@ -24,8 +24,8 @@
 //! only when there is none — the store holds no row for an unanswered field, so a manifest that changes its
 //! default reaches every project that never answered. A field whose user chose *none* of its candidates is
 //! injected **empty**: the reserved word that tells that answer apart from silence in storage
-//! ([`NONE_SELECTED`]) is spent by the time the child sees it, and an author writes no special case for a
-//! spelling they never chose.
+//! ([`NONE_SELECTED`](crate::plugin_manifest::NONE_SELECTED)) is spent by the time the child sees it, and
+//! an author writes no special case for a spelling they never chose.
 //!
 //! This layer does not launch the plugin or build the event payload — it returns the two pieces, and the
 //! hook/command wiring (`AMB-T-1972`) attaches [`env`](Injection::env) to the invocation and merges
@@ -35,7 +35,7 @@ use serde_json::{Map, Value};
 
 use crate::error::Result;
 use crate::plugin_config;
-use crate::plugin_manifest::{ConfigField, FieldType, NONE_SELECTED};
+use crate::plugin_manifest::ConfigField;
 use crate::store::Store;
 
 /// The environment-variable prefix a secret config value is injected under. Namespaced under `AMENBO_`
@@ -79,19 +79,19 @@ pub struct Injection {
 /// What one field is worth to a run, from what the store holds for it (`AMB-D-415`) — the three answers a
 /// field can carry, resolved into the one value a plugin receives:
 ///
-/// | held | injected |
+/// | state ([`plugin_config::answer`]) | injected |
 /// |---|---|
-/// | a value | itself |
-/// | [`NONE_SELECTED`], on a [`Multi`](FieldType::Multi) field | the empty string — chosen, and nothing chosen |
-/// | nothing | the author's [`default`](ConfigField::default), or nothing at all |
+/// | [`Chosen`](plugin_config::Answer::Chosen) | the value itself |
+/// | [`NoneOfThem`](plugin_config::Answer::NoneOfThem) | the empty string — an answer, and nothing in it |
+/// | [`Unanswered`](plugin_config::Answer::Unanswered) | the author's [`default`](ConfigField::default), or nothing at all |
 ///
-/// A text field is untouched by the middle row: the word is only reserved where a checkbox group could
-/// leave every box unticked, so a text field that holds the literal line `none` holds that line.
+/// The state is read where it is named, so a face saying "none of them" and a run receiving nothing are
+/// reading the same thing rather than two spellings of it.
 fn resolved(field: &ConfigField, held: Option<String>) -> Option<String> {
-    match held {
-        Some(v) if field.field_type == FieldType::Multi && v == NONE_SELECTED => Some(String::new()),
-        Some(v) => Some(v),
-        None => field.default.clone(),
+    match plugin_config::answer(field, held.as_deref()) {
+        plugin_config::Answer::Chosen => held,
+        plugin_config::Answer::NoneOfThem => Some(String::new()),
+        plugin_config::Answer::Unanswered => field.default.clone(),
     }
 }
 
@@ -127,7 +127,7 @@ pub fn resolve(
 mod tests {
     use super::*;
     use crate::config::Paths;
-    use crate::plugin_manifest::{ConfigField, ConfigOption};
+    use crate::plugin_manifest::{ConfigField, ConfigOption, FieldType, NONE_SELECTED};
 
     fn text_field(key: &str) -> ConfigField {
         ConfigField::new(key, key)

@@ -589,18 +589,23 @@ pub enum PluginConfigCmd {
     /// Store one setting's value, for this project (`AMB-D-434`). The key must be one the plugin's
     /// manifest declares — that declaration is what says whether the value is a secret, and amenbo never
     /// guesses (`AMB-D-356`). An empty value clears the setting rather than storing a blank.
+    ///
+    /// A setting that offers candidates takes them comma-separated, and `none` to choose none of them;
+    /// anything else is refused here rather than stored to match nothing later (`AMB-D-415`). Run
+    /// `plugin config get` to see the candidates and what is in force.
     Set {
         /// the installed plugin's name
         name: String,
         /// the setting's key, as the manifest declares it
         key: String,
         /// the value; `-` reads it from stdin (which keeps a secret off argv and out of shell history),
-        /// and an empty string clears the setting
+        /// and an empty string clears the setting (a setting with a default goes back to it)
         value: String,
     },
 
-    /// Read one setting back, as this project holds it. A secret is never echoed: it reports only whether
-    /// one is set.
+    /// Read one setting back, as this project holds it, and — for a setting that offers candidates — what
+    /// it offers, with what is in force ticked (`AMB-D-415`). A secret is never echoed: it reports only
+    /// whether one is set.
     Get {
         /// the installed plugin's name
         name: String,

@@ -1268,7 +1268,15 @@ fn plugin_config_set_cmd(
     let project = plugin_config_project(store)?;
     let value = plugin_config_value(value)?;
     let cleared = value.is_empty();
-    amenbo_core::plugin_config::set(store, &field, name, project, &value).map_err(CliError::from)?;
+    amenbo_core::plugin_config::set(store, &field, name, project, &value).map_err(|e| {
+        // The boundary names the answer it turned away; a terminal is where the list of admissible ones
+        // has to come with it, because there is no form here showing them (`AMB-D-415`).
+        let mut refusal = CliError::from(e);
+        if refusal.hint.is_none() {
+            refusal.hint = plugin_config_choices_hint(&field);
+        }
+        refusal
+    })?;
 
     human(
         flags,
@@ -1283,16 +1291,59 @@ fn plugin_config_set_cmd(
     Ok(0)
 }
 
+/// The candidates a field offers, worded for a refusal's hint — `None` for a field that offers none, where
+/// any line is admissible and there is nothing to list (`AMB-D-415`).
+fn plugin_config_choices_hint(
+    field: &amenbo_core::plugin_manifest::ConfigField,
+) -> Option<String> {
+    if field.options.is_empty() {
+        return None;
+    }
+    let values: Vec<&str> = field.options.iter().map(|o| o.value.as_str()).collect();
+    Some(format!(
+        "Choose from: {} (comma-separated). `{}` chooses none of them, and an empty value goes back to the default.",
+        values.join(", "),
+        amenbo_core::plugin_manifest::NONE_SELECTED,
+    ))
+}
+
+/// What one field currently answers with, as a line to print: the value in force, or the state in words
+/// where there is no value to show (`AMB-D-415`).
+///
+/// The three states a face has to keep apart are all here — a value someone chose, the author's default
+/// standing in for an answer nobody gave, and a choice answered with *none of them* — because a reader who
+/// cannot tell them apart cannot tell whether writing an empty value would change anything.
+fn plugin_config_shown(
+    field: &amenbo_core::plugin_manifest::ConfigField,
+    held: Option<&str>,
+) -> String {
+    use amenbo_core::plugin_config::Answer;
+    match amenbo_core::plugin_config::answer(field, held) {
+        Answer::Chosen => held.unwrap_or_default().to_string(),
+        Answer::NoneOfThem => "(none of them)".to_string(),
+        Answer::Unanswered => match &field.default {
+            Some(default) => format!("{default} (the default — nothing set here)"),
+            None => "(not set)".to_string(),
+        },
+    }
+}
+
 /// `plugin config get <name> <key>` — read one setting back, as this project holds it. A secret's value
 /// does not come out here: the face reports that one is set and stops, because a `get` that prints a token
 /// puts it in the terminal, the scrollback and the shell's history. Injection reads secrets whole, at run
 /// time, into the plugin's environment and nowhere else (`AMB-D-356`).
+///
+/// For a field that offers candidates it is also the only place they can be read from a terminal
+/// (`AMB-D-415`): the candidates are printed with what is in force ticked, because a value nobody can see
+/// the spelling of is one nobody can set.
 fn plugin_config_get_cmd(
     store: &mut Store,
     flags: &Flags,
     name: &str,
     key: &str,
 ) -> Result<i32, CliError> {
+    use amenbo_core::plugin_config::Answer;
+
     let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
     let field = plugin_config_field(&plugin, key)?;
     let project = plugin_config_project(store)?;
@@ -1300,20 +1351,40 @@ fn plugin_config_get_cmd(
         amenbo_core::plugin_config::get(store, &field, name, project).map_err(CliError::from)?;
 
     let set = value.is_some();
+    let state = amenbo_core::plugin_config::answer(&field, value.as_deref());
     if field.secret {
         human(flags, format!("{name}.{key}: {}", if set { "set (not shown)" } else { "not set" }));
     } else {
-        human(flags, format!("{name}.{key}: {}", value.as_deref().unwrap_or("(not set)")));
+        human(flags, format!("{name}.{key}: {}", plugin_config_shown(&field, value.as_deref())));
+        // What is in force, candidate by candidate: the chosen values, or the default they stand in for.
+        let in_force: Vec<&str> = match state {
+            Answer::NoneOfThem => Vec::new(),
+            Answer::Chosen => value.as_deref().unwrap_or_default().split(',').collect(),
+            Answer::Unanswered => {
+                field.default.as_deref().map(|d| d.split(',').collect()).unwrap_or_default()
+            }
+        };
+        for option in &field.options {
+            let tick = if in_force.contains(&option.value.as_str()) { "x" } else { " " };
+            human(flags, format!("  [{tick}] {} — {}", option.value, option.label));
+        }
     }
     if flags.json {
         let mut out = json!({
             "ok": true, "action": "plugin.config.get", "plugin": name, "key": key,
-            "secret": field.secret, "project": project, "set": set,
+            "secret": field.secret, "project": project, "set": set, "state": state.as_str(),
         });
         // A secret's value never leaves through this door, --json included: a machine reader wants to know
-        // whether the setting is filled, and injection is the only thing that needs the value itself.
+        // whether the setting is filled, and injection is the only thing that needs the value itself. The
+        // author's own declarations ride only for the rest, for the same reason — nothing about a secret
+        // field is answered here in values.
         if !field.secret {
             out["value"] = json!(value);
+            out["type"] = json!(field.field_type);
+            out["default"] = json!(field.default);
+            if !field.options.is_empty() {
+                out["options"] = json!(field.options);
+            }
         }
         print_json(&out);
     }
@@ -6898,5 +6969,42 @@ mod tests {
         assert!(lines[1].contains("went quiet") && lines[1].contains("takes the queue over"), "{}", lines[1]);
         assert!(lines[2].contains("1 event,") && lines[2].contains("nobody is running"), "{}", lines[2]);
         assert!(lines.iter().all(|l| l.contains("oldest 2026-07-25T08:00:00Z")), "{lines:?}");
+    }
+
+    /// What `plugin config get` prints for each of the three states a setting can be in (`AMB-D-415`), and
+    /// the list a refusal hands back. A reader who cannot tell "nobody answered" from "none of them" cannot
+    /// tell whether clearing the setting would change anything.
+    #[test]
+    fn a_setting_says_which_of_the_three_states_it_is_in() {
+        use amenbo_core::plugin_manifest::{ConfigField, ConfigOption, FieldType};
+
+        let events = ConfigField {
+            field_type: FieldType::Multi,
+            options: vec![
+                ConfigOption { value: "task.done".into(), label: "done".into() },
+                ConfigOption { value: "task.rejected".into(), label: "rejected".into() },
+            ],
+            default: Some("task.done".into()),
+            ..ConfigField::new("events", "Events")
+        };
+
+        assert_eq!(plugin_config_shown(&events, Some("task.done,task.rejected")), "task.done,task.rejected");
+        assert_eq!(plugin_config_shown(&events, Some("none")), "(none of them)");
+        let unanswered = plugin_config_shown(&events, None);
+        assert!(
+            unanswered.starts_with("task.done ") && unanswered.contains("default"),
+            "an unanswered field shows what stands in for the answer: {unanswered}",
+        );
+
+        // A field with nothing behind it reads as it always has.
+        let bare = ConfigField::new("channel", "Channel");
+        assert_eq!(plugin_config_shown(&bare, None), "(not set)");
+        assert_eq!(plugin_config_shown(&bare, Some("#ops")), "#ops");
+
+        // The refusal's hint names the candidates and the two words that are not among them; a field
+        // offering none has nothing to list.
+        let hint = plugin_config_choices_hint(&events).unwrap();
+        assert!(hint.contains("task.done, task.rejected") && hint.contains("none"), "{hint}");
+        assert!(plugin_config_choices_hint(&bare).is_none());
     }
 }

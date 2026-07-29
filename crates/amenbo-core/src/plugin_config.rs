@@ -151,6 +151,43 @@ pub fn set(
     Ok(())
 }
 
+/// Which of the three answers a field holds right now (`AMB-D-415`) — the reading a face shows, named once
+/// here so the CLI and the GUI cannot each invent their own words for the same state.
+///
+/// Read off what storage holds, which is why it is a function of the field and the raw value rather than a
+/// flag anyone writes: the store keeps answers, never states.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Answer {
+    /// Nothing is stored — nobody has answered, so the author's [`default`](ConfigField::default) is what
+    /// the run receives, if the author wrote one.
+    Unanswered,
+    /// A value is stored: the line a text field was given, or the candidates a choice picked.
+    Chosen,
+    /// A choice was answered with *none of them* ([`NONE_SELECTED`]) — an answer, and not the same as
+    /// having none.
+    NoneOfThem,
+}
+
+impl Answer {
+    /// The stable word a face uses for this state — `--json` prints it, and a human line is worded from it.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Answer::Unanswered => "unanswered",
+            Answer::Chosen => "chosen",
+            Answer::NoneOfThem => "none",
+        }
+    }
+}
+
+/// Read the state of one field from what the store holds for it (`AMB-D-415`) — `held` is [`get`]'s answer.
+pub fn answer(field: &ConfigField, held: Option<&str>) -> Answer {
+    match held {
+        None => Answer::Unanswered,
+        Some(v) if field.field_type == FieldType::Multi && v == NONE_SELECTED => Answer::NoneOfThem,
+        Some(_) => Answer::Chosen,
+    }
+}
+
 /// Read back one plugin config value in `project`, exactly as [`set`] wrote it (`AMB-D-434`) — the same
 /// two roads, taken by the same flag. Returns `None` when the setting is unset there.
 ///
@@ -388,6 +425,21 @@ mod tests {
             assert!(set(&mut store, &events, "slack", p, bad).is_err(), "'{bad}' must not be stored");
         }
         assert_eq!(get(&store, &events, "slack", p).unwrap(), None, "nothing landed from the refusals");
+    }
+
+    /// The state each answer reads as (`AMB-D-415`) — one naming, for every face that has to say which of
+    /// the three a field is in.
+    #[test]
+    fn each_answer_reads_as_its_own_state() {
+        let events = multi_field("events");
+        assert_eq!(answer(&events, None), Answer::Unanswered);
+        assert_eq!(answer(&events, Some("task.done")), Answer::Chosen);
+        assert_eq!(answer(&events, Some(NONE_SELECTED)), Answer::NoneOfThem);
+        // A default changes what an unanswered field is *worth*, never that nobody answered it.
+        let with_default = ConfigField { default: Some("task.done".into()), ..multi_field("events") };
+        assert_eq!(answer(&with_default, None), Answer::Unanswered);
+        // The word is a choice's: on a text field it is a line like any other.
+        assert_eq!(answer(&text_field("greeting"), Some(NONE_SELECTED)), Answer::Chosen);
     }
 
     /// The reserved word belongs to a choice, not to every field: a text field takes `none` as the line it

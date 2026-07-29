@@ -339,7 +339,7 @@ pub enum Command {
     /// under the app-data `plugins/` directory (`AMB-D-350`). `install` is the door those bytes come
     /// through; `list` / `enable` / `disable` are the machine-local face of what came through it: what is
     /// installed, and whose gate is open (`AMB-D-351` — installing a plugin never runs it; and each plugin
-    /// has exactly one gate, at the level its author declared — `AMB-D-379`). `run` is the one command that
+    /// has exactly one gate, and it is a project's — `AMB-D-434`). `run` is the one command that
     /// actually *calls* a plugin on purpose: its command face, whose return value comes back to you
     /// (`AMB-D-353`). `validate` is
     /// the author's side — it runs the same rules amenbo enforces at
@@ -382,12 +382,11 @@ pub enum PluginCmd {
         name: String,
     },
 
-    /// Open an installed plugin's gate: record the one-time consent to run its code and let it fire
-    /// (`AMB-D-351` — `install ≠ enable`, so nothing runs until this). **Which** switch this is was
-    /// declared by the plugin's author (`AMB-D-379`): a project-scoped plugin turns on for the project you
-    /// are in (so it needs a bound folder), a machine-scoped one for the device. There is no `--scope` —
-    /// a plugin has one switch, and the message says which level it moved. Refused while a setting the
-    /// author marked `required` is still empty; fill it with `plugin config set` first. Refused too when
+    /// Open an installed plugin's gate and let it fire (`AMB-D-351` — `install ≠ enable`, so nothing runs
+    /// until this; and doing it is itself the permission to run the plugin's code). The switch is the
+    /// project's you are in (`AMB-D-434`), so it needs a bound folder, and turning it on elsewhere is a
+    /// separate act. There is no `--scope` — a plugin has one switch. Refused while a setting the author
+    /// marked `required` is still empty; fill it with `plugin config set` first. Refused too when
     /// the plugin is not compatible with this build — a different payload contract, or a floor above the
     /// running version (`AMB-D-359`).
     Enable {
@@ -395,10 +394,9 @@ pub enum PluginCmd {
         name: String,
     },
 
-    /// Close an enabled plugin's gate — the same one switch `enable` opens (`AMB-D-379`). The plugin stays
-    /// installed and stays consented, so a later `enable` does not ask again (`disable ≠ uninstall`,
-    /// `AMB-D-357`). A plugin whose manifest cannot be read has no declaration left to follow, so every
-    /// gate the name could hold is closed.
+    /// Close an enabled plugin's gate — the same one switch `enable` opens (`AMB-D-434`). The plugin stays
+    /// installed, so a later `enable` costs nothing (`disable ≠ uninstall`, `AMB-D-357`). Nothing here is
+    /// read off the manifest, so a plugin whose manifest cannot be read is stopped just the same.
     Disable {
         /// the plugin's name
         name: String,
@@ -489,7 +487,7 @@ pub enum PluginCmd {
     /// a build this amenbo cannot speak to, an asset that will not verify, a new schema whose `required`
     /// settings have no value where the plugin is enabled — leaves the working plugin exactly as it was.
     /// That last check is asked of **every** gate the plugin is enabled at, not of the folder you happen to
-    /// be in (`AMB-D-379`): one update replaces the build for all of them, so a project short of a value
+    /// be in (`AMB-D-434`): one update replaces the build for all of them, so a project short of a value
     /// holds it back from anywhere. `plugin config set` is the way past it.
     ///
     /// `--check` is cheap on purpose: with nothing installed no catalog is read at all, and otherwise a

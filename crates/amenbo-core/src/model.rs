@@ -374,17 +374,14 @@ pub struct PluginConfigOverride {
     pub updated_at: Timestamp,
 }
 
-/// A **per-project override of a plugin's enable gate** (`AMB-D-350`, the upper tier). One row per
-/// `(project, plugin)`: this project has the plugin **on** (`AMB-D-379`). The row is the whole answer —
-/// there is no machine tier under a project-scoped plugin to inherit from or veto, so absence is simply
-/// off, and turning it off deletes the row rather than storing a `false`.
+/// A **plugin's enable gate in one project** (`AMB-D-434`). One row per `(project, plugin)`: this project
+/// has the plugin **on**. The row is the whole answer — there is no other tier to inherit from or veto, so
+/// absence is simply off, and turning it off deletes the row rather than storing a `false`.
 ///
-/// It carries the **gate only, never the consent**: consent to run a plugin's code is machine-local
-/// (`AMB-D-351`) and is the other half of what
-/// [`plugin_trust::effective_enabled_in`](crate::plugin_trust::effective_enabled_in) reads, so a row
-/// carried onto a device that never consented fires nothing. Like [`PluginConfigOverride`] this is a real
-/// record, carried by `export`/`backup` — a restore that dropped it would silently switch a project's
-/// plugins off.
+/// The row is also the whole of it: turning a plugin on is itself the permission to run its code
+/// (`AMB-D-434`), so nothing sits beside this to be carried separately. Like [`PluginConfigOverride`] it
+/// is a real record, carried by `export`/`backup` — a restore that dropped it would silently switch a
+/// project's plugins off, and one that keeps it brings the plugin back on where it was.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PluginEnabledProject {
     pub id: i64,

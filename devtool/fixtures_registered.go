@@ -85,7 +85,6 @@ func registeredCatalogDocs() map[string][]byte {
 		detail := marshal(map[string]any{
 			"name":      p.name,
 			"payload_v": 1,
-			"scope":     "project",
 			"events":    []string{p.event},
 			"config": []map[string]any{
 				{"key": p.askKey, "label": p.askLabel, "required": true},

@@ -4439,8 +4439,7 @@ fn a_body_option_reads_stdin_on_dash() {
 
 /// Plant an installed plugin under the test's app-data: the manifest (the install marker) plus the
 /// executable named after it, which is the whole on-disk shape `plugin_installed::read` looks for.
-/// `scope` is the switch its author declares (`AMB-D-379`) — which gate the faces will move.
-fn install_scoped_plugin(cli: &Cli, name: &str, scope: &str, config: serde_json::Value) {
+fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {
     let dir = cli.home.join("plugins").join(name);
     std::fs::create_dir_all(&dir).unwrap();
     let manifest = serde_json::json!({
@@ -4455,17 +4454,12 @@ fn install_scoped_plugin(cli: &Cli, name: &str, scope: &str, config: serde_json:
         // What an install records of the detail document it was installed from (`AMB-D-386`) — the
         // value a later catalog fetch compares against to say the plugin has moved.
         "detail_sum": format!("sha256:{}", "d".repeat(64)),
-        "scope": scope,
         "config": config,
     });
     std::fs::write(dir.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
     std::fs::write(dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX)), b"#!/bin/sh\n").unwrap();
 }
 
-/// The everyday case: a plugin declaring the default `scope: project`.
-fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {
-    install_scoped_plugin(cli, name, "project", config)
-}
 
 /// `plugin config set/get`: the author's schema decides the keys, their `secret` flag decides where the
 /// value is kept, and `--scope` picks the text tier. A secret never comes back out of `get`.
@@ -4532,30 +4526,20 @@ fn plugin_config_writes_by_the_authors_schema_and_never_echoes_a_secret() {
     assert!(e2.contains("nope"), "{e2}");
 }
 
-/// One plugin, one switch, at the level its author declared (`AMB-D-379`): a project-scoped plugin turns
-/// on for the project you are in and nowhere else, a machine-scoped one for the device — and the faces
-/// never ask which, because there is nothing to ask.
+/// One plugin, one switch, and it is the bound project's (`AMB-D-434`): it turns on for the project you
+/// are in and nowhere else, and the faces never ask which level, because there is no other.
 #[test]
-fn a_plugins_declaration_decides_which_gate_the_faces_move() {
+fn a_plugins_one_switch_is_the_bound_projects() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
-    install_scoped_plugin(&cli, "slack", "project", serde_json::json!([]));
-    install_scoped_plugin(&cli, "watcher", "machine", serde_json::json!([]));
+    install_plugin(&cli, "slack", serde_json::json!([]));
+    install_plugin(&cli, "watcher", serde_json::json!([]));
 
-    // The project-scoped one: on here, and the consent is the device's either way.
     let on = cli.json(&["plugin", "enable", "slack", "--json"]);
-    assert_eq!(on["scope"], "project");
     assert_eq!(on["level"], "this project");
     let listed = cli.json(&["plugin", "list", "--json"]);
     let slack = listed["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "slack").unwrap();
     assert_eq!(slack["enabled"], true, "on in this project");
-    assert_eq!(slack["scope"], "project");
-    assert_eq!(slack["consented"], true, "consent is the device's, whichever gate moved");
-
-    // The machine-scoped one: the same command, the other level — no flag distinguishes them.
-    let device = cli.json(&["plugin", "enable", "watcher", "--json"]);
-    assert_eq!(device["scope"], "machine");
-    assert_eq!(device["level"], "this device");
 
     // There is no second switch to reach for.
     let (_, no_scope_flag) = cli.run(&["plugin", "enable", "slack", "--scope", "project", "--json"]);
@@ -4564,13 +4548,13 @@ fn a_plugins_declaration_decides_which_gate_the_faces_move() {
     assert_eq!(no_inherit, 2, "so is inherit — there is no tier to inherit from");
 
     // Disabling is the same one switch, and it leaves the neighbour alone.
+    cli.json(&["plugin", "enable", "watcher", "--json"]);
     cli.json(&["plugin", "disable", "slack", "--json"]);
     let after = cli.json(&["plugin", "list", "--json"]);
     let slack = after["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "slack").unwrap();
     let watcher = after["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "watcher").unwrap();
     assert_eq!(slack["enabled"], false);
-    assert_eq!(slack["consented"], true, "disable ≠ uninstall: the consent stays");
-    assert_eq!(watcher["enabled"], true, "the device-wide plugin is untouched");
+    assert_eq!(watcher["enabled"], true, "the neighbour is untouched");
 }
 
 /// An open gate is not the same as a plugin that fires (`AMB-D-359`). amenbo updates underneath an
@@ -4725,8 +4709,8 @@ fn plugin_validate_json_carries_the_two_documents_only_when_the_manifest_passes(
 /// small enough that everyone can fetch every one of them to draw a list, and a `detail` fetched for the one
 /// plugin being opened or installed. The split is amenbo's, so the aggregator holds no idea of which half a
 /// field belongs in — an idea it could hold only by naming fields, and so fail to name. Between them they
-/// carry the whole manifest, including the fields a hand-written copy list has dropped before (`scope`,
-/// `events`). The entry's `added_at` and `detail_sum` (`AMB-D-386`) come back as empty slots: neither can be
+/// carry the whole manifest, including the fields a hand-written copy list has dropped before (`events`,
+/// `config`). The entry's `added_at` and `detail_sum` (`AMB-D-386`) come back as empty slots: neither can be
 /// known from a manifest, so the catalog fills them.
 #[test]
 fn plugin_validate_json_splits_the_manifest_into_the_two_documents_the_catalog_serves() {
@@ -4743,7 +4727,6 @@ fn plugin_validate_json_splits_the_manifest_into_the_two_documents_the_catalog_s
         "url": "https://example.com/worktree-v1.tar.gz",
         "checksum": format!("sha256:{}", "a".repeat(64)),
         "official": true,
-        "scope": "machine",
         "events": ["task.done"],
         "config": [{ "key": "base", "label": "Base branch" }],
         "min_amenbo": "1.8.0",
@@ -4759,7 +4742,7 @@ fn plugin_validate_json_splits_the_manifest_into_the_two_documents_the_catalog_s
     assert_eq!(entry["desc"], "Isolate each task in its own git worktree");
     assert_eq!(entry["os"], serde_json::json!(["macos"]));
     assert_eq!(entry["official"], true, "the badge is drawn in the list");
-    for install_only in ["url", "checksum", "signature", "assets", "scope", "events", "config"] {
+    for install_only in ["url", "checksum", "signature", "assets", "events", "config"] {
         assert!(entry.get(install_only).is_none(), "{install_only} does not ride in the list");
     }
     assert!(entry["added_at"].is_null(), "the catalog's slot, emitted empty");
@@ -4769,7 +4752,6 @@ fn plugin_validate_json_splits_the_manifest_into_the_two_documents_the_catalog_s
     assert_eq!(detail["name"], "worktree", "the join between the two documents");
     assert_eq!(detail["url"], "https://example.com/worktree-v1.tar.gz");
     assert_eq!(detail["checksum"], format!("sha256:{}", "a".repeat(64)));
-    assert_eq!(detail["scope"], "machine");
     assert_eq!(detail["events"], serde_json::json!(["task.done"]));
     assert_eq!(detail["config"][0]["key"], "base");
     assert_eq!(detail["min_amenbo"], "1.8.0");
@@ -5147,9 +5129,7 @@ fn a_plugin_reads_its_own_project_back_and_no_other() {
 /// *do* something overwrites it.
 #[cfg(unix)]
 fn install_subscribing_plugin(cli: &Cli, name: &str, events: &[&str]) {
-    // Declared machine-scoped: the observation path reads the device's gate, and a project-scoped
-    // plugin's switch is a project's — which a drained event cannot name yet (`AMB-D-379`).
-    install_scoped_plugin(cli, name, "machine", serde_json::json!([]));
+    install_plugin(cli, name, serde_json::json!([]));
     let manifest_file = cli.home.join("plugins").join(name).join("manifest.json");
     let mut manifest: Value =
         serde_json::from_str(&std::fs::read_to_string(&manifest_file).unwrap()).unwrap();

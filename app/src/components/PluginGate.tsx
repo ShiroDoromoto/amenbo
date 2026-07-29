@@ -4,20 +4,17 @@ import { setPluginEnabled, type PluginInstall } from "../core/pluginInstalls";
 
 /**
  * One installed plugin's switch, wherever a face draws it — the market's detail and the installed
- * screen both hand the same control to the same seam (`AMB-D-351`/`AMB-D-379`).
+ * screen both hand the same control to the same seam (`AMB-D-351`/`AMB-D-434`).
  *
- * **The consent is asked here, once per device.** Enabling means running somebody else's code on this
- * machine, so the first enable stops and asks; core records the answer, and `consented` on the row is what
- * keeps every later enable from asking again (a disable does not take it back — `disable ≠ uninstall`).
- *
- * **One switch, and the author says which** (`AMB-D-379`). A `machine` plugin has the device's, a
- * `project` plugin has one project's — so the second needs a project named before it can be moved, and the
- * picker is that, not a choice of level. Everything else that can refuse (a build this amenbo cannot speak
- * to, a `required` setting with no value) is core's judgement, shown here as the reason it gave.
+ * **One switch, and it is a project's** (`AMB-D-434`). So a project has to be named before the switch can
+ * be moved, and the picker is that, not a choice of level. Turning a plugin on is itself the permission to
+ * run its code, so there is no second question to ask. Everything that can refuse (a build this amenbo
+ * cannot speak to, a `required` setting with no value) is core's judgement, shown here as the reason it
+ * gave.
  */
 export function PluginGate({ install, projects, projectId, onProject, lead }: {
   install: PluginInstall;
-  /** The projects a project-scoped gate can be moved in — the store's, for the picker below. */
+  /** The projects the gate can be moved in — the store's, for the picker below. */
   projects: { id: number; name: string }[];
   /** Which project this gate speaks for (`null` = none chosen yet). */
   projectId: number | null;
@@ -31,9 +28,6 @@ export function PluginGate({ install, projects, projectId, onProject, lead }: {
   // an empty queue is the ordinary case, and saying so every time would train the eye past the one time
   // it matters — the same silence the CLI keeps.
   const [dropped, setDropped] = useState(0);
-  // Open only while the consent question is on screen. Not a stored answer: what is remembered lives on
-  // the device (`consented`), and this is just the asking.
-  const [asking, setAsking] = useState(false);
 
   const move = async (next: boolean) => {
     setBusy(true);
@@ -49,28 +43,25 @@ export function PluginGate({ install, projects, projectId, onProject, lead }: {
     }
   };
 
-  const perProject = install.scope === "project";
   const enabled = install.enabled === true;
-  const where = t(perProject ? "plugins.gate.project" : "plugins.gate.machine");
-  // A project-scoped gate with no project named has no answer to move — the picker is the way out, so the
-  // buttons wait for it rather than acting on some default project nobody chose.
-  const unanswered = perProject && projectId == null;
+  const where = t("plugins.gate.project");
+  // A gate with no project named has no answer to move — the picker is the way out, so the buttons wait
+  // for it rather than acting on some default project nobody chose.
+  const unanswered = projectId == null;
 
   return (
     <div className="pluggate">
       {lead}
-      {perProject && (
-        <select
-          value={projectId ?? ""}
-          onChange={(e) => onProject(e.target.value === "" ? null : Number(e.target.value))}
-          style={{ fontSize: "var(--fs-xs)" }}
-        >
-          <option value="">{t("plugins.pickProject")}</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      )}
+      <select
+        value={projectId ?? ""}
+        onChange={(e) => onProject(e.target.value === "" ? null : Number(e.target.value))}
+        style={{ fontSize: "var(--fs-xs)" }}
+      >
+        <option value="">{t("plugins.pickProject")}</option>
+        {projects.map((p) => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
       {!unanswered && (
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
           {tf(enabled ? "plugins.enabledAt" : "plugins.disabledAt", { where })}
@@ -84,7 +75,7 @@ export function PluginGate({ install, projects, projectId, onProject, lead }: {
         <button
           className="btn"
           disabled={busy || unanswered || !install.compatible}
-          onClick={() => (install.consented ? void move(true) : setAsking(true))}
+          onClick={() => void move(true)}
         >
           {t("plugins.enable")}
         </button>
@@ -101,24 +92,6 @@ export function PluginGate({ install, projects, projectId, onProject, lead }: {
           re-enabling starts from now (`AMB-D-399`). The CLI has always said it; this is the same line. */}
       {dropped > 0 && (
         <div className="pluggate__note">{tn("plugins.droppedQueued", dropped)}</div>
-      )}
-      {asking && (
-        <div className="pluggate__consent">
-          <div>{tf("plugins.consentAsk", { name: install.name })}</div>
-          <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.consentOnce")}</div>
-          <div className="pluggate">
-            <button
-              className="btn"
-              disabled={busy}
-              onClick={() => { setAsking(false); void move(true); }}
-            >
-              {t("plugins.consentAgree")}
-            </button>
-            <button className="feed__action" disabled={busy} onClick={() => setAsking(false)}>
-              {t("plugins.consentCancel")}
-            </button>
-          </div>
-        </div>
       )}
       {error && <div className="pluggate__note">{error}</div>}
     </div>

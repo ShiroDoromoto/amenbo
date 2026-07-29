@@ -209,9 +209,9 @@ pub fn queued_plugins(conn: &Connection) -> Result<Vec<String>> {
 /// its queue (`AMB-D-399`). `project` narrows it to the rows stamped with that project; `None` takes every
 /// row the plugin holds, whichever project each came from.
 ///
-/// The narrowing is what a per-project switch needs: a project-scoped plugin can be on in one project and
-/// off in another (`AMB-D-379`), and turning it off in one is no statement about the other's events. `None`
-/// is the whole-plugin stop — a machine-wide switch closing, or an uninstall.
+/// The narrowing is what a switch needs: a plugin can be on in one project and off in another
+/// (`AMB-D-434`), and turning it off in one is no statement about the other's events. `None` is the
+/// whole-plugin stop — an uninstall.
 ///
 /// Dropping rather than keeping is the decision, not an optimisation: a disabled plugin's queue has no
 /// condition under which it would ever be worked, so held rows would grow for as long as the plugin is off
@@ -313,7 +313,7 @@ mod tests {
     }
 
     /// Turning a plugin off in one project takes that project's rows only: the same plugin may still be on
-    /// in another (`AMB-D-379`), and its events there were never part of the answer that changed.
+    /// in another (`AMB-D-434`), and its events there were never part of the answer that changed.
     #[test]
     fn dropping_one_projects_share_leaves_the_other_projects_rows() {
         let e = StoreEngine::open_in_memory().unwrap();

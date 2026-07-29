@@ -13,7 +13,7 @@
 //!
 //! - **installed** — read by name off disk ([`plugin_installed::read`]),
 //!   which errors rather than shrugging: a caller who named a plugin is owed the reason it did not run;
-//! - **enabled** — the one gate its author declared (`AMB-D-379`/`AMB-D-351`; `install ≠ enable`, and
+//! - **enabled** — the gate of the project it is called in (`AMB-D-434`/`AMB-D-351`; `install ≠ enable`, and
 //!   running a plugin's arbitrary code is exactly what the consent is for);
 //! - **compatible** — this amenbo speaks the payload contract it reads and clears its version floor
 //!   (`AMB-D-359`);
@@ -51,7 +51,7 @@ use crate::plugin_inject;
 use crate::plugin_installed;
 use crate::plugin_log;
 use crate::plugin_payload::VERSION;
-use crate::plugin_trust::{effective_enabled_in, gate_for};
+use crate::plugin_trust::{effective_enabled_in, require_project};
 use crate::store::Store;
 
 /// What the execution log records in the `event` column for a command run. Not one of the v1 event names
@@ -84,8 +84,8 @@ pub fn command_stdin(config: Map<String, Value>) -> String {
 /// Split from [`call`] so the assembly is testable without spawning anything, and so a caller that wants to
 /// inspect what would run (or run it under its own policy — a timeout is the caller's, `AMB-D-352`) can.
 /// `project` is the run's project context, which a command has and an observation does not: an invocation
-/// happens inside one bound folder, so a project-scoped gate and a project's config override are both
-/// answerable here.
+/// happens inside one bound folder, so the gate and the project's config override are both answerable
+/// here. Outside one there is no gate to ask (`AMB-D-434`), and the refusal says so.
 pub fn prepare(
     store: &Store,
     name: &str,
@@ -95,8 +95,8 @@ pub fn prepare(
     let plugin = plugin_installed::read(&store.paths, name)?;
     crate::plugin_compat::check(&plugin.manifest).map_err(|why| why.into_error(name))?;
 
-    let gate = gate_for(plugin.manifest.scope, project)?;
-    if !effective_enabled_in(store, name, gate)? {
+    let project = require_project(project)?;
+    if !effective_enabled_in(store, name, project)? {
         let cmd = crate::config::Paths::command_name();
         return Err(crate::error::Error::invalid(
             format!(
@@ -105,7 +105,7 @@ pub fn prepare(
         ));
     }
 
-    let injection = plugin_inject::resolve(store, name, &plugin.manifest.config, project)?;
+    let injection = plugin_inject::resolve(store, name, &plugin.manifest.config, Some(project))?;
     let mut invocation =
         PluginInvocation::new(plugin.program).stdin_json(command_stdin(injection.text));
     for arg in args {
@@ -116,7 +116,7 @@ pub fn prepare(
     }
     // The read-back path (`AMB-D-406`): the store to call into, and the window to read it through — which is
     // the gate this run just passed, since what a plugin may observe is what it may read.
-    for (key, value) in plugin_callback::env(&store.paths.base_dir, plugin_callback::reach_of(gate)) {
+    for (key, value) in plugin_callback::env(&store.paths.base_dir, plugin_callback::reach_of(project)) {
         invocation = invocation.env(key, value);
     }
     Ok(invocation)

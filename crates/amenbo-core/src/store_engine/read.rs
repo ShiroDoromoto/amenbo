@@ -3776,7 +3776,7 @@ pub fn plugin_config_value(
 }
 
 /// The live `plugin_enable` row id for `(project_id, plugin)`, or `None` — the lookup behind both writes,
-/// since enabling is "ensure the row" and disabling is "delete it" (`AMB-D-379`). The `plugin_enable_pair`
+/// since enabling is "ensure the row" and disabling is "delete it" (`AMB-D-434`). The `plugin_enable_pair`
 /// UNIQUE index guarantees at most one row.
 pub fn plugin_enable_row_id(
     conn: &Connection,
@@ -3807,8 +3807,7 @@ pub fn plugin_enable_row_by_id(
 }
 
 /// Whether this project holds the gate open for one plugin — the row's presence, and nothing else
-/// (`AMB-D-379`). The consent that has to sit beside it is machine-local, and lives in the config
-/// ([`crate::plugin_trust::effective_enabled_in`] is the resolution that reads both).
+/// (`AMB-D-434`).
 pub fn plugin_enabled_in_project(
     conn: &Connection,
     project_id: i64,

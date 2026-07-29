@@ -1,16 +1,14 @@
-//! The projects a `scope: project` plugin is **enabled in** (`AMB-D-379`).
+//! The projects a plugin is **enabled in** (`AMB-D-434`).
 //!
-//! A set, not a pair of answers: the author declares which single switch their plugin has
-//! ([`crate::plugin_manifest::Scope`]), so a project-scoped plugin has no machine tier beneath it to
+//! A set, not a pair of answers: a plugin has one switch and it is a project's, with no tier beneath it to
 //! inherit from or veto. The row **is** the answer — present means "on here", absent means off — which is
 //! why [`set`] takes a plain `bool` and turning a plugin off deletes rather than stores a `false`.
 //! Like the sibling [`crate::ops::plugin_config`] this is a real record, carried by `export`/`backup`: a
 //! restore that dropped it would silently switch a project's plugins off.
 //!
-//! **The gate only, never the consent.** Consent to run a plugin's code is machine-local and stays in
-//! `config.json` (`AMB-D-351`); a row here cannot grant it, and the resolution that reads both
-//! ([`crate::plugin_trust::effective_enabled_in`]) is what keeps a row carried onto another device from
-//! firing anything there.
+//! **The row is the whole of it.** Turning a plugin on is itself the permission to run its code
+//! (`AMB-D-434`), so nothing else has to travel beside these rows for them to mean the same thing wherever
+//! they land.
 //!
 //! One row per `(project_id, plugin)` — the `plugin_enable_pair` UNIQUE index is what makes [`set`]
 //! idempotent rather than an append. Reach is guarded one level up, by the `Store` wrapper
@@ -23,7 +21,7 @@ use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
 /// Turn one plugin on (`true`) or off (`false`) in one project, inside the caller's transaction — write
-/// the row, or delete it (`AMB-D-379`: the row is the answer, so there is no second state to update in
+/// the row, or delete it (`AMB-D-434`: the row is the answer, so there is no second state to update in
 /// place). Idempotent on the `(project_id, plugin)` pair in both directions; returns whether anything
 /// changed.
 pub fn set(tx: &WriteTx<'_>, project_id: i64, plugin: &str, on: bool) -> Result<bool> {
@@ -79,8 +77,8 @@ mod tests {
         });
     }
 
-    /// Turning it off deletes the row rather than storing a `false`: there is no machine tier under a
-    /// project-scoped plugin, so "off here" and "nothing here" are the same state (`AMB-D-379`).
+    /// Turning it off deletes the row rather than storing a `false`: there is no tier under it, so "off
+    /// here" and "nothing here" are the same state (`AMB-D-434`).
     #[test]
     fn turning_it_off_deletes_the_row() {
         with_tx(|tx| {

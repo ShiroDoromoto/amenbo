@@ -28,11 +28,11 @@ import { getSnapshot, subscribe } from "../core/snapshot";
 // knows (a description, an author) — those belong to the market's copy of the entry, not to the install.
 //
 // Everything a row can *do* is one control (`PluginGate`), the same one the market's detail draws, so the
-// consent question and the project a gate speaks for cannot mean two different things on two screens.
+// project a gate speaks for cannot mean two different things on two screens.
 
 export function PluginInstalledScreen() {
   const projects = useSyncExternalStore(subscribe, () => getSnapshot().projects);
-  // Which project a project-scoped gate speaks for (`AMB-D-379`). This screen is not opened inside a
+  // Which project a gate speaks for (`AMB-D-434`). This screen is not opened inside a
   // project, so it has to be named — except on a store with exactly one project, where naming it would be
   // asking a question with a single answer.
   const [pickedProject, setPickedProject] = useState<number | null>(null);
@@ -111,14 +111,13 @@ export function PluginInstalledScreen() {
  *
  * The settings are one item whichever tier they sat at (a machine default and a project override are the
  * same thing to the person who typed them), and the binary is not the headline: what makes `AMB-D-357`
- * worth saying out loud is that the settings, the secrets and the consent went with it.
+ * worth saying out loud is that the settings and the secrets went with it.
  */
 function removedParts(r: PluginRemoved): string {
   const parts = [
     r.directory && t("plugins.removedPart.binary"),
     (r.machineDefaults || r.projectOverrides > 0) && t("plugins.removedPart.settings"),
     r.secrets && t("plugins.removedPart.secrets"),
-    r.consent && t("plugins.removedPart.consent"),
     r.runsLog && t("plugins.removedPart.runs"),
   ].filter((p): p is string => typeof p === "string");
   return parts.join(t("common.listSeparator"));
@@ -202,7 +201,7 @@ function InstalledRow({ install, update, projects, projectId, onProject, onRemov
   };
 
   // The question names what goes beyond the binary (`AMB-D-357`): the settings in every project, the
-  // secrets and the consent are the part nobody pictures, and they do not come back with a re-install.
+  // secrets are the part nobody pictures, and they do not come back with a re-install.
   const onRemove = async () => {
     if (!(await confirmDialog(tf("plugins.removeConfirm", { name: install.name })))) return;
     setBusy(true);
@@ -222,9 +221,7 @@ function InstalledRow({ install, update, projects, projectId, onProject, onRemov
       <div className="feed__body" style={{ minWidth: 0 }}>
         <div className="feed__line">
           <strong>{install.name}</strong>{" "}
-          <span className="chip">
-            {t(install.scope === "project" ? "plugins.gate.project" : "plugins.gate.machine")}
-          </span>
+          <span className="chip">{t("plugins.gate.project")}</span>
           {!install.compatible ? (
             <>
               {" "}

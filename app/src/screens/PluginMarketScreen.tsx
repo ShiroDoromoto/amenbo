@@ -54,7 +54,7 @@ export function PluginMarketScreen() {
   // The opened entry is held by name, not as a row: the catalog can be refetched underneath, and a
   // detail must then show what the catalog now holds rather than a copy frozen at the click.
   const [openName, setOpenName] = useState<string | null>(null);
-  // Which project a project-scoped gate speaks for (`AMB-D-379`). The market is not opened inside a
+  // Which project a gate speaks for (`AMB-D-434`). The market is not opened inside a
   // project, so it has to be named — except on a store with exactly one project, where naming it would be
   // asking a question with a single answer.
   const [pickedProject, setPickedProject] = useState<number | null>(null);

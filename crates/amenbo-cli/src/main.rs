@@ -1195,10 +1195,9 @@ fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, C
 /// The two facts side by side, because `install ≠ enable` (`AMB-D-351`) is the thing a reader most often
 /// gets wrong: an installed plugin that never fires is the *normal* state, not a fault.
 ///
-/// Each plugin has exactly one switch, at the level its author declared (`AMB-D-379`), so the listing says
-/// **which** level answered as well as what it answered — "on here" and "on for this device" are different
-/// facts, and a reader who cannot tell them apart cannot tell where to go and change one. A project-scoped
-/// plugin read from outside any project has no answer at all rather than a made-up one.
+/// Each plugin has exactly one switch and it is a project's (`AMB-D-434`), so the listing answers for the
+/// project the folder is bound to. Read from outside any project it has no answer at all rather than a
+/// made-up one.
 ///
 /// **An open gate is not the same as a plugin that fires**, so the listing carries the compatibility
 /// verdict beside it (`AMB-D-359`). The dispatch resolver warns and drops a plugin this build cannot speak
@@ -1212,8 +1211,7 @@ fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, C
 /// surfaces the fact, quietly.
 fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     use amenbo_core::plugin_compat;
-    use amenbo_core::plugin_manifest::Scope;
-    use amenbo_core::plugin_trust::{effective_enabled_in, gate_for};
+    use amenbo_core::plugin_trust::effective_enabled_in;
 
     let installed =
         amenbo_core::plugin_installed::installed(&store.paths).map_err(CliError::from)?;
@@ -1226,12 +1224,14 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
             .map(|c| c.name)
             .collect();
     let here = bound_project(store);
-    // `None` = this plugin's switch cannot be answered from where we stand (a project-scoped plugin, and
-    // no project in context).
-    let gate_of = |scope: Scope, name: &str| -> Result<Option<bool>, CliError> {
-        match gate_for(scope, here) {
-            Ok(gate) => Ok(Some(effective_enabled_in(store, name, gate).map_err(CliError::from)?)),
-            Err(_) => Ok(None),
+    // `None` = this plugin's switch cannot be answered from where we stand (every gate is a project's, and
+    // no project is in context).
+    let gate_of = |name: &str| -> Result<Option<bool>, CliError> {
+        match here {
+            Some(project) => {
+                Ok(Some(effective_enabled_in(store, name, project).map_err(CliError::from)?))
+            }
+            None => Ok(None),
         }
     };
 
@@ -1244,12 +1244,10 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
                 "desc": p.manifest.desc,
                 "author": p.manifest.author,
                 "official": p.manifest.official,
-                "scope": p.manifest.scope.as_str(),
-                "enabled": gate_of(p.manifest.scope, &p.name)?,
+                "enabled": gate_of(&p.name)?,
                 "compatible": why.is_none(),
                 "incompatible_reason": why.map(|why| why.to_string()),
                 "update_available": updatable.contains(&p.name),
-                "consented": store.config.plugin_consented(&p.name),
                 "events": p.manifest.events,
                 "program": p.program.display().to_string(),
             }));
@@ -1263,14 +1261,10 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
         human(flags, format!("No plugins installed ({}).", store.paths.plugins_dir().display()));
     } else {
         for p in &installed {
-            let where_ = match p.manifest.scope {
-                Scope::Machine => "this device",
-                Scope::Project => "this project",
-            };
-            let open = gate_of(p.manifest.scope, &p.name)?;
+            let open = gate_of(&p.name)?;
             let gate = match open {
-                Some(true) => format!("enabled ({where_})"),
-                Some(false) => format!("disabled ({where_})"),
+                Some(true) => "enabled (this project)".to_string(),
+                Some(false) => "disabled (this project)".to_string(),
                 None => "per project — open a project to see".to_string(),
             };
             let badge = if p.manifest.official { " [official]" } else { "" };
@@ -1663,32 +1657,10 @@ fn plugin_rollback_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, 
     Ok(0)
 }
 
-/// The gate one installed plugin's declaration names, from where this command is standing
-/// (`AMB-D-379`): a `machine` plugin's device-wide switch, or a `project` plugin's switch in the bound
-/// project. The refusal for a project-scoped plugin outside any project comes from the boundary itself, so
-/// the CLI does not restate the rule.
-fn plugin_gate(
-    store: &Store,
-    scope: amenbo_core::plugin_manifest::Scope,
-) -> Result<amenbo_core::plugin_trust::Gate, CliError> {
-    amenbo_core::plugin_trust::gate_for(scope, bound_project(store)).map_err(CliError::from)
-}
-
-/// How a gate reads back to its caller — the level, never a tier a user would have to pick.
-fn plugin_gate_level(gate: amenbo_core::plugin_trust::Gate) -> &'static str {
-    match gate {
-        amenbo_core::plugin_trust::Gate::Machine => "this device",
-        amenbo_core::plugin_trust::Gate::Project(_) => "this project",
-    }
-}
-
-/// Which config tier the `required` probe should count for this gate (`AMB-D-356`): a project's enable
-/// counts that project's overrides on top of the machine defaults; the device's counts the defaults alone.
-fn plugin_value_tier(gate: amenbo_core::plugin_trust::Gate) -> amenbo_core::plugin_config::Scope {
-    match gate {
-        amenbo_core::plugin_trust::Gate::Machine => amenbo_core::plugin_config::Scope::MachineDefault,
-        amenbo_core::plugin_trust::Gate::Project(id) => amenbo_core::plugin_config::Scope::Project(id),
-    }
+/// The project whose gate this command is moving — the bound one (`AMB-D-434`). The refusal for a command
+/// standing in no project comes from the boundary itself, so the CLI does not restate the rule.
+fn plugin_gate(store: &Store) -> Result<i64, CliError> {
+    amenbo_core::plugin_trust::require_project(bound_project(store)).map_err(CliError::from)
 }
 
 /// The config re-check an update runs before it replaces a build (`AMB-D-359`), handed to
@@ -1700,7 +1672,7 @@ fn plugin_value_tier(gate: amenbo_core::plugin_trust::Gate) -> amenbo_core::plug
 /// enabled plugin missing a value its own author marked required.
 ///
 /// The folder this ran in is not part of that: an update replaces the build for every project at once, so
-/// the gates judged are all of them (`AMB-D-379`), bound folder or not.
+/// the gates judged are all of them (`AMB-D-434`), bound folder or not.
 ///
 /// Which build is held back is [`amenbo_core::plugin_config::required_unset_for_update`]'s call, shared
 /// with the GUI's gate; what a terminal is told about it is this command's — hence the `amenbo plugin
@@ -1723,90 +1695,63 @@ fn refuse_update_leaving_required_unset(
     ))
 }
 
-/// `plugin enable <name>` — record consent and open **the** gate, through the one boundary that moves that
-/// state ([`amenbo_core::plugin_trust`]). There is no `--scope`: the plugin's author declared which switch
-/// it has (`AMB-D-379`), so this command always means one thing, and the message says which level it moved.
-/// Fail-closed twice over: on the plugin's compatibility declarations
-/// ([`amenbo_core::plugin_compat`], `AMB-D-359` — a plugin this amenbo cannot speak to is refused before
-/// any consent is recorded), and on the author's `required` settings, probed at the tier that gate reads.
+/// `plugin enable <name>` — open the bound project's gate, through the one boundary that moves that state
+/// ([`amenbo_core::plugin_trust`]). There is no `--scope`: every plugin has one switch and it is a
+/// project's (`AMB-D-434`), so this command always means one thing. Fail-closed twice over: on the
+/// plugin's compatibility declarations ([`amenbo_core::plugin_compat`], `AMB-D-359` — a plugin this amenbo
+/// cannot speak to is refused before anything is written), and on the author's `required` settings, probed
+/// at the tier that gate reads.
 fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
     let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
     amenbo_core::plugin_compat::check(&plugin.manifest)
         .map_err(|incompatible| CliError::from(incompatible.into_error(name)))?;
-    let gate = plugin_gate(store, plugin.manifest.scope)?;
+    let project = plugin_gate(store)?;
     let fields = plugin.manifest.config.clone();
-    let tier = plugin_value_tier(gate);
+    let tier = amenbo_core::plugin_config::Scope::Project(project);
     let satisfied = amenbo_core::plugin_config::satisfied_keys(store, name, &fields, tier)
         .map_err(CliError::from)?;
     let has_value = |f: &amenbo_core::plugin_manifest::ConfigField| {
         satisfied.iter().any(|k| k == &f.key)
     };
 
-    amenbo_core::plugin_trust::enable(store, name, gate, &fields, has_value)
+    amenbo_core::plugin_trust::enable(store, name, project, &fields, has_value)
         .map_err(CliError::from)?;
 
-    let where_ = plugin_gate_level(gate);
-    human(flags, format!("Enabled plugin: {name} ({where_})"));
+    human(flags, format!("Enabled plugin: {name} (this project)"));
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "plugin.enable", "plugin": name,
-            "enabled": true, "scope": plugin.manifest.scope.as_str(), "level": where_,
+            "enabled": true, "level": "this project",
         }));
     }
     Ok(0)
 }
 
-/// `plugin disable <name>` — close the gate, keeping the consent (`disable ≠ uninstall`, `AMB-D-357`).
+/// `plugin disable <name>` — close this project's gate (`disable ≠ uninstall`, `AMB-D-357`).
 ///
 /// Deliberately does **not** require the plugin to still read as installed: this is the way to stop a
-/// plugin firing, and a broken install is exactly when that is most needed. Without a manifest there is no
-/// declaration to read, so it closes **every** gate the name could hold — closing one that was never open
-/// costs nothing, and leaving one open because a file would not parse is the failure that matters.
+/// plugin firing, and a broken install is exactly when that is most needed. Nothing here is read off a
+/// manifest, so a file that will not parse cannot leave a gate open.
 fn plugin_disable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
-    use amenbo_core::plugin_trust::{disable, effective_enabled_in, Gate};
+    use amenbo_core::plugin_trust::{disable, effective_enabled_in};
 
-    let declared = amenbo_core::plugin_installed::read(&store.paths, name)
-        .ok()
-        .map(|p| p.manifest.scope);
-    let Some(scope) = declared else {
-        let mut closed = false;
-        let mut dropped = 0;
-        for gate in [Some(Gate::Machine), bound_project(store).map(Gate::Project)].into_iter().flatten() {
-            closed |= effective_enabled_in(store, name, gate).map_err(CliError::from)?;
-            dropped += disable(store, name, gate).map_err(CliError::from)?.queued;
-        }
-        human(
-            flags,
-            format!("Disabled plugin: {name} (its manifest is unreadable, so every gate it could hold was closed)"),
-        );
-        say_dropped(flags, dropped);
-        if flags.json {
-            print_json(&json!({
-                "ok": true, "action": "plugin.disable", "plugin": name,
-                "enabled": false, "scope": null, "noop": !closed, "dropped_queued": dropped,
-            }));
-        }
-        return Ok(0);
-    };
+    let project = plugin_gate(store)?;
+    let was_enabled = effective_enabled_in(store, name, project).map_err(CliError::from)?;
+    let stopped = disable(store, name, project).map_err(CliError::from)?;
 
-    let gate = plugin_gate(store, scope)?;
-    let was_enabled = effective_enabled_in(store, name, gate).map_err(CliError::from)?;
-    let stopped = disable(store, name, gate).map_err(CliError::from)?;
-
-    let where_ = plugin_gate_level(gate);
     human(
         flags,
         if was_enabled {
-            format!("Disabled plugin: {name} ({where_})")
+            format!("Disabled plugin: {name} (this project)")
         } else {
-            format!("Plugin already disabled: {name} ({where_})")
+            format!("Plugin already disabled: {name} (this project)")
         },
     );
     say_dropped(flags, stopped.queued);
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "plugin.disable", "plugin": name,
-            "enabled": false, "scope": scope.as_str(), "level": where_, "noop": !was_enabled,
+            "enabled": false, "level": "this project", "noop": !was_enabled,
             "dropped_queued": stopped.queued,
         }));
     }
@@ -1848,7 +1793,6 @@ fn plugin_uninstall_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<
             "removed": {
                 "was_enabled": removed.was_enabled,
                 "queued": removed.queued,
-                "consent": removed.consent,
                 "machine_defaults": removed.machine_defaults,
                 "secrets": removed.secrets,
                 "project_overrides": removed.project_overrides,
@@ -6320,14 +6264,14 @@ mod tests {
     #[test]
     fn an_update_that_would_leave_a_required_setting_unset_is_held_back_only_for_an_enabled_plugin() {
         use amenbo_core::plugin_manifest::{ConfigField, Manifest};
-        use amenbo_core::plugin_trust::{self, Gate};
+        use amenbo_core::plugin_trust;
 
         fn manifest(config: serde_json::Value) -> Manifest {
             serde_json::from_value(serde_json::json!({
                 "name": "watcher", "desc": "t", "author": "amenbo",
                 "repo": "ShiroDoromoto/amenbo", "os": ["macos", "linux", "windows"],
                 "category": "workflow", "url": "https://example.invalid/x.tar.gz",
-                "checksum": "sha256:dead", "scope": "machine", "config": config,
+                "checksum": "sha256:dead", "config": config,
             }))
             .unwrap()
         }
@@ -6339,7 +6283,17 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let mut store = Store::open_at(amenbo_core::config::Paths::at(dir)).unwrap();
 
-        // Plant a machine-scoped install carrying one required setting, and give that setting a value.
+        let project = store
+            .project_add(amenbo_core::ops::project::NewProject {
+                name: "p".into(),
+                view: amenbo_core::model::View::List,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap()
+            .id;
+
+        // Plant an install carrying one required setting, and give that setting a value.
         let installed = manifest(serde_json::json!([{ "key": "token", "label": "T", "required": true }]));
         let home = store.paths.plugin_dir("watcher");
         std::fs::create_dir_all(&home).unwrap();
@@ -6376,7 +6330,7 @@ mod tests {
 
         // Enable it, then the two builds diverge: the satisfied one passes, the one that grew a required
         // field is held back and names it.
-        plugin_trust::enable(&mut store, "watcher", Gate::Machine, &installed.config, |_| true).unwrap();
+        plugin_trust::enable(&mut store, "watcher", project, &installed.config, |_| true).unwrap();
         assert!(refuse_update_leaving_required_unset(&store, &same).is_ok());
         let held = refuse_update_leaving_required_unset(&store, &grew).unwrap_err();
         assert_eq!(held.code(), "invalid_value");

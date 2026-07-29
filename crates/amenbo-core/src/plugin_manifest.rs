@@ -183,7 +183,7 @@ impl Platform {
     }
 
     /// Parse a wire token back to a [`Platform`]: an OS alone, or `<os>-<arch>`. `None` for any token
-    /// whose OS or arch is outside the vocabulary — the same fail-to-parse an unknown `os` or `scope` gets.
+    /// whose OS or arch is outside the vocabulary — the same fail-to-parse an unknown `os` gets.
     pub fn parse(s: &str) -> Option<Platform> {
         if let Some(os) = Os::parse(s) {
             return Some(Platform { os, arch: None });
@@ -204,40 +204,6 @@ impl<'de> Deserialize<'de> for Platform {
         let token = String::deserialize(deserializer)?;
         Platform::parse(&token)
             .ok_or_else(|| serde::de::Error::custom(format!("unknown platform token '{token}'")))
-    }
-}
-
-/// **What one switch turns this plugin on** (`AMB-D-379`) — declared by the author, because only the
-/// author knows which one is meaningful for their plugin.
-///
-/// A user is never shown two enable switches for the same plugin. A notifier is answered per project ("do
-/// I want this here"), while a plugin that watches the whole device has nothing a project could usefully
-/// say about it — so amenbo asks for one answer, at the level this field names, and refuses the other. The
-/// per-project *differences* a plugin needs beyond on/off are its **settings**, which have their own tiers
-/// (`AMB-D-356`): "notify at all" is one switch, "to which channel" is a value a project may override.
-///
-/// Not to be confused with [`plugin_config::Scope`](crate::plugin_config::Scope), which names the tier one
-/// config *value* is written at. This names what the *gate* is per.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Scope {
-    /// Enabled per project — the default, and what most plugins want. A project that has not enabled it
-    /// does not run it, and there is no device-wide answer to inherit.
-    #[default]
-    Project,
-    /// Enabled once for the device. A project cannot override it: for a plugin whose work is not a
-    /// project's (it watches the machine, or the store as a whole), a per-project answer would be a switch
-    /// that looks like it does something and does not.
-    Machine,
-}
-
-impl Scope {
-    /// The wire token.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Scope::Project => "project",
-            Scope::Machine => "machine",
-        }
     }
 }
 
@@ -297,7 +263,7 @@ fn default_faces() -> Vec<Face> {
 ///
 /// **Shape only, like the rest of this module.** That `reply: true` is allowed only with `faces: [cli]`,
 /// and that `faces` is non-empty, are rules the validator enforces (`AMB-D-354`/`AMB-D-383`); serde already
-/// refuses a face token outside the vocabulary, the same way an unknown `scope` fails to parse. The
+/// refuses a face token outside the vocabulary, the same way an unknown `os` fails to parse. The
 /// dispatcher reads `faces` to decide whether the driving face fires this hook and `reply` to decide
 /// whether to relay its output — neither is this type's to act on.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -439,8 +405,8 @@ pub struct Manifest {
     ///
     /// **Absent means the single-`url` form**, which stays valid: the two are alternatives, and where both
     /// are written this one answers. That the keys match the declared `os` set is the door's to enforce —
-    /// this type only carries the map, and a platform token it does not know fails to parse the same way an
-    /// unknown `scope` does.
+    /// this type only carries the map, and a platform token it does not know fails to parse the same way
+    /// every other value outside its vocabulary does.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub assets: BTreeMap<Platform, Asset>,
     /// The official badge: the author is the amenbo team. Catalog-authoritative (`AMB-D-347`), never
@@ -462,15 +428,6 @@ pub struct Manifest {
     /// on the way out, because the digest is over bytes that do not exist until the catalog publishes them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail_sum: Option<String>,
-    /// Which switch enables this plugin — per project, or once for the device ([`Scope`], `AMB-D-379`).
-    /// Absent means [`Scope::Project`], the answer that fits most plugins and the safe one: a project that
-    /// has said nothing runs nothing. Declaring `machine` is the author saying a per-project answer would
-    /// be meaningless for their plugin, and the faces then offer only the device-wide switch.
-    ///
-    /// A value outside the two is refused where every other shape error is (`AMB-D-354`): the manifest does
-    /// not parse, so it never reaches the rules or the catalog.
-    #[serde(default)]
-    pub scope: Scope,
     /// The event-payload contract version this plugin reads (`AMB-D-349` — a single integer `v` for the
     /// whole contract, evolving additively). It lets amenbo notice when its own `v` has moved past what a
     /// plugin understands and warn or refuse rather than silently feed it a payload it cannot parse
@@ -628,7 +585,6 @@ mod tests {
             "url": "https://example.com/worktree-v1.tar.gz",
             "checksum": "sha256:deadbeef",
             "official": true,
-            "scope": "project",
             "payload_v": 1,
             "min_amenbo": "1.8.0"
         })
@@ -656,32 +612,21 @@ mod tests {
         assert_eq!(Os::parse("bsd"), None);
     }
 
-    /// The enable scope is the author's declaration (`AMB-D-379`): absent means per project — the safe
-    /// answer, since a project that has said nothing then runs nothing — and a value outside the two is a
-    /// manifest that does not parse, which is where every other shape error is caught.
+    /// A plugin is enabled per project and nothing declares that (`AMB-D-434`), so a manifest written
+    /// while `scope` still existed is read as one that never had it: the key is dropped in silence,
+    /// whatever it says. Refusing it would strand every already-published entry on a door it passed
+    /// yesterday, and honouring it would keep the layer this removed.
     #[test]
-    fn the_enable_scope_defaults_to_project_and_rejects_anything_else() {
-        let mut v = full_json();
-        v.as_object_mut().unwrap().remove("scope");
-        let m: Manifest = serde_json::from_value(v).unwrap();
-        assert_eq!(m.scope, Scope::Project, "an undeclared scope is per project");
-
-        let mut machine = full_json();
-        machine["scope"] = serde_json::json!("machine");
-        let m: Manifest = serde_json::from_value(machine).unwrap();
-        assert_eq!(m.scope, Scope::Machine);
-        assert_eq!(serde_json::to_value(&m).unwrap()["scope"], serde_json::json!("machine"));
-
-        for bad in ["global", "workspace", "Project", ""] {
+    fn a_scope_left_over_from_an_older_manifest_is_dropped_in_silence() {
+        for leftover in ["project", "machine", "global", ""] {
             let mut v = full_json();
-            v["scope"] = serde_json::json!(bad);
-            assert!(
-                serde_json::from_value::<Manifest>(v).is_err(),
-                "a scope outside the vocabulary must not parse: {bad}"
-            );
+            v["scope"] = serde_json::json!(leftover);
+            let m: Manifest =
+                serde_json::from_value(v).unwrap_or_else(|e| panic!("'{leftover}' must parse: {e}"));
+            let out = serde_json::to_value(&m).unwrap();
+            assert_eq!(out.get("scope"), None, "and it is not carried back out");
+            assert_eq!(out, full_json(), "the rest of the document is what it was");
         }
-        assert_eq!(Scope::Project.as_str(), "project");
-        assert_eq!(Scope::Machine.as_str(), "machine");
     }
 
     #[test]
@@ -952,7 +897,7 @@ mod tests {
         );
     }
 
-    /// A face token outside the vocabulary is refused at the shape, the same way an unknown `scope` or `os`
+    /// A face token outside the vocabulary is refused at the shape, the same way an unknown `os`
     /// is — the validator never sees it.
     #[test]
     fn a_face_outside_the_vocabulary_does_not_parse() {

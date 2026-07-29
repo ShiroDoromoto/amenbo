@@ -601,10 +601,9 @@ impl Store {
     }
 
     /// Put a plugin's gate in this project into `on` (one operation = one transaction): `true` writes the
-    /// row that says "enabled here", `false` deletes it (`AMB-D-379` — the row *is* the answer). Returns
+    /// row that says "enabled here", `false` deletes it (`AMB-D-434` — the row *is* the answer). Returns
     /// whether anything changed. Written through the trust boundary ([`crate::plugin_trust`]), which is
-    /// where the consent and the fail-closed `required` check live; reach is guarded by
-    /// `WriteTarget::Project`.
+    /// where the fail-closed `required` check lives; reach is guarded by `WriteTarget::Project`.
     pub fn set_plugin_enabled_in_project(
         &mut self,
         project_id: i64,

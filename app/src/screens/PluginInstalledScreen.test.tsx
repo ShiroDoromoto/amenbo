@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // The installed screen answers "what does this machine hold, and is it firing" (`AMB-D-351`) without ever
-// reading the catalog. These tests hold it to that: every install is listed with the switch its author
-// declared, the switch moves from here under the same consent the market asks, and a project-scoped gate
-// still waits to be told which project it speaks for (`AMB-D-379`).
+// reading the catalog. These tests hold it to that: every install is listed with its switch, the switch
+// moves from here through the same control the market draws, and a gate still waits to be told which
+// project it speaks for (`AMB-D-434`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -100,8 +100,6 @@ let container: HTMLDivElement;
 let root: Root;
 
 const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => ({
-  scope: "machine",
-  consented: false,
   compatible: true,
   config: [],
   rollback: false,
@@ -157,7 +155,7 @@ beforeEach(() => {
   hoisted.asked = [];
   hoisted.confirm = true;
   hoisted.receipt = {
-    wasEnabled: false, consent: true, machineDefaults: true, secrets: true,
+    wasEnabled: false, machineDefaults: true, secrets: true,
     projectOverrides: 2, projectGates: 1, directory: true, runsLog: true, anything: true,
   };
   container = document.createElement("div");
@@ -175,16 +173,12 @@ const render = () => act(() => root.render(createElement(PluginInstalledScreen))
 describe("what this machine holds", () => {
   it("lists every install, and says which switch each one has", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
-    hoisted.installs = [
-      row({ name: "notify" }),
-      row({ name: "worktree", scope: "project", consented: true, enabled: true }),
-    ];
+    hoisted.installs = [row({ name: "notify" }), row({ name: "worktree", enabled: true })];
     render();
 
     expect(rows()).toHaveLength(2);
     expect(container.textContent).toContain("notify");
     expect(container.textContent).toContain("worktree");
-    expect(container.textContent).toContain(t("plugins.gate.machine"));
     expect(container.textContent).toContain(t("plugins.gate.project"));
     expect(container.textContent).toContain(tf("plugins.installedCount", { count: 2 }));
     // Enabled is the fact worth badging; installed is what every row on this screen already is.
@@ -207,30 +201,31 @@ describe("what this machine holds", () => {
 });
 
 describe("moving a gate from the list", () => {
-  it("asks for the consent the first time, and moves the gate on the answer", async () => {
+  // Turning a plugin on is itself the permission to run its code (`AMB-D-434`), so the switch moves on
+  // the click with nothing else asked.
+  it("enables on the click", async () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [row({ name: "notify" })];
     render();
 
-    act(() => { button(t("plugins.enable"))!.click(); });
-    expect(container.textContent).toContain(tf("plugins.consentAsk", { name: "notify" }));
-    expect(hoisted.gated).toEqual([]);
-
-    await act(async () => { button(t("plugins.consentAgree"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: null, enabled: true }]);
+    await act(async () => { button(t("plugins.enable"))!.click(); });
+    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 1, enabled: true }]);
   });
 
-  it("disables without a question", async () => {
-    hoisted.installs = [row({ name: "notify", consented: true, enabled: true })];
+  it("disables the same way", async () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
+    hoisted.installs = [row({ name: "notify", enabled: true })];
     render();
     await act(async () => { button(t("plugins.disable"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: null, enabled: false }]);
+    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 1, enabled: false }]);
   });
 
   // The discard a disable makes is real and there is no other trace of it: those events are not
   // delivered late, and re-enabling starts from now (`AMB-D-399`). An empty queue says nothing at all —
   // a line every time would train the eye past the one time it matters, which is the CLI's line too.
   it("says how many waiting events a disable threw away, and stays quiet when none did", async () => {
-    hoisted.installs = [row({ name: "notify", consented: true, enabled: true })];
+    hoisted.projects = [{ id: 1, name: "alpha" }];
+    hoisted.installs = [row({ name: "notify", enabled: true })];
     hoisted.droppedQueued = 3;
     render();
     await act(async () => { button(t("plugins.disable"))!.click(); });
@@ -242,10 +237,10 @@ describe("moving a gate from the list", () => {
     expect(container.textContent).not.toContain(tn("plugins.droppedQueued", 0));
   });
 
-  // A project-scoped gate has no device-wide answer to fall back on, so this screen names the project too.
-  it("waits for a project before it will move a project-scoped gate", async () => {
+  // A gate has no device-wide answer to fall back on, so this screen names the project too.
+  it("waits for a project before it will move a gate", async () => {
     hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
-    hoisted.installs = [row({ name: "worktree", scope: "project", consented: true })];
+    hoisted.installs = [row({ name: "worktree" })];
     render();
 
     expect(container.textContent).toContain(t("plugins.pickProjectNote"));
@@ -263,7 +258,7 @@ describe("moving a gate from the list", () => {
   // An open gate on a build amenbo cannot speak to fires nothing, so the switch says why instead of moving.
   it("refuses to enable a plugin this build cannot speak to, and names the mismatch", () => {
     hoisted.installs = [
-      row({ name: "notify", consented: true, compatible: false, incompatibleReason: "needs amenbo 9.0" }),
+      row({ name: "notify", compatible: false, incompatibleReason: "needs amenbo 9.0" }),
     ];
     render();
     expect(container.textContent).toContain("needs amenbo 9.0");
@@ -279,22 +274,21 @@ describe("a plugin this build cannot speak to", () => {
     hoisted.installs = [
       row({
         name: "notify",
-        consented: true,
         enabled: true,
         compatible: false,
         incompatibleReason: "payload v2, this build speaks v1",
       }),
     ];
     render();
-    expect(chips()).toEqual([t("plugins.gate.machine"), t("plugins.notFiring")]);
+    expect(chips()).toEqual([t("plugins.gate.project"), t("plugins.notFiring")]);
     // Core's own line, not a second judgement of our own.
     expect(container.textContent).toContain("payload v2, this build speaks v1");
   });
 
   it("leaves a compatible row wearing the plain enabled badge", () => {
-    hoisted.installs = [row({ name: "notify", consented: true, enabled: true })];
+    hoisted.installs = [row({ name: "notify", enabled: true })];
     render();
-    expect(chips()).toEqual([t("plugins.gate.machine"), t("plugins.enabledChip")]);
+    expect(chips()).toEqual([t("plugins.gate.project"), t("plugins.enabledChip")]);
   });
 });
 
@@ -456,9 +450,9 @@ describe("moving one plugin's build from its row", () => {
   });
 });
 
-// Uninstall is not disable (`AMB-D-357`): it takes the settings in every project, the secrets and the
-// consent with it, and none of that comes back. So the question has to say so before anything is removed,
-// and the answer has to say what actually went.
+// Uninstall is not disable (`AMB-D-357`): it takes the settings in every project and the secrets with it,
+// and none of that comes back. So the question has to say so before anything is removed, and the answer
+// has to say what actually went.
 describe("removing a plugin from this screen", () => {
   it("asks first, naming what goes beyond the plugin itself", async () => {
     hoisted.installs = [row({ name: "notify" })];
@@ -493,7 +487,6 @@ describe("removing a plugin from this screen", () => {
           t("plugins.removedPart.binary"),
           t("plugins.removedPart.settings"),
           t("plugins.removedPart.secrets"),
-          t("plugins.removedPart.consent"),
           t("plugins.removedPart.runs"),
         ].join(t("common.listSeparator")),
       }),
@@ -503,7 +496,7 @@ describe("removing a plugin from this screen", () => {
   // A name that held nothing is not a failure — it is how a half-broken install gets cleaned up.
   it("says so when the name held nothing on this machine", async () => {
     hoisted.receipt = {
-      wasEnabled: false, consent: false, machineDefaults: false, secrets: false,
+      wasEnabled: false, machineDefaults: false, secrets: false,
       projectOverrides: 0, projectGates: 0, directory: false, runsLog: false, anything: false,
     };
     hoisted.installs = [row({ name: "notify" })];

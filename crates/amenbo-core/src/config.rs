@@ -444,26 +444,6 @@ pub struct Config {
     /// error, and an empty map does not serialize (no `{}` residue).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub plugin_config: BTreeMap<String, BTreeMap<String, String>>,
-    /// **Per-plugin trust — machine-global, never synced** (`AMB-D-350`/`AMB-D-351`). A plugin's *presence*
-    /// in this map is the record of its **one-time consent** to run arbitrary code (`AMB-D-351`): it is
-    /// written at the first `enable`, kept across a `disable`, and removed only by `uninstall`
-    /// (`AMB-D-357`). [`PluginTrust::enabled`] is the current gate — `install ≠ enable`, so a plugin that
-    /// was installed but never enabled is simply absent here, and a disabled one is present with
-    /// `enabled: false`. Moved only through the trust write boundary ([`crate::plugin_trust`]), never
-    /// `config set`. Empty by default and does not serialize empty (no `{}` residue).
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub plugin_trust: BTreeMap<String, PluginTrust>,
-}
-
-/// The trust state amenbo keeps for one plugin — machine-global, never synced (`AMB-D-350`). The struct's
-/// *presence* in [`Config::plugin_trust`] is the consent record (`AMB-D-351`, given once and never asked
-/// for again); [`PluginTrust::enabled`] is whether the plugin currently fires.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PluginTrust {
-    /// Whether the plugin currently fires (`AMB-D-351`, the machine-global gate). `install ≠ enable`:
-    /// consent (this record's very existence) does not by itself run anything — `enable` sets this, and
-    /// `disable` clears it while keeping the consent so a later re-`enable` never asks again.
-    pub enabled: bool,
 }
 
 impl Config {
@@ -473,58 +453,9 @@ impl Config {
         self.plugin_config.get(plugin)?.get(key).map(String::as_str)
     }
 
-    /// Whether this plugin currently fires (`AMB-D-351`, the machine-global gate). `false` both for a plugin
-    /// that was never enabled (absent) and for one explicitly disabled. Read by the dispatch resolver so
-    /// only an enabled plugin observes an event (`AMB-T-2032`).
-    pub fn plugin_enabled(&self, plugin: &str) -> bool {
-        self.plugin_trust.get(plugin).is_some_and(|t| t.enabled)
-    }
-
-    /// Whether consent to run this plugin's arbitrary code has been recorded (`AMB-D-351`, given once). It
-    /// stays `true` across a `disable`, so a re-`enable` never re-asks; only `uninstall` clears it
-    /// ([`Config::forget_plugin_trust`]).
-    pub fn plugin_consented(&self, plugin: &str) -> bool {
-        self.plugin_trust.contains_key(plugin)
-    }
-
-    /// Record consent (if not already) and open the gate so the plugin fires (`AMB-D-351`). Idempotent —
-    /// re-enabling an already-enabled plugin is a no-op, and re-enabling a disabled one keeps its consent.
-    /// Does **not** persist; the caller saves the config through the write boundary, as with
-    /// [`Config::set_plugin_text_default`]. Prefer the boundary [`crate::plugin_trust::enable`], which is
-    /// fail-closed on required settings.
-    pub fn enable_plugin(&mut self, plugin: &str) {
-        self.plugin_trust.insert(plugin.to_string(), PluginTrust { enabled: true });
-    }
-
-    /// Record consent to run this plugin's code **without opening the machine-global gate** (`AMB-D-351`).
-    /// A no-op for a plugin that is already consented, so an enabled plugin never loses its gate to this.
-    ///
-    /// This is what a **project-scoped** enable needs (`AMB-D-379`): the user has said yes to running the
-    /// code on this device — the answer that is asked once, whichever gate they were moving — while the
-    /// gate itself is one project's, which lives in the store, not here. Does not persist; prefer the
-    /// boundary [`crate::plugin_trust::enable`], which is fail-closed on required settings.
-    pub fn consent_plugin(&mut self, plugin: &str) {
-        self.plugin_trust.entry(plugin.to_string()).or_insert(PluginTrust { enabled: false });
-    }
-
-    /// Close the gate, keeping the consent record (`disable ≠ uninstall`, `AMB-D-357`). A no-op for a plugin
-    /// with no trust record. Does not persist.
-    pub fn disable_plugin(&mut self, plugin: &str) {
-        if let Some(t) = self.plugin_trust.get_mut(plugin) {
-            t.enabled = false;
-        }
-    }
-
-    /// Erase this plugin's trust entirely — its consent and its enabled state both (`AMB-D-357`, the
-    /// `uninstall` after-clean). Does not persist.
-    pub fn forget_plugin_trust(&mut self, plugin: &str) {
-        self.plugin_trust.remove(plugin);
-    }
-
     /// Drop every machine default this plugin holds — the `config.json` half of `uninstall`
-    /// (`AMB-D-357`), beside [`forget_plugin_trust`](Self::forget_plugin_trust)'s consent half, so a
-    /// re-install starts clean rather than inheriting the settings of the copy that was removed. Returns
-    /// whether anything was there. Does not persist.
+    /// (`AMB-D-357`), so a re-install starts clean rather than inheriting the settings of the copy that
+    /// was removed. Returns whether anything was there. Does not persist.
     pub fn forget_plugin_config(&mut self, plugin: &str) -> bool {
         self.plugin_config.remove(plugin).is_some()
     }
@@ -602,7 +533,6 @@ impl Default for Config {
             ai_avatar: None,
             hook_consent: None,
             plugin_config: BTreeMap::new(),
-            plugin_trust: BTreeMap::new(),
         }
     }
 }

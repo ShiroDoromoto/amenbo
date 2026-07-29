@@ -7,9 +7,8 @@
 // local read.
 //
 // **Install is not enable** (`AMB-D-351`), so nothing here folds the two: `installPlugin` lands a plugin
-// inert, and `setPluginEnabled` is the separate act the consent is taken for. The consent question itself
-// belongs to the face (the detail asks it, once per device — `consented` is how it knows), and calling
-// enable is the answer core records.
+// inert, and `setPluginEnabled` is the separate act that lets it run — which is itself the permission to
+// run somebody else's code (`AMB-D-434`), so there is no second answer kept beside it.
 import { invoke } from "./ipc";
 import { inTauri } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
@@ -33,8 +32,8 @@ const NONE: PluginInstall[] = [];
 
 /**
  * Read what is installed, resolved for `projectId` (Tauri: `plugin_installs`). The project is not a
- * choice of level — the author declared that (`AMB-D-379`) — it is which project the answer is about: a
- * project-scoped plugin asked about without one comes back with no `enabled` at all rather than "off".
+ * choice of level — there is only one (`AMB-D-434`) — it is which project the answer is about: a plugin
+ * asked about without one comes back with no `enabled` at all rather than "off".
  *
  * Outside Tauri — `npm run dev` in a browser — there is no plugins directory to read, so the mock says
  * nothing is installed rather than inventing state.
@@ -81,8 +80,8 @@ export async function installPlugin(
  * it threw away**. Enabling is fail-closed in core on compatibility and on the author's `required`
  * settings, so a refusal here is a message to show, not a state to guess at.
  *
- * Calling it to enable **is** the consent (`AMB-D-351`): ask before calling, and only the first time —
- * `consented` on the row is what says whether this device has already answered.
+ * Calling it to enable **is** the permission (`AMB-D-434`): turning a plugin on is what running its code
+ * means, so nothing is asked beside it.
  *
  * `droppedQueued` is the discard a disable makes (`AMB-D-399`): whatever was waiting on that plugin's
  * queue is gone, and it is not caught up on when the plugin comes back. The caller is expected to say so
@@ -124,7 +123,7 @@ export async function setPluginConfig(
  * Remove one plugin and everything it left behind (Tauri: `plugin_uninstall`, `AMB-D-357`), and answer
  * what was actually found.
  *
- * **Uninstall is not disable**: the gate closes on the way out, and the binary, the consent, the settings
+ * **Uninstall is not disable**: the gates close on the way out, and the binary, the settings
  * in every project and the secrets go with it — a re-install starts clean. Ask before calling; the receipt
  * is for saying what went, not for asking whether it should.
  */

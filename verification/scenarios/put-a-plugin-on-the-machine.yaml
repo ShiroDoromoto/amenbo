@@ -49,8 +49,8 @@ steps_cli:
       name: worktree
       enabled: false
 
-  # The gate. This plugin declares itself project-scoped, so the switch answers for the project the
-  # folder is bound to — and there is one switch, at the level its author declared.
+  # The gate. There is one switch and it is a project's, so it answers for the project the folder is
+  # bound to.
   - type: action
     domain: plugin
     op: enable
@@ -140,8 +140,8 @@ steps_cli:
       name: worktree
       refused: not_found_plugin_rollback_build
 
-  # Removal takes everything the plugin left — its directory, its settings, the consent it was
-  # given — so the listing is the machine's own answer that nothing is left over.
+  # Removal takes everything the plugin left — its directory, its settings, its secrets — so the
+  # listing is the machine's own answer that nothing is left over.
   - type: action
     domain: plugin
     op: uninstall

@@ -123,7 +123,7 @@ pub struct Reply {
 /// document, so the payload channel stays the dispatcher's. Return an empty vector for an event nobody
 /// observes.
 ///
-/// `project` is what makes a project-scoped plugin's switch answerable here (`AMB-D-379`): the dispatcher
+/// `project` is what makes a plugin's switch answerable here (`AMB-D-434`): the dispatcher
 /// reads it off the event, which was stamped with it when it was appended (`AMB-D-405`). `None` means the
 /// event happened in no project, or was appended before there was a column to say — and a resolver that
 /// needs a project must then fire nothing rather than guess one.
@@ -286,7 +286,7 @@ pub fn fan_out(
                     // all: the record it names is gone by now, and a task that has moved since would
                     // otherwise route its older events to its new home. `None` is a real answer (a record
                     // in no project, or a row from before the column), and a resolver that needs a project
-                    // fires nothing without one (`AMB-D-379`).
+                    // fires nothing without one (`AMB-D-434`).
                     for sub in subs.resolve(payload.event, row.project, face) {
                         if sub.reply {
                             // A replying hook (CLI-only, `AMB-D-383`) never joins a queue: its stderr is the
@@ -383,7 +383,7 @@ pub fn hook_for(subs: &dyn Subscribers, row: &queue::QueueRow) -> Result<Option<
     // subscriber that no longer resolves has been turned off since the fan-out, and a plugin that is off
     // must not fire. The project is the one thing read off the row rather than asked for again
     // (`AMB-D-405`): it is a fact about when the event happened, and by now the record may have moved or be
-    // gone — which is exactly the case a project-scoped plugin was never reached in.
+    // gone — which is exactly the case a plugin was never reached in.
     let Some(sub) = subs.resolve_one(&row.plugin, payload.event, row.project, face) else {
         tracing::debug!(
             plugin = %row.plugin,
@@ -832,11 +832,11 @@ mod tests {
         assert!(queued_for(e.conn(), "fixed", 10).unwrap().is_empty(), "and its row does not linger");
     }
 
-    // ───────────────────── where an event happened (`AMB-D-379`, `AMB-D-405`) ─────────────────────
+    // ───────────────────── where an event happened (`AMB-D-434`, `AMB-D-405`) ─────────────────────
 
-    /// A resolver that answers only for one project — a project-scoped plugin's gate, as `AMB-D-379`
-    /// declares it. An event carrying no project resolves nothing here, which is what makes "did the
-    /// project survive the trip" a thing a test can see.
+    /// A resolver that answers only for one project — a plugin's gate, as `AMB-D-434` declares it. An
+    /// event carrying no project resolves nothing here, which is what makes "did the project survive the
+    /// trip" a thing a test can see.
     struct InProject {
         project: i64,
         invocation: PluginInvocation,
@@ -900,10 +900,10 @@ mod tests {
     }
 
     /// An event carrying no project — one from a record in none, or a row an older store appended before
-    /// the column existed — reaches a project-scoped plugin not at all. The gate is answered with what the
-    /// event says, and "unknown" is never turned into a project by guessing.
+    /// the column existed — reaches no plugin at all. The gate is answered with what the event says, and
+    /// "unknown" is never turned into a project by guessing.
     #[test]
-    fn an_event_with_no_project_reaches_no_project_scoped_plugin() {
+    fn an_event_with_no_project_reaches_nothing() {
         let e = StoreEngine::open_in_memory().unwrap();
         emit(&e, "task.created", 7, None);
 

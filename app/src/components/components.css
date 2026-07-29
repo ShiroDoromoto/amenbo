@@ -292,11 +292,8 @@
 .pluggate { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); }
 .pluggate .pluggate { margin-bottom: 0; }
 .pluggate__note { flex-basis: 100%; color: var(--c-warn); font-size: var(--fs-xs); }
-/* The consent question (`AMB-D-351`), asked once per device. Set apart from the row it came from: it is a
-   stop, not another control, and it must not read as one more button beside "Enable". */
-.pluggate__consent { flex-basis: 100%; border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-bg); padding: var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); font-size: var(--fs-sm); }
 /* The settings a plugin's author declared (`AMB-D-356`), drawn as a form amenbo generates. Set inside a
-   frame like the consent question: it is a place to type, not another control on the row's line. */
+   frame of its own: it is a place to type, not another control on the row's line. */
 .plugcfg { flex-basis: 100%; border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-bg); padding: var(--s-3); margin-bottom: var(--s-3); font-size: var(--fs-sm); }
 .plugcfg__field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-3); align-items: flex-start; }
 .plugcfg__field input { width: 100%; }

@@ -263,8 +263,8 @@ impl Store {
     /// Stop delivering to a plugin: throw away what is waiting for it and end the runner working it, on one
     /// transaction (`AMB-D-399`). Returns how many queued rows went.
     ///
-    /// `project` narrows the drop to one project's share, which is what a per-project switch closing means
-    /// (`AMB-D-379`); `None` is the whole plugin — a machine-wide switch, or an uninstall. The lease goes
+    /// `project` narrows the drop to one project's share, which is what a switch closing means
+    /// (`AMB-D-434`); `None` is the whole plugin — an uninstall. The lease goes
     /// only once the queue is empty, read inside the same transaction: a plugin still on in another project
     /// has work left, and the runner already on it is the one that should carry it out.
     ///

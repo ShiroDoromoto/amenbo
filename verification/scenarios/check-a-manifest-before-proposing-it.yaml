@@ -34,7 +34,6 @@ steps_cli:
           linux-arm64:
             url: https://example.com/scenario-plugin-v1-linux-arm64.tar.gz
             checksum: sha256:a3b1ae53a6650e05673783d9d9e686b03c31582d488639a5af667f87e90988a5
-        scope: project
         payload_v: 1
         config:
           - key: base
@@ -75,7 +74,6 @@ steps_cli:
           linux-arm64:
             url: https://example.com/scenario-plugin-v1-linux-arm64.tar.gz
             checksum: sha256:a3b1ae53a6650e05673783d9d9e686b03c31582d488639a5af667f87e90988a5
-        scope: project
         payload_v: 1
         config:
           - key: base

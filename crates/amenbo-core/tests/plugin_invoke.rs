@@ -13,13 +13,13 @@ use std::os::unix::fs::PermissionsExt;
 use amenbo_core::config::Paths;
 use amenbo_core::plugin_command::CommandOutcome;
 use amenbo_core::plugin_invoke;
-use amenbo_core::plugin_trust::{enable, Gate};
+use amenbo_core::plugin_trust::enable;
 use amenbo_core::Store;
 
-/// A store with one plugin installed by hand: the manifest an install would have written, plus a shell
-/// script standing in for the executable. Declared `scope: machine` so the gate is the device's and these
-/// tests need no bound project — what a project-scoped gate does is the trust boundary's own material.
-fn store_with_plugin(label: &str, name: &str, script: &str) -> Store {
+/// A store with one plugin installed by hand — the manifest an install would have written, plus a shell
+/// script standing in for the executable — and one project to call it in, since every gate is a project's
+/// (`AMB-D-434`).
+fn store_with_plugin(label: &str, name: &str, script: &str) -> (Store, i64) {
     let base = amenbo_scratch::scratch(label);
     let paths = Paths::at(base.clone());
     let home = paths.plugin_dir(name);
@@ -33,7 +33,6 @@ fn store_with_plugin(label: &str, name: &str, script: &str) -> Store {
             "repo": "ShiroDoromoto/amenbo-plugin-test",
             "os": ["macos", "linux"],
             "category": "workflow",
-            "scope": "machine",
             "url": "https://example.invalid/plugin.tar.gz",
             "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
         })
@@ -43,7 +42,17 @@ fn store_with_plugin(label: &str, name: &str, script: &str) -> Store {
     let program = home.join(name);
     std::fs::write(&program, script).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    Store::open_at(paths).unwrap()
+    let mut store = Store::open_at(paths).unwrap();
+    let project = store
+        .project_add(amenbo_core::ops::project::NewProject {
+            name: "scenario".into(),
+            view: amenbo_core::model::View::List,
+            notes: String::new(),
+            color: None,
+        })
+        .unwrap()
+        .id;
+    (store, project)
 }
 
 fn args(words: &[&str]) -> Vec<String> {
@@ -54,9 +63,9 @@ fn args(words: &[&str]) -> Vec<String> {
 /// told so rather than handed an empty return value.
 #[test]
 fn an_installed_but_disabled_plugin_is_refused() {
-    let store = store_with_plugin("invoke-gate", "quiet", "#!/bin/sh\nprintf 'cd /w\\n'\n");
+    let (store, project) = store_with_plugin("invoke-gate", "quiet", "#!/bin/sh\nprintf 'cd /w\\n'\n");
 
-    let err = plugin_invoke::call(&store, "quiet", &[], None).unwrap_err();
+    let err = plugin_invoke::call(&store, "quiet", &[], Some(project)).unwrap_err();
     assert!(
         err.message_en().contains("not enabled"),
         "the refusal names the gate, not something vaguer: {}",
@@ -67,9 +76,9 @@ fn an_installed_but_disabled_plugin_is_refused() {
 /// A plugin that was never installed is refused by name — the caller named something that is not here.
 #[test]
 fn an_unknown_plugin_is_refused() {
-    let store = store_with_plugin("invoke-unknown", "here", "#!/bin/sh\nexit 0\n");
+    let (store, project) = store_with_plugin("invoke-unknown", "here", "#!/bin/sh\nexit 0\n");
 
-    let err = plugin_invoke::call(&store, "elsewhere", &[], None).unwrap_err();
+    let err = plugin_invoke::call(&store, "elsewhere", &[], Some(project)).unwrap_err();
     assert_eq!(err.code(), "not_found_plugin_installed", "{}", err.message_en());
 }
 
@@ -77,14 +86,15 @@ fn an_unknown_plugin_is_refused() {
 /// value, stderr as the diagnostic, and the stdin document leads with `v` (`AMB-D-349`).
 #[test]
 fn an_enabled_plugin_returns_its_stdout_and_relays_its_stderr() {
-    let mut store = store_with_plugin(
+    let (mut store, project) = store_with_plugin(
         "invoke-run",
         "worktree",
         "#!/bin/sh\ncat >/dev/null\nprintf 'cd /w/%s\\n' \"$2\"\nprintf 'task %s ready\\n' \"$2\" 1>&2\n",
     );
-    enable(&mut store, "worktree", Gate::Machine, &[], |_| true).unwrap();
+    enable(&mut store, "worktree", project, &[], |_| true).unwrap();
 
-    let outcome = plugin_invoke::call(&store, "worktree", &args(&["start", "123"]), None).unwrap();
+    let outcome =
+        plugin_invoke::call(&store, "worktree", &args(&["start", "123"]), Some(project)).unwrap();
     assert_eq!(
         outcome,
         CommandOutcome::Returned {
@@ -97,11 +107,11 @@ fn an_enabled_plugin_returns_its_stdout_and_relays_its_stderr() {
 /// The stdin document a command plugin reads: `v` first, and nothing else for a plugin with no settings.
 #[test]
 fn the_plugin_reads_the_version_marker_on_stdin() {
-    let mut store =
+    let (mut store, project) =
         store_with_plugin("invoke-stdin", "echoer", "#!/bin/sh\ncat\nexit 0\n");
-    enable(&mut store, "echoer", Gate::Machine, &[], |_| true).unwrap();
+    enable(&mut store, "echoer", project, &[], |_| true).unwrap();
 
-    let outcome = plugin_invoke::call(&store, "echoer", &[], None).unwrap();
+    let outcome = plugin_invoke::call(&store, "echoer", &[], Some(project)).unwrap();
     assert_eq!(outcome.value(), Some(r#"{"v":1}"#), "the wire document leads with v");
 }
 
@@ -109,14 +119,14 @@ fn the_plugin_reads_the_version_marker_on_stdin() {
 /// (`AMB-D-354`). The run is on the execution log either way (`AMB-D-361`).
 #[test]
 fn a_failing_plugin_discards_its_return_value_and_lands_on_the_log() {
-    let mut store = store_with_plugin(
+    let (mut store, project) = store_with_plugin(
         "invoke-fail",
         "broken",
         "#!/bin/sh\ncat >/dev/null\nprintf 'half-written\\n'\nprintf 'boom\\n' 1>&2\nexit 3\n",
     );
-    enable(&mut store, "broken", Gate::Machine, &[], |_| true).unwrap();
+    enable(&mut store, "broken", project, &[], |_| true).unwrap();
 
-    let outcome = plugin_invoke::call(&store, "broken", &[], None).unwrap();
+    let outcome = plugin_invoke::call(&store, "broken", &[], Some(project)).unwrap();
     assert_eq!(
         outcome,
         CommandOutcome::Failed { code: Some(3), diagnostic: "boom\n".to_string() }
@@ -134,17 +144,18 @@ fn a_failing_plugin_discards_its_return_value_and_lands_on_the_log() {
 /// the point of putting it in the environment rather than on stdin.
 #[test]
 fn a_called_plugin_reads_the_store_and_its_window_out_of_its_environment() {
-    use amenbo_core::plugin_callback::{ALL_REACH, REACH_ENV, STORE_ENV};
+    use amenbo_core::plugin_callback::{REACH_ENV, STORE_ENV};
 
-    let mut store = store_with_plugin(
+    let (mut store, project) = store_with_plugin(
         "invoke-callback",
         "reader",
         &format!("#!/bin/sh\ncat >/dev/null\nprintf '%s|%s\\n' \"${STORE_ENV}\" \"${REACH_ENV}\"\n"),
     );
-    enable(&mut store, "reader", Gate::Machine, &[], |_| true).unwrap();
+    enable(&mut store, "reader", project, &[], |_| true).unwrap();
 
-    let outcome = plugin_invoke::call(&store, "reader", &[], None).unwrap();
+    let outcome = plugin_invoke::call(&store, "reader", &[], Some(project)).unwrap();
     let base = store.paths.base_dir.to_string_lossy();
-    // `scope: machine`, so the gate is the device's and so is the window.
-    assert_eq!(outcome.value(), Some(format!("{base}|{ALL_REACH}\n").as_str()));
+    // The gate it fired through is the project's, and so is the window (`AMB-D-406`).
+    let reach = amenbo_core::idref::project(project);
+    assert_eq!(outcome.value(), Some(format!("{base}|{reach}\n").as_str()));
 }

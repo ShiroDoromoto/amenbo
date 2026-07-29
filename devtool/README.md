@@ -370,7 +370,7 @@ of `verification/scenarios/plugin-from-a-catalog.yaml` is looked at for.
 
 **Each of them declares an event and a setting**, in its own detail document —
 the second document a catalog is served as, fetched when a row is opened. The
-panel above it is drawn from the entry the list already had, and the scope line
+panel above it is drawn from the entry the list already had, and the enable line
 under it is a phrase of the interface, so those declarations are the only thing
 on an opened plugin that says which catalog's document was fetched. That is what
 the reading after it, on that same road, is looked at for.

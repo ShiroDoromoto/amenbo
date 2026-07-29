@@ -7,13 +7,11 @@
 //!
 //! **Four inputs, joined at the seam.** A plugin fires for an event only when all four hold:
 //!
-//! - it is **enabled** — the one gate its author declared is open (`AMB-D-351`/`AMB-D-379`; `install ≠
-//!   enable`, so an installed-but-not-enabled plugin never fires). Which gate that is depends on the
-//!   plugin: a `machine` one is the device's ([`Config::plugin_enabled`](crate::config::Config::plugin_enabled)), a `project` one is the gate of
-//!   the project the **event happened in**, which the dispatcher resolves from the row it drained and
-//!   hands over. An event whose project cannot be named — a deleted task takes its project with it —
-//!   fires no project-scoped plugin at all, which is the fail-safe side: the alternative is opening a gate
-//!   in a project the user never opened one in;
+//! - it is **enabled** — the gate of the project the **event happened in** is open (`AMB-D-351`/`AMB-D-434`;
+//!   `install ≠ enable`, so an installed-but-not-enabled plugin never fires). The dispatcher resolves that
+//!   project from the row it drained and hands it over. An event whose project cannot be named — a deleted
+//!   task takes its project with it — fires nothing at all, which is the fail-safe side: the alternative is
+//!   opening a gate in a project the user never opened one in;
 //! - it **subscribes** — the event's name is in its manifest [`events`](crate::plugin_manifest::Manifest::events);
 //! - it is **compatible** — this amenbo speaks the payload contract it reads and clears the version floor
 //!   it declares ([`plugin_compat::check`](crate::plugin_compat::check), `AMB-D-359`);
@@ -36,9 +34,8 @@
 //!
 //! **The project is the event's own, not the caller's.** The dispatcher resolves each drained row back to
 //! the project of the record it names and hands it here, so both project-keyed reads — the gate
-//! (`AMB-D-379`) and a text setting's override (`AMB-D-356`) — are answered where the event happened rather
-//! than wherever the drive was standing. An event whose project cannot be named answers at the machine tier
-//! alone, and fires no project-scoped plugin at all (above).
+//! (`AMB-D-434`) and a text setting's override (`AMB-D-356`) — are answered where the event happened rather
+//! than wherever the drive was standing. An event whose project cannot be named fires nothing (above).
 //!
 //! **A config read that errors drops that one plugin, not the event.** Delivery is best-effort
 //! (`AMB-D-352`): if a plugin's config cannot be read, the resolver warns and omits it, and the event still
@@ -61,7 +58,7 @@ use crate::store::Store;
 /// discovered here (see the module docs).
 #[derive(Debug, Clone)]
 pub struct InstalledPlugin {
-    /// The plugin's name — its identity in [`Config::plugin_enabled`](crate::config::Config::plugin_enabled) and its config storage key.
+    /// The plugin's name — its identity in the store's `plugin_enable` rows and its config storage key.
     pub name: String,
     /// The executable to run when the plugin fires.
     pub program: PathBuf,
@@ -85,8 +82,7 @@ pub struct EnabledSubscribers<'a> {
 
 impl<'a> EnabledSubscribers<'a> {
     /// Build the resolver over the installed plugins and the store their gates and settings live in. The
-    /// enable state is not passed separately: a project-scoped plugin's gate is a row in that same store
-    /// (`AMB-D-379`), so the two halves of the answer have to come from one place.
+    /// enable state is not passed separately: a plugin's gate is a row in that same store (`AMB-D-434`).
     pub fn new(installed: &'a [InstalledPlugin], store: &'a Store) -> Self {
         Self { installed, store }
     }
@@ -94,16 +90,17 @@ impl<'a> EnabledSubscribers<'a> {
 
 impl Subscribers for EnabledSubscribers<'_> {
     fn resolve(&self, event: &str, project: Option<i64>, face: Face) -> Vec<Subscriber> {
+        // Every gate is a project's (`AMB-D-434`), so an event that names none has no switch to measure any
+        // plugin against and fires nothing — rather than being answered by a device-wide gate that no
+        // longer exists.
+        let Some(project) = project else {
+            return Vec::new();
+        };
         let mut subscribers = Vec::new();
         for plugin in self.installed {
-            // Enabled (the one gate its author declared is open, `AMB-D-351`/`AMB-D-379`) and subscribed
-            // (the event is in its manifest). A project-scoped plugin is answered by the project the event
-            // happened in; with none to name, it is skipped rather than measured against a switch it does
-            // not have. A gate that cannot be read drops this plugin only (`AMB-D-352`).
-            let Ok(gate) = plugin_trust::gate_for(plugin.manifest.scope, project) else {
-                continue;
-            };
-            match plugin_trust::effective_enabled_in(self.store, &plugin.name, gate) {
+            // Enabled in the project the event happened in (`AMB-D-351`/`AMB-D-434`) and subscribed (the
+            // event is in its manifest). A gate that cannot be read drops this plugin only (`AMB-D-352`).
+            match plugin_trust::effective_enabled_in(self.store, &plugin.name, project) {
                 Ok(true) => {}
                 Ok(false) => continue,
                 Err(error) => {
@@ -148,7 +145,7 @@ impl Subscribers for EnabledSubscribers<'_> {
                 self.store,
                 &plugin.name,
                 &plugin.manifest.config,
-                project,
+                Some(project),
             ) {
                 Ok(injection) => injection,
                 Err(error) => {
@@ -169,7 +166,7 @@ impl Subscribers for EnabledSubscribers<'_> {
             // through — the same gate that let this subscriber fire, since what a plugin may observe is what
             // it may read.
             for (name, value) in
-                plugin_callback::env(&self.store.paths.base_dir, plugin_callback::reach_of(gate))
+                plugin_callback::env(&self.store.paths.base_dir, plugin_callback::reach_of(project))
             {
                 invocation = invocation.env(name, value);
             }
@@ -197,15 +194,17 @@ mod tests {
         (Store::open_at(Paths::at(dir.clone())).unwrap(), dir)
     }
 
-    /// Open a plugin's device-wide gate — what a `scope: machine` plugin's enable does.
-    fn enable_machine(store: &mut Store, plugin: &str) {
-        plugin_trust::enable(store, plugin, plugin_trust::Gate::Machine, &[], |_| true).unwrap();
+    /// A store with one project to hang events on — the ordinary setup, since every gate is a project's
+    /// (`AMB-D-434`) and an event with no project fires nothing.
+    fn store_in_a_project(tag: &str) -> (Store, std::path::PathBuf, i64) {
+        let (mut store, dir) = store_at(tag);
+        let project = mk_project(&mut store, "p");
+        (store, dir, project)
     }
 
-    /// Open a plugin's gate in one project — what a `scope: project` plugin's enable does.
+    /// Open a plugin's gate in one project — what an enable does.
     fn enable_in(store: &mut Store, plugin: &str, project: i64) {
-        plugin_trust::enable(store, plugin, plugin_trust::Gate::Project(project), &[], |_| true)
-            .unwrap();
+        plugin_trust::enable(store, plugin, project, &[], |_| true).unwrap();
     }
 
     /// A project to hang an event on.
@@ -221,16 +220,8 @@ mod tests {
             .id
     }
 
-    /// The same manifest, declaring the project switch instead of the device one (`AMB-D-379`).
-    fn project_scoped(name: &str, events: &[&str]) -> InstalledPlugin {
-        let mut plugin = installed(name, events, vec![]);
-        plugin.manifest.scope = crate::plugin_manifest::Scope::Project;
-        plugin
-    }
-
     /// A minimal manifest carrying a subscription list and a config schema — the two fields this resolver
-    /// reads, plus the `scope` that says its switch is the device's (the only one this path can read —
-    /// `AMB-D-379`); the rest is filler the resolver never touches.
+    /// reads; the rest is filler it never touches.
     fn manifest(events: &[&str], config: Vec<ConfigField>) -> Manifest {
         Manifest {
             name: "unused".into(),
@@ -245,7 +236,6 @@ mod tests {
             assets: Default::default(),
             official: false,
             detail_sum: None,
-            scope: crate::plugin_manifest::Scope::Machine,
             // The contract this build speaks: the compatibility gate reads this one, so it tracks
             // `VERSION` rather than sitting on a literal that a bump would turn into a false failure.
             payload_v: crate::plugin_payload::VERSION,
@@ -274,12 +264,12 @@ mod tests {
     /// An enabled, subscribed plugin fires; the resolved invocation names its program.
     #[test]
     fn an_enabled_subscribed_plugin_fires() {
-        let (mut store, _dir) = store_at("enabled-subscribed");
-        enable_machine(&mut store, "slack");
+        let (mut store, _dir, p) = store_in_a_project("enabled-subscribed");
+        enable_in(&mut store, "slack", p);
         let plugins = [installed("slack", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        let subs = resolver.resolve("task.created", None, Face::Cli);
+        let subs = resolver.resolve("task.created", Some(p), Face::Cli);
         assert_eq!(subs.len(), 1);
         assert_eq!(subs[0].invocation.program, PathBuf::from("/plugins/slack"));
     }
@@ -289,63 +279,72 @@ mod tests {
     /// execution log — reports on plugins, not on paths.
     #[test]
     fn a_resolved_subscriber_carries_the_plugins_name() {
-        let (mut store, _dir) = store_at("named");
-        enable_machine(&mut store, "slack");
+        let (mut store, _dir, p) = store_in_a_project("named");
+        enable_in(&mut store, "slack", p);
         let plugins = [installed("slack", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        let subs = resolver.resolve("task.created", None, Face::Cli);
+        let subs = resolver.resolve("task.created", Some(p), Face::Cli);
         assert_eq!(subs[0].plugin, "slack");
     }
 
     /// Installed but not enabled: nothing fires — `install ≠ enable` (`AMB-D-351`).
     #[test]
     fn an_installed_but_disabled_plugin_does_not_fire() {
-        let (store, _dir) = store_at("disabled");
+        let (store, _dir, p) = store_in_a_project("disabled");
         let plugins = [installed("slack", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert!(resolver.resolve("task.created", None, Face::Cli).is_empty(), "an unenabled plugin never fires");
+        assert!(
+            resolver.resolve("task.created", Some(p), Face::Cli).is_empty(),
+            "an unenabled plugin never fires"
+        );
     }
 
     /// Enabled but not subscribed to this event: nothing fires.
     #[test]
     fn an_enabled_plugin_not_subscribed_to_the_event_does_not_fire() {
-        let (mut store, _dir) = store_at("unsubscribed");
-        enable_machine(&mut store, "slack");
+        let (mut store, _dir, p) = store_in_a_project("unsubscribed");
+        enable_in(&mut store, "slack", p);
         let plugins = [installed("slack", &["comment.added"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert!(resolver.resolve("task.created", None, Face::Cli).is_empty(), "only the subscribed event fires it");
+        assert!(
+            resolver.resolve("task.created", Some(p), Face::Cli).is_empty(),
+            "only the subscribed event fires it"
+        );
     }
 
     /// Enabled and subscribed, but incompatible with this build: it is dropped with a warning rather than
     /// fired (`AMB-D-359`) — enable-time is not the only door, since amenbo can update underneath it.
     #[test]
     fn an_incompatible_plugin_does_not_fire() {
-        let (mut store, _dir) = store_at("incompatible");
-        enable_machine(&mut store, "slack");
+        let (mut store, _dir, p) = store_in_a_project("incompatible");
+        enable_in(&mut store, "slack", p);
         let mut plugin = installed("slack", &["task.created"], vec![]);
         plugin.manifest.min_amenbo = Some("999.0.0".into());
         let plugins = [plugin];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert!(resolver.resolve("task.created", None, Face::Cli).is_empty(), "a floor this build cannot meet");
+        assert!(
+            resolver.resolve("task.created", Some(p), Face::Cli).is_empty(),
+            "a floor this build cannot meet"
+        );
     }
 
     /// One incompatible plugin never silences the rest: delivery is best-effort (`AMB-D-352`).
     #[test]
     fn an_incompatible_plugin_does_not_silence_the_others() {
-        let (mut store, _dir) = store_at("incompatible-many");
-        enable_machine(&mut store, "slack");
-        enable_machine(&mut store, "email");
+        let (mut store, _dir, p) = store_in_a_project("incompatible-many");
+        enable_in(&mut store, "slack", p);
+        enable_in(&mut store, "email", p);
         let mut stale = installed("slack", &["task.created"], vec![]);
         stale.manifest.payload_v = crate::plugin_payload::VERSION + 1;
         let plugins = [stale, installed("email", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
         let fired: Vec<_> = resolver
-            .resolve("task.created", None, Face::Cli)
+            .resolve("task.created", Some(p), Face::Cli)
             .into_iter()
             .map(|s| s.invocation.program)
             .collect();
@@ -356,11 +355,11 @@ mod tests {
     /// the author's `secret` flag (`AMB-D-356`), and only this plugin's own values.
     #[test]
     fn a_subscribers_own_config_is_injected_split_by_secret() {
-        let (mut store, _dir) = store_at("inject");
+        let (mut store, _dir, p) = store_in_a_project("inject");
         plugin_config::set(&mut store, &secret_field("webhook_url"), "slack", "https://hooks/x", Scope::MachineDefault).unwrap();
         plugin_config::set(&mut store, &text_field("channel"), "slack", "#ops", Scope::MachineDefault).unwrap();
 
-        enable_machine(&mut store, "slack");
+        enable_in(&mut store, "slack", p);
         let plugins = [installed(
             "slack",
             &["task.created"],
@@ -368,7 +367,7 @@ mod tests {
         )];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        let subs = resolver.resolve("task.created", None, Face::Cli);
+        let subs = resolver.resolve("task.created", Some(p), Face::Cli);
         assert_eq!(subs.len(), 1);
         // Secret → env, off the payload. (The read-back path rides the same channel — `AMB-D-406` — so this
         // asks for the one variable rather than for the whole environment.)
@@ -381,9 +380,9 @@ mod tests {
     /// Several plugins subscribe to one event; every enabled subscriber fires, the disabled one does not.
     #[test]
     fn every_enabled_subscriber_to_an_event_fires() {
-        let (mut store, _dir) = store_at("many");
-        enable_machine(&mut store, "slack");
-        enable_machine(&mut store, "email");
+        let (mut store, _dir, p) = store_in_a_project("many");
+        enable_in(&mut store, "slack", p);
+        enable_in(&mut store, "email", p);
         // `audit` is subscribed but never enabled — it must not fire.
         let plugins = [
             installed("slack", &["task.created"], vec![]),
@@ -393,54 +392,39 @@ mod tests {
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
         let fired: Vec<_> = resolver
-            .resolve("task.created", None, Face::Cli)
+            .resolve("task.created", Some(p), Face::Cli)
             .into_iter()
             .map(|s| s.invocation.program)
             .collect();
         assert_eq!(fired, vec![PathBuf::from("/plugins/slack"), PathBuf::from("/plugins/email")]);
     }
 
-    // ───────────────────── the project the event happened in (`AMB-D-379`) ────────────────────────
+    // ───────────────────── the project the event happened in (`AMB-D-434`) ────────────────────────
 
-    /// A project-scoped plugin fires for an event in a project that has it on — and for nothing else.
+    /// A plugin fires for an event in a project that has it on — and for nothing else.
     #[test]
-    fn a_project_scoped_plugin_fires_only_in_the_project_that_enabled_it() {
+    fn a_plugin_fires_only_in_the_project_that_enabled_it() {
         let (mut store, _dir) = store_at("project-gate");
         let a = mk_project(&mut store, "a");
         let b = mk_project(&mut store, "b");
         enable_in(&mut store, "slack", a);
-        let plugins = [project_scoped("slack", &["task.created"])];
+        let plugins = [installed("slack", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
         assert_eq!(resolver.resolve("task.created", Some(a), Face::Cli).len(), 1, "on in a");
         assert!(resolver.resolve("task.created", Some(b), Face::Cli).is_empty(), "off in b");
     }
 
-    /// An event whose project cannot be named fires no project-scoped plugin: without a project there is
-    /// no switch to read, and firing anyway would open a gate the user never opened.
+    /// An event whose project cannot be named fires nothing: without a project there is no switch to read,
+    /// and firing anyway would open a gate the user never opened.
     #[test]
-    fn a_project_scoped_plugin_does_not_fire_for_an_unplaced_event() {
-        let (mut store, _dir) = store_at("project-unplaced");
-        let p = mk_project(&mut store, "p");
+    fn an_unplaced_event_fires_nothing() {
+        let (mut store, _dir, p) = store_in_a_project("project-unplaced");
         enable_in(&mut store, "slack", p);
-        let plugins = [project_scoped("slack", &["task.created"])];
-
-        let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert!(resolver.resolve("task.created", None, Face::Cli).is_empty());
-    }
-
-    /// A machine-scoped plugin is the device's answer wherever the event happened — the project it
-    /// carries changes nothing.
-    #[test]
-    fn a_machine_scoped_plugin_ignores_the_events_project() {
-        let (mut store, _dir) = store_at("machine-anywhere");
-        let p = mk_project(&mut store, "p");
-        enable_machine(&mut store, "slack");
         let plugins = [installed("slack", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert_eq!(resolver.resolve("task.created", Some(p), Face::Cli).len(), 1);
-        assert_eq!(resolver.resolve("task.created", None, Face::Cli).len(), 1);
+        assert!(resolver.resolve("task.created", None, Face::Cli).is_empty());
     }
 
     // ───────────────────── the read-back path a subscriber is handed (`AMB-D-406`) ─────────────────
@@ -449,32 +433,27 @@ mod tests {
     /// rather than left to the plugin's directory to imply.
     #[test]
     fn a_subscriber_is_told_which_store_to_read_back_from() {
-        let (mut store, dir) = store_at("callback-store");
-        enable_machine(&mut store, "slack");
+        let (mut store, dir, p) = store_in_a_project("callback-store");
+        enable_in(&mut store, "slack", p);
         let plugins = [installed("slack", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        let subs = resolver.resolve("task.created", None, Face::Cli);
+        let subs = resolver.resolve("task.created", Some(p), Face::Cli);
         let named = env_of(&subs[0], crate::plugin_callback::STORE_ENV);
         assert_eq!(std::path::PathBuf::from(named), dir);
     }
 
-    /// The window a subscriber reads through is the gate it fired through: one project for a project-scoped
-    /// plugin, the device for a machine-scoped one (`AMB-D-406`).
+    /// The window a subscriber reads through is the gate it fired through: the project that has it on
+    /// (`AMB-D-406`).
     #[test]
     fn a_subscribers_window_is_the_gate_it_fired_through() {
-        let (mut store, _dir) = store_at("callback-reach");
-        let p = mk_project(&mut store, "p");
+        let (mut store, _dir, p) = store_in_a_project("callback-reach");
         enable_in(&mut store, "slack", p);
-        enable_machine(&mut store, "watcher");
-        let plugins = [project_scoped("slack", &["task.created"]), installed("watcher", &["task.created"], vec![])];
+        let plugins = [installed("slack", &["task.created"], vec![])];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
         let subs = resolver.resolve("task.created", Some(p), Face::Cli);
-        let scoped = subs.iter().find(|s| s.plugin == "slack").expect("the project-scoped plugin fired");
-        assert_eq!(env_of(scoped, crate::plugin_callback::REACH_ENV), crate::idref::project(p));
-        let device = subs.iter().find(|s| s.plugin == "watcher").expect("the machine-scoped one too");
-        assert_eq!(env_of(device, crate::plugin_callback::REACH_ENV), crate::plugin_callback::ALL_REACH);
+        assert_eq!(env_of(&subs[0], crate::plugin_callback::REACH_ENV), crate::idref::project(p));
     }
 
     /// One variable's value off a resolved subscriber's invocation.
@@ -501,8 +480,8 @@ mod tests {
     /// stays silent on a GUI one. This is the filter that keeps a reply off the GUI, where no caller waits.
     #[test]
     fn a_subscription_fires_only_on_a_declared_face() {
-        let (mut store, _dir) = store_at("face-filter");
-        enable_machine(&mut store, "worktree");
+        let (mut store, _dir, p) = store_in_a_project("face-filter");
+        enable_in(&mut store, "worktree", p);
         let sub = EventSubscription {
             event: "task.status_changed".into(),
             faces: vec![Face::Cli],
@@ -511,9 +490,13 @@ mod tests {
         let plugins = [installed_sub("worktree", sub)];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        assert_eq!(resolver.resolve("task.status_changed", None, Face::Cli).len(), 1, "fires on cli");
+        assert_eq!(
+            resolver.resolve("task.status_changed", Some(p), Face::Cli).len(),
+            1,
+            "fires on cli"
+        );
         assert!(
-            resolver.resolve("task.status_changed", None, Face::Gui).is_empty(),
+            resolver.resolve("task.status_changed", Some(p), Face::Gui).is_empty(),
             "the same hook stays silent on the face it did not declare"
         );
     }
@@ -522,9 +505,9 @@ mod tests {
     /// it synchronously and relay its stderr (`AMB-D-383`). A plain subscription resolves `reply:false`.
     #[test]
     fn a_replying_subscription_resolves_a_replying_subscriber() {
-        let (mut store, _dir) = store_at("reply-flag");
-        enable_machine(&mut store, "worktree");
-        enable_machine(&mut store, "slack");
+        let (mut store, _dir, p) = store_in_a_project("reply-flag");
+        enable_in(&mut store, "worktree", p);
+        enable_in(&mut store, "slack", p);
         let advice = EventSubscription {
             event: "task.status_changed".into(),
             faces: vec![Face::Cli],
@@ -536,7 +519,7 @@ mod tests {
         ];
 
         let resolver = EnabledSubscribers::new(&plugins, &store);
-        let subs = resolver.resolve("task.status_changed", None, Face::Cli);
+        let subs = resolver.resolve("task.status_changed", Some(p), Face::Cli);
         let worktree = subs.iter().find(|s| s.plugin == "worktree").expect("the advice hook fired");
         assert!(worktree.reply, "the replying subscription resolves a replying subscriber");
         let slack = subs.iter().find(|s| s.plugin == "slack").expect("the notification fired too");

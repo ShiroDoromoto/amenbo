@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
-// Install and enable are two acts, and the second one asks first (`AMB-D-351`). These tests hold the market
-// to that: installing writes a plugin that fires nothing, the first enable stops at the consent question and
-// only the answer moves the gate, and a plugin whose switch is one project's cannot be moved until a project
-// is named (`AMB-D-379`).
+// Install and enable are two acts (`AMB-D-351`). These tests hold the market to that: installing writes a
+// plugin that fires nothing, enabling is the separate act that lets it run, and the switch cannot be moved
+// until a project is named (`AMB-D-434`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -82,8 +81,6 @@ const entry = (name: string) => ({
 });
 
 const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => ({
-  scope: "machine",
-  consented: false,
   compatible: true,
   config: [],
   rollback: false,
@@ -133,13 +130,14 @@ describe("installing from the market", () => {
     expect(container.textContent).toContain(t("plugins.installed"));
     expect(container.textContent).not.toContain(t("plugins.enabledChip"));
 
-    hoisted.installs = [row({ name: "notify", enabled: true, consented: true })];
+    hoisted.installs = [row({ name: "notify", enabled: true })];
     render();
     expect(container.textContent).toContain(t("plugins.enabledChip"));
   });
 
   it("shows what core refused with, rather than swallowing it", async () => {
-    hoisted.installs = [row({ name: "notify", consented: true })];
+    hoisted.projects = [{ id: 7, name: "solo" }];
+    hoisted.installs = [row({ name: "notify" })];
     hoisted.enableFails = "plugin_signature_invalid";
     render();
     open(0);
@@ -148,55 +146,31 @@ describe("installing from the market", () => {
   });
 });
 
-describe("the consent the first enable asks for", () => {
-  it("asks before the first enable, and moves the gate only on the answer", async () => {
+describe("the one switch, and it is a project's", () => {
+  // Turning a plugin on is itself the permission to run its code (`AMB-D-434`), so the switch moves on the
+  // click rather than stopping to ask a second question.
+  it("enables on the click, with nothing else asked", async () => {
+    hoisted.projects = [{ id: 7, name: "solo" }];
     hoisted.installs = [row({ name: "notify", enabled: false })];
     render();
     open(0);
-
-    act(() => { button(t("plugins.enable"))!.click(); });
-    // The question is on screen and nothing has been enabled yet.
-    expect(detail()!.textContent).toContain(tf("plugins.consentAsk", { name: "notify" }));
-    expect(hoisted.gated).toEqual([]);
-
-    await act(async () => { button(t("plugins.consentAgree"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: null, enabled: true }]);
-  });
-
-  it("backing out of the question enables nothing", () => {
-    hoisted.installs = [row({ name: "notify" })];
-    render();
-    open(0);
-    act(() => { button(t("plugins.enable"))!.click(); });
-    act(() => { button(t("plugins.consentCancel"))!.click(); });
-    expect(hoisted.gated).toEqual([]);
-    expect(detail()!.textContent).not.toContain(tf("plugins.consentAsk", { name: "notify" }));
-  });
-
-  // Asked once per device (`AMB-D-351`): a plugin this machine already answered for goes straight through,
-  // and disabling never asks at all.
-  it("does not ask again once this device has consented", async () => {
-    hoisted.installs = [row({ name: "notify", consented: true })];
-    render();
-    open(0);
     await act(async () => { button(t("plugins.enable"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: null, enabled: true }]);
+    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 7, enabled: true }]);
   });
 
-  it("disables without a question", async () => {
-    hoisted.installs = [row({ name: "notify", enabled: true, consented: true })];
+  it("disables the same way", async () => {
+    hoisted.projects = [{ id: 7, name: "solo" }];
+    hoisted.installs = [row({ name: "notify", enabled: true })];
     render();
     open(0);
     await act(async () => { button(t("plugins.disable"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: null, enabled: false }]);
+    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 7, enabled: false }]);
   });
-});
 
-describe("the one switch, at the level its author declared", () => {
-  // A project-scoped gate has no device-wide answer to fall back on, so the market names the project first.
-  it("waits for a project before it will move a project-scoped gate", async () => {
+  // A gate has no device-wide answer to fall back on, so the market names the project first.
+  it("waits for a project before it will move a gate", async () => {
     hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
-    hoisted.installs = [row({ name: "notify", scope: "project", consented: true })];
+    hoisted.installs = [row({ name: "notify" })];
     render();
     open(0);
 
@@ -215,7 +189,7 @@ describe("the one switch, at the level its author declared", () => {
   // One project is not a question worth asking: there is exactly one answer, so the gate is movable at once.
   it("takes the only project there is without asking", async () => {
     hoisted.projects = [{ id: 7, name: "solo" }];
-    hoisted.installs = [row({ name: "notify", scope: "project", consented: true, enabled: false })];
+    hoisted.installs = [row({ name: "notify", enabled: false })];
     render();
     open(0);
     expect(detail()!.textContent).not.toContain(t("plugins.pickProjectNote"));
@@ -226,7 +200,7 @@ describe("the one switch, at the level its author declared", () => {
   // An open gate on a build amenbo cannot speak to fires nothing, so the switch says why instead of moving.
   it("refuses to enable a plugin this build cannot speak to, and names the mismatch", () => {
     hoisted.installs = [
-      row({ name: "notify", consented: true, compatible: false, incompatibleReason: "needs amenbo 9.0" }),
+      row({ name: "notify", compatible: false, incompatibleReason: "needs amenbo 9.0" }),
     ];
     render();
     open(0);
@@ -240,16 +214,14 @@ describe("the one switch, at the level its author declared", () => {
 // the point — a plugin that will want a credential, or that this build cannot run, says so first.
 describe("what the opened entry says installing it would mean", () => {
   const doc = (over: Partial<PluginDetail> = {}): PluginDetail => ({
-    scope: "machine",
     events: [],
     config: [],
     compatible: true,
     ...over,
   });
 
-  it("names the switch it gets, what it watches, and what it will ask to be told", () => {
+  it("names what it watches, and what it will ask to be told", () => {
     hoisted.detail = doc({
-      scope: "project",
       events: ["task.created", "task.completed"],
       config: [
         { key: "webhook", label: "Webhook URL", secret: true, required: true },
@@ -286,6 +258,6 @@ describe("what the opened entry says installing it would mean", () => {
     open(0);
 
     expect(detail()!.textContent).toContain("notify");
-    expect(detail()!.textContent).not.toContain(t("plugins.want.perDevice"));
+    expect(detail()!.textContent).not.toContain(t("plugins.want.perProject"));
   });
 });

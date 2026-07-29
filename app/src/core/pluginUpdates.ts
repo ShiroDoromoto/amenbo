@@ -30,7 +30,7 @@ const KEY = "amenbo.pluginUpdatesDismissed";
 /**
  * Ask core which installed plugins have a newer build waiting (Tauri: `plugin_updates`), with the "needs a
  * decision first" gates judged wherever the plugin is enabled — no project is passed, because an update
- * replaces the build for every project at once (`AMB-D-379`), and this is asked from screens that are in no
+ * replaces the build for every project at once (`AMB-D-434`), and this is asked from screens that are in no
  * project.
  *
  * Outside Tauri — `npm run dev` in a browser — there is no plugins directory and no catalog cache, so the

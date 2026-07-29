@@ -295,9 +295,8 @@ impl Store {
         )?)
     }
 
-    /// Whether this project holds a plugin's gate open (`AMB-D-379`) — the row's presence. The consent
-    /// that must sit beside it is the device's, so the resolution that reads both is
-    /// [`crate::plugin_trust::effective_enabled_in`].
+    /// Whether this project holds a plugin's gate open (`AMB-D-434`) — the row's presence, which is the
+    /// whole answer ([`crate::plugin_trust::effective_enabled_in`] is the boundary's name for it).
     pub fn plugin_enabled_in_project(&self, project_id: i64, plugin: &str) -> Result<bool> {
         Ok(crate::store_engine::read::plugin_enabled_in_project(
             self.engine.conn(),
@@ -306,13 +305,10 @@ impl Store {
         )?)
     }
 
-    /// Every project holding a plugin's gate open (`AMB-D-379`), whether or not the caller is standing in
+    /// Every project holding a plugin's gate open (`AMB-D-434`), whether or not the caller is standing in
     /// one of them — the twin of [`Self::plugin_enabled_in_project`] for the judgements that are about the
     /// plugin rather than about a screen, such as the `required` re-check an update runs
     /// ([`crate::plugin_config::required_unset_for_update`]).
-    ///
-    /// The device's consent is not read here; a caller that needs the effective answer asks
-    /// [`crate::plugin_trust::effective_enabled_in`] per project, as that resolution is machine-local.
     pub fn projects_with_plugin_enabled(&self, plugin: &str) -> Result<Vec<i64>> {
         let conn = self.engine.conn();
         let mut projects = Vec::new();

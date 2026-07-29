@@ -21,9 +21,9 @@ import { setPluginConfig, type PluginConfigField, type PluginInstall } from "../
  * below shows through. The form says which one it is writing rather than resolving them into a single
  * effective value nobody could then clear.
  *
- * The tiers are the settings' own, not the gate's: which project a plugin *fires* in is the author's
- * declaration (`AMB-D-379`), while a project override is something any plugin's text setting can carry.
- * So the project is named here even for a plugin whose switch is the device's.
+ * The tiers are the settings' own, not the gate's: which project a plugin *fires* in is its enable row,
+ * while a project override is something any plugin's text setting can carry — so the project is named
+ * here whether or not the plugin is on in it.
  */
 export function PluginConfigForm({ install, projects, projectId, onProject }: {
   install: PluginInstall;

@@ -31,7 +31,7 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
   entry: PluginEntry;
   /** This machine's row for this entry, or `undefined` when it is not installed. */
   install?: PluginInstall;
-  /** The projects a project-scoped gate can be moved in — the store's, for the picker below. */
+  /** The projects the gate can be moved in — the store's, for the picker below. */
   projects: { id: number; name: string }[];
   /** Which project the gate below speaks for (`null` = none chosen yet). */
   projectId: number | null;
@@ -127,9 +127,9 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
 /**
  * What installing this plugin would mean, from the catalog's detail document (`AMB-D-385`).
  *
- * Everything here is the author's declaration, read **before** anything is installed: which switch turns
- * it on, what it will be woken for, and what it will want to be told — a secret among those is the line
- * worth seeing in advance, since it means handing over a credential. The one judgement is amenbo's own:
+ * Everything here is the author's declaration, read **before** anything is installed: what it will be
+ * woken for, and what it will want to be told — a secret among those is the line worth seeing in advance,
+ * since it means handing over a credential. The one judgement is amenbo's own:
  * a build this version cannot speak to says so here rather than at the enable that would refuse it.
  *
  * It does not block the install button. Compatibility is enforced at the gate that fires the plugin
@@ -139,7 +139,7 @@ function WhatItWants({ detail }: { detail: PluginDetailDoc }) {
   return (
     <div className="plugdet__wants">
       <div className="plugdet__meta faint">
-        <span>{t(detail.scope === "project" ? "plugins.want.perProject" : "plugins.want.perDevice")}</span>
+        <span>{t("plugins.want.perProject")}</span>
         {detail.events.length > 0 && (
           <>
             <span>·</span>
@@ -177,7 +177,7 @@ function WhatItWants({ detail }: { detail: PluginDetailDoc }) {
  * installing writes a binary that runs nothing, and only enabling opens the gate it fires through.
  *
  * Only the install half lives here: the switch is `PluginGate`, the one control the installed screen
- * draws too, so the consent question and the project a gate speaks for cannot drift between the two faces.
+ * draws too, so the project a gate speaks for cannot drift between the two faces.
  */
 function PluginActions({ entry, install, projects, projectId, onProject }: {
   entry: PluginEntry;

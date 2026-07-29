@@ -492,7 +492,6 @@ mod tests {
             assets: Default::default(),
             official: false,
             detail_sum: None,
-            scope: crate::plugin_manifest::Scope::Project,
             payload_v: 1,
             min_amenbo: None,
             config: Vec::new(),

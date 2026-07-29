@@ -2547,6 +2547,46 @@ fn a_help_flag_reaches_the_plugin_and_only_the_nameless_form_is_amenbos() {
     assert!(stderr.contains("plugin run usage"), "and hands back where the flag belongs: {stderr}");
 }
 
+/// A flag amenbo happens to share a spelling with is the plugin's too, and the word right after the name
+/// is where the sharing bites: amenbo's flags are global, so the parser would answer for one written
+/// there and the plugin would never see it. An author is entitled to put `--json` on their own face.
+///
+/// The other side of the same line: written **ahead** of the name, those flags are amenbo's — that is the
+/// place its own help names for them, and moving the boundary must not take that away.
+#[cfg(unix)]
+#[test]
+fn amenbos_own_flags_are_the_plugins_from_the_name_onward() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    install_plugin(&cli, "usage", serde_json::json!([]));
+    let program = cli.home.join("plugins").join("usage").join("usage");
+    std::fs::write(&program, "#!/bin/sh\ncat >/dev/null\necho \"handed: $*\"\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    cli.json(&["plugin", "enable", "usage", "--json"]);
+
+    // One word past the name: the position amenbo's own flags reach in every other command.
+    for flag in ["--json", "--yes", "-y", "--quiet", "--no-color"] {
+        let (stdout, code) = cli.run(&["--actor", "human", "plugin", "run", "usage", flag]);
+        assert_eq!(code, 0, "the call reached the plugin: {stdout}");
+        assert!(stdout.contains(&format!("handed: {flag}")), "`{flag}` reached the plugin: {stdout}");
+    }
+    // The one that carries a value, and would otherwise take the word after it along.
+    let (stdout, _) = cli.run(&["--actor", "human", "plugin", "run", "usage", "--actor", "ai"]);
+    assert!(stdout.contains("handed: --actor ai"), "both words reached the plugin: {stdout}");
+
+    // Ahead of the name they are still amenbo's: this one asks amenbo to answer in JSON, and the
+    // plugin's return value rides inside that document rather than being printed raw.
+    let (stdout, code) = cli.run(&["plugin", "run", "--json", "--actor", "human", "usage", "hello"]);
+    assert_eq!(code, 0, "{stdout}");
+    let doc: Value = serde_json::from_str(&stdout).expect("amenbo answered in JSON");
+    assert!(
+        doc["value"].as_str().unwrap_or_default().contains("handed: hello"),
+        "the plugin's own words are inside amenbo's document: {stdout}"
+    );
+}
+
 /// One lap around the dimension model on the CLI: add an axis, value-add, list/show by name, set/unset on a
 /// task (single-select replacement, and a cross-process no-op proving it persisted), rename, cascading rm.
 #[test]
@@ -5303,7 +5343,8 @@ fn a_plugin_reads_its_own_project_back_and_no_other() {
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     cli.json(&["plugin", "enable", "reader", "--json"]);
 
-    let run = cli.json(&["plugin", "run", "--json", "reader"]);
+    // Amenbo's flags all go ahead of the name — past it every word is the plugin's, the facet included.
+    let run = cli.json(&["plugin", "run", "--json", "--actor", "human", "reader"]);
     assert_eq!(run["ok"], true, "the plugin ran: {run}");
 
     // It read its own project's work — the listing needed no `--project`, because the window filled the slot.

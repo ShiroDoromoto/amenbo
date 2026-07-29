@@ -75,13 +75,26 @@ fn restore_sigpipe() {
 fn restore_sigpipe() {}
 
 fn real_main() -> i32 {
-    let parsed = match retargeted_cli()
-        .try_get_matches()
+    // What was handed to a plugin is taken out of the command line before the parser sees it — the words
+    // after a plugin's name are not amenbo's to read (see `plugin_words`).
+    let argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    let handed = plugin_words(&argv);
+    let amenbos = match &handed {
+        Some((at, _)) => &argv[..=*at],
+        None => &argv[..],
+    };
+    let mut parsed = match retargeted_cli()
+        .try_get_matches_from(amenbos)
         .and_then(|m| Cli::from_arg_matches(&m))
     {
         Ok(c) => c,
         Err(e) => return handle_parse_error(e),
     };
+    if let (Some((_, words)), Some(Command::Plugin { sub: PluginCmd::Run { args, .. } })) =
+        (handed, &mut parsed.command)
+    {
+        *args = words;
+    }
     // `plugin run` keeps no help flag of its own, so a `--help` sitting where the plugin's name goes
     // is the one nobody else will answer. It is answered here, ahead of the facet and the pointer,
     // because that is where a help request has always been answered — before the store is opened.
@@ -212,6 +225,87 @@ fn split_own_flags(args: &[String]) -> (Vec<String>, Vec<String>) {
         }
     }
     (own, rest)
+}
+
+/// Amenbo's own flags as they may stand **ahead of a plugin's name**, and whether each takes the word
+/// after it. This is the whole set a reader is allowed to write there (`amenbo plugin run --json worktree
+/// …`), so it is also the set [`plugin_words`] steps over on its way to the name.
+const FLAGS_BEFORE_THE_NAME: &[(&str, bool)] = &[
+    ("--json", false),
+    ("--quiet", false),
+    ("--no-color", false),
+    ("--yes", false),
+    ("-y", false),
+    ("--workspace", true),
+    ("--actor", true),
+    ("--project", true),
+];
+
+/// Does this word spell one of amenbo's flags, and does it take the next word? `--actor=ai` is one word
+/// and takes nothing further.
+fn flag_before_the_name(word: &str) -> Option<bool> {
+    let (head, joined) = match word.split_once('=') {
+        Some((head, _)) => (head, true),
+        None => (word, false),
+    };
+    FLAGS_BEFORE_THE_NAME
+        .iter()
+        .find(|(flag, _)| *flag == head)
+        .map(|(_, takes_value)| *takes_value && !joined)
+}
+
+/// Where the plugin's name stands in this command line, and the words handed to the plugin after it —
+/// `None` when this invocation is not a `plugin run` with anything trailing the name.
+///
+/// **After the name every word is the plugin's** (`AMB-D-346`), and that line cannot be held by the
+/// parser alone: amenbo's flags are global, so the parser answers for one wherever it appears — including
+/// the first word after the name, which the plugin never then sees. A plugin author who puts `--json` or
+/// `--yes` on their own face would find amenbo quietly eating it. So the split is made here, over the raw
+/// command line, and the parser is handed only the words up to and including the name.
+///
+/// The name is the first word after `run` that is not one of amenbo's own (`amenbo plugin run --json
+/// worktree …` is the documented place for those). Whatever lands there is the name position, a flag
+/// included — that is where `plugin run --help` goes, and where a flag written one word too late is
+/// reported from.
+///
+/// A word that is not valid UTF-8 anywhere in the line gives `None`: the parser owns that error, and it
+/// says it better than a splitter could.
+fn plugin_words(argv: &[std::ffi::OsString]) -> Option<(usize, Vec<String>)> {
+    let at = name_position(argv)?;
+    let handed = argv.get(at + 1..).filter(|words| !words.is_empty())?;
+    let words: Vec<String> =
+        handed.iter().map(|w| w.to_str().map(str::to_string)).collect::<Option<_>>()?;
+    Some((at, words))
+}
+
+/// Walk the command line to the word standing where a plugin's name goes. Only the path `plugin run`
+/// leads there, so anything else — another subcommand, a stray word, a flag amenbo does not answer for
+/// before the path is complete — ends the walk with `None` and leaves the line to the parser.
+fn name_position(argv: &[std::ffi::OsString]) -> Option<usize> {
+    let mut i = 1;
+    for step in ["plugin", "run"] {
+        loop {
+            let word = argv.get(i)?.to_str()?;
+            match flag_before_the_name(word) {
+                Some(takes_value) => i += if takes_value { 2 } else { 1 },
+                None if word == step => {
+                    i += 1;
+                    break;
+                }
+                // Any other word means this line goes somewhere else entirely.
+                None => return None,
+            }
+        }
+    }
+    // Amenbo's own flags reach one word further than the path does: written here they are still ahead of
+    // the name, and still amenbo's.
+    while let Some(takes_value) = flag_before_the_name(argv.get(i)?.to_str()?) {
+        i += if takes_value { 2 } else { 1 };
+    }
+    // Whatever stands here is the name — a flag amenbo does not answer for included, since past `run`
+    // there is nobody else left to read it.
+    argv.get(i)?.to_str()?;
+    Some(i)
 }
 
 /// How a person asks for help, in both spellings.
@@ -6591,6 +6685,39 @@ mod tests {
         assert_eq!(split(&["start", "--branch", "main"]), (String::new(), "start --branch main".into()));
         // A bare `--actor` at the end takes no value with it, and the next flag is not eaten as one.
         assert_eq!(split(&["--actor", "--json"]), ("--actor --json".into(), String::new()));
+    }
+
+    /// The boundary the parser cannot hold: from the plugin's name onward every word is the plugin's,
+    /// amenbo's own spellings included, while the same flags written ahead of the name stay amenbo's.
+    /// A line that goes anywhere else is left alone for the parser to read as it always has.
+    #[test]
+    fn the_words_after_a_plugins_name_are_taken_off_the_command_line() {
+        let split = |line: &str| {
+            let argv: Vec<std::ffi::OsString> =
+                line.split_whitespace().map(std::ffi::OsString::from).collect();
+            plugin_words(&argv).map(|(at, words)| (argv[at].to_str().unwrap().to_string(), words.join(" ")))
+        };
+        let handed = |line: &str| split(line).map(|(_, words)| words);
+
+        // The word right after the name — the one position the parser answered for itself.
+        assert_eq!(split("amenbo plugin run worktree --actor ai"), Some(("worktree".into(), "--actor ai".into())));
+        assert_eq!(handed("amenbo plugin run worktree --json"), Some("--json".into()));
+        assert_eq!(handed("amenbo plugin run worktree -y start"), Some("-y start".into()));
+        // Ahead of the name they are amenbo's, and the name is still found past them.
+        assert_eq!(split("amenbo plugin run --json worktree start"), Some(("worktree".into(), "start".into())));
+        assert_eq!(split("amenbo --actor ai plugin run worktree start"), Some(("worktree".into(), "start".into())));
+        assert_eq!(split("amenbo plugin run --actor=ai worktree start"), Some(("worktree".into(), "start".into())));
+        // Nothing trailing the name: there is nothing to take off, so the line is left whole.
+        assert_eq!(handed("amenbo plugin run worktree"), None);
+        assert_eq!(handed("amenbo plugin run"), None);
+        // The name position holds whatever was written there, a flag included — that is where amenbo's
+        // own help lands, and where a misplaced flag is reported from.
+        assert_eq!(handed("amenbo plugin run --help"), None);
+        assert_eq!(split("amenbo plugin run --jsn usage"), Some(("--jsn".into(), "usage".into())));
+        // Another command entirely, and a word standing where the path should be.
+        assert_eq!(handed("amenbo plugin log usage"), None);
+        assert_eq!(handed("amenbo task list --json"), None);
+        assert_eq!(handed("amenbo --help plugin run worktree start"), None);
     }
 
     /// The hint fires on one pairing: a facet that was typed, went to the plugin, and so never arrived.

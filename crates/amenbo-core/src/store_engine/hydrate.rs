@@ -30,8 +30,8 @@ use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Database,
     Decision, DecisionComment, DecisionEdge, DecisionEdgeKind, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionCardinality,
-    DimensionRole, DimensionValue, PluginConfigOverride, PluginEnabledProject, Priority, Project,
-    Subtype, Task, TaskComment, TaskCommit, TaskDependency,
+    DimensionRole, DimensionValue, PluginConfigValue, PluginEnabledProject, PluginSecret, Priority,
+    Project, Subtype, Task, TaskComment, TaskCommit, TaskDependency,
     TaskDimensionValue, TaskStatus, View,
 };
 use crate::time::Timestamp;
@@ -188,10 +188,24 @@ pub(super) fn task_commit_row(r: &Row) -> rusqlite::Result<TaskCommit> {
     })
 }
 
-pub(super) fn plugin_config_row(r: &Row) -> rusqlite::Result<PluginConfigOverride> {
+pub(super) fn plugin_config_row(r: &Row) -> rusqlite::Result<PluginConfigValue> {
     const C: col::plugin_config::Cols = col::plugin_config::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
-    Ok(PluginConfigOverride {
+    Ok(PluginConfigValue {
+        id: get(r, C.id)?,
+        project_id: get(r, C.project_id)?,
+        plugin: get(r, C.plugin)?,
+        field_key: get(r, C.field_key)?,
+        value: get(r, C.value)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn plugin_secret_row(r: &Row) -> rusqlite::Result<PluginSecret> {
+    const C: col::plugin_secret::Cols = col::plugin_secret::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(PluginSecret {
         id: get(r, C.id)?,
         project_id: get(r, C.project_id)?,
         plugin: get(r, C.plugin)?,

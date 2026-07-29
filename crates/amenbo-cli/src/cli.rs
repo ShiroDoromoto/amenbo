@@ -521,9 +521,9 @@ pub enum PluginCmd {
     },
 
     /// Fill in an installed plugin's settings — the keys its author declared in the manifest
-    /// (`AMB-D-356`). Where a value is kept is the author's `secret` flag's to decide, not yours:
-    /// a secret goes to the user-area secret file (off the store, off every backup), the rest to the
-    /// ordinary machine-default / per-project tiers.
+    /// (`AMB-D-356`). Where a value is kept is the author's `secret` flag's to decide, not yours: a
+    /// secret goes to the store table an `export` must leave, the rest to the ordinary one. Either
+    /// way it is this project's value and there is no tier under it (`AMB-D-434`).
     Config {
         #[command(subcommand)]
         sub: PluginConfigCmd,
@@ -574,9 +574,9 @@ pub enum PluginCatalogCmd {
 
 #[derive(Subcommand, Debug)]
 pub enum PluginConfigCmd {
-    /// Store one setting's value. The key must be one the plugin's manifest declares — that declaration
-    /// is what says whether the value is a secret, and amenbo never guesses (`AMB-D-356`). An empty value
-    /// clears the setting rather than storing a blank.
+    /// Store one setting's value, for this project (`AMB-D-434`). The key must be one the plugin's
+    /// manifest declares — that declaration is what says whether the value is a secret, and amenbo never
+    /// guesses (`AMB-D-356`). An empty value clears the setting rather than storing a blank.
     Set {
         /// the installed plugin's name
         name: String,
@@ -585,23 +585,15 @@ pub enum PluginConfigCmd {
         /// the value; `-` reads it from stdin (which keeps a secret off argv and out of shell history),
         /// and an empty string clears the setting
         value: String,
-        /// which tier to write: `machine` (the default, in config.json) or `project` (this project's
-        /// override). Ignored for a secret — there is one secret per plugin and key.
-        #[arg(long, default_value = "machine")]
-        scope: String,
     },
 
-    /// Read one setting back **at that tier** — the machine default or the project override as stored,
-    /// not the effective value precedence would pick. A secret is never echoed: it reports only whether
+    /// Read one setting back, as this project holds it. A secret is never echoed: it reports only whether
     /// one is set.
     Get {
         /// the installed plugin's name
         name: String,
         /// the setting's key, as the manifest declares it
         key: String,
-        /// which tier to read: `machine` (the default) or `project` (this project's override)
-        #[arg(long, default_value = "machine")]
-        scope: String,
     },
 }
 

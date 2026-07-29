@@ -524,13 +524,12 @@ offered: number, };
  * (`AMB-D-356`) — everything the generic form needs to draw a row and nothing amenbo judges for
  * itself.
  *
- * The two text tiers are carried separately rather than resolved into one effective value, because
- * the form edits a tier: a project override that is absent has to read as absent, with the machine
- * default it falls back to shown beside it.
+ * The value is the one the project on screen holds, and nothing stands under it (`AMB-D-434`): absent
+ * reads as absent, which is what lets the form draw "not provided" and clear a field.
  *
- * **A secret's value is never here.** The author's flag is what routes it to the user-area secret
- * file, and a value read back into a webview would be a copy of it in a place `AMB-D-356` keeps it
- * out of — so a secret carries whether it is held, and that is all a form needs to mask it.
+ * **A secret's value is never here.** The author's flag is what routes it to `plugin_secret`, and a
+ * value read back into a webview would be a copy of it in a place `AMB-D-356` keeps it out of — so a
+ * secret carries whether it is held, and that is all a form needs to mask it.
  */
 export type PluginConfigFieldDto = { 
 /**
@@ -542,8 +541,7 @@ key: string,
  */
 label: string, 
 /**
- * Whether the author marked it secret. The form masks it and stores it once for the device; a
- * text field gets the two tiers instead.
+ * Whether the author marked it secret. The form masks it and never reads it back.
  */
 secret: boolean, 
 /**
@@ -552,17 +550,13 @@ secret: boolean,
  */
 required: boolean, 
 /**
- * The text machine default, as stored — absent when unset, and always absent for a secret.
+ * The text value the project the request named holds, as stored — absent when unset, when no
+ * project was named, and always for a secret.
  */
-machineValue?: string, 
+value?: string, 
 /**
- * The text override held by the project the request named — absent when unset, when no project
- * was named, and always for a secret.
- */
-projectValue?: string, 
-/**
- * Whether a secret is held for this key on this device. Always false for a text field, whose
- * values say it themselves.
+ * Whether that project holds a secret for this key. Always false for a text field, whose value
+ * says it itself.
  */
 secretSet: boolean, };
 
@@ -717,17 +711,13 @@ export type PluginRemovedDto = {
  */
 wasEnabled: boolean, 
 /**
- * Machine-default settings existed and are gone.
- */
-machineDefaults: boolean, 
-/**
  * Secrets existed and have been purged (`AMB-D-357`'s non-negotiable).
  */
 secrets: boolean, 
 /**
- * How many per-project setting rows were deleted, across every project.
+ * How many setting rows were deleted, across every project.
  */
-projectOverrides: number, 
+projectValues: number, 
 /**
  * How many per-project gate answers were deleted, across every project.
  */

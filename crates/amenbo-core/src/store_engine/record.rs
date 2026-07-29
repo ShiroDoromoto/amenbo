@@ -22,8 +22,8 @@ use rusqlite::types::Value;
 
 use crate::model::{
     ActorKind, Attachment, Database, Decision, DecisionComment, DecisionEdge, DecisionTaskLink,
-    Dimension, DimensionValue, PluginConfigOverride, PluginEnabledProject, Project, Task, TaskComment, TaskCommit,
-    TaskDependency, TaskDimensionValue,
+    Dimension, DimensionValue, PluginConfigValue, PluginEnabledProject, PluginSecret, Project, Task,
+    TaskComment, TaskCommit, TaskDependency, TaskDimensionValue,
 };
 use crate::time::Timestamp;
 
@@ -186,7 +186,7 @@ pub fn task_commit(c: &TaskCommit) -> Record {
     )
 }
 
-pub fn plugin_config(c: &PluginConfigOverride) -> Record {
+pub fn plugin_config(c: &PluginConfigValue) -> Record {
     Record::new(
         "plugin_config",
         c.id,
@@ -199,6 +199,23 @@ pub fn plugin_config(c: &PluginConfigOverride) -> Record {
             ],
             &c.created_at,
             &c.updated_at,
+        ),
+    )
+}
+
+pub fn plugin_secret(s: &PluginSecret) -> Record {
+    Record::new(
+        "plugin_secret",
+        s.id,
+        with_audit(
+            vec![
+                ("project_id", kv(s.project_id)),
+                ("plugin", tv(&s.plugin)),
+                ("field_key", tv(&s.field_key)),
+                ("value", tv(&s.value)),
+            ],
+            &s.created_at,
+            &s.updated_at,
         ),
     )
 }

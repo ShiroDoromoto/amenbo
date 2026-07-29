@@ -3726,10 +3726,10 @@ pub fn task_commits(conn: &Connection, task_id: i64) -> Result<Vec<crate::model:
     Ok(rows)
 }
 
-/// The live `plugin_config` override row id for `(project_id, plugin, field_key)`, or `None` — what makes
+/// The live `plugin_config` row id for `(project_id, plugin, field_key)`, or `None` — what makes
 /// the config write boundary an upsert (find-then-update) and a clear a lookup. The `plugin_config_triple`
 /// UNIQUE index guarantees at most one row.
-pub fn plugin_config_override_id(
+pub fn plugin_config_row_id(
     conn: &Connection,
     project_id: i64,
     plugin: &str,
@@ -3745,32 +3745,77 @@ pub fn plugin_config_override_id(
     )
 }
 
-/// Every live `plugin_config` override row belonging to one plugin, **across every project** — what an
+/// Every live `plugin_config` row belonging to one plugin, **across every project** — what an
 /// `uninstall` erases in one pass (`AMB-D-357`). The store is a single device-wide database, so a plugin's
 /// per-project settings are one predicate away rather than a walk over projects.
-pub fn plugin_config_override_ids(conn: &Connection, plugin: &str) -> Result<Vec<i64>> {
+pub fn plugin_config_row_ids(conn: &Connection, plugin: &str) -> Result<Vec<i64>> {
     const C: col::plugin_config::Cols = col::plugin_config::ALL;
     select_ids(conn, C.id, Some(&Pred::eq(C.plugin, plugin)))
 }
 
-/// The `plugin_config` override with this id.
-pub fn plugin_config_override(
+/// The `plugin_config` row with this id.
+pub fn plugin_config_row_by_id(
     conn: &Connection,
     id: i64,
-) -> Result<Option<crate::model::PluginConfigOverride>> {
+) -> Result<Option<crate::model::PluginConfigValue>> {
     super::hydrate::row_by_id(conn, "plugin_config", id, super::hydrate::plugin_config_row)
 }
 
-/// The per-project override value of one plugin text field, or `None` when the project has none (the
-/// machine default then stands). The upper of the two text tiers (`AMB-D-356`).
+/// One plugin text field's value in this project, or `None` when it is unset (`AMB-D-434`).
 pub fn plugin_config_value(
     conn: &Connection,
     project_id: i64,
     plugin: &str,
     field_key: &str,
 ) -> Result<Option<String>> {
-    match plugin_config_override_id(conn, project_id, plugin, field_key)? {
-        Some(id) => Ok(plugin_config_override(conn, id)?.map(|r| r.value)),
+    match plugin_config_row_id(conn, project_id, plugin, field_key)? {
+        Some(id) => Ok(plugin_config_row_by_id(conn, id)?.map(|r| r.value)),
+        None => Ok(None),
+    }
+}
+
+/// The `plugin_secret` twins of the three above — same address, same upsert-and-clear shape; the table is
+/// separate so `export` can leave it out wholesale (`AMB-D-434`).
+pub fn plugin_secret_row_id(
+    conn: &Connection,
+    project_id: i64,
+    plugin: &str,
+    field_key: &str,
+) -> Result<Option<i64>> {
+    const C: col::plugin_secret::Cols = col::plugin_secret::ALL;
+    first_id(
+        conn,
+        C.id,
+        &Pred::eq(C.project_id, project_id)
+            .and(Pred::eq(C.plugin, plugin))
+            .and(Pred::eq(C.field_key, field_key)),
+    )
+}
+
+/// Every live `plugin_secret` row belonging to one plugin, across every project — what an `uninstall`
+/// purges (`AMB-D-357`: a secret is the one thing that must never survive a removal).
+pub fn plugin_secret_row_ids(conn: &Connection, plugin: &str) -> Result<Vec<i64>> {
+    const C: col::plugin_secret::Cols = col::plugin_secret::ALL;
+    select_ids(conn, C.id, Some(&Pred::eq(C.plugin, plugin)))
+}
+
+/// The `plugin_secret` row with this id.
+pub fn plugin_secret_row_by_id(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::PluginSecret>> {
+    super::hydrate::row_by_id(conn, "plugin_secret", id, super::hydrate::plugin_secret_row)
+}
+
+/// One plugin secret field's value in this project, or `None` when it is unset (`AMB-D-434`).
+pub fn plugin_secret_value(
+    conn: &Connection,
+    project_id: i64,
+    plugin: &str,
+    field_key: &str,
+) -> Result<Option<String>> {
+    match plugin_secret_row_id(conn, project_id, plugin, field_key)? {
+        Some(id) => Ok(plugin_secret_row_by_id(conn, id)?.map(|r| r.value)),
         None => Ok(None),
     }
 }
@@ -3792,7 +3837,7 @@ pub fn plugin_enable_row_id(
 }
 
 /// Every live `plugin_enable` row belonging to one plugin, **across every project** — what an
-/// `uninstall` erases in one pass (`AMB-D-357`), the gate twin of [`plugin_config_override_ids`].
+/// `uninstall` erases in one pass (`AMB-D-357`), the gate twin of [`plugin_config_row_ids`].
 pub fn plugin_enable_row_ids(conn: &Connection, plugin: &str) -> Result<Vec<i64>> {
     const C: col::plugin_enable::Cols = col::plugin_enable::ALL;
     select_ids(conn, C.id, Some(&Pred::eq(C.plugin, plugin)))

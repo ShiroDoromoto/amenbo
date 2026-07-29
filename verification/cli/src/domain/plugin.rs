@@ -242,18 +242,12 @@ impl Driver {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
                 let value = req_str(with, "value")?;
-                let mut args: Vec<String> =
-                    vec!["plugin".into(), "config".into(), "set".into(), name.into(), key.into(), value.into()];
-                if let Some(scope) = with.get("scope").and_then(|v| v.as_str()) {
-                    args.push("--scope".into());
-                    args.push(scope.to_string());
-                }
-                args.push("--json".into());
-                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
-                let scope = v["scope"].as_str().unwrap_or("?");
+                let v = self.run_json(&[
+                    "plugin", "config", "set", name, key, value, "--json",
+                ])?;
                 Ok(Outcome::action(match v["cleared"].as_bool() {
-                    Some(true) => format!("took `{key}` back off `{name}` at the {scope} tier"),
-                    _ => format!("told `{name}` its `{key}` at the {scope} tier"),
+                    Some(true) => format!("took `{key}` back off `{name}` for this project"),
+                    _ => format!("told `{name}` its `{key}` for this project"),
                 }))
             }
             // A catalog of the run's own on the loopback, so a scenario can walk what only a catalog
@@ -391,21 +385,12 @@ impl Driver {
                     ),
                 ))
             }
-            // A setting read back at the tier it was written at. Reading is per-tier on purpose (it
-            // is not the precedence a run would apply), so the scope the step names goes to the read
-            // as well as to the write.
+            // A setting read back as this project holds it — one value per setting, so the read asks
+            // the same question the write answered.
             "config" => {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
-                let mut args: Vec<String> =
-                    vec!["plugin".into(), "config".into(), "get".into(), name.into(), key.into()];
-                if let Some(scope) = with.get("scope").and_then(|v| v.as_str()) {
-                    args.push("--scope".into());
-                    args.push(scope.to_string());
-                }
-                args.push("--json".into());
-                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
-                let tier = v["scope"].as_str().unwrap_or("?").to_string();
+                let v = self.run_json(&["plugin", "config", "get", name, key, "--json"])?;
                 // Whether the read treats the setting as a secret — and, when it should, whether it
                 // kept the value to itself. Both halves are the same promise: a `get` that printed a
                 // token would put it in the terminal, the scrollback and the shell's history, so a
@@ -418,7 +403,7 @@ impl Driver {
                     return Ok(Outcome::assert(
                         pass,
                         format!(
-                            "plugin `{name}` reads `{key}` back as {} at the {tier} tier{} (expected {}, {})",
+                            "plugin `{name}` reads `{key}` back as {}{} (expected {}, {})",
                             if declared { "a secret" } else { "an ordinary setting" },
                             if leaked { ", value and all" } else { "" },
                             if want { "a secret nobody echoes" } else { "an ordinary setting" },
@@ -434,13 +419,13 @@ impl Driver {
                         Ok(Outcome::assert(
                             pass,
                             format!(
-                                "plugin `{name}` reads `{key}` back as {} at the {tier} tier (expected {want}, {})",
+                                "plugin `{name}` reads `{key}` back as {} (expected {want}, {})",
                                 v["value"],
                                 if pass { "as expected" } else { "MISMATCH" }
                             ),
                         ))
                     }
-                    // With no value named, the question is whether the tier holds one at all — which
+                    // With no value named, the question is whether the project holds one at all — which
                     // is how a setting taken back is told apart from one that was never given.
                     None => {
                         let want = opt_bool(with, "set").unwrap_or(true);
@@ -448,7 +433,7 @@ impl Driver {
                         Ok(Outcome::assert(
                             got == want,
                             format!(
-                                "plugin `{name}` {} `{key}` at the {tier} tier (expected {}, {})",
+                                "plugin `{name}` {} `{key}` (expected {}, {})",
                                 if got { "holds a" } else { "holds no" },
                                 if want { "set" } else { "unset" },
                                 if got == want { "as expected" } else { "MISMATCH" }

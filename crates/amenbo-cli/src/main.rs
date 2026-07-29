@@ -858,12 +858,10 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         }
         PluginCmd::Rollback { name } => plugin_rollback_cmd(store, flags, &name),
         PluginCmd::Config { sub } => match sub {
-            PluginConfigCmd::Set { name, key, value, scope } => {
-                plugin_config_set_cmd(store, flags, &name, &key, value, &scope)
+            PluginConfigCmd::Set { name, key, value } => {
+                plugin_config_set_cmd(store, flags, &name, &key, value)
             }
-            PluginConfigCmd::Get { name, key, scope } => {
-                plugin_config_get_cmd(store, flags, &name, &key, &scope)
-            }
+            PluginConfigCmd::Get { name, key } => plugin_config_get_cmd(store, flags, &name, &key),
         },
         PluginCmd::Catalog { sub } => match sub {
             PluginCatalogCmd::List => plugin_catalog_list_cmd(store, flags),
@@ -1007,23 +1005,11 @@ fn plugin_catalog_remove_cmd(store: &Store, flags: &Flags, url: &str) -> Result<
     Ok(0)
 }
 
-/// Which tier `--scope` names (`AMB-D-356`/`AMB-D-350`) — the same two for a config value and for the
-/// enable gate. `machine` is the default that applies everywhere; `project` is this project's override,
-/// and *which* project is never named here — it is the effective context ([`bound_project`]): the binding,
-/// or a human's `--project`. An AI cannot name one, so for it the binding is the only answer, which is
-/// exactly the reach the store enforces.
-fn plugin_scope(store: &Store, scope: &str) -> Result<amenbo_core::plugin_config::Scope, CliError> {
-    use amenbo_core::plugin_config::Scope;
-    match scope {
-        "machine" => Ok(Scope::MachineDefault),
-        "project" => bound_project(store).map(Scope::Project).ok_or_else(|| project_required(store)),
-        other => Err(CliError {
-            code: "invalid_value",
-            message: format!("unknown --scope '{other}'"),
-            hint: Some("Pass --scope machine (the default) or --scope project.".to_string()),
-            exit: 2,
-        }),
-    }
+/// The project a plugin setting belongs to (`AMB-D-434`) — never named on the command line, because it is
+/// the effective context ([`bound_project`]): the binding, or a human's `--project`. An AI cannot name one,
+/// so for it the binding is the only answer, which is exactly the reach the store enforces.
+fn plugin_config_project(store: &Store) -> Result<i64, CliError> {
+    bound_project(store).ok_or_else(|| project_required(store))
 }
 
 /// The declared field this key names, or a refusal that lists the keys the author *did* declare. The
@@ -1073,42 +1059,36 @@ fn plugin_config_value(value: String) -> Result<String, CliError> {
 /// `plugin config set <name> <key> <value>` — the CLI face of the one config write boundary
 /// ([`amenbo_core::plugin_config::set`]), which is where the safe floor and the secret routing live
 /// (`AMB-D-356`). This side does two things and no more: read the installed manifest off disk to find the
-/// field the key names, and turn `--scope` into a tier. **The value is never echoed back**, secret or not —
-/// there is nothing to confirm that the caller did not just type.
+/// field the key names, and settle which project the value belongs to. **The value is never echoed back**,
+/// secret or not — there is nothing to confirm that the caller did not just type.
 fn plugin_config_set_cmd(
     store: &mut Store,
     flags: &Flags,
     name: &str,
     key: &str,
     value: String,
-    scope: &str,
 ) -> Result<i32, CliError> {
     let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
     let field = plugin_config_field(&plugin, key)?;
-    let scope = plugin_scope(store, scope)?;
+    let project = plugin_config_project(store)?;
     let value = plugin_config_value(value)?;
     let cleared = value.is_empty();
-    amenbo_core::plugin_config::set(store, &field, name, &value, scope).map_err(CliError::from)?;
+    amenbo_core::plugin_config::set(store, &field, name, project, &value).map_err(CliError::from)?;
 
-    let where_ = plugin_config_tier(&field, scope);
     human(
         flags,
-        if cleared {
-            format!("Cleared {name}.{key} ({where_})")
-        } else {
-            format!("Set {name}.{key} ({where_})")
-        },
+        if cleared { format!("Cleared {name}.{key}") } else { format!("Set {name}.{key}") },
     );
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "plugin.config.set", "plugin": name, "key": key,
-            "secret": field.secret, "scope": where_, "cleared": cleared,
+            "secret": field.secret, "project": project, "cleared": cleared,
         }));
     }
     Ok(0)
 }
 
-/// `plugin config get <name> <key>` — read one setting back at the tier `--scope` names. A secret's value
+/// `plugin config get <name> <key>` — read one setting back, as this project holds it. A secret's value
 /// does not come out here: the face reports that one is set and stops, because a `get` that prints a token
 /// puts it in the terminal, the scrollback and the shell's history. Injection reads secrets whole, at run
 /// time, into the plugin's environment and nowhere else (`AMB-D-356`).
@@ -1117,24 +1097,23 @@ fn plugin_config_get_cmd(
     flags: &Flags,
     name: &str,
     key: &str,
-    scope: &str,
 ) -> Result<i32, CliError> {
     let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
     let field = plugin_config_field(&plugin, key)?;
-    let scope = plugin_scope(store, scope)?;
-    let value = amenbo_core::plugin_config::get(store, &field, name, scope).map_err(CliError::from)?;
+    let project = plugin_config_project(store)?;
+    let value =
+        amenbo_core::plugin_config::get(store, &field, name, project).map_err(CliError::from)?;
 
-    let where_ = plugin_config_tier(&field, scope);
     let set = value.is_some();
     if field.secret {
-        human(flags, format!("{name}.{key} ({where_}): {}", if set { "set (not shown)" } else { "not set" }));
+        human(flags, format!("{name}.{key}: {}", if set { "set (not shown)" } else { "not set" }));
     } else {
-        human(flags, format!("{name}.{key} ({where_}): {}", value.as_deref().unwrap_or("(not set)")));
+        human(flags, format!("{name}.{key}: {}", value.as_deref().unwrap_or("(not set)")));
     }
     if flags.json {
         let mut out = json!({
             "ok": true, "action": "plugin.config.get", "plugin": name, "key": key,
-            "secret": field.secret, "scope": where_, "set": set,
+            "secret": field.secret, "project": project, "set": set,
         });
         // A secret's value never leaves through this door, --json included: a machine reader wants to know
         // whether the setting is filled, and injection is the only thing that needs the value itself.
@@ -1144,23 +1123,6 @@ fn plugin_config_get_cmd(
         print_json(&out);
     }
     Ok(0)
-}
-
-/// Where a value actually lands, for the caller to read back. It is not simply what `--scope` said: a
-/// secret ignores the tiers entirely and goes to the user-area secret file, and saying `machine` there
-/// would describe a place the value is not in.
-fn plugin_config_tier(
-    field: &amenbo_core::plugin_manifest::ConfigField,
-    scope: amenbo_core::plugin_config::Scope,
-) -> &'static str {
-    use amenbo_core::plugin_config::Scope;
-    if field.secret {
-        "secret file"
-    } else if matches!(scope, Scope::Project(_)) {
-        "project"
-    } else {
-        "machine"
-    }
 }
 
 /// `plugin install <name>` — resolve the name in the catalog, fetch its asset, verify its provenance,
@@ -1700,15 +1662,14 @@ fn refuse_update_leaving_required_unset(
 /// project's (`AMB-D-434`), so this command always means one thing. Fail-closed twice over: on the
 /// plugin's compatibility declarations ([`amenbo_core::plugin_compat`], `AMB-D-359` — a plugin this amenbo
 /// cannot speak to is refused before anything is written), and on the author's `required` settings, probed
-/// at the tier that gate reads.
+/// in the project that gate is for.
 fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
     let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
     amenbo_core::plugin_compat::check(&plugin.manifest)
         .map_err(|incompatible| CliError::from(incompatible.into_error(name)))?;
     let project = plugin_gate(store)?;
     let fields = plugin.manifest.config.clone();
-    let tier = amenbo_core::plugin_config::Scope::Project(project);
-    let satisfied = amenbo_core::plugin_config::satisfied_keys(store, name, &fields, tier)
+    let satisfied = amenbo_core::plugin_config::satisfied_keys(store, name, &fields, project)
         .map_err(CliError::from)?;
     let has_value = |f: &amenbo_core::plugin_manifest::ConfigField| {
         satisfied.iter().any(|k| k == &f.key)
@@ -1793,9 +1754,8 @@ fn plugin_uninstall_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<
             "removed": {
                 "was_enabled": removed.was_enabled,
                 "queued": removed.queued,
-                "machine_defaults": removed.machine_defaults,
                 "secrets": removed.secrets,
-                "project_overrides": removed.project_overrides,
+                "project_values": removed.project_values,
                 "directory": removed.directory,
                 "runs_log": removed.runs_log,
             },
@@ -6308,18 +6268,11 @@ mod tests {
         )
         .unwrap();
         let token = field("token", true);
-        amenbo_core::plugin_config::set(
-            &mut store,
-            &token,
-            "watcher",
-            "abc",
-            amenbo_core::plugin_config::Scope::MachineDefault,
-        )
-        .unwrap();
+        amenbo_core::plugin_config::set(&mut store, &token, "watcher", project, "abc").unwrap();
 
         // A build whose new schema keeps the same required set is satisfied — nothing to fill.
         let same = manifest(serde_json::json!([{ "key": "token", "label": "T", "required": true }]));
-        // A build whose new schema adds a *new* required field this machine has no value for.
+        // A build whose new schema adds a *new* required field the project has no value for.
         let grew = manifest(serde_json::json!([
             { "key": "token", "label": "T", "required": true },
             { "key": "channel", "label": "C", "required": true },

@@ -25,6 +25,7 @@ pub mod dimension;
 pub mod comment;
 pub mod plugin_config;
 pub mod plugin_enable;
+pub mod plugin_secret;
 pub mod project;
 pub mod task;
 pub mod user;

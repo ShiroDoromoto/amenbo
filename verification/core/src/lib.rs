@@ -379,10 +379,10 @@ const REGISTRY: &[OpSpec] = &[
     // the driver leaves one answering slowly, the way `declare-secret` writes a declaration no
     // published plugin carries. `seconds` is the window the asserts after it have to read in.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "slow-program", required: &["name", "seconds"], refs: &[], strings: &["name"], binds: false },
-    // What an installed plugin is told. `key` is a setting its author declared, and `scope` picks the
-    // tier the value is written at (the machine default, or this project's override); an empty value
-    // is how one is taken back, which is why it is a value here and not an op of its own.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-set", required: &["name", "key", "value"], refs: &[], strings: &["name", "key", "value", "scope"], binds: false },
+    // What an installed plugin is told, for the project the run stands in. `key` is a setting its
+    // author declared; an empty value is how one is taken back, which is why it is a value here and
+    // not an op of its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-set", required: &["name", "key", "value"], refs: &[], strings: &["name", "key", "value"], binds: false },
     // A catalog of the run's own, answering on the loopback for as long as the scenario lasts.
     // Registering one is a trust decision taken on the key it publishes beside its `catalog.json`,
     // and a key is only published by something that answers on a port — no URL a scenario can write
@@ -517,11 +517,10 @@ const REGISTRY: &[OpSpec] = &[
     // answers, and the only way to read from outside which build a machine is on (a manifest carries no
     // version number, so there is no number to compare).
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "outdated", required: &["name", "present"], refs: &[], strings: &["name"], binds: false },
-    // A setting read back at the tier it was written at — `equals` for the value, or `set: false` to
-    // ask that the tier holds none. `scope` names the tier, since a read is per-tier and not the
-    // precedence a run would apply. `secret: true` asks the other thing a read of a secret has to be
-    // true of: that it says so, and that the value does not come out with it.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "scope"], binds: false },
+    // A setting read back as this project holds it — `equals` for the value, or `set: false` to ask
+    // that it holds none. `secret: true` asks the other thing a read of a secret has to be true of:
+    // that it says so, and that the value does not come out with it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key"], binds: false },
     // A catalog in the browsing view: whether it is a source at all (`present`), whether the browse
     // could reach it, and — `pinned_key` — whether a key of its is what plugins from it would be
     // trusted on. The last is the half that decides installability rather than visibility, and it is

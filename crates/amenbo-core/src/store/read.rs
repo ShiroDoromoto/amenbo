@@ -279,15 +279,31 @@ impl Store {
         Ok(crate::store_engine::read::task_commits(self.engine.conn(), task_id)?)
     }
 
-    /// The per-project override value of one plugin text field, or `None` when the project has none (the
-    /// machine default in `config.json` then stands). The upper of the two text tiers (`AMB-D-356`).
-    pub fn plugin_config_override(
+    /// One plugin text field's value in this project, or `None` when it is unset (`AMB-D-434`).
+    pub fn plugin_config_value(
         &self,
         project_id: i64,
         plugin: &str,
         field_key: &str,
     ) -> Result<Option<String>> {
         Ok(crate::store_engine::read::plugin_config_value(
+            self.engine.conn(),
+            project_id,
+            plugin,
+            field_key,
+        )?)
+    }
+
+    /// One plugin secret field's value in this project, or `None` when it is unset (`AMB-D-434`) — read
+    /// from the table an `export` must leave. The only caller that wants the value itself is the run-time
+    /// injection ([`crate::plugin_inject`]); a face asks whether it is set and stops there.
+    pub fn plugin_secret_value(
+        &self,
+        project_id: i64,
+        plugin: &str,
+        field_key: &str,
+    ) -> Result<Option<String>> {
+        Ok(crate::store_engine::read::plugin_secret_value(
             self.engine.conn(),
             project_id,
             plugin,

@@ -86,9 +86,9 @@ steps_cli:
       name: worktree
       present: false
 
-  # Age what the machine records. Everything after this is the real thing: the catalog is fetched, the
-  # asset's signature is checked against the key in the binary, and this platform's digest is checked
-  # against the bytes that arrived.
+  # Age what the machine records — the entry it was installed from, which is what an update is compared
+  # by. Everything after this is the real thing: the catalog is fetched, the asset's signature is checked
+  # against the key in the binary, and this platform's digest is checked against the bytes that arrived.
   - type: action
     domain: plugin
     op: stale-manifest

@@ -106,11 +106,13 @@ export async function rollbackPlugin(name: string): Promise<string | null> {
 }
 
 /**
- * The identity a dismissal is keyed by: the plugin **and** the build offered for it. The digest is what
- * detection itself compared, so a catalog that moves the entry again mints a new id and the offer returns.
+ * The identity a dismissal is keyed by: the plugin **and** the entry offered for it. The digest is the one
+ * detection itself compared, so a catalog that moves the entry again mints a new id and the offer returns —
+ * including when the executable did not move, which is a real update and must not stay buried under the
+ * dismissal of an earlier one.
  */
 export function updateId(u: PluginUpdate): string {
-  return `${u.name}@${u.availableChecksum ?? ""}`;
+  return `${u.name}@${u.availableDetailSum ?? ""}`;
 }
 
 // The dismissal, read once and then held: it is device-local state (localStorage, like the theme), and the

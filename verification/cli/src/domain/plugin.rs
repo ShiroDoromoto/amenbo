@@ -123,29 +123,19 @@ impl Driver {
                     .map_err(|e| format!("could not read {}: {e}", path.display()))?;
                 let mut manifest: serde_json::Value = serde_json::from_str(&raw)
                     .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
-                let stale = serde_json::Value::String(format!("sha256:{}", "0".repeat(64)));
-                let mut digests = 0;
-                if manifest["checksum"].is_string() {
-                    manifest["checksum"] = stale.clone();
-                    digests += 1;
-                }
-                for asset in manifest["assets"].as_object_mut().into_iter().flat_map(|m| m.values_mut()) {
-                    asset["checksum"] = stale.clone();
-                    digests += 1;
-                }
-                if digests == 0 {
-                    return Err(format!("{} publishes no distributable to age", path.display()));
-                }
-                // The digests are a document away from the list now, so a check compares the list's
-                // own digest first and only fetches that document when it moved. Ageing the
-                // distributables alone would leave the check answering "current" from a list that
-                // still matches. Written rather than only replaced: a record that has none is still
-                // one a moved list has to be able to move past.
-                manifest["detail_sum"] = stale;
+                // What an update is compared by, and the whole of it: the digest of the detail document
+                // this install was made from. Age that one value and the machine is one the catalog has
+                // moved past — which is what the scenario after this walks. The asset digests are
+                // deliberately left alone: they are checked at the door over the bytes that arrive, and
+                // ageing them here would age nothing detection looks at.
+                //
+                // Written rather than only replaced: a record carrying none — a plugin placed by hand — is
+                // still one a moved list has to be able to move past.
+                manifest["detail_sum"] = serde_json::Value::String(format!("sha256:{}", "0".repeat(64)));
                 std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 Ok(Outcome::action(format!(
-                    "left `{name}` recording a build the catalog has moved past ({digests} digest(s), and a detail document it no longer names)"
+                    "left `{name}` recording a detail document the catalog no longer names"
                 )))
             }
             // Adding a secret setting to what an installed plugin says it takes. amenbo reads the

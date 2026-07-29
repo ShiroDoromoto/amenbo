@@ -776,10 +776,13 @@ name: string,
  */
 desc: string, 
 /**
- * The offered build's identity for this machine (its asset digest — the same thing detection
- * compared). A face keys a dismissal by it, so a *newer* build surfaces again on its own.
+ * The offered entry's identity — the digest of the detail document it was published as, which is the
+ * same thing detection compared (`AMB-D-438`). A face keys a dismissal by it, so a catalog that moves
+ * the entry again mints a new one and the offer returns. It has to be this and not the asset's digest:
+ * an update that changes no binary is a real update, and keying on the executable would let one
+ * dismissal bury every later manifest-only change behind the same id.
  */
-availableChecksum?: string, 
+availableDetailSum?: string, 
 /**
  * Why this one needs a decision before it can be applied, or absent when it can just be applied
  * (`AMB-D-359`: send the user to a screen only when judgment is required). `incompatible` — the

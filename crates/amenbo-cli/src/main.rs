@@ -1704,8 +1704,10 @@ fn plugin_update_check_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError
         let rows: Vec<_> = updates
             .iter()
             .map(|u| {
-                // This machine's distributable on both sides (`AMB-D-381`/`AMB-D-384`) — the digests the
-                // detection actually compared, resolved os-arch then os, not another platform's.
+                // This machine's distributable on both sides (`AMB-D-381`/`AMB-D-384`), resolved os-arch
+                // then os, so the bytes named are the ones this machine runs and would fetch. Not what the
+                // detection compared — that is the detail document's digest, one for the whole entry
+                // (`AMB-D-438`) — but what a reader wants next: whether the executable is among what moved.
                 let installed = here.and_then(|p| u.installed.asset_for(p));
                 let available = here.and_then(|p| u.available.asset_for(p));
                 json!({

@@ -4927,11 +4927,14 @@ pub struct PluginUpdateDto {
     name: String,
     /// What the **new** build says it is, for a line the user can recognise it by.
     desc: String,
-    /// The offered build's identity for this machine (its asset digest — the same thing detection
-    /// compared). A face keys a dismissal by it, so a *newer* build surfaces again on its own.
+    /// The offered entry's identity — the digest of the detail document it was published as, which is the
+    /// same thing detection compared (`AMB-D-438`). A face keys a dismissal by it, so a catalog that moves
+    /// the entry again mints a new one and the offer returns. It has to be this and not the asset's digest:
+    /// an update that changes no binary is a real update, and keying on the executable would let one
+    /// dismissal bury every later manifest-only change behind the same id.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    available_checksum: Option<String>,
+    available_detail_sum: Option<String>,
     /// Why this one needs a decision before it can be applied, or absent when it can just be applied
     /// (`AMB-D-359`: send the user to a screen only when judgment is required). `incompatible` — the
     /// offered build cannot run on this amenbo; `settings` — it declares `required` settings this machine
@@ -4979,7 +4982,6 @@ pub async fn plugin_updates() -> Result<Vec<PluginUpdateDto>, CmdError> {
         if updates.is_empty() {
             return Ok(Vec::new());
         }
-        let here = amenbo_core::plugin_manifest::Platform::here();
         let store = open_store_read()?;
         updates
             .into_iter()
@@ -4996,9 +4998,7 @@ pub async fn plugin_updates() -> Result<Vec<PluginUpdateDto>, CmdError> {
                 };
                 Ok(PluginUpdateDto {
                     name: u.name,
-                    available_checksum: here
-                        .and_then(|p| u.available.asset_for(p))
-                        .map(|a| a.checksum),
+                    available_detail_sum: u.available.detail_sum,
                     desc: u.available.desc,
                     hold,
                     missing,

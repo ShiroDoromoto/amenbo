@@ -41,7 +41,7 @@ let opened = 0;
 
 const offer = (over: Partial<PluginUpdate> & { name: string }): PluginUpdate => ({
   desc: "does a thing",
-  availableChecksum: "sum-1",
+  availableDetailSum: "sum-1",
   missing: [],
   ...over,
 });
@@ -147,13 +147,13 @@ describe("what needs a decision", () => {
 
 describe("dismissing an offer", () => {
   it("stays quiet for the build dismissed, and returns for the next one", () => {
-    hoisted.updates = [offer({ name: "worktree", availableChecksum: "sum-1" })];
+    hoisted.updates = [offer({ name: "worktree", availableDetailSum: "sum-1" })];
     render();
     act(() => { button(t("health.dismiss"))!.click(); });
     expect(container.textContent).toBe("");
 
-    // The same plugin, a build further on: a dismissal is about the build offered, not about the plugin.
-    hoisted.updates = [offer({ name: "worktree", availableChecksum: "sum-2" })];
+    // The same plugin, a later entry: a dismissal is about the entry offered, not about the plugin.
+    hoisted.updates = [offer({ name: "worktree", availableDetailSum: "sum-2" })];
     render();
     expect(container.textContent).toContain("worktree");
   });

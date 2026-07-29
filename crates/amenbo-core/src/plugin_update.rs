@@ -46,26 +46,28 @@
 //! the timing (after "is it a different build", before the network); the caller resolves the values and the
 //! enabled state, exactly as [`plugin_trust::enable`](crate::plugin_trust::enable) takes its `has_value`.
 //!
-//! **What "a different build" means here.** A manifest carries no version number, so there is nothing to
-//! compare as one. What it does carry is the `checksum` of the exact bytes the asset serves, which is the
-//! build's identity: two manifests with the same digest point at the same executable, whatever else moved
-//! around them, and a digest that differs is a different executable. So the comparison is the checksum —
-//! content, not a claim about it. **This machine's** checksum, at that: a manifest publishes one
-//! distributable per platform (`AMB-D-381`/`AMB-D-384`), so the digest compared is the one for the OS and
-//! arch running the check (resolved os-arch then os by [`Manifest::asset_for`]), and a release that rebuilt
-//! only Windows — or only linux-arm64 — is not an update for a Mac. The corollary is that this reports
-//! *different*, not *newer*: a catalog that rolls an entry back offers that older build as an update,
-//! which is right, because the catalog is the authority on what is published.
+//! **What "a different build" means here: `detail_sum`, and nothing else** (`AMB-D-438`). A manifest
+//! carries no version number, so there is nothing to compare as one. What the list carries is one digest
+//! per entry — `detail_sum`, over the whole document an install reads — and a value there that is not the
+//! one the install recorded is the whole of what an update is. That document is everything an install acts
+//! on (`AMB-D-385`): the assets and their digests, the config schema, the subscriptions, the compatibility
+//! floor, and what the plugin says for itself at the AI's entry point. So the comparison covers what the
+//! asset checksums could not — **an update that changes no binary is a real update**, and a check that
+//! compared executables would keep every one of them from ever reaching anyone. The corollary
+//! is that this reports *different*, not *newer*: a catalog that rolls an entry back offers that older
+//! build as an update, which is right, because the catalog is the authority on what is published.
 //!
-//! **The checksums are a document away, so detection happens in two steps** (`AMB-D-386`). The list
-//! everyone fetches carries one digest per entry — `detail_sum`, over the document the checksums live in —
-//! and a value there that is not the one the install recorded makes that plugin a [`Candidate`]: something
-//! about how it installs has moved, and the list is enough to say so without a request per plugin. What
-//! actually moved is then read from the one document it is in ([`crate::plugin_catalog::detail`]), which
-//! is where this machine's checksum is compared and the [`Update`] either exists or does not. A rebuild of
-//! another platform moves the digest and stops at that second step, which is why a candidate is not yet an
-//! update and why nothing but [`available_cached`] — a listing's mark, deliberately network-free — ever
-//! reports one as if it were.
+//! The asset checksums are still checked, at the door where they mean something: the bytes that arrive
+//! must be the bytes the entry published (`AMB-D-351`). What they are not is how a move is *noticed* —
+//! that question is the list's, and one answer serves both faces, so a listing's mark and an update check
+//! can no longer disagree about the same plugin.
+//!
+//! **Detection is therefore two steps, and only the first one judges** (`AMB-D-386`). The list everyone
+//! fetches makes a plugin whose digest moved a [`Candidate`]; the document that digest covers is then
+//! fetched for its *content* — the config schema, the compatibility floor, the asset to fetch — which is
+//! everything a caller needs to decide and to apply ([`confirm`]). A [`Candidate`] is what a listing can
+//! report without a request per plugin ([`available_cached`]), and an [`Update`] is the same plugin with
+//! that document in hand.
 //!
 //! **It never reaches for the network on its own account.** With nothing installed there is nothing to
 //! compare and the catalog is not touched at all; otherwise the list goes through
@@ -100,12 +102,13 @@ pub struct Update {
     pub available: Manifest,
 }
 
-/// One installed plugin the catalog's **list** already says something has moved about — an update
-/// candidate, before the document that says *what* has been read (`AMB-D-386`).
+/// One installed plugin the catalog's **list** already says something has moved about — an update, before
+/// the document that says *what moved* has been read (`AMB-D-386`).
 ///
-/// It is not an [`Update`] and does not pretend to be: the digest it was found by covers the whole detail
-/// document, so it moves when any platform's asset does, and only [`confirm`] can say whether the bytes
-/// *this* machine runs are among them.
+/// The verdict is the same one an [`Update`] carries (`AMB-D-438`): the digest moved, so this is a
+/// different entry from the one the install was made from. What it is missing is the content — the
+/// description to show, the schema to judge, the asset to fetch — all of which live a document away, so
+/// this is what a listing can report and an apply cannot work from.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Candidate {
     /// The plugin's name — its identity in the catalog and its directory under `plugins/`.
@@ -126,20 +129,6 @@ pub struct Candidate {
 pub fn moved(installed: &Manifest, entry: &ListEntry) -> bool {
     match (&installed.detail_sum, &entry.detail_sum) {
         (Some(installed), Some(listed)) => installed != listed,
-        _ => false,
-    }
-}
-
-/// Whether the catalog's entry is a different build from the installed one, **for this platform** (see the
-/// module docs: this platform's asset checksum is the build's identity, so it is the whole comparison).
-/// The platform is resolved exact-then-OS-wide by [`Manifest::asset_for`] (`AMB-D-384`), so an arch-specific
-/// build and an arch-agnostic one compare on the bytes this machine would actually run.
-///
-/// An entry that publishes nothing for this platform compares as unchanged. It is not an update anyone could
-/// apply — there are no bytes to fetch — and reporting one would offer a fix that cannot run.
-pub fn differs(installed: &Manifest, available: &Manifest, here: Platform) -> bool {
-    match (installed.asset_for(here), available.asset_for(here)) {
-        (Some(installed), Some(available)) => installed.checksum != available.checksum,
         _ => false,
     }
 }
@@ -165,48 +154,49 @@ pub fn compare(installed: &[InstalledPlugin], view: &Discovery) -> Vec<Candidate
         .collect()
 }
 
-/// Read the one document a candidate's digest pointed at, and say whether this machine's build actually
-/// moved (`AMB-D-386`) — the second step of detection, and the only one that costs a request.
+/// Read the one document a candidate's digest pointed at (`AMB-D-386`) — the second step of detection, and
+/// the only one that costs a request.
 ///
-/// `Ok(None)` is the honest common answer to a candidate: the detail moved for some platform, and not for
-/// this one. What comes back otherwise is a whole [`Update`], because the detail is where the config
-/// schema, the compatibility floor and the asset this machine would fetch all are — everything a caller
-/// has to judge before applying, and everything the apply path needs.
+/// It **judges nothing**: the digest already said this entry is not the one the install was made from, and
+/// that is the whole of what an update is (`AMB-D-438`). What the fetch is for is the content — the detail
+/// is where the config schema, the compatibility floor and the asset this machine would fetch all are,
+/// which is everything a caller has to judge before applying and everything the apply path needs.
 ///
 /// The detail goes through the install door's own validation ([`plugin_install::catalog_manifest`]), so an
 /// update is judged against exactly the manifest an install would have been.
-fn confirm(paths: &Paths, candidate: &Candidate, here: Platform) -> Result<Option<Update>> {
+fn confirm(paths: &Paths, candidate: &Candidate) -> Result<Update> {
     let available = plugin_install::catalog_manifest(paths, &candidate.found)?;
-    Ok(differs(&candidate.installed, &available, here).then(|| Update {
+    Ok(Update {
         name: candidate.name.clone(),
         installed: candidate.installed.clone(),
         available,
-    }))
+    })
 }
 
-/// Every installed plugin the catalog holds a different build of, for this machine.
+/// Every installed plugin the catalog lists a different entry for, with the document that says what moved.
 ///
 /// With nothing installed the answer is "no updates" without a catalog read at all — there is nothing to
 /// compare it against, and a check should not spend a fetch to say so. Otherwise the list comes from
 /// [`plugin_catalog::fresh`], so a check inside the freshness window costs no network at all and one
 /// outside it costs a single fetch of the whole index; each candidate that comes out of it then costs one
-/// small document ([`confirm`]), which is the price of the checksums no longer riding in the list.
+/// small document ([`confirm`]), which is the price of the detail riding a document away.
 ///
-/// **A candidate that cannot be confirmed is passed over.** A detail that will not fetch, will not parse
-/// or is not the one the entry listed is not an update anyone could apply right now, and one such plugin
-/// must not cost the report of every other (`AMB-D-352`'s posture). Naming a plugin — `plugin update
-/// <name>` — is what asks for the reason rather than the omission.
+/// **A candidate whose document cannot be read is passed over.** A detail that will not fetch, will not
+/// parse or is not the one the entry listed is not an update anyone could apply right now, and one such
+/// plugin must not cost the report of every other (`AMB-D-352`'s posture). Naming a plugin — `plugin
+/// update <name>` — is what asks for the reason rather than the omission.
 ///
 /// Fails only when there is no catalog at all to compare against: nothing fetched and nothing cached.
 /// Being offline with a cached copy is not a failure — the answer is then as fresh as the cache, which is
 /// the deal a static index buys (`AMB-D-347`).
 pub fn available(paths: &Paths) -> Result<Vec<Update>> {
-    let Some((installed, here)) = worth_comparing(paths)? else {
+    let installed = plugin_installed::installed(paths)?;
+    if installed.is_empty() {
         return Ok(Vec::new());
-    };
+    }
     Ok(compare(&installed, &plugin_catalog::discover(paths))
         .iter()
-        .filter_map(|candidate| confirm(paths, candidate, here).ok().flatten())
+        .filter_map(|candidate| confirm(paths, candidate).ok())
         .collect())
 }
 
@@ -219,25 +209,16 @@ pub fn available(paths: &Paths) -> Result<Vec<Update>> {
 /// --check`. No cache, an unreadable one, or nothing installed is simply nothing to report — never an
 /// error, because a listing does not fail on a catalog it has not got.
 ///
-/// Candidates, and said so in the type: without the detail document there is no way to tell a rebuild of
-/// this platform from a rebuild of another, and a mark on a listing is the one place where erring towards
-/// "go look" costs nothing (`AMB-D-386`).
+/// Candidates, and said so in the type: the verdict is the one an update carries, and what is missing is
+/// the content a document away (`AMB-D-438`). Which is why a mark here and an update check now say the
+/// same thing about the same plugin — the mark that could not be acted on was the two faces reading two
+/// different comparisons.
 #[must_use]
 pub fn available_cached(paths: &Paths) -> Vec<Candidate> {
     let Ok(installed) = plugin_installed::installed(paths) else {
         return Vec::new();
     };
     compare(&installed, &plugin_catalog::cached_view(paths))
-}
-
-/// What is installed and the platform to judge it on, or `None` when there is nothing to compare — no
-/// plugins installed, or a platform amenbo's manifests cannot even name. Both are answers no catalog read
-/// could change, so they are settled before one is spent.
-fn worth_comparing(paths: &Paths) -> Result<Option<(Vec<InstalledPlugin>, Platform)>> {
-    let (installed, Some(here)) = (plugin_installed::installed(paths)?, Platform::here()) else {
-        return Ok(None);
-    };
-    Ok((!installed.is_empty()).then_some((installed, here)))
 }
 
 /// What one applied update replaced — the receipt a caller reports from.
@@ -303,11 +284,10 @@ pub fn backup_manifest_path(paths: &Paths, name: &str) -> PathBuf {
 /// Apply the update for one installed plugin: fetch the catalog's build, verify it, retain the current
 /// one, and put the new one in place.
 ///
-/// `Ok(None)` means there was nothing to apply — the catalog publishes the build already installed — and
-/// nothing was written. That is a result, not a failure: `plugin update <name>` on a current plugin is a
-/// no-op a caller can report plainly. It is answered twice over (`AMB-D-386`): from the list, when the
-/// entry still points at the detail document the install recorded, and otherwise from that document, when
-/// what moved in it was another platform's asset and not this machine's.
+/// `Ok(None)` means there was nothing to apply — the catalog publishes the entry the install was made
+/// from — and nothing was written. That is a result, not a failure: `plugin update <name>` on a current
+/// plugin is a no-op a caller can report plainly. It is answered from the list alone (`AMB-D-438`), which
+/// is why a current plugin costs no second fetch.
 ///
 /// Refuses, leaving the install untouched, when the plugin is not installed (that is `plugin install`'s
 /// door), when the catalog it came from does not list it (installed by hand, delisted since, or a record
@@ -326,8 +306,10 @@ pub fn apply(
 ) -> Result<Option<Replaced>> {
     let installed = plugin_installed::read(paths, name)?;
     // Unreachable on a platform amenbo ships for, and a refusal rather than "nothing to do" if it ever is
-    // reached: a caller who named a plugin is owed the reason, not a silent no-op.
-    let here = Platform::here().ok_or_else(|| {
+    // reached: a caller who named a plugin is owed the reason, not a silent no-op. Asked here rather than
+    // left to the download, which refuses in the vocabulary of what the *plugin* supports — true, and not
+    // the answer when the gap is that amenbo has no name for this machine at all.
+    Platform::here().ok_or_else(|| {
         Error::Invalid(
             Msg::new(format!(
                 "plugin manifests cannot name {}, so '{name}' cannot be updated here",
@@ -352,9 +334,7 @@ pub fn apply(
         installed: installed.manifest,
         found: found.clone(),
     };
-    let Some(update) = confirm(paths, &candidate, here)? else {
-        return Ok(None);
-    };
+    let update = confirm(paths, &candidate)?;
     // The caller's gate on the new schema, before the download (see the module docs): a refusal keeps the
     // working build exactly as it was.
     approve(&update.available)?;
@@ -431,35 +411,31 @@ pub fn apply_all(
     paths: &Paths,
     approve: impl Fn(&Manifest) -> Result<()>,
 ) -> Result<Vec<Outcome>> {
-    let Some((installed, here)) = worth_comparing(paths)? else {
+    let installed = plugin_installed::installed(paths)?;
+    if installed.is_empty() {
         return Ok(Vec::new());
-    };
+    }
     // The list the way an install reads it, not the way a check does: applying is the explicit act, so it
     // asks the network the way `plugin_catalog::load` does and falls back to the cache only when there is no
     // answer. Replacing a binary on what a cache said an hour ago would be acting on stale evidence.
     let view = plugin_catalog::for_install(paths)?;
     Ok(compare(&installed, &view)
         .iter()
-        .filter_map(|candidate| match confirm(paths, candidate, here) {
-            // This platform's bytes did not move: there was nothing to do, and nothing to report.
-            Ok(None) => None,
-            Ok(Some(update)) => Some(
-                match candidate
-                    .found
-                    .trust_root()
-                    .and_then(|root| {
-                        approve(&update.available).and_then(|()| {
-                            replace(paths, &update, &root, &candidate.found.origin())
-                        })
-                    })
-                {
-                    Ok(replaced) => Outcome::Replaced(Box::new(replaced)),
-                    Err(error) => Outcome::Failed { name: update.name, error },
-                },
-            ),
+        .map(|candidate| match confirm(paths, candidate) {
+            Ok(update) => match candidate
+                .found
+                .trust_root()
+                .and_then(|root| {
+                    approve(&update.available)
+                        .and_then(|()| replace(paths, &update, &root, &candidate.found.origin()))
+                })
+            {
+                Ok(replaced) => Outcome::Replaced(Box::new(replaced)),
+                Err(error) => Outcome::Failed { name: update.name, error },
+            },
             // Unlike a check, this run was asked to act, so a detail that could not be read is reported
             // rather than passed over — and the plugins beside it are still applied.
-            Err(error) => Some(Outcome::Failed { name: candidate.name.clone(), error }),
+            Err(error) => Outcome::Failed { name: candidate.name.clone(), error },
         })
         .collect())
 }
@@ -871,20 +847,67 @@ mod tests {
         assert_eq!(names, vec!["alpha", "gamma"], "beta is current, and the rest stay sorted");
     }
 
-    /// A per-OS entry is judged **per OS** (`AMB-D-381`): the machine running the check sees only its own
-    /// asset move. A release that rebuilt one platform is not an update for the others.
-    ///
-    /// The list cannot say that — one digest covers the whole detail document, so a rebuild anywhere makes
-    /// every machine a candidate (`AMB-D-386`). Which is why the platform question is asked of the
-    /// document itself, and asked of it before anything is offered.
+    /// **An update that changes no binary is an update** (`AMB-D-438`) — the whole reason the comparison
+    /// is the detail's digest rather than an asset's. Every one of these leaves the executable byte for
+    /// byte what it was, and every one of them is something the user is owed.
     #[test]
-    fn a_per_os_entry_is_judged_against_this_machines_asset() {
+    fn an_entry_whose_manifest_moved_but_whose_bytes_did_not_is_an_update() {
+        let installed_manifest = published(manifest("worktree", "same-bytes"));
+        let installed = vec![InstalledPlugin {
+            name: "worktree".to_string(),
+            program: std::path::PathBuf::from("/dev/null"),
+            manifest: installed_manifest.clone(),
+            origin: Some(Origin::Official),
+        }];
+
+        let cases: [fn(&mut Manifest); 3] = [
+            // A setting the author added.
+            |m| {
+                m.config.push(crate::plugin_manifest::ConfigField {
+                    key: "base".into(),
+                    label: "Base branch".into(),
+                    secret: false,
+                    required: false,
+                })
+            },
+            // A subscription they changed.
+            |m| m.events.push(crate::plugin_manifest::EventSubscription::new("task.done")),
+            // The words the plugin says for itself at the AI's entry point (`AMB-D-437`).
+            |m| {
+                m.agent = Some(crate::plugin_manifest::AgentGuide {
+                    when: "Starting work on a task that will produce commits".into(),
+                    commands: Vec::new(),
+                })
+            },
+        ];
+        for moved in cases {
+            let mut entry = installed_manifest.clone();
+            moved(&mut entry);
+            let entry = published(entry);
+            assert_eq!(
+                entry.asset_for(plat(Os::Macos)).map(|a| a.checksum),
+                installed_manifest.asset_for(plat(Os::Macos)).map(|a| a.checksum),
+                "the bytes are the ones already installed",
+            );
+            assert_eq!(
+                compare(&installed, &catalog(vec![entry])).len(),
+                1,
+                "and the entry is still a different one from the one this was installed from",
+            );
+        }
+    }
+
+    /// A rebuild of another platform is an update here too (`AMB-D-438`): one digest covers the whole
+    /// document, and the two faces read that one answer. What the second document is fetched for is the
+    /// content, not a second verdict.
+    #[test]
+    fn a_rebuild_of_another_platform_is_still_a_different_entry() {
         let mut installed_manifest = manifest("worktree", "unused");
         installed_manifest.url = String::new();
         installed_manifest.checksum = String::new();
         installed_manifest.assets = [
             (plat(Os::Macos), asset("mac-1")),
-            (plat(Os::Linux), asset("linux-1")),
+            (plat_arch(Os::Linux, Arch::X64), asset("linux-x64-1")),
         ]
         .into_iter()
         .collect();
@@ -896,56 +919,35 @@ mod tests {
             origin: Some(Origin::Official),
         }];
 
-        // Only Linux was rebuilt.
+        // Only the linux build was cut again.
         let mut entry = installed_manifest.clone();
-        entry.assets.insert(plat(Os::Linux), asset("linux-2"));
+        entry.assets.insert(plat_arch(Os::Linux, Arch::X64), asset("linux-x64-2"));
         let entry = published(entry);
 
         assert_eq!(
-            compare(&installed, &catalog(vec![entry.clone()])).len(),
+            compare(&installed, &catalog(vec![entry])).len(),
             1,
-            "the detail moved, so every machine has one document to go and read"
+            "the document moved, so this is a different entry — on every machine, not only the linux one"
         );
-        assert!(!differs(&installed_manifest, &entry, plat(Os::Macos)), "the mac asset is the one it was");
-        assert!(differs(&installed_manifest, &entry, plat(Os::Linux)), "the linux asset moved");
-        assert_eq!(entry.asset_for(plat(Os::Linux)).unwrap().checksum, "sha256:linux-2");
     }
 
-    /// The comparison is per **platform**, not just per OS (`AMB-D-384`): a release that rebuilt only
-    /// linux-arm64 is an update for an arm64 machine and not for an x64 one, each seeing its own asset move.
+    /// The same entry re-published is not an update, whatever else the catalog did around it — which is
+    /// what a deterministic signature buys (`AMB-D-438`): re-signing identical bytes leaves the digest
+    /// where it was, so nothing is offered.
     #[test]
-    fn a_per_arch_entry_is_compared_against_this_machines_arch() {
-        let mut installed_manifest = manifest("worktree", "unused");
-        installed_manifest.url = String::new();
-        installed_manifest.checksum = String::new();
-        installed_manifest.os = vec![Os::Linux];
-        installed_manifest.assets = [
-            (plat_arch(Os::Linux, Arch::X64), asset("x64-1")),
-            (plat_arch(Os::Linux, Arch::Arm64), asset("arm64-1")),
-        ]
-        .into_iter()
-        .collect();
+    fn an_entry_republished_unchanged_is_not_an_update() {
+        let installed_manifest = published(manifest("worktree", "aa"));
+        let installed = vec![InstalledPlugin {
+            name: "worktree".to_string(),
+            program: std::path::PathBuf::from("/dev/null"),
+            manifest: installed_manifest.clone(),
+            origin: Some(Origin::Official),
+        }];
 
-        // Only the arm64 build moved.
-        let mut entry = installed_manifest.clone();
-        entry.assets.insert(plat_arch(Os::Linux, Arch::Arm64), asset("arm64-2"));
-
-        // The arm64 machine sees the move; the x64 machine sees the digest it always had.
-        assert!(differs(&installed_manifest, &entry, plat_arch(Os::Linux, Arch::Arm64)), "arm64 moved");
-        assert!(!differs(&installed_manifest, &entry, plat_arch(Os::Linux, Arch::X64)), "x64 is unchanged");
-    }
-
-    /// An entry that publishes nothing for this OS offers no update: there would be no bytes to apply.
-    #[test]
-    fn an_entry_with_no_asset_here_is_not_an_update() {
-        let mut installed_manifest = manifest("worktree", "unused");
-        installed_manifest.url = String::new();
-        installed_manifest.checksum = String::new();
-        installed_manifest.assets = [(plat(Os::Linux), asset("linux-1"))].into_iter().collect();
-        let mut entry = installed_manifest.clone();
-        entry.assets.insert(plat(Os::Linux), asset("linux-2"));
-
-        assert!(!differs(&installed_manifest, &entry, plat(Os::Macos)));
+        assert!(
+            compare(&installed, &catalog(vec![published(manifest("worktree", "aa"))])).is_empty(),
+            "the same document publishes as the same digest"
+        );
     }
 
     /// Nothing installed is answered without a catalog at all — including when there is no cache to read

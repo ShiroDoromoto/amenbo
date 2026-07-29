@@ -1,0 +1,203 @@
+# A setting whose answers the author listed. amenbo learns the list and nothing else — not what a
+# candidate means, only that it was offered — which is enough to keep a person from having to spell a
+# value, and enough to turn away one nobody offered.
+#
+# Like every line that installs a plugin, this one goes to the catalog over the network on purpose
+# (see `put-a-plugin-on-the-machine.yaml`): the settings are a face of a plugin that is really there.
+id: choose-from-what-a-plugin-offers
+title: A setting offering candidates keeps three answers apart — the ones chosen, none of them, and nobody asked yet — and each is worth its own thing to a run
+description: >
+  Install the official `worktree` plugin, give it a setting whose answers its author listed, and walk the
+  three states that setting can be left in. Nobody has answered it yet, so the author's default stands
+  without anything being stored. Choose two of the candidates and read them back. Answer with none of
+  them — an answer, and not the same as never having been asked, which is why the read still says
+  something is held. Empty the value, which is the door back to the default. Then a candidate the author
+  never offered, turned away at the boundary rather than kept somewhere it would silently match nothing.
+  Finally the only place the difference is worth anything: a plugin is asked what it was handed, and gets
+  the default while nobody has answered, and an empty answer once someone has declined every candidate.
+steps_cli:
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # Which candidates a setting offers is the author's word, and no published plugin offers any — so the
+  # declaration is put onto the installed manifest here (see the op's own note). From this step on,
+  # everything is amenbo's own doing.
+  - type: action
+    domain: plugin
+    op: declare-choice
+    with:
+      name: worktree
+      key: events
+      label: Events to be told about
+      options: task.done,task.rejected,task.blocked
+      default: task.done
+
+  # Nobody has answered it, so what the author wrote is what stands — and the store holds nothing at all.
+  # A default is not an answer someone gave; it is what is worth having in the absence of one, which is
+  # why it lives in the manifest and not in this project's row.
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      state: unanswered
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      set: false
+
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: events
+      value: task.done,task.rejected
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      equals: task.done,task.rejected
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      state: chosen
+
+  # Declining every candidate is an answer of its own. It has to be stored as something, because the
+  # empty value is the clear door — so the read still says this project holds one, and the state is what
+  # says which answer it is.
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: events
+      value: "none"
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      state: "none"
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      set: true
+
+  # And the way back to the default is the same door every other setting is taken back through.
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: events
+      value: ""
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      state: unanswered
+
+  # A candidate nobody offered. The list is the one thing amenbo does know about this value, so a
+  # misspelling is turned away here rather than stored to match nothing at run time — and a refusal
+  # leaves the setting standing where it was.
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: events
+      value: task.archived
+      refused: invalid_value
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      state: unanswered
+
+  # What each answer is finally worth. A non-secret setting reaches a run in the document on its stdin
+  # and nowhere a reader can look, so the only witness is a plugin willing to say what it was handed, and
+  # the driver stands one in (see the op's own note). The gate is opened because a command run needs it.
+  - type: action
+    domain: plugin
+    op: echo-program
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: config
+
+  # Nobody answered, so the run receives the author's default — resolved on the way out, which is why a
+  # store holding nothing for this project is not a plugin receiving nothing.
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: '"events":"task.done"'
+
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: events
+      value: "none"
+
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: config
+
+  # Every candidate declined, so the run receives an empty answer — and not the word the store keeps it
+  # under, which is spent by the time the plugin is handed anything. An author writes no special case for
+  # a spelling they never chose.
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: '"events":""'
+
+  - type: action
+    domain: plugin
+    op: uninstall
+    with:
+      name: worktree

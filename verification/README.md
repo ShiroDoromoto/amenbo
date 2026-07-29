@@ -281,13 +281,17 @@ build, and an asset is trusted only by the key of the catalog that served it, so
 build to install first and no way to sign one into existence. `plugin declare-secret` puts a secret setting into what an
 installed plugin says it takes: what is secret is the author's word, amenbo never invents a field, and
 no plugin in the official catalog declares one — so the secret route, which fails silently and in plain
-text, would otherwise go unwalked until one does. `plugin slow-program` leaves an installed plugin
+text, would otherwise go unwalked until one does. `plugin declare-choice` puts in the other kind for the
+same reason — a setting whose answers the author listed, and the default that stands until someone gives
+one — which is what keeps a choice made, a choice declined and a question nobody has answered
+apart. `plugin slow-program` leaves an installed plugin
 taking seconds to answer, which is the only way a queue holds anything to read: a row leaves the moment
 its plugin replies, so the backlog `plugin log` reports is the window a slow plugin holds open, and
 every plugin the catalog publishes answers in the time a process takes to start. `plugin echo-program`
-leaves one answering with the config it was handed, which is the only witness a secret's delivery has:
-it travels as an environment variable on the child process, and the published plugins use their
-settings rather than report them. They are the same idea as `repo write-file`: the
+leaves one answering with the config it was handed, which is the only witness a setting's delivery has:
+it travels on the child process — as an environment variable for a secret, in the stdin document for
+everything else — and the published plugins use their settings rather than report them. They are the
+same idea as `repo write-file`: the
 state on disk a scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach
 for one only when the line under test is what amenbo does about that state.
 
@@ -331,8 +335,10 @@ takes `absent: <text>` when what is under test is something that must **not** ha
 amenbo handed out is read as bytes — one file for a backup, the whole folder for an export — and the
 word is looked for verbatim, which needs no reading of the layout around it. A `plugin config` assert
 takes `secret: true` for the same kind of question one tier up: the read says the setting is a secret,
-and does not hand the value over with it. A `listed` assert asks
-whether the task is in the listing; give it
+and does not hand the value over with it. It takes `state:` for the question a value cannot answer for
+itself — `chosen`, `none` or `unanswered` — since a choice answered with none of its candidates and one
+nobody has answered both hold no chosen value, and only the second follows the author's default.
+A `listed` assert asks whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible.
 

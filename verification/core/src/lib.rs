@@ -363,6 +363,14 @@ const REGISTRY: &[OpSpec] = &[
     // is: the driver writes the declaration onto the installed manifest, the way `stale-manifest`
     // writes the disagreement it needs. Everything after it is amenbo's own doing.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-secret", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
+    // An installed plugin declaring a setting whose answers its author listed, and the one that stands
+    // while nobody has answered. Same reason as `declare-secret`: which settings a plugin takes is the
+    // author's word, and no plugin in the official catalog offers candidates — so the half of
+    // `plugin config` that keeps three answers apart (a choice made, none of them chosen, nobody asked
+    // yet) would go unwalked until one does. `options` is the candidates as their stored values, joined
+    // by commas the way an answer is; `default` is a subset of them, and leaving it out is the other
+    // shape a choice comes in.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-choice", required: &["name", "key", "options"], refs: &[], strings: &["name", "key", "label", "options", "default"], binds: false },
     // An installed plugin saying, in its author's words, when to reach for it and what to type. What a
     // plugin says for itself is written in its manifest and amenbo invents none of it, so this is the
     // author's block arriving the only way it can — written onto the installed manifest, the way
@@ -553,8 +561,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "outdated", required: &["name", "present"], refs: &[], strings: &["name"], binds: false },
     // A setting read back as this project holds it — `equals` for the value, or `set: false` to ask
     // that it holds none. `secret: true` asks the other thing a read of a secret has to be true of:
-    // that it says so, and that the value does not come out with it.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key"], binds: false },
+    // that it says so, and that the value does not come out with it. `state` asks which of the three
+    // answers a field holds (`chosen` / `none` / `unanswered`), which is the one question a value
+    // cannot answer for itself: a choice answered with none of them and one nobody has answered both
+    // read as no value chosen, and only the second follows the author's default.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "state"], binds: false },
     // A catalog in the browsing view: whether it is a source at all (`present`), whether the browse
     // could reach it, and — `pinned_key` — whether a key of its is what plugins from it would be
     // trusted on. The last is the half that decides installability rather than visibility, and it is

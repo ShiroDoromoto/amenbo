@@ -181,6 +181,53 @@ impl Driver {
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 Ok(Outcome::action(format!("`{name}` now declares `{key}` as a secret setting")))
             }
+            // Adding a setting whose answers the author listed, and the one that stands until someone
+            // answers. Same road in as `declare-secret`, and for the same reason: candidates are the
+            // author's to declare, no published plugin declares any, and what the scenario walks
+            // afterwards — which answer is held, what a read says about it, what a run receives — is
+            // amenbo's own. The label a candidate carries is display text the scenario never reads
+            // back, so each one is labelled with its own value rather than given wording to keep in
+            // step.
+            "declare-choice" => {
+                let name = req_str(with, "name")?;
+                let key = req_str(with, "key")?;
+                let label = with.get("label").and_then(|v| v.as_str()).unwrap_or(key);
+                let options = req_str(with, "options")?;
+                let path = self.session.home.join("plugins").join(name).join("manifest.json");
+                let raw = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
+                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
+                if manifest["config"].is_null() {
+                    manifest["config"] = serde_json::json!([]);
+                }
+                let fields = manifest["config"]
+                    .as_array_mut()
+                    .ok_or_else(|| format!("{}'s config schema is not a list of fields", path.display()))?;
+                if fields.iter().any(|f| f["key"].as_str() == Some(key)) {
+                    return Err(format!("`{name}` already declares a setting called `{key}`"));
+                }
+                let candidates: Vec<serde_json::Value> = options
+                    .split(',')
+                    .map(|value| serde_json::json!({ "value": value, "label": value }))
+                    .collect();
+                let mut field = serde_json::json!({
+                    "key": key, "label": label, "type": "multi", "options": candidates,
+                    "secret": false, "required": false
+                });
+                // A field that declares no default is the other shape a choice comes in — one where
+                // nothing stands in for an answer nobody gave — so the key is left off rather than
+                // written empty, which the manifest would read as a default of the empty string.
+                if let Some(default) = with.get("default").and_then(|v| v.as_str()) {
+                    field["default"] = serde_json::json!(default);
+                }
+                fields.push(field);
+                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                Ok(Outcome::action(format!(
+                    "`{name}` now offers `{options}` as the answers to `{key}`"
+                )))
+            }
             // Writing what a plugin says for itself onto the manifest beside its binary — the author's
             // `agent` block, arriving the only way it can while the scenario is not to depend on the
             // catalog's own wording (see the registry). The block is one thing rather than a list, so a
@@ -207,13 +254,15 @@ impl Driver {
                 Ok(Outcome::action(format!("`{name}` now says for itself: {when}")))
             }
             // Standing in a program that says what it was handed, so the injection has a witness. A
-            // secret reaches a run as an environment variable and nowhere else: the store never held
-            // it, the log is kept clear of it, and the read that says it is set says nothing more. A
-            // plugin is the only thing on the receiving end, and the published ones use their settings
-            // rather than report them (see the registry) — so this one prints its injected config and
-            // stops there. The prefix is amenbo's own; the callback variables beside it are left out,
-            // because what is under test is the value a plugin was told, not the door it can read back
-            // through.
+            // config value reaches a run and nowhere else: the store holds the answer rather than what
+            // it is worth, the log is kept clear of it, and the read that says a secret is set says
+            // nothing more. A plugin is the only thing on the receiving end, and the published ones use
+            // their settings rather than report them (see the registry) — so this one prints its
+            // injected config and stops there. Both roads, because a setting travels by the one its
+            // author's `secret` flag chose: an environment variable for a secret, the stdin document
+            // for the rest. The `AMENBO_CONFIG_` prefix is amenbo's own; the callback variables beside
+            // it are left out, because what is under test is the value a plugin was told, not the door
+            // it can read back through.
             "echo-program" => {
                 let name = req_str(with, "name")?;
                 let path = self.session.home.join("plugins").join(name).join(name);
@@ -223,8 +272,10 @@ impl Driver {
                 // `grep` finding nothing is a non-zero exit, and a command run that exits non-zero is a
                 // failure amenbo reports rather than a return value — so the script ends by saying it
                 // is fine. Handed nothing, it returns nothing, which is exactly the reading a scenario
-                // asking whether a secret is gone needs.
-                std::fs::write(&path, "#!/bin/sh\nenv | grep '^AMENBO_CONFIG_'\nexit 0\n")
+                // asking whether a secret is gone needs. The stdin document is echoed verbatim: what a
+                // non-secret setting is worth to a run is a key in it, and the whole point of a value
+                // resolved on the way out is that it cannot be read anywhere else.
+                std::fs::write(&path, "#!/bin/sh\nenv | grep '^AMENBO_CONFIG_'\ncat\nexit 0\n")
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 make_runnable(&path)?;
                 Ok(Outcome::action(format!(
@@ -502,6 +553,21 @@ impl Driver {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
                 let v = self.run_json(&["plugin", "config", "get", name, key, "--json"])?;
+                // Which of the three answers the field holds. It is asked apart from the value because
+                // the value cannot tell two of them apart: a choice answered with none of the
+                // candidates and one nobody has answered yet both read as nothing chosen, and only the
+                // second is the author's default speaking.
+                if let Some(want) = with.get("state").and_then(|v| v.as_str()) {
+                    let got = v["state"].as_str().unwrap_or_default();
+                    let pass = got == want;
+                    return Ok(Outcome::assert(
+                        pass,
+                        format!(
+                            "plugin `{name}` holds `{key}` as `{got}` (expected `{want}`, {})",
+                            if pass { "as expected" } else { "MISMATCH" }
+                        ),
+                    ));
+                }
                 // Whether the read treats the setting as a secret — and, when it should, whether it
                 // kept the value to itself. Both halves are the same promise: a `get` that printed a
                 // token would put it in the terminal, the scrollback and the shell's history, so a

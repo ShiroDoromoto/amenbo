@@ -15,14 +15,16 @@
 # here rather than read out of the catalog: an author may reword their block any day, and a line
 # asserting today's sentence would go red on a change amenbo had no part in.
 id: see-which-plugins-are-callable-here
-title: An AI's entry point names the plugins this folder can call, in their authors' words, as lines it can type
+title: An AI's entry point names the plugins this folder can call, in their authors' words, as lines it can type — and says which empty it is when it names none
 description: >
   Install a plugin and read the entry point: it is not offered, because installed is not switched on
   and a call would refuse it. Switch it on and it appears — with its own one-line description, before
   its author has said anything about how to drive it. Have the author say it, and read back both
   halves: the occasion, verbatim, and a command that arrives as `<amenbo> plugin run <name> …` rather
   than as the bare subcommand the author wrote. Switch it off and it is gone from the entry point
-  again.
+  again — and this time read what the entry point says about naming nothing, which is a different
+  sentence from the one it says once the plugin is removed altogether. Nothing offered is not one
+  state but several, and the two the user can act on are the two that are walked here.
 steps_cli:
   - type: action
     domain: plugin
@@ -89,6 +91,17 @@ steps_cli:
       name: worktree
       present: false
 
+  # And the entry point says which nothing this is. A reader who is told only that no plugin is offered
+  # cannot tell a machine with none from a project that switched none on, and those want opposite moves
+  # — so the empty answer carries the state that produced it.
+  - type: assert
+    domain: plugin
+    op: at-entry
+    with:
+      name: worktree
+      present: false
+      because: no plugin is enabled in this project
+
   - type: assert
     domain: plugin
     op: listed
@@ -101,3 +114,13 @@ steps_cli:
     op: uninstall
     with:
       name: worktree
+
+  # The other empty, and a different sentence: nothing is installed at all now, so enabling something is
+  # not the move — there is nothing here to enable.
+  - type: assert
+    domain: plugin
+    op: at-entry
+    with:
+      name: worktree
+      present: false
+      because: no plugin is installed on this machine

@@ -432,9 +432,10 @@ impl Driver {
                 }
             }
             // The entry point as an AI meets it: `plugins` names what this folder can actually call, in
-            // the words their authors wrote. Three readings live here because they fail apart — a plugin
-            // offered when its gate is shut, a line paraphrased instead of relayed, and a command handed
-            // over in a form nobody can type are three different breakages of the same key.
+            // the words their authors wrote. Four readings live here because they fail apart — a plugin
+            // offered when its gate is shut, a line paraphrased instead of relayed, a command handed
+            // over in a form nobody can type, and an empty key that does not say which empty it is are
+            // four different breakages of the same key.
             "at-entry" => {
                 let name = req_str(with, "name")?;
                 let present = req_bool(with, "present")?;
@@ -443,9 +444,37 @@ impl Driver {
                 // the same gates — and when the key comes back empty it says why, rather than leaving
                 // a reader to guess which of several empty-handed states they are in.
                 let v = self.run_json(&["agent", "--json", "--actor", "ai"])?;
-                let entry = v["plugins"]
-                    .as_array()
-                    .and_then(|rows| rows.iter().find(|p| p["name"].as_str() == Some(name)));
+                let rows = v["plugins"].as_array().map(Vec::as_slice).unwrap_or_default();
+                let why = v["pluginsEmptyBecause"].as_str();
+                // The floor every reading here stands on: the reason is the answer for an empty list,
+                // so it is there exactly when there is nothing to name. A sentence beside a list is one
+                // a reader has no use for, and an empty list with nothing said leaves them guessing
+                // which of several empty-handed states they are in — both are the key failing at its
+                // job, whichever question the step went on to ask.
+                if why.is_some() != rows.is_empty() {
+                    return Ok(Outcome::assert(
+                        false,
+                        format!(
+                            "the entry point offers {} plugin(s) and {} why it is empty (MISMATCH — a reason stands exactly where there is nothing to list)",
+                            rows.len(),
+                            if why.is_some() { "still says" } else { "does not say" }
+                        ),
+                    ));
+                }
+                // Which empty-handed state this is. Asked before the row, since with nothing offered
+                // there is no row to ask about — and the reason is the whole of what a reader gets.
+                if let Some(want) = with.get("because").and_then(|v| v.as_str()) {
+                    let said = why.unwrap_or_default();
+                    let pass = said.contains(want);
+                    return Ok(Outcome::assert(
+                        pass,
+                        format!(
+                            "the entry point says it is empty because {said:?} (expected it to carry `{want}`, {})",
+                            if pass { "as expected" } else { "MISMATCH" }
+                        ),
+                    ));
+                }
+                let entry = rows.iter().find(|p| p["name"].as_str() == Some(name));
                 let Some(entry) = entry else {
                     return Ok(Outcome::assert(
                         !present,

@@ -606,9 +606,16 @@ const REGISTRY: &[OpSpec] = &[
     // type. The command word itself is left out of the step: a build reached by another name hands out
     // lines naming it, and that is the point rather than a mismatch.
     //
+    // `because` is for the other half of the key: when nothing is offered, the entry point says which
+    // empty-handed state this is, and a reader who cannot tell "nothing installed" from "nothing
+    // switched on here" cannot tell which move would fix it. It is matched as a fragment rather than a
+    // sentence — what is under test is that the right state is named, not today's wording, which amenbo
+    // is free to reword without breaking a promise. Whichever reading a step asks for, the document is
+    // held to its own floor first: a reason stands exactly where there is nothing to list.
+    //
     // A CLI road alone: the entry point is a document for whoever drives the terminal, and no screen
     // prints it.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "at-entry", required: &["name", "present"], refs: &[], strings: &["name", "when", "cmd"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "at-entry", required: &["name", "present"], refs: &[], strings: &["name", "when", "cmd", "because"], binds: false },
     // The author's own door, before anything is installed anywhere: a manifest file is held up to the
     // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
     // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.

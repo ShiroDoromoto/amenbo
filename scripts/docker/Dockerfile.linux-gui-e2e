@@ -9,11 +9,11 @@
 # suite (OS-independent feed → scope invalidation). It needs the AppImage (a full Linux
 # release build), so it rides the Linux GUI bundle workflow rather than every push.
 #
-# The base has to be no older than the runner that builds the amd64 CLI this image runs: that
-# binary links against the runner's glibc, and a base below it cannot load the binary at all.
-# The AppImage is built on an older base and loads here regardless — glibc carries old binaries
-# forward, never new ones back.
-FROM ubuntu:24.04
+# The base is the same Ubuntu 22.04 the AppImage and the CLI are built on, which makes this the
+# check that the distribution actually loads on its own floor: both binaries are copied in and run
+# here, and a build that drifted onto a newer glibc dies at startup with `GLIBC_2.xx not found`
+# before a single screenshot is taken.
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 

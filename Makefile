@@ -119,21 +119,29 @@ GUI_APPIMAGE_DIST := $(DIST_DIR)/amenbo-app-linux-$(LINUX_IMG_ARCH).AppImage
 HOST_GUI_ARCH     := $(if $(filter arm64,$(shell uname -m)),arm64,amd64)
 HOST_IMG_ARCH     := $(if $(filter arm64,$(HOST_GUI_ARCH)),aarch64,x86_64)
 GUI_APPIMAGE_HOST := $(DIST_DIR)/amenbo-app-linux-$(HOST_IMG_ARCH).AppImage
+# The shipped Linux CLI is built inside the SAME container as the GUI bundle, for an explicit arch.
+# That base (Ubuntu 22.04) is the floor of the whole Linux distribution: a CLI compiled on a newer
+# machine links a newer glibc and then refuses to start on the very systems the AppImage beside it
+# still runs on. amd64 is the default; override with LINUX_CLI_ARCH=arm64.
+LINUX_CLI_ARCH    ?= amd64
+CLI_LINUX_DIST    := $(DIST_DIR)/amenbo-linux-$(LINUX_CLI_ARCH)
 # The AppImage carries the GUI alone, so the e2e's separate writer — the CLI process the
-# check watches the webview react to — is brought in as its own binary. In release CI the
-# native CLI build has already put it here, so only a local run pays to produce it.
+# check watches the webview react to — is brought in as its own binary, built for the host arch.
 CLI_LINUX_HOST    := $(DIST_DIR)/amenbo-linux-$(HOST_GUI_ARCH)
 # The Linux clippy container (lint-linux) reuses Dockerfile.linux-gui but is built for
 # the HOST arch, so it gets its own tag: the same tag under two platforms would have the
 # dist image (amd64 by default) and this one overwrite each other on every build.
 LINUX_LINT_IMAGE  := amenbo-linux-lint:$(HOST_GUI_ARCH)
+# The CLI build image is that same Dockerfile again, for the arch being shipped — its own tag for
+# the same reason the lint has one (two platforms under one tag overwrite each other).
+LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 
 # What shellcheck covers = every tracked shell script. Enumeration is left to git, so a new .sh is
 # guarded automatically (nothing is forgotten). Shell embedded in workflows (`run:`) is not a file,
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac test doc-gate shell-gate comment-gate go-gate scopes-gate cli-name-gate selfupdate-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac test doc-gate shell-gate comment-gate go-gate scopes-gate cli-name-gate selfupdate-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -152,6 +160,7 @@ help:
 	@echo "make dist-gui     - build the prod GUI (mac dmg) with build-time signing into dist/ (a supplement for non-installer users; not a wharfy bundle)"
 	@echo "make dist-gui-mac - build the mac unified .pkg (GUI to /Applications, CLI to /usr/local/bin) into dist/ (the mac release bundle itself; Intel build via MAC_GUI_ARCH=amd64)"
 	@echo "make dist-gui-linux - build the Linux GUI AppImage in Docker into dist/ (needs Docker)"
+	@echo "make dist-cli-linux - build the shipped Linux CLI in the same Docker base as the AppImage, into dist/ (that base is the glibc floor of the distribution; LINUX_CLI_ARCH=arm64 for the other arch; needs Docker)"
 	@echo "make verify-gui-linux - exercise 'another process writes → the screen updates' on a real Linux GUI over Xvfb (needs Docker)"
 	@echo "make verify-network-linux - stand up real NFS/SMB and exercise store_watch's network-FS detection (needs Docker; also runs every time in CI)"
 	@echo "make verify-network-mac - the macOS version of the above (MNT_LOCAL detection). Mounts real SMB over loopback and exercises it (needs Docker)"
@@ -316,6 +325,27 @@ dist-gui-linux:
 	@echo "→ Linux GUI bundle built (arch=$(LINUX_GUI_ARCH)):"
 	@ls -1 $(DIST_DIR)/amenbo-app-linux-*.AppImage
 
+## Build the Linux CLI that ships, inside the same Ubuntu 22.04 container as the GUI bundle, and
+## collect it into dist/ as amenbo-linux-<arch>. Building it on whatever machine happens to run the
+## release instead links that machine's glibc into the binary, and a user on the oldest distribution
+## the AppImage supports gets `GLIBC_2.39 not found` the moment they run it — the container is what
+## keeps both halves of the distribution standing on one floor. Override the arch with
+## LINUX_CLI_ARCH=arm64. Needs Docker; the arch must be native (emulation only makes it slow).
+dist-cli-linux:
+	@command -v docker >/dev/null 2>&1 || { echo "✗ docker is required (the Linux CLI is built in a container)"; exit 1; }
+	@mkdir -p $(DIST_DIR)
+	docker build --platform linux/$(LINUX_CLI_ARCH) -f scripts/docker/Dockerfile.linux-gui -t $(LINUX_CLI_IMAGE) scripts/docker/
+	@# Named volumes carry the crates.io cache and the target dir across runs — shared with lint-linux,
+	@# which compiles the same workspace in the same image (in CI they are fresh every time).
+	docker run --rm --platform linux/$(LINUX_CLI_ARCH) \
+	  -e OUT_NAME=$(notdir $(CLI_LINUX_DIST)) \
+	  -v "amenbo-lint-registry-$(LINUX_CLI_ARCH):/root/.cargo/registry" \
+	  -v "amenbo-lint-target-$(LINUX_CLI_ARCH):/build/target" \
+	  -v "$(CURDIR):/src:ro" \
+	  -v "$(CURDIR)/$(DIST_DIR):/out" \
+	  $(LINUX_CLI_IMAGE) bash /src/scripts/docker/build-linux-cli.sh
+	@echo "→ Linux CLI built (arch=$(LINUX_CLI_ARCH)): $(CLI_LINUX_DIST)"
+
 ## The scenario that drives verify-gui-linux. The check reads its `steps_gui` road — the screen is
 ## what it judges — and that road's listed/present title is the card it writes and OCRs back;
 ## override to point the Linux check at another scenario.
@@ -354,21 +384,11 @@ verify-gui-linux: $(GUI_APPIMAGE_HOST) $(CLI_LINUX_HOST)
 $(GUI_APPIMAGE_HOST):
 	$(MAKE) dist-gui-linux LINUX_GUI_ARCH=$(HOST_GUI_ARCH)
 
-## The CLI the e2e writes with, built for Linux. Cross-compiling from the mac is not possible (the
-## same wall lint-linux describes), so it borrows the Linux image the lint uses — already carrying
-## the toolchain — and only produces the CLI. Release CI builds this natively before the e2e step,
-## so there this rule never fires.
+## The CLI the e2e writes with, built for Linux through the same recipe that builds the shipped one
+## (the check then runs the artifact a user would get, floor included). Release CI has already put
+## it here — the same recipe, run as its own job — so there this rule never fires.
 $(CLI_LINUX_HOST):
-	@command -v docker >/dev/null 2>&1 || { echo "✗ docker is required (the Linux CLI is built in a container)"; exit 1; }
-	@mkdir -p $(DIST_DIR)
-	docker build --platform linux/$(HOST_GUI_ARCH) -f scripts/docker/Dockerfile.linux-gui -t $(LINUX_LINT_IMAGE) scripts/docker/
-	docker run --rm --platform linux/$(HOST_GUI_ARCH) \
-	  -e OUT_NAME=$(notdir $(CLI_LINUX_HOST)) \
-	  -v "amenbo-lint-registry-$(HOST_GUI_ARCH):/root/.cargo/registry" \
-	  -v "amenbo-lint-target-$(HOST_GUI_ARCH):/build/target" \
-	  -v "$(CURDIR):/src:ro" \
-	  -v "$(CURDIR)/$(DIST_DIR):/out" \
-	  $(LINUX_LINT_IMAGE) bash /src/scripts/docker/build-linux-cli.sh
+	$(MAKE) dist-cli-linux LINUX_CLI_ARCH=$(HOST_GUI_ARCH)
 
 ## Stand up a real network FS (NFS/SMB) and exercise whether store_watch sees a store on it as
 ## "network" and wakes on polling. Get the detection wrong and the GUI misses other hosts' writes

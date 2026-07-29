@@ -144,13 +144,13 @@ jobs:
       - name: Show toolchain
         run: rustc --version && cargo --version
 
-      # amd64 CLI builds natively (wharfy `prebuilt`); the arm64 CLI is a separate
-      # native job (linux-arm-cli) so nothing here has to cross-compile.
+      # The amd64 CLI is built in the Ubuntu 22.04 container, not on the runner: the runner's glibc
+      # is newer than the floor the AppImage sets, and a natively built CLI stops dead with
+      # `GLIBC_2.39 not found` on the distributions the GUI beside it still runs on. Docker is
+      # preinstalled here and this runner is native amd64. The arm64 CLI is a separate native job
+      # (linux-arm-cli) running the same recipe, so nothing here has to cross-compile.
       - name: Build the Linux amd64 CLI
-        run: |
-          mkdir -p dist
-          cargo build --release -p amenbo-cli
-          cp target/release/amenbo dist/amenbo-linux-amd64
+        run: make dist-cli-linux LINUX_CLI_ARCH=amd64
 
       # The Linux GUI bundle (the AppImage, per-user and self-updating) builds in the
       # shared Docker recipe on this NATIVE amd64 runner, because Apple Silicon can't
@@ -198,17 +198,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Show toolchain
-        run: rustc --version && cargo --version
-
-      # Built natively on an arm64 runner (free for public repos) rather than
-      # cross-compiled — no zig, no emulation. arm64 ships the CLI only (the `script`
-      # channel + CLI archive); there is no arm64 Linux GUI bundle.
+      # On an arm64 runner (free for public repos) rather than cross-compiled — no zig, no
+      # emulation — and through the same 22.04 container as amd64, so both architectures carry the
+      # one glibc floor. arm64 ships the CLI only (the `script` channel + CLI archive); there is no
+      # arm64 Linux GUI bundle.
       - name: Build the Linux arm64 CLI
-        run: |
-          mkdir -p dist
-          cargo build --release -p amenbo-cli
-          cp target/release/amenbo dist/amenbo-linux-arm64
+        run: make dist-cli-linux LINUX_CLI_ARCH=arm64
 
       - uses: actions/upload-artifact@v7
         with:

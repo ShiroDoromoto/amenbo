@@ -496,6 +496,7 @@ mod tests {
             min_amenbo: None,
             config: Vec::new(),
             events: Vec::new(),
+            agent: None,
         }
     }
 

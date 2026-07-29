@@ -198,6 +198,7 @@ mod tests {
             min_amenbo: min_amenbo.map(str::to_string),
             config: Vec::new(),
             events: Vec::new(),
+            agent: None,
         }
     }
 

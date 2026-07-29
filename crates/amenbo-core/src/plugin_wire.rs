@@ -29,7 +29,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::plugin_manifest::{Asset, ConfigField, EventSubscription, Manifest, Os, Platform};
+use crate::plugin_manifest::{AgentGuide, Asset, ConfigField, EventSubscription, Manifest, Os, Platform};
 
 /// **What a browse view draws** — the half of a manifest that rides in `catalog.json`, which everyone
 /// fetches whole (`AMB-D-385`). Nothing an install needs is here, and that is the point: the signature
@@ -113,6 +113,14 @@ pub struct Detail {
     /// The observation events the plugin subscribes to (`AMB-D-383`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub events: Vec<EventSubscription>,
+    /// What the plugin says for itself at the AI's entry point (`AMB-D-437`).
+    ///
+    /// It rides here rather than in the list because it is read on the machine the plugin is installed and
+    /// enabled on, from the copy kept beside the binary — never while browsing, where `desc` is the line
+    /// a reader is shown. Putting it in the list would charge every reader for every plugin's usage notes
+    /// on a fetch that only draws names.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentGuide>,
 }
 
 /// Publish one validated manifest as the two documents the catalog serves (`AMB-D-385`).
@@ -147,6 +155,7 @@ pub fn split(manifest: &Manifest) -> (ListEntry, Detail) {
         min_amenbo: manifest.min_amenbo.clone(),
         config: manifest.config.clone(),
         events: manifest.events.clone(),
+        agent: manifest.agent.clone(),
     };
     (entry, detail)
 }
@@ -182,6 +191,7 @@ pub fn join(entry: &ListEntry, detail: &Detail) -> Manifest {
         min_amenbo: detail.min_amenbo.clone(),
         config: detail.config.clone(),
         events: detail.events.clone(),
+        agent: detail.agent.clone(),
     }
 }
 
@@ -216,6 +226,10 @@ mod tests {
             "min_amenbo": "1.8.0",
             "config": [{ "key": "base", "label": "Base branch", "secret": false, "required": false }],
             "events": [{ "event": "task.status_changed", "faces": ["cli"], "reply": true }],
+            "agent": {
+                "when": "Starting work on a task that will produce commits",
+                "commands": [{ "cmd": "start <task-id>", "does": "Cuts a worktree and returns the cd line" }],
+            },
         }))
         .expect("the fixture is a manifest")
     }
@@ -283,6 +297,8 @@ mod tests {
         assert_eq!(detail.events.len(), 1);
         assert_eq!(detail.events[0].faces, vec![Face::Cli]);
         assert!(detail.events[0].reply, "and the reply the subscription asked for survives the split");
+        let agent = detail.agent.as_ref().expect("what the plugin says for itself installs, not browses");
+        assert_eq!(agent.commands[0].cmd, "start <task-id>", "the author's face, prefix-free");
     }
 
     /// **The two documents put back together are the manifest they came from.** What an install works
@@ -327,7 +343,7 @@ mod tests {
         let (entry, detail) = split(&bare);
 
         let detail_json = serde_json::to_value(&detail).unwrap();
-        for absent in ["signature", "assets", "min_amenbo", "config", "events"] {
+        for absent in ["signature", "assets", "min_amenbo", "config", "events", "agent"] {
             assert!(detail_json.get(absent).is_none(), "{absent} was not written, so it is not emitted");
         }
         assert_eq!(detail_json["payload_v"], 1);

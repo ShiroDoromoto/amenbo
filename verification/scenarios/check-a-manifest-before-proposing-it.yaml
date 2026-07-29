@@ -5,10 +5,11 @@
 id: check-a-manifest-before-proposing-it
 title: A manifest passes the catalog rules, and a broken one is turned down by the rule it broke
 description: >
-  Write a manifest the way an author would, hold it up to the rules, and have it pass. Then break one
-  rule at a time — an asset URL that is not https, and a file that does not even parse — and read back
-  not just that it failed but which rule it failed on. A check that says "invalid" for the wrong
-  reason is a check an author cannot act on.
+  Write a manifest the way an author would — the words the plugin will say for itself at the AI's entry
+  point included — hold it up to the rules, and have it pass. Then break one rule at a time — an asset
+  URL that is not https, an agent block that names no occasion, and a file that does not even parse —
+  and read back not just that it failed but which rule it failed on. A check that says "invalid" for the
+  wrong reason is a check an author cannot act on.
 steps_cli:
   - type: action
     domain: repo
@@ -40,6 +41,11 @@ steps_cli:
             label: Base branch
             secret: false
             required: false
+        agent:
+          when: SCENARIO — when an AI should reach for this plugin
+          commands:
+            - cmd: start <task-id>
+              does: Does the thing, and returns the line the caller uses
 
   - type: assert
     domain: plugin
@@ -88,6 +94,48 @@ steps_cli:
       path: not-https.yaml
       ok: false
       problem: bad_url
+
+  # What a plugin says for itself is the author's own words, and amenbo never rules on them — but a block
+  # that names no occasion says nothing an AI can act on, so the door turns it down like any other empty
+  # line rather than relaying a blank.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: silent-agent.yaml
+      content: |
+        name: scenario-plugin
+        desc: SCENARIO — the same manifest, naming no occasion to reach for it
+        author: amenbo
+        repo: ShiroDoromoto/amenbo-plugin-worktree
+        os:
+          - macos
+          - linux
+        category: workflow
+        assets:
+          macos:
+            url: https://example.com/scenario-plugin-v1-macos.tar.gz
+            checksum: sha256:a6c1027eb54606d4f5e67176faeefefff3b64161b03fd76faff5908e093bf07c
+          linux-x64:
+            url: https://example.com/scenario-plugin-v1-linux-x64.tar.gz
+            checksum: sha256:f74ec13fc4341dba8bb64071651f86fb374bb932e0f15a8799bed8de014c06ac
+          linux-arm64:
+            url: https://example.com/scenario-plugin-v1-linux-arm64.tar.gz
+            checksum: sha256:a3b1ae53a6650e05673783d9d9e686b03c31582d488639a5af667f87e90988a5
+        payload_v: 1
+        agent:
+          when: ""
+          commands:
+            - cmd: start <task-id>
+              does: Does the thing, and returns the line the caller uses
+
+  - type: assert
+    domain: plugin
+    op: validated
+    with:
+      path: silent-agent.yaml
+      ok: false
+      problem: empty
 
   # The other half of a fail-closed door: a file missing a field the rules cannot even begin without.
   # It never becomes a manifest, so there is no rule to point at — and it still has to come back as a

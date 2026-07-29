@@ -242,6 +242,7 @@ mod tests {
             min_amenbo: None,
             config,
             events: events.iter().map(|e| EventSubscription::new(*e)).collect(),
+            agent: None,
         }
     }
 

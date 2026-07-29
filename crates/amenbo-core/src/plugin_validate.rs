@@ -62,6 +62,19 @@ pub const MAX_CONFIG_FIELDS: usize = 32;
 /// (`AMB-D-356`, the safe floor). Bounds the schema as a whole, complementing the per-field caps.
 pub const MAX_CONFIG_SCHEMA_BYTES: usize = 8 * 1024;
 
+/// The longest the agent block's `when` line may be (characters) — one line at the AI's entry point
+/// (`AMB-D-437`), capped like every other one-line field.
+pub const MAX_AGENT_WHEN_LEN: usize = 200;
+/// The longest one agent command's `cmd` may be (characters). Shorter than the prose caps: it is a
+/// subcommand and its arguments, not a sentence.
+pub const MAX_AGENT_CMD_LEN: usize = 120;
+/// The longest one agent command's `does` line may be (characters).
+pub const MAX_AGENT_DOES_LEN: usize = 200;
+/// The most commands one plugin may name in its agent block (`AMB-D-437`, the same safe floor the config
+/// schema keeps). Every one of them is read into an AI's context on every `agent --json`, so the ceiling
+/// is what stops one manifest from crowding out the document it is a guest in.
+pub const MAX_AGENT_COMMANDS: usize = 16;
+
 /// Ids reserved beyond the disk-layout name (`registry`, via [`is_reserved_plugin_name`]): the badge word
 /// and amenbo's own namespace (`AMB-D-360`). Kept small on purpose — the strict id grammar plus command
 /// namespacing (`AMB-D-346`, a plugin's commands are namespaced by its id) already prevent a plugin from
@@ -101,7 +114,8 @@ pub enum ProblemCode {
     EmptyOs,
     /// A value appears more than once where it must be unique (an OS, a config key).
     Duplicate,
-    /// The config schema declares more fields than the cap.
+    /// A declared list holds more entries than its cap — the config schema's fields, an agent block's
+    /// commands.
     TooManyFields,
     /// The config schema exceeds the total-size cap.
     SchemaTooLarge,
@@ -214,6 +228,7 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
     check_os(&mut problems, &m.os);
     check_config(&mut problems, m);
     check_events(&mut problems, m);
+    check_agent(&mut problems, m);
 
     problems
 }
@@ -587,10 +602,42 @@ fn check_events(problems: &mut Vec<Problem>, m: &Manifest) {
     }
 }
 
+/// Check the agent block against the same floor every other author-written text keeps (`AMB-D-437`): the
+/// `when` line and each command's two lines are one-line fields — non-empty, control-char-free, capped —
+/// and the command list has a ceiling.
+///
+/// The block is optional, so a manifest without one has nothing here to break. What it says is never
+/// judged: amenbo has no vocabulary for what a third party's plugin is for, and a door that ruled on the
+/// wording would be the body of knowledge `AMB-D-437` deliberately refuses to hold. It rules on the shape
+/// alone — enough that a line cannot break the entry-point document it lands in, and that a block claiming
+/// to name an occasion actually names one.
+fn check_agent(problems: &mut Vec<Problem>, m: &Manifest) {
+    let Some(agent) = &m.agent else { return };
+
+    check_line(problems, "agent.when", &agent.when, MAX_AGENT_WHEN_LEN);
+    if agent.commands.len() > MAX_AGENT_COMMANDS {
+        problems.push(Problem::new(
+            "agent.commands",
+            ProblemCode::TooManyFields,
+            format!(
+                "agent names too many commands ({}; max {MAX_AGENT_COMMANDS})",
+                agent.commands.len()
+            ),
+        ));
+    }
+    for (i, command) in agent.commands.iter().enumerate() {
+        check_line(problems, &format!("agent.commands[{i}].cmd"), &command.cmd, MAX_AGENT_CMD_LEN);
+        check_line(problems, &format!("agent.commands[{i}].does"), &command.does, MAX_AGENT_DOES_LEN);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin_manifest::{Arch, Asset, ConfigField, EventSubscription, Face, Manifest, Os, Platform};
+    use crate::plugin_manifest::{
+        AgentCommand, AgentGuide, Arch, Asset, ConfigField, EventSubscription, Face, Manifest, Os,
+        Platform,
+    };
 
     /// An arch-agnostic platform key (`<os>`).
     fn plat(os: Os) -> Platform {
@@ -624,6 +671,8 @@ mod tests {
             // signature (provenance) and events (subscription) are other boundaries' to validate — the
             // manifest-shape validator here neither reads nor checks them.
             signature: None,
+            // The agent block is optional; the tests below are the ones that put one in.
+            agent: None,
             // The one-file form: this manifest's single url serves both the OSes it lists.
             assets: Default::default(),
             events: Vec::new(),
@@ -900,6 +949,96 @@ mod tests {
             assert!(codes(&problems).contains(&ProblemCode::ReplyNeedsCli), "{:?}", codes(&problems));
             assert!(problems.iter().any(|p| p.location == "events[0].reply"));
         }
+    }
+
+    // ---- agent (`AMB-D-437`) ----
+
+    /// A well-formed block, and the two shapes an author may write: with a command face, and with none.
+    #[test]
+    fn an_agent_block_is_valid_with_or_without_commands() {
+        let mut m = valid();
+        m.agent = Some(AgentGuide {
+            when: "Starting work on a task that will produce commits".into(),
+            commands: vec![AgentCommand {
+                cmd: "start <task-id>".into(),
+                does: "Cuts a worktree outside the repo and returns the cd line to eval".into(),
+            }],
+        });
+        assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
+
+        // An observation-only plugin names its occasion and stops there.
+        m.agent = Some(AgentGuide { when: "Never — it only watches".into(), commands: vec![] });
+        assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
+
+        // And declaring no block at all is the ordinary case.
+        m.agent = None;
+        assert!(validate_manifest(&m).is_empty());
+    }
+
+    #[test]
+    fn an_agent_block_that_names_no_occasion_is_refused() {
+        let mut m = valid();
+        m.agent = Some(AgentGuide { when: String::new(), commands: vec![] });
+        let problems = validate_manifest(&m);
+        assert!(codes(&problems).contains(&ProblemCode::Empty));
+        assert!(problems.iter().any(|p| p.location == "agent.when"), "{problems:?}");
+    }
+
+    /// The lines are one-line fields, and each is located precisely enough for an author to fix it.
+    #[test]
+    fn an_agent_line_that_breaks_the_one_line_floor_is_refused() {
+        let over = |n: usize| "x".repeat(n + 1);
+        let cases: [(&str, AgentGuide); 4] = [
+            (
+                "agent.when",
+                AgentGuide { when: over(MAX_AGENT_WHEN_LEN), commands: vec![] },
+            ),
+            (
+                "agent.commands[0].cmd",
+                AgentGuide {
+                    when: "w".into(),
+                    commands: vec![AgentCommand { cmd: over(MAX_AGENT_CMD_LEN), does: "d".into() }],
+                },
+            ),
+            (
+                "agent.commands[0].does",
+                AgentGuide {
+                    when: "w".into(),
+                    commands: vec![AgentCommand { cmd: "c".into(), does: over(MAX_AGENT_DOES_LEN) }],
+                },
+            ),
+            (
+                "agent.commands[0].does",
+                AgentGuide {
+                    when: "w".into(),
+                    commands: vec![AgentCommand { cmd: "c".into(), does: "one\ntwo".into() }],
+                },
+            ),
+        ];
+        for (location, agent) in cases {
+            let mut m = valid();
+            m.agent = Some(agent);
+            let problems = validate_manifest(&m);
+            assert!(
+                problems.iter().any(|p| p.location == location),
+                "{location} must be reported: {problems:?}"
+            );
+        }
+    }
+
+    /// Every command is read into an AI's context on every `agent --json`, so the list has a ceiling.
+    #[test]
+    fn too_many_agent_commands_is_refused() {
+        let mut m = valid();
+        m.agent = Some(AgentGuide {
+            when: "w".into(),
+            commands: (0..MAX_AGENT_COMMANDS + 1)
+                .map(|i| AgentCommand { cmd: format!("c{i}"), does: "does".into() })
+                .collect(),
+        });
+        let problems = validate_manifest(&m);
+        assert!(codes(&problems).contains(&ProblemCode::TooManyFields));
+        assert!(problems.iter().any(|p| p.location == "agent.commands"), "{problems:?}");
     }
 
     // ---- min_amenbo ----

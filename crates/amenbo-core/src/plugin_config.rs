@@ -317,6 +317,7 @@ mod tests {
             min_amenbo: None,
             config,
             events: Vec::new(),
+            agent: None,
         };
         let home = paths.plugin_dir(name);
         std::fs::create_dir_all(&home).unwrap();

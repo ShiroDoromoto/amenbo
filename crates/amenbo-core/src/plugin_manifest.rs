@@ -477,6 +477,11 @@ pub struct Manifest {
     /// `config`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub events: Vec<EventSubscription>,
+    /// **What this plugin says for itself at the AI's entry point** (`AMB-D-437`) — see [`AgentGuide`].
+    /// Absent means it says nothing there, which is what every manifest written before this field says:
+    /// the block is additive, so it moves neither `payload_v` nor `min_amenbo`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentGuide>,
 }
 
 impl Manifest {
@@ -558,6 +563,54 @@ pub struct ConfigField {
     /// means `false`.
     #[serde(default)]
     pub required: bool,
+}
+
+/// **How a plugin names itself where an AI reads how to work here** (`AMB-D-437`): the occasion to reach
+/// for it, and the calls it answers.
+///
+/// `amenbo agent --json` is the one document an AI is pointed at, and a plugin the user installed and
+/// enabled is part of the answer that document owes. amenbo has no words of its own for what a third
+/// party's plugin is for, so what rides there is what the author wrote here — read at run time, never
+/// written into amenbo's source (`AMB-D-346`). A plugin renamed or retired takes its own sentences with it.
+///
+/// ```yaml
+/// agent:
+///   when: when to reach for this plugin (one line)
+///   commands:
+///     - cmd: <subcommand and arguments>
+///       does: what it does, and what it returns (one line)
+/// ```
+///
+/// **The calling form is amenbo's to build.** [`cmd`](AgentCommand::cmd) holds the plugin's own command
+/// face alone; the entry point puts `amenbo plugin run <name> ` in front of it from the name it just read,
+/// so an AI receives a line it can type. An author writing the whole line would be writing their own name
+/// into it, which is the one thing this shape keeps out.
+///
+/// **The text is the author's one language.** amenbo's own entry point carries its wording in more than
+/// one, and it holds no translation for a plugin's — what was written is what is relayed.
+///
+/// **Shape only, like the rest of this module**: that `when` says something, and how long and how many the
+/// lines may be, are the validator's (`AMB-D-354`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentGuide {
+    /// The one line saying when to reach for this plugin — required, since a block naming no occasion
+    /// gives a reader nothing to act on.
+    pub when: String,
+    /// The plugin's command face, one entry per call. Absent means none: a plugin whose whole surface is
+    /// observation hooks names its occasion and stops there (`AMB-D-437`). An empty list does not
+    /// serialize, so the absent and the empty forms stay one document — the rule `config` and `events`
+    /// already follow.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<AgentCommand>,
+}
+
+/// One call an author puts on the record (`AMB-D-437`): what to type, and what comes back.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentCommand {
+    /// The subcommand and its arguments — without the `amenbo plugin run <name>` the reader prepends.
+    pub cmd: String,
+    /// One line: what the call does, and what it returns.
+    pub does: String,
 }
 
 #[cfg(test)]
@@ -924,6 +977,65 @@ mod tests {
         assert_eq!(Face::Gui.as_str(), "gui");
         assert_eq!(serde_json::to_value(Face::Cli).unwrap(), serde_json::json!("cli"));
         assert_eq!(serde_json::from_value::<Face>(serde_json::json!("gui")).unwrap(), Face::Gui);
+    }
+
+    /// The block is optional, and its absence is what every manifest written before it says (`AMB-D-437`):
+    /// no key on the way in, no key on the way out.
+    #[test]
+    fn no_agent_block_is_a_plugin_that_says_nothing_at_the_entry_point() {
+        let m: Manifest = serde_json::from_value(full_json()).unwrap();
+        assert!(m.agent.is_none(), "no `agent` key ⇒ nothing to relay");
+        assert!(serde_json::to_value(&m).unwrap().get("agent").is_none());
+    }
+
+    #[test]
+    fn an_agent_block_round_trips() {
+        let mut v = full_json();
+        v["agent"] = serde_json::json!({
+            "when": "タスクに着手して、コミットを産む作業を隔離したいとき",
+            "commands": [
+                { "cmd": "start <task-id>", "does": "リポ外に worktree を切り、cd 行を返す" },
+                { "cmd": "finish <task-id>", "does": "worktree を畳む" },
+            ],
+        });
+        let m: Manifest = serde_json::from_value(v.clone()).unwrap();
+        let agent = m.agent.as_ref().expect("the block parsed");
+        assert_eq!(agent.commands.len(), 2);
+        assert_eq!(agent.commands[0].cmd, "start <task-id>", "the author's own face, with no prefix");
+        assert_eq!(serde_json::to_value(&m).unwrap()["agent"], v["agent"]);
+    }
+
+    /// A plugin whose whole surface is observation hooks names its occasion and stops there — and an
+    /// empty command list re-emits as no key at all, the same absent-equals-empty rule `config` follows.
+    #[test]
+    fn an_agent_block_may_name_no_commands() {
+        let mut v = full_json();
+        v["agent"] = serde_json::json!({ "when": "何もしない — 見ているだけ" });
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        assert!(m.agent.as_ref().unwrap().commands.is_empty());
+        assert_eq!(
+            serde_json::to_value(&m).unwrap()["agent"],
+            serde_json::json!({ "when": "何もしない — 見ているだけ" })
+        );
+    }
+
+    #[test]
+    fn an_agent_block_missing_a_required_line_does_not_parse() {
+        // The shape half of the door: `when` is the block, and a command is both halves of a call.
+        let mut no_when = full_json();
+        no_when["agent"] = serde_json::json!({ "commands": [{ "cmd": "start", "does": "cuts one" }] });
+        assert!(serde_json::from_value::<Manifest>(no_when).is_err(), "a block must name its occasion");
+
+        for field in ["cmd", "does"] {
+            let mut v = full_json();
+            let mut command = serde_json::json!({ "cmd": "start", "does": "cuts one" });
+            command.as_object_mut().unwrap().remove(field);
+            v["agent"] = serde_json::json!({ "when": "w", "commands": [command] });
+            assert!(
+                serde_json::from_value::<Manifest>(v).is_err(),
+                "a command missing `{field}` must not parse"
+            );
+        }
     }
 
     #[test]

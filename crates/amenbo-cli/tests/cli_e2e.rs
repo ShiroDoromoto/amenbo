@@ -4520,13 +4520,14 @@ fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {
 }
 
 
-/// `plugin config set/get`: the author's schema decides the keys, their `secret` flag decides where the
-/// value is kept, and `--scope` picks the text tier. A secret never comes back out of `get`.
+/// `plugin config set/get`: the author's schema decides the keys and their `secret` flag decides which
+/// table the value is kept in — either way it is the bound project's, with no tier under it
+/// (`AMB-D-434`). A secret never comes back out of `get`.
 #[test]
 fn plugin_config_writes_by_the_authors_schema_and_never_echoes_a_secret() {
     let cli = Cli::new();
-    // The project tier needs a bound folder: which project `--scope project` means is never named on the
-    // command line, it is the binding (an AI has no other route to one).
+    // A setting belongs to a project, and which one is never named on the command line: it is the
+    // binding (an AI has no other route to one).
     cli.run(&["init", "--name", "tester"]);
     install_plugin(
         &cli,
@@ -4537,36 +4538,32 @@ fn plugin_config_writes_by_the_authors_schema_and_never_echoes_a_secret() {
         ]),
     );
 
-    // A text field lands in the machine default by default, and reads back at that tier.
+    // A text field lands in this project's row, and reads back from it.
     let set = cli.json(&["plugin", "config", "set", "slack", "events", "push,merge", "--json"]);
     assert_eq!(set["action"], "plugin.config.set");
     assert_eq!(set["secret"], false);
-    assert_eq!(set["scope"], "machine");
+    assert!(set["project"].is_number(), "the write says which project it was for");
     let got = cli.json(&["plugin", "config", "get", "slack", "events", "--json"]);
     assert_eq!(got["value"], "push,merge");
     assert_eq!(got["set"], true);
 
-    // The project tier is a separate slot: writing it leaves the machine default alone.
-    cli.json(&["plugin", "config", "set", "slack", "events", "merge", "--scope", "project", "--json"]);
-    let proj = cli.json(&["plugin", "config", "get", "slack", "events", "--scope", "project", "--json"]);
-    assert_eq!(proj["value"], "merge");
-    assert_eq!(proj["scope"], "project");
-    let machine = cli.json(&["plugin", "config", "get", "slack", "events", "--json"]);
-    assert_eq!(machine["value"], "push,merge", "the project override did not touch the machine default");
-
     // An empty value clears rather than storing a blank — the same door for set and unset.
-    cli.json(&["plugin", "config", "set", "slack", "events", "", "--scope", "project", "--json"]);
-    let cleared = cli.json(&["plugin", "config", "get", "slack", "events", "--scope", "project", "--json"]);
+    cli.json(&["plugin", "config", "set", "slack", "events", "", "--json"]);
+    let cleared = cli.json(&["plugin", "config", "get", "slack", "events", "--json"]);
     assert_eq!(cleared["set"], false);
     assert!(cleared["value"].is_null());
 
-    // A secret goes to the user-area file, off the store, and `-` keeps it off argv.
+    // There is no tier to name any more.
+    let (_, no_scope) =
+        cli.run(&["plugin", "config", "set", "slack", "events", "x", "--scope", "project", "--json"]);
+    assert_eq!(no_scope, 2, "--scope is gone");
+
+    // A secret goes to the table of its own, and `-` keeps it off argv.
     let sec = cli.json_stdin(
         &["plugin", "config", "set", "slack", "webhook_url", "-", "--json"],
         "https://hooks.example.com/T0P-53CR3T\n",
     );
     assert_eq!(sec["secret"], true);
-    assert_eq!(sec["scope"], "secret file", "a secret ignores the text tiers");
     let (out, err, code) = cli.run_both(&["plugin", "config", "get", "slack", "webhook_url", "--json"]);
     assert_eq!(code, 0);
     let v: Value = serde_json::from_str(&out).unwrap();

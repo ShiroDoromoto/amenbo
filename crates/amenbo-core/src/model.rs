@@ -351,24 +351,47 @@ pub struct TaskCommit {
     pub updated_at: Timestamp,
 }
 
-/// A **per-project override of a plugin's text (non-secret) config value** (`AMB-D-356` / `AMB-D-350`).
-/// One row per `(project, plugin, field)`: the value here takes precedence, for this project, over the
-/// machine default a plugin field carries in `config.json` ([`crate::config::Config::plugin_config`]).
-/// This is the upper of the two text tiers; a `secret` field is never one of these — it lives in the
-/// user-area secret file ([`crate::plugin_secret`]), off the store and off every backup. `plugin` is the
-/// plugin's manifest name (plugins live on disk, not in the store, so there is no id for it) and
-/// `field_key` the config field's key. Unlike `hook_optout` this is a real record, carried by
-/// `export`/`backup` — text config lives in the ordinary tiers, backup included.
+/// A **plugin's text (non-secret) config value in one project** (`AMB-D-434` / `AMB-D-356`). One row per
+/// `(project, plugin, field)`, and that row is the whole answer: a plugin is a project's, so there is no
+/// tier under this for the value to fall back to. A `secret` field is never one of these — it is a
+/// [`PluginSecret`], the table an `export` must leave behind. `plugin` is the plugin's manifest name (plugins
+/// live on disk, not in the store, so there is no id for it) and `field_key` the config field's key.
+/// Unlike `hook_optout` this is a real record, carried by `export`/`backup`.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct PluginConfigOverride {
+pub struct PluginConfigValue {
     pub id: i64,
-    /// The project this override applies to.
+    /// The project this value belongs to.
     pub project_id: i64,
     /// The plugin's manifest name.
     pub plugin: String,
     /// The config field's key (spelled out because `key` is a SQLite keyword).
     pub field_key: String,
-    /// The overriding value.
+    /// The value.
+    pub value: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// A **plugin's secret config value in one project** (`AMB-D-434`): the same shape and the same address as
+/// [`PluginConfigValue`], in a table of its own because its rows may travel to fewer places. A backup
+/// carries it — the road back to one's own machine, where dropping the secrets would mean typing every
+/// credential in again — and an export must not, that being the one-way door out to another tool. The
+/// separation is a whole table rather than a flag on a row so that the exclusion holds for a path nobody
+/// remembered to teach.
+///
+/// The value is never handed back to a face; it is read at the moment a plugin runs and injected as an
+/// environment variable ([`crate::plugin_inject`]).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PluginSecret {
+    pub id: i64,
+    /// The project this secret belongs to.
+    pub project_id: i64,
+    /// The plugin's manifest name.
+    pub plugin: String,
+    /// The config field's key (spelled out because `key` is a SQLite keyword).
+    pub field_key: String,
+    /// The secret value, in plaintext — at-rest secrecy is the OS's full-disk encryption, the same
+    /// delegation the truth source itself makes.
     pub value: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -379,7 +402,7 @@ pub struct PluginConfigOverride {
 /// absence is simply off, and turning it off deletes the row rather than storing a `false`.
 ///
 /// The row is also the whole of it: turning a plugin on is itself the permission to run its code
-/// (`AMB-D-434`), so nothing sits beside this to be carried separately. Like [`PluginConfigOverride`] it
+/// (`AMB-D-434`), so nothing sits beside this to be carried separately. Like [`PluginConfigValue`] it
 /// is a real record, carried by `export`/`backup` — a restore that dropped it would silently switch a
 /// project's plugins off, and one that keeps it brings the plugin back on where it was.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

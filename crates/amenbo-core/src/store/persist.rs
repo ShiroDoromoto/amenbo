@@ -574,10 +574,10 @@ impl Store {
         self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::commit::remove(tx, id, sha))
     }
 
-    /// Set (`Some`) or clear (`None`) the per-project override of a plugin text field (one operation = one
+    /// Set (`Some`) or clear (`None`) one plugin text field's value in a project (one operation = one
     /// transaction). Returns whether anything changed. The value is validated at the config write boundary
     /// ([`crate::plugin_config::set`]) before it reaches here; reach is guarded by `WriteTarget::Project`.
-    pub fn set_plugin_config_override(
+    pub fn set_plugin_config_value(
         &mut self,
         project_id: i64,
         plugin: &str,
@@ -589,7 +589,22 @@ impl Store {
         })
     }
 
-    /// Erase every per-project override of one plugin, device-wide (one operation = one transaction) —
+    /// The secret twin of [`Self::set_plugin_config_value`] — the same operation against the table an
+    /// `export` must leave (`AMB-D-434`). Which of the two a value goes to is the config write
+    /// boundary's call, made from the author's `secret` flag alone.
+    pub fn set_plugin_secret(
+        &mut self,
+        project_id: i64,
+        plugin: &str,
+        field_key: &str,
+        value: Option<&str>,
+    ) -> Result<bool> {
+        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+            crate::ops::plugin_secret::set(tx, project_id, plugin, field_key, value)
+        })
+    }
+
+    /// Erase every project's settings for one plugin, device-wide (one operation = one transaction) —
     /// the store half of `plugin uninstall` (`AMB-D-357`). Returns how many rows went.
     ///
     /// **Deliberately unguarded by project reach**, the only write here that is: what it deletes is one
@@ -598,6 +613,12 @@ impl Store {
     /// name alone — no caller can aim this at a project's tasks, decisions or comments.
     pub fn forget_plugin_config(&mut self, plugin: &str) -> Result<usize> {
         self.write_one(&[], |tx| crate::ops::plugin_config::forget_plugin(tx, plugin))
+    }
+
+    /// The secret twin of [`Self::forget_plugin_config`], unguarded for the same reason — and the one
+    /// purge an uninstall runs unconditionally (`AMB-D-357`: a secret must never outlive the plugin).
+    pub fn forget_plugin_secrets(&mut self, plugin: &str) -> Result<usize> {
+        self.write_one(&[], |tx| crate::ops::plugin_secret::forget_plugin(tx, plugin))
     }
 
     /// Put a plugin's gate in this project into `on` (one operation = one transaction): `true` writes the

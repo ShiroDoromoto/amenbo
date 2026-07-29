@@ -105,7 +105,7 @@ pub fn prepare(
         ));
     }
 
-    let injection = plugin_inject::resolve(store, name, &plugin.manifest.config, Some(project))?;
+    let injection = plugin_inject::resolve(store, name, &plugin.manifest.config, project)?;
     let mut invocation =
         PluginInvocation::new(plugin.program).stdin_json(command_stdin(injection.text));
     for arg in args {

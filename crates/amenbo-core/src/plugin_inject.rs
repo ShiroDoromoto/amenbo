@@ -7,18 +7,17 @@
 //! splits the results the same way the flag says they travel to the child:
 //!
 //! - **secret** ⇒ an **environment variable** ([`Injection::env`]), off argv and off logs, named
-//!   [`secret_env_name`]. The value is pulled from the user-area secret file
-//!   ([`crate::plugin_secret`]) — never the store.
+//!   [`secret_env_name`].
 //! - **text** ⇒ a JSON object ([`Injection::text`]) the caller places on the child's **stdin**, under the
-//!   payload's config key. The value is the **effective** one: a project override
-//!   ([`Scope::Project`]) when the run has a project and one is set, otherwise the machine default
-//!   ([`Scope::MachineDefault`]).
-//!   Reading the effective value — applying the two-tier precedence — is this layer's, not the boundary's
-//!   (the boundary reads one tier verbatim; see [`crate::plugin_config::get`]).
+//!   payload's config key.
+//!
+//! Both are read for the **project the run is for** and no other (`AMB-D-434`): a plugin is a project's,
+//! so there is one value per field per project and no tier to resolve on the way out. Every run has a
+//! project — an event that cannot name one fires nothing.
 //!
 //! **Only this plugin's config is injected.** [`resolve`] is handed one plugin's schema and reads only that
 //! plugin's stored values, so a plugin never sees another's settings — the central-injection promise of
-//! `AMB-D-356` (a plugin reads no secret file of its own; amenbo hands it exactly, and only, its own).
+//! `AMB-D-356` (a plugin reads nothing of its own; amenbo hands it exactly, and only, its own).
 //!
 //! An **unset** field contributes nothing: no env var, no stdin key. Only a field with a value set (the
 //! same "not provided is unset" reading the write boundary uses) is injected. This layer does not launch
@@ -29,7 +28,7 @@
 use serde_json::{Map, Value};
 
 use crate::error::Result;
-use crate::plugin_config::{self, Scope};
+use crate::plugin_config;
 use crate::plugin_manifest::ConfigField;
 use crate::store::Store;
 
@@ -75,34 +74,24 @@ pub struct Injection {
 /// (`AMB-D-356` / `AMB-T-2016`), reading only *this* plugin's stored values.
 ///
 /// `fields` is the plugin's manifest config schema; each field carries the author's `secret` flag, which
-/// decides both where the value was stored and how it is injected. `project` is the run's project context
-/// (the write path always has one; `None` falls back to the machine default alone). A field with no value
-/// set contributes nothing.
+/// decides both where the value was stored and how it is injected. `project` is the run's project — the
+/// only one whose values this run may see. A field with no value set contributes nothing.
 pub fn resolve(
     store: &Store,
     plugin: &str,
     fields: &[ConfigField],
-    project: Option<i64>,
+    project: i64,
 ) -> Result<Injection> {
     let mut injection = Injection::default();
     for field in fields {
+        let Some(value) = plugin_config::get(store, field, plugin, project)? else {
+            continue;
+        };
         if field.secret {
-            // Secret: the user-area secret file (scope is ignored for a secret). Injected off argv/logs.
-            if let Some(value) = plugin_config::get(store, field, plugin, Scope::MachineDefault)? {
-                injection.env.push((secret_env_name(&field.key), value));
-            }
+            // Off argv and off logs — an environment variable on the child process.
+            injection.env.push((secret_env_name(&field.key), value));
         } else {
-            // Text: the effective value — a project override on top of the machine default.
-            let value = match project {
-                Some(project_id) => match plugin_config::get(store, field, plugin, Scope::Project(project_id))? {
-                    Some(v) => Some(v),
-                    None => plugin_config::get(store, field, plugin, Scope::MachineDefault)?,
-                },
-                None => plugin_config::get(store, field, plugin, Scope::MachineDefault)?,
-            };
-            if let Some(value) = value {
-                injection.text.insert(field.key.clone(), Value::String(value));
-            }
+            injection.text.insert(field.key.clone(), Value::String(value));
         }
     }
     Ok(injection)
@@ -151,11 +140,12 @@ mod tests {
     #[test]
     fn a_secret_rides_env_and_text_rides_stdin() {
         let (mut store, _dir) = store_at("split");
-        plugin_config::set(&mut store, &secret_field("webhook_url"), "slack", "https://hooks/x", Scope::MachineDefault).unwrap();
-        plugin_config::set(&mut store, &text_field("events"), "slack", "push,merge", Scope::MachineDefault).unwrap();
+        let p = new_project(&mut store, "proj");
+        plugin_config::set(&mut store, &secret_field("webhook_url"), "slack", p, "https://hooks/x").unwrap();
+        plugin_config::set(&mut store, &text_field("events"), "slack", p, "push,merge").unwrap();
 
         let fields = [secret_field("webhook_url"), text_field("events")];
-        let inj = resolve(&store, "slack", &fields, None).unwrap();
+        let inj = resolve(&store, "slack", &fields, p).unwrap();
 
         // Secret → env, never text.
         assert_eq!(inj.env, vec![("AMENBO_CONFIG_WEBHOOK_URL".to_string(), "https://hooks/x".to_string())]);
@@ -164,38 +154,29 @@ mod tests {
         assert!(inj.text.get("webhook_url").is_none(), "a secret never appears in the stdin JSON");
     }
 
+    /// A run sees the values of the project it is for, and no other project's (`AMB-D-434`).
     #[test]
-    fn a_text_field_reads_its_effective_value_project_over_machine() {
-        let (mut store, _dir) = store_at("effective");
-        let project = new_project(&mut store, "proj");
-        plugin_config::set(&mut store, &text_field("events"), "slack", "default", Scope::MachineDefault).unwrap();
-        plugin_config::set(&mut store, &text_field("events"), "slack", "for-proj", Scope::Project(project)).unwrap();
+    fn a_field_reads_the_value_of_the_project_the_run_is_for() {
+        let (mut store, _dir) = store_at("per-project");
+        let (here, elsewhere) = (new_project(&mut store, "here"), new_project(&mut store, "elsewhere"));
+        plugin_config::set(&mut store, &text_field("events"), "slack", here, "for-here").unwrap();
+        plugin_config::set(&mut store, &text_field("events"), "slack", elsewhere, "for-elsewhere").unwrap();
 
-        // With the project context, the override wins.
-        let with_project = resolve(&store, "slack", &[text_field("events")], Some(project)).unwrap();
-        assert_eq!(with_project.text.get("events"), Some(&Value::String("for-proj".to_string())));
+        let inj = resolve(&store, "slack", &[text_field("events")], here).unwrap();
+        assert_eq!(inj.text.get("events"), Some(&Value::String("for-here".to_string())));
 
-        // Without it, the machine default stands.
-        let no_project = resolve(&store, "slack", &[text_field("events")], None).unwrap();
-        assert_eq!(no_project.text.get("events"), Some(&Value::String("default".to_string())));
-    }
-
-    #[test]
-    fn a_text_field_falls_back_to_the_machine_default_when_the_project_has_no_override() {
-        let (mut store, _dir) = store_at("fallback");
-        let project = new_project(&mut store, "proj");
-        // Only a machine default is set; the project has no override of its own.
-        plugin_config::set(&mut store, &text_field("events"), "slack", "default", Scope::MachineDefault).unwrap();
-
-        let inj = resolve(&store, "slack", &[text_field("events")], Some(project)).unwrap();
-        assert_eq!(inj.text.get("events"), Some(&Value::String("default".to_string())));
+        // A project that set nothing is handed nothing — there is no tier under it to fall back to.
+        let bare = new_project(&mut store, "bare");
+        let inj = resolve(&store, "slack", &[text_field("events")], bare).unwrap();
+        assert!(inj.text.is_empty());
     }
 
     #[test]
     fn an_unset_field_contributes_nothing() {
-        let (store, _dir) = store_at("unset");
+        let (mut store, _dir) = store_at("unset");
+        let p = new_project(&mut store, "proj");
         let fields = [secret_field("webhook_url"), text_field("events")];
-        let inj = resolve(&store, "slack", &fields, None).unwrap();
+        let inj = resolve(&store, "slack", &fields, p).unwrap();
         assert!(inj.env.is_empty(), "an unset secret sets no env var");
         assert!(inj.text.is_empty(), "an unset text field adds no stdin key");
     }
@@ -203,11 +184,12 @@ mod tests {
     #[test]
     fn only_this_plugins_config_is_injected() {
         let (mut store, _dir) = store_at("scoped");
+        let p = new_project(&mut store, "proj");
         // Another plugin's config must not leak into this one's injection.
-        plugin_config::set(&mut store, &secret_field("token"), "github", "gh-secret", Scope::MachineDefault).unwrap();
-        plugin_config::set(&mut store, &text_field("events"), "slack", "push", Scope::MachineDefault).unwrap();
+        plugin_config::set(&mut store, &secret_field("token"), "github", p, "gh-secret").unwrap();
+        plugin_config::set(&mut store, &text_field("events"), "slack", p, "push").unwrap();
 
-        let inj = resolve(&store, "slack", &[text_field("events")], None).unwrap();
+        let inj = resolve(&store, "slack", &[text_field("events")], p).unwrap();
         assert_eq!(inj.text.get("events"), Some(&Value::String("push".to_string())));
         assert!(inj.env.is_empty(), "the other plugin's secret is not injected here");
         assert!(inj.text.get("token").is_none());

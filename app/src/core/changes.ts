@@ -60,11 +60,12 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   decision_task_link: ["tasks", "decisions"], // shows on both (a task's decision badge, a decision's linked tasks)
   attachment: ["attachments"],
   project: ["projects"],
-  // One switch and one settings tier per plugin, both per project (`AMB-D-434`/`AMB-D-356`) — and one
-  // surface that draws them, so they fold to the same scope: whichever moved, the installed rows are what
-  // has to be re-read. A gate flipped from the CLI is the ordinary way either of these arrives.
+  // One switch and one value per setting per plugin, all of them per project (`AMB-D-434`/`AMB-D-356`) —
+  // and one surface that draws them, so they fold to the same scope: whichever moved, the installed rows
+  // are what has to be re-read. A gate flipped from the CLI is the ordinary way any of these arrives.
   plugin_enable: ["plugins"],
   plugin_config: ["plugins"],
+  plugin_secret: ["plugins"],
 };
 
 /**

@@ -1,21 +1,19 @@
 # What an installed plugin is told, and where it is kept. The settings are declared by the plugin's
-# author and written by whoever runs it, at one of two tiers — the machine, and this project. Reading
-# is per-tier and not the precedence a run applies, so each tier is asked for its own answer.
+# author and written by whoever runs it, for the project they are standing in — a plugin is a project's,
+# so its values are too, and there is no tier under them to fall back to.
 #
 # Like every line that installs a plugin, this one goes to the catalog over the network on purpose
 # (see `put-a-plugin-on-the-machine.yaml`): the settings are a face of a plugin that is really there.
 id: tell-a-plugin-what-it-needs-to-know
-title: A plugin's setting is filled in at the machine tier, overridden for the project, taken back, and never invented — and a secret one reaches the run it is for and nowhere else, until a removal takes it
+title: A plugin's setting is filled in for the project, taken back, and never invented — and a secret one reaches the run it is for and comes back out nowhere, until a removal takes it
 description: >
   Install the official `worktree` plugin, fill in the setting its manifest declares, and read it back.
-  Write a different value as this project's override and read that back at its own tier — the two are
-  kept apart, and the machine's answer does not move. Take the override away and see the tier report
-  nothing while the machine still holds its own. Then a key the manifest never declared: it is
-  refused, because a plugin is told only what its author said it takes. Finally the other route a
-  value can take: a setting the author marked secret is filled in, and the read says it is set without
-  saying what it is — while neither the backup nor the export carries the value at all. Then the two
-  ends nothing else can see: a run is asked what it was handed, and answers with the secret; and a
-  plugin removed with one still set is installed again, to be handed nothing.
+  Take it away through the door an empty value opens, and see the read say the project holds nothing.
+  Then a key the manifest never declared: it is refused, because a plugin is told only what its author
+  said it takes. Finally the other route a value can take: a setting the author marked secret is filled
+  in, and the read says it is set without saying what it is. Then the two ends nothing else can see: a
+  run is asked what it was handed, and answers with the secret; and a plugin removed with one still set
+  is installed again, to be handed nothing.
 steps_cli:
   - type: action
     domain: plugin
@@ -23,6 +21,8 @@ steps_cli:
     with:
       name: worktree
 
+  # Which project the value belongs to is never named here — it is the folder's binding, the same thing
+  # that decides everything else this run reaches.
   - type: action
     domain: plugin
     op: config-set
@@ -39,36 +39,6 @@ steps_cli:
       key: base
       equals: main
 
-  # The project's own answer, over the machine's. Which project is never named here — it is the
-  # folder's binding, the same thing that decides everything else this run reaches.
-  - type: action
-    domain: plugin
-    op: config-set
-    with:
-      name: worktree
-      key: base
-      value: release
-      scope: project
-
-  - type: assert
-    domain: plugin
-    op: config
-    with:
-      name: worktree
-      key: base
-      scope: project
-      equals: release
-
-  # The tiers are kept apart: an override is not a rewrite of what the machine holds.
-  - type: assert
-    domain: plugin
-    op: config
-    with:
-      name: worktree
-      key: base
-      scope: machine
-      equals: main
-
   # An empty value is how a setting is taken back — the unset door is the same door, so there is no
   # way to store a blank by accident and no second command to forget about.
   - type: action
@@ -78,7 +48,6 @@ steps_cli:
       name: worktree
       key: base
       value: ""
-      scope: project
 
   - type: assert
     domain: plugin
@@ -86,17 +55,7 @@ steps_cli:
     with:
       name: worktree
       key: base
-      scope: project
       set: false
-
-  - type: assert
-    domain: plugin
-    op: config
-    with:
-      name: worktree
-      key: base
-      scope: machine
-      equals: main
 
   # The manifest is the vocabulary. A key the author never declared is turned away rather than kept
   # somewhere the plugin will never read it — a setting nobody reads is worse than one that is missing.
@@ -147,39 +106,11 @@ steps_cli:
       key: token
       set: true
 
-  # The promise that fails silently and in plain text: a secret is kept in the user area, outside the
-  # source of truth, so neither of the two files amenbo hands a user may carry it. Both are asked for
-  # the token verbatim — what a token looks like in an archive nobody has to know, only that it is
-  # not in there.
-  - type: action
-    domain: store
-    op: backup
-    as: after-the-secret
-
-  - type: assert
-    domain: store
-    op: snapshot
-    with:
-      target: after-the-secret
-      absent: amb_scenario_secret_9f2c4b7e0d1a5f36
-
-  - type: action
-    domain: store
-    op: export
-    as: taken-out
-
-  - type: assert
-    domain: store
-    op: snapshot
-    with:
-      target: taken-out
-      absent: amb_scenario_secret_9f2c4b7e0d1a5f36
-
-  # None of that says the value ever reaches the plugin, and nothing here can: it travels as an
-  # environment variable on the child process, which is the one place neither a person nor the store
-  # looks. So the only witness is a plugin willing to say what it was handed, and the driver stands one
-  # in (see the op's own note). The gate is opened because a command run needs it — what a plugin may
-  # be told is what it may be run for.
+  # Nothing so far says the value ever reaches the plugin, and nothing a person can look at will: it
+  # travels as an environment variable on the child process, which is the one place neither a reader
+  # nor the store sees. So the only witness is a plugin willing to say what it was handed, and the
+  # driver stands one in (see the op's own note). The gate is opened because a command run needs it —
+  # what a plugin may be told is what it may be run for.
   - type: action
     domain: plugin
     op: echo-program
@@ -222,10 +153,9 @@ steps_cli:
       key: token
       set: false
 
-  # And the end of a secret's life. A secret is kept in the user area, outside the store, so nothing a
-  # backup or an export carries would show one left behind — and once the plugin is gone, the read that
-  # would answer for it is gone with it. So it is filled in again, the plugin removed, and installed a
-  # second time: what a fresh install is handed is the whole question, and it has to be nothing.
+  # And the end of a secret's life. Once the plugin is gone the read that would answer for it is gone
+  # with it, so it is filled in again, the plugin removed, and installed a second time: what a fresh
+  # install is handed is the whole question, and it has to be nothing.
   - type: action
     domain: plugin
     op: config-set

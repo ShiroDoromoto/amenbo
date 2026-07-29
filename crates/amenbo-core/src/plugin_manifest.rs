@@ -547,8 +547,8 @@ pub struct ConfigField {
     pub label: String,
     /// Whether the value is a secret. **The author declares this; amenbo does not judge it** (`AMB-D-356`)
     /// — amenbo cannot know a webhook URL is sensitive, so it trusts the flag. A secret is stored in the
-    /// user-area secret file (never the store, never a backup) and injected as an environment variable
-    /// (off argv, off logs); a non-secret is stored in the ordinary two tiers and injected on stdin.
+    /// store table an `export` must leave (`AMB-D-434`) and injected as an environment variable (off
+    /// argv, off logs); a non-secret is stored in the ordinary table and injected on stdin.
     /// Absent means `false` — the safe-for-storage default is *not* secret only for a field the author
     /// left unmarked, which is a plain-text field by construction.
     #[serde(default)]

@@ -237,6 +237,23 @@ pub const STEPS: &[Step] = &[
         // is exactly what was never written down.
         apply: Apply::Custom(add_parent),
     },
+    Step {
+        to: 15,
+        name: "move a plugin's settings and secrets out of the user area and into each project's rows",
+        // A plugin is a project's, so its values are too: the machine-wide default in `config.json` and
+        // the secret in `plugin-secrets.json` become a row per project in `plugin_config` /
+        // `plugin_secret`, and the two user-area homes go.
+        //
+        // **Seeded, unlike the four steps above it** — and this is the one place a seed is not a guess. A
+        // machine-wide default is, by construction, the value every project without one of its own is
+        // handed at run time, so writing it as each project's row is what that sentence *meant*, not an
+        // inference about it. A project holding a value of its own keeps it: the insert stands down, and
+        // the closer of the two answers stands.
+        //
+        // A store with no project carries the values nowhere, and that is right: nothing could ever have
+        // fired for them, and inventing a project to hold them would be worse than letting them go.
+        apply: Apply::Custom(move_plugin_settings_into_the_store),
+    },
 ];
 
 /// v4: the lint-hook question stopped being one per project and became one for the device
@@ -415,6 +432,97 @@ fn add_parent(ctx: &Ctx<'_>) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// v15: carry a plugin's settings and secrets from the user area into each project's rows (`AMB-D-434`),
+/// and take the two user-area homes away.
+///
+/// Everything here names its tables, columns and JSON keys in frozen text, per this module's contract.
+/// The instant stamped on a carried row is SQLite's own `strftime` in the audit columns' format, not a
+/// helper this crate could reshape later.
+///
+/// **What is deliberately not rolled back.** The row writes ride the step's transaction; removing
+/// `config.json`'s plugin key and deleting `plugin-secrets.json` cannot — a file is not transactional.
+/// They are done last, after the rows are in hand, so an interruption leaves a readable copy of what was
+/// already carried rather than a value that exists nowhere. Residue in the other direction (files that
+/// outlive a commit) is inert: nothing reads either home after this build.
+fn move_plugin_settings_into_the_store(ctx: &Ctx<'_>) -> Result<()> {
+    let projects: Vec<i64> = {
+        let mut stmt = ctx.tx.prepare("SELECT id FROM project")?;
+        let rows = stmt.query_map([], |r| r.get::<_, i64>(0))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+
+    // `OR IGNORE` is what lets a machine-wide default stand down where a project answered for itself:
+    // the `(project_id, plugin, field_key)` unique index refuses the second row, so the project's own
+    // value — the closer of the two answers — is the one left standing.
+    for (table, values) in [
+        ("plugin_config", read_user_area_map(&ctx.base_dir.join("config.json"), Some("plugin_config"))),
+        ("plugin_secret", read_user_area_map(&ctx.base_dir.join("plugin-secrets.json"), None)),
+    ] {
+        let sql = format!(
+            "INSERT OR IGNORE INTO {table}(project_id, plugin, field_key, value, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))"
+        );
+        let mut stmt = ctx.tx.prepare(&sql)?;
+        for (plugin, key, value) in values {
+            for project in &projects {
+                stmt.execute(rusqlite::params![project, &plugin, &key, &value])?;
+            }
+        }
+    }
+
+    drop_config_plugin_key(ctx.base_dir);
+    let _ = std::fs::remove_file(ctx.base_dir.join("plugin-secrets.json"));
+    Ok(())
+}
+
+/// The `{ "<plugin>": { "<key>": "<value>" } }` document both user-area homes were, flattened to
+/// `(plugin, key, value)`. `key` names the field to read it out of when the map is nested inside a larger
+/// document (`config.json`); `None` is the whole file (`plugin-secrets.json`). A file that is absent,
+/// unreadable or not of that shape carries nothing — a store with no plugin settings is the ordinary case,
+/// and refusing to migrate over a malformed preferences file would be the worse of the two outcomes.
+fn read_user_area_map(path: &Path, field: Option<&str>) -> Vec<(String, String, String)> {
+    let Some(doc) = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+    else {
+        return Vec::new();
+    };
+    let map = match field {
+        Some(name) => doc.get(name),
+        None => Some(&doc),
+    };
+    let Some(map) = map.and_then(|v| v.as_object()) else { return Vec::new() };
+    let mut out = Vec::new();
+    for (plugin, fields) in map {
+        let Some(fields) = fields.as_object() else { continue };
+        for (key, value) in fields {
+            if let Some(value) = value.as_str() {
+                out.push((plugin.clone(), key.clone(), value.to_string()));
+            }
+        }
+    }
+    out
+}
+
+/// Take the `plugin_config` key out of `config.json`, leaving every other key exactly as it was — the
+/// read-modify-write twin of [`write_config_hook_consent`], and frozen for the same reason.
+fn drop_config_plugin_key(base_dir: &Path) {
+    let path = base_dir.join("config.json");
+    let Some(mut doc) = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+    else {
+        return;
+    };
+    let Some(obj) = doc.as_object_mut() else { return };
+    if obj.remove("plugin_config").is_none() {
+        return;
+    }
+    if let Ok(text) = serde_json::to_string_pretty(&doc) {
+        let _ = crate::store::write_atomic(&path, text.as_bytes());
+    }
 }
 
 /// v9: widen `task.status`'s closed set by one value (`AMB-D-397`).
@@ -1238,6 +1346,89 @@ mod tests {
                 [],
             )
             .expect("what is fanned out from here on can carry its project");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v15 in full, on the store shape v14 left behind: a machine default in `config.json` and a secret in
+    /// `plugin-secrets.json`, with two projects to carry them to. Both land as each project's own row —
+    /// the machine default *was* what a project without one of its own ran on, so writing it per project
+    /// is that sentence, not a guess — a project that had answered for itself keeps its answer, and the
+    /// two user-area homes are gone afterwards.
+    #[test]
+    fn the_plugins_settings_move_into_every_projects_rows_and_the_user_area_homes_go() {
+        let dir = scratch("plugin-settings-move");
+        let engine = store_at(&dir, 14);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'alpha'), (2, 'beta');
+                 INSERT INTO plugin_config (id, project_id, plugin, field_key, value, created_at, updated_at)
+                     VALUES (1, 2, 'slack', 'events', 'answered-for-itself',
+                             '2026-07-26T09:00:00Z', '2026-07-26T09:00:00Z');",
+            )
+            .unwrap();
+        std::fs::write(
+            dir.join("config.json"),
+            br#"{"onboarded":true,"plugin_config":{"slack":{"events":"push"}}}"#,
+        )
+        .unwrap();
+        std::fs::write(dir.join("plugin-secrets.json"), br#"{"slack":{"token":"s3cret"}}"#).unwrap();
+
+        let run = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert!(run.applied.iter().any(|s| s.contains("into each project's rows")), "{:?}", run.applied);
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+
+        let value = |table: &str, project: i64, key: &str| -> Option<String> {
+            engine
+                .conn()
+                .query_row(
+                    &format!(
+                        "SELECT value FROM {table} WHERE project_id = ?1 AND plugin = 'slack' AND field_key = ?2"
+                    ),
+                    rusqlite::params![project, key],
+                    |r| r.get::<_, String>(0),
+                )
+                .ok()
+        };
+        assert_eq!(value("plugin_config", 1, "events").as_deref(), Some("push"), "the default is carried");
+        assert_eq!(
+            value("plugin_config", 2, "events").as_deref(),
+            Some("answered-for-itself"),
+            "the project that had its own answer keeps it",
+        );
+        assert_eq!(value("plugin_secret", 1, "token").as_deref(), Some("s3cret"));
+        assert_eq!(value("plugin_secret", 2, "token").as_deref(), Some("s3cret"));
+
+        // The homes are gone, and what else `config.json` held is untouched.
+        assert!(!dir.join("plugin-secrets.json").exists(), "the secret file is taken away");
+        let config = std::fs::read_to_string(dir.join("config.json")).unwrap();
+        assert!(!config.contains("plugin_config"), "the config key is gone: {config}");
+        assert!(config.contains("onboarded"), "and nothing else in the file moved: {config}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A store with no project carries the values nowhere — there was never anything a plugin could have
+    /// fired for — and the migration is still the end of the user-area homes.
+    #[test]
+    fn a_store_with_no_project_still_loses_the_user_area_homes() {
+        let dir = scratch("plugin-settings-no-project");
+        let engine = store_at(&dir, 14);
+        std::fs::write(dir.join("config.json"), br#"{"plugin_config":{"slack":{"events":"push"}}}"#).unwrap();
+        std::fs::write(dir.join("plugin-secrets.json"), br#"{"slack":{"token":"s3cret"}}"#).unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let rows: i64 = engine
+            .conn()
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM plugin_config) + (SELECT COUNT(*) FROM plugin_secret)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rows, 0);
+        assert!(!dir.join("plugin-secrets.json").exists());
         std::fs::remove_dir_all(&dir).ok();
     }
 

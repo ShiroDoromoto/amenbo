@@ -1,10 +1,9 @@
-//! The per-project override of a plugin's **text (non-secret)** config value (`AMB-D-356` / `AMB-D-350`).
+//! A plugin's **text (non-secret)** config value in one project (`AMB-D-434` / `AMB-D-356`).
 //!
-//! This is the store-side, upper tier of the two a text config field lives in: a row here overrides, for
-//! one project, the machine default the field carries in `config.json`
-//! ([`crate::config::Config::plugin_config`]). A `secret` field never reaches this layer — it is routed to
-//! the user-area secret file ([`crate::plugin_secret`]) by the config write boundary, off the store and off
-//! every backup. Unlike `hook_optout` this is a real record, carried by `export`/`backup`.
+//! One value per project and nothing under it: a plugin is a project's, so a row here is the whole answer
+//! rather than an override of a machine-wide default. A `secret` field never reaches this layer — the
+//! config write boundary routes it to [`crate::ops::plugin_secret`], the table an `export` must leave.
+//! Unlike `hook_optout` this is a real record, carried by `export`/`backup`.
 //!
 //! One row per `(project_id, plugin, field_key)` — the `plugin_config_triple` UNIQUE index is what makes
 //! [`set`] an idempotent upsert rather than an append. The value is assumed **already validated** at the
@@ -13,15 +12,15 @@
 //! (`WriteTarget::Project`), so an AI cannot write a project outside its binding.
 
 use crate::error::Result;
-use crate::model::PluginConfigOverride;
+use crate::model::PluginConfigValue;
 use crate::ops::{emit_create, emit_update};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
-/// Set (`Some`) or clear (`None`) the per-project override of one plugin text field, inside the caller's
+/// Set (`Some`) or clear (`None`) one plugin text field's value in one project, inside the caller's
 /// transaction. Idempotent upsert on the `(project_id, plugin, field_key)` triple: an existing row's value
 /// is updated in place (a re-set to the same value is a no-op); a new one is inserted; a clear deletes the
-/// row so the machine default stands again. Returns whether anything changed.
+/// row, leaving the field unset. Returns whether anything changed.
 pub fn set(
     tx: &WriteTx<'_>,
     project_id: i64,
@@ -29,15 +28,15 @@ pub fn set(
     field_key: &str,
     value: Option<&str>,
 ) -> Result<bool> {
-    let existing_id = read::plugin_config_override_id(tx.conn(), project_id, plugin, field_key)?;
+    let existing_id = read::plugin_config_row_id(tx.conn(), project_id, plugin, field_key)?;
     match (existing_id, value) {
         (Some(id), Some(v)) => {
-            let before = read::plugin_config_override(tx.conn(), id)?
+            let before = read::plugin_config_row_by_id(tx.conn(), id)?
                 .expect("the row id was just read from the same transaction");
             if before.value == v {
                 return Ok(false);
             }
-            let after = PluginConfigOverride {
+            let after = PluginConfigValue {
                 value: v.to_string(),
                 updated_at: Timestamp::now(),
                 ..before.clone()
@@ -51,7 +50,7 @@ pub fn set(
         }
         (None, Some(v)) => {
             let now = Timestamp::now();
-            let row = PluginConfigOverride {
+            let row = PluginConfigValue {
                 id: read::next_id(tx.conn(), "plugin_config")?,
                 project_id,
                 plugin: plugin.to_string(),
@@ -67,7 +66,7 @@ pub fn set(
     }
 }
 
-/// Delete **every** override this plugin holds, in every project, inside the caller's transaction —
+/// Delete **every** value this plugin holds, in every project, inside the caller's transaction —
 /// the store half of `uninstall` (`AMB-D-357`: nothing is left behind, and a re-install starts clean).
 /// Returns how many rows went.
 ///
@@ -76,7 +75,7 @@ pub fn set(
 /// and the store is a single device-wide database. A reach-limited erase would be the very thing the
 /// decision forbids — an uninstall that leaves other projects' rows behind.
 pub fn forget_plugin(tx: &WriteTx<'_>, plugin: &str) -> Result<usize> {
-    let ids = read::plugin_config_override_ids(tx.conn(), plugin)?;
+    let ids = read::plugin_config_row_ids(tx.conn(), plugin)?;
     for id in &ids {
         tx.delete_record("plugin_config", *id)?;
     }
@@ -90,7 +89,7 @@ mod tests {
     use crate::store_engine::read;
 
     #[test]
-    fn set_then_read_back_the_override() {
+    fn set_then_read_back_the_value() {
         with_tx(|tx| {
             let p = mk_project(tx, "proj");
             assert!(set(tx, p, "slack", "events", Some("push,merge")).unwrap());
@@ -135,18 +134,18 @@ mod tests {
     }
 
     #[test]
-    fn clearing_deletes_the_override_so_the_default_stands() {
+    fn clearing_deletes_the_row_and_leaves_the_field_unset() {
         with_tx(|tx| {
             let p = mk_project(tx, "proj");
             set(tx, p, "slack", "events", Some("a")).unwrap();
-            assert!(set(tx, p, "slack", "events", None).unwrap(), "clearing an existing override changes state");
+            assert!(set(tx, p, "slack", "events", None).unwrap(), "clearing an existing value changes state");
             assert_eq!(read::plugin_config_value(tx.conn(), p, "slack", "events").unwrap(), None);
-            assert!(!set(tx, p, "slack", "events", None).unwrap(), "clearing an absent override is a no-op");
+            assert!(!set(tx, p, "slack", "events", None).unwrap(), "clearing an absent value is a no-op");
         });
     }
 
     #[test]
-    fn overrides_are_scoped_per_project() {
+    fn values_are_one_projects_own() {
         with_tx(|tx| {
             let a = mk_project(tx, "a");
             let b = mk_project(tx, "b");
@@ -158,7 +157,7 @@ mod tests {
             assert_eq!(
                 read::plugin_config_value(tx.conn(), b, "slack", "events").unwrap(),
                 None,
-                "one project's override does not leak into another",
+                "one project's value does not leak into another",
             );
         });
     }
@@ -196,7 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn deleting_the_project_cascades_its_overrides() {
+    fn deleting_the_project_cascades_its_values() {
         with_tx(|tx| {
             let p = mk_project(tx, "proj");
             set(tx, p, "slack", "events", Some("a")).unwrap();
@@ -205,7 +204,7 @@ mod tests {
                 .conn()
                 .query_row("SELECT count(*) FROM plugin_config WHERE project_id=?1", [p], |r| r.get(0))
                 .unwrap();
-            assert_eq!(n, 0, "the override cascaded with the project (ON DELETE CASCADE)");
+            assert_eq!(n, 0, "the value cascaded with the project (ON DELETE CASCADE)");
         });
     }
 }

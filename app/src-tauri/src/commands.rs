@@ -4560,13 +4560,12 @@ pub async fn plugin_detail(name: String) -> Result<Option<PluginDetailDto>, CmdE
 /// (`AMB-D-356`) — everything the generic form needs to draw a row and nothing amenbo judges for
 /// itself.
 ///
-/// The two text tiers are carried separately rather than resolved into one effective value, because
-/// the form edits a tier: a project override that is absent has to read as absent, with the machine
-/// default it falls back to shown beside it.
+/// The value is the one the project on screen holds, and nothing stands under it (`AMB-D-434`): absent
+/// reads as absent, which is what lets the form draw "not provided" and clear a field.
 ///
-/// **A secret's value is never here.** The author's flag is what routes it to the user-area secret
-/// file, and a value read back into a webview would be a copy of it in a place `AMB-D-356` keeps it
-/// out of — so a secret carries whether it is held, and that is all a form needs to mask it.
+/// **A secret's value is never here.** The author's flag is what routes it to `plugin_secret`, and a
+/// value read back into a webview would be a copy of it in a place `AMB-D-356` keeps it out of — so a
+/// secret carries whether it is held, and that is all a form needs to mask it.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -4575,23 +4574,18 @@ pub struct PluginConfigFieldDto {
     key: String,
     /// The author's own label for the field, drawn as the form's caption.
     label: String,
-    /// Whether the author marked it secret. The form masks it and stores it once for the device; a
-    /// text field gets the two tiers instead.
+    /// Whether the author marked it secret. The form masks it and never reads it back.
     secret: bool,
     /// Whether the author marked it required. An enable is refused while one of these has no value,
     /// so the form says which before the switch does.
     required: bool,
-    /// The text machine default, as stored — absent when unset, and always absent for a secret.
+    /// The text value the project the request named holds, as stored — absent when unset, when no
+    /// project was named, and always for a secret.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    machine_value: Option<String>,
-    /// The text override held by the project the request named — absent when unset, when no project
-    /// was named, and always for a secret.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    project_value: Option<String>,
-    /// Whether a secret is held for this key on this device. Always false for a text field, whose
-    /// values say it themselves.
+    value: Option<String>,
+    /// Whether that project holds a secret for this key. Always false for a text field, whose value
+    /// says it itself.
     secret_set: bool,
 }
 
@@ -4669,33 +4663,28 @@ pub struct PluginInstallDto {
     rollback: bool,
 }
 
-/// Read one declared setting into its DTO, at the tiers a form edits. The author's `secret` flag is
-/// the only thing that decides where the value lives, so it is the only thing read here to route the
-/// probe (`AMB-D-356`).
+/// Read one declared setting into its DTO, for the project the form is editing (`AMB-D-434`). The
+/// author's `secret` flag decides which of the two tables the value came from, and it is the only thing
+/// read here to route the probe (`AMB-D-356`). A secret's value never leaves core — only whether one is
+/// held. Without a project there is nothing to answer with, and a made-up "unset" is not an answer.
 fn config_field_row(
     store: &Store,
     plugin: &str,
     field: &amenbo_core::plugin_manifest::ConfigField,
     project: Option<i64>,
 ) -> Result<PluginConfigFieldDto, CmdError> {
-    use amenbo_core::plugin_config::{get, Scope};
-    let (machine_value, project_value, secret_set) = if field.secret {
-        (None, None, get(store, field, plugin, Scope::MachineDefault)?.is_some())
-    } else {
-        let machine = get(store, field, plugin, Scope::MachineDefault)?;
-        let over = match project {
-            Some(id) => get(store, field, plugin, Scope::Project(id))?,
-            None => None,
-        };
-        (machine, over, false)
+    use amenbo_core::plugin_config::get;
+    let held = match project {
+        Some(id) => get(store, field, plugin, id)?,
+        None => None,
     };
+    let (value, secret_set) = if field.secret { (None, held.is_some()) } else { (held, false) };
     Ok(PluginConfigFieldDto {
         key: field.key.clone(),
         label: field.label.clone(),
         secret: field.secret,
         required: field.required,
-        machine_value,
-        project_value,
+        value,
         secret_set,
     })
 }
@@ -4777,8 +4766,8 @@ pub async fn plugin_install(
 /// There is one switch and it is a project's (`AMB-D-434`), so `project_id` does not choose a level: it
 /// says which project the caller is speaking for, and without one core refuses rather than answering
 /// device-wide. Enabling is fail-closed twice over, both in core: on the compatibility declarations
-/// (`AMB-D-359`) before anything is written, and on the author's `required` settings, probed at the tier
-/// that gate reads ([`amenbo_core::plugin_config::satisfied_keys`], `AMB-D-356`).
+/// (`AMB-D-359`) before anything is written, and on the author's `required` settings, probed in the
+/// project that gate is for ([`amenbo_core::plugin_config::satisfied_keys`], `AMB-D-356`).
 ///
 /// **Calling this to enable is the permission** (`AMB-D-434`) — turning a plugin on is what running
 /// somebody else's code means, so there is no second answer to record. Returns where the gate ended up,
@@ -4798,9 +4787,8 @@ pub fn plugin_set_enabled(
             amenbo_core::plugin_compat::check(&installed.manifest)
                 .map_err(|incompatible| CmdError::from(incompatible.into_error(&name)))?;
             let fields = installed.manifest.config.clone();
-            let tier = amenbo_core::plugin_config::Scope::Project(project);
             let satisfied =
-                amenbo_core::plugin_config::satisfied_keys(store, &name, &fields, tier)?;
+                amenbo_core::plugin_config::satisfied_keys(store, &name, &fields, project)?;
             enable(store, &name, project, &fields, |f| satisfied.iter().any(|k| k == &f.key))?;
         } else {
             dropped_queued = disable(store, &name, project)?.queued;
@@ -4834,13 +4822,13 @@ pub struct PluginGateMovedDto {
 /// boundary every face shares ([`amenbo_core::plugin_config::set`], `AMB-D-356`).
 ///
 /// This side does what the CLI's does and no more: find the field the key names in the installed
-/// manifest, and turn the caller's tier into a scope. The author's `secret` flag on that field is what
-/// routes the value — a secret to the user-area secret file, text to the tier — and **amenbo never
-/// decides secrecy here**; a key the manifest does not declare has no routing rule, so it is refused
-/// rather than guessed at.
+/// manifest, and settle which project the value is for. The author's `secret` flag on that field is what
+/// routes the value — a secret to `plugin_secret`, text to `plugin_config` — and **amenbo never decides
+/// secrecy here**; a key the manifest does not declare has no routing rule, so it is refused rather than
+/// guessed at.
 ///
-/// `project_id` is the tier: `null` writes the machine default, a project writes that project's
-/// override. A secret ignores it, holding one value for the device.
+/// `project_id` names the project whose value this is, and is required: a plugin is a project's
+/// (`AMB-D-434`), so there is no tier to write to without one.
 ///
 /// An **empty** `value` clears the setting, which is how the form's clear works — "not provided" is
 /// unset, the same reading `required` uses. Nothing is echoed back: the caller has the value it typed,
@@ -4862,11 +4850,8 @@ pub fn plugin_config_set(
                 format!("plugin '{name}' declares no setting '{key}' (it declares: {known})"),
             ))
         })?;
-        let scope = match project_id {
-            Some(id) => amenbo_core::plugin_config::Scope::Project(id),
-            None => amenbo_core::plugin_config::Scope::MachineDefault,
-        };
-        amenbo_core::plugin_config::set(store, &field, &name, &value, scope)?;
+        let project = amenbo_core::plugin_trust::require_project(project_id)?;
+        amenbo_core::plugin_config::set(store, &field, &name, project, &value)?;
         Ok(())
     })
 }
@@ -4882,13 +4867,11 @@ pub fn plugin_config_set(
 pub struct PluginRemovedDto {
     /// The plugin was enabled somewhere, and its gates have been closed on the way out.
     was_enabled: bool,
-    /// Machine-default settings existed and are gone.
-    machine_defaults: bool,
     /// Secrets existed and have been purged (`AMB-D-357`'s non-negotiable).
     secrets: bool,
-    /// How many per-project setting rows were deleted, across every project.
+    /// How many setting rows were deleted, across every project.
     #[ts(type = "number")]
-    project_overrides: usize,
+    project_values: usize,
     /// How many per-project gate answers were deleted, across every project.
     #[ts(type = "number")]
     project_gates: usize,
@@ -4902,9 +4885,9 @@ pub struct PluginRemovedDto {
 
 /// Remove one plugin and everything it left behind (`AMB-D-357`) — the GUI's `plugin uninstall`.
 ///
-/// **Uninstall is not disable.** It closes every gate on the way out and then takes the binary, the
-/// machine defaults, every project's overrides, the secrets and the run log with it — so the face must
-/// have said as much before calling this. What came back is the receipt, not a promise: a piece
+/// **Uninstall is not disable.** It closes every gate on the way out and then takes the binary, every
+/// project's settings, the secrets and the run log with it — so the face must have said as much before
+/// calling this. What came back is the receipt, not a promise: a piece
 /// that was not there is reported as one less thing removed rather than as a failure, which is also how a
 /// half-broken install gets cleaned up.
 #[tauri::command]
@@ -4913,9 +4896,8 @@ pub fn plugin_uninstall(name: String) -> Result<PluginRemovedDto, CmdError> {
         let r = amenbo_core::plugin_uninstall::uninstall(store, &name)?;
         Ok(PluginRemovedDto {
             was_enabled: r.was_enabled,
-            machine_defaults: r.machine_defaults,
             secrets: r.secrets,
-            project_overrides: r.project_overrides,
+            project_values: r.project_values,
             project_gates: r.project_gates,
             directory: r.directory,
             runs_log: r.runs_log,
@@ -5392,34 +5374,32 @@ mod tests {
         let events = field(Some(project_id), "events");
         assert_eq!(events.label, "通知するイベント");
         assert!(!events.secret && !events.required);
-        assert_eq!((events.machine_value, events.project_value, events.secret_set), (None, None, false));
+        assert_eq!((events.value, events.secret_set), (None, false));
 
-        // Text: the two tiers are separate answers, and the project's is only read for the project asked
-        // about — resolving them into one would leave the form editing a value it could not clear.
-        plugin_config_set("notify".into(), "events".into(), "push".into(), None).unwrap();
+        // Text: the value is the project's, and it is read for the project asked about and no other
+        // (`AMB-D-434`). Without a project there is nothing to answer with.
         plugin_config_set("notify".into(), "events".into(), "deploy".into(), Some(project_id)).unwrap();
-        let here = field(Some(project_id), "events");
-        assert_eq!(here.machine_value.as_deref(), Some("push"));
-        assert_eq!(here.project_value.as_deref(), Some("deploy"));
-        assert_eq!(field(None, "events").project_value, None, "no project named, no override read");
+        assert_eq!(field(Some(project_id), "events").value.as_deref(), Some("deploy"));
+        assert_eq!(field(None, "events").value, None, "no project named, nothing read");
 
-        // Secret: routed by the author's flag to the user-area file, and reported as held — the value
-        // itself is for injection at run time, never for a webview.
-        plugin_config_set("notify".into(), "token".into(), "s3cret".into(), None).unwrap();
+        // Secret: routed by the author's flag to the table of its own, and reported as held —
+        // the value itself is for injection at run time, never for a webview.
+        plugin_config_set("notify".into(), "token".into(), "s3cret".into(), Some(project_id)).unwrap();
         let token = field(Some(project_id), "token");
         assert!(token.secret_set, "a held secret is what the form masks");
-        assert_eq!((token.machine_value, token.project_value), (None, None), "never the value itself");
+        assert_eq!(token.value, None, "never the value itself");
         let config_raw = std::fs::read_to_string(tmp.join("config.json")).unwrap_or_default();
         assert!(!config_raw.contains("s3cret"), "a secret must not reach config.json");
 
-        // The empty value is the clear, at whichever tier it is aimed.
+        // The empty value is the clear.
         plugin_config_set("notify".into(), "events".into(), String::new(), Some(project_id)).unwrap();
-        let cleared = field(Some(project_id), "events");
-        assert_eq!(cleared.project_value, None, "the override is gone");
-        assert_eq!(cleared.machine_value.as_deref(), Some("push"), "the default under it stays");
+        assert_eq!(field(Some(project_id), "events").value, None, "the setting is gone");
 
         // A key the manifest does not declare has no routing rule — amenbo does not invent one.
-        assert!(plugin_config_set("notify".into(), "nope".into(), "x".into(), None).is_err());
+        assert!(plugin_config_set("notify".into(), "nope".into(), "x".into(), Some(project_id)).is_err());
+
+        // And a write with no project named is refused rather than aimed somewhere.
+        assert!(plugin_config_set("notify".into(), "events".into(), "x".into(), None).is_err());
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

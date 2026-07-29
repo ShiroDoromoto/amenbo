@@ -139,13 +139,13 @@ impl Subscribers for EnabledSubscribers<'_> {
             }
             // Resolve this plugin's own config: secret → env, text → the payload's `config` key. A read
             // that errors drops this plugin only — the event still fires for the rest (`AMB-D-352`).
-            // The same project answers the config tiers, so a value it overrides is what the plugin is
-            // handed here (`AMB-D-356`).
+            // The values are that project's own, so what the plugin is handed here is what was set
+            // where the event happened (`AMB-D-434`).
             let injection = match plugin_inject::resolve(
                 self.store,
                 &plugin.name,
                 &plugin.manifest.config,
-                Some(project),
+                project,
             ) {
                 Ok(injection) => injection,
                 Err(error) => {
@@ -185,7 +185,7 @@ impl Subscribers for EnabledSubscribers<'_> {
 mod tests {
     use super::*;
     use crate::config::Paths;
-    use crate::plugin_config::{self, Scope};
+    use crate::plugin_config;
     use crate::plugin_manifest::{ConfigField, EventSubscription, Manifest, Os};
 
     fn store_at(tag: &str) -> (Store, std::path::PathBuf) {
@@ -356,8 +356,8 @@ mod tests {
     #[test]
     fn a_subscribers_own_config_is_injected_split_by_secret() {
         let (mut store, _dir, p) = store_in_a_project("inject");
-        plugin_config::set(&mut store, &secret_field("webhook_url"), "slack", "https://hooks/x", Scope::MachineDefault).unwrap();
-        plugin_config::set(&mut store, &text_field("channel"), "slack", "#ops", Scope::MachineDefault).unwrap();
+        plugin_config::set(&mut store, &secret_field("webhook_url"), "slack", p, "https://hooks/x").unwrap();
+        plugin_config::set(&mut store, &text_field("channel"), "slack", p, "#ops").unwrap();
 
         enable_in(&mut store, "slack", p);
         let plugins = [installed(

@@ -58,7 +58,7 @@
 //! | what the row is | example | `ON DELETE` |
 //! |---|---|---|
 //! | a concept someone can point at | a comment, a dependency edge, a decision↔task link, a commit anchor, a classification value | `RESTRICT` (+ the delete op takes the children first) |
-//! | amenbo's own settings for a project | `plugin_config`, `plugin_enable`, `hook_optout` | `CASCADE` |
+//! | amenbo's own settings for a project | `plugin_config`, `plugin_secret`, `plugin_enable`, `hook_optout` | `CASCADE` |
 //! | optional entity reference (keep the child, drop the reference) | none in the registry today | `SET NULL` |
 //!
 //! So `RESTRICT` is what holds the ops to the rule: leave a child behind and the parent's `DELETE` stops
@@ -700,18 +700,34 @@ datasets! {
         order_key: col(ORDER_KEY),
     }
 
-    // Per-project override of a plugin's **text (non-secret)** config value (`AMB-D-356` / `AMB-D-350`).
-    // The machine default is a `config.json` field (`config.plugin_config`); this row overrides it for one
-    // project — the same two-tier shape `hook_consent` (config) / `hook_optout` (store) already use, with
-    // one deliberate difference: this **is** a record table, carried by `export`/`backup`, not a
-    // device-local plain table — text config belongs in the ordinary tiers, backup included, whereas
-    // `hook_optout` is an export-excluded veto. A `secret` field never reaches here — it lives in the
-    // user-area secret file (`crate::plugin_secret`), off the store entirely. `plugin` is the plugin's
-    // manifest name (a string; plugins live on disk, not in the store, so there is no FK for it) and
-    // `field_key` the config field's key (spelled out because `key` is a SQLite keyword). The
-    // `(project_id, plugin, field_key)` triple is unique (`plugin_config_triple` below). CASCADE: the
-    // override is *about* the project, so deleting the project retires it.
+    // A plugin's **text (non-secret)** config value, for one project (`AMB-D-434` / `AMB-D-356`). One
+    // value per project and no tier under it: a plugin is a project's, so there is nothing left for a
+    // machine default to be the default *of*. A record table, carried by `export`/`backup` — text config
+    // is ordinary content of the project it belongs to. A `secret` field never reaches here; it lives in
+    // `plugin_secret` below. `plugin` is the plugin's manifest name (a string; plugins live on disk, not
+    // in the store, so there is no FK for it) and `field_key` the config field's key (spelled out because
+    // `key` is a SQLite keyword). The `(project_id, plugin, field_key)` triple is unique
+    // (`plugin_config_triple` below). CASCADE: the value is *about* the project, so deleting the project
+    // retires it.
     plugin_config => plugin_config {
+        project_id: fk("project", "CASCADE"),
+        plugin: col(REQ),
+        field_key: col(REQ),
+        value: col(REQ),
+    }
+
+    // A plugin's **secret** config value, for one project (`AMB-D-434`). Same address as `plugin_config`
+    // above — `(project_id, plugin, field_key)`, unique as `plugin_secret_triple` — and the same shape;
+    // what makes it a table of its own is where its rows may travel. `backup`/`restore` carry it (a
+    // snapshot of the whole file), because that is the road back to one's own machine and dropping it
+    // would mean typing every credential in again after a restore; an `export` must leave it, that being
+    // a one-way door out to another tool no plaintext credential may take.
+    //
+    // **A whole table, so the exclusion cannot rot.** Keeping the secrets beside the text values and
+    // filtering "the rows whose field is secret" would put the judgement on every path that ever reads
+    // config — and the next path added would be written by someone who did not know to ask. A table left
+    // out of `export`'s walk is left out whether or not anyone remembers it exists.
+    plugin_secret => plugin_secret {
         project_id: fk("project", "CASCADE"),
         plugin: col(REQ),
         field_key: col(REQ),
@@ -721,7 +737,7 @@ datasets! {
     // The projects a plugin is **enabled in** (`AMB-D-434`). A set, not a two-answer
     // override: a plugin has one switch and it is a project's, with no tier under it to inherit or veto —
     // a row means "on here" and no row means off. (That is `hook_optout`'s shape after all; the `enabled`
-    // column the two-tier version carried is gone with the tier it existed for.) A record table, so it is
+    // column the two-answer version carried is gone with the tier it existed for.) A record table, so it is
     // carried by `export`/`backup`: a restore that dropped it would silently switch a project's plugins
     // off, and one that keeps it brings them back on where they were.
     //
@@ -991,11 +1007,13 @@ CREATE INDEX IF NOT EXISTS task_dimension_value_by_task ON task_dimension_value(
 CREATE UNIQUE INDEX IF NOT EXISTS task_commit_task_sha ON task_commit(task_id, sha);
 CREATE INDEX IF NOT EXISTS task_commit_by_sha  ON task_commit(sha);
 CREATE INDEX IF NOT EXISTS task_commit_by_task ON task_commit(task_id);
--- One plugin config override per (project, plugin, field): the triple is the natural key, so the write
+-- One plugin config value per (project, plugin, field): the triple is the natural key, so the write
 -- boundary upserts a value by finding this row rather than appending a second. The unique index *is* that
 -- constraint (the column decls carry no UNIQUE), and its leading columns also serve the reads that seek a
--- project's overrides — by `project_id`, or by `(project_id, plugin)` for one plugin's whole config.
+-- project's values — by `project_id`, or by `(project_id, plugin)` for one plugin's whole config.
 CREATE UNIQUE INDEX IF NOT EXISTS plugin_config_triple ON plugin_config(project_id, plugin, field_key);
+-- The secret half, keyed the same way and for the same reason (`AMB-D-434`).
+CREATE UNIQUE INDEX IF NOT EXISTS plugin_secret_triple ON plugin_secret(project_id, plugin, field_key);
 -- One enable override per (project, plugin): the pair is the natural key, so the trust boundary upserts the
 -- gate by finding this row rather than appending a second answer. The unique index *is* that constraint,
 -- and its leading column also serves a read that seeks one project's overrides.

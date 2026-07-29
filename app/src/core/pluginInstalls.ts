@@ -101,9 +101,9 @@ export async function setPluginEnabled(
 /**
  * Write one setting the plugin's author declared (Tauri: `plugin_config_set`, `AMB-D-356`).
  *
- * `projectId` is the tier, not the gate: `null` writes the machine default and a project writes that
- * project's override, while a secret ignores it entirely — the author's flag decides where the value
- * lives, and this seam never says which is which. An **empty** value clears the setting.
+ * `projectId` names the project the value belongs to and is required (`AMB-D-434`) — the author's
+ * `secret` flag decides which of the two tables it lands in, and this seam never says which is which.
+ * An **empty** value clears the setting.
  *
  * The installs are refetched afterwards because they carry what is now held, which is what the form
  * draws from.

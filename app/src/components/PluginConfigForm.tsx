@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { errText, t, tf } from "../core/i18n";
+import { errText, t } from "../core/i18n";
 import { setPluginConfig, type PluginConfigField, type PluginInstall } from "../core/pluginInstalls";
 
 /**
@@ -11,19 +11,14 @@ import { setPluginConfig, type PluginConfigField, type PluginInstall } from "../
  * floor under any value (a byte cap, no control characters) at the one write boundary every face
  * shares.
  *
- * **A secret is written, never read back.** It lives in the user-area secret file, off the store and
- * off every backup, so the form has only "held / not held" to draw — which is why setting one asks for
- * it twice: with nothing to compare against afterwards, the second box is the only check on a typo.
- * The tier switch does not apply to it either; there is one secret per key for the device.
+ * **A secret is written, never read back.** It never leaves core — the form has only "held / not held"
+ * to draw — which is why setting one asks for it twice: with nothing to compare against afterwards, the
+ * second box is the only check on a typo.
  *
- * **Text has the two tiers, and the switch edits one of them.** A project override sits on top of the
- * machine default, so an empty override is not an empty value — it is no override, and the default
- * below shows through. The form says which one it is writing rather than resolving them into a single
- * effective value nobody could then clear.
- *
- * The tiers are the settings' own, not the gate's: which project a plugin *fires* in is its enable row,
- * while a project override is something any plugin's text setting can carry — so the project is named
- * here whether or not the plugin is on in it.
+ * **Every value is one project's** (`AMB-D-434`), secret or not, so the form edits one project and says
+ * which. That is not the gate: which project a plugin *fires* in is its enable row, while a setting is
+ * something any plugin can carry in a project it is off in — so the project is named here whether or
+ * not the plugin is on in it.
  */
 export function PluginConfigForm({ install, projects, projectId, onProject }: {
   install: PluginInstall;
@@ -33,7 +28,6 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
   projectId: number | null;
   onProject: (id: number | null) => void;
 }) {
-  const [scope, setScope] = useState<"machine" | "project">("machine");
   // Only what the user actually typed, keyed by field. Kept apart from the stored values so a refetch
   // never argues with a half-typed box, and so a cleared box reads as "clear this", not as "unchanged".
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -45,13 +39,9 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
   // What the last write did, said back in its own words: a clear removed a value, a save wrote one.
   const [done, setDone] = useState<"plugins.cfg.saved" | "plugins.cfg.cleared" | null>(null);
 
-  const tier = scope === "project" ? projectId : null;
-  const onProjectTier = scope === "project";
-  // The project tier with no project named writes nowhere: falling back to the machine default here
-  // would put a value in the tier every project reads, which is the opposite of what was asked for.
-  const unnamedProject = onProjectTier && projectId == null;
-  const stored = (f: PluginConfigField) =>
-    (onProjectTier ? f.projectValue : f.machineValue) ?? "";
+  // With no project named there is nowhere to write: a setting belongs to a project and to nothing else.
+  const unnamedProject = projectId == null;
+  const stored = (f: PluginConfigField) => f.value ?? "";
   const shown = (f: PluginConfigField) => edits[f.key] ?? stored(f);
 
   const run = async (op: () => Promise<unknown>, said: typeof done) => {
@@ -78,11 +68,11 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
           const pair = secrets[f.key];
           if (!pair || pair.value === "") continue;
           if (pair.value !== pair.confirm) throw new Error(t("plugins.cfg.secretMismatch"));
-          await setPluginConfig(install.name, f.key, pair.value, null);
+          await setPluginConfig(install.name, f.key, pair.value, projectId);
         } else {
           const next = edits[f.key];
           if (next === undefined || next === stored(f)) continue;
-          await setPluginConfig(install.name, f.key, next, tier);
+          await setPluginConfig(install.name, f.key, next, projectId);
         }
       }
       setEdits({});
@@ -91,7 +81,7 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
 
   const onClear = (f: PluginConfigField) =>
     run(async () => {
-      await setPluginConfig(install.name, f.key, "", f.secret ? null : tier);
+      await setPluginConfig(install.name, f.key, "", projectId);
       setEdits((e) => ({ ...e, [f.key]: "" }));
       setSecrets((s) => ({ ...s, [f.key]: { value: "", confirm: "" } }));
     }, "plugins.cfg.cleared");
@@ -99,37 +89,21 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
   return (
     <div className="plugcfg">
       <div className="pluggate">
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.cfg.tier")}</span>
         <select
-          value={scope}
+          value={projectId ?? ""}
           disabled={busy}
           onChange={(e) => {
-            setScope(e.target.value === "project" ? "project" : "machine");
+            onProject(e.target.value === "" ? null : Number(e.target.value));
             setEdits({});
             setDone(null);
           }}
           style={{ fontSize: "var(--fs-xs)" }}
         >
-          <option value="machine">{t("plugins.cfg.tier.machine")}</option>
-          <option value="project">{t("plugins.cfg.tier.project")}</option>
+          <option value="">{t("plugins.cfg.pickProject")}</option>
+          {projects.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
         </select>
-        {onProjectTier && (
-          <select
-            value={projectId ?? ""}
-            disabled={busy}
-            onChange={(e) => {
-              onProject(e.target.value === "" ? null : Number(e.target.value));
-              setEdits({});
-              setDone(null);
-            }}
-            style={{ fontSize: "var(--fs-xs)" }}
-          >
-            <option value="">{t("plugins.cfg.pickProject")}</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        )}
         {unnamedProject && (
           <div className="pluggate__note faint">{t("plugins.cfg.pickProjectNote")}</div>
         )}
@@ -186,16 +160,9 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
                 value={shown(f)}
                 onChange={(e) => setEdits((s) => ({ ...s, [f.key]: e.target.value }))}
               />
-              {/* What an empty override falls back to. Drawn only where it is the answer: at the
-                  machine tier the box already holds that value. */}
-              {onProjectTier && f.projectValue == null && f.machineValue != null && (
-                <div className="faint plugcfg__note">
-                  {tf("plugins.cfg.fallback", { value: f.machineValue })}
-                </div>
-              )}
             </>
           )}
-          {held(f, onProjectTier) && (
+          {held(f) && (
             <button
               className="feed__action"
               disabled={busy || unnamedProject}
@@ -221,16 +188,14 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
 }
 
 /**
- * Whether a field has no value anywhere — the state an enable is refused for while the author marked it
- * required. A text field is held by either tier, since the machine default is what a project without an
- * override runs on.
+ * Whether this project holds no value for the field — the state an enable is refused for while the
+ * author marked it required.
  */
 function unset(f: PluginConfigField): boolean {
-  return f.secret ? !f.secretSet : f.machineValue == null && f.projectValue == null;
+  return f.secret ? !f.secretSet : f.value == null;
 }
 
-/** Whether *this* tier holds something to clear — clearing a tier that holds nothing is a no-op. */
-function held(f: PluginConfigField, onProjectTier: boolean): boolean {
-  if (f.secret) return f.secretSet;
-  return (onProjectTier ? f.projectValue : f.machineValue) != null;
+/** Whether there is something to clear — clearing a field that holds nothing is a no-op. */
+function held(f: PluginConfigField): boolean {
+  return f.secret ? f.secretSet : f.value != null;
 }

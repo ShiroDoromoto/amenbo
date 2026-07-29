@@ -109,14 +109,13 @@ export function PluginInstalledScreen() {
 /**
  * What an uninstall took, as a list a person can read — empty when the name held nothing on this machine.
  *
- * The settings are one item whichever tier they sat at (a machine default and a project override are the
- * same thing to the person who typed them), and the binary is not the headline: what makes `AMB-D-357`
- * worth saying out loud is that the settings and the secrets went with it.
+ * The settings are one item however many projects held them, and the binary is not the headline: what
+ * makes `AMB-D-357` worth saying out loud is that the settings and the secrets went with it.
  */
 function removedParts(r: PluginRemoved): string {
   const parts = [
     r.directory && t("plugins.removedPart.binary"),
-    (r.machineDefaults || r.projectOverrides > 0) && t("plugins.removedPart.settings"),
+    r.projectValues > 0 && t("plugins.removedPart.settings"),
     r.secrets && t("plugins.removedPart.secrets"),
     r.runsLog && t("plugins.removedPart.runs"),
   ].filter((p): p is string => typeof p === "string");
@@ -124,13 +123,13 @@ function removedParts(r: PluginRemoved): string {
 }
 
 /**
- * How many settings the author marked `required` this machine holds no value for — the count an enable
- * is refused over (`AMB-D-356`). A text setting is held by either tier, since a project with no
- * override of its own runs on the machine default.
+ * How many settings the author marked `required` this project holds no value for — the count an enable
+ * is refused over (`AMB-D-356`). There is one value per setting per project (`AMB-D-434`), so a field is
+ * held or it is not.
  */
 function requiredUnset(install: PluginInstall): number {
   return install.config.filter(
-    (f) => f.required && (f.secret ? !f.secretSet : f.machineValue == null && f.projectValue == null),
+    (f) => f.required && (f.secret ? !f.secretSet : f.value == null),
   ).length;
 }
 

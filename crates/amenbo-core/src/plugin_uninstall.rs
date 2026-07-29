@@ -8,9 +8,8 @@
 //! | what | where | how it goes |
 //! |---|---|---|
 //! | the events queued for it, and the lease of whoever is running them | the store's `plugin_queue` / `plugin_runner` rows | [`Store::drop_plugin_delivery`](crate::store::Store::drop_plugin_delivery) (`AMB-D-399`) |
-//! | machine-default settings | `config.json` | [`Config::forget_plugin_config`](crate::config::Config::forget_plugin_config) |
-//! | secrets | the user-area secret file | [`Secrets::forget_plugin`](crate::plugin_secret::Secrets::forget_plugin) + save (**always**, `AMB-D-357`) |
-//! | per-project settings, every project | the store's `plugin_config` rows | [`Store::forget_plugin_config`](crate::store::Store::forget_plugin_config) |
+//! | secrets, every project | the store's `plugin_secret` rows | [`Store::forget_plugin_secrets`](crate::store::Store::forget_plugin_secrets) (**always**, `AMB-D-357`) |
+//! | settings, every project | the store's `plugin_config` rows | [`Store::forget_plugin_config`](crate::store::Store::forget_plugin_config) |
 //! | per-project gate answers, every project | the store's `plugin_enable` rows | [`Store::forget_plugin_enable`](crate::store::Store::forget_plugin_enable) |
 //! | the binary and its home | `<base>/plugins/<name>/` | the directory is removed |
 //! | the plugin's runs in the execution log | `<base>/plugin-runs.jsonl` | [`plugin_log::forget`](crate::plugin_log::forget) |
@@ -32,7 +31,6 @@
 
 use crate::config::is_reserved_plugin_name;
 use crate::error::{Error, Result};
-use crate::plugin_secret::Secrets;
 use crate::store::Store;
 
 /// What an [`uninstall`] actually found and removed — the receipt, so a caller can report the removal
@@ -41,14 +39,12 @@ use crate::store::Store;
 pub struct Removed {
     /// The plugin was enabled in at least one project, and those gates have been closed.
     pub was_enabled: bool,
-    /// Machine-default settings existed in `config.json` and are gone.
-    pub machine_defaults: bool,
-    /// Secrets existed in the secret file and have been purged.
+    /// Secrets were stored for the plugin and have been purged (`AMB-D-357`).
     pub secrets: bool,
     /// How many events were still queued for the plugin and were dropped (`AMB-D-399`).
     pub queued: usize,
-    /// How many per-project setting rows were deleted, across every project.
-    pub project_overrides: usize,
+    /// How many setting rows were deleted, across every project.
+    pub project_values: usize,
     /// How many per-project gate answers were deleted, across every project (`AMB-D-434`).
     pub project_gates: usize,
     /// The plugin's home under `plugins/` existed and has been removed.
@@ -61,10 +57,9 @@ impl Removed {
     /// Whether anything at all was found — `false` means the name held nothing on this machine, which a
     /// caller reports as "not installed" rather than as a removal.
     pub fn anything(&self) -> bool {
-        self.machine_defaults
-            || self.secrets
+        self.secrets
             || self.queued > 0
-            || self.project_overrides > 0
+            || self.project_values > 0
             || self.project_gates > 0
             || self.directory
             || self.runs_log
@@ -97,18 +92,12 @@ pub fn uninstall(store: &mut Store, plugin: &str) -> Result<Removed> {
     //    project.
     removed.queued = store.drop_plugin_delivery(plugin, None)?;
 
-    // 3. The secrets, purged unconditionally — the bytes that must not outlive the plugin.
-    let secrets_file = store.paths.plugin_secrets_file();
-    let mut secrets = Secrets::load(&secrets_file)?;
-    if secrets.forget_plugin(plugin) {
-        secrets.save(&secrets_file)?;
-        removed.secrets = true;
-    }
+    // 3. The secrets, purged unconditionally — the bytes that must not outlive the plugin. Their own
+    //    table, so this is the whole of them wherever a project put one (`AMB-D-434`).
+    removed.secrets = store.forget_plugin_secrets(plugin)? > 0;
 
-    // 4. The settings: this machine's defaults, and every project's overrides.
-    removed.machine_defaults = store.config.forget_plugin_config(plugin);
-    store.save_config()?;
-    removed.project_overrides = store.forget_plugin_config(plugin)?;
+    // 4. The settings, every project's.
+    removed.project_values = store.forget_plugin_config(plugin)?;
 
     // 5. The binary and its home: what is left if anything above failed is an inert directory.
     let home = store.paths.plugin_dir(plugin);
@@ -131,7 +120,7 @@ pub fn uninstall(store: &mut Store, plugin: &str) -> Result<Removed> {
 mod tests {
     use super::*;
     use crate::config::Paths;
-    use crate::plugin_config::{self, Scope};
+    use crate::plugin_config;
     use crate::plugin_manifest::ConfigField;
 
     fn field(key: &str, secret: bool) -> ConfigField {
@@ -146,8 +135,8 @@ mod tests {
         (store, dir)
     }
 
-    /// Give the plugin something in every place it can leave residue: a home with a binary, a machine
-    /// default, a secret, a per-project override, and an open gate.
+    /// Give the plugin something in every place it can leave residue: a home with a binary, a setting,
+    /// a secret, and an open gate.
     fn install_and_configure(store: &mut Store, plugin: &str) -> i64 {
         let home = store.paths.plugin_dir(plugin);
         std::fs::create_dir_all(&home).unwrap();
@@ -162,12 +151,8 @@ mod tests {
             })
             .unwrap()
             .id;
-        plugin_config::set(store, &field("events", false), plugin, "push", Scope::MachineDefault)
-            .unwrap();
-        plugin_config::set(store, &field("events", false), plugin, "merge", Scope::Project(project))
-            .unwrap();
-        plugin_config::set(store, &field("token", true), plugin, "s3cret", Scope::MachineDefault)
-            .unwrap();
+        plugin_config::set(store, &field("events", false), plugin, project, "merge").unwrap();
+        plugin_config::set(store, &field("token", true), plugin, project, "s3cret").unwrap();
         // ...and a project that has the plugin on, the gate's residue (`AMB-D-434`).
         crate::plugin_trust::enable(store, plugin, project, &[], |_| true).unwrap();
         // ...and an event still waiting on its queue, which goes with the plugin (`AMB-D-399`).
@@ -202,16 +187,17 @@ mod tests {
         project
     }
 
-    /// The whole point: after an uninstall nothing of the plugin is left in any of the four places.
+    /// The whole point: after an uninstall nothing of the plugin is left in any of the places it can
+    /// leave residue.
     #[test]
     fn uninstall_leaves_nothing_behind() {
         let (mut store, dir) = store_at("everything");
         let project = install_and_configure(&mut store, "slack");
 
         let removed = uninstall(&mut store, "slack").unwrap();
-        assert!(removed.was_enabled && removed.machine_defaults);
+        assert!(removed.was_enabled);
         assert!(removed.secrets && removed.directory && removed.runs_log);
-        assert_eq!(removed.project_overrides, 1);
+        assert_eq!(removed.project_values, 1);
         assert_eq!(removed.project_gates, 1);
         assert_eq!(removed.queued, 1, "what was waiting for it went with it (`AMB-D-399`)");
         assert!(
@@ -227,38 +213,40 @@ mod tests {
             "the plugin's runs are purged from the execution log",
         );
 
-        assert_eq!(store.config.plugin_text_default("slack", "events"), None);
         assert_eq!(
-            store.plugin_config_override(project, "slack", "events").unwrap(),
+            store.plugin_config_value(project, "slack", "events").unwrap(),
             None,
-            "the project override is gone",
+            "the project's setting is gone",
         );
         assert!(
             !store.plugin_enabled_in_project(project, "slack").unwrap(),
             "the project's gate row is gone",
         );
         assert_eq!(
-            plugin_config::get(&store, &field("token", true), "slack", Scope::MachineDefault)
-                .unwrap(),
+            plugin_config::get(&store, &field("token", true), "slack", project).unwrap(),
             None,
             "the secret is purged",
         );
         assert!(!dir.join("plugins").join("slack").exists(), "the home is gone");
-        // And the purge really left the file — not just the reader's view of it.
-        let raw = std::fs::read_to_string(dir.join(Paths::PLUGIN_SECRETS_FILE_NAME)).unwrap();
-        assert!(!raw.contains("s3cret"), "the secret bytes are out of the file");
+        // And the purge really took the bytes out of the store, not just the reader's view of them.
+        let raw = std::fs::read(dir.join("store.sqlite")).unwrap();
+        assert!(
+            !String::from_utf8_lossy(&raw).contains("s3cret"),
+            "the secret bytes are out of the truth source",
+        );
     }
 
     /// A re-install starts clean: nothing survives to be inherited by the next copy of the same name.
     #[test]
     fn a_reinstall_inherits_nothing() {
         let (mut store, _dir) = store_at("reinstall");
-        install_and_configure(&mut store, "slack");
+        let project = install_and_configure(&mut store, "slack");
         uninstall(&mut store, "slack").unwrap();
 
-        // The same name, installed again: no gate anywhere, no settings.
+        // The same name, installed again: no gate anywhere, no settings, no secret.
         assert!(store.projects_with_plugin_enabled("slack").unwrap().is_empty());
-        assert_eq!(store.config.plugin_text_default("slack", "events"), None);
+        assert_eq!(store.plugin_config_value(project, "slack", "events").unwrap(), None);
+        assert_eq!(store.plugin_secret_value(project, "slack", "token").unwrap(), None);
     }
 
     /// Uninstall works from the name alone — a half-broken install (a home with no manifest) is exactly
@@ -301,15 +289,14 @@ mod tests {
             1,
             "the neighbour keeps its gate",
         );
-        assert_eq!(store.config.plugin_text_default("worktree", "events"), Some("push"));
         assert!(dir.join("plugins").join("worktree").exists(), "the neighbour keeps its home");
         assert_eq!(
             crate::plugin_log::recent(&store.paths.plugin_log_file(), "worktree").len(),
             1,
             "the neighbour keeps its execution-log runs",
         );
-        // ...including its own project override and gate answer, which share the store with the erased ones.
-        assert!(store.plugin_config_override(project, "slack", "events").unwrap().is_none());
+        // ...including its own setting and gate answer, which share the store with the erased ones.
+        assert!(store.plugin_config_value(project, "slack", "events").unwrap().is_none());
         assert!(!store.plugin_enabled_in_project(project, "slack").unwrap());
     }
 

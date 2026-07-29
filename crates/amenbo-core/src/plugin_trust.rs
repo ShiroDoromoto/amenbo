@@ -56,13 +56,19 @@ pub fn require_project(project: Option<i64>) -> Result<i64> {
 /// The `required` fields of `fields` that have no value per the caller's `has_value` probe — the reason an
 /// [`enable`] would be refused. An empty result means every required field is satisfied. Presence is all
 /// amenbo checks (`AMB-D-351`); the author validates meaning at run time (`AMB-D-356`).
+///
+/// **A field carrying a `default` is never unanswered** (`AMB-D-415`), so it is not held against an enable
+/// however it is marked: the store holding nothing for it means the author's value is in force, and that is
+/// what the run receives ([`plugin_inject`](crate::plugin_inject)). `required` asks whether the plugin can
+/// work without an answer, and a default is one — the two are separate axes, and demanding a user retype a
+/// value that is already in effect would refuse a plugin that is, in fact, fully configured.
 pub fn missing_required(
     fields: &[ConfigField],
     has_value: impl Fn(&ConfigField) -> bool,
 ) -> Vec<&str> {
     fields
         .iter()
-        .filter(|f| f.required && !has_value(f))
+        .filter(|f| f.required && f.default.is_none() && !has_value(f))
         .map(|f| f.key.as_str())
         .collect()
 }
@@ -327,5 +333,21 @@ mod tests {
         let fields = [field("a", true), field("b", false), field("c", true)];
         let missing = missing_required(&fields, |f| f.key == "a");
         assert_eq!(missing, vec!["c"]);
+    }
+
+    /// A required field with a `default` is answered by its author (`AMB-D-415`): the run receives that
+    /// value, so an empty store is not a reason to hold the plugin off.
+    #[test]
+    fn a_required_field_with_a_default_does_not_block_enable() {
+        let fields = [
+            ConfigField { default: Some("task.done".into()), ..field("events", true) },
+            field("webhook_url", true),
+        ];
+        assert_eq!(missing_required(&fields, |_| false), vec!["webhook_url"]);
+
+        let mut store = store_at("defaulted");
+        let p = mk_project(&mut store, "p");
+        enable(&mut store, "slack", p, &fields[..1], |_| false).unwrap();
+        assert!(effective_enabled_in(&store, "slack", p).unwrap());
     }
 }

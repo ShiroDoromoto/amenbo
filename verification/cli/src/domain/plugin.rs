@@ -52,11 +52,22 @@ impl Driver {
                 let bytes = v["program_bytes"].as_i64().unwrap_or(0);
                 Ok(Outcome::action(format!("installed plugin `{name}` ({bytes} bytes of program)")))
             }
+            // A gate is one project's, so the line says whose it opened. The write answers with that
+            // project's id, which is not what a reader recognises — the name is read back for the
+            // evidence, and the id stands in if that read cannot be made.
             "enable" => {
                 let name = req_str(with, "name")?;
                 let v = self.run_json(&["plugin", "enable", name, "--json"])?;
-                let level = v["level"].as_str().unwrap_or("?").to_string();
-                Ok(Outcome::action(format!("opened `{name}`'s gate ({level})")))
+                let where_ = v["project"].as_i64().map(|id| {
+                    self.run_json(&["project", "show", &id.to_string(), "--json"])
+                        .ok()
+                        .and_then(|p| p["name"].as_str().map(str::to_string))
+                        .unwrap_or_else(|| format!("project {id}"))
+                });
+                Ok(Outcome::action(match where_ {
+                    Some(where_) => format!("opened `{name}`'s gate in {where_}"),
+                    None => format!("opened `{name}`'s gate"),
+                }))
             }
             "disable" => {
                 let name = req_str(with, "name")?;

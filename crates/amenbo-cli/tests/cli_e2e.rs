@@ -2488,6 +2488,65 @@ fn a_facet_written_after_plugin_run_is_named_where_the_call_failed() {
     assert!(!stderr.contains("facet is unspecified"), "the facet arrived: {stderr}");
 }
 
+/// `--help` after the plugin's name is the plugin's word like every other one (`AMB-D-346`) — and it is
+/// the word that matters most there, because a plugin's usage is what its author puts behind it. amenbo
+/// answering in its place would hide the very text the person asked for.
+///
+/// One form is still amenbo's: `plugin run --help` names no plugin, so there is nobody else to ask. It is
+/// answered before the facet and the pointer are, the way every other help request is.
+#[cfg(unix)]
+#[test]
+fn a_help_flag_reaches_the_plugin_and_only_the_nameless_form_is_amenbos() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    // A plugin whose command face prints its usage, which is all it takes to tell the two apart.
+    install_plugin(&cli, "usage", serde_json::json!([]));
+    let program = cli.home.join("plugins").join("usage").join("usage");
+    std::fs::write(&program, "#!/bin/sh\ncat >/dev/null\necho \"the plugin's usage: $*\"\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    cli.json(&["plugin", "enable", "usage", "--json"]);
+
+    for help in ["--help", "-h"] {
+        // After the name: handed through, and what comes back is what the plugin printed.
+        let (stdout, code) = cli.run(&["--actor", "human", "plugin", "run", "usage", help]);
+        assert_eq!(code, 0, "the call reached the plugin: {stdout}");
+        assert!(stdout.contains(&format!("the plugin's usage: {help}")), "the plugin answered: {stdout}");
+
+        // Naming no plugin: amenbo's own help, and no facet declared anywhere — a help request never
+        // needed one.
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &cli.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&cli.home)
+            .args(["plugin", "run", help])
+            .output()
+            .expect("run amenbo");
+        let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+        assert_eq!(exit_code(&out), 0, "help is not a failure: {stdout}");
+        assert!(
+            stdout.contains("Usage: amenbo plugin run"),
+            "it is this command's help, named the way it is typed: {stdout}"
+        );
+    }
+
+    // A hyphen where the name goes is otherwise a flag written one word too late, and is told so rather
+    // than sent to the catalog as a plugin nobody could have installed.
+    let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        .env("AMENBO_HOME", &cli.home)
+        .env("AMENBO_UPDATE_CHECK", "0")
+        .current_dir(&cli.home)
+        .args(["plugin", "run", "--jsn", "usage"])
+        .output()
+        .expect("run amenbo");
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    assert_eq!(exit_code(&out), 2, "a bad argument stops at the door: {stderr}");
+    assert!(stderr.contains("is a flag, not a plugin's name"), "it names what went wrong: {stderr}");
+    assert!(stderr.contains("plugin run usage"), "and hands back where the flag belongs: {stderr}");
+}
+
 /// One lap around the dimension model on the CLI: add an axis, value-add, list/show by name, set/unset on a
 /// task (single-select replacement, and a cross-process no-op proving it persisted), rename, cascading rm.
 #[test]

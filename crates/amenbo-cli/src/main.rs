@@ -82,6 +82,17 @@ fn real_main() -> i32 {
         Ok(c) => c,
         Err(e) => return handle_parse_error(e),
     };
+    // `plugin run` keeps no help flag of its own, so a `--help` sitting where the plugin's name goes
+    // is the one nobody else will answer. It is answered here, ahead of the facet and the pointer,
+    // because that is where a help request has always been answered — before the store is opened.
+    if asks_for_own_help(&parsed.command) {
+        return print_plugin_run_help();
+    }
+    if let Some(err) = flag_in_the_name_position(&parsed.command) {
+        // No Flags yet, so render the error with a minimal set.
+        let probe = Flags { json: parsed.json, yes: false, quiet: false, no_color: false, actor: None };
+        return render_error(&probe, &err);
+    }
     // facet (actor kind): `--actor` and nothing else (`AMB-D-408`). An operation that uses the facet —
     // stamping who acted, or drawing how far an AI reaches — must declare one, and gets `facet_required`
     // when it does not. An operation that uses none passes without one and never touches a facet again.
@@ -201,6 +212,70 @@ fn split_own_flags(args: &[String]) -> (Vec<String>, Vec<String>) {
         }
     }
     (own, rest)
+}
+
+/// How a person asks for help, in both spellings.
+const HELP_FLAGS: &[&str] = &["--help", "-h"];
+
+/// Is this a `plugin run` with a help flag standing where the plugin's name goes?
+///
+/// After the name every word is the plugin's (`AMB-D-346`), `--help` included — which is exactly the
+/// one a plugin's author puts its usage behind, so amenbo answering it would hide the very text the
+/// person asked for. `plugin run` therefore carries no help flag of its own and the word travels
+/// through untouched. What is left is the form that names no plugin at all: there, the request is
+/// amenbo's to answer, and the name is the position the flag lands in.
+///
+/// A plugin cannot be called `--help`: a catalog name is `[a-z0-9-]`, so nothing legitimate is shadowed.
+fn asks_for_own_help(cmd: &Option<Command>) -> bool {
+    matches!(
+        cmd,
+        Some(Command::Plugin { sub: PluginCmd::Run { name, .. } }) if HELP_FLAGS.contains(&name.as_str())
+    )
+}
+
+/// A word starting with a hyphen where the plugin's name goes, and it is not a help flag.
+///
+/// The position takes hyphens at all so that `--help` has somewhere to land; nothing else written there
+/// can be a plugin (`[a-z0-9-]`, never leading), so it is a flag of amenbo's put one word too late —
+/// they all go ahead of the name. Saying that is the answer; hunting the catalog for a plugin nobody
+/// could have installed is not.
+fn flag_in_the_name_position(cmd: &Option<Command>) -> Option<CliError> {
+    let Some(Command::Plugin { sub: PluginCmd::Run { name, args } }) = cmd else { return None };
+    if !name.starts_with('-') {
+        return None;
+    }
+    let corrected = [
+        vec![Paths::command_name().to_string(), name.clone()],
+        vec!["plugin".to_string(), "run".to_string()],
+        args.clone(),
+    ]
+    .concat()
+    .join(" ");
+    Some(CliError {
+        code: "invalid_value",
+        message: format!("'{name}' is a flag, not a plugin's name"),
+        hint: Some(format!(
+            "amenbo's flags go before the plugin's name — after it every word is the plugin's:\n  {corrected}"
+        )),
+        exit: 2,
+    })
+}
+
+/// Print `plugin run`'s own help, the way clap would have.
+///
+/// It is rendered off the same retargeted tree the parse ran against, so a dev build's help names the
+/// command that build installs, exactly as every other help does. The tree is built first, which is what
+/// gives a subcommand the full path to itself — without it the usage line opens at `run`, naming no
+/// command anyone can type.
+fn print_plugin_run_help() -> i32 {
+    let mut cli = retargeted_cli();
+    cli.build();
+    let run = cli
+        .find_subcommand_mut("plugin")
+        .and_then(|plugin| plugin.find_subcommand_mut("run"))
+        .expect("`plugin run` is in the command tree this arm was reached through");
+    print!("{}", run.render_long_help());
+    0
 }
 
 /// Does this command **use** the facet (human/ai)? There are two consumers, and either one counts

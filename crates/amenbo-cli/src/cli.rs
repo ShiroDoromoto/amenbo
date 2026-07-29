@@ -421,12 +421,18 @@ pub enum PluginCmd {
     ///
     /// Everything after the name is the plugin's, passed through untouched — dashes and all: amenbo
     /// neither parses nor rewrites it, because what the words mean is the plugin's business (`AMB-D-346`).
+    /// That covers `--help`, which is where a plugin's author puts its usage: the word travels through and
+    /// the plugin answers it. Only the form that names no plugin — `amenbo plugin run --help` — has nobody
+    /// else to answer, and there the help you get back is this command's.
+    ///
     /// The corollary is that amenbo's own flags have to come *before* the plugin's name
     /// (`amenbo plugin run --json worktree …`), since after it every word is the plugin's. Refused when the
     /// plugin is not installed, not enabled (`install ≠ enable`, `AMB-D-351`), or not compatible with this
     /// build (`AMB-D-359`) — a caller waiting on a return value is told why there is none.
+    #[command(disable_help_flag = true)]
     Run {
         /// the installed plugin's name
+        #[arg(allow_hyphen_values = true)]
         name: String,
         /// arguments handed to the plugin verbatim, dashes included
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]

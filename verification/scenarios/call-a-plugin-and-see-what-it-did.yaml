@@ -24,7 +24,8 @@ id: call-a-plugin-and-see-what-it-did
 title: An enabled plugin is called with a task's id, what it prints comes back as the value, every call lands in the execution log, and removing the plugin takes its rows with it
 description: >
   Install and enable the official `worktree` plugin on a machine where it has never run, and read the
-  log say so — "it never ran" and "it ran and said nothing" are different diagnoses. Call its command
+  log say so — "it never ran" and "it ran and said nothing" are different diagnoses. Ask it for its
+  usage, and read off the log that the plugin is what answered. Call its command
   face for a task this scenario just registered, read the returned value for the shape the contract
   promises — the way into the checkout — and read the call back off the log as having ended cleanly.
   Take the checkout away again, and read that call back too. Then leave the plugin answering slowly,
@@ -58,6 +59,26 @@ steps_cli:
     with:
       name: worktree
       present: false
+
+  # The first thing anyone asks a program they just installed. Its usage sits behind `--help`, where
+  # its author put it, so the flag has to travel through as the plugin's word — amenbo answering in
+  # its place would hide the very text that was asked for, and hide it behind something that looks
+  # like an answer. What proves it arrived is the log: a call amenbo took for itself would leave no
+  # run here at all. The usage rides stderr, the stream a plugin's own voice goes out on, so the
+  # return value stays empty and there is nothing to read with `returned`.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: --help
+
+  - type: assert
+    domain: plugin
+    op: ran
+    with:
+      name: worktree
+      outcome: ok
 
   - type: action
     domain: task

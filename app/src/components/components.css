@@ -291,6 +291,9 @@
    control, so they share its shape. Same row rules as the actions above it. */
 .pluggate { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); }
 .pluggate .pluggate { margin-bottom: 0; }
+/* One project the plugin is on in, and the way to turn it off there — kept together so a wrap never
+   leaves a name on one line and its switch on the next. */
+.pluggate__on { display: inline-flex; align-items: center; gap: var(--s-1); }
 .pluggate__note { flex-basis: 100%; color: var(--c-warn); font-size: var(--fs-xs); }
 /* The settings a plugin's author declared (`AMB-D-356`), drawn as a form amenbo generates. Set inside a
    frame of its own: it is a place to type, not another control on the row's line. */

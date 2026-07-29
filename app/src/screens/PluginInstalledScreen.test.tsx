@@ -49,7 +49,7 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
       fields: projectId == null ? [] : (hoisted.held[name]?.[projectId] ?? []),
       loading: false,
     }),
-    setPluginEnabled: (name: string, projectId: number | null, enabled: boolean) => {
+    setPluginEnabled: (name: string, projectId: number, enabled: boolean) => {
       hoisted.gated.push({ name, projectId, enabled });
       return Promise.resolve({ enabled, droppedQueued: hoisted.droppedQueued });
     },
@@ -145,6 +145,10 @@ const select = (el: HTMLSelectElement, value: string) => {
 };
 /** The form's own select: which project's settings are being written. */
 const formProject = () => container.querySelector<HTMLSelectElement>(".plugcfg select")!;
+/** The gate's own select: picking a project on it is the enable. */
+const gatePicker = () => container.querySelector<HTMLSelectElement>(".pluggate select")!;
+/** What a select offers, in order. */
+const options = (el: HTMLSelectElement) => Array.from(el.options).map((o) => o.textContent);
 /** Every badge on screen, in order — the row's own state, told apart from the prose around it. */
 const chips = () => Array.from(container.querySelectorAll(".chip")).map((c) => c.textContent);
 
@@ -188,10 +192,12 @@ describe("what this machine holds", () => {
     expect(rows()).toHaveLength(2);
     expect(container.textContent).toContain("notify");
     expect(container.textContent).toContain("worktree");
-    expect(container.textContent).toContain(t("plugins.gate.project"));
     expect(container.textContent).toContain(tf("plugins.installedCount", { count: 2 }));
     // Enabled is the fact worth badging; installed is what every row on this screen already is.
     expect(container.textContent).toContain(t("plugins.enabledChip"));
+    // Each row answers for itself: the one that is on names its project, the one that is not says so.
+    expect(rows()[0].textContent).toContain(t("plugins.gate.offEverywhere"));
+    expect(rows()[1].textContent).toContain("alpha");
   });
 
   // Nothing installed is not an error, and the way out of it is the other tab.
@@ -210,30 +216,51 @@ describe("what this machine holds", () => {
 });
 
 describe("moving a gate from the list", () => {
-  // Turning a plugin on is itself the permission to run its code (`AMB-D-434`), so the switch moves on
-  // the click with nothing else asked.
-  it("enables on the click", async () => {
-    hoisted.projects = [{ id: 1, name: "alpha" }];
+  // Picking the project is the enable (`AMB-D-434`): turning a plugin on is itself the permission to
+  // run its code, so nothing is asked beside it.
+  it("enables the project picked from the row", async () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
     hoisted.installs = [row({ name: "notify" })];
     render();
 
-    await act(async () => { button(t("plugins.enable"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 1, enabled: true }]);
+    await act(async () => { select(gatePicker(), "2"); });
+    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 2, enabled: true }]);
   });
 
-  it("disables the same way", async () => {
+  it("turns one off from beside the project it is on in", async () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
+    hoisted.installs = [row({ name: "notify", enabledProjects: [2] })];
+    render();
+    await act(async () => { button(t("plugins.disable"))!.click(); });
+    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 2, enabled: false }]);
+  });
+
+  // The whole point of the list: a project it is on in is named whether or not anyone is looking at
+  // that project, and only the ones left are offered.
+  it("names every project it is on in, and offers only the rest", () => {
+    hoisted.projects = [
+      { id: 1, name: "alpha" }, { id: 2, name: "beta" }, { id: 3, name: "gamma" },
+    ];
+    hoisted.installs = [row({ name: "notify", enabledProjects: [1, 3] })];
+    render();
+
+    expect(chips()).toEqual([t("plugins.enabledChip"), "alpha", "gamma"]);
+    expect(options(gatePicker())).toEqual([t("plugins.gate.addProject"), "beta"]);
+  });
+
+  // On in every project there is: there is nothing left to add, so nothing is offered.
+  it("drops the picker when there is no project left to add", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
     render();
-    await act(async () => { button(t("plugins.disable"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 1, enabled: false }]);
+    expect(container.querySelector(".pluggate select")).toBeNull();
   });
 
   // The discard a disable makes is real and there is no other trace of it: those events are not
   // delivered late, and re-enabling starts from now (`AMB-D-399`). An empty queue says nothing at all —
   // a line every time would train the eye past the one time it matters, which is the CLI's line too.
   it("says how many waiting events a disable threw away, and stays quiet when none did", async () => {
-    hoisted.projects = [{ id: 1, name: "alpha" }];
+    hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
     hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
     hoisted.droppedQueued = 3;
     render();
@@ -246,33 +273,16 @@ describe("moving a gate from the list", () => {
     expect(container.textContent).not.toContain(tn("plugins.droppedQueued", 0));
   });
 
-  // A gate has no device-wide answer to fall back on, so this screen names the project too.
-  it("waits for a project before it will move a gate", async () => {
-    hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
-    hoisted.installs = [row({ name: "worktree" })];
-    render();
-
-    expect(container.textContent).toContain(t("plugins.pickProjectNote"));
-    expect(button(t("plugins.enable"))!.disabled).toBe(true);
-
-    const picker = container.querySelector("select") as HTMLSelectElement;
-    act(() => {
-      picker.value = "2";
-      picker.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await act(async () => { button(t("plugins.enable"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "worktree", projectId: 2, enabled: true }]);
-  });
-
   // An open gate on a build amenbo cannot speak to fires nothing, so the switch says why instead of moving.
   it("refuses to enable a plugin this build cannot speak to, and names the mismatch", () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [
       row({ name: "notify", compatible: false, incompatibleReason: "needs amenbo 9.0" }),
     ];
     render();
     expect(container.textContent).toContain("needs amenbo 9.0");
     expect(container.textContent).toContain(t("plugins.incompatibleChip"));
-    expect(button(t("plugins.enable"))!.disabled).toBe(true);
+    expect(gatePicker().disabled).toBe(true);
   });
 });
 
@@ -290,7 +300,7 @@ describe("a plugin this build cannot speak to", () => {
       }),
     ];
     render();
-    expect(chips()).toEqual([t("plugins.gate.project"), t("plugins.notFiring")]);
+    expect(chips()).toEqual([t("plugins.notFiring"), "alpha"]);
     // Core's own line, not a second judgement of our own.
     expect(container.textContent).toContain("payload v2, this build speaks v1");
   });
@@ -299,7 +309,7 @@ describe("a plugin this build cannot speak to", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
     render();
-    expect(chips()).toEqual([t("plugins.gate.project"), t("plugins.enabledChip")]);
+    expect(chips()).toEqual([t("plugins.enabledChip"), "alpha"]);
   });
 });
 
@@ -317,6 +327,8 @@ describe("the settings form", () => {
     render();
 
     expect(button(t("plugins.cfg.open"))).toBeTruthy();
+    // The count is the form's: it is about one project's values, and the form is what names one.
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
     expect(container.textContent).toContain(tn("plugins.cfg.requiredUnset", 1));
     // The row that declares nothing has nothing to open.
     expect(rows()[1].textContent).not.toContain(t("plugins.cfg.open"));

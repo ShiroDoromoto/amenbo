@@ -57,11 +57,6 @@ export function usePluginInstalls(): {
   return { installs: data ?? NONE, loading, error };
 }
 
-/** Whether the plugin fires in that project — the row's own answer, read from the list it carries. */
-export function enabledIn(install: PluginInstall, projectId: number | null): boolean {
-  return projectId != null && install.enabledProjects.includes(projectId);
-}
-
 /** Refetch the installs — after one landed, or after a gate moved. */
 function reloadInstalls(): void {
   invalidateQueries((key) => key[0] === "plugin-installs");
@@ -127,7 +122,7 @@ export async function installPlugin(name: string): Promise<PluginInstall | null>
  */
 export async function setPluginEnabled(
   name: string,
-  projectId: number | null,
+  projectId: number,
   enabled: boolean,
 ): Promise<PluginGateMoved> {
   if (!inTauri()) return { enabled: false, droppedQueued: 0 };

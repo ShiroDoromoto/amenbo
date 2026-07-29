@@ -41,7 +41,7 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
       hoisted.installed.push(name);
       return Promise.resolve(null);
     },
-    setPluginEnabled: (name: string, projectId: number | null, enabled: boolean) => {
+    setPluginEnabled: (name: string, projectId: number, enabled: boolean) => {
       if (hoisted.enableFails) return Promise.reject(hoisted.enableFails);
       hoisted.gated.push({ name, projectId, enabled });
       return Promise.resolve({ enabled, droppedQueued: hoisted.droppedQueued });
@@ -90,6 +90,14 @@ const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => 
 
 const buttons = () => Array.from(container.querySelectorAll("button"));
 const button = (label: string) => buttons().find((b) => b.textContent === label);
+/** The gate's own select: picking a project on it is the enable. */
+const gatePicker = () => container.querySelector<HTMLSelectElement>(".pluggate select")!;
+/** What a select offers, in order. */
+const options = (el: HTMLSelectElement) => Array.from(el.options).map((o) => o.textContent);
+const select = (el: HTMLSelectElement, value: string) => {
+  el.value = value;
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+};
 const detail = () => container.querySelector(".plugdet");
 const open = (i: number) =>
   act(() => (Array.from(container.querySelectorAll(".feed__item"))[i] as HTMLElement).click());
@@ -142,24 +150,24 @@ describe("installing from the market", () => {
     hoisted.enableFails = "plugin_signature_invalid";
     render();
     open(0);
-    await act(async () => { button(t("plugins.enable"))!.click(); });
+    await act(async () => { select(gatePicker(), "7"); });
     expect(detail()!.textContent).toContain("plugin_signature_invalid");
   });
 });
 
 describe("the one switch, and it is a project's", () => {
-  // Turning a plugin on is itself the permission to run its code (`AMB-D-434`), so the switch moves on the
-  // click rather than stopping to ask a second question.
-  it("enables on the click, with nothing else asked", async () => {
-    hoisted.projects = [{ id: 7, name: "solo" }];
+  // Picking the project is the enable (`AMB-D-434`): turning a plugin on is itself the permission to run
+  // its code, so the switch moves on the pick rather than stopping to ask a second question.
+  it("enables the project picked, with nothing else asked", async () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
     hoisted.installs = [row({ name: "notify" })];
     render();
     open(0);
-    await act(async () => { button(t("plugins.enable"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 7, enabled: true }]);
+    await act(async () => { select(gatePicker(), "2"); });
+    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 2, enabled: true }]);
   });
 
-  it("disables the same way", async () => {
+  it("turns one off from beside the project it is on in", async () => {
     hoisted.projects = [{ id: 7, name: "solo" }];
     hoisted.installs = [row({ name: "notify", enabledProjects: [7] })];
     render();
@@ -168,45 +176,35 @@ describe("the one switch, and it is a project's", () => {
     expect(hoisted.gated).toEqual([{ name: "notify", projectId: 7, enabled: false }]);
   });
 
-  // A gate has no device-wide answer to fall back on, so the market names the project first.
-  it("waits for a project before it will move a gate", async () => {
+  // The detail draws the same control the installed screen does (`AMB-D-412`), so it says where the
+  // plugin is on without being told which project to look through.
+  it("names the projects it is on in, and offers the rest", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
-    hoisted.installs = [row({ name: "notify" })];
+    hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
     render();
     open(0);
-
-    expect(detail()!.textContent).toContain(t("plugins.pickProjectNote"));
-    expect(button(t("plugins.enable"))!.disabled).toBe(true);
-
-    const picker = detail()!.querySelector("select") as HTMLSelectElement;
-    act(() => {
-      picker.value = "2";
-      picker.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await act(async () => { button(t("plugins.enable"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 2, enabled: true }]);
+    expect(detail()!.textContent).toContain("alpha");
+    expect(options(gatePicker())).toEqual([t("plugins.gate.addProject"), "beta"]);
   });
 
-  // One project is not a question worth asking: there is exactly one answer, so the gate is movable at once.
-  it("takes the only project there is without asking", async () => {
+  it("says so for a plugin that is on nowhere", () => {
     hoisted.projects = [{ id: 7, name: "solo" }];
     hoisted.installs = [row({ name: "notify" })];
     render();
     open(0);
-    expect(detail()!.textContent).not.toContain(t("plugins.pickProjectNote"));
-    await act(async () => { button(t("plugins.enable"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 7, enabled: true }]);
+    expect(detail()!.textContent).toContain(t("plugins.gate.offEverywhere"));
   });
 
   // An open gate on a build amenbo cannot speak to fires nothing, so the switch says why instead of moving.
   it("refuses to enable a plugin this build cannot speak to, and names the mismatch", () => {
+    hoisted.projects = [{ id: 7, name: "solo" }];
     hoisted.installs = [
       row({ name: "notify", compatible: false, incompatibleReason: "needs amenbo 9.0" }),
     ];
     render();
     open(0);
     expect(detail()!.textContent).toContain("needs amenbo 9.0");
-    expect(button(t("plugins.enable"))!.disabled).toBe(true);
+    expect(gatePicker().disabled).toBe(true);
   });
 });
 

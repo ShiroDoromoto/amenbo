@@ -333,10 +333,9 @@ export const ja: Translation = {
     "plugins.install": "インストール", "plugins.installing": "インストール中…",
     "plugins.installNote": "入れただけでは動きません。実行するには有効化が要ります。",
     "plugins.installed": "インストール済み", "plugins.enabledChip": "有効",
-    "plugins.enable": "有効にする", "plugins.disable": "無効にする",
-    "plugins.gate.project": "このプロジェクト",
-    "plugins.enabledAt": "{where}で有効", "plugins.disabledAt": "{where}で無効",
-    "plugins.pickProject": "プロジェクトを選択", "plugins.pickProjectNote": "このプラグインはプロジェクトごとに有効化します。対象のプロジェクトを選んでください。",
+    "plugins.disable": "無効にする",
+    "plugins.gate.onIn": "有効なプロジェクト", "plugins.gate.offEverywhere": "どこでも無効",
+    "plugins.gate.addProject": "プロジェクトを選んで有効にする",
     "plugins.incompatible": "この版の amenbo では動きません",
     "plugins.droppedQueued.other": "未配達の {n} 件を捨てました。無効な間の出来事は届かず、有効に戻しても今からです。",
     // the installed screen (the "manage what you have" tab)

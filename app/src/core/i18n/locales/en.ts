@@ -342,10 +342,9 @@ const ui = {
   "plugins.install": "Install", "plugins.installing": "Installing…",
   "plugins.installNote": "Installing does not run it. Enabling is what lets it fire.",
   "plugins.installed": "Installed", "plugins.enabledChip": "Enabled",
-  "plugins.enable": "Enable", "plugins.disable": "Disable",
-  "plugins.gate.project": "this project",
-  "plugins.enabledAt": "Enabled for {where}", "plugins.disabledAt": "Disabled for {where}",
-  "plugins.pickProject": "Pick a project", "plugins.pickProjectNote": "This plugin is enabled per project. Pick the project it should fire in.",
+  "plugins.disable": "Disable",
+  "plugins.gate.onIn": "Enabled in", "plugins.gate.offEverywhere": "Off everywhere",
+  "plugins.gate.addProject": "Enable in a project…",
   "plugins.incompatible": "This build of amenbo cannot run it",
   "plugins.droppedQueued.one": "{n} waiting event was dropped. Nothing arrives while it is off, and enabling it again starts from now.", "plugins.droppedQueued.other": "{n} waiting events were dropped. Nothing arrives while it is off, and enabling it again starts from now.",
   // the installed screen (the "manage what you have" tab)

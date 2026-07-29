@@ -29,28 +29,37 @@ export type PluginRemoved = PluginRemovedDto;
 export type PluginGateMoved = PluginGateMovedDto;
 
 const NONE: PluginInstall[] = [];
+const NO_FIELDS: PluginConfigField[] = [];
 
 /**
- * Read what is installed, resolved for `projectId` (Tauri: `plugin_installs`). The project is not a
- * choice of level — there is only one (`AMB-D-434`) — it is which project the answer is about: a plugin
- * asked about without one comes back with no `enabled` at all rather than "off".
+ * Read what is installed, and which projects each one fires in (Tauri: `plugin_installs`).
+ *
+ * **It is asked from nowhere in particular** (`AMB-D-412`): every row names its own projects, so no face
+ * has to pick one to look through, and a plugin left on somewhere else cannot be drawn as "off".
  *
  * Outside Tauri — `npm run dev` in a browser — there is no plugins directory to read, so the mock says
  * nothing is installed rather than inventing state.
  */
-export async function fetchPluginInstalls(projectId: number | null): Promise<PluginInstall[]> {
-  if (inTauri()) return invoke<PluginInstall[]>("plugin_installs", { projectId });
+export async function fetchPluginInstalls(): Promise<PluginInstall[]> {
+  if (inTauri()) return invoke<PluginInstall[]>("plugin_installs");
   return NONE;
 }
 
 /** The installs, for the market to draw over the catalog. Local and cheap: no network, no catalog fetch. */
-export function usePluginInstalls(
-  projectId: number | null,
-): { installs: PluginInstall[]; loading: boolean; error: unknown } {
-  const { data, loading, error } = useQuery<PluginInstall[]>(["plugin-installs", projectId], () =>
-    fetchPluginInstalls(projectId),
+export function usePluginInstalls(): {
+  installs: PluginInstall[];
+  loading: boolean;
+  error: unknown;
+} {
+  const { data, loading, error } = useQuery<PluginInstall[]>(["plugin-installs"], () =>
+    fetchPluginInstalls(),
   );
   return { installs: data ?? NONE, loading, error };
+}
+
+/** Whether the plugin fires in that project — the row's own answer, read from the list it carries. */
+export function enabledIn(install: PluginInstall, projectId: number | null): boolean {
+  return projectId != null && install.enabledProjects.includes(projectId);
 }
 
 /** Refetch the installs — after one landed, or after a gate moved. */
@@ -59,18 +68,47 @@ function reloadInstalls(): void {
 }
 
 /**
+ * Read what one project holds for a plugin's declared settings (Tauri: `plugin_config_read`).
+ *
+ * Separate from the installs because a value is one project's and an install is not (`AMB-D-434`): with
+ * no project named there is nothing to read, and no blanks are invented in its place — the form draws
+ * the author's schema from the install row until a project answers for it.
+ */
+export async function fetchPluginConfig(
+  name: string,
+  projectId: number | null,
+): Promise<PluginConfigField[]> {
+  if (!inTauri() || projectId == null) return NO_FIELDS;
+  return invoke<PluginConfigField[]>("plugin_config_read", { name, projectId });
+}
+
+/** What one project holds for a plugin — the settings form's own read. */
+export function usePluginConfig(
+  name: string,
+  projectId: number | null,
+): { fields: PluginConfigField[]; loading: boolean } {
+  const { data, loading } = useQuery<PluginConfigField[]>(["plugin-config", name, projectId], () =>
+    fetchPluginConfig(name, projectId),
+  );
+  return { fields: data ?? NO_FIELDS, loading };
+}
+
+/** Refetch what a project holds — after a value was written or cleared. */
+function reloadConfig(): void {
+  invalidateQueries((key) => key[0] === "plugin-config");
+}
+
+/**
  * Install one plugin by name (Tauri: `plugin_install`). Every gate is core's: the catalog resolve, the
  * signature against amenbo's own key and the checksum over the bytes served — a refusal anywhere throws
  * with the reason, and nothing is written (`AMB-D-371`).
  *
- * It lands **inert**: the row it returns is an installed plugin with its gate shut.
+ * It lands **inert**: the row it returns is an installed plugin whose gate is open nowhere — which is
+ * also why no project is named to install it (`AMB-D-412`).
  */
-export async function installPlugin(
-  name: string,
-  projectId: number | null,
-): Promise<PluginInstall | null> {
+export async function installPlugin(name: string): Promise<PluginInstall | null> {
   if (!inTauri()) return null;
-  const row = await invoke<PluginInstall>("plugin_install", { name, projectId });
+  const row = await invoke<PluginInstall>("plugin_install", { name });
   reloadInstalls();
   return row;
 }
@@ -105,8 +143,7 @@ export async function setPluginEnabled(
  * `secret` flag decides which of the two tables it lands in, and this seam never says which is which.
  * An **empty** value clears the setting.
  *
- * The installs are refetched afterwards because they carry what is now held, which is what the form
- * draws from.
+ * What that project holds is refetched afterwards, since it is what the form draws from.
  */
 export async function setPluginConfig(
   name: string,
@@ -116,7 +153,7 @@ export async function setPluginConfig(
 ): Promise<void> {
   if (!inTauri()) return;
   await invoke<null>("plugin_config_set", { name, key, value, projectId });
-  reloadInstalls();
+  reloadConfig();
 }
 
 /**
@@ -131,6 +168,7 @@ export async function uninstallPlugin(name: string): Promise<PluginRemoved | nul
   if (!inTauri()) return null;
   const removed = await invoke<PluginRemoved>("plugin_uninstall", { name });
   reloadInstalls();
+  reloadConfig();
   // An offer to update what is no longer here would be an offer to install it again (`AMB-D-359`).
   invalidateQueries((key) => key[0] === "plugin-updates");
   return removed;

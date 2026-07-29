@@ -205,7 +205,7 @@ function PluginActions({ entry, install, projects, projectId, onProject }: {
     setBusy(true);
     setError(null);
     try {
-      await installPlugin(entry.name, projectId);
+      await installPlugin(entry.name);
     } catch (e) {
       setError(errText(e));
     } finally {

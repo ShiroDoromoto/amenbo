@@ -62,7 +62,7 @@ export function PluginMarketScreen() {
   const gateProject = pickedProject ?? (projects.length === 1 ? projects[0].id : null);
   // What this machine holds, drawn over the catalog by name. A separate, local read: the catalog says what
   // exists, this says what is here, and an unreachable catalog must not hide an installed plugin.
-  const { installs } = usePluginInstalls(gateProject);
+  const { installs } = usePluginInstalls();
   // Opening a plugin screen is one of the update triggers (`AMB-D-359`). The offer is the shell's banner, so
   // nothing is drawn here for it — this only asks. Free inside the catalog's freshness window.
   useEffect(() => { refreshPluginUpdates(); }, []);
@@ -426,12 +426,16 @@ function PluginCard({ entry, install, onOpen }: {
             </>
           )}
           {/* Installed and enabled are two facts (`AMB-D-351`), and the row says which one it is: a plugin
-              that is here but fires nothing is the ordinary state, not a half-finished install. */}
+              that is here but fires nothing is the ordinary state, not a half-finished install. The card
+              is one line about the plugin, so "enabled" here means it fires in some project
+              (`AMB-D-412`) — which ones is the detail's to name. */}
           {install && (
             <>
               {" "}
               <span className="chip">
-                {install.enabled ? t("plugins.enabledChip") : t("plugins.installed")}
+                {install.enabledProjects.length > 0
+                  ? t("plugins.enabledChip")
+                  : t("plugins.installed")}
               </span>
             </>
           )}

@@ -22,6 +22,8 @@ const hoisted = vi.hoisted(() => ({
   /** What a disable answers it threw away — zero unless a test is about the discard. */
   droppedQueued: 0,
   projects: [] as { id: number; name: string }[],
+  /** What each project holds for a plugin's settings, keyed by plugin then project. */
+  held: {} as Record<string, Record<number, PluginConfigField[]>>,
   removed: [] as string[],
   /** Every setting written, in order — the project included, since that is what a value belongs to. */
   wrote: [] as { name: string; key: string; value: string; projectId: number | null }[],
@@ -41,6 +43,11 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
       installs: hoisted.installs,
       loading: hoisted.loading,
       error: hoisted.error,
+    }),
+    // A value is one project's, so this seam answers nothing until one is named (`AMB-D-434`).
+    usePluginConfig: (name: string, projectId: number | null) => ({
+      fields: projectId == null ? [] : (hoisted.held[name]?.[projectId] ?? []),
+      loading: false,
     }),
     setPluginEnabled: (name: string, projectId: number | null, enabled: boolean) => {
       hoisted.gated.push({ name, projectId, enabled });
@@ -101,6 +108,7 @@ let root: Root;
 
 const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => ({
   compatible: true,
+  enabledProjects: [],
   config: [],
   rollback: false,
   ...over,
@@ -147,6 +155,7 @@ beforeEach(() => {
   hoisted.gated = [];
   hoisted.droppedQueued = 0;
   hoisted.projects = [];
+  hoisted.held = {};
   hoisted.removed = [];
   hoisted.wrote = [];
   hoisted.updates = [];
@@ -173,7 +182,7 @@ const render = () => act(() => root.render(createElement(PluginInstalledScreen))
 describe("what this machine holds", () => {
   it("lists every install, and says which switch each one has", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify" }), row({ name: "worktree", enabled: true })];
+    hoisted.installs = [row({ name: "notify" }), row({ name: "worktree", enabledProjects: [1] })];
     render();
 
     expect(rows()).toHaveLength(2);
@@ -214,7 +223,7 @@ describe("moving a gate from the list", () => {
 
   it("disables the same way", async () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", enabled: true })];
+    hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
     render();
     await act(async () => { button(t("plugins.disable"))!.click(); });
     expect(hoisted.gated).toEqual([{ name: "notify", projectId: 1, enabled: false }]);
@@ -225,7 +234,7 @@ describe("moving a gate from the list", () => {
   // a line every time would train the eye past the one time it matters, which is the CLI's line too.
   it("says how many waiting events a disable threw away, and stays quiet when none did", async () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", enabled: true })];
+    hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
     hoisted.droppedQueued = 3;
     render();
     await act(async () => { button(t("plugins.disable"))!.click(); });
@@ -271,10 +280,11 @@ describe("moving a gate from the list", () => {
 // event, so the row has to say that rather than let "enabled" stand for "working".
 describe("a plugin this build cannot speak to", () => {
   it("reads as enabled-but-silent, not as enabled", () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [
       row({
         name: "notify",
-        enabled: true,
+        enabledProjects: [1],
         compatible: false,
         incompatibleReason: "payload v2, this build speaks v1",
       }),
@@ -286,7 +296,8 @@ describe("a plugin this build cannot speak to", () => {
   });
 
   it("leaves a compatible row wearing the plain enabled badge", () => {
-    hoisted.installs = [row({ name: "notify", enabled: true })];
+    hoisted.projects = [{ id: 1, name: "alpha" }];
+    hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
     render();
     expect(chips()).toEqual([t("plugins.gate.project"), t("plugins.enabledChip")]);
   });
@@ -297,10 +308,12 @@ describe("a plugin this build cannot speak to", () => {
 // on screen, and all of them go out through the one write boundary.
 describe("the settings form", () => {
   it("offers settings only for a plugin that declares any, and counts what an enable will refuse over", () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [
       row({ name: "notify", config: [field({ key: "webhook", required: true })] }),
       row({ name: "quiet" }),
     ];
+    hoisted.held = { notify: { 1: [field({ key: "webhook", required: true })] } };
     render();
 
     expect(button(t("plugins.cfg.open"))).toBeTruthy();
@@ -314,9 +327,10 @@ describe("the settings form", () => {
     hoisted.installs = [
       row({
         name: "notify",
-        config: [field({ key: "events", value: "push" }), field({ key: "room" })],
+        config: [field({ key: "events" }), field({ key: "room" })],
       }),
     ];
+    hoisted.held = { notify: { 7: [field({ key: "events", value: "push" }), field({ key: "room" })] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
 
@@ -372,7 +386,8 @@ describe("the settings form", () => {
   // Clearing is the same door as setting: an empty value is "not provided", which is what `required` reads.
   it("clears a held setting with an empty value", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", config: [field({ key: "events", value: "push" })] })];
+    hoisted.installs = [row({ name: "notify", config: [field({ key: "events" })] })];
+    hoisted.held = { notify: { 7: [field({ key: "events", value: "push" })] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
 

@@ -4538,16 +4538,7 @@ pub async fn plugin_detail(name: String) -> Result<Option<PluginDetailDto>, CmdE
         let why = amenbo_core::plugin_compat::check(&manifest).err();
         Ok(Some(PluginDetailDto {
             events: detail.events.iter().map(|e| e.event.clone()).collect(),
-            config: detail
-                .config
-                .iter()
-                .map(|f| PluginWantedSettingDto {
-                    key: f.key.clone(),
-                    label: f.label.clone(),
-                    secret: f.secret,
-                    required: f.required,
-                })
-                .collect(),
+            config: detail.config.iter().map(wanted_setting).collect(),
             compatible: why.is_none(),
             incompatible_reason: why.map(|why| why.to_string()),
         }))
@@ -4589,9 +4580,11 @@ pub struct PluginConfigFieldDto {
     secret_set: bool,
 }
 
-/// One setting a plugin will ask for, as the market names it **before** anything is installed
-/// (`AMB-D-385`). The author's declaration and nothing else: what a machine holds for a key is the
-/// installed plugin's business, and here there is no install to hold anything.
+/// One setting a plugin will ask for, as its author declared it — and nothing a store holds for it.
+///
+/// This is what the market shows **before** anything is installed (`AMB-D-385`), and it is also what an
+/// installed row carries: a value belongs to one project (`AMB-D-434`), and neither of those faces is
+/// standing in one. What is held is read for a named project, through [`plugin_config_read`].
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -4605,6 +4598,17 @@ pub struct PluginWantedSettingDto {
     secret: bool,
     /// Whether an enable is refused until it is filled in (`AMB-D-356`).
     required: bool,
+}
+
+/// One declared setting as its own DTO — the author's four words, wherever a face asks what a plugin
+/// wants without standing in a project.
+fn wanted_setting(field: &amenbo_core::plugin_manifest::ConfigField) -> PluginWantedSettingDto {
+    PluginWantedSettingDto {
+        key: field.key.clone(),
+        label: field.label.clone(),
+        secret: field.secret,
+        required: field.required,
+    }
 }
 
 /// What the catalog's **detail document** says about one plugin — the half of its entry that is fetched
@@ -4641,22 +4645,22 @@ pub struct PluginDetailDto {
 pub struct PluginInstallDto {
     /// The plugin's name — the key the market joins this row onto a catalog entry by.
     name: String,
-    /// Whether it fires in the project the request named — `null` when there is no answer to give: a
-    /// plugin asked about without a project is not "off", it is unanswered (`AMB-D-434`).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    enabled: Option<bool>,
+    /// Every project holding this plugin's gate open (`AMB-D-412`). Empty means off everywhere, which is
+    /// an answer; a truth value read from one project is not, because it hides the projects it is still
+    /// firing in.
+    #[ts(type = "number[]")]
+    enabled_projects: Vec<i64>,
     /// Whether this build can speak to it at all (`AMB-D-359`). An open gate on an incompatible plugin
-    /// fires nothing, and amenbo updates underneath an install, so this is not derivable from `enabled`.
+    /// fires nothing, and amenbo updates underneath an install, so this is not derivable from a gate.
     compatible: bool,
     /// Why not, when `compatible` is false — the mismatch named, rather than left to the log.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     incompatible_reason: Option<String>,
-    /// The settings the author declared, in that order, each with what this machine holds for it
-    /// (`AMB-D-356`). Empty for a plugin that declares none, which is the form's own answer to
-    /// whether there is anything to configure.
-    config: Vec<PluginConfigFieldDto>,
+    /// The settings the author declared, in that order — the schema alone. Empty for a plugin that
+    /// declares none, which is the form's own answer to whether there is anything to configure. What is
+    /// held for a key is one project's (`AMB-D-434`) and comes from [`plugin_config_read`].
+    config: Vec<PluginWantedSettingDto>,
     /// Whether the build the last update replaced is still retained beside this one, so a rollback
     /// has somewhere to go (`AMB-D-359`). An update retains exactly one build and a rollback consumes
     /// it, so this is false for a plugin that was never updated and false again once it is used.
@@ -4666,18 +4670,14 @@ pub struct PluginInstallDto {
 /// Read one declared setting into its DTO, for the project the form is editing (`AMB-D-434`). The
 /// author's `secret` flag decides which of the two tables the value came from, and it is the only thing
 /// read here to route the probe (`AMB-D-356`). A secret's value never leaves core — only whether one is
-/// held. Without a project there is nothing to answer with, and a made-up "unset" is not an answer.
+/// held.
 fn config_field_row(
     store: &Store,
     plugin: &str,
     field: &amenbo_core::plugin_manifest::ConfigField,
-    project: Option<i64>,
+    project: i64,
 ) -> Result<PluginConfigFieldDto, CmdError> {
-    use amenbo_core::plugin_config::get;
-    let held = match project {
-        Some(id) => get(store, field, plugin, id)?,
-        None => None,
-    };
+    let held = amenbo_core::plugin_config::get(store, field, plugin, project)?;
     let (value, secret_set) = if field.secret { (None, held.is_some()) } else { (held, false) };
     Ok(PluginConfigFieldDto {
         key: field.key.clone(),
@@ -4689,28 +4689,16 @@ fn config_field_row(
     })
 }
 
-/// Read one installed plugin into its DTO at the gate `project` names (the shape `plugin list` prints).
+/// Read one installed plugin into its DTO, naming every project it fires in (`AMB-D-412`).
 fn install_row(
     store: &Store,
     plugin: &amenbo_core::plugin_subscribe::InstalledPlugin,
-    project: Option<i64>,
 ) -> Result<PluginInstallDto, CmdError> {
-    use amenbo_core::plugin_trust::effective_enabled_in;
     let why = amenbo_core::plugin_compat::check(&plugin.manifest).err();
-    // A gate that cannot be resolved from here is no answer at all, never a made-up `false`.
-    let enabled = match project {
-        Some(id) => Some(effective_enabled_in(store, &plugin.name, id)?),
-        None => None,
-    };
-    let config = plugin
-        .manifest
-        .config
-        .iter()
-        .map(|f| config_field_row(store, &plugin.name, f, project))
-        .collect::<Result<Vec<_>, CmdError>>()?;
+    let config = plugin.manifest.config.iter().map(wanted_setting).collect();
     Ok(PluginInstallDto {
         name: plugin.name.clone(),
-        enabled,
+        enabled_projects: store.projects_with_plugin_enabled(&plugin.name)?,
         compatible: why.is_none(),
         incompatible_reason: why.map(|why| why.to_string()),
         config,
@@ -4718,20 +4706,45 @@ fn install_row(
     })
 }
 
-/// What this machine has installed, and where each one's switch currently stands — the state the market
-/// draws over the catalog it is browsing (`AMB-D-351`).
+/// What this machine has installed, and which projects each one fires in — the state the market draws
+/// over the catalog it is browsing (`AMB-D-351`).
 ///
-/// `project_id` is which project the answer is for: a plugin's gate is one project's, so asking without
-/// one comes back `enabled: null` rather than a device-wide answer it does not have (`AMB-D-434`).
+/// **It is asked from nowhere in particular** (`AMB-D-412`). Every row names the projects holding its
+/// gate open, so a face draws the whole answer without first choosing a project to look through — and a
+/// plugin still running somewhere else cannot be hidden by where the screen happened to be standing.
 ///
 /// Reads the app-data `plugins/` directory and this store, and nothing else — no network, no catalog
 /// fetch — so it answers the same offline, and a directory that will not read as an install is skipped
 /// rather than allowed to hide the rest.
 #[tauri::command]
-pub fn plugin_installs(project_id: Option<i64>) -> Result<Vec<PluginInstallDto>, CmdError> {
+pub fn plugin_installs() -> Result<Vec<PluginInstallDto>, CmdError> {
     let store = open_store_read()?;
     let installed = amenbo_core::plugin_installed::installed(&store.paths)?;
-    installed.iter().map(|p| install_row(&store, p, project_id)).collect()
+    installed.iter().map(|p| install_row(&store, p)).collect()
+}
+
+/// What one project holds for a plugin's declared settings (`AMB-D-434`) — the form's own read, made
+/// once a project is named.
+///
+/// It is separate from [`plugin_installs`] because a value is one project's while an install is not: the
+/// list says what is installed and where it fires, and this says what a single project has filled in.
+/// A secret comes back as held or not, never as itself (`AMB-D-356`).
+#[tauri::command]
+pub fn plugin_config_read(
+    name: String,
+    project_id: Option<i64>,
+) -> Result<Vec<PluginConfigFieldDto>, CmdError> {
+    let store = open_store_read()?;
+    let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
+    // Refused rather than answered with blanks: "no project named" and "this project holds nothing" are
+    // different states, and a form that cannot tell them apart draws the second for the first.
+    let project = amenbo_core::plugin_trust::require_project(project_id)?;
+    installed
+        .manifest
+        .config
+        .iter()
+        .map(|f| config_field_row(&store, &name, f, project))
+        .collect()
 }
 
 /// Install one plugin from the catalog by name (`AMB-D-351`) — the GUI's half of `plugin install`.
@@ -4742,19 +4755,17 @@ pub fn plugin_installs(project_id: Option<i64>) -> Result<Vec<PluginInstallDto>,
 /// parameter down there.
 ///
 /// **Installing never enables.** The plugin lands inert and [`plugin_set_enabled`] is the separate,
-/// explicit act that lets it run — which is why this returns the fresh row rather than an enabled one.
+/// explicit act that lets it run — which is why this returns the fresh row rather than an enabled one,
+/// and why no project is named here: installing is not aimed at one (`AMB-D-412`).
 /// Off the main thread: it downloads.
 #[tauri::command]
-pub async fn plugin_install(
-    name: String,
-    project_id: Option<i64>,
-) -> Result<PluginInstallDto, CmdError> {
+pub async fn plugin_install(name: String) -> Result<PluginInstallDto, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<PluginInstallDto, CmdError> {
         let paths = amenbo_core::config::Paths::resolve()?;
         amenbo_core::plugin_install::install(&paths, &name)?;
         let store = open_store_read()?;
         let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
-        install_row(&store, &installed, project_id)
+        install_row(&store, &installed)
     })
     .await
     .map_err(|e| -> CmdError { format!("installing the plugin did not finish: {e}").into() })?
@@ -5229,19 +5240,19 @@ mod tests {
     }
 
     /// The GUI's gate commands are the CLI's `plugin enable/disable` through the same boundary: one
-    /// switch, and it is the named project's (`AMB-D-434`). Asked without a project there is no answer to
-    /// give and nothing to move — `null` rather than a made-up "off", and a refusal rather than a
-    /// device-wide write.
+    /// switch, and it is the named project's (`AMB-D-434`). What the list answers with is every project
+    /// holding that switch open (`AMB-D-412`) — asked from nowhere in particular, so a plugin firing in
+    /// one project cannot be read as "off" from another.
     #[test]
     fn the_gate_commands_move_one_projects_switch() {
         let _env = env_guard();
         let tmp = amenbo_scratch::scratch("plugin-gate");
         std::env::set_var("AMENBO_HOME", &tmp);
-        let project_id = {
+        let project = |name: &str| {
             let mut store = Store::open().unwrap();
             store
                 .project_add(amenbo_core::ops::project::NewProject {
-                    name: "テストPJ".into(),
+                    name: name.into(),
                     view: View::List,
                     notes: String::new(),
                     color: None,
@@ -5249,31 +5260,38 @@ mod tests {
                 .unwrap()
                 .id
         };
+        let project_id = project("テストPJ");
+        let other_id = project("となりのPJ");
         plant_plugin(&tmp, "notify");
 
-        // Installed is not enabled.
-        let rows = plugin_installs(Some(project_id)).unwrap();
+        // Installed is not enabled: the row is here, and it names no project at all.
+        let rows = plugin_installs().unwrap();
         assert_eq!(rows.len(), 1, "the plant reads as installed");
-        assert_eq!(rows[0].enabled, Some(false));
+        assert!(rows[0].enabled_projects.is_empty(), "off everywhere is an empty list, not a false");
 
-        let row = |project: Option<i64>| {
-            plugin_installs(project).unwrap().into_iter().find(|r| r.name == "notify").unwrap()
-        };
+        let row = || plugin_installs().unwrap().into_iter().find(|r| r.name == "notify").unwrap();
         assert!(plugin_set_enabled("notify".into(), Some(project_id), true).unwrap().enabled);
-        assert_eq!(row(Some(project_id)).enabled, Some(true));
+        assert_eq!(row().enabled_projects, vec![project_id]);
 
-        // Disabling closes that project's gate; the plugin stays installed (`disable ≠ uninstall`).
+        // A second project's switch is its own, and the list carries both rather than the one a caller
+        // happened to ask through.
+        assert!(plugin_set_enabled("notify".into(), Some(other_id), true).unwrap().enabled);
+        let mut on = row().enabled_projects;
+        on.sort_unstable();
+        assert_eq!(on, vec![project_id, other_id]);
+
+        // Disabling closes that project's gate and no other; the plugin stays installed
+        // (`disable ≠ uninstall`).
         let off_gate = plugin_set_enabled("notify".into(), Some(project_id), false).unwrap();
         assert!(!off_gate.enabled);
         assert_eq!(off_gate.dropped_queued, 0, "nothing was queued, so nothing was thrown away");
-        assert_eq!(row(Some(project_id)).enabled, Some(false));
+        assert_eq!(row().enabled_projects, vec![other_id], "the other project is still firing");
 
-        // Without a project there is no switch: refused to move, and unanswered to read.
+        // Without a project there is no switch to move.
         assert!(
             plugin_set_enabled("notify".into(), None, true).is_err(),
             "there is no device-wide answer for a gate to fall back on"
         );
-        assert_eq!(row(None).enabled, None, "unanswered, not off");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -5330,10 +5348,10 @@ mod tests {
     }
 
     /// What a generated settings form is drawn from and writes through (`AMB-D-356`): the author's
-    /// schema comes back with what each tier holds, the write routes by the author's `secret` flag
-    /// alone, and a secret's value never comes back out — the form has "held" and nothing more.
+    /// schema comes back with what the named project holds, the write routes by the author's `secret`
+    /// flag alone, and a secret's value never comes back out — the form has "held" and nothing more.
     #[test]
-    fn the_settings_carry_both_tiers_and_a_secret_only_as_held() {
+    fn the_settings_carry_one_projects_values_and_a_secret_only_as_held() {
         let _env = env_guard();
         let tmp = amenbo_scratch::scratch("plugin-config");
         std::env::set_var("AMENBO_HOME", &tmp);
@@ -5358,16 +5376,21 @@ mod tests {
             ]),
         );
         let field = |project: Option<i64>, key: &str| {
-            plugin_installs(project)
+            plugin_config_read("notify".into(), project)
                 .unwrap()
-                .into_iter()
-                .find(|r| r.name == "notify")
-                .unwrap()
-                .config
                 .into_iter()
                 .find(|f| f.key == key)
                 .unwrap()
         };
+
+        // The install row carries the author's schema and nothing a project holds — that is this read's
+        // to answer (`AMB-D-412`).
+        let declared = plugin_installs().unwrap().into_iter().find(|r| r.name == "notify").unwrap();
+        assert_eq!(
+            declared.config.iter().map(|f| f.key.as_str()).collect::<Vec<_>>(),
+            vec!["events", "token"],
+            "the schema arrives in the author's order, without a project being named"
+        );
 
         // The schema arrives whole, holding nothing yet — which is what the form draws "not provided"
         // and the enable gate refuses over.
@@ -5377,10 +5400,11 @@ mod tests {
         assert_eq!((events.value, events.secret_set), (None, false));
 
         // Text: the value is the project's, and it is read for the project asked about and no other
-        // (`AMB-D-434`). Without a project there is nothing to answer with.
+        // (`AMB-D-434`). Without a project there is nothing to answer with, so the read refuses rather
+        // than drawing every field blank.
         plugin_config_set("notify".into(), "events".into(), "deploy".into(), Some(project_id)).unwrap();
         assert_eq!(field(Some(project_id), "events").value.as_deref(), Some("deploy"));
-        assert_eq!(field(None, "events").value, None, "no project named, nothing read");
+        assert!(plugin_config_read("notify".into(), None).is_err(), "no project named, nothing to read");
 
         // Secret: routed by the author's flag to the table of its own, and reported as held —
         // the value itself is for injection at run time, never for a webview.
@@ -5414,7 +5438,7 @@ mod tests {
         let tmp = amenbo_scratch::scratch("plugin-rollback");
         std::env::set_var("AMENBO_HOME", &tmp);
         plant_plugin(&tmp, "notify");
-        let row = || plugin_installs(None).unwrap().into_iter().find(|r| r.name == "notify").unwrap();
+        let row = || plugin_installs().unwrap().into_iter().find(|r| r.name == "notify").unwrap();
 
         // Never updated: there is nothing retained, so the face has no return to offer.
         assert!(!row().rollback);

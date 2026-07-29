@@ -672,13 +672,14 @@ export type PluginInstallDto = {
  */
 name: string, 
 /**
- * Whether it fires in the project the request named — `null` when there is no answer to give: a
- * plugin asked about without a project is not "off", it is unanswered (`AMB-D-434`).
+ * Every project holding this plugin's gate open (`AMB-D-412`). Empty means off everywhere, which is
+ * an answer; a truth value read from one project is not, because it hides the projects it is still
+ * firing in.
  */
-enabled?: boolean, 
+enabledProjects: number[], 
 /**
  * Whether this build can speak to it at all (`AMB-D-359`). An open gate on an incompatible plugin
- * fires nothing, and amenbo updates underneath an install, so this is not derivable from `enabled`.
+ * fires nothing, and amenbo updates underneath an install, so this is not derivable from a gate.
  */
 compatible: boolean, 
 /**
@@ -686,11 +687,11 @@ compatible: boolean,
  */
 incompatibleReason?: string, 
 /**
- * The settings the author declared, in that order, each with what this machine holds for it
- * (`AMB-D-356`). Empty for a plugin that declares none, which is the form's own answer to
- * whether there is anything to configure.
+ * The settings the author declared, in that order — the schema alone. Empty for a plugin that
+ * declares none, which is the form's own answer to whether there is anything to configure. What is
+ * held for a key is one project's (`AMB-D-434`) and comes from [`plugin_config_read`].
  */
-config: Array<PluginConfigFieldDto>, 
+config: Array<PluginWantedSettingDto>, 
 /**
  * Whether the build the last update replaced is still retained beside this one, so a rollback
  * has somewhere to go (`AMB-D-359`). An update retains exactly one build and a rollback consumes
@@ -809,9 +810,11 @@ applied: boolean,
 error?: string, };
 
 /**
- * One setting a plugin will ask for, as the market names it **before** anything is installed
- * (`AMB-D-385`). The author's declaration and nothing else: what a machine holds for a key is the
- * installed plugin's business, and here there is no install to hold anything.
+ * One setting a plugin will ask for, as its author declared it — and nothing a store holds for it.
+ *
+ * This is what the market shows **before** anything is installed (`AMB-D-385`), and it is also what an
+ * installed row carries: a value belongs to one project (`AMB-D-434`), and neither of those faces is
+ * standing in one. What is held is read for a named project, through [`plugin_config_read`].
  */
 export type PluginWantedSettingDto = { 
 /**

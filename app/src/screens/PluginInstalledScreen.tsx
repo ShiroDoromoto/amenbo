@@ -4,8 +4,11 @@ import { PluginGate } from "../components/PluginGate";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tn, tf } from "../core/i18n";
 import {
+  enabledIn,
   uninstallPlugin,
+  usePluginConfig,
   usePluginInstalls,
+  type PluginConfigField,
   type PluginInstall,
   type PluginRemoved,
 } from "../core/pluginInstalls";
@@ -37,7 +40,7 @@ export function PluginInstalledScreen() {
   // asking a question with a single answer.
   const [pickedProject, setPickedProject] = useState<number | null>(null);
   const gateProject = pickedProject ?? (projects.length === 1 ? projects[0].id : null);
-  const { installs, loading, error } = usePluginInstalls(gateProject);
+  const { installs, loading, error } = usePluginInstalls();
   // Opening this screen is one of the update triggers (`AMB-D-359`) — core answers from the catalog's
   // freshness window, so arriving here inside the hour costs nothing. The offer itself is the shell's banner;
   // what this screen reads it for is the "nothing is waiting" the banner has no reason to say.
@@ -123,14 +126,12 @@ function removedParts(r: PluginRemoved): string {
 }
 
 /**
- * How many settings the author marked `required` this project holds no value for — the count an enable
- * is refused over (`AMB-D-356`). There is one value per setting per project (`AMB-D-434`), so a field is
- * held or it is not.
+ * How many settings the author marked `required` the named project holds no value for — the count an
+ * enable is refused over (`AMB-D-356`). There is one value per setting per project (`AMB-D-434`), so a
+ * field is held or it is not; with no project named nothing was read, and nothing is claimed.
  */
-function requiredUnset(install: PluginInstall): number {
-  return install.config.filter(
-    (f) => f.required && (f.secret ? !f.secretSet : f.value == null),
-  ).length;
+function requiredUnset(fields: PluginConfigField[]): number {
+  return fields.filter((f) => f.required && (f.secret ? !f.secretSet : f.value == null)).length;
 }
 
 /**
@@ -169,6 +170,9 @@ function InstalledRow({ install, update, projects, projectId, onProject, onRemov
   const [settings, setSettings] = useState(false);
   // What the last build move did, said on the row it was about — the offer is gone by the time it is drawn.
   const [moved, setMoved] = useState<string | null>(null);
+  // What the named project holds, for the "still missing" count said on the closed row.
+  const { fields } = usePluginConfig(install.name, projectId);
+  const missing = requiredUnset(fields);
 
   const run = async (op: () => Promise<string | null>) => {
     setBusy(true);
@@ -225,10 +229,10 @@ function InstalledRow({ install, update, projects, projectId, onProject, onRemov
             <>
               {" "}
               <span className="chip chip--warn">
-                {t(install.enabled === true ? "plugins.notFiring" : "plugins.incompatibleChip")}
+                {t(enabledIn(install, projectId) ? "plugins.notFiring" : "plugins.incompatibleChip")}
               </span>
             </>
-          ) : install.enabled === true ? (
+          ) : enabledIn(install, projectId) ? (
             <>
               {" "}
               <span className="chip">{t("plugins.enabledChip")}</span>
@@ -248,10 +252,8 @@ function InstalledRow({ install, update, projects, projectId, onProject, onRemov
             </button>
             {/* Said on the closed row too: this is why an enable is refused, and the row is where
                 anyone looking at that refusal is standing. */}
-            {requiredUnset(install) > 0 && (
-              <span className="chip chip--warn">
-                {tn("plugins.cfg.requiredUnset", requiredUnset(install))}
-              </span>
+            {missing > 0 && (
+              <span className="chip chip--warn">{tn("plugins.cfg.requiredUnset", missing)}</span>
             )}
           </div>
         )}

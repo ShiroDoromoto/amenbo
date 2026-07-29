@@ -82,6 +82,7 @@ const entry = (name: string) => ({
 
 const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => ({
   compatible: true,
+  enabledProjects: [],
   config: [],
   rollback: false,
   ...over,
@@ -130,7 +131,7 @@ describe("installing from the market", () => {
     expect(container.textContent).toContain(t("plugins.installed"));
     expect(container.textContent).not.toContain(t("plugins.enabledChip"));
 
-    hoisted.installs = [row({ name: "notify", enabled: true })];
+    hoisted.installs = [row({ name: "notify", enabledProjects: [7] })];
     render();
     expect(container.textContent).toContain(t("plugins.enabledChip"));
   });
@@ -151,7 +152,7 @@ describe("the one switch, and it is a project's", () => {
   // click rather than stopping to ask a second question.
   it("enables on the click, with nothing else asked", async () => {
     hoisted.projects = [{ id: 7, name: "solo" }];
-    hoisted.installs = [row({ name: "notify", enabled: false })];
+    hoisted.installs = [row({ name: "notify" })];
     render();
     open(0);
     await act(async () => { button(t("plugins.enable"))!.click(); });
@@ -160,7 +161,7 @@ describe("the one switch, and it is a project's", () => {
 
   it("disables the same way", async () => {
     hoisted.projects = [{ id: 7, name: "solo" }];
-    hoisted.installs = [row({ name: "notify", enabled: true })];
+    hoisted.installs = [row({ name: "notify", enabledProjects: [7] })];
     render();
     open(0);
     await act(async () => { button(t("plugins.disable"))!.click(); });
@@ -189,7 +190,7 @@ describe("the one switch, and it is a project's", () => {
   // One project is not a question worth asking: there is exactly one answer, so the gate is movable at once.
   it("takes the only project there is without asking", async () => {
     hoisted.projects = [{ id: 7, name: "solo" }];
-    hoisted.installs = [row({ name: "notify", enabled: false })];
+    hoisted.installs = [row({ name: "notify" })];
     render();
     open(0);
     expect(detail()!.textContent).not.toContain(t("plugins.pickProjectNote"));

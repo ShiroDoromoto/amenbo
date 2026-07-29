@@ -1,6 +1,12 @@
 import { useState } from "react";
+import type { PluginWantedSettingDto } from "../bindings/bindings";
 import { errText, t } from "../core/i18n";
-import { setPluginConfig, type PluginConfigField, type PluginInstall } from "../core/pluginInstalls";
+import {
+  setPluginConfig,
+  usePluginConfig,
+  type PluginConfigField,
+  type PluginInstall,
+} from "../core/pluginInstalls";
 
 /**
  * The settings of one installed plugin, drawn from the schema its author declared (`AMB-D-356`).
@@ -19,6 +25,10 @@ import { setPluginConfig, type PluginConfigField, type PluginInstall } from "../
  * which. That is not the gate: which project a plugin *fires* in is its enable row, while a setting is
  * something any plugin can carry in a project it is off in — so the project is named here whether or
  * not the plugin is on in it.
+ *
+ * The author's schema comes from the install (it is the same wherever you stand) and what is *held*
+ * is read for the named project, which is why the two arrive separately: until a project is picked
+ * there is a form to draw and nothing to draw in it.
  */
 export function PluginConfigForm({ install, projects, projectId, onProject }: {
   install: PluginInstall;
@@ -38,11 +48,14 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
   const [error, setError] = useState<string | null>(null);
   // What the last write did, said back in its own words: a clear removed a value, a save wrote one.
   const [done, setDone] = useState<"plugins.cfg.saved" | "plugins.cfg.cleared" | null>(null);
+  const { fields } = usePluginConfig(install.name, projectId);
 
   // With no project named there is nowhere to write: a setting belongs to a project and to nothing else.
   const unnamedProject = projectId == null;
-  const stored = (f: PluginConfigField) => f.value ?? "";
-  const shown = (f: PluginConfigField) => edits[f.key] ?? stored(f);
+  // What that project holds for a key — absent while no project is named, which is not "unset".
+  const heldFor = (key: string): PluginConfigField | undefined => fields.find((f) => f.key === key);
+  const stored = (f: PluginWantedSettingDto) => heldFor(f.key)?.value ?? "";
+  const shown = (f: PluginWantedSettingDto) => edits[f.key] ?? stored(f);
 
   const run = async (op: () => Promise<unknown>, said: typeof done) => {
     setBusy(true);
@@ -79,7 +92,7 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
       setSecrets({});
     }, "plugins.cfg.saved");
 
-  const onClear = (f: PluginConfigField) =>
+  const onClear = (f: PluginWantedSettingDto) =>
     run(async () => {
       await setPluginConfig(install.name, f.key, "", projectId);
       setEdits((e) => ({ ...e, [f.key]: "" }));
@@ -114,10 +127,14 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
           <label className="plugcfg__label" htmlFor={`cfg-${install.name}-${f.key}`}>
             {f.label}
             {f.required && <span className="chip">{t("plugins.cfg.required")}</span>}
-            {unset(f) ? (
-              <span className={f.required ? "chip chip--warn" : "chip"}>{t("plugins.cfg.unset")}</span>
-            ) : (
+            {held(heldFor(f.key)) ? (
               f.secret && <span className="chip">{t("plugins.cfg.held")}</span>
+            ) : (
+              !unnamedProject && (
+                <span className={f.required ? "chip chip--warn" : "chip"}>
+                  {t("plugins.cfg.unset")}
+                </span>
+              )
             )}
           </label>
           {f.secret ? (
@@ -128,7 +145,7 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
                 autoComplete="new-password"
                 disabled={busy}
                 value={secrets[f.key]?.value ?? ""}
-                placeholder={f.secretSet ? t("plugins.cfg.secretReplace") : ""}
+                placeholder={heldFor(f.key)?.secretSet ? t("plugins.cfg.secretReplace") : ""}
                 onChange={(e) =>
                   setSecrets((s) => ({
                     ...s,
@@ -162,7 +179,7 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
               />
             </>
           )}
-          {held(f) && (
+          {held(heldFor(f.key)) && (
             <button
               className="feed__action"
               disabled={busy || unnamedProject}
@@ -188,14 +205,11 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
 }
 
 /**
- * Whether this project holds no value for the field — the state an enable is refused for while the
- * author marked it required.
+ * Whether the named project holds a value for the field — and so whether there is anything to clear
+ * (clearing a field that holds nothing is a no-op). A field that was never read for a project holds
+ * nothing that can be said about it, which is not the same as holding no value.
  */
-function unset(f: PluginConfigField): boolean {
-  return f.secret ? !f.secretSet : f.value == null;
-}
-
-/** Whether there is something to clear — clearing a field that holds nothing is a no-op. */
-function held(f: PluginConfigField): boolean {
+export function held(f: PluginConfigField | undefined): boolean {
+  if (!f) return false;
   return f.secret ? f.secretSet : f.value != null;
 }

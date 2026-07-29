@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { errText, t, tn, tf } from "../core/i18n";
-import { setPluginEnabled, type PluginInstall } from "../core/pluginInstalls";
+import { enabledIn, setPluginEnabled, type PluginInstall } from "../core/pluginInstalls";
 
 /**
  * One installed plugin's switch, wherever a face draws it — the market's detail and the installed
@@ -43,7 +43,7 @@ export function PluginGate({ install, projects, projectId, onProject, lead }: {
     }
   };
 
-  const enabled = install.enabled === true;
+  const enabled = enabledIn(install, projectId);
   const where = t("plugins.gate.project");
   // A gate with no project named has no answer to move — the picker is the way out, so the buttons wait
   // for it rather than acting on some default project nobody chose.

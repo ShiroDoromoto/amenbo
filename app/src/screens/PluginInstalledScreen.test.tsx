@@ -7,6 +7,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginConfigField, PluginInstall } from "../core/pluginInstalls";
+import type { PluginWantedSettingDto } from "../bindings/bindings";
 import type { PluginUpdate } from "../core/pluginUpdates";
 
 const hoisted = vi.hoisted(() => ({
@@ -121,12 +122,21 @@ const offer = (over: Partial<PluginUpdate> & { name: string }): PluginUpdate => 
   ...over,
 });
 
-/** One declared setting, holding nothing until a test says otherwise. */
-const field = (over: Partial<PluginConfigField> & { key: string }): PluginConfigField => ({
+/**
+ * One declared setting, holding nothing until a test says otherwise. It stands in for both faces of a
+ * setting — the author's declaration a row is drawn from, and what a project holds — so one object can be
+ * handed to either. The state follows the value unless a test names it.
+ */
+const field = (
+  over: Partial<PluginConfigField & PluginWantedSettingDto> & { key: string },
+): PluginConfigField & PluginWantedSettingDto => ({
   label: over.key,
   secret: false,
   required: false,
   secretSet: false,
+  fieldType: "text",
+  options: [],
+  state: over.value != null || over.secretSet ? "chosen" : "unanswered",
   ...over,
 });
 

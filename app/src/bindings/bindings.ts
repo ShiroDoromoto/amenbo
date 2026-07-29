@@ -558,7 +558,24 @@ value?: string,
  * Whether that project holds a secret for this key. Always false for a text field, whose value
  * says it itself.
  */
-secretSet: boolean, };
+secretSet: boolean, 
+/**
+ * Which of the three answers this project is giving (`AMB-D-415`), read by core so the form and the
+ * CLI cannot each decide for themselves what the stored string means: `chosen` (a value is held),
+ * `none` (a choice answered with none of its candidates), `unanswered` (nothing is held, and the
+ * author's default is what a run receives).
+ *
+ * A form that could not tell the last two apart would draw the same empty boxes for "declined" and
+ * "not been here yet", and offer no way back to the default.
+ */
+state: "chosen" | "none" | "unanswered", };
+
+/**
+ * One candidate a setting offers (`AMB-D-415`): the value stored when it is ticked, and the words the
+ * author wants beside its checkbox. Two audiences, so two strings — the plugin reads `value`, the user
+ * reads `label`.
+ */
+export type PluginConfigOptionDto = { value: string, label: string, };
 
 /**
  * What the catalog's **detail document** says about one plugin — the half of its entry that is fetched
@@ -836,7 +853,23 @@ secret: boolean,
 /**
  * Whether an enable is refused until it is filled in (`AMB-D-356`).
  */
-required: boolean, };
+required: boolean, 
+/**
+ * What kind of answer the field takes (`AMB-D-415`) — a line the user types, or any number of the
+ * candidates below. It rides with the declaration rather than with the held value because it is the
+ * same wherever you stand: it says what to *draw*, and a form is drawn before a project is picked.
+ */
+fieldType: "text" | "multi", 
+/**
+ * The candidates a `multi` field offers, in the author's order. Empty for a text field, which is the
+ * form's own answer to whether there is a choice to draw.
+ */
+options: Array<PluginConfigOptionDto>, 
+/**
+ * The value in force while nobody has answered (`AMB-D-415`) — what a run receives, and what the
+ * form ticks and captions as the default. Absent means an unanswered field is simply unanswered.
+ */
+defaultValue?: string, };
 
 /**
  * What [`repair_pointers`] returns: how many folders were fixed, and how many were left waiting on

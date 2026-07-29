@@ -4578,6 +4578,26 @@ pub struct PluginConfigFieldDto {
     /// Whether that project holds a secret for this key. Always false for a text field, whose value
     /// says it itself.
     secret_set: bool,
+    /// Which of the three answers this project is giving (`AMB-D-415`), read by core so the form and the
+    /// CLI cannot each decide for themselves what the stored string means: `chosen` (a value is held),
+    /// `none` (a choice answered with none of its candidates), `unanswered` (nothing is held, and the
+    /// author's default is what a run receives).
+    ///
+    /// A form that could not tell the last two apart would draw the same empty boxes for "declined" and
+    /// "not been here yet", and offer no way back to the default.
+    #[ts(type = "\"chosen\" | \"none\" | \"unanswered\"")]
+    state: String,
+}
+
+/// One candidate a setting offers (`AMB-D-415`): the value stored when it is ticked, and the words the
+/// author wants beside its checkbox. Two audiences, so two strings — the plugin reads `value`, the user
+/// reads `label`.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginConfigOptionDto {
+    value: String,
+    label: String,
 }
 
 /// One setting a plugin will ask for, as its author declared it — and nothing a store holds for it.
@@ -4598,16 +4618,36 @@ pub struct PluginWantedSettingDto {
     secret: bool,
     /// Whether an enable is refused until it is filled in (`AMB-D-356`).
     required: bool,
+    /// What kind of answer the field takes (`AMB-D-415`) — a line the user types, or any number of the
+    /// candidates below. It rides with the declaration rather than with the held value because it is the
+    /// same wherever you stand: it says what to *draw*, and a form is drawn before a project is picked.
+    #[ts(type = "\"text\" | \"multi\"")]
+    field_type: amenbo_core::plugin_manifest::FieldType,
+    /// The candidates a `multi` field offers, in the author's order. Empty for a text field, which is the
+    /// form's own answer to whether there is a choice to draw.
+    options: Vec<PluginConfigOptionDto>,
+    /// The value in force while nobody has answered (`AMB-D-415`) — what a run receives, and what the
+    /// form ticks and captions as the default. Absent means an unanswered field is simply unanswered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    default_value: Option<String>,
 }
 
-/// One declared setting as its own DTO — the author's four words, wherever a face asks what a plugin
-/// wants without standing in a project.
+/// One declared setting as its own DTO — the author's words, wherever a face asks what a plugin wants
+/// without standing in a project.
 fn wanted_setting(field: &amenbo_core::plugin_manifest::ConfigField) -> PluginWantedSettingDto {
     PluginWantedSettingDto {
         key: field.key.clone(),
         label: field.label.clone(),
         secret: field.secret,
         required: field.required,
+        field_type: field.field_type,
+        options: field
+            .options
+            .iter()
+            .map(|o| PluginConfigOptionDto { value: o.value.clone(), label: o.label.clone() })
+            .collect(),
+        default_value: field.default.clone(),
     }
 }
 
@@ -4678,6 +4718,7 @@ fn config_field_row(
     project: i64,
 ) -> Result<PluginConfigFieldDto, CmdError> {
     let held = amenbo_core::plugin_config::get(store, field, plugin, project)?;
+    let state = amenbo_core::plugin_config::answer(field, held.as_deref());
     let (value, secret_set) = if field.secret { (None, held.is_some()) } else { (held, false) };
     Ok(PluginConfigFieldDto {
         key: field.key.clone(),
@@ -4686,6 +4727,7 @@ fn config_field_row(
         required: field.required,
         value,
         secret_set,
+        state: state.as_str().to_string(),
     })
 }
 
@@ -5424,6 +5466,79 @@ mod tests {
 
         // And a write with no project named is refused rather than aimed somewhere.
         assert!(plugin_config_set("notify".into(), "events".into(), "x".into(), None).is_err());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// What a field offering candidates hands the form (`AMB-D-415`): the author's declaration — what to
+    /// draw, what to offer, what is in force before anyone answers — and, per project, which of the three
+    /// answers is being given. The form draws checkboxes from the first and ticks them from the second, so
+    /// a state it had to infer from the stored string is a rule that would drift from core's.
+    #[test]
+    fn a_setting_that_offers_candidates_hands_over_its_choices_and_which_answer_is_given() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("plugin-config-multi");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "テストPJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        plant_plugin_with(
+            &tmp,
+            "notify",
+            serde_json::json!([{
+                "key": "events", "label": "通知するイベント", "type": "multi",
+                "options": [
+                    {"value": "task.done", "label": "完了した"},
+                    {"value": "task.rejected", "label": "見送った"},
+                ],
+                "default": "task.done",
+            }]),
+        );
+        let declared = plugin_installs().unwrap().into_iter().find(|r| r.name == "notify").unwrap();
+        let events = &declared.config[0];
+        assert_eq!(events.field_type, amenbo_core::plugin_manifest::FieldType::Multi);
+        assert_eq!(
+            events.options.iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),
+            vec!["task.done", "task.rejected"],
+            "the candidates arrive in the author's order, without a project being named",
+        );
+        assert_eq!(events.default_value.as_deref(), Some("task.done"));
+
+        let held = |key: &str| {
+            plugin_config_read("notify".into(), Some(project_id))
+                .unwrap()
+                .into_iter()
+                .find(|f| f.key == key)
+                .unwrap()
+        };
+
+        // Nobody has answered: the default is what a run receives, and the form says as much rather than
+        // drawing an empty box that looks like a refusal.
+        assert_eq!(held("events").state, "unanswered");
+
+        plugin_config_set("notify".into(), "events".into(), "task.rejected".into(), Some(project_id))
+            .unwrap();
+        let chosen = held("events");
+        assert_eq!((chosen.state.as_str(), chosen.value.as_deref()), ("chosen", Some("task.rejected")));
+
+        // Wanting none of them is its own answer, and the form has to be able to draw it apart from the
+        // one above.
+        plugin_config_set("notify".into(), "events".into(), "none".into(), Some(project_id)).unwrap();
+        assert_eq!(held("events").state, "none");
+
+        // Back to unanswered through the door an empty value opens — which is what "restore the default"
+        // is made of.
+        plugin_config_set("notify".into(), "events".into(), String::new(), Some(project_id)).unwrap();
+        assert_eq!(held("events").state, "unanswered");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

@@ -5,11 +5,12 @@
 id: check-a-manifest-before-proposing-it
 title: A manifest passes the catalog rules, and a broken one is turned down by the rule it broke
 description: >
-  Write a manifest the way an author would — the words the plugin will say for itself at the AI's entry
-  point included — hold it up to the rules, and have it pass. Then break one rule at a time — an asset
-  URL that is not https, an agent block that names no occasion, and a file that does not even parse —
-  and read back not just that it failed but which rule it failed on. A check that says "invalid" for the
-  wrong reason is a check an author cannot act on.
+  Write a manifest the way an author would — the settings the plugin offers and the words it will say
+  for itself at the AI's entry point included — hold it up to the rules, and have it pass. Then break one
+  rule at a time — an asset URL that is not https, a setting whose default is not among the choices it
+  offers, an agent block that names no occasion, and a file that does not even parse — and read back not
+  just that it failed but which rule it failed on. A check that says "invalid" for the wrong reason is a
+  check an author cannot act on.
 steps_cli:
   - type: action
     domain: repo
@@ -41,6 +42,15 @@ steps_cli:
             label: Base branch
             secret: false
             required: false
+          - key: events
+            label: Events to report
+            type: multi
+            default: task.done
+            options:
+              - value: task.done
+                label: Finished
+              - value: task.rejected
+                label: Decided against
         agent:
           when: SCENARIO — when an AI should reach for this plugin
           commands:
@@ -94,6 +104,53 @@ steps_cli:
       path: not-https.yaml
       ok: false
       problem: bad_url
+
+  # A setting whose candidates the author declares is a setting no one has to spell — which only holds if
+  # the value in force before anyone answers is one of those candidates. A default outside them is a value
+  # the form could never produce, and the author is told which one it is while the manifest is still theirs.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: default-off-the-list.yaml
+      content: |
+        name: scenario-plugin
+        desc: SCENARIO — the same manifest, defaulting to a choice it does not offer
+        author: amenbo
+        repo: ShiroDoromoto/amenbo-plugin-worktree
+        os:
+          - macos
+          - linux
+        category: workflow
+        assets:
+          macos:
+            url: https://example.com/scenario-plugin-v1-macos.tar.gz
+            checksum: sha256:a6c1027eb54606d4f5e67176faeefefff3b64161b03fd76faff5908e093bf07c
+          linux-x64:
+            url: https://example.com/scenario-plugin-v1-linux-x64.tar.gz
+            checksum: sha256:f74ec13fc4341dba8bb64071651f86fb374bb932e0f15a8799bed8de014c06ac
+          linux-arm64:
+            url: https://example.com/scenario-plugin-v1-linux-arm64.tar.gz
+            checksum: sha256:a3b1ae53a6650e05673783d9d9e686b03c31582d488639a5af667f87e90988a5
+        payload_v: 1
+        config:
+          - key: events
+            label: Events to report
+            type: multi
+            default: task.created
+            options:
+              - value: task.done
+                label: Finished
+              - value: task.rejected
+                label: Decided against
+
+  - type: assert
+    domain: plugin
+    op: validated
+    with:
+      path: default-off-the-list.yaml
+      ok: false
+      problem: not_an_option
 
   # What a plugin says for itself is the author's own words, and amenbo never rules on them — but a block
   # that names no occasion says nothing an AI can act on, so the door turns it down like any other empty

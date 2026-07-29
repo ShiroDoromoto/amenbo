@@ -256,10 +256,10 @@ mod tests {
     }
 
     fn text_field(key: &str) -> ConfigField {
-        ConfigField { key: key.into(), label: key.into(), secret: false, required: false }
+        ConfigField::new(key, key)
     }
     fn secret_field(key: &str) -> ConfigField {
-        ConfigField { key: key.into(), label: key.into(), secret: true, required: false }
+        ConfigField { secret: true, ..ConfigField::new(key, key) }
     }
 
     /// An enabled, subscribed plugin fires; the resolved invocation names its program.

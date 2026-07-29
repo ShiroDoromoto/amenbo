@@ -104,10 +104,10 @@ mod tests {
     use crate::plugin_manifest::ConfigField;
 
     fn text_field(key: &str) -> ConfigField {
-        ConfigField { key: key.to_string(), label: key.to_string(), secret: false, required: false }
+        ConfigField::new(key, key)
     }
     fn secret_field(key: &str) -> ConfigField {
-        ConfigField { key: key.to_string(), label: key.to_string(), secret: true, required: false }
+        ConfigField { secret: true, ..ConfigField::new(key, key) }
     }
 
     fn store_at(tag: &str) -> (Store, std::path::PathBuf) {

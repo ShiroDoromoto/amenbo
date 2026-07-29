@@ -863,12 +863,7 @@ mod tests {
         let cases: [fn(&mut Manifest); 3] = [
             // A setting the author added.
             |m| {
-                m.config.push(crate::plugin_manifest::ConfigField {
-                    key: "base".into(),
-                    label: "Base branch".into(),
-                    secret: false,
-                    required: false,
-                })
+                m.config.push(crate::plugin_manifest::ConfigField::new("base", "Base branch"))
             },
             // A subscription they changed.
             |m| m.events.push(crate::plugin_manifest::EventSubscription::new("task.done")),

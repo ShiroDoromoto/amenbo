@@ -141,7 +141,7 @@ mod tests {
     use super::*;
 
     fn field(key: &str, required: bool) -> ConfigField {
-        ConfigField { key: key.to_string(), label: key.to_string(), secret: false, required }
+        ConfigField { required, ..ConfigField::new(key, key) }
     }
 
     /// A real store on a scratch base, so the enable rows land somewhere.

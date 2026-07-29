@@ -213,10 +213,10 @@ mod tests {
     use crate::plugin_manifest::ConfigField;
 
     fn text_field(key: &str) -> ConfigField {
-        ConfigField { key: key.to_string(), label: key.to_string(), secret: false, required: false }
+        ConfigField::new(key, key)
     }
     fn secret_field(key: &str) -> ConfigField {
-        ConfigField { key: key.to_string(), label: key.to_string(), secret: true, required: false }
+        ConfigField { secret: true, ..ConfigField::new(key, key) }
     }
 
     /// Open a real store under a scratch AMENBO_HOME so the store file resolves under it.
@@ -331,7 +331,7 @@ mod tests {
     }
 
     fn required_field(key: &str) -> ConfigField {
-        ConfigField { key: key.to_string(), label: key.to_string(), secret: false, required: true }
+        ConfigField { required: true, ..ConfigField::new(key, key) }
     }
 
     /// A project to enable a plugin in.

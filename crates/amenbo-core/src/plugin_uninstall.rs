@@ -124,7 +124,7 @@ mod tests {
     use crate::plugin_manifest::ConfigField;
 
     fn field(key: &str, secret: bool) -> ConfigField {
-        ConfigField { key: key.to_string(), label: key.to_string(), secret, required: false }
+        ConfigField { secret, ..ConfigField::new(key, key) }
     }
 
     /// A store on a scratch base, plus the base path so the on-disk residue can be inspected.

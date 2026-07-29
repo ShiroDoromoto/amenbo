@@ -34,7 +34,7 @@ use serde::{Serialize, Serializer};
 use crate::config::is_reserved_plugin_name;
 use crate::error::Msg;
 use crate::plugin_config::MAX_CONFIG_IDENT_BYTES;
-use crate::plugin_manifest::{Face, Manifest, Os};
+use crate::plugin_manifest::{ConfigField, Face, FieldType, Manifest, Os, NONE_SELECTED};
 use crate::plugin_wire::ListEntry;
 
 /// The shortest a plugin id (`name`) may be (`AMB-D-360`).
@@ -58,9 +58,21 @@ pub const MAX_LABEL_LEN: usize = 100;
 /// real plugin needs a handful — whose only purpose is to stop a manifest declaring thousands of fields
 /// and bloating the generated form / stored config.
 pub const MAX_CONFIG_FIELDS: usize = 32;
-/// The largest a config schema may be in total, summed over every field's key and label bytes
-/// (`AMB-D-356`, the safe floor). Bounds the schema as a whole, complementing the per-field caps.
+/// The largest a config schema may be in total, summed over every field's declared text — its key and
+/// label, its candidates' values and labels, and its default (`AMB-D-356`, the safe floor). Bounds the
+/// schema as a whole, complementing the per-field caps: candidates are counted here because a handful of
+/// fields can still carry a great deal of them.
 pub const MAX_CONFIG_SCHEMA_BYTES: usize = 8 * 1024;
+/// The most candidates one `multi` field may offer (`AMB-D-415`, the same safe floor the schema keeps).
+/// Every one of them is a checkbox in the form, so the ceiling is what keeps a field a choice rather than
+/// a catalog.
+pub const MAX_CONFIG_OPTIONS: usize = 64;
+/// The longest one candidate's stored `value` may be (characters) — it is a value that travels to the
+/// plugin, not a sentence, and it is joined with its siblings into one stored string (`AMB-D-415`).
+pub const MAX_OPTION_VALUE_LEN: usize = 100;
+/// The longest a text field's `default` may be (characters). A default is a seed for a line the user
+/// types, so it is bounded like one; a `multi` field's default is bounded by its candidates instead.
+pub const MAX_DEFAULT_LEN: usize = 200;
 
 /// The longest the agent block's `when` line may be (characters) — one line at the AI's entry point
 /// (`AMB-D-437`), capped like every other one-line field.
@@ -100,7 +112,8 @@ pub enum ProblemCode {
     HyphenEdge,
     /// The id contains `--`.
     DoubleHyphen,
-    /// The id is reserved and cannot name a plugin.
+    /// A reserved word is used where it may not be — as a plugin id, or as a `multi` candidate's `value`
+    /// (the word that stores a deliberate empty choice, `AMB-D-415`).
     Reserved,
     /// A one-line text field holds a control character.
     ControlChar,
@@ -112,10 +125,11 @@ pub enum ProblemCode {
     BadRepo,
     /// The OS set is empty.
     EmptyOs,
-    /// A value appears more than once where it must be unique (an OS, a config key).
+    /// A value appears more than once where it must be unique (an OS, a config key, a `multi` field's
+    /// candidate value).
     Duplicate,
-    /// A declared list holds more entries than its cap — the config schema's fields, an agent block's
-    /// commands.
+    /// A declared list holds more entries than its cap — the config schema's fields, a `multi` field's
+    /// candidates, an agent block's commands.
     TooManyFields,
     /// The config schema exceeds the total-size cap.
     SchemaTooLarge,
@@ -132,6 +146,11 @@ pub enum ProblemCode {
     /// A subscription asks for `reply: true` without `faces: [cli]` — output relayed to a caller no other
     /// face has (`AMB-D-383`).
     ReplyNeedsCli,
+    /// A field declares `options` without being a `multi` field — candidates for something that is not a
+    /// choice (`AMB-D-415`).
+    OptionsNeedMulti,
+    /// A `multi` field's `default` names something the field does not offer (`AMB-D-415`).
+    NotAnOption,
 }
 
 impl ProblemCode {
@@ -158,6 +177,8 @@ impl ProblemCode {
         Self::AssetMismatch,
         Self::EmptyFaces,
         Self::ReplyNeedsCli,
+        Self::OptionsNeedMulti,
+        Self::NotAnOption,
     ];
 
     /// The one place a code string is written; `Serialize` goes through here too.
@@ -184,6 +205,8 @@ impl ProblemCode {
             Self::AssetMismatch => "asset_mismatch",
             Self::EmptyFaces => "empty_faces",
             Self::ReplyNeedsCli => "reply_needs_cli",
+            Self::OptionsNeedMulti => "options_need_multi",
+            Self::NotAnOption => "not_an_option",
         }
     }
 }
@@ -508,10 +531,11 @@ fn check_os(problems: &mut Vec<Problem>, os: &[Os]) {
     }
 }
 
-/// Check the config schema against the safe floor (`AMB-D-356`): a field-count cap, a total-size cap, a
-/// key grammar, a label floor, and unique keys. The per-value byte/control floor is a different boundary —
-/// it guards a *user-typed value* at write time ([`crate::plugin_config::check_value`]) — and is not here;
-/// this validates the *author-declared schema*.
+/// Check the config schema against the safe floor (`AMB-D-356`, `AMB-D-415`): a field-count cap, a
+/// total-size cap, a key grammar, a label floor, unique keys, and — for a field that declares a kind — the
+/// shape its kind owes. The per-value byte/control floor is a different boundary — it guards a
+/// *user-typed value* at write time ([`crate::plugin_config::check_value`]) — and is not here; this
+/// validates the *author-declared schema*.
 fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
     if m.config.len() > MAX_CONFIG_FIELDS {
         problems.push(Problem::new(
@@ -520,7 +544,7 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
             format!("config declares too many fields ({}; max {MAX_CONFIG_FIELDS})", m.config.len()),
         ));
     }
-    let total: usize = m.config.iter().map(|f| f.key.len() + f.label.len()).sum();
+    let total: usize = m.config.iter().map(schema_bytes).sum();
     if total > MAX_CONFIG_SCHEMA_BYTES {
         problems.push(Problem::new(
             "config",
@@ -538,6 +562,100 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
                 format!("config[{i}].key"),
                 ProblemCode::Duplicate,
                 format!("config key '{}' is declared more than once", field.key),
+            ));
+        }
+        check_config_kind(problems, i, field);
+    }
+}
+
+/// How much of the schema's size budget one field spends: every string its author wrote into it.
+fn schema_bytes(f: &ConfigField) -> usize {
+    f.key.len()
+        + f.label.len()
+        + f.options.iter().map(|o| o.value.len() + o.label.len()).sum::<usize>()
+        + f.default.as_deref().map_or(0, str::len)
+}
+
+/// Check one field's kind against what that kind owes (`AMB-D-415`).
+///
+/// A `multi` field is a choice, so it must offer something to choose from, each candidate must be one the
+/// store can hold and hand back — a line, unique among its siblings, free of the comma the chosen values
+/// are joined by, and not the reserved word an empty choice is stored as
+/// ([`NONE_SELECTED`]) — and a declared default must name candidates
+/// this field actually offers, since a default outside the choice is a value no form could ever produce.
+///
+/// A text field owes the opposite: **no** candidates. Ignoring them silently would let an author write a
+/// choice, see a text box, and have nothing to read; naming it is the only way they learn `type` was the
+/// key they missed.
+fn check_config_kind(problems: &mut Vec<Problem>, i: usize, field: &ConfigField) {
+    if field.field_type != FieldType::Multi {
+        if !field.options.is_empty() {
+            problems.push(Problem::new(
+                format!("config[{i}].options"),
+                ProblemCode::OptionsNeedMulti,
+                "options may only be declared on a field with type: multi",
+            ));
+        }
+        if let Some(default) = &field.default {
+            check_line(problems, &format!("config[{i}].default"), default, MAX_DEFAULT_LEN);
+        }
+        return;
+    }
+
+    if field.options.is_empty() {
+        problems.push(Problem::new(
+            format!("config[{i}].options"),
+            ProblemCode::Empty,
+            "a multi field must declare the options it offers",
+        ));
+    }
+    if field.options.len() > MAX_CONFIG_OPTIONS {
+        problems.push(Problem::new(
+            format!("config[{i}].options"),
+            ProblemCode::TooManyFields,
+            format!(
+                "config field declares too many options ({}; max {MAX_CONFIG_OPTIONS})",
+                field.options.len()
+            ),
+        ));
+    }
+
+    let mut seen = HashSet::new();
+    for (j, option) in field.options.iter().enumerate() {
+        let loc = format!("config[{i}].options[{j}].value");
+        check_line(problems, &loc, &option.value, MAX_OPTION_VALUE_LEN);
+        check_line(problems, &format!("config[{i}].options[{j}].label"), &option.label, MAX_LABEL_LEN);
+        if option.value.contains(',') {
+            problems.push(Problem::new(
+                loc.clone(),
+                ProblemCode::BadChars,
+                "an option value must not contain ',' — chosen values are stored joined by one",
+            ));
+        }
+        if option.value == NONE_SELECTED {
+            problems.push(Problem::new(
+                loc.clone(),
+                ProblemCode::Reserved,
+                format!("option value '{NONE_SELECTED}' is reserved for choosing nothing"),
+            ));
+        }
+        if !option.value.is_empty() && !seen.insert(option.value.as_str()) {
+            problems.push(Problem::new(
+                loc,
+                ProblemCode::Duplicate,
+                format!("option value '{}' is declared more than once", option.value),
+            ));
+        }
+    }
+
+    let Some(default) = &field.default else { return };
+    let offered: HashSet<&str> = field.options.iter().map(|o| o.value.as_str()).collect();
+    for part in default.split(',') {
+        if !offered.contains(part) {
+            problems.push(Problem::new(
+                format!("config[{i}].default"),
+                ProblemCode::NotAnOption,
+                format!("default '{part}' is not one of the options this field offers"),
             ));
         }
     }
@@ -635,8 +753,8 @@ fn check_agent(problems: &mut Vec<Problem>, m: &Manifest) {
 mod tests {
     use super::*;
     use crate::plugin_manifest::{
-        AgentCommand, AgentGuide, Arch, Asset, ConfigField, EventSubscription, Face, Manifest, Os,
-        Platform,
+        AgentCommand, AgentGuide, Arch, Asset, ConfigField, ConfigOption, EventSubscription, Face,
+        Manifest, Os, Platform,
     };
 
     /// An arch-agnostic platform key (`<os>`).
@@ -681,8 +799,8 @@ mod tests {
             payload_v: 1,
             min_amenbo: Some("1.8.0".into()),
             config: vec![
-                ConfigField { key: "webhook_url".into(), label: "Webhook URL".into(), secret: true, required: true },
-                ConfigField { key: "events".into(), label: "Events".into(), secret: false, required: false },
+                ConfigField { secret: true, required: true, ..ConfigField::new("webhook_url", "Webhook URL") },
+                ConfigField::new("events", "Events"),
             ],
         }
     }
@@ -872,7 +990,7 @@ mod tests {
     fn too_many_config_fields_is_refused() {
         let mut m = valid();
         m.config = (0..MAX_CONFIG_FIELDS + 1)
-            .map(|i| ConfigField { key: format!("k{i}"), label: "L".into(), secret: false, required: false })
+            .map(|i| ConfigField::new(format!("k{i}"), "L"))
             .collect();
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::TooManyFields));
     }
@@ -881,7 +999,7 @@ mod tests {
     fn a_bad_config_key_is_refused() {
         for bad in ["Webhook", "1st", "web-hook", "web hook", ""] {
             let mut m = valid();
-            m.config = vec![ConfigField { key: bad.into(), label: "L".into(), secret: false, required: false }];
+            m.config = vec![ConfigField::new(bad, "L")];
             let cs = codes(&validate_manifest(&m));
             assert!(
                 cs.contains(&ProblemCode::BadKey) || cs.contains(&ProblemCode::Empty),
@@ -894,10 +1012,141 @@ mod tests {
     fn a_duplicate_config_key_is_refused() {
         let mut m = valid();
         m.config = vec![
-            ConfigField { key: "dup".into(), label: "A".into(), secret: false, required: false },
-            ConfigField { key: "dup".into(), label: "B".into(), secret: false, required: false },
+            ConfigField::new("dup", "A"),
+            ConfigField::new("dup", "B"),
         ];
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::Duplicate));
+    }
+
+    /// A well-formed choice — candidates, and a default among them (`AMB-D-415`).
+    fn multi(default: Option<&str>) -> ConfigField {
+        ConfigField {
+            field_type: FieldType::Multi,
+            options: vec![
+                ConfigOption { value: "task.done".into(), label: "完了した".into() },
+                ConfigOption { value: "task.rejected".into(), label: "見送った".into() },
+            ],
+            default: default.map(str::to_string),
+            ..ConfigField::new("events", "Events")
+        }
+    }
+
+    #[test]
+    fn a_multi_field_with_options_and_a_default_among_them_is_valid() {
+        let mut m = valid();
+        m.config = vec![multi(Some("task.done,task.rejected"))];
+        assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
+
+        // No default at all is equally fine: the field is simply unanswered until someone answers it.
+        m.config = vec![multi(None)];
+        assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
+    }
+
+    /// A choice with nothing to choose from is a form field a user cannot answer.
+    #[test]
+    fn a_multi_field_with_no_options_is_refused() {
+        let mut m = valid();
+        m.config = vec![ConfigField { options: Vec::new(), ..multi(None) }];
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::Empty));
+    }
+
+    /// Candidates on a field that is not a choice: the author meant `type: multi` and would otherwise be
+    /// shown a text box with their options nowhere.
+    #[test]
+    fn options_on_a_text_field_are_refused() {
+        let mut m = valid();
+        m.config = vec![ConfigField { field_type: FieldType::Text, ..multi(None) }];
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::OptionsNeedMulti));
+    }
+
+    /// The stored value is the chosen values joined by commas, so a candidate carrying one could not be
+    /// read back, and the reserved word for choosing nothing cannot also be something to choose.
+    #[test]
+    fn an_option_value_may_not_carry_a_comma_or_be_the_reserved_word() {
+        let mut m = valid();
+        m.config = vec![ConfigField {
+            options: vec![ConfigOption { value: "a,b".into(), label: "L".into() }],
+            ..multi(None)
+        }];
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::BadChars));
+
+        m.config = vec![ConfigField {
+            options: vec![ConfigOption { value: NONE_SELECTED.into(), label: "L".into() }],
+            ..multi(None)
+        }];
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::Reserved));
+    }
+
+    #[test]
+    fn a_duplicate_option_value_is_refused() {
+        let mut m = valid();
+        m.config = vec![ConfigField {
+            options: vec![
+                ConfigOption { value: "task.done".into(), label: "A".into() },
+                ConfigOption { value: "task.done".into(), label: "B".into() },
+            ],
+            ..multi(None)
+        }];
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::Duplicate));
+    }
+
+    #[test]
+    fn too_many_options_is_refused() {
+        let mut m = valid();
+        m.config = vec![ConfigField {
+            options: (0..MAX_CONFIG_OPTIONS + 1)
+                .map(|i| ConfigOption { value: format!("v{i}"), label: "L".into() })
+                .collect(),
+            ..multi(None)
+        }];
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::TooManyFields));
+    }
+
+    /// A default outside the candidates is a value no form could ever produce — including the reserved
+    /// word, since "choose nothing" is the user's answer to give, not a default to declare.
+    #[test]
+    fn a_default_that_is_not_offered_is_refused() {
+        for bad in ["task.created", "task.done,task.created", NONE_SELECTED, ""] {
+            let mut m = valid();
+            m.config = vec![multi(Some(bad))];
+            assert!(
+                codes(&validate_manifest(&m)).contains(&ProblemCode::NotAnOption),
+                "'{bad}' is not one of the offered values"
+            );
+        }
+    }
+
+    /// A text field's default is a line like any other: bounded, and not a blank standing in for unset.
+    #[test]
+    fn a_text_default_is_held_to_the_one_line_floor() {
+        let mut m = valid();
+        m.config = vec![ConfigField {
+            default: Some("x".repeat(MAX_DEFAULT_LEN + 1)),
+            ..ConfigField::new("base", "Base branch")
+        }];
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::TooLong));
+
+        m.config = vec![ConfigField {
+            default: Some("main".into()),
+            ..ConfigField::new("base", "Base branch")
+        }];
+        assert!(validate_manifest(&m).is_empty(), "a plain default on a text field is fine");
+    }
+
+    /// The size cap bounds the schema an author declares, candidates included — a handful of fields can
+    /// carry a great many of them.
+    #[test]
+    fn options_count_towards_the_schema_size_cap() {
+        let full_of_options = |key: &str| ConfigField {
+            options: (0..MAX_CONFIG_OPTIONS)
+                .map(|i| ConfigOption { value: format!("v{i}"), label: "l".repeat(MAX_LABEL_LEN) })
+                .collect(),
+            ..ConfigField { field_type: FieldType::Multi, ..ConfigField::new(key, "L") }
+        };
+        let mut m = valid();
+        // Each field is within every per-field cap; together they are more schema than the whole may be.
+        m.config = vec![full_of_options("a"), full_of_options("b")];
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::SchemaTooLarge));
     }
 
     #[test]

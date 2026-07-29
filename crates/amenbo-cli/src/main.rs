@@ -6472,7 +6472,7 @@ mod tests {
             .unwrap()
         }
         fn field(key: &str, required: bool) -> ConfigField {
-            ConfigField { key: key.to_string(), label: key.to_string(), secret: false, required }
+            ConfigField { required, ..ConfigField::new(key, key) }
         }
 
         let dir = amenbo_scratch::scratch("update-config-recheck");

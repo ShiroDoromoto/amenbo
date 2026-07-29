@@ -450,10 +450,12 @@ pub struct Manifest {
     /// plugin takes no configuration — the safe default is an empty schema, so an older manifest with
     /// no `config` key is a plugin with no settings, not a parse error.
     ///
-    /// The list is **the whole schema**: no types, no validation rules. amenbo does not judge what a
-    /// value means (a URL, an email) — that is the author's job at run time. What amenbo reads here is
-    /// only which fields exist, which are secret (so the store never sees them — `AMB-D-356`), and
-    /// which are required (so `enable` is blocked until they are filled — `AMB-D-351`).
+    /// The list is **the whole schema**: no validation rules, and no notion of what a value means (a URL,
+    /// an email) — that judgement is the author's at run time. What amenbo reads here is only which fields
+    /// exist, which are secret (so the store never sees them — `AMB-D-356`), which are required (so
+    /// `enable` is blocked until they are filled — `AMB-D-351`), and what shape each answer takes:
+    /// [`ConfigField::field_type`] with its candidates and default (`AMB-D-415`), which is what a form can
+    /// be drawn from and what a written value is admitted against.
     ///
     /// An empty schema does not serialize (`skip_serializing_if`), so a re-emitted manifest for a plugin
     /// with no settings is byte-for-byte what an author who omitted `config` wrote — the absent and the
@@ -537,12 +539,76 @@ pub struct Asset {
     pub signature: Option<String>,
 }
 
-/// One field of a plugin's configuration schema (`AMB-D-356`). The author declares a flat list of these
-/// in the manifest; amenbo renders each as one form field, routes its value to storage by the `secret`
-/// flag, and injects it into the plugin at run time. **amenbo carries no notion of the field's type or
-/// meaning** — there is no `type`, no pattern, no validation rule here. The only semantics amenbo acts on
-/// are `secret` (where the value is stored and how it is injected) and `required` (whether an empty value
-/// blocks `enable`).
+/// **What kind of value a field holds** (`AMB-D-415`) — the one thing about a value amenbo does read, and
+/// it reads it only to know what to draw and what to accept.
+///
+/// A field is one of three kinds, and two of them live here: a plain line of text, and a choice among
+/// candidates the author declares ([`ConfigField::options`]). The third — a secret — is the `secret` flag
+/// beside this, since being hidden is about *where the value is stored*, not about what shape it has.
+///
+/// **The meaning of the value is still the author's** (`AMB-D-356`). A `Text` field is any line at all;
+/// amenbo does not know a URL from an email. What [`Multi`](FieldType::Multi) adds is not a type system but
+/// a shorter road to a right answer: a value the author already knows the candidates for should never be
+/// something the user has to spell.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FieldType {
+    /// One line the user types. The default — a manifest that omits `type` declares a text field, which is
+    /// what every field written before the key existed is.
+    #[default]
+    Text,
+    /// Any number of the candidates the field declares. Stored as one string, the chosen
+    /// [`value`](ConfigOption::value)s joined by commas, or [`NONE_SELECTED`] for a deliberate empty
+    /// choice (`AMB-D-415`).
+    Multi,
+}
+
+impl FieldType {
+    /// Whether this is the default kind, so a field that never declared `type` re-emits without the key —
+    /// the absent-equals-default rule the rest of the manifest keeps.
+    fn is_text(&self) -> bool {
+        matches!(self, FieldType::Text)
+    }
+}
+
+/// **The value a [`Multi`](FieldType::Multi) field stores when the user chose nothing** (`AMB-D-415`).
+///
+/// A field has three states, and the empty string cannot hold two of them: it already means *unset*
+/// everywhere else (the clear path at the write boundary, the reading `required` takes), and "I looked at
+/// the candidates and want none of them" is a different answer from "I have not been here yet" — only the
+/// second follows [`ConfigField::default`]. So the deliberate empty choice is stored as this word, which is
+/// why the validator refuses it as a candidate's own `value`: one string cannot mean both.
+///
+/// The word is amenbo's, not the author's: what a plugin receives is the resolved value (`AMB-D-415`), so
+/// nothing a plugin reads has to know the reserved spelling.
+pub const NONE_SELECTED: &str = "none";
+
+/// One candidate a [`Multi`](FieldType::Multi) field offers (`AMB-D-415`): the value that is stored, and
+/// the words shown beside its checkbox.
+///
+/// The pair exists because the two audiences differ — the plugin receives `value` and the user reads
+/// `label`, so an author can name an event `task.status_changed` on the wire and give it a sentence in
+/// their own language on the screen, without either side compromising for the other.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfigOption {
+    /// What is stored and handed to the plugin when this candidate is chosen. Commas are forbidden (the
+    /// validator's rule): the chosen values are joined by one, so a value carrying its own would not
+    /// survive the round trip.
+    pub value: String,
+    /// The human-readable label shown beside this candidate. Display text only.
+    pub label: String,
+}
+
+/// One field of a plugin's configuration schema (`AMB-D-356`, `AMB-D-415`). The author declares a flat list
+/// of these in the manifest; amenbo renders each as one form field, routes its value to storage by the
+/// `secret` flag, and injects it into the plugin at run time.
+///
+/// **amenbo still carries no notion of what a value means** — no pattern, no validation rule. What it
+/// reads is only: `secret` (where the value is stored and how it is injected), `required` (whether an
+/// unset field blocks `enable`), and — since `AMB-D-415` — [`field_type`](ConfigField::field_type) with
+/// its [`options`](ConfigField::options) and [`default`](ConfigField::default), which say what to draw and
+/// which answers are admissible. The last three are about the *form of the answer*, never about what the
+/// answer signifies.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigField {
     /// The field's stable key — its identity in storage and the name it is injected under (the env var
@@ -560,9 +626,47 @@ pub struct ConfigField {
     pub secret: bool,
     /// Whether the field must hold a value before the plugin may be enabled (`AMB-D-351`, fail-closed).
     /// amenbo only checks presence (a non-empty value); it does not check the value is *valid*. Absent
-    /// means `false`.
+    /// means `false`. Separate from [`default`](ConfigField::default): a field that carries one is never
+    /// unanswered, so it does not block `enable` however it is marked here.
     #[serde(default)]
     pub required: bool,
+    /// What kind of value this field holds (`AMB-D-415`) — spelled `type` in a manifest. Absent means
+    /// [`Text`](FieldType::Text), so a schema written before the key existed is a schema of text fields,
+    /// and re-emits without the key.
+    #[serde(rename = "type", default, skip_serializing_if = "FieldType::is_text")]
+    pub field_type: FieldType,
+    /// The candidates a [`Multi`](FieldType::Multi) field offers, in the order the form shows them
+    /// (`AMB-D-415`). Empty is the only shape a text field may have — declaring candidates for a field
+    /// that is not a choice is a mistake the validator names, not a silent ignore.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<ConfigOption>,
+    /// The value that is in force while the field is unset (`AMB-D-415`). Absent means there is none: an
+    /// unset field is simply unanswered.
+    ///
+    /// For a [`Multi`](FieldType::Multi) field this is a comma-joined subset of the declared
+    /// [`options`](ConfigField::options) — the validator keeps it one — and for a text field it is the line
+    /// the plugin gets until a user writes another. Either way it is resolved on the way *out*, at
+    /// injection: what the store holds for an unset field is still nothing, so a later change to the
+    /// manifest's default reaches every project that never answered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+}
+
+impl ConfigField {
+    /// A field with every default: a plain text line, no candidates, no default value, neither secret nor
+    /// required. The shape an author writes when they declare a `key` and a `label` and nothing else, and
+    /// the base the other kinds are written on top of.
+    pub fn new(key: impl Into<String>, label: impl Into<String>) -> Self {
+        ConfigField {
+            key: key.into(),
+            label: label.into(),
+            secret: false,
+            required: false,
+            field_type: FieldType::Text,
+            options: Vec::new(),
+            default: None,
+        }
+    }
 }
 
 /// **How a plugin names itself where an AI reads how to work here** (`AMB-D-437`): the occasion to reach
@@ -867,6 +971,75 @@ mod tests {
         assert!(!m.config[1].required, "an unmarked field is not required");
         // Re-serializing a schema built from the parsed form yields the same document.
         assert_eq!(serde_json::to_value(&m).unwrap()["config"], serde_json::to_value(&m.config).unwrap());
+    }
+
+    /// A field that declares no kind is a text field, and re-emits without the key — the same
+    /// absent-equals-default rule the rest of the manifest keeps (`AMB-D-415`).
+    #[test]
+    fn a_field_with_no_kind_is_a_text_field_and_stays_one_document() {
+        let mut v = full_json();
+        v["config"] = serde_json::json!([{ "key": "base", "label": "Base branch" }]);
+        let m: Manifest = serde_json::from_value(v.clone()).unwrap();
+        assert_eq!(m.config[0], ConfigField::new("base", "Base branch"));
+        assert_eq!(m.config[0].field_type, FieldType::Text, "no `type` ⇒ a line the user types");
+        assert!(m.config[0].options.is_empty());
+        assert!(m.config[0].default.is_none());
+        let out = &serde_json::to_value(&m).unwrap()["config"][0];
+        for absent in ["type", "options", "default"] {
+            assert_eq!(out.get(absent), None, "`{absent}` was not written, so it is not carried back out");
+        }
+    }
+
+    /// The candidates and the default round-trip as written (`AMB-D-415`) — an author's schema is handed
+    /// back to them verbatim, `type` included.
+    #[test]
+    fn a_multi_field_round_trips_with_its_options_and_default() {
+        let mut v = full_json();
+        v["config"] = serde_json::json!([{
+            "key": "events",
+            "label": "通知するイベント",
+            "type": "multi",
+            "options": [
+                { "value": "task.done", "label": "完了した" },
+                { "value": "task.rejected", "label": "見送った" },
+            ],
+            "default": "task.done",
+        }]);
+        let m: Manifest = serde_json::from_value(v.clone()).unwrap();
+        let field = &m.config[0];
+        assert_eq!(field.field_type, FieldType::Multi);
+        assert_eq!(field.options.len(), 2);
+        assert_eq!(field.options[0].value, "task.done");
+        assert_eq!(field.options[0].label, "完了した");
+        assert_eq!(field.default.as_deref(), Some("task.done"));
+        let out = &serde_json::to_value(&m).unwrap()["config"][0];
+        for declared in ["type", "options", "default"] {
+            assert_eq!(out[declared], v["config"][0][declared], "`{declared}` comes back as written");
+        }
+    }
+
+    /// A kind outside the vocabulary is refused at the shape, where every other unknown token is.
+    #[test]
+    fn a_field_type_outside_the_vocabulary_does_not_parse() {
+        let mut v = full_json();
+        v["config"] = serde_json::json!([{ "key": "k", "label": "L", "type": "number" }]);
+        assert!(serde_json::from_value::<Manifest>(v).is_err());
+    }
+
+    /// A candidate is both halves — what is stored and what is read — so neither may be left out.
+    #[test]
+    fn a_config_option_missing_value_or_label_does_not_parse() {
+        for half in ["value", "label"] {
+            let mut option = serde_json::json!({ "value": "task.done", "label": "完了した" });
+            option.as_object_mut().unwrap().remove(half);
+            let mut v = full_json();
+            v["config"] =
+                serde_json::json!([{ "key": "k", "label": "L", "type": "multi", "options": [option] }]);
+            assert!(
+                serde_json::from_value::<Manifest>(v).is_err(),
+                "an option missing `{half}` must not parse"
+            );
+        }
     }
 
     #[test]

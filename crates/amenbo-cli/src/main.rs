@@ -587,21 +587,79 @@ fn bound_dir_is_under_git() -> bool {
 /// here), and able to run against this build (`AMB-D-359`). Naming one the call would refuse is worse than
 /// leaving it out, since the AI spends a turn learning what amenbo already knew.
 ///
-/// Best-effort, like the rest of this runtime seam: a plugin directory that cannot be read is already
-/// warned about and skipped downstream, and a base directory that cannot be listed at all yields no
-/// plugins rather than an entry point that fails to answer. Outside a binding there is no project whose
-/// gate could be open, so the list is empty — which is what "enabled here" means where there is no here.
-fn plugins_for_agent(store: &Store) -> serde_json::Value {
-    let Some(project) = store.reach().project() else { return serde_json::Value::Array(Vec::new()) };
-    let installed = amenbo_core::plugin_installed::installed(&store.paths).unwrap_or_default();
-    let callable: Vec<_> = installed
+/// `project` is the effective context — the folder's binding, or a human's `--project` ([`bound_project`])
+/// — and not the caller's reach: the reach narrows an AI to its own project, but a human's is every
+/// project at once, which names no gate to read. Taken as an argument so the answer is a function of the
+/// project alone.
+///
+/// **An empty list comes back with the reason it is empty**, because several different states fall to the
+/// same empty array and a reader who cannot tell them apart spends a turn finding out (a run outside a
+/// binding, nothing installed, everything installed needing a different amenbo, nothing switched on here).
+/// Best-effort, like the rest of this runtime seam: a base directory that cannot be listed answers with
+/// that as the reason rather than an entry point that fails to answer.
+fn plugins_for_agent(
+    store: &Store,
+    project: Option<i64>,
+) -> (serde_json::Value, Option<&'static str>) {
+    let empty = || serde_json::Value::Array(Vec::new());
+    let Some(project) = project else {
+        return (
+            empty(),
+            Some(
+                "no project is in context: a plugin's switch is one project's, so there is no gate to \
+                 read outside a bound folder — run this from one",
+            ),
+        );
+    };
+    let Ok(installed) = amenbo_core::plugin_installed::installed(&store.paths) else {
+        return (empty(), Some("the plugins directory could not be read, so nothing could be listed"));
+    };
+    if installed.is_empty() {
+        return (
+            empty(),
+            Some("no plugin is installed on this machine — `plugin list` shows what is"),
+        );
+    }
+    let compatible: Vec<_> = installed
         .iter()
         .filter(|p| amenbo_core::plugin_compat::check(&p.manifest).is_ok())
+        .collect();
+    if compatible.is_empty() {
+        return (
+            empty(),
+            Some(
+                "every installed plugin speaks a contract this build does not, so none of them can be \
+                 called — `plugin list` names the mismatch",
+            ),
+        );
+    }
+    // A gate that cannot be read is not the same answer as a gate that is shut, and this is the one place
+    // that can still say which it was.
+    let mut unreadable_gate = false;
+    let callable: Vec<_> = compatible
+        .into_iter()
         .filter(|p| {
-            amenbo_core::plugin_trust::effective_enabled_in(store, &p.name, project).unwrap_or(false)
+            match amenbo_core::plugin_trust::effective_enabled_in(store, &p.name, project) {
+                Ok(on) => on,
+                Err(_) => {
+                    unreadable_gate = true;
+                    false
+                }
+            }
         })
         .collect();
-    amenbo_core::plugin_agent::entries(&callable, amenbo_core::config::Paths::command_name())
+    if callable.is_empty() {
+        return (
+            empty(),
+            Some(if unreadable_gate {
+                "whether a plugin is enabled here could not be read from the store"
+            } else {
+                "no plugin is enabled in this project — installing one never turns it on; \
+                 `plugin enable <name>` opens its gate here"
+            }),
+        );
+    }
+    (amenbo_core::plugin_agent::entries(&callable, amenbo_core::config::Paths::command_name()), None)
 }
 
 /// Can this invocation reach a store at all — is one named, by a pointer or by env (AMENBO_HOME /
@@ -2417,7 +2475,16 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 // separate shelf so a reader can always tell whose words they are reading. Runtime like the
                 // fields above, and for the same reason: what is installed and open is the store's answer,
                 // not the static spec's.
-                map.insert("plugins".to_string(), plugins_for_agent(&store));
+                let (plugins, empty_because) = plugins_for_agent(&store, bound_project(&store));
+                map.insert("plugins".to_string(), plugins);
+                // Only when there is nothing to name: a reader with a list in hand has no use for a
+                // sentence about lists that are empty, and the key's presence is itself the answer.
+                if let Some(why) = empty_because {
+                    map.insert(
+                        "pluginsEmptyBecause".to_string(),
+                        serde_json::Value::String(why.to_string()),
+                    );
+                }
             }
             print_json(&spec);
         }
@@ -6522,6 +6589,73 @@ mod tests {
         };
         attach_premise_change(&mut v, &pc);
         assert_eq!(v["premise_change"]["added_blockers"][0]["id"], 7);
+    }
+
+    /// Why the entry point's `plugins` is empty, when it is (`AMB-D-437`). Several unrelated states fall
+    /// to the same empty array — no binding, nothing installed, nothing this build can speak to, nothing
+    /// switched on here — and a reader who cannot tell them apart has to go looking. Each one says which.
+    #[test]
+    fn an_empty_plugin_list_says_why_it_is_empty() {
+        use amenbo_core::plugin_manifest::Manifest;
+
+        let dir = amenbo_scratch::scratch("agent-plugins-empty");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut store = Store::open_at(amenbo_core::config::Paths::at(dir)).unwrap();
+        let project = store
+            .project_add(amenbo_core::ops::project::NewProject {
+                name: "テストPJ".into(),
+                view: View::List,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap()
+            .id;
+        let why = |store: &Store, project: Option<i64>| {
+            let (list, why) = plugins_for_agent(store, project);
+            assert!(list.as_array().is_some_and(|rows| rows.is_empty()), "a reason comes with an empty list");
+            why.unwrap_or("")
+        };
+
+        // Standing in no project: a gate is one project's, so there is none to read.
+        assert!(why(&store, None).contains("no project is in context"));
+
+        // Bound, with nothing on the machine.
+        assert!(why(&store, Some(project)).contains("no plugin is installed"));
+
+        // Installed, and off — which install always leaves it (`AMB-D-351`).
+        let plant = |store: &Store, payload_v: u32| {
+            let manifest: Manifest = serde_json::from_value(serde_json::json!({
+                "name": "notes", "desc": "a note taker", "author": "amenbo",
+                "repo": "ShiroDoromoto/amenbo", "os": ["macos", "linux", "windows"],
+                "category": "workflow", "url": "https://example.invalid/x.tar.gz",
+                "checksum": "sha256:00", "payload_v": payload_v,
+            }))
+            .unwrap();
+            let home = store.paths.plugin_dir("notes");
+            std::fs::create_dir_all(&home).unwrap();
+            std::fs::write(
+                amenbo_core::plugin_installed::program_path(&store.paths, "notes"),
+                b"#!/bin/sh\n",
+            )
+            .unwrap();
+            std::fs::write(
+                amenbo_core::plugin_installed::manifest_path(&store.paths, "notes"),
+                serde_json::to_vec(&manifest).unwrap(),
+            )
+            .unwrap();
+        };
+        plant(&store, amenbo_core::plugin_payload::VERSION);
+        assert!(why(&store, Some(project)).contains("no plugin is enabled"));
+
+        // Switched on here: the list is the answer, and there is nothing to explain.
+        amenbo_core::plugin_trust::enable(&mut store, "notes", project, &[], |_| true).unwrap();
+        let (list, why_now) = plugins_for_agent(&store, Some(project));
+        assert_eq!(list[0]["name"], "notes");
+        assert_eq!(why_now, None, "a list in hand needs no sentence about empty ones");
+
+        // A build that speaks a different payload contract is dropped before the gate is asked.
+        plant(&store, amenbo_core::plugin_payload::VERSION + 1);
+        assert!(why(&store, Some(project)).contains("does not"));
     }
 
     /// The update config re-check (`AMB-D-359`): before a build is replaced, the new manifest's `required`

@@ -377,9 +377,9 @@ impl Driver {
                 let name = req_str(with, "name")?;
                 let present = req_bool(with, "present")?;
                 // Asked as the AI, which is who the document is for: the `plugins` key is what *this
-                // folder* can call, and the folder's project is the reach an AI is held to. A human
-                // facet reaches every project at once and so has no single one whose gates could be
-                // read — the key is empty for them, honestly rather than wrongly.
+                // folder* can call. Which folder that is comes from the binding, so either facet reads
+                // the same gates — and when the key comes back empty it says why, rather than leaving
+                // a reader to guess which of several empty-handed states they are in.
                 let v = self.run_json(&["agent", "--json", "--actor", "ai"])?;
                 let entry = v["plugins"]
                     .as_array()

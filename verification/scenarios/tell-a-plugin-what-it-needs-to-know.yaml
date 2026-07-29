@@ -11,9 +11,10 @@ description: >
   Take it away through the door an empty value opens, and see the read say the project holds nothing.
   Then a key the manifest never declared: it is refused, because a plugin is told only what its author
   said it takes. Finally the other route a value can take: a setting the author marked secret is filled
-  in, and the read says it is set without saying what it is. Then the two ends nothing else can see: a
-  run is asked what it was handed, and answers with the secret; and a plugin removed with one still set
-  is installed again, to be handed nothing.
+  in, and the read says it is set without saying what it is — while of the two files amenbo hands a
+  person, the backup carries the value home and the export leaves it behind. Then the two ends nothing
+  else can see: a run is asked what it was handed, and answers with the secret; and a plugin removed
+  with one still set is installed again, to be handed nothing.
 steps_cli:
   - type: action
     domain: plugin
@@ -105,6 +106,35 @@ steps_cli:
       name: worktree
       key: token
       set: true
+
+  # The two files amenbo hands a person, and the secret goes out with one and not the other. A backup
+  # is the road home — a restore that dropped the credentials would mean typing every one of them in
+  # again — and an export is one-way, into another tool's hands, where a credential in the clear is one
+  # nobody here controls any more. Both are asked for the token verbatim: what it looks like inside an
+  # archive nobody has to know, only which of the two carries it.
+  - type: action
+    domain: store
+    op: backup
+    as: after-the-secret
+
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: after-the-secret
+      contains: amb_scenario_secret_9f2c4b7e0d1a5f36
+
+  - type: action
+    domain: store
+    op: export
+    as: taken-out
+
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: taken-out
+      absent: amb_scenario_secret_9f2c4b7e0d1a5f36
 
   # Nothing so far says the value ever reaches the plugin, and nothing a person can look at will: it
   # travels as an environment variable on the child process, which is the one place neither a reader

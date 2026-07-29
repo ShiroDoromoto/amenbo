@@ -190,15 +190,36 @@ fn stream_table(
 /// bundling export poll every row instead — see [`stream_table`].
 const CANCEL_POLL_ROWS: u64 = 256;
 
+/// Datasets an export leaves behind, by their stable name (`AMB-D-434`).
+///
+/// A plugin's secrets are the one thing here that is a credential in plain text, and an export is a
+/// one-way door out of amenbo: the file lands in another tool's hands and stays there. So the whole
+/// table stays home. Table-level and not row-level on purpose — a rule that has to judge each row is a
+/// rule that can be got wrong once; a table nobody streams cannot leak the row nobody remembered.
+///
+/// `backup` carries them, and must: that road leads back to the same person's own store, and dropping
+/// them there would mean typing every credential in again after each restore. It copies the database
+/// file whole ([`crate::archive`]), so it never walks this list.
+pub const WITHHELD_FROM_EXPORT: &[&str] = &["plugin_secret"];
+
+/// The registry an export walks: every dataset except [`WITHHELD_FROM_EXPORT`].
+///
+/// A dataset stays in [`DATASETS`] whether or not it is exported — that list is the schema itself, and
+/// a snapshot's verification requires every table in it. What an export carries is a narrower question,
+/// and this is where it is answered.
+pub fn exported_datasets() -> Vec<&'static Dataset> {
+    DATASETS.iter().filter(|d| !WITHHELD_FROM_EXPORT.contains(&d.name)).collect()
+}
+
 /// Stream a store's whole read model — the `{ "task": [...], "project": [...], … }` object — to `w`,
-/// one row at a time (O(1) memory). `datasets` is the registry to walk ([`DATASETS`]). Public so the
-/// scale guard can exercise the streaming core directly against an in-memory connection; the
+/// one row at a time (O(1) memory). `datasets` is the registry to walk ([`exported_datasets`]). Public
+/// so the scale guard can exercise the streaming core directly against an in-memory connection; the
 /// whole-device export writes it as the document's `tables` value. `bundle` is `Some` when the export is
 /// writing a directory — the attachment rows then also carry their bytes out (see [`AttachmentBundle`]);
 /// `None` streams records only (stdout).
 pub fn stream_store_tables(
     conn: &Connection,
-    datasets: &[Dataset],
+    datasets: &[&Dataset],
     w: &mut impl Write,
     mut bundle: Option<&mut AttachmentBundle>,
     progress: &mut impl FnMut(&Progress) -> ControlFlow<()>,
@@ -375,7 +396,7 @@ fn stream_json(
     w.write_all(b"{\"amenbo_export\":")?;
     write_json(w, &header)?;
     w.write_all(b",\"tables\":")?;
-    stream_store_tables(&conn, DATASETS, w, bundle, progress)?;
+    stream_store_tables(&conn, &exported_datasets(), w, bundle, progress)?;
     w.write_all(b"}")?;
     Ok(())
 }

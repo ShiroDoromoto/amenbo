@@ -219,6 +219,10 @@ pub enum Command {
     /// exists for migrating into other tools, and neither an excerpt nor a human-readable table serves
     /// that. Export is **one-way**: the way back into amenbo is a `backup` archive and `restore`,
     /// not this output.
+    ///
+    /// One thing stays behind: a plugin's **secrets** (`AMB-D-434`). This file goes out to another tool
+    /// and stays in its hands, and a credential in the clear is not something to hand over on the way
+    /// past — they ride `backup`, which leads back to your own store, instead.
     Export {
         /// The **export directory** to create — `export.json` plus `attachments/` with every
         /// attachment's bytes. Must not exist yet. With no `--out` the dump streams to stdout (records
@@ -229,7 +233,9 @@ pub enum Command {
     /// Back up this device — its store and its attachment bytes — into a single
     /// verified `.amenbo-backup` archive at `path`. The store is snapshotted with `VACUUM INTO`
     /// (checkpointed, no torn DB+WAL) and bounded-verified; a `manifest.json` records its migration
-    /// generation. Secrets (keys/identity) are never included. The destination must not already exist.
+    /// generation. The device's own secrets (at-rest key / identity) are never included; a plugin's
+    /// secrets are store rows, so those ride along and come back working (`AMB-D-434`). The destination
+    /// must not already exist.
     Backup {
         /// Destination `.amenbo-backup` archive; must not already exist.
         path: Option<String>,

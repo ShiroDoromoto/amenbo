@@ -7,6 +7,7 @@ import {
   bindFolder, deleteProject, fetchBoundFolders, fetchProjectSettings, openTerminal,
   pickFolder, revealFolder, setProjectArchived, unbindFolder, updateProject,
 } from "../core/mutations";
+import { setPluginEnabled, usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf, viewLabel } from "../core/i18n";
@@ -153,6 +154,8 @@ export function ProjectSettingsScreen({
         </div>
 
         {inTauri() && <FoldersSection projectId={projectId} />}
+
+        {inTauri() && <PluginsSection projectId={projectId} />}
 
         <div className="settings__section">
           <div className="settings__h">{t("projset.danger")}</div>
@@ -303,6 +306,84 @@ function FoldersSection({ projectId }: { projectId: number }) {
         <div className="newproj__nextrow">
           <button className="btn" onClick={() => void add()} disabled={busy}>📂 {t("projset.addFolder")}</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The plugins turned on for this project (`AMB-D-412`) — the other face of the plugin screen's row, and
+ * the same switch (`AMB-D-434`), not a second one.
+ *
+ * A project-wide switch is looked for in the project. Someone who turned a plugin on and later wants it
+ * off opens the project it was bothering them in, not a catalogue of plugins — so the answer is here as
+ * well, saying the same thing from the other end: there, one plugin and the projects it fires in; here,
+ * one project and the plugins that fire for it.
+ *
+ * What is installed is read once for the whole store — a row already carries the projects it is on in,
+ * so this section is a filter over that, with no reading of its own.
+ */
+function PluginsSection({ projectId }: { projectId: number }) {
+  const { installs } = usePluginInstalls();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const move = async (name: string, next: boolean) => {
+    setBusy(true); setError(null);
+    try {
+      await setPluginEnabled(name, projectId, next);
+    } catch (e) {
+      // A refusal is core's (an incompatible build, a `required` setting this project has no value
+      // for), and it is the sentence worth showing rather than a switch that appears not to work.
+      setError(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const on = installs.filter((i) => i.enabledProjects.includes(projectId));
+  const off = installs.filter((i) => !i.enabledProjects.includes(projectId));
+
+  return (
+    <div className="settings__section">
+      <div className="settings__h">{t("projset.plugins")}</div>
+      <div className="settings__body newproj">
+        <span className="newproj__hint">{t("projset.pluginsHint")}</span>
+
+        {installs.length === 0 && <span className="faint">{t("plugins.emptyInstalled")}</span>}
+        {installs.length > 0 && on.length === 0 && (
+          <span className="faint">{t("projset.pluginsNoneOn")}</span>
+        )}
+
+        {on.map((i) => (
+          <div key={i.name} className="settings__row">
+            <span className="settings__k">{i.name}</span>
+            {!i.compatible && <span className="chip chip--warn">{t("plugins.notFiring")}</span>}
+            <button className="btn" onClick={() => void move(i.name, false)} disabled={busy}>
+              {t("plugins.disable")}
+            </button>
+          </div>
+        ))}
+
+        {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+
+        {/* Picking one is the enable, the same as on the plugin screen. Only what is off here is
+            offered — a plugin already firing for this project has nothing to add. */}
+        {off.length > 0 && (
+          <div className="newproj__nextrow">
+            <select
+              className="btn"
+              value=""
+              disabled={busy}
+              onChange={(e) => void move(e.target.value, true)}
+            >
+              <option value="">{t("projset.pluginsAdd")}</option>
+              {off.map((i) => (
+                <option key={i.name} value={i.name}>{i.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
     </div>
   );

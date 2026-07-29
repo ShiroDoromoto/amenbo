@@ -9,10 +9,15 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BoundFolderDto } from "../bindings/bindings";
+import type { PluginInstall } from "../core/pluginInstalls";
 
 const hoisted = vi.hoisted(() => ({
   /** The folders the list reads (what `fetchBoundFolders` answers). */
   folders: [] as BoundFolderDto[],
+  /** What this machine holds, each row naming the projects it fires in. */
+  installs: [] as PluginInstall[],
+  /** The gates that were moved, arguments and all. */
+  gated: [] as { name: string; projectId: number; enabled: boolean }[],
   /** Canned answers for the confirm dialog, consumed from the front; once exhausted, everything is OK. */
   answers: [] as boolean[],
   /** The writes that were called, arguments and all. */
@@ -22,6 +27,18 @@ const hoisted = vi.hoisted(() => ({
 vi.mock("../core/snapshot", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../core/snapshot")>();
   return { ...orig, inTauri: () => true };
+});
+// The plugin seam, replaced whole: what is installed, and what a moved switch was called with.
+vi.mock("../core/pluginInstalls", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../core/pluginInstalls")>();
+  return {
+    ...orig,
+    usePluginInstalls: () => ({ installs: hoisted.installs, loading: false, error: undefined }),
+    setPluginEnabled: (name: string, projectId: number, enabled: boolean) => {
+      hoisted.gated.push({ name, projectId, enabled });
+      return Promise.resolve({ enabled, droppedQueued: 0 });
+    },
+  };
 });
 vi.mock("../core/dialog", () => ({
   confirmDialog: () => Promise.resolve(hoisted.answers.shift() ?? true),
@@ -77,6 +94,8 @@ const button = (r: HTMLElement, text: string) =>
 
 beforeEach(() => {
   hoisted.folders = [];
+  hoisted.installs = [];
+  hoisted.gated.length = 0;
   hoisted.answers.length = 0;
   hoisted.calls.length = 0;
   container = document.createElement("div");
@@ -153,5 +172,74 @@ describe("invariants held by the rows of the linked-folder list", () => {
     await render([folder(), folder({ path: "/w/two", legacy: true })]);
     expect(warnings(row("/w/one"))).toEqual([]);
     expect(warnings(row("/w/two"))).toEqual([`⚠ ${t("projset.folderLegacyPointer")}`]);
+  });
+});
+
+/** One installed plugin, on in no project until a test says otherwise. */
+function install(over: Partial<PluginInstall> & { name: string }): PluginInstall {
+  return { compatible: true, enabledProjects: [], config: [], rollback: false, ...over };
+}
+
+/** The plugins section, found by its heading. */
+function pluginsSection(): HTMLElement {
+  const head = Array.from(container.querySelectorAll(".settings__h")).find(
+    (h) => h.textContent === t("projset.plugins"),
+  );
+  return head!.closest(".settings__section") as HTMLElement;
+}
+const picker = () => pluginsSection().querySelector("select") as HTMLSelectElement;
+const offered = (el: HTMLSelectElement) => Array.from(el.options).map((o) => o.textContent);
+
+// The project's own face of the one switch (`AMB-D-412`): a plugin turned on per project is looked for
+// in the project, and this says the same thing the plugin screen says, from the other end.
+describe("the plugins turned on for this project", () => {
+  it("lists the ones on here, and offers the rest", async () => {
+    hoisted.installs = [
+      install({ name: "worktree", enabledProjects: [1, 2] }),
+      install({ name: "notify", enabledProjects: [2] }),
+    ];
+    await render([]);
+
+    const section = pluginsSection();
+    expect(section.textContent).toContain("worktree");
+    expect(offered(picker())).toEqual([t("projset.pluginsAdd"), "notify"]);
+  });
+
+  it("says so when this project has none on, without hiding what is installed", async () => {
+    hoisted.installs = [install({ name: "notify", enabledProjects: [2] })];
+    await render([]);
+    expect(pluginsSection().textContent).toContain(t("projset.pluginsNoneOn"));
+    expect(offered(picker())).toEqual([t("projset.pluginsAdd"), "notify"]);
+  });
+
+  it("points at the market when this machine holds no plugin at all", async () => {
+    await render([]);
+    expect(pluginsSection().textContent).toContain(t("plugins.emptyInstalled"));
+    expect(pluginsSection().querySelector("select")).toBeNull();
+  });
+
+  // The switch this moves is the plugin screen's, aimed at this project and no other.
+  it("turns one on for this project by picking it", async () => {
+    hoisted.installs = [install({ name: "notify" })];
+    await render([]);
+    await act(async () => {
+      picker().value = "notify";
+      picker().dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 1, enabled: true }]);
+  });
+
+  it("turns one off from the row it is listed on", async () => {
+    hoisted.installs = [install({ name: "worktree", enabledProjects: [1] })];
+    await render([]);
+    const off = Array.from(pluginsSection().querySelectorAll("button")).find(
+      (b) => b.textContent === t("plugins.disable"),
+    );
+    await act(async () => {
+      off!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(hoisted.gated).toEqual([{ name: "worktree", projectId: 1, enabled: false }]);
   });
 });

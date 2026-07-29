@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { PluginWantedSettingDto } from "../bindings/bindings";
-import { errText, t } from "../core/i18n";
+import { errText, t, tn } from "../core/i18n";
 import {
   setPluginConfig,
   usePluginConfig,
@@ -29,15 +29,19 @@ import {
  * The author's schema comes from the install (it is the same wherever you stand) and what is *held*
  * is read for the named project, which is why the two arrive separately: until a project is picked
  * there is a form to draw and nothing to draw in it.
+ *
+ * The project is the form's own, not the screen's (`AMB-D-412`) — a plugin is on in as many projects as
+ * it is on in, and the one whose settings are being written is a separate question from all of them.
  */
-export function PluginConfigForm({ install, projects, projectId, onProject }: {
+export function PluginConfigForm({ install, projects }: {
   install: PluginInstall;
-  /** The projects an override can be written for — the store's, for the picker. */
+  /** The projects a value can be written for — the store's, for the picker. */
   projects: { id: number; name: string }[];
-  /** The project this screen speaks for — whose override the form writes (`null` = none chosen). */
-  projectId: number | null;
-  onProject: (id: number | null) => void;
 }) {
+  // Which project's values are on screen. A store with exactly one project answers it already: naming
+  // it would be asking a question with a single answer.
+  const [picked, setPicked] = useState<number | null>(null);
+  const projectId = picked ?? (projects.length === 1 ? projects[0].id : null);
   // Only what the user actually typed, keyed by field. Kept apart from the stored values so a refetch
   // never argues with a half-typed box, and so a cleared box reads as "clear this", not as "unchanged".
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -56,6 +60,9 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
   const heldFor = (key: string): PluginConfigField | undefined => fields.find((f) => f.key === key);
   const stored = (f: PluginWantedSettingDto) => heldFor(f.key)?.value ?? "";
   const shown = (f: PluginWantedSettingDto) => edits[f.key] ?? stored(f);
+  // How many `required` settings this project holds no value for — what an enable in it is refused
+  // over. Zero while no project is named: nothing was read, so nothing is missing.
+  const missing = fields.filter((f) => f.required && !held(f)).length;
 
   const run = async (op: () => Promise<unknown>, said: typeof done) => {
     setBusy(true);
@@ -106,7 +113,7 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
           value={projectId ?? ""}
           disabled={busy}
           onChange={(e) => {
-            onProject(e.target.value === "" ? null : Number(e.target.value));
+            setPicked(e.target.value === "" ? null : Number(e.target.value));
             setEdits({});
             setDone(null);
           }}
@@ -117,6 +124,11 @@ export function PluginConfigForm({ install, projects, projectId, onProject }: {
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
+        {/* Why an enable in *this* project is refused (`AMB-D-356`), said where the values are — the
+            gate lists projects, and a count that named none of them would not say whose. */}
+        {missing > 0 && (
+          <span className="chip chip--warn">{tn("plugins.cfg.requiredUnset", missing)}</span>
+        )}
         {unnamedProject && (
           <div className="pluggate__note faint">{t("plugins.cfg.pickProjectNote")}</div>
         )}

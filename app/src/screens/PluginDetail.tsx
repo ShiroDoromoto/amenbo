@@ -27,15 +27,12 @@ import { installPlugin, type PluginInstall } from "../core/pluginInstalls";
 // amenbo's own key (`AMB-D-371`); a star count is a display figure, and a download count includes
 // whatever else pulls an asset, so both are read as a sense of scale and nothing more.
 
-export function PluginDetail({ entry, install, projects, projectId, onProject, onClose }: {
+export function PluginDetail({ entry, install, projects, onClose }: {
   entry: PluginEntry;
   /** This machine's row for this entry, or `undefined` when it is not installed. */
   install?: PluginInstall;
-  /** The projects the gate can be moved in — the store's, for the picker below. */
+  /** The projects the gate below can be moved in — the store's. */
   projects: { id: number; name: string }[];
-  /** Which project the gate below speaks for (`null` = none chosen yet). */
-  projectId: number | null;
-  onProject: (id: number | null) => void;
   onClose: () => void;
 }) {
   const { facts, loading, error } = usePluginRepoFacts(entry.repo);
@@ -66,13 +63,7 @@ export function PluginDetail({ entry, install, projects, projectId, onProject, o
           <button className="btn" onClick={onClose}>{t("plugins.close")}</button>
         </div>
 
-        <PluginActions
-          entry={entry}
-          install={install}
-          projects={projects}
-          projectId={projectId}
-          onProject={onProject}
-        />
+        <PluginActions entry={entry} install={install} projects={projects} />
 
         <div className="plugdet__desc">{entry.desc}</div>
         <div className="plugdet__meta faint">
@@ -177,14 +168,12 @@ function WhatItWants({ detail }: { detail: PluginDetailDoc }) {
  * installing writes a binary that runs nothing, and only enabling opens the gate it fires through.
  *
  * Only the install half lives here: the switch is `PluginGate`, the one control the installed screen
- * draws too, so the project a gate speaks for cannot drift between the two faces.
+ * draws too, so what a gate says cannot drift between the two faces.
  */
-function PluginActions({ entry, install, projects, projectId, onProject }: {
+function PluginActions({ entry, install, projects }: {
   entry: PluginEntry;
   install?: PluginInstall;
   projects: { id: number; name: string }[];
-  projectId: number | null;
-  onProject: (id: number | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -194,8 +183,6 @@ function PluginActions({ entry, install, projects, projectId, onProject }: {
       <PluginGate
         install={install}
         projects={projects}
-        projectId={projectId}
-        onProject={onProject}
         lead={<span className="chip">{t("plugins.installed")}</span>}
       />
     );

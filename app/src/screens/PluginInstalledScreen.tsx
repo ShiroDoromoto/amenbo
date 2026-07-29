@@ -2,13 +2,10 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { PluginConfigForm } from "../components/PluginConfigForm";
 import { PluginGate } from "../components/PluginGate";
 import { confirmDialog } from "../core/dialog";
-import { errText, t, tn, tf } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import {
-  enabledIn,
   uninstallPlugin,
-  usePluginConfig,
   usePluginInstalls,
-  type PluginConfigField,
   type PluginInstall,
   type PluginRemoved,
 } from "../core/pluginInstalls";
@@ -30,16 +27,13 @@ import { getSnapshot, subscribe } from "../core/snapshot";
 // whether or not the index that offered them is up. The cost is that nothing here shows what the catalog
 // knows (a description, an author) — those belong to the market's copy of the entry, not to the install.
 //
-// Everything a row can *do* is one control (`PluginGate`), the same one the market's detail draws, so the
-// project a gate speaks for cannot mean two different things on two screens.
+// Everything a row can *do* is one control (`PluginGate`), the same one the market's detail draws, so a
+// switch cannot mean two different things on two screens. **The screen holds no project of its own**
+// (`AMB-D-412`): each row names the projects it is on in, so no single choice up here can decide what a
+// row is allowed to say.
 
 export function PluginInstalledScreen() {
   const projects = useSyncExternalStore(subscribe, () => getSnapshot().projects);
-  // Which project a gate speaks for (`AMB-D-434`). This screen is not opened inside a
-  // project, so it has to be named — except on a store with exactly one project, where naming it would be
-  // asking a question with a single answer.
-  const [pickedProject, setPickedProject] = useState<number | null>(null);
-  const gateProject = pickedProject ?? (projects.length === 1 ? projects[0].id : null);
   const { installs, loading, error } = usePluginInstalls();
   // Opening this screen is one of the update triggers (`AMB-D-359`) — core answers from the catalog's
   // freshness window, so arriving here inside the hour costs nothing. The offer itself is the shell's banner;
@@ -99,8 +93,6 @@ export function PluginInstalledScreen() {
             install={install}
             update={updates.find((u) => u.name === install.name)}
             projects={projects}
-            projectId={gateProject}
-            onProject={setPickedProject}
             onRemoved={setRemoved}
           />
         ))}
@@ -126,15 +118,6 @@ function removedParts(r: PluginRemoved): string {
 }
 
 /**
- * How many settings the author marked `required` the named project holds no value for — the count an
- * enable is refused over (`AMB-D-356`). There is one value per setting per project (`AMB-D-434`), so a
- * field is held or it is not; with no project named nothing was read, and nothing is claimed.
- */
-function requiredUnset(fields: PluginConfigField[]): number {
-  return fields.filter((f) => f.required && (f.secret ? !f.secretSet : f.value == null)).length;
-}
-
-/**
  * One installed plugin: its name, which switch it has, and that switch.
  *
  * Installed and enabled are two facts (`AMB-D-351`), and a plugin that is here but fires nothing is the
@@ -155,24 +138,21 @@ function requiredUnset(fields: PluginConfigField[]): number {
  * an offer that needs a decision is actually resolvable, since the settings the new schema wants are one
  * button away. The way back is here for the same reason: this face applies updates, so it owes the undo.
  */
-function InstalledRow({ install, update, projects, projectId, onProject, onRemoved }: {
+function InstalledRow({ install, update, projects, onRemoved }: {
   install: PluginInstall;
   /** The build the catalog holds for this plugin, when it is not the one installed. */
   update?: PluginUpdate;
   projects: { id: number; name: string }[];
-  projectId: number | null;
-  onProject: (id: number | null) => void;
   /** Report what an uninstall took, for the screen to say once this row is gone. */
   onRemoved: (r: { name: string; parts: string }) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
+  // The badge is about the plugin, so it reads the whole list: on in some project, or on in none.
+  const firing = install.enabledProjects.length > 0;
   // What the last build move did, said on the row it was about — the offer is gone by the time it is drawn.
   const [moved, setMoved] = useState<string | null>(null);
-  // What the named project holds, for the "still missing" count said on the closed row.
-  const { fields } = usePluginConfig(install.name, projectId);
-  const missing = requiredUnset(fields);
 
   const run = async (op: () => Promise<string | null>) => {
     setBusy(true);
@@ -223,48 +203,30 @@ function InstalledRow({ install, update, projects, projectId, onProject, onRemov
     <div className="feed__item">
       <div className="feed__body" style={{ minWidth: 0 }}>
         <div className="feed__line">
-          <strong>{install.name}</strong>{" "}
-          <span className="chip">{t("plugins.gate.project")}</span>
+          <strong>{install.name}</strong>
           {!install.compatible ? (
             <>
               {" "}
               <span className="chip chip--warn">
-                {t(enabledIn(install, projectId) ? "plugins.notFiring" : "plugins.incompatibleChip")}
+                {t(firing ? "plugins.notFiring" : "plugins.incompatibleChip")}
               </span>
             </>
-          ) : enabledIn(install, projectId) ? (
+          ) : firing ? (
             <>
               {" "}
               <span className="chip">{t("plugins.enabledChip")}</span>
             </>
           ) : null}
         </div>
-        <PluginGate
-          install={install}
-          projects={projects}
-          projectId={projectId}
-          onProject={onProject}
-        />
+        <PluginGate install={install} projects={projects} />
         {install.config.length > 0 && (
           <div className="pluggate">
             <button className="feed__action" onClick={() => setSettings((s) => !s)}>
               {settings ? t("plugins.cfg.hide") : t("plugins.cfg.open")}
             </button>
-            {/* Said on the closed row too: this is why an enable is refused, and the row is where
-                anyone looking at that refusal is standing. */}
-            {missing > 0 && (
-              <span className="chip chip--warn">{tn("plugins.cfg.requiredUnset", missing)}</span>
-            )}
           </div>
         )}
-        {settings && (
-          <PluginConfigForm
-            install={install}
-            projects={projects}
-            projectId={projectId}
-            onProject={onProject}
-          />
-        )}
+        {settings && <PluginConfigForm install={install} projects={projects} />}
         {(update || install.rollback || moved) && (
           <div className="pluggate">
             {/* An offer that needs a decision is named instead of offered as a button that would only be

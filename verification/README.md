@@ -174,14 +174,24 @@ store the app opens (`devtool/README.md`), and `--app` points that at the build 
 overrides it uses are the product's own, so the build is not a different one for having been asked.
 
 uiauto is the input primitive, called here, never moved: `window <pid>` yields the id
-`screencapture -l` needs and the window bounds (in the manifest) an operator uses to turn a shot's
-pixel into a click point, and its `click` / `dblclick` / `type` / `key` carry out the action steps the
-checklist names. Bring the app to the front first (`--app`, or by hand) — uiauto skips a window
-behind another Space. `--winid <id>` shoots a window directly, skipping uiauto; `--evidence <dir>`
+`screencapture -l` needs and the window bounds (in the manifest) that put a shot in the frame the
+screen stands in, and its `find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the
+action steps the checklist names. Bring the app to the front first (`--app`, or by hand) — uiauto skips
+a window behind another Space. `--winid <id>` shoots a window directly, skipping uiauto; `--evidence <dir>`
 chooses where the shots and manifest land (default: a fresh dir under the temp tree); `--ocr
 <path>` overrides `ocr.swift`. Exit is 0 when every OCR-judged assert passed and every step was
 captured, non-zero on a failed assert or a load/capture/OCR failure — a `Review` step is closed by
 a human from the evidence, not by the exit code.
+
+**Name what to press rather than aim at it.** `find <pid>` lists every element on screen with the name
+it answers to and where it stands, and `click-named <pid> <name>` clicks the one of that name. The
+screen is a webview, so both read it through the accessibility tree the app serves once asked.
+A point worked out from a shot's pixels carries two errors instead: the shot's pixels are the window's
+points times the scale of the display it was on (2 on a built-in panel, 1 on an external one), and the
+screen goes on moving after the shot — opening the right pane pushes a column header down by tens of
+pixels. Anything wide swallows both, which is why aiming works until it is aimed at something small:
+the board's `＋` and the view tabs read as unreachable elements until the arithmetic was suspected
+instead.
 
 ### `--step` — a scenario whose screen moves
 
@@ -191,7 +201,7 @@ pick the folder, read the linked screen — cannot be written as one scenario, o
 outside it and asserted at the end.
 
 `--step` stops the run after each step's shot and waits for a line on stdin. Between the two, the
-screen belongs to whoever is driving: carry out the next step by hand, or with uiauto's `click` /
+screen belongs to whoever is driving: carry out the next step by hand, or with uiauto's `click-named` /
 `type` / `key`, and send the line when the screen is standing where the scenario says it should. The
 stop is **after** the shot, never before — the evidence of where the run stood is on disk before
 anyone is invited to move on — and there is no stop after the last step, which has nothing following

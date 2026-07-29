@@ -202,7 +202,12 @@ It is the three steps above, assembled: resolve the pid, ask
 - **It drops the shadow** (`-o`). The shadow is asymmetric, so with it there the
   png's pixels stop corresponding to screen points by any fixed offset. Without
   it the png's top-left **is** the window origin, and uiauto's arithmetic —
-  halve the pixel on Retina, add the origin — lands on the thing you clicked.
+  divide the pixel by the shot's scale, add the origin — lands on the thing you
+  clicked. Take that scale from the png's own width over the width printed here,
+  never from what the machine's main display happens to be: an external panel
+  shoots at 1 where the built-in one shoots at 2. Better still, name the thing
+  instead of aiming at it (`uiauto find` / `click-named`), and neither the scale
+  nor a screen that has moved since the shot is yours to get right.
 - **The origin comes back with the path**, so a point read off the shot converts
   to a click point without asking `uiauto window` again about a window that may
   since have moved.

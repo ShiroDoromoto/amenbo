@@ -33,6 +33,7 @@ pub mod ops;
 pub mod order;
 pub mod overview;
 pub mod perf;
+pub mod plugin_agent;
 pub mod plugin_callback;
 pub mod plugin_catalog;
 pub mod plugin_command;

@@ -578,6 +578,32 @@ fn bound_dir_is_under_git() -> bool {
         .is_some_and(|(dir, _)| worktree::under_git(&dir))
 }
 
+/// **The plugins the agent spec names** (`AMB-D-437`): what this project can actually call, described in
+/// the words their authors wrote ([`amenbo_core::plugin_agent`]).
+///
+/// The filter is the callable set, and it is the same set an actual call passes
+/// ([`plugin_invoke::prepare`](amenbo_core::plugin_invoke::prepare)): installed, **enabled in the project
+/// this folder is bound to** (`AMB-D-434` — the gate is a project's, so a plugin open elsewhere is not open
+/// here), and able to run against this build (`AMB-D-359`). Naming one the call would refuse is worse than
+/// leaving it out, since the AI spends a turn learning what amenbo already knew.
+///
+/// Best-effort, like the rest of this runtime seam: a plugin directory that cannot be read is already
+/// warned about and skipped downstream, and a base directory that cannot be listed at all yields no
+/// plugins rather than an entry point that fails to answer. Outside a binding there is no project whose
+/// gate could be open, so the list is empty — which is what "enabled here" means where there is no here.
+fn plugins_for_agent(store: &Store) -> serde_json::Value {
+    let Some(project) = store.reach().project() else { return serde_json::Value::Array(Vec::new()) };
+    let installed = amenbo_core::plugin_installed::installed(&store.paths).unwrap_or_default();
+    let callable: Vec<_> = installed
+        .iter()
+        .filter(|p| amenbo_core::plugin_compat::check(&p.manifest).is_ok())
+        .filter(|p| {
+            amenbo_core::plugin_trust::effective_enabled_in(store, &p.name, project).unwrap_or(false)
+        })
+        .collect();
+    amenbo_core::plugin_agent::entries(&callable, amenbo_core::config::Paths::command_name())
+}
+
 /// Can this invocation reach a store at all — is one named, by a pointer or by env (AMENBO_HOME /
 /// AMENBO_PROJECT_DIR)? If not, `Store::open()` would quietly create a new one, so "may we open?" is asked
 /// in exactly one place: both the exec guard and the faces that answer without opening (version/update)
@@ -2312,6 +2338,13 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                         cycles.remove("worktree");
                     }
                 }
+                // What the user installed and switched on here, in the author's own words (`AMB-D-437`).
+                // A key of its own, never folded into `cycles`: those are amenbo's own working practice and
+                // amenbo answers for every line of them, while these are a third party's — kept on a
+                // separate shelf so a reader can always tell whose words they are reading. Runtime like the
+                // fields above, and for the same reason: what is installed and open is the store's answer,
+                // not the static spec's.
+                map.insert("plugins".to_string(), plugins_for_agent(&store));
             }
             print_json(&spec);
         }

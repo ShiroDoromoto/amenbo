@@ -14,6 +14,11 @@
 //!   leaves only by releasing it on the transaction that finds its queue empty. Both sides pass through one
 //!   write lock, so there is no gap between "nothing left" and "nobody running" for an event to fall into:
 //!   whichever lands first, the other sees the state it left.
+//! - **Every run is told how much is behind it** ([`QUEUE_REMAINING_VAR`], `AMB-D-417`). A plugin sees one
+//!   event per launch and has no way to know that forty-nine more are already queued for it, so the one
+//!   thing standing between a project deletion and fifty messages is a number only the runner can give.
+//!   Delivery itself is unchanged — nothing is held back, and whether to batch on the number is entirely
+//!   the plugin's call.
 //! - **Nothing is killed for being slow.** A runner has nobody behind it but the rest of its own plugin's
 //!   queue, so a hook is waited on to its end ([`plugin_hooks::run_queued`](crate::plugin_hooks::run_queued))
 //!   rather than cut off at five seconds — being cut off mid-work is exactly the half-done outside effect
@@ -63,13 +68,26 @@ use crate::config::Paths;
 use crate::error::Result;
 use crate::plugin_dispatch::{hook_for, Subscribers};
 use crate::store_engine::{
-    backlog, lease_of, queued_for, queued_plugins, Lease, QueueDepth, StoreEngine,
+    backlog, lease_of, queued_count, queued_for, queued_plugins, Lease, QueueDepth, StoreEngine,
 };
 use crate::time::Timestamp;
 
 /// How many rows one pass reads from a plugin's queue at a time. A page is one query, and the runner keeps
 /// reading until its queue is empty, so this bounds memory and nothing else.
 const RUN_PAGE: i64 = 256;
+
+/// The environment variable a plugin is told **how many events are still behind this one** under
+/// (`AMB-D-417`).
+///
+/// A plugin is run once per event and cannot see its own queue, so batching — one message for the fifty
+/// events a project deletion emitted, rather than fifty — is something only the runner can make possible.
+/// It does not do the batching: amenbo delivers as fast as it can, in order (`AMB-D-399`), and what a
+/// plugin does with the number is the plugin's business. It only says what it knows.
+///
+/// **`0` means the queue is empty as of this launch, not that nothing more is coming.** An event queued a
+/// moment later is delivered like any other, so a plugin that flushes on `0` may end up sending twice —
+/// two messages instead of one, never a message lost.
+pub const QUEUE_REMAINING_VAR: &str = "AMENBO_PLUGIN_QUEUE_REMAINING";
 
 /// How far ahead a runner holds its lease, pushed out again before every row it takes and while one runs.
 ///
@@ -306,25 +324,41 @@ pub fn run_queue(
     log: Option<&Path>,
 ) {
     loop {
+        // What this pass has to get through, counted once over the whole queue rather than per row
+        // (`AMB-D-417`): a number counted again for every launch would sit at whatever is waiting right
+        // now, so a plugin batching on it would never see the queue end while writes kept arriving.
+        let counted = match queued_count(engine.conn(), plugin) {
+            Ok(counted) => counted,
+            Err(e) => return warn_stop(plugin, &e.to_string()),
+        };
         let rows = match queued_for(engine.conn(), plugin, RUN_PAGE) {
             Ok(rows) => rows,
             Err(e) => return warn_stop(plugin, &e.to_string()),
         };
+        // Rows queued between the count and the read belong to the next pass — the number handed out must
+        // only fall — but the page in hand is work this pass is certainly doing, so it is the floor.
+        let mut left = counted.max(rows.len() as i64);
         for row in &rows {
+            // What stays behind once this row has been run, whether or not it reaches a plugin: a row that
+            // resolves to nobody still leaves the queue.
+            left -= 1;
             match hold(engine, plugin, owner) {
                 Ok(true) => {}
                 Ok(false) => return taken_over(plugin),
                 Err(e) => return warn_stop(plugin, &e.to_string()),
             }
             match hook_for(subs, row) {
-                Ok(Some(hook)) => crate::plugin_hooks::run_queued(
-                    &hook,
-                    log,
-                    Some(crate::plugin_hooks::Heartbeat {
-                        every: BEAT,
-                        beat: &|| beat(engine, plugin, owner),
-                    }),
-                ),
+                Ok(Some(mut hook)) => {
+                    hook.invocation = hook.invocation.env(QUEUE_REMAINING_VAR, left.to_string());
+                    crate::plugin_hooks::run_queued(
+                        &hook,
+                        log,
+                        Some(crate::plugin_hooks::Heartbeat {
+                            every: BEAT,
+                            beat: &|| beat(engine, plugin, owner),
+                        }),
+                    )
+                }
                 Ok(None) => {}
                 Err(e) => tracing::warn!(
                     plugin = %plugin,
@@ -628,6 +662,122 @@ mod tests {
             queued_for(e.conn(), "slack", 10).unwrap().is_empty(),
             "and each is gone once that run returned"
         );
+    }
+
+    /// A resolver whose plugin is a shell line writing what it was told is left behind, one line per run.
+    /// The number is added by the runner after this hands the invocation over, so reading it back out of a
+    /// real child is the only place it can be seen at all.
+    #[cfg(unix)]
+    struct Reporting {
+        plugin: &'static str,
+        out: std::path::PathBuf,
+    }
+    #[cfg(unix)]
+    impl Subscribers for Reporting {
+        fn resolve(&self, _event: &str, _project: Option<i64>, _face: Face) -> Vec<Subscriber> {
+            let invocation = PluginInvocation::new("/bin/sh")
+                .arg("-c")
+                .arg(format!("echo \"${QUEUE_REMAINING_VAR}\" >> {}", self.out.display()));
+            vec![Subscriber::new(self.plugin, invocation)]
+        }
+        fn resolve_one(
+            &self,
+            plugin: &str,
+            event: &str,
+            project: Option<i64>,
+            face: Face,
+        ) -> Option<Subscriber> {
+            self.resolve(event, project, face).into_iter().find(|s| s.plugin == plugin)
+        }
+    }
+
+    #[cfg(unix)]
+    fn reported(out: &std::path::Path) -> Vec<String> {
+        std::fs::read_to_string(out)
+            .unwrap()
+            .lines()
+            .map(|l| l.trim().to_string())
+            .collect()
+    }
+
+    /// What every plugin is told is how much is behind it, counted once for the pass and handed down one
+    /// per run (`AMB-D-417`): five queued events are `4,3,2,1,0`, and the last one is the only `0`. A real
+    /// child is the only place the number is visible, so this is unix-only like the other end-to-end runs.
+    #[cfg(unix)]
+    #[test]
+    fn each_run_is_told_how_many_are_still_behind_it() {
+        let dir = amenbo_scratch::scratch("plugin-runner-remaining");
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("remaining.txt");
+        let _ = std::fs::remove_file(&out);
+
+        let e = StoreEngine::open_in_memory().unwrap();
+        for id in 1..=5 {
+            queue(&e, "slack", id);
+        }
+        claim(&e, "slack", "mine");
+
+        run_queue(&e, &Reporting { plugin: "slack", out: out.clone() }, "slack", "mine", None);
+
+        assert_eq!(reported(&out), ["4", "3", "2", "1", "0"], "counted down to the end of the queue");
+    }
+
+    /// The number never grows while a pass is being counted down (`AMB-D-417`). An event queued *during* the
+    /// pass is not in the count the pass started with, so the rows already in hand keep falling to `0` — and
+    /// the newcomer is delivered right after, as its own pass, which is why `0` says the queue is empty now
+    /// rather than promising nothing more is coming.
+    #[cfg(unix)]
+    #[test]
+    fn an_event_queued_mid_pass_does_not_raise_what_the_runs_are_told() {
+        /// Queues one more row the first time it is asked, then answers like [`Reporting`].
+        struct QueuesOneMore<'a> {
+            engine: &'a StoreEngine,
+            inner: Reporting,
+            queued: Mutex<bool>,
+        }
+        impl Subscribers for QueuesOneMore<'_> {
+            fn resolve(&self, event: &str, project: Option<i64>, face: Face) -> Vec<Subscriber> {
+                self.inner.resolve(event, project, face)
+            }
+            fn resolve_one(
+                &self,
+                plugin: &str,
+                event: &str,
+                project: Option<i64>,
+                face: Face,
+            ) -> Option<Subscriber> {
+                let mut queued = self.queued.lock().unwrap();
+                if !*queued {
+                    *queued = true;
+                    queue(self.engine, plugin, 99);
+                }
+                self.inner.resolve_one(plugin, event, project, face)
+            }
+        }
+
+        let dir = amenbo_scratch::scratch("plugin-runner-remaining-mid-pass");
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("remaining.txt");
+        let _ = std::fs::remove_file(&out);
+
+        let e = StoreEngine::open_in_memory().unwrap();
+        queue(&e, "slack", 1);
+        queue(&e, "slack", 2);
+        claim(&e, "slack", "mine");
+
+        let subs = QueuesOneMore {
+            engine: &e,
+            inner: Reporting { plugin: "slack", out: out.clone() },
+            queued: Mutex::new(false),
+        };
+        run_queue(&e, &subs, "slack", "mine", None);
+
+        assert_eq!(
+            reported(&out),
+            ["1", "0", "0"],
+            "the pass counts down the two it started with; the one queued during it is its own pass"
+        );
+        assert!(queued_for(e.conn(), "slack", 10).unwrap().is_empty(), "and all three were run");
     }
 
     /// A runner taken over *while a row is running* leaves that row where it is: answering for it would be

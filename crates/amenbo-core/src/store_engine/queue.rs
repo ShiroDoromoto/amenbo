@@ -151,6 +151,27 @@ pub fn queued_for(conn: &Connection, plugin: &str, limit: i64) -> Result<Vec<Que
     Ok(rows)
 }
 
+/// How many rows one plugin still owes — the whole of its queue, not a page of it (`AMB-D-417`).
+///
+/// The runner counts this once before a pass and hands each plugin what is left after its own run, so the
+/// count has to be over every row waiting: counting the page it is about to read would say *nothing behind
+/// you* to a plugin with hundreds of rows behind it, which is the one thing the number is for.
+///
+/// [`backlog`] answers the same question for every plugin at once, and is what a diagnosis wants. This is
+/// the one-plugin form, for the runner that already knows whose queue it is on.
+pub fn queued_count(conn: &Connection, plugin: &str) -> Result<i64> {
+    let q = col::plugin_queue::ALL;
+    let mut sel = Select::new();
+    let waiting = sel.count_all();
+    let mut sql = Sql::from(&sel, q.table);
+    sql.push_where(Some(&Pred::eq(q.plugin, plugin)));
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let count = stmt
+        .query_row(rusqlite::params_from_iter(sql.params()), |r| waiting.get(r))
+        .map_err(StoreEngineError::from)?;
+    Ok(count)
+}
+
 /// One plugin's queue, counted rather than read: how much it still owes, and since when.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueueDepth {
@@ -422,6 +443,24 @@ mod tests {
             dequeue(e.conn(), row.id).unwrap();
         }
         assert_eq!(queued_plugins(e.conn()).unwrap(), vec!["slack"], "an emptied queue is nobody's work");
+    }
+
+    /// One plugin's count is over its whole queue, not over the page a reader takes — which is the point of
+    /// it (`AMB-D-417`): a runner reads a page at a time, and a count of the page would tell the last row of
+    /// a page that nothing is behind it. Another plugin's rows are not this plugin's, either.
+    #[test]
+    fn a_queue_is_counted_whole_and_by_plugin() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        assert_eq!(queued_count(e.conn(), "slack").unwrap(), 0, "an empty queue owes nothing");
+
+        for id in 1..=3 {
+            queue(&e, "slack", "task.created", id);
+        }
+        queue(&e, "email", "task.created", 4);
+
+        assert_eq!(queued_count(e.conn(), "slack").unwrap(), 3);
+        assert_eq!(queued_for(e.conn(), "slack", 2).unwrap().len(), 2, "while a page reads only its page");
+        assert_eq!(queued_count(e.conn(), "email").unwrap(), 1, "and each queue is counted alone");
     }
 
     /// The backlog counts each queue and dates it by its oldest row — the two facts a diagnosis reads.

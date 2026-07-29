@@ -4582,6 +4582,57 @@ fn plugin_config_writes_by_the_authors_schema_and_never_echoes_a_secret() {
     assert!(e2.contains("nope"), "{e2}");
 }
 
+/// A plugin's secrets go out with a backup and stay home on an export (`AMB-D-434`).
+///
+/// The two doors lead to different places. An export is one-way, out of amenbo and into another tool's
+/// hands, and a credential that leaves that way is a credential in a file nobody here controls any more
+/// — so the table does not travel. A backup leads back to the same person's own store, and dropping the
+/// secrets there would mean typing every one of them in again after each restore.
+///
+/// What is checked is the table, not the value: the export carries no `plugin_secret` at all, which is
+/// the shape that cannot be got wrong one row at a time.
+#[test]
+fn a_plugins_secret_rides_a_backup_and_never_an_export() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    install_plugin(
+        &cli,
+        "slack",
+        serde_json::json!([
+            { "key": "events", "label": "イベント" },
+            { "key": "webhook_url", "label": "Webhook URL", "secret": true, "required": true },
+        ]),
+    );
+    cli.json(&["plugin", "config", "set", "slack", "events", "push", "--json"]);
+    cli.json_stdin(
+        &["plugin", "config", "set", "slack", "webhook_url", "-", "--json"],
+        "https://hooks.example.com/T0P-53CR3T\n",
+    );
+
+    // The export: the plain setting is there to prove the plugin's rows were reached at all, and the
+    // secret's table is not in the document — no key, not even an empty array to read as "none set".
+    let (dump, code) = cli.run(&["export"]);
+    assert_eq!(code, 0, "{dump}");
+    assert!(!dump.contains("T0P-53CR3T"), "the secret left the device in the export: {dump}");
+    let doc: Value = serde_json::from_str(&dump).unwrap();
+    assert!(doc["tables"].get("plugin_secret").is_none(), "the whole table stays home: {dump}");
+    let settings = doc["tables"]["plugin_config"].as_array().unwrap();
+    assert_eq!(settings.len(), 1, "the plugin's other rows do travel: {dump}");
+    assert_eq!(settings[0]["field_key"], "events");
+
+    // The backup: the same secret comes back through a restore, ready to use, with nothing to type in
+    // again. The value never leaves through `get`, so what answers is that it is set.
+    let archive = cli.home.join("backup.amenbo-backup");
+    cli.json(&["backup", archive.to_str().unwrap(), "--json"]);
+    cli.json(&["plugin", "config", "set", "slack", "webhook_url", "", "--json"]);
+    let cleared = cli.json(&["plugin", "config", "get", "slack", "webhook_url", "--json"]);
+    assert_eq!(cleared["set"], false, "cleared, so the restore has something to bring back");
+
+    cli.json(&["restore", archive.to_str().unwrap(), "--yes", "--json"]);
+    let back = cli.json(&["plugin", "config", "get", "slack", "webhook_url", "--json"]);
+    assert_eq!(back["set"], true, "the secret rode the archive home");
+}
+
 /// One plugin, one switch, and it is the bound project's (`AMB-D-434`): it turns on for the project you
 /// are in and nowhere else, and the faces never ask which level, because there is no other.
 #[test]

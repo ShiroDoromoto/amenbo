@@ -425,7 +425,7 @@ const REGISTRY: &[OpSpec] = &[
     // object, so both sides are checked back to a binding. `absent` asks the archive's bytes for a
     // word that must not be in them — the one question about a file amenbo hands out that needs no
     // reading of its layout, and the only way to say a secret really stayed out of it.
-    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "snapshot", required: &["target"], refs: &["target"], strings: &["absent"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "snapshot", required: &["target"], refs: &["target"], strings: &["absent", "contains"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Comment, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },

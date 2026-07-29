@@ -11,7 +11,6 @@
 mod common;
 
 use amenbo_core::progress;
-use amenbo_core::store_engine::schema::DATASETS;
 use amenbo_core::{export, perf};
 use common::{seed, Seeded};
 
@@ -35,8 +34,15 @@ const O1_ROW_CEILING: usize = 4;
 fn peak_export_rows(s: &Seeded) -> usize {
     perf::reset_row_watermark();
     let mut sink = std::io::sink();
-    export::stream_store_tables(s.engine.conn(), DATASETS, &mut sink, None, &mut progress::ignore)
-        .unwrap();
+    // The registry the real export walks, so the guard measures the path a person's export takes.
+    export::stream_store_tables(
+        s.engine.conn(),
+        &export::exported_datasets(),
+        &mut sink,
+        None,
+        &mut progress::ignore,
+    )
+    .unwrap();
     perf::peak_materialized_rows()
 }
 

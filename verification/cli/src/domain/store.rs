@@ -87,6 +87,24 @@ impl Driver {
                         ),
                     ));
                 }
+                // The other half of the same reading. A backup is the road home, so what it must carry
+                // is as much the question as what an export must not — and a value missing there is one
+                // a person has to type in again after every restore.
+                if let Some(needle) = with.get("contains").and_then(|v| v.as_str()) {
+                    if needle.is_empty() {
+                        return Err("`contains` names nothing to look for".to_string());
+                    }
+                    let (carried, read) = carries_text(&path, needle)?;
+                    return Ok(Outcome::assert(
+                        carried,
+                        format!(
+                            "{} ({read} bytes) {} `{needle}` ({})",
+                            path.display(),
+                            if carried { "carries" } else { "does not carry" },
+                            if carried { "as expected" } else { "MISMATCH" }
+                        ),
+                    ));
+                }
                 let present = opt_bool(with, "present").unwrap_or(true);
                 // An archive is a file with bytes in it. Whether those bytes put a store back is
                 // what `restore` answers — asking that here would only be guessing at the layout of

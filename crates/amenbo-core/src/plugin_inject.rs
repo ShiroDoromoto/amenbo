@@ -19,17 +19,23 @@
 //! plugin's stored values, so a plugin never sees another's settings — the central-injection promise of
 //! `AMB-D-356` (a plugin reads nothing of its own; amenbo hands it exactly, and only, its own).
 //!
-//! An **unset** field contributes nothing: no env var, no stdin key. Only a field with a value set (the
-//! same "not provided is unset" reading the write boundary uses) is injected. This layer does not launch
-//! the plugin or build the event payload — it returns the two pieces, and the hook/command wiring
-//! (`AMB-T-1972`) attaches [`env`](Injection::env) to the invocation and merges [`text`](Injection::text)
-//! into the stdin document.
+//! **Resolution happens here, so a plugin reads answers and not amenbo's bookkeeping** (`AMB-D-415`). An
+//! **unset** field falls back to the author's [`default`](ConfigField::default), and contributes nothing
+//! only when there is none — the store holds no row for an unanswered field, so a manifest that changes its
+//! default reaches every project that never answered. A field whose user chose *none* of its candidates is
+//! injected **empty**: the reserved word that tells that answer apart from silence in storage
+//! ([`NONE_SELECTED`]) is spent by the time the child sees it, and an author writes no special case for a
+//! spelling they never chose.
+//!
+//! This layer does not launch the plugin or build the event payload — it returns the two pieces, and the
+//! hook/command wiring (`AMB-T-1972`) attaches [`env`](Injection::env) to the invocation and merges
+//! [`text`](Injection::text) into the stdin document.
 
 use serde_json::{Map, Value};
 
 use crate::error::Result;
 use crate::plugin_config;
-use crate::plugin_manifest::ConfigField;
+use crate::plugin_manifest::{ConfigField, FieldType, NONE_SELECTED};
 use crate::store::Store;
 
 /// The environment-variable prefix a secret config value is injected under. Namespaced under `AMENBO_`
@@ -70,12 +76,32 @@ pub struct Injection {
     pub text: Map<String, Value>,
 }
 
+/// What one field is worth to a run, from what the store holds for it (`AMB-D-415`) — the three answers a
+/// field can carry, resolved into the one value a plugin receives:
+///
+/// | held | injected |
+/// |---|---|
+/// | a value | itself |
+/// | [`NONE_SELECTED`], on a [`Multi`](FieldType::Multi) field | the empty string — chosen, and nothing chosen |
+/// | nothing | the author's [`default`](ConfigField::default), or nothing at all |
+///
+/// A text field is untouched by the middle row: the word is only reserved where a checkbox group could
+/// leave every box unticked, so a text field that holds the literal line `none` holds that line.
+fn resolved(field: &ConfigField, held: Option<String>) -> Option<String> {
+    match held {
+        Some(v) if field.field_type == FieldType::Multi && v == NONE_SELECTED => Some(String::new()),
+        Some(v) => Some(v),
+        None => field.default.clone(),
+    }
+}
+
 /// Resolve a plugin's config for one run and split it into env (secret) and stdin-JSON (text) pieces
 /// (`AMB-D-356` / `AMB-T-2016`), reading only *this* plugin's stored values.
 ///
 /// `fields` is the plugin's manifest config schema; each field carries the author's `secret` flag, which
-/// decides both where the value was stored and how it is injected. `project` is the run's project — the
-/// only one whose values this run may see. A field with no value set contributes nothing.
+/// decides both where the value was stored and how it is injected, and the `default` and candidates
+/// [`resolved`] reads. `project` is the run's project — the only one whose values this run may see. A field
+/// that resolves to nothing — unanswered, with no default behind it — contributes nothing.
 pub fn resolve(
     store: &Store,
     plugin: &str,
@@ -84,7 +110,7 @@ pub fn resolve(
 ) -> Result<Injection> {
     let mut injection = Injection::default();
     for field in fields {
-        let Some(value) = plugin_config::get(store, field, plugin, project)? else {
+        let Some(value) = resolved(field, plugin_config::get(store, field, plugin, project)?) else {
             continue;
         };
         if field.secret {
@@ -101,13 +127,25 @@ pub fn resolve(
 mod tests {
     use super::*;
     use crate::config::Paths;
-    use crate::plugin_manifest::ConfigField;
+    use crate::plugin_manifest::{ConfigField, ConfigOption};
 
     fn text_field(key: &str) -> ConfigField {
         ConfigField::new(key, key)
     }
     fn secret_field(key: &str) -> ConfigField {
         ConfigField { secret: true, ..ConfigField::new(key, key) }
+    }
+    /// A field offering two candidates, with the author's `default` behind them (`AMB-D-415`).
+    fn multi_field(key: &str, default: Option<&str>) -> ConfigField {
+        ConfigField {
+            field_type: FieldType::Multi,
+            options: vec![
+                ConfigOption { value: "task.done".into(), label: "完了した".into() },
+                ConfigOption { value: "task.rejected".into(), label: "見送った".into() },
+            ],
+            default: default.map(str::to_string),
+            ..ConfigField::new(key, key)
+        }
     }
 
     fn store_at(tag: &str) -> (Store, std::path::PathBuf) {
@@ -179,6 +217,58 @@ mod tests {
         let inj = resolve(&store, "slack", &fields, p).unwrap();
         assert!(inj.env.is_empty(), "an unset secret sets no env var");
         assert!(inj.text.is_empty(), "an unset text field adds no stdin key");
+    }
+
+    /// An unanswered field is handed the author's `default`, on both roads — nothing is stored for it, so
+    /// the manifest is where the answer comes from until a user writes one.
+    #[test]
+    fn an_unanswered_field_is_handed_the_authors_default() {
+        let (mut store, _dir) = store_at("default");
+        let p = new_project(&mut store, "proj");
+        let events = multi_field("events", Some("task.done"));
+        let token = ConfigField { default: Some("anonymous".into()), ..secret_field("token") };
+
+        let inj = resolve(&store, "slack", &[events.clone(), token], p).unwrap();
+        assert_eq!(inj.text.get("events"), Some(&Value::String("task.done".to_string())));
+        assert_eq!(inj.env, vec![("AMENBO_CONFIG_TOKEN".to_string(), "anonymous".to_string())]);
+
+        // An answer takes over from the default, and clearing it hands the default back.
+        plugin_config::set(&mut store, &events, "slack", p, "task.rejected").unwrap();
+        let inj = resolve(&store, "slack", std::slice::from_ref(&events), p).unwrap();
+        assert_eq!(inj.text.get("events"), Some(&Value::String("task.rejected".to_string())));
+
+        plugin_config::set(&mut store, &events, "slack", p, "").unwrap();
+        let inj = resolve(&store, "slack", std::slice::from_ref(&events), p).unwrap();
+        assert_eq!(inj.text.get("events"), Some(&Value::String("task.done".to_string())));
+    }
+
+    /// Wanting none of the candidates is an answer of its own, and it reaches the plugin **empty** — the
+    /// word the store keeps it under is amenbo's bookkeeping and stops here (`AMB-D-415`). A default behind
+    /// it does not come back: it was declined, not left unanswered.
+    #[test]
+    fn choosing_none_of_them_is_injected_empty() {
+        let (mut store, _dir) = store_at("none");
+        let p = new_project(&mut store, "proj");
+        let events = multi_field("events", Some("task.done"));
+        plugin_config::set(&mut store, &events, "slack", p, NONE_SELECTED).unwrap();
+
+        let inj = resolve(&store, "slack", std::slice::from_ref(&events), p).unwrap();
+        assert_eq!(
+            inj.text.get("events"),
+            Some(&Value::String(String::new())),
+            "the key is there — the answer is 'none of them', not 'nothing said'",
+        );
+    }
+
+    /// The word is a choice's alone: a text field holding the line `none` hands over that line.
+    #[test]
+    fn a_text_field_hands_over_the_reserved_word_as_a_line() {
+        let (mut store, _dir) = store_at("word-as-line");
+        let p = new_project(&mut store, "proj");
+        plugin_config::set(&mut store, &text_field("greeting"), "slack", p, NONE_SELECTED).unwrap();
+
+        let inj = resolve(&store, "slack", &[text_field("greeting")], p).unwrap();
+        assert_eq!(inj.text.get("greeting"), Some(&Value::String(NONE_SELECTED.to_string())));
     }
 
     #[test]

@@ -29,9 +29,16 @@
 //! Setting a field to the **empty string clears it** — an empty value is "not provided" (the same reading
 //! `required` uses), so it removes the row rather than storing a blank. There is thus one door for both
 //! set and unset.
+//!
+//! **A field that offers candidates has three answers, and all three are stored here** (`AMB-D-415`): the
+//! chosen [`value`](crate::plugin_manifest::ConfigOption::value)s joined by commas, the reserved
+//! [`NONE_SELECTED`] for "none of them", and — by the clear path above — no row at all for "not answered
+//! yet", which is the state the author's [`default`](ConfigField::default) speaks for. The word is resolved
+//! away on the far side ([`crate::plugin_inject`]), so what a plugin reads is an answer and never a
+//! spelling amenbo picked.
 
 use crate::error::{Error, ErrorCode, Msg, Result};
-use crate::plugin_manifest::ConfigField;
+use crate::plugin_manifest::{ConfigField, FieldType, NONE_SELECTED};
 use crate::store::Store;
 
 /// The largest a single config value may be, in bytes. Loose — a webhook URL or a short token fits with
@@ -68,6 +75,35 @@ pub fn check_value(value: &str) -> Result<()> {
     Ok(())
 }
 
+/// Enforce what a [`Multi`](FieldType::Multi) field accepts as an answer (`AMB-D-415`): the candidates its
+/// author declared, joined by commas and each named once, or [`NONE_SELECTED`] on its own. A text field
+/// takes any line, so it passes untouched — this is not amenbo learning what a value *means* (`AMB-D-354`
+/// leaves that to the plugin); it is the one thing amenbo does know, because the author told it the whole
+/// list.
+///
+/// It sits at the boundary rather than in a form so that both faces refuse alike: a checkbox group cannot
+/// produce a candidate that is not on it, but `plugin config set` can, and a misspelt one stored quietly
+/// would simply never match anything at run time.
+fn check_choice(field: &ConfigField, value: &str) -> Result<()> {
+    if field.field_type != FieldType::Multi || value == NONE_SELECTED {
+        return Ok(());
+    }
+    let mut chosen: Vec<&str> = Vec::new();
+    for one in value.split(',') {
+        if !field.options.iter().any(|o| o.value == one) {
+            return Err(Error::invalid(format!(
+                "'{one}' is not one of the choices '{}' offers",
+                field.key
+            )));
+        }
+        if chosen.contains(&one) {
+            return Err(Error::invalid(format!("'{one}' is chosen twice for '{}'", field.key)));
+        }
+        chosen.push(one);
+    }
+    Ok(())
+}
+
 /// Enforce the identifier floor on a plugin name or field key: non-empty and within the byte cap.
 fn check_ident(kind: &str, s: &str) -> Result<()> {
     if s.is_empty() {
@@ -87,7 +123,8 @@ fn check_ident(kind: &str, s: &str) -> Result<()> {
 /// blank — "not provided" is unset. Persists as it goes: either road commits its own transaction.
 ///
 /// `field` carries the author's `secret` flag and the `key` — the caller loads it from the plugin's
-/// manifest; this function never decides secrecy for itself.
+/// manifest; this function never decides secrecy for itself. It carries the candidates too, which is what
+/// lets a field that offers a choice refuse an answer outside it ([`check_choice`], `AMB-D-415`).
 pub fn set(
     store: &mut Store,
     field: &ConfigField,
@@ -102,6 +139,7 @@ pub fn set(
         None
     } else {
         check_value(value)?;
+        check_choice(field, value)?;
         Some(value)
     };
 
@@ -210,13 +248,24 @@ pub fn required_unset_for_update(
 mod tests {
     use super::*;
     use crate::config::Paths;
-    use crate::plugin_manifest::ConfigField;
+    use crate::plugin_manifest::{ConfigField, ConfigOption};
 
     fn text_field(key: &str) -> ConfigField {
         ConfigField::new(key, key)
     }
     fn secret_field(key: &str) -> ConfigField {
         ConfigField { secret: true, ..ConfigField::new(key, key) }
+    }
+    /// A field offering two candidates — the shape whose answers this boundary judges (`AMB-D-415`).
+    fn multi_field(key: &str) -> ConfigField {
+        ConfigField {
+            field_type: FieldType::Multi,
+            options: vec![
+                ConfigOption { value: "task.done".into(), label: "完了した".into() },
+                ConfigOption { value: "task.rejected".into(), label: "見送った".into() },
+            ],
+            ..ConfigField::new(key, key)
+        }
     }
 
     /// Open a real store under a scratch AMENBO_HOME so the store file resolves under it.
@@ -292,6 +341,66 @@ mod tests {
 
         assert_eq!(get(&store, &text_field("events"), "slack", a).unwrap().as_deref(), Some("for-a"));
         assert_eq!(get(&store, &text_field("events"), "slack", b).unwrap(), None);
+    }
+
+    /// The three answers a choice can carry, each stored as itself (`AMB-D-415`): the chosen candidates
+    /// joined by commas, the reserved word for wanting none of them, and — down the clear path every field
+    /// shares — no row at all, which is the unanswered state the author's `default` speaks for.
+    #[test]
+    fn a_choice_keeps_its_three_answers_apart() {
+        let (mut store, _dir) = store_at("choice");
+        let p = mk_project(&mut store, "proj");
+        let events = multi_field("events");
+
+        set(&mut store, &events, "slack", p, "task.done,task.rejected").unwrap();
+        assert_eq!(
+            get(&store, &events, "slack", p).unwrap().as_deref(),
+            Some("task.done,task.rejected"),
+        );
+
+        set(&mut store, &events, "slack", p, NONE_SELECTED).unwrap();
+        assert_eq!(
+            get(&store, &events, "slack", p).unwrap().as_deref(),
+            Some(NONE_SELECTED),
+            "wanting none of them is an answer, and it is stored",
+        );
+
+        set(&mut store, &events, "slack", p, "").unwrap();
+        assert_eq!(get(&store, &events, "slack", p).unwrap(), None, "empty is still the clear path");
+    }
+
+    /// An answer a choice does not offer never lands — the whole point of the author declaring candidates
+    /// is that a value outside them could only ever be a mistake.
+    #[test]
+    fn an_answer_outside_the_choice_is_refused() {
+        let (mut store, _dir) = store_at("not-a-choice");
+        let p = mk_project(&mut store, "proj");
+        let events = multi_field("events");
+
+        for bad in [
+            "task.created",                // never declared
+            "Task.Done",                   // declared, spelt otherwise
+            "task.done,task.created",      // one of each
+            "task.done,",                  // a trailing comma is an empty candidate
+            "task.done,task.done",         // the same one twice
+            "task.done,none",              // the reserved word is not a candidate to mix in
+        ] {
+            assert!(set(&mut store, &events, "slack", p, bad).is_err(), "'{bad}' must not be stored");
+        }
+        assert_eq!(get(&store, &events, "slack", p).unwrap(), None, "nothing landed from the refusals");
+    }
+
+    /// The reserved word belongs to a choice, not to every field: a text field takes `none` as the line it
+    /// is, because there is no "unticked every box" state there for it to stand for.
+    #[test]
+    fn a_text_field_takes_the_reserved_word_as_a_line() {
+        let (mut store, _dir) = store_at("word-as-line");
+        let p = mk_project(&mut store, "proj");
+        set(&mut store, &text_field("greeting"), "plug", p, NONE_SELECTED).unwrap();
+        assert_eq!(
+            get(&store, &text_field("greeting"), "plug", p).unwrap().as_deref(),
+            Some(NONE_SELECTED),
+        );
     }
 
     /// An install on disk, with the manifest an update would be judged against.

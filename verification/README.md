@@ -135,7 +135,10 @@ step is captured with `screencapture -l <winid>` into an evidence directory (plu
 An assert is judged from its shot with macOS's own **Vision** OCR (`gui/ocr.swift`):
 the harness derives the text the step expects on screen — for a `listed` assert, the bound task's
 title — reads the shot back, and passes when that text is present (or absent, for `present:
-false`). The recognized text is written next to the shot (`NN-…​.txt`) as evidence of the reading.
+false`). Both sides are matched on their words rather than their glyphs — case, punctuation and the
+line a wrapped card broke on are folded away, and so is the long vowel mark Vision returns where a
+title carries a dash, which Unicode files under letters. The recognized text is written next to the
+shot (`NN-…​.txt`) as evidence of the reading.
 An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`: its shot is
 kept for an AI/human eye and does not fail the run. tesseract stays the Linux container path
 (`scripts/docker/gui-e2e.sh`); each driver walks the road written for it.

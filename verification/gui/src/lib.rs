@@ -100,17 +100,24 @@ pub fn activate(app: &str) -> Result<(), String> {
     }
 }
 
+/// The dashes Unicode files under letters. A long vowel mark is what Vision most often returns for an
+/// em dash on a Japanese screen, and it is alphanumeric where every other dash is punctuation — so it
+/// would survive the fold on the read side while the dash it stands for is dropped on the expected
+/// one, and the two halves of the same title would stop matching. Dropped on both sides, a title that
+/// really carries one still matches itself.
+const DASHES_FILED_AS_LETTERS: [char; 2] = ['\u{30FC}', '\u{FF70}'];
+
 /// Fold a reading to the part of it OCR can be held to: the words, not the glyphs. Vision reads the
 /// words on a card reliably and the punctuation between them however it likes — an em dash comes
-/// back as a hyphen, a space, or nothing — so a verbatim comparison fails on a title no human would
-/// call misread. Case goes the same way, and a line break where the card wrapped folds to the single
-/// space the title was written with. Alphanumerics are what survives, Japanese included: the screen
-/// under test is in Japanese and is judged by this same rule.
+/// back as a hyphen, a space, a long vowel mark, or nothing — so a verbatim comparison fails on a
+/// title no human would call misread. Case goes the same way, and a line break where the card wrapped
+/// folds to the single space the title was written with. Alphanumerics are what survives, Japanese
+/// included: the screen under test is in Japanese and is judged by this same rule.
 fn fold(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut pending_space = false;
     for c in s.chars() {
-        if c.is_alphanumeric() {
+        if c.is_alphanumeric() && !DASHES_FILED_AS_LETTERS.contains(&c) {
             if pending_space && !out.is_empty() {
                 out.push(' ');
             }
@@ -995,6 +1002,12 @@ steps_gui:
         assert_eq!(fold("SCENARIO SEED — handed to me-ai"), "scenario seed handed to me ai");
         assert!(fold("… SCENARIO SEED - handed to me-ai\nAMB-T-1 …")
             .contains(&fold("SCENARIO SEED — handed to me-ai")));
+        // The reading Vision hands back for that same card on a Japanese screen: the em dash as a long
+        // vowel mark, which is a letter to Unicode and would otherwise be the one glyph left standing.
+        assert!(fold("… SCENARIO SEED ー handed to me-ai\nAMB-T-9 …")
+            .contains(&fold("SCENARIO SEED — handed to me-ai")));
+        // And a word that carries the mark as itself still meets the title it was written into.
+        assert!(fold("メニューバーの表示").contains(&fold("メニューバー")));
         // A card that wrapped mid-title reads as two lines, and folds back to the one it was written as.
         assert!(fold("SCENARIO SEED — handed to\nme-ai").contains(&fold("handed to me-ai")));
         // Japanese is words too, so a screen in Japanese is judged by the same rule.

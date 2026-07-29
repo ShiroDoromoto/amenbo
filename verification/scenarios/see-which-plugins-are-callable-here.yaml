@@ -1,0 +1,103 @@
+# What an AI reads before it does anything in a folder, and where a plugin appears in it.
+#
+# `amenbo agent --json` is the one document an AI is pointed at, and a plugin the user installed and
+# switched on is part of what it owes: switching it on was an instruction, and an entry point that
+# does not carry it leaves the AI working without something someone put there on purpose.
+#
+# amenbo holds no words of its own about a third party's plugin — no plugin's name appears in its
+# source — so what rides at the entry point is read off the manifest beside the binary at the moment
+# the question is asked. That is what makes this a path worth a gate rather than a field to test: the
+# words are the author's, the gate is the user's, and the only thing amenbo contributes is the line an
+# AI can type.
+#
+# The subject is the official `worktree` plugin, installed from the catalog like the rest of the plugin
+# scenarios, so this needs the network. What it says for itself is written onto the installed manifest
+# here rather than read out of the catalog: an author may reword their block any day, and a line
+# asserting today's sentence would go red on a change amenbo had no part in.
+id: see-which-plugins-are-callable-here
+title: An AI's entry point names the plugins this folder can call, in their authors' words, as lines it can type
+description: >
+  Install a plugin and read the entry point: it is not offered, because installed is not switched on
+  and a call would refuse it. Switch it on and it appears — with its own one-line description, before
+  its author has said anything about how to drive it. Have the author say it, and read back both
+  halves: the occasion, verbatim, and a command that arrives as `<amenbo> plugin run <name> …` rather
+  than as the bare subcommand the author wrote. Switch it off and it is gone from the entry point
+  again.
+steps_cli:
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # Installed and not switched on: a call would be refused here, so the entry point offering it would
+  # be sending the AI at a door it cannot open.
+  - type: assert
+    domain: plugin
+    op: at-entry
+    with:
+      name: worktree
+      present: false
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  # Switched on, and named — with nothing but what its manifest already said. An author who wrote no
+  # guidance has still told a reader something: this is here, and this is what it is called.
+  - type: assert
+    domain: plugin
+    op: at-entry
+    with:
+      name: worktree
+      present: true
+
+  - type: action
+    domain: plugin
+    op: declare-agent
+    with:
+      name: worktree
+      when: SCENARIO — when an AI should reach for this plugin
+      cmd: start <task-id>
+      does: SCENARIO — what the call does, and what it returns
+
+  # The author's line, relayed rather than paraphrased — and the one thing amenbo adds: the calling
+  # form in front of the author's own subcommand, assembled from the name it just read off disk.
+  - type: assert
+    domain: plugin
+    op: at-entry
+    with:
+      name: worktree
+      present: true
+      when: SCENARIO — when an AI should reach for this plugin
+      cmd: start <task-id>
+
+  - type: action
+    domain: plugin
+    op: disable
+    with:
+      name: worktree
+
+  # The gate closed, the offer withdrawn. The plugin is still installed — what changed is only whether
+  # a call here would be answered.
+  - type: assert
+    domain: plugin
+    op: at-entry
+    with:
+      name: worktree
+      present: false
+
+  - type: assert
+    domain: plugin
+    op: listed
+    with:
+      name: worktree
+      present: true
+
+  - type: action
+    domain: plugin
+    op: uninstall
+    with:
+      name: worktree

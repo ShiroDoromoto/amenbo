@@ -344,6 +344,7 @@ const ui = {
   "plugins.want.settings": "Settings it will ask for:", "plugins.want.secret": "secret",
   "plugins.install": "Install", "plugins.installing": "Installing…",
   "plugins.installNote": "Installing does not run it. Enabling is what lets it fire.",
+  "plugins.landedInert": "It is here, and it runs nothing yet.", "plugins.turnItOn": "Turn it on",
   "plugins.installed": "Installed", "plugins.enabledChip": "Enabled",
   "plugins.disable": "Disable",
   "plugins.gate.onIn": "Enabled in", "plugins.gate.offEverywhere": "Off everywhere",

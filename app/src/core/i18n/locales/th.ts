@@ -330,6 +330,7 @@ export const th: Translation = {
     "plugins.want.settings": "ค่าที่มันจะขอ:", "plugins.want.secret": "ความลับ",
     "plugins.install": "ติดตั้ง", "plugins.installing": "กำลังติดตั้ง…",
     "plugins.installNote": "การติดตั้งไม่ได้ทำให้มันทำงาน การเปิดใช้ต่างหากที่ทำให้มันทำงานได้",
+    "plugins.landedInert": "ติดตั้งแล้ว และยังไม่ทำงานอะไรเลย", "plugins.turnItOn": "ไปเปิดใช้",
     "plugins.installed": "ติดตั้งแล้ว", "plugins.enabledChip": "เปิดอยู่",
     "plugins.disable": "ปิด",
     "plugins.gate.onIn": "เปิดใช้ใน", "plugins.gate.offEverywhere": "ปิดทุกโปรเจกต์",

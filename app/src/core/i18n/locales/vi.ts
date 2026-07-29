@@ -330,6 +330,7 @@ export const vi: Translation = {
     "plugins.want.settings": "Những cài đặt nó sẽ hỏi:", "plugins.want.secret": "bí mật",
     "plugins.install": "Cài", "plugins.installing": "Đang cài…",
     "plugins.installNote": "Cài không có nghĩa là chạy. Bật mới là cái cho nó chạy.",
+    "plugins.landedInert": "Đã cài xong, và chưa chạy gì cả.", "plugins.turnItOn": "Đi bật nó",
     "plugins.installed": "Đã cài", "plugins.enabledChip": "Đang bật",
     "plugins.disable": "Tắt",
     "plugins.gate.onIn": "Đang bật ở", "plugins.gate.offEverywhere": "Tắt ở mọi dự án",

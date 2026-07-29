@@ -345,6 +345,7 @@ export const ptBR: Translation = {
     "plugins.want.settings": "Configurações que ele vai pedir:", "plugins.want.secret": "segredo",
     "plugins.install": "Instalar", "plugins.installing": "Instalando…",
     "plugins.installNote": "Instalar não executa. O que deixa ele agir é ativar.",
+    "plugins.landedInert": "Já está aqui e ainda não faz nada.", "plugins.turnItOn": "Ir ativar",
     "plugins.installed": "Instalado", "plugins.enabledChip": "Ativado",
     "plugins.disable": "Desativar",
     "plugins.gate.onIn": "Ativado em", "plugins.gate.offEverywhere": "Desativado em todos os projetos",

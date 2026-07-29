@@ -335,6 +335,7 @@ export const ja: Translation = {
     "plugins.want.settings": "入れたあとに設定するもの:", "plugins.want.secret": "秘密",
     "plugins.install": "インストール", "plugins.installing": "インストール中…",
     "plugins.installNote": "入れただけでは動きません。実行するには有効化が要ります。",
+    "plugins.landedInert": "入りました。まだ何も動きません。", "plugins.turnItOn": "有効にしに行く",
     "plugins.installed": "インストール済み", "plugins.enabledChip": "有効",
     "plugins.disable": "無効にする",
     "plugins.gate.onIn": "有効なプロジェクト", "plugins.gate.offEverywhere": "どこでも無効",

@@ -330,6 +330,7 @@ export const id: Translation = {
     "plugins.want.settings": "Pengaturan yang akan dimintanya:", "plugins.want.secret": "rahasia",
     "plugins.install": "Pasang", "plugins.installing": "Memasang…",
     "plugins.installNote": "Memasang tidak menjalankannya. Menyalakannyalah yang membuatnya bisa jalan.",
+    "plugins.landedInert": "Sudah ada di sini, dan belum menjalankan apa pun.", "plugins.turnItOn": "Pergi menyalakannya",
     "plugins.installed": "Terpasang", "plugins.enabledChip": "Nyala",
     "plugins.disable": "Matikan",
     "plugins.gate.onIn": "Menyala di", "plugins.gate.offEverywhere": "Mati di semua proyek",

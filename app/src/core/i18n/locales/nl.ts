@@ -327,6 +327,7 @@ export const nl: Translation = {
     "plugins.want.settings": "Instellingen waar hij om vraagt:", "plugins.want.secret": "geheim",
     "plugins.install": "Installeren", "plugins.installing": "Bezig met installeren…",
     "plugins.installNote": "Installeren laat hem niet lopen. Aanzetten is wat hem laat afgaan.",
+    "plugins.landedInert": "Hij staat erop en doet nog niets.", "plugins.turnItOn": "Ga hem aanzetten",
     "plugins.installed": "Geïnstalleerd", "plugins.enabledChip": "Aan",
     "plugins.disable": "Uitzetten",
     "plugins.gate.onIn": "Aan in", "plugins.gate.offEverywhere": "Overal uit",

@@ -347,6 +347,7 @@ export const uk: Translation = {
     "plugins.want.settings": "Налаштування, які він попросить:", "plugins.want.secret": "секрет",
     "plugins.install": "Встановити", "plugins.installing": "Встановлення…",
     "plugins.installNote": "Встановлення його не запускає. Запускає його саме ввімкнення.",
+    "plugins.landedInert": "Він тут і поки нічого не робить.", "plugins.turnItOn": "Перейти й увімкнути",
     "plugins.installed": "Встановлено", "plugins.enabledChip": "Увімкнено",
     "plugins.disable": "Вимкнути",
     "plugins.gate.onIn": "Увімкнено в", "plugins.gate.offEverywhere": "Вимкнено всюди",

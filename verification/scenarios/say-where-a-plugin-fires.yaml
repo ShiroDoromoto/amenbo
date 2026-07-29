@@ -1,0 +1,110 @@
+# One switch, and it is a project's — so the only honest answer to "is this plugin on?" is a list of
+# projects, and the row is where that list is read.
+#
+# What a single yes/no hides is a plugin still firing in a project nobody is looking at. Shutting a
+# gate from one place and reading it back from that same place cannot catch it: the answer agrees with
+# itself either way. What catches it is a row that names more than one project, and then names one
+# fewer.
+#
+# Hence a road written for the screen alone. A row names every project wherever it is read, but a
+# terminal moves the switch belonging to the folder it stands in — there is no flag for another one —
+# so a road written for it can only ever put one name on the row. Picking a project beside the row is
+# where a second one comes from, which makes the screen the only place the list can be watched growing
+# and the only place shutting one can be seen leaving the other alone.
+#
+# Picking **is** the enable: turning a plugin on is itself the permission to run its code, so there is
+# no second question under the picker, and no step here answers one.
+#
+# What the road wants in front of it is a device holding the two projects named below, with the
+# official `worktree` plugin installed and its gate shut everywhere — stand the projects and install
+# the plugin in the store the build under test opens (`devtool devgui cli`), and start the run on the
+# installed plugins screen. Every step after the first moves the screen, so drive it stepped
+# (`--step`) and carry out each move at the hand-back before it.
+#
+# Every line is closed by an eye rather than by a reading. What each one names is a project, and the
+# projects run down the side of every screen: a reading that finds the name cannot say it came from
+# the row, and one that misses it would be reading a screen the row is not even on.
+id: say-where-a-plugin-fires
+title: A plugin's switch is a project's — the row names every project it fires in, and shutting one leaves the others firing
+description: >
+  Start with the plugin installed and firing nowhere, and turn it on in one project by picking that
+  project beside the row. Turn it on in a second, and read the row naming both — which is the whole of
+  what a truth value cannot say. Then shut the first project's gate and read the row twice: the
+  project just shut is gone from it, and the other one is still there, still firing, untouched by a
+  switch moved somewhere else.
+steps_gui:
+  # Off everywhere is a state the row has to be able to say, or the readings after it would pass over
+  # a row that names every project on the device.
+  - type: assert
+    domain: plugin
+    op: fires-in
+    with:
+      name: worktree
+      project: Greenhouse
+      present: false
+
+  - type: action
+    domain: plugin
+    op: enable-in
+    with:
+      name: worktree
+      project: Greenhouse
+
+  - type: assert
+    domain: plugin
+    op: fires-in
+    with:
+      name: worktree
+      project: Greenhouse
+      present: true
+
+  # A second project, on the same switch. Nothing was answered twice — the first project was never
+  # asked about again — so a row that now names one project alone has dropped something.
+  - type: action
+    domain: plugin
+    op: enable-in
+    with:
+      name: worktree
+      project: Toolshed
+
+  - type: assert
+    domain: plugin
+    op: fires-in
+    with:
+      name: worktree
+      project: Toolshed
+      present: true
+
+  - type: assert
+    domain: plugin
+    op: fires-in
+    with:
+      name: worktree
+      project: Greenhouse
+      present: true
+
+  # Shutting one gate. The two readings after it are one line each of the same sentence, and the
+  # second is the one this road exists for: a project nobody touched is still firing, and says so
+  # where anyone can see it.
+  - type: action
+    domain: plugin
+    op: disable-in
+    with:
+      name: worktree
+      project: Greenhouse
+
+  - type: assert
+    domain: plugin
+    op: fires-in
+    with:
+      name: worktree
+      project: Greenhouse
+      present: false
+
+  - type: assert
+    domain: plugin
+    op: fires-in
+    with:
+      name: worktree
+      project: Toolshed
+      present: true

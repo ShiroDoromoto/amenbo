@@ -405,6 +405,18 @@ const REGISTRY: &[OpSpec] = &[
     // catalog's to give and two of them may serve one: which row is opened is the whole question the
     // panel after it answers.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "open-entry", required: &["name", "source"], refs: &[], strings: &["name", "source"], binds: false },
+    // The switch as a screen draws it: one project at a time, each one named. `enable-in` picks a
+    // project from those offered beside the row — and picking one *is* the enable, since turning a
+    // plugin on is itself the permission to run its code, so there is no second question under the
+    // picker. `disable-in` shuts the gate for one of the projects the row names, leaving whatever else
+    // it names still firing.
+    //
+    // A screen road alone, and not by omission: a plugin has one switch, and a terminal says which
+    // project it is moving by standing in a folder bound to that project. There is no flag for another
+    // one — so `enable` / `disable` are the terminal's road to this same act, and naming the project in
+    // the step is the screen's.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "enable-in", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "disable-in", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
@@ -505,6 +517,20 @@ const REGISTRY: &[OpSpec] = &[
     // question is only whether the plugin is there at all), what the last call returned on its own
     // stdout, and what the execution log kept of a run.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "listed", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // One project a row names among those the plugin fires in — or, with `present: false`, one it does
+    // not. The question is asked a project at a time because that is what a list can be wrong about: a
+    // gate read as a single yes/no hides a plugin still firing where nobody is looking, and what has to
+    // be true after one project's gate is shut is an answer about the project left alone.
+    //
+    // A screen road alone, like the moves it reads after. A row names every project wherever it is
+    // read, but a terminal can only put one name on it — the switch it moves is the one belonging to
+    // the folder it stands in — so the state this is about, a plugin on in more than one project, is
+    // reachable on the screen's road and on no other.
+    //
+    // A `Review` rather than a reading, for the reason `folder open-existing` is: the list of projects
+    // runs down the side of every screen, and a reading answers which words are on a shot and never
+    // which part of it they came from — so finding the name proves nothing about the row.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "fires-in", required: &["name", "project", "present"], refs: &[], strings: &["name", "project"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "returned", required: &["contains"], refs: &[], strings: &["contains"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "ran", required: &["name"], refs: &[], strings: &["name", "outcome"], binds: false },
     // What one plugin's queue owes, and whether anything is working it. The execution log

@@ -219,12 +219,16 @@ impl Instructor {
     /// never which part of the window they came from — the same name is in the list of projects
     /// down the side of every screen, so a reading of it would pass wherever the run was pointed.
     /// That one is a `Review`, closed by an eye on the shot.
+    ///
+    /// `fires-in` is a `Review` for that same reason, and it is the whole of that road: what every
+    /// line of it names is a project, and the projects run down the side of every screen — so a
+    /// reading that finds the name cannot say it came from the row, and one that fails to find it
+    /// would be reading a screen the plugin's row is not even on.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
             (Domain::Task, "listed") => {
-                let present = with.get("present").and_then(|v| v.as_bool()).unwrap_or(true);
-                Some(Expectation { text: self.target_label(with), present })
+                Some(Expectation { text: self.target_label(with), present: present(with) })
             }
             (Domain::Plugin, "browsed") if !official(with) => {
                 Some(Expectation { text: arg_str(with, "source")?.to_string(), present: true })
@@ -290,21 +294,31 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "source")?
             ),
+            // The switch, moved one project at a time. Picking a project is the whole of the enable,
+            // so the instruction stops there — a step telling anyone to confirm anything afterwards
+            // would be inviting a screen the run has not shot yet.
+            (Domain::Plugin, "enable-in") => format!(
+                "In the row for \"{}\", pick \"{}\" among the projects offered beside the switch.",
+                req(with, "name")?,
+                req(with, "project")?
+            ),
+            (Domain::Plugin, "disable-in") => format!(
+                "In the row for \"{}\", shut the gate beside \"{}\" — one of the projects the row names.",
+                req(with, "name")?,
+                req(with, "project")?
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
 
     fn assert(&self, domain: Domain, op: &str, with: &Args) -> Result<String, String> {
         Ok(match (domain, op) {
-            (Domain::Task, "listed") => {
-                let present = with.get("present").and_then(|v| v.as_bool()).unwrap_or(true);
-                format!(
-                    "Confirm the task \"{}\" is {} the listing filtered by `{}`.",
-                    self.target_label(with),
-                    if present { "present in" } else { "absent from" },
-                    req(with, "filter")?
-                )
-            }
+            (Domain::Task, "listed") => format!(
+                "Confirm the task \"{}\" is {} the listing filtered by `{}`.",
+                self.target_label(with),
+                if present(with) { "present in" } else { "absent from" },
+                req(with, "filter")?
+            ),
             (Domain::Task, "field") => format!(
                 "Confirm the task \"{}\" shows {} = {}.",
                 self.target_label(with),
@@ -329,6 +343,18 @@ impl Instructor {
                 req(with, "source")?,
                 req(with, "declares")?
             ),
+            (Domain::Plugin, "fires-in") => {
+                let name = req(with, "name")?;
+                let project = req(with, "project")?;
+                match present(with) {
+                    true => format!(
+                        "Confirm the row for \"{name}\" names \"{project}\" among the projects it fires in."
+                    ),
+                    false => format!(
+                        "Confirm the row for \"{name}\" does not name \"{project}\" among the projects it fires in."
+                    ),
+                }
+            }
             (Domain::Folder, "first-loop") => format!(
                 "Confirm the first loop is offered here: its first move opens a terminal already inside the linked folder, its second hands over the request to paste — which names \"{}\" — and its third says the tasks will appear on the board.",
                 req(with, "hands_over")?
@@ -377,6 +403,12 @@ fn req<'a>(with: &'a Args, key: &str) -> Result<&'a str, String> {
 /// prove, since "not official" is the reading a badge has to earn.
 fn official(with: &Args) -> bool {
     with.get("official").and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
+/// Whether a step asks for what it names to be on screen, rather than gone from it. Absence is
+/// always said out loud, so an unsaid one is a step asking that something is there.
+fn present(with: &Args) -> bool {
+    with.get("present").and_then(|v| v.as_bool()).unwrap_or(true)
 }
 
 /// Render an arbitrary scalar arg for display: a string as itself, anything else through YAML so
@@ -737,6 +769,46 @@ steps_gui:
 
         let exp = ins.expectation(&s.steps(Driver::Gui)[1]).expect("a detail assert is OCR-judged");
         assert_eq!(exp, Expectation { text: "Channel webhook".to_string(), present: true });
+    }
+
+    /// The gate line: the switch is moved a project at a time, and read back the same way — including
+    /// the reading that matters most, the project left firing after another one's gate was shut. Every
+    /// line of it is a `Review`: what it names is a project, and the projects are down the side of the
+    /// screen whether or not the row names one.
+    #[test]
+    fn the_gate_moves_one_project_at_a_time_and_is_read_back_by_an_eye() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: plugin
+    op: enable-in
+    with: { name: worktree, project: Greenhouse }
+  - type: assert
+    domain: plugin
+    op: fires-in
+    with: { name: worktree, project: Greenhouse, present: true }
+  - type: action
+    domain: plugin
+    op: disable-in
+    with: { name: worktree, project: Greenhouse }
+  - type: assert
+    domain: plugin
+    op: fires-in
+    with: { name: worktree, project: Greenhouse, present: false }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("pick \"Greenhouse\""), "got: {}", lines[0]);
+        assert!(lines[1].contains("names \"Greenhouse\""), "got: {}", lines[1]);
+        assert!(lines[2].contains("shut the gate beside \"Greenhouse\""), "got: {}", lines[2]);
+        assert!(lines[3].contains("does not name \"Greenhouse\""), "got: {}", lines[3]);
+
+        for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
+            assert!(ins.expectation(st).is_none(), "step {i} names a project, which no reading settles");
+        }
     }
 
     /// Where the screen has a form for what the CLI does with a command, the road takes the domain's

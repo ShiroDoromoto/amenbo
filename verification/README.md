@@ -209,8 +209,10 @@ to the next is an action step like any other (`folder open-existing-card`, `fold
 and it earns the two things a note never can: the screen it arrives at is shot, so the middle of the
 road is evidence rather than something taken on trust, and the assert after it cannot be reached by a
 hand tidying the screen while the run is held. The screen roads are written that way: `link-a-folder`
-walks the arrival screen, the card, the picker and the board it lands on, and
-`say-where-a-plugin-fires` walks one plugin's row through the four states one switch leaves it in.
+walks the arrival screen, the card, the picker and the board it lands on,
+`say-where-a-plugin-fires` walks one plugin's row through the four states one switch leaves it in, and
+`choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
+the button back to the author's default.
 
 Everything the wait prints — the step just captured, and the prompt — goes to stderr, so `--json`
 still leaves one machine-readable line on stdout. A driver that is not a person keeps its side open

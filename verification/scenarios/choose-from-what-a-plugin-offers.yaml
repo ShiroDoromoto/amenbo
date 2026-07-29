@@ -201,3 +201,84 @@ steps_cli:
     op: uninstall
     with:
       name: worktree
+
+# The same three answers, where a person actually gives them. A terminal takes the answer as a value to
+# type, so all three are one string apiece and telling them apart is a matter of spelling; a form draws
+# the candidates instead, and two of the three answers leave every box clear. What the screen owes is
+# therefore the thing the boxes cannot say on their own — which answer is being held — and the way back
+# to the author's, which on this road is a button and not a value anybody could write down.
+#
+# What the road wants in front of it is the device the CLI road builds by hand: the official `worktree`
+# plugin installed in the store the build under test opens, its manifest declaring `events` as a choice
+# of `task.done` / `task.rejected` / `task.blocked` with `task.done` standing as the default, and nothing
+# answered for it yet. Stand that with `devtool devgui cli` and the same declaration the road above
+# makes, open the plugin's settings on the installed plugins screen, and start the run there. Every step
+# moves the screen, so drive it stepped (`--step`) and carry out each move at the hand-back before it.
+#
+# Every line is closed by an eye rather than by a reading. What a form says here is which of its boxes
+# are ticked and which chip the field wears: the candidates are drawn whichever answer is held, so their
+# words are on every shot, and the chip is a word of the interface.
+steps_gui:
+  # Nobody has answered, and the form says so twice over — the chip naming the state, and the default's
+  # candidates ticked, which is what a run would receive as things stand. Neither is read off the store:
+  # this project holds nothing at all.
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      state: unanswered
+
+  - type: action
+    domain: plugin
+    op: config-choose
+    with:
+      name: worktree
+      key: events
+      options: task.done,task.rejected
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      state: chosen
+      equals: task.done,task.rejected
+
+  # Clearing the last box is not clearing the field. What the form writes here is the answer "none of
+  # them", which has to look like itself on screen — empty boxes under the default's chip would be the
+  # state this just left.
+  - type: action
+    domain: plugin
+    op: config-choose-none
+    with:
+      name: worktree
+      key: events
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      state: "none"
+
+  # And the door back. It is an act on this road rather than a value, and the screen after it is the
+  # whole of what it promises: the field standing on the author's default again, drawn exactly as it was
+  # before anyone answered.
+  - type: action
+    domain: plugin
+    op: config-restore-default
+    with:
+      name: worktree
+      key: events
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      state: unanswered

@@ -224,6 +224,11 @@ impl Instructor {
     /// line of it names is a project, and the projects run down the side of every screen — so a
     /// reading that finds the name cannot say it came from the row, and one that fails to find it
     /// would be reading a screen the plugin's row is not even on.
+    ///
+    /// `config` is a `Review` for a reason of its own: what a form says about a choice is which of
+    /// its boxes are ticked and which chip the field wears. The candidates are drawn whichever answer
+    /// is held, so their words are on every shot of the road, and the chip is a word of the interface
+    /// — neither is something the presence of text can settle.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -307,6 +312,27 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "project")?
             ),
+            // Answering a choice on the form it is drawn on. Saving belongs to the move rather than
+            // standing as a step of its own: the form holds an answer nobody has committed yet, so a
+            // shot of ticked boxes left unsaved would be evidence of an answer the store never
+            // received. The button is the one exception — it writes on its own, and there is nothing
+            // to save after it.
+            (Domain::Plugin, "config-choose") => format!(
+                "In the settings for \"{}\", tick \"{}\" among the candidates offered for \"{}\", leave every other one clear, and save.",
+                req(with, "name")?,
+                req(with, "options")?,
+                req(with, "key")?
+            ),
+            (Domain::Plugin, "config-choose-none") => format!(
+                "In the settings for \"{}\", clear every candidate ticked for \"{}\" and save.",
+                req(with, "name")?,
+                req(with, "key")?
+            ),
+            (Domain::Plugin, "config-restore-default") => format!(
+                "In the settings for \"{}\", press the button under \"{}\" that takes it back to what its author put behind it.",
+                req(with, "name")?,
+                req(with, "key")?
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -371,6 +397,31 @@ impl Instructor {
                 "Confirm the open card asks which project to link the folder to — with \"{}\", one of the projects on this device, chosen in it.",
                 req(with, "project")?
             ),
+            // Which of the three answers the form is holding. The state is the whole question here:
+            // the value a screen shows is its ticks, and two of the three answers leave every box
+            // clear — so a line naming only the value would pass over the one difference this reads.
+            (Domain::Plugin, "config") => {
+                let name = req(with, "name")?;
+                let key = req(with, "key")?;
+                let state = arg_str(with, "state").ok_or_else(|| {
+                    "assert `config` on screen needs `state`: a form draws its answer as ticks, and which answer that is cannot be read off them alone".to_string()
+                })?;
+                match state {
+                    "unanswered" => format!(
+                        "Confirm the setting \"{key}\" in \"{name}\"'s settings is one nobody has answered: its author's candidates are drawn a box apiece, the ones the author's default names are the ticked ones, and the field is chipped as standing on that default."
+                    ),
+                    "chosen" => format!(
+                        "Confirm the setting \"{key}\" in \"{name}\"'s settings has \"{}\" ticked and every other candidate clear, wearing neither the default's chip nor the declined one's.",
+                        req(with, "equals")?
+                    ),
+                    "none" => format!(
+                        "Confirm the setting \"{key}\" in \"{name}\"'s settings has every candidate clear, and is chipped as having declined them all — which is the answer an unanswered field is not."
+                    ),
+                    other => {
+                        return Err(format!("assert `config` on screen does not know the state `{other}`"))
+                    }
+                }
+            }
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -809,6 +860,76 @@ steps_gui:
         for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
             assert!(ins.expectation(st).is_none(), "step {i} names a project, which no reading settles");
         }
+    }
+
+    /// The settings form: a choice is answered by ticking and saving, declined by clearing every box,
+    /// and taken back by the button under the field. Each of the three answers is read back by its
+    /// state, and every one of those readings is a `Review` — the candidates are on the shot whichever
+    /// answer is held, and the chip that tells the answers apart is a word of the interface.
+    #[test]
+    fn a_choice_is_answered_on_the_form_and_read_back_by_which_answer_it_holds() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: config
+    with: { name: worktree, key: events, state: unanswered }
+  - type: action
+    domain: plugin
+    op: config-choose
+    with: { name: worktree, key: events, options: "task.done,task.rejected" }
+  - type: assert
+    domain: plugin
+    op: config
+    with: { name: worktree, key: events, state: chosen, equals: "task.done,task.rejected" }
+  - type: action
+    domain: plugin
+    op: config-choose-none
+    with: { name: worktree, key: events }
+  - type: assert
+    domain: plugin
+    op: config
+    with: { name: worktree, key: events, state: "none" }
+  - type: action
+    domain: plugin
+    op: config-restore-default
+    with: { name: worktree, key: events }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("nobody has answered") && lines[0].contains("default"), "got: {}", lines[0]);
+        assert!(lines[1].contains("tick \"task.done,task.rejected\"") && lines[1].contains("save"), "got: {}", lines[1]);
+        assert!(lines[2].contains("\"task.done,task.rejected\" ticked"), "got: {}", lines[2]);
+        assert!(lines[3].contains("clear every candidate"), "got: {}", lines[3]);
+        assert!(lines[4].contains("declined them all"), "got: {}", lines[4]);
+        assert!(lines[5].contains("back to what its author put behind it"), "got: {}", lines[5]);
+
+        for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
+            assert!(ins.expectation(st).is_none(), "step {i} is closed by an eye, not by a reading");
+        }
+    }
+
+    /// A screen road that says which answer a choice holds without saying which of the three it is has
+    /// asked for nothing: two of them leave every box clear. The harness says so rather than rendering
+    /// a line an operator would read as a reading of the value.
+    #[test]
+    fn a_choice_read_back_without_naming_its_answer_is_refused() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: config
+    with: { name: worktree, key: events, equals: task.done }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let err = ins.render(&s.steps(Driver::Gui)[0]).unwrap_err();
+        assert!(err.contains("needs `state`"), "got: {err}");
     }
 
     /// Where the screen has a form for what the CLI does with a command, the road takes the domain's

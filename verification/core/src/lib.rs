@@ -433,6 +433,18 @@ const REGISTRY: &[OpSpec] = &[
     // the step is the screen's.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "enable-in", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "disable-in", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
+    // A setting offering candidates, as the form answers it: a box per candidate, and a button under
+    // the field. `config-choose` leaves the named ones ticked and every other one clear;
+    // `config-choose-none` clears them all, which is the answer that is not the same as never having
+    // been asked; `config-restore-default` presses the button, which is the door back to what the
+    // author put behind the field.
+    //
+    // A screen road alone, for the reason `enable-in` is: a terminal answers this setting by writing
+    // the value down (`config-set`), and a form has boxes and a button where the value would be — the
+    // three answers are one string apiece to type, and three different moves to make.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-choose", required: &["name", "key", "options"], refs: &[], strings: &["name", "key", "options"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-choose-none", required: &["name", "key"], refs: &[], strings: &["name", "key"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-restore-default", required: &["name", "key"], refs: &[], strings: &["name", "key"], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
@@ -564,7 +576,10 @@ const REGISTRY: &[OpSpec] = &[
     // that it says so, and that the value does not come out with it. `state` asks which of the three
     // answers a field holds (`chosen` / `none` / `unanswered`), which is the one question a value
     // cannot answer for itself: a choice answered with none of them and one nobody has answered both
-    // read as no value chosen, and only the second follows the author's default.
+    // read as no value chosen, and only the second follows the author's default. The screen asks that
+    // same question of the settings form — which boxes are ticked, and which of the three the field
+    // says it is holding — so `state` is what a road there is written on, with `equals` naming the
+    // candidates a chosen one leaves ticked.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "state"], binds: false },
     // A catalog in the browsing view: whether it is a source at all (`present`), whether the browse
     // could reach it, and — `pinned_key` — whether a key of its is what plugins from it would be

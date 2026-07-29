@@ -32,6 +32,13 @@ const NONE: PluginInstall[] = [];
 const NO_FIELDS: PluginConfigField[] = [];
 
 /**
+ * What a setting stores when someone looked at its candidates and wanted none of them (`AMB-D-415`) —
+ * core's reserved spelling, written by the form and read back as the `none` state. An empty value still
+ * means nobody answered, so the two answers need two spellings, and no candidate may take this one.
+ */
+export const NONE_SELECTED = "none";
+
+/**
  * Read what is installed, and which projects each one fires in (Tauri: `plugin_installs`).
  *
  * **It is asked from nowhere in particular** (`AMB-D-412`): every row names its own projects, so no face

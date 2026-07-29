@@ -347,6 +347,8 @@ export const vi: Translation = {
     "plugins.cfg.pickProject": "Chọn một dự án",
     "plugins.cfg.pickProjectNote": "Hãy chọn dự án mà bạn đang viết cài đặt cho nó.",
     "plugins.cfg.required": "Bắt buộc", "plugins.cfg.unset": "Chưa điền", "plugins.cfg.held": "Đã điền",
+    "plugins.cfg.default": "Mặc định", "plugins.cfg.noneChosen": "Không chọn gì",
+    "plugins.cfg.restoreDefault": "Khôi phục mặc định",
     "plugins.cfg.secretNote": "Bí mật được giữ cho dự án này và không hiện lại được.",
     "plugins.cfg.secretReplace": "Giá trị mới (chỉ để thay thế)",
     "plugins.cfg.secretConfirm": "Gõ lại lần nữa để xác nhận",

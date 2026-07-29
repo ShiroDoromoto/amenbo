@@ -363,6 +363,8 @@ const ui = {
   "plugins.cfg.pickProject": "Pick a project",
   "plugins.cfg.pickProjectNote": "Pick the project whose settings you are writing.",
   "plugins.cfg.required": "Required", "plugins.cfg.unset": "Not provided", "plugins.cfg.held": "Provided",
+  "plugins.cfg.default": "Default", "plugins.cfg.noneChosen": "None chosen",
+  "plugins.cfg.restoreDefault": "Restore the default",
   "plugins.cfg.secretNote": "A secret is kept for this project and cannot be shown again.",
   "plugins.cfg.secretReplace": "A new value (only to replace it)",
   "plugins.cfg.secretConfirm": "Type it again to confirm",

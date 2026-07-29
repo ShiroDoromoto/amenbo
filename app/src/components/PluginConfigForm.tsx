@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { PluginWantedSettingDto } from "../bindings/bindings";
 import { errText, t, tn } from "../core/i18n";
 import {
+  NONE_SELECTED,
   setPluginConfig,
   usePluginConfig,
   type PluginConfigField,
@@ -11,11 +12,16 @@ import {
 /**
  * The settings of one installed plugin, drawn from the schema its author declared (`AMB-D-356`).
  *
- * **The form is generic and amenbo judges nothing in it.** There are two kinds of field and no more —
- * a text box, and a masked pair for a secret — because the manifest carries a flag, not a type: what a
- * value must look like is the plugin author's to check at run time, and what amenbo enforces is the
- * floor under any value (a byte cap, no control characters) at the one write boundary every face
- * shares.
+ * **A field that offers candidates is drawn as its candidates** (`AMB-D-415`), and carries three answers
+ * rather than two: the boxes someone ticked, *none of them* — an answer of its own, and not the same as
+ * silence — and nobody having answered, where the author's default is what runs and the form says so. The
+ * way back to that last one is the same button that empties any other field, wearing the name of what it
+ * does here.
+ *
+ * **The form is generic and amenbo judges nothing in it.** What the author declares is the *shape of the
+ * answer* — a line, a masked pair for a secret, a set of candidates — never what a value must look like:
+ * that stays the plugin author's to check at run time, and what amenbo enforces is the floor under any
+ * value (a byte cap, no control characters) at the one write boundary every face shares.
  *
  * **A secret is written, never read back.** It never leaves core — the form has only "held / not held"
  * to draw — which is why setting one asks for it twice: with nothing to compare against afterwards, the
@@ -60,9 +66,23 @@ export function PluginConfigForm({ install, projects }: {
   const heldFor = (key: string): PluginConfigField | undefined => fields.find((f) => f.key === key);
   const stored = (f: PluginWantedSettingDto) => heldFor(f.key)?.value ?? "";
   const shown = (f: PluginWantedSettingDto) => edits[f.key] ?? stored(f);
+  // Which candidates are in force on screen: what is being edited, what the project holds, or — while
+  // nobody has answered — the author's default, which is what a run would receive as things stand.
+  const ticked = (f: PluginWantedSettingDto): string[] => {
+    const edit = edits[f.key];
+    // An edit of "" is the clear this form writes, and for a choice the clear *is* "back to the default"
+    // — so the boxes go back to the author's, not blank. Blank is the answer the reserved word carries.
+    const answer =
+      edit === "" ? f.defaultValue ?? "" : edit ?? heldFor(f.key)?.value ?? f.defaultValue ?? "";
+    return answer === "" || answer === NONE_SELECTED ? [] : answer.split(",");
+  };
   // How many `required` settings this project holds no value for — what an enable in it is refused
-  // over. Zero while no project is named: nothing was read, so nothing is missing.
-  const missing = fields.filter((f) => f.required && !held(f)).length;
+  // over. Zero while no project is named: nothing was read, so nothing is missing. A field carrying a
+  // default is never unanswered (`AMB-D-415`), which is the same reading the enable gate takes.
+  const declared = (key: string) => install.config.find((f) => f.key === key);
+  const missing = fields.filter(
+    (f) => f.required && declared(f.key)?.defaultValue == null && !held(f),
+  ).length;
 
   const run = async (op: () => Promise<unknown>, said: typeof done) => {
     setBusy(true);
@@ -136,11 +156,23 @@ export function PluginConfigForm({ install, projects }: {
 
       {install.config.map((f) => (
         <div key={f.key} className="plugcfg__field">
-          <label className="plugcfg__label" htmlFor={`cfg-${install.name}-${f.key}`}>
+          {/* A choice is a group of boxes, each with its own label, so the caption above it names the
+              group rather than pointing at one input. */}
+          <label
+            className="plugcfg__label"
+            htmlFor={f.fieldType === "multi" ? undefined : `cfg-${install.name}-${f.key}`}
+          >
             {f.label}
             {f.required && <span className="chip">{t("plugins.cfg.required")}</span>}
-            {held(heldFor(f.key)) ? (
+            {/* Which of the three answers this field is giving (`AMB-D-415`). "Nobody answered" is drawn
+                as the default where the author wrote one — the value a run receives is not missing — and
+                "none of them" is drawn as itself, since empty boxes alone would read as unanswered. */}
+            {heldFor(f.key)?.state === "none" ? (
+              <span className="chip">{t("plugins.cfg.noneChosen")}</span>
+            ) : held(heldFor(f.key)) ? (
               f.secret && <span className="chip">{t("plugins.cfg.held")}</span>
+            ) : f.defaultValue != null ? (
+              <span className="chip">{t("plugins.cfg.default")}</span>
             ) : (
               !unnamedProject && (
                 <span className={f.required ? "chip chip--warn" : "chip"}>
@@ -180,16 +212,42 @@ export function PluginConfigForm({ install, projects }: {
               />
               <div className="faint plugcfg__note">{t("plugins.cfg.secretNote")}</div>
             </>
+          ) : f.fieldType === "multi" ? (
+            /* The candidates, in the author's order. Unticking the last box does not empty the field —
+               it writes the word for "none of them", because empty is where an unanswered field already
+               lives and the two answers must not collapse into one. */
+            <div className="plugcfg__choices">
+              {f.options.map((o) => (
+                <label key={o.value} className="plugcfg__choice">
+                  <input
+                    type="checkbox"
+                    disabled={busy}
+                    checked={ticked(f).includes(o.value)}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? [...ticked(f), o.value]
+                        : ticked(f).filter((v) => v !== o.value);
+                      setEdits((s) => ({
+                        ...s,
+                        [f.key]: next.length === 0 ? NONE_SELECTED : next.join(","),
+                      }));
+                    }}
+                  />
+                  {o.label}
+                </label>
+              ))}
+            </div>
           ) : (
-            <>
-              <input
-                id={`cfg-${install.name}-${f.key}`}
-                type="text"
-                disabled={busy}
-                value={shown(f)}
-                onChange={(e) => setEdits((s) => ({ ...s, [f.key]: e.target.value }))}
-              />
-            </>
+            <input
+              id={`cfg-${install.name}-${f.key}`}
+              type="text"
+              disabled={busy}
+              value={shown(f)}
+              /* An empty box under a "default" chip would leave the value in force unreadable — the
+                 candidates of a choice are ticked, and this is the same showing for a line. */
+              placeholder={f.defaultValue ?? ""}
+              onChange={(e) => setEdits((s) => ({ ...s, [f.key]: e.target.value }))}
+            />
           )}
           {held(heldFor(f.key)) && (
             <button
@@ -197,7 +255,9 @@ export function PluginConfigForm({ install, projects }: {
               disabled={busy || unnamedProject}
               onClick={() => void onClear(f)}
             >
-              {t("plugins.cfg.clear")}
+              {/* The same write either way — an empty value — said as what it does here: a field with a
+                  default is not emptied by it, it goes back to what the author put behind it. */}
+              {f.defaultValue != null ? t("plugins.cfg.restoreDefault") : t("plugins.cfg.clear")}
             </button>
           )}
         </div>

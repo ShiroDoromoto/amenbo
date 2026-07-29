@@ -366,6 +366,8 @@ export const ptBR: Translation = {
     "plugins.cfg.pickProject": "Escolha um projeto",
     "plugins.cfg.pickProjectNote": "Escolha o projeto cujas configurações você está escrevendo.",
     "plugins.cfg.required": "Obrigatório", "plugins.cfg.unset": "Não preenchido", "plugins.cfg.held": "Preenchido",
+    "plugins.cfg.default": "Padrão", "plugins.cfg.noneChosen": "Nenhum escolhido",
+    "plugins.cfg.restoreDefault": "Restaurar o padrão",
     "plugins.cfg.secretNote": "Um segredo é guardado para este projeto e não pode ser mostrado de novo.",
     "plugins.cfg.secretReplace": "Um valor novo (só para substituí-lo)",
     "plugins.cfg.secretConfirm": "Digite de novo para confirmar",

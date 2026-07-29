@@ -344,6 +344,8 @@ export const nl: Translation = {
     "plugins.cfg.pickProject": "Kies een project",
     "plugins.cfg.pickProjectNote": "Kies het project waarvan je de instellingen schrijft.",
     "plugins.cfg.required": "Verplicht", "plugins.cfg.unset": "Niet opgegeven", "plugins.cfg.held": "Opgegeven",
+    "plugins.cfg.default": "Standaard", "plugins.cfg.noneChosen": "Niets gekozen",
+    "plugins.cfg.restoreDefault": "Terug naar standaard",
     "plugins.cfg.secretNote": "Een geheim wordt voor dit project bewaard en kan niet opnieuw worden getoond.",
     "plugins.cfg.secretReplace": "Een nieuwe waarde (alleen om hem te vervangen)",
     "plugins.cfg.secretConfirm": "Typ hem nog eens ter bevestiging",

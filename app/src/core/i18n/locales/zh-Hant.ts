@@ -345,6 +345,8 @@ export const zhHant: Translation = {
     "plugins.cfg.pickProject": "選擇專案",
     "plugins.cfg.pickProjectNote": "選擇你要為哪個專案寫設定。",
     "plugins.cfg.required": "必填", "plugins.cfg.unset": "沒有填", "plugins.cfg.held": "已填",
+    "plugins.cfg.default": "預設", "plugins.cfg.noneChosen": "一個都不選",
+    "plugins.cfg.restoreDefault": "恢復預設",
     "plugins.cfg.secretNote": "機密為這個專案保存，之後無法再顯示。",
     "plugins.cfg.secretReplace": "新的值（只在要替換時填）",
     "plugins.cfg.secretConfirm": "再輸入一次以確認",

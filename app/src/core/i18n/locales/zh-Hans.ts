@@ -345,6 +345,8 @@ export const zhHans: Translation = {
     "plugins.cfg.pickProject": "选择项目",
     "plugins.cfg.pickProjectNote": "选择你要为哪个项目写设置。",
     "plugins.cfg.required": "必填", "plugins.cfg.unset": "未填写", "plugins.cfg.held": "已填写",
+    "plugins.cfg.default": "默认", "plugins.cfg.noneChosen": "一个都不选",
+    "plugins.cfg.restoreDefault": "恢复默认",
     "plugins.cfg.secretNote": "机密为这个项目保存，之后无法再显示。",
     "plugins.cfg.secretReplace": "新的值（仅在需要替换时填写）",
     "plugins.cfg.secretConfirm": "再输入一次以确认",

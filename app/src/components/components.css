@@ -301,6 +301,11 @@
 .plugcfg__field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-3); align-items: flex-start; }
 .plugcfg__field input { width: 100%; }
 .plugcfg__label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
+/* A field whose author declared candidates: one row per candidate, each box only as wide as a box (the
+   rule above stretches a text input to the field's width, which would swallow a checkbox). */
+.plugcfg__choices { display: flex; flex-direction: column; gap: var(--s-1); }
+.plugcfg__choice { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
+.plugcfg__choice input { width: auto; }
 .plugcfg__note { font-size: var(--fs-xs); }
 .plugdet__readme { border-top: 1px solid var(--c-border); padding-top: var(--s-3); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .plugdet__foot { border-top: 1px solid var(--c-border); margin-top: var(--s-4); padding-top: var(--s-2); font-size: var(--fs-xs); }

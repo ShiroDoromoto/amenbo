@@ -344,6 +344,8 @@ export const hi: Translation = {
     "plugins.cfg.pickProject": "प्रोजेक्ट चुनें",
     "plugins.cfg.pickProjectNote": "वह प्रोजेक्ट चुनें जिसकी सेटिंग आप लिख रहे हैं।",
     "plugins.cfg.required": "आवश्यक", "plugins.cfg.unset": "नहीं दी गई", "plugins.cfg.held": "दी गई",
+    "plugins.cfg.default": "डिफ़ॉल्ट", "plugins.cfg.noneChosen": "कोई नहीं चुना",
+    "plugins.cfg.restoreDefault": "डिफ़ॉल्ट पर लौटाएँ",
     "plugins.cfg.secretNote": "गुप्त मान इस प्रोजेक्ट के लिए रखा जाता है और दोबारा दिखाया नहीं जा सकता।",
     "plugins.cfg.secretReplace": "नया मान (सिर्फ़ बदलने के लिए)",
     "plugins.cfg.secretConfirm": "पुष्टि के लिए दोबारा लिखें",

@@ -344,6 +344,8 @@ export const tr: Translation = {
     "plugins.cfg.pickProject": "Bir proje seçin",
     "plugins.cfg.pickProjectNote": "Ayarlarını yazdığınız projeyi seçin.",
     "plugins.cfg.required": "Zorunlu", "plugins.cfg.unset": "Girilmemiş", "plugins.cfg.held": "Girilmiş",
+    "plugins.cfg.default": "Varsayılan", "plugins.cfg.noneChosen": "Hiçbiri seçilmedi",
+    "plugins.cfg.restoreDefault": "Varsayılana döndür",
     "plugins.cfg.secretNote": "Gizli değer bu proje için tutulur ve bir daha gösterilemez.",
     "plugins.cfg.secretReplace": "Yeni bir değer (yalnızca değiştirmek için)",
     "plugins.cfg.secretConfirm": "Doğrulamak için yeniden yazın",

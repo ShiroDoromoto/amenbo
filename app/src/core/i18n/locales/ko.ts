@@ -344,6 +344,8 @@ export const ko: Translation = {
     "plugins.cfg.pickProject": "프로젝트 고르기",
     "plugins.cfg.pickProjectNote": "어느 프로젝트의 설정을 쓸지 고르세요.",
     "plugins.cfg.required": "필수", "plugins.cfg.unset": "비어 있음", "plugins.cfg.held": "채워짐",
+    "plugins.cfg.default": "기본값", "plugins.cfg.noneChosen": "아무것도 선택 안 함",
+    "plugins.cfg.restoreDefault": "기본값으로 되돌리기",
     "plugins.cfg.secretNote": "비밀값은 이 프로젝트에 보관되고 다시 볼 수 없습니다.",
     "plugins.cfg.secretReplace": "새 값(바꿀 때만 입력)",
     "plugins.cfg.secretConfirm": "확인을 위해 한 번 더 입력",

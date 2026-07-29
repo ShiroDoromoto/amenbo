@@ -347,6 +347,8 @@ export const th: Translation = {
     "plugins.cfg.pickProject": "เลือกโปรเจกต์",
     "plugins.cfg.pickProjectNote": "เลือกโปรเจกต์ที่คุณกำลังเขียนการตั้งค่าให้",
     "plugins.cfg.required": "จำเป็น", "plugins.cfg.unset": "ยังไม่ได้ใส่", "plugins.cfg.held": "ใส่แล้ว",
+    "plugins.cfg.default": "ค่าเริ่มต้น", "plugins.cfg.noneChosen": "ไม่เลือกสักอย่าง",
+    "plugins.cfg.restoreDefault": "กลับไปใช้ค่าเริ่มต้น",
     "plugins.cfg.secretNote": "ความลับถูกเก็บไว้สำหรับโปรเจกต์นี้และแสดงซ้ำไม่ได้",
     "plugins.cfg.secretReplace": "ค่าใหม่ (ใส่เฉพาะตอนจะแทนที่)",
     "plugins.cfg.secretConfirm": "พิมพ์อีกครั้งเพื่อยืนยัน",

@@ -370,6 +370,8 @@ export const uk: Translation = {
     "plugins.cfg.pickProject": "Оберіть проєкт",
     "plugins.cfg.pickProjectNote": "Оберіть проєкт, налаштування якого ви записуєте.",
     "plugins.cfg.required": "Обов'язково", "plugins.cfg.unset": "Не задано", "plugins.cfg.held": "Задано",
+    "plugins.cfg.default": "За замовчуванням", "plugins.cfg.noneChosen": "Нічого не вибрано",
+    "plugins.cfg.restoreDefault": "Повернути значення за замовчуванням",
     "plugins.cfg.secretNote": "Секрет зберігається для цього проєкту й показати його вдруге не можна.",
     "plugins.cfg.secretReplace": "Нове значення (лише щоб замінити його)",
     "plugins.cfg.secretConfirm": "Наберіть ще раз для підтвердження",

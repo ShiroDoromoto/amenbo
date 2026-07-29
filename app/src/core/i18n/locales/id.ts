@@ -347,6 +347,8 @@ export const id: Translation = {
     "plugins.cfg.pickProject": "Pilih proyek",
     "plugins.cfg.pickProjectNote": "Pilih proyek yang pengaturannya sedang Anda tulis.",
     "plugins.cfg.required": "Wajib", "plugins.cfg.unset": "Belum diisi", "plugins.cfg.held": "Terisi",
+    "plugins.cfg.default": "Bawaan", "plugins.cfg.noneChosen": "Tidak ada yang dipilih",
+    "plugins.cfg.restoreDefault": "Kembalikan ke bawaan",
     "plugins.cfg.secretNote": "Rahasia disimpan untuk proyek ini dan tidak bisa ditampilkan lagi.",
     "plugins.cfg.secretReplace": "Nilai baru (hanya untuk menggantinya)",
     "plugins.cfg.secretConfirm": "Ketik sekali lagi untuk memastikan",

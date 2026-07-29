@@ -370,6 +370,8 @@ export const pl: Translation = {
     "plugins.cfg.pickProject": "Wybierz projekt",
     "plugins.cfg.pickProjectNote": "Wybierz projekt, którego ustawienia zapisujesz.",
     "plugins.cfg.required": "Wymagane", "plugins.cfg.unset": "Nie podano", "plugins.cfg.held": "Podano",
+    "plugins.cfg.default": "Domyślne", "plugins.cfg.noneChosen": "Nic nie wybrano",
+    "plugins.cfg.restoreDefault": "Przywróć domyślne",
     "plugins.cfg.secretNote": "Sekret jest trzymany dla tego projektu i nie da się go pokazać ponownie.",
     "plugins.cfg.secretReplace": "Nowa wartość (tylko po to, żeby ją zastąpić)",
     "plugins.cfg.secretConfirm": "Wpisz jeszcze raz, aby potwierdzić",

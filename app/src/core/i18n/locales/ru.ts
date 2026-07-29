@@ -373,6 +373,8 @@ export const ru: Translation = {
     "plugins.cfg.pickProject": "Выберите проект",
     "plugins.cfg.pickProjectNote": "Выберите проект, настройки которого вы пишете.",
     "plugins.cfg.required": "Обязательно", "plugins.cfg.unset": "Не заполнено", "plugins.cfg.held": "Заполнено",
+    "plugins.cfg.default": "По умолчанию", "plugins.cfg.noneChosen": "Ничего не выбрано",
+    "plugins.cfg.restoreDefault": "Вернуть значение по умолчанию",
     "plugins.cfg.secretNote": "Секрет хранится для этого проекта и больше не показывается.",
     "plugins.cfg.secretReplace": "Новое значение (только чтобы заменить прежнее)",
     "plugins.cfg.secretConfirm": "Введите ещё раз для подтверждения",

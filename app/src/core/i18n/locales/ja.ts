@@ -354,6 +354,8 @@ export const ja: Translation = {
     "plugins.cfg.pickProject": "プロジェクトを選択",
     "plugins.cfg.pickProjectNote": "設定を書くプロジェクトを選んでください。",
     "plugins.cfg.required": "必須", "plugins.cfg.unset": "未入力", "plugins.cfg.held": "設定済み",
+    "plugins.cfg.default": "既定", "plugins.cfg.noneChosen": "どれも選ばない",
+    "plugins.cfg.restoreDefault": "既定に戻す",
     "plugins.cfg.secretNote": "秘密はこのプロジェクトに保存し、あとから表示することはできません。",
     "plugins.cfg.secretReplace": "新しい値（入れ替えるときだけ）",
     "plugins.cfg.secretConfirm": "確認のためもう一度",

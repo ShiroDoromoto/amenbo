@@ -6,6 +6,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NONE_SELECTED } from "../core/pluginInstalls";
 import type { PluginConfigField, PluginInstall } from "../core/pluginInstalls";
 import type { PluginWantedSettingDto } from "../bindings/bindings";
 import type { PluginUpdate } from "../core/pluginUpdates";
@@ -403,6 +404,101 @@ describe("the settings form", () => {
     await act(async () => { button(t("plugins.cfg.save"))!.click(); });
     // A secret is this project's, like every other value (`AMB-D-434`).
     expect(hoisted.wrote).toEqual([{ name: "notify", key: "token", value: "shh", projectId: 7 }]);
+  });
+
+  // A field whose author declared candidates has three answers, and the form has to draw all three
+  // (`AMB-D-415`): ticked boxes, none of them, and nobody having answered — where the default is ticked
+  // and named, because that is what a run receives as things stand.
+  it("draws a choice as its candidates, and says which of the three answers is in force", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const events = field({
+      key: "events",
+      fieldType: "multi",
+      options: [
+        { value: "task.done", label: "Done" },
+        { value: "task.rejected", label: "Rejected" },
+      ],
+      defaultValue: "task.done",
+    });
+    hoisted.installs = [row({ name: "notify", config: [events] })];
+    hoisted.held = { notify: { 7: [events] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    // Unanswered: the author's default is ticked and said out loud, and the boxes are the candidates.
+    expect(container.textContent).toContain(t("plugins.cfg.default"));
+    expect(boxes().map((b) => b.checked)).toEqual([true, false]);
+
+    // Ticking the other one writes both, in the order the author declared them.
+    act(() => { boxes()[1].click(); });
+    await act(async () => { button(t("plugins.cfg.save"))!.click(); });
+    expect(hoisted.wrote).toEqual([
+      { name: "notify", key: "events", value: "task.done,task.rejected", projectId: 7 },
+    ]);
+  });
+
+  // Unticking the last box is an answer, not a retraction: it writes the reserved word, because an empty
+  // value is where "nobody answered" already lives.
+  it("writes the word for none of them when every box comes off", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const events = field({
+      key: "events",
+      fieldType: "multi",
+      options: [{ value: "task.done", label: "Done" }],
+      value: "task.done",
+    });
+    hoisted.installs = [row({ name: "notify", config: [events] })];
+    hoisted.held = { notify: { 7: [events] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    act(() => { boxes()[0].click(); });
+    await act(async () => { button(t("plugins.cfg.save"))!.click(); });
+    expect(hoisted.wrote).toEqual([
+      { name: "notify", key: "events", value: NONE_SELECTED, projectId: 7 },
+    ]);
+  });
+
+  // The two answers a form must not collapse: "none of them" says so, and the way back to the default is
+  // the same write that empties any other field, wearing the name of what it does here.
+  it("names the none-of-them answer, and offers the default back", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const events = field({
+      key: "events",
+      fieldType: "multi",
+      options: [{ value: "task.done", label: "Done" }],
+      defaultValue: "task.done",
+      value: NONE_SELECTED,
+      state: "none",
+    });
+    hoisted.installs = [row({ name: "notify", config: [events] })];
+    hoisted.held = { notify: { 7: [events] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    expect(container.textContent).toContain(t("plugins.cfg.noneChosen"));
+    expect(boxes()[0].checked).toBe(false);
+
+    await act(async () => { button(t("plugins.cfg.restoreDefault"))!.click(); });
+    expect(hoisted.wrote).toEqual([{ name: "notify", key: "events", value: "", projectId: 7 }]);
+    // And the boxes go back to the author's, not blank: the write that restores a default must not be
+    // drawn as the answer that declines everything.
+    expect(boxes()[0].checked).toBe(true);
+  });
+
+  // A field the author put a default behind is never unanswered (`AMB-D-415`), so it is not one of the
+  // settings an enable is refused over — the count has to read it the way the gate does.
+  it("does not count a required setting that carries a default as missing", () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
+    const withDefault = field({ key: "events", required: true, defaultValue: "task.done" });
+    hoisted.installs = [
+      row({ name: "notify", config: [withDefault, field({ key: "webhook", required: true })] }),
+    ];
+    hoisted.held = { notify: { 1: [withDefault, field({ key: "webhook", required: true })] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    expect(container.textContent).toContain(tn("plugins.cfg.requiredUnset", 1));
   });
 
   // Clearing is the same door as setting: an empty value is "not provided", which is what `required` reads.

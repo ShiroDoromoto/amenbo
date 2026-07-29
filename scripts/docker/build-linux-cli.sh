@@ -2,14 +2,14 @@
 # build-linux-cli.sh — runs INSIDE the linux-gui container (see Dockerfile.linux-gui).
 # Builds the amenbo CLI FOR LINUX and drops the binary into the mounted /out.
 #
-# Who needs it: the Linux GUI e2e (`make verify-gui-linux`). The AppImage it launches carries
-# the GUI alone, and the check's whole question is whether a SEPARATE process writing to the
-# store repaints that GUI — so the writer has to be brought in as its own binary. Release CI
-# builds the same binary natively before the e2e step, so this only runs on a mac, where
-# cross-compiling is not an option (the wall lint-linux.sh describes) and a Linux box is
-# borrowed instead.
+# Who needs it: the release itself (`make dist-cli-linux`, one job per arch). The container's
+# Ubuntu 22.04 is the glibc floor of the Linux distribution — the AppImage stands on it, and a CLI
+# compiled anywhere newer links a glibc the same users do not have. The Linux GUI e2e
+# (`make verify-gui-linux`) then writes to the store with this very binary: the AppImage it
+# launches carries the GUI alone, and the check's whole question is whether a SEPARATE process
+# repaints that GUI.
 #
-# Mounts expected (set by `make verify-gui-linux`):
+# Mounts expected (set by `make dist-cli-linux`):
 #   /src                  (ro)  the repo
 #   /out                  (rw)  where the binary is collected  (host: ./dist)
 #   /build/target         (rw)  named volume — the workspace target dir (shared with lint-linux)

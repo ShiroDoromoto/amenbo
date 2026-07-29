@@ -363,6 +363,14 @@ const REGISTRY: &[OpSpec] = &[
     // is: the driver writes the declaration onto the installed manifest, the way `stale-manifest`
     // writes the disagreement it needs. Everything after it is amenbo's own doing.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-secret", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
+    // An installed plugin saying, in its author's words, when to reach for it and what to type. What a
+    // plugin says for itself is written in its manifest and amenbo invents none of it, so this is the
+    // author's block arriving the only way it can — written onto the installed manifest, the way
+    // `declare-secret` writes a declaration no published plugin carries. Which is also why the scenario
+    // does not read the catalog's own wording back: an author may reword their block any day, and a line
+    // asserting today's sentence would go red on a change amenbo had no part in. `when` is the occasion;
+    // `cmd` and `does` are one call, which is enough to see the calling form amenbo puts in front of it.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-agent", required: &["name", "when"], refs: &[], strings: &["name", "when", "cmd", "does"], binds: false },
     // An installed plugin whose program answers with the secrets it was handed. A secret travels to a
     // run as an environment variable on the child process — off argv, off the log, out of the store —
     // so the only place it can be seen arriving is inside the run, and only a plugin willing to say
@@ -576,6 +584,20 @@ const REGISTRY: &[OpSpec] = &[
     // list` answers per installed manifest, and installing off a registered catalog needs a signed
     // asset — so before an install, the panel is where the declaration is.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "detail", required: &["name", "source", "declares"], refs: &[], strings: &["name", "source", "declares"], binds: false },
+    // What an AI is told about this plugin where it reads how to work in this folder — the `plugins` key
+    // of the entry point. `present` is whether the plugin is offered there at all, which is the gate's
+    // answer and not the install's: an installed plugin nobody switched on is one a call would refuse,
+    // and naming it would spend a reader's turn learning what amenbo already knew.
+    //
+    // `when` is the author's own line, read back to prove it is relayed rather than paraphrased. `cmd` is
+    // the author's own command face, and what is checked is what amenbo puts *in front* of it — the
+    // calling form is assembled from the name read off disk, so what an AI receives is a line it can
+    // type. The command word itself is left out of the step: a build reached by another name hands out
+    // lines naming it, and that is the point rather than a mismatch.
+    //
+    // A CLI road alone: the entry point is a document for whoever drives the terminal, and no screen
+    // prints it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "at-entry", required: &["name", "present"], refs: &[], strings: &["name", "when", "cmd"], binds: false },
     // The author's own door, before anything is installed anywhere: a manifest file is held up to the
     // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
     // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.

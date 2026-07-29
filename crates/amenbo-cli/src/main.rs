@@ -1232,9 +1232,15 @@ fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, C
 /// The two facts side by side, because `install ≠ enable` (`AMB-D-351`) is the thing a reader most often
 /// gets wrong: an installed plugin that never fires is the *normal* state, not a fault.
 ///
-/// Each plugin has exactly one switch and it is a project's (`AMB-D-434`), so the listing answers for the
-/// project the folder is bound to. Read from outside any project it has no answer at all rather than a
-/// made-up one.
+/// Each plugin has exactly one switch and it is a project's (`AMB-D-434`), so **the row names every
+/// project holding that switch open** (`AMB-D-412`) rather than answering yes/no from wherever the terminal
+/// happens to stand. A truth value read from one project is not an answer: it hides the projects the plugin
+/// is still firing in, and it leaves a reader outside any project with nothing at all. An empty list *is*
+/// an answer — off everywhere.
+///
+/// The names come through [`Store::project_list`], so the reach is folded in exactly as it is for
+/// `project list`: an AI sees its own project and never learns the others exist, and the wording says as
+/// much rather than claiming "everywhere" over a list it was not shown.
 ///
 /// **An open gate is not the same as a plugin that fires**, so the listing carries the compatibility
 /// verdict beside it (`AMB-D-359`). The dispatch resolver warns and drops a plugin this build cannot speak
@@ -1248,7 +1254,6 @@ fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, C
 /// surfaces the fact, quietly.
 fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     use amenbo_core::plugin_compat;
-    use amenbo_core::plugin_trust::effective_enabled_in;
 
     let installed =
         amenbo_core::plugin_installed::installed(&store.paths).map_err(CliError::from)?;
@@ -1260,28 +1265,42 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
             .into_iter()
             .map(|c| c.name)
             .collect();
-    let here = bound_project(store);
-    // `None` = this plugin's switch cannot be answered from where we stand (every gate is a project's, and
-    // no project is in context).
-    let gate_of = |name: &str| -> Result<Option<bool>, CliError> {
-        match here {
-            Some(project) => {
-                Ok(Some(effective_enabled_in(store, name, project).map_err(CliError::from)?))
-            }
-            None => Ok(None),
-        }
+    // The projects a row may name, in the order the sidebar shows them — archived ones included, since a
+    // gate an archived project holds open still fires. Reach-narrowed by `project_list` itself.
+    let visible = store.project_list(true).map_err(CliError::from)?.projects;
+    let enabled_in = |name: &str| -> Result<Vec<&amenbo_core::query::ProjectListItem>, CliError> {
+        let open: std::collections::HashSet<i64> =
+            store.projects_with_plugin_enabled(name).map_err(CliError::from)?.into_iter().collect();
+        Ok(visible.iter().filter(|p| open.contains(&p.id)).collect())
     };
+    // Under a narrowed reach the listing has been shown one project, so "off everywhere" is a claim it
+    // cannot make; it names the project it *was* answered for instead.
+    let only = store
+        .reach()
+        .project()
+        .and_then(|pid| visible.iter().find(|p| p.id == pid))
+        .map(|p| p.name.as_str());
 
     if flags.json {
         let mut rows = Vec::with_capacity(installed.len());
         for p in &installed {
             let why = plugin_compat::check(&p.manifest).err();
+            let on: Vec<_> = enabled_in(&p.name)?
+                .iter()
+                .map(|project| {
+                    json!({
+                        "id": project.id,
+                        "ref": amenbo_core::idref::project(project.id),
+                        "name": project.name,
+                    })
+                })
+                .collect();
             rows.push(json!({
                 "name": p.name,
                 "desc": p.manifest.desc,
                 "author": p.manifest.author,
                 "official": p.manifest.official,
-                "enabled": gate_of(&p.name)?,
+                "enabled_projects": on,
                 "compatible": why.is_none(),
                 "incompatible_reason": why.map(|why| why.to_string()),
                 "update_available": updatable.contains(&p.name),
@@ -1298,11 +1317,14 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
         human(flags, format!("No plugins installed ({}).", store.paths.plugins_dir().display()));
     } else {
         for p in &installed {
-            let open = gate_of(&p.name)?;
-            let gate = match open {
-                Some(true) => "enabled (this project)".to_string(),
-                Some(false) => "disabled (this project)".to_string(),
-                None => "per project — open a project to see".to_string(),
+            let on = enabled_in(&p.name)?;
+            let gate = match (on.as_slice(), only) {
+                ([], Some(here)) => format!("off in {here}"),
+                ([], None) => "off everywhere".to_string(),
+                (projects, _) => format!(
+                    "on: {}",
+                    projects.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(", ")
+                ),
             };
             let badge = if p.manifest.official { " [official]" } else { "" };
             // A quiet badge, not a nag (`AMB-D-359`): the fact sits on the line, and applying it is the
@@ -1312,9 +1334,10 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
             if let Err(why) = plugin_compat::check(&p.manifest) {
                 // The consequence, not just the verdict: an open gate reads as "this one is working"
                 // until the line says otherwise, and that gap is the whole point of showing this here.
-                let effect = match open {
-                    Some(true) => "enabled, but nothing fires",
-                    _ => "cannot run against this amenbo",
+                let effect = if on.is_empty() {
+                    "cannot run against this amenbo"
+                } else {
+                    "enabled, but nothing fires"
                 };
                 human(flags, format!("    {effect}: {why}"));
             }
@@ -1700,6 +1723,14 @@ fn plugin_gate(store: &Store) -> Result<i64, CliError> {
     amenbo_core::plugin_trust::require_project(bound_project(store)).map_err(CliError::from)
 }
 
+/// Name the project a gate was moved in. Every switch is one project's (`AMB-D-434`), so the confirmation
+/// says which — "this project" is not the same sentence when `--project` named a folder you are not in.
+/// A project that will not read back is named by its ref rather than left unsaid.
+fn gate_project(store: &Store, project: i64) -> Result<String, CliError> {
+    Ok(project_name(store, Some(project))?
+        .unwrap_or_else(|| amenbo_core::idref::project(project)))
+}
+
 /// The config re-check an update runs before it replaces a build (`AMB-D-359`), handed to
 /// [`amenbo_core::plugin_update::apply`] / `apply_all` as their `approve` gate. It re-judges the **new**
 /// manifest's `required` settings the same way `plugin enable` does (`AMB-D-351`/`AMB-D-356`): if the new
@@ -1753,11 +1784,11 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
     amenbo_core::plugin_trust::enable(store, name, project, &fields, has_value)
         .map_err(CliError::from)?;
 
-    human(flags, format!("Enabled plugin: {name} (this project)"));
+    human(flags, format!("Enabled plugin: {name} ({})", gate_project(store, project)?));
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "plugin.enable", "plugin": name,
-            "enabled": true, "level": "this project",
+            "enabled": true, "project": project,
         }));
     }
     Ok(0)
@@ -1775,19 +1806,20 @@ fn plugin_disable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i3
     let was_enabled = effective_enabled_in(store, name, project).map_err(CliError::from)?;
     let stopped = disable(store, name, project).map_err(CliError::from)?;
 
+    let where_ = gate_project(store, project)?;
     human(
         flags,
         if was_enabled {
-            format!("Disabled plugin: {name} (this project)")
+            format!("Disabled plugin: {name} ({where_})")
         } else {
-            format!("Plugin already disabled: {name} (this project)")
+            format!("Plugin already disabled: {name} ({where_})")
         },
     );
     say_dropped(flags, stopped.queued);
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "plugin.disable", "plugin": name,
-            "enabled": false, "level": "this project", "noop": !was_enabled,
+            "enabled": false, "project": project, "noop": !was_enabled,
             "dropped_queued": stopped.queued,
         }));
     }

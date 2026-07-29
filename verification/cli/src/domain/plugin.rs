@@ -314,19 +314,27 @@ impl Driver {
                     .as_array()
                     .and_then(|rows| rows.iter().find(|p| p["name"].as_str() == Some(name)));
                 // With `enabled` the question is the gate, and `install ≠ enable` is exactly what a
-                // reader gets wrong — so the two are asked apart, never rolled into one answer.
+                // reader gets wrong — so the two are asked apart, never rolled into one answer. The row
+                // names the projects holding the gate open, so "open" is that list having anything in
+                // it, and the projects themselves are read back into the line.
                 match opt_bool(with, "enabled") {
                     Some(want) => {
-                        let got = row.and_then(|r| r["enabled"].as_bool());
-                        let pass = got == Some(want);
+                        let on: Option<Vec<&str>> = row.and_then(|r| {
+                            r["enabled_projects"]
+                                .as_array()
+                                .map(|ps| ps.iter().filter_map(|p| p["name"].as_str()).collect())
+                        });
+                        let pass = on.as_ref().map(|ps| !ps.is_empty()) == Some(want);
                         Ok(Outcome::assert(
                             pass,
                             format!(
-                                "plugin `{name}` gate is {} (expected {want}, {})",
-                                match got {
-                                    Some(open) => open.to_string(),
-                                    None => "not installed at all".to_string(),
+                                "plugin `{name}` fires in {} (expected {}, {})",
+                                match on.as_deref() {
+                                    Some([]) => "no project".to_string(),
+                                    Some(projects) => projects.join(", "),
+                                    None => "— it is not installed at all".to_string(),
                                 },
+                                if want { "at least one project" } else { "none" },
                                 if pass { "as expected" } else { "MISMATCH" }
                             ),
                         ))

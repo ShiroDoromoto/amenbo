@@ -4641,12 +4641,14 @@ fn a_plugins_one_switch_is_the_bound_projects() {
     cli.run(&["init", "--name", "tester"]);
     install_plugin(&cli, "slack", serde_json::json!([]));
     install_plugin(&cli, "watcher", serde_json::json!([]));
+    let here = bound_project_name(&cli);
 
     let on = cli.json(&["plugin", "enable", "slack", "--json"]);
-    assert_eq!(on["level"], "this project");
+    assert_eq!(on["enabled"], true);
+    assert!(on.get("level").is_none(), "no tier is named, because there is none: {on}");
     let listed = cli.json(&["plugin", "list", "--json"]);
     let slack = listed["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "slack").unwrap();
-    assert_eq!(slack["enabled"], true, "on in this project");
+    assert_eq!(slack["enabled_projects"][0]["name"], here.as_str(), "on in this project");
 
     // There is no second switch to reach for.
     let (_, no_scope_flag) = cli.run(&["plugin", "enable", "slack", "--scope", "project", "--json"]);
@@ -4660,8 +4662,91 @@ fn a_plugins_one_switch_is_the_bound_projects() {
     let after = cli.json(&["plugin", "list", "--json"]);
     let slack = after["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "slack").unwrap();
     let watcher = after["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "watcher").unwrap();
-    assert_eq!(slack["enabled"], false);
-    assert_eq!(watcher["enabled"], true, "the neighbour is untouched");
+    assert_eq!(slack["enabled_projects"].as_array().unwrap().len(), 0);
+    assert_eq!(
+        watcher["enabled_projects"][0]["name"],
+        here.as_str(),
+        "the neighbour is untouched"
+    );
+}
+
+/// A row names **every** project holding the switch open (`AMB-D-412`), not the one the terminal happens
+/// to stand in: a plugin left running in a project you are not looking at is exactly what a yes/no answer
+/// hides. Off nowhere at all is an answer too, and the line says so rather than going quiet.
+#[test]
+fn a_listed_plugin_names_every_project_it_fires_in() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let here = bound_project_name(&cli);
+    cli.json(&["project", "add", "--name", "外の仕事", "--json"]);
+    install_plugin(&cli, "slack", serde_json::json!([]));
+
+    cli.json(&["plugin", "enable", "slack", "--json"]);
+    // The gate names the project it was moved in — "this project" would be the wrong sentence when
+    // `--project` names a folder nobody is standing in.
+    let (said, _) = cli.run(&["--project", "外の仕事", "plugin", "enable", "slack"]);
+    assert!(said.contains("Enabled plugin: slack (外の仕事)"), "{said}");
+
+    let listed = cli.json(&["plugin", "list", "--json"]);
+    let slack = listed["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "slack").unwrap();
+    let on: Vec<&str> = slack["enabled_projects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(on, vec![here.as_str(), "外の仕事"], "both of them, in the order projects are shown");
+    assert!(slack["enabled_projects"][0]["ref"].as_str().unwrap().starts_with("AMB-P-"));
+
+    let (out, code) = cli.run(&["plugin", "list"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains(&format!("on: {here}, 外の仕事")), "the line names them: {out}");
+
+    // Closing both gates: an empty list is the answer "off everywhere", said out loud.
+    cli.json(&["plugin", "disable", "slack", "--json"]);
+    cli.json(&["--project", "外の仕事", "plugin", "disable", "slack", "--json"]);
+    let (out, _) = cli.run(&["plugin", "list"]);
+    assert!(out.contains("off everywhere"), "{out}");
+}
+
+/// An AI reads one project and never learns the others exist, and this listing is narrowed like every
+/// other one. So it must not claim "everywhere" over a list it was not shown: with its own gate closed it
+/// says which project that was, and a plugin firing next door stays out of its context entirely.
+#[test]
+fn an_ais_listing_names_its_own_project_and_claims_nothing_beyond_it() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let here = bound_project_name(&cli);
+    cli.json(&["project", "add", "--name", "外の仕事", "--json"]);
+    install_plugin(&cli, "slack", serde_json::json!([]));
+    cli.json(&["--project", "外の仕事", "plugin", "enable", "slack", "--json"]);
+
+    let listed = cli.json(&["--actor", "ai", "plugin", "list", "--json"]);
+    let slack = listed["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "slack").unwrap();
+    assert_eq!(
+        slack["enabled_projects"].as_array().unwrap().len(),
+        0,
+        "the neighbour's gate is not this AI's to read: {slack}"
+    );
+
+    let (out, code) = cli.run(&["--actor", "ai", "plugin", "list"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(!out.contains("外の仕事"), "not even the other project's name: {out}");
+    assert!(out.contains(&format!("off in {here}")), "it names what it was answered for: {out}");
+    assert!(!out.contains("off everywhere"), "a claim it cannot make from here: {out}");
+
+    // The human standing over both sees what the AI could not.
+    let (out, _) = cli.run(&["plugin", "list"]);
+    assert!(out.contains("on: 外の仕事"), "{out}");
+}
+
+/// The project this test's folder was bound to at `init` — named after the folder, so it is read back
+/// rather than spelled out.
+fn bound_project_name(cli: &Cli) -> String {
+    cli.json(&["project", "list", "--json"])["projects"][0]["name"]
+        .as_str()
+        .expect("init made exactly one project")
+        .to_string()
 }
 
 /// An open gate is not the same as a plugin that fires (`AMB-D-359`). amenbo updates underneath an
@@ -4686,7 +4771,11 @@ fn a_plugin_this_build_cannot_speak_to_is_named_in_the_listing() {
     let listed = cli.json(&["plugin", "list", "--json"]);
     let rows = listed["plugins"].as_array().unwrap();
     let slack = rows.iter().find(|p| p["name"] == "slack").unwrap();
-    assert_eq!(slack["enabled"], true, "the gate is still open — that is the whole trap");
+    assert_eq!(
+        slack["enabled_projects"].as_array().unwrap().len(),
+        1,
+        "the gate is still open — that is the whole trap"
+    );
     assert_eq!(slack["compatible"], false);
     let why = slack["incompatible_reason"].as_str().unwrap();
     assert!(why.contains("99.0.0"), "the mismatch is named, not just flagged: {why}");

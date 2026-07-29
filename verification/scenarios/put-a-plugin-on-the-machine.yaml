@@ -49,8 +49,8 @@ steps_cli:
       name: worktree
       enabled: false
 
-  # The gate. There is one switch and it is a project's, so it answers for the project the folder is
-  # bound to.
+  # The gate. There is one switch and it is a project's, so the row answers by naming the projects
+  # holding it open — here, the one this folder is bound to.
   - type: action
     domain: plugin
     op: enable

@@ -344,6 +344,7 @@ export const es: Translation = {
     "plugins.want.settings": "Ajustes que pedirá:", "plugins.want.secret": "secreto",
     "plugins.install": "Instalar", "plugins.installing": "Instalando…",
     "plugins.installNote": "Instalarlo no lo ejecuta. Lo que le deja actuar es activarlo.",
+    "plugins.landedInert": "Ya está aquí y todavía no hace nada.", "plugins.turnItOn": "Ir a activarlo",
     "plugins.installed": "Instalado", "plugins.enabledChip": "Activado",
     "plugins.disable": "Desactivar",
     "plugins.gate.onIn": "Activado en", "plugins.gate.offEverywhere": "Desactivado en todos los proyectos",

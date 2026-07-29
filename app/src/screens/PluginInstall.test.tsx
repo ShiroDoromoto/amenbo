@@ -15,9 +15,10 @@ const hoisted = vi.hoisted(() => ({
   installs: [] as PluginInstall[],
   installed: [] as string[],
   gated: [] as { name: string; projectId: number | null; enabled: boolean }[],
+  /** How many times the detail sent the reader to the installed screen. */
+  wentToInstalled: 0,
   /** What a disable answers it threw away — zero unless a test is about the discard. */
   droppedQueued: 0,
-  enableFails: null as string | null,
   projects: [] as { id: number; name: string }[],
 }));
 
@@ -42,7 +43,6 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
       return Promise.resolve(null);
     },
     setPluginEnabled: (name: string, projectId: number, enabled: boolean) => {
-      if (hoisted.enableFails) return Promise.reject(hoisted.enableFails);
       hoisted.gated.push({ name, projectId, enabled });
       return Promise.resolve({ enabled, droppedQueued: hoisted.droppedQueued });
     },
@@ -90,14 +90,6 @@ const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => 
 
 const buttons = () => Array.from(container.querySelectorAll("button"));
 const button = (label: string) => buttons().find((b) => b.textContent === label);
-/** The gate's own select: picking a project on it is the enable. */
-const gatePicker = () => container.querySelector<HTMLSelectElement>(".pluggate select")!;
-/** What a select offers, in order. */
-const options = (el: HTMLSelectElement) => Array.from(el.options).map((o) => o.textContent);
-const select = (el: HTMLSelectElement, value: string) => {
-  el.value = value;
-  el.dispatchEvent(new Event("change", { bubbles: true }));
-};
 const detail = () => container.querySelector(".plugdet");
 const open = (i: number) =>
   act(() => (Array.from(container.querySelectorAll(".feed__item"))[i] as HTMLElement).click());
@@ -108,7 +100,7 @@ beforeEach(() => {
   hoisted.installs = [];
   hoisted.installed = [];
   hoisted.gated = [];
-  hoisted.enableFails = null;
+  hoisted.wentToInstalled = 0;
   hoisted.projects = [];
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -120,7 +112,12 @@ afterEach(() => {
   container.remove();
 });
 
-const render = () => act(() => root.render(createElement(PluginMarketScreen)));
+const render = () =>
+  act(() =>
+    root.render(
+      createElement(PluginMarketScreen, { onOpenInstalled: () => hoisted.wentToInstalled++ }),
+    ),
+  );
 
 describe("installing from the market", () => {
   it("offers an install for an entry this machine does not hold, and says it will not run", async () => {
@@ -144,67 +141,35 @@ describe("installing from the market", () => {
     expect(container.textContent).toContain(t("plugins.enabledChip"));
   });
 
-  it("shows what core refused with, rather than swallowing it", async () => {
-    hoisted.projects = [{ id: 7, name: "solo" }];
-    hoisted.installs = [row({ name: "notify" })];
-    hoisted.enableFails = "plugin_signature_invalid";
-    render();
-    open(0);
-    await act(async () => { select(gatePicker(), "7"); });
-    expect(detail()!.textContent).toContain("plugin_signature_invalid");
-  });
 });
 
-describe("the one switch, and it is a project's", () => {
-  // Picking the project is the enable (`AMB-D-434`): turning a plugin on is itself the permission to run
-  // its code, so the switch moves on the pick rather than stopping to ask a second question.
-  it("enables the project picked, with nothing else asked", async () => {
+// Installing is aimed at no project (`AMB-D-412`), so the face that installs never asks about one — not
+// even after the fact, by turning the button that was pressed into the switch where it stood.
+describe("what the install face says once a plugin has landed", () => {
+  it("says it is here and runs nothing, and offers the one way on", async () => {
     hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
     hoisted.installs = [row({ name: "notify" })];
     render();
     open(0);
-    await act(async () => { select(gatePicker(), "2"); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 2, enabled: true }]);
+
+    expect(detail()!.textContent).toContain(t("plugins.installed"));
+    expect(detail()!.textContent).toContain(t("plugins.landedInert"));
+    // No project is asked for here, and no switch is moved from here.
+    expect(detail()!.querySelector("select")).toBeNull();
+
+    await act(async () => { button(t("plugins.turnItOn"))!.click(); });
+    expect(hoisted.wentToInstalled).toBe(1);
+    expect(hoisted.gated).toEqual([]);
   });
 
-  it("turns one off from beside the project it is on in", async () => {
-    hoisted.projects = [{ id: 7, name: "solo" }];
-    hoisted.installs = [row({ name: "notify", enabledProjects: [7] })];
-    render();
-    open(0);
-    await act(async () => { button(t("plugins.disable"))!.click(); });
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 7, enabled: false }]);
-  });
-
-  // The detail draws the same control the installed screen does (`AMB-D-412`), so it says where the
-  // plugin is on without being told which project to look through.
-  it("names the projects it is on in, and offers the rest", () => {
-    hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
+  // Where it is on is the row's to say (`AMB-D-412`); this face is about what exists and what is here.
+  it("says the same thing for a plugin already on somewhere", () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
     render();
     open(0);
-    expect(detail()!.textContent).toContain("alpha");
-    expect(options(gatePicker())).toEqual([t("plugins.gate.addProject"), "beta"]);
-  });
-
-  it("says so for a plugin that is on nowhere", () => {
-    hoisted.projects = [{ id: 7, name: "solo" }];
-    hoisted.installs = [row({ name: "notify" })];
-    render();
-    open(0);
-    expect(detail()!.textContent).toContain(t("plugins.gate.offEverywhere"));
-  });
-
-  // An open gate on a build amenbo cannot speak to fires nothing, so the switch says why instead of moving.
-  it("refuses to enable a plugin this build cannot speak to, and names the mismatch", () => {
-    hoisted.projects = [{ id: 7, name: "solo" }];
-    hoisted.installs = [
-      row({ name: "notify", compatible: false, incompatibleReason: "needs amenbo 9.0" }),
-    ];
-    render();
-    open(0);
-    expect(detail()!.textContent).toContain("needs amenbo 9.0");
-    expect(gatePicker().disabled).toBe(true);
+    expect(detail()!.textContent).toContain(t("plugins.landedInert"));
+    expect(detail()!.querySelector("select")).toBeNull();
   });
 });
 

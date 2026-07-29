@@ -370,7 +370,11 @@ export function AppShell() {
             />
           )}
           {nav.type === "view" && nav.id === "commands" && <CommandCatalogScreen />}
-          {nav.type === "view" && nav.id === "plugins" && <PluginMarketScreen />}
+          {nav.type === "view" && nav.id === "plugins" && (
+            <PluginMarketScreen
+              onOpenInstalled={() => navTo({ type: "view", id: "pluginsInstalled" })}
+            />
+          )}
           {nav.type === "view" && nav.id === "pluginsInstalled" && <PluginInstalledScreen />}
           {nav.type === "view" && nav.id === "settings" && <SettingsScreen />}
           {nav.type === "view" && nav.id === "onboarding" && <OnboardingScreen onNav={navTo} />}

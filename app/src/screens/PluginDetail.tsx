@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Markdown } from "../components/Markdown";
-import { PluginGate } from "../components/PluginGate";
 import { errText, formatNumber, t, tf } from "../core/i18n";
 import { openExternalUrl } from "../core/mutations";
 import {
@@ -27,12 +26,12 @@ import { installPlugin, type PluginInstall } from "../core/pluginInstalls";
 // amenbo's own key (`AMB-D-371`); a star count is a display figure, and a download count includes
 // whatever else pulls an asset, so both are read as a sense of scale and nothing more.
 
-export function PluginDetail({ entry, install, projects, onClose }: {
+export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
   entry: PluginEntry;
   /** This machine's row for this entry, or `undefined` when it is not installed. */
   install?: PluginInstall;
-  /** The projects the gate below can be moved in — the store's. */
-  projects: { id: number; name: string }[];
+  /** Go to the installed screen, which is where a plugin is turned on (`AMB-D-412`). */
+  onOpenInstalled: () => void;
   onClose: () => void;
 }) {
   const { facts, loading, error } = usePluginRepoFacts(entry.repo);
@@ -63,7 +62,7 @@ export function PluginDetail({ entry, install, projects, onClose }: {
           <button className="btn" onClick={onClose}>{t("plugins.close")}</button>
         </div>
 
-        <PluginActions entry={entry} install={install} projects={projects} />
+        <PluginActions entry={entry} install={install} onOpenInstalled={onOpenInstalled} />
 
         <div className="plugdet__desc">{entry.desc}</div>
         <div className="plugdet__meta faint">
@@ -163,28 +162,30 @@ function WhatItWants({ detail }: { detail: PluginDetailDoc }) {
 }
 
 /**
- * The two acts this screen can perform on a plugin, in the order they exist in: **install**, then
- * **enable** (`AMB-D-351`). They are drawn as two separate steps because they are two separate things —
- * installing writes a binary that runs nothing, and only enabling opens the gate it fires through.
+ * The one act this screen performs on a plugin: **install** (`AMB-D-351`). Enabling is the other act and
+ * it is not here — installing is aimed at no project, so the face that installs asks about none
+ * (`AMB-D-412`).
  *
- * Only the install half lives here: the switch is `PluginGate`, the one control the installed screen
- * draws too, so what a gate says cannot drift between the two faces.
+ * **What lands is inert**, and that is what this says once it has: the button does not turn into the
+ * switch where it stood, which would read as being asked, after the fact, where the plugin was supposed
+ * to go. What is offered instead is the one way on — the installed screen, where every plugin's switch
+ * lives.
  */
-function PluginActions({ entry, install, projects }: {
+function PluginActions({ entry, install, onOpenInstalled }: {
   entry: PluginEntry;
   install?: PluginInstall;
-  projects: { id: number; name: string }[];
+  onOpenInstalled: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (install) {
     return (
-      <PluginGate
-        install={install}
-        projects={projects}
-        lead={<span className="chip">{t("plugins.installed")}</span>}
-      />
+      <div className="plugdet__actions">
+        <span className="chip">{t("plugins.installed")}</span>
+        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.landedInert")}</span>
+        <button className="btn" onClick={onOpenInstalled}>{t("plugins.turnItOn")}</button>
+      </div>
     );
   }
 

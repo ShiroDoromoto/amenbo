@@ -327,6 +327,7 @@ export const tr: Translation = {
     "plugins.want.settings": "İsteyeceği ayarlar:", "plugins.want.secret": "gizli",
     "plugins.install": "Kur", "plugins.installing": "Kuruluyor…",
     "plugins.installNote": "Kurmak onu çalıştırmaz. Çalışmasını sağlayan şey açmaktır.",
+    "plugins.landedInert": "Burada ve henüz hiçbir şey yapmıyor.", "plugins.turnItOn": "Açmaya git",
     "plugins.installed": "Kurulu", "plugins.enabledChip": "Açık",
     "plugins.disable": "Kapat",
     "plugins.gate.onIn": "Açık olduğu projeler", "plugins.gate.offEverywhere": "Her yerde kapalı",

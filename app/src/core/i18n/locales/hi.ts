@@ -327,6 +327,7 @@ export const hi: Translation = {
     "plugins.want.settings": "जो सेटिंग यह माँगेगा:", "plugins.want.secret": "गुप्त",
     "plugins.install": "संस्थापित करें", "plugins.installing": "संस्थापित हो रहा है…",
     "plugins.installNote": "संस्थापित करने से वह चलता नहीं है। चलने देना चालू करने से होता है।",
+    "plugins.landedInert": "यह आ गया है और अभी कुछ नहीं चलाता।", "plugins.turnItOn": "इसे चालू करने चलें",
     "plugins.installed": "संस्थापित", "plugins.enabledChip": "चालू",
     "plugins.disable": "बंद करें",
     "plugins.gate.onIn": "इन प्रोजेक्ट में चालू", "plugins.gate.offEverywhere": "कहीं भी चालू नहीं",

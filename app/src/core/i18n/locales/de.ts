@@ -335,6 +335,7 @@ export const de: Translation = {
     "plugins.want.settings": "Einstellungen, nach denen es fragt:", "plugins.want.secret": "geheim",
     "plugins.install": "Installieren", "plugins.installing": "Wird installiert…",
     "plugins.installNote": "Installieren führt es nicht aus. Erst das Einschalten lässt es auslösen.",
+    "plugins.landedInert": "Es ist da und läuft noch nicht.", "plugins.turnItOn": "Einschalten gehen",
     "plugins.installed": "Installiert", "plugins.enabledChip": "Eingeschaltet",
     "plugins.disable": "Ausschalten",
     "plugins.gate.onIn": "Eingeschaltet in", "plugins.gate.offEverywhere": "Überall ausgeschaltet",

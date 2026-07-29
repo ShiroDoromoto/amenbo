@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pager, usePager } from "../components/Pager";
 import { errText, t, tn, tf } from "../core/i18n";
 import {
@@ -8,7 +8,6 @@ import {
 } from "../core/pluginCatalog";
 import { installOf, usePluginInstalls, type PluginInstall } from "../core/pluginInstalls";
 import { refreshPluginUpdates } from "../core/pluginUpdates";
-import { getSnapshot, subscribe } from "../core/snapshot";
 import { PluginDetail } from "./PluginDetail";
 
 // The plugin market — the "find one" half of the plugin section (`AMB-D-356`); managing what is
@@ -39,7 +38,10 @@ function isLayerChoice(v: string): v is PluginLayer {
 /** The orderings on offer. "Popular" is not among them: stars are fetched for one opened entry, never for a list. */
 const SORT_CHOICES: PluginSort[] = ["featured", "new", "name"];
 
-export function PluginMarketScreen() {
+export function PluginMarketScreen({ onOpenInstalled }: {
+  /** Go to the installed screen — where a plugin that just landed is turned on (`AMB-D-412`). */
+  onOpenInstalled: () => void;
+}) {
   const { catalog, loading, error } = usePluginCatalog();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -54,7 +56,6 @@ export function PluginMarketScreen() {
   // The opened entry is held by name, not as a row: the catalog can be refetched underneath, and a
   // detail must then show what the catalog now holds rather than a copy frozen at the click.
   const [openName, setOpenName] = useState<string | null>(null);
-  const projects = useSyncExternalStore(subscribe, () => getSnapshot().projects);
   // What this machine holds, drawn over the catalog by name. A separate, local read: the catalog says what
   // exists, this says what is here, and an unreachable catalog must not hide an installed plugin.
   const { installs } = usePluginInstalls();
@@ -198,7 +199,7 @@ export function PluginMarketScreen() {
         <PluginDetail
           entry={open}
           install={installOf(installs, open.name)}
-          projects={projects}
+          onOpenInstalled={onOpenInstalled}
           onClose={() => setOpenName(null)}
         />
       )}

@@ -347,6 +347,7 @@ export const pl: Translation = {
     "plugins.want.settings": "Ustawienia, o które poprosi:", "plugins.want.secret": "sekret",
     "plugins.install": "Zainstaluj", "plugins.installing": "Instalowanie…",
     "plugins.installNote": "Instalacja jej nie uruchamia. Uruchamia ją dopiero włączenie.",
+    "plugins.landedInert": "Jest już tutaj i jeszcze nic nie robi.", "plugins.turnItOn": "Przejdź, aby włączyć",
     "plugins.installed": "Zainstalowana", "plugins.enabledChip": "Włączona",
     "plugins.disable": "Wyłącz",
     "plugins.gate.onIn": "Włączona w", "plugins.gate.offEverywhere": "Wyłączona wszędzie",

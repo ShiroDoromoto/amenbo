@@ -328,6 +328,7 @@ export const zhHant: Translation = {
     "plugins.want.settings": "它會要求的設定：", "plugins.want.secret": "機密",
     "plugins.install": "安裝", "plugins.installing": "安裝中…",
     "plugins.installNote": "安裝並不會執行它。讓它觸發的是啟用。",
+    "plugins.landedInert": "已經裝好了，還什麼都不會跑。", "plugins.turnItOn": "去啟用",
     "plugins.installed": "已安裝", "plugins.enabledChip": "已啟用",
     "plugins.disable": "停用",
     "plugins.gate.onIn": "已啟用的專案", "plugins.gate.offEverywhere": "所有專案均已停用",

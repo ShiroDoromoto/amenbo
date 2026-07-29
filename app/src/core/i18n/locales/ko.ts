@@ -327,6 +327,7 @@ export const ko: Translation = {
     "plugins.want.settings": "요구할 설정:", "plugins.want.secret": "비밀값",
     "plugins.install": "설치", "plugins.installing": "설치 중…",
     "plugins.installNote": "설치한다고 실행되지는 않습니다. 실제로 동작하게 하는 것은 켜기입니다.",
+    "plugins.landedInert": "들어왔고, 아직 아무것도 하지 않습니다.", "plugins.turnItOn": "켜러 가기",
     "plugins.installed": "설치됨", "plugins.enabledChip": "켜짐",
     "plugins.disable": "끄기",
     "plugins.gate.onIn": "켜 둔 프로젝트", "plugins.gate.offEverywhere": "어디에서도 꺼짐",

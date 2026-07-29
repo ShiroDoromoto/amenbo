@@ -350,6 +350,7 @@ export const ru: Translation = {
     "plugins.want.settings": "Настройки, которые он попросит:", "plugins.want.secret": "секрет",
     "plugins.install": "Установить", "plugins.installing": "Установка…",
     "plugins.installNote": "Установка его не запускает. Сработать ему позволяет включение.",
+    "plugins.landedInert": "Он здесь и пока ничего не делает.", "plugins.turnItOn": "Перейти и включить",
     "plugins.installed": "Установлен", "plugins.enabledChip": "Включён",
     "plugins.disable": "Выключить",
     "plugins.gate.onIn": "Включён в", "plugins.gate.offEverywhere": "Выключен везде",

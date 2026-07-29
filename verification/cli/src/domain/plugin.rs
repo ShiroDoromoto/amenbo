@@ -170,6 +170,31 @@ impl Driver {
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 Ok(Outcome::action(format!("`{name}` now declares `{key}` as a secret setting")))
             }
+            // Writing what a plugin says for itself onto the manifest beside its binary — the author's
+            // `agent` block, arriving the only way it can while the scenario is not to depend on the
+            // catalog's own wording (see the registry). The block is one thing rather than a list, so a
+            // plugin that already carries one has it replaced: what the asserts after this read back is
+            // the sentence written here, whatever the catalog says today.
+            "declare-agent" => {
+                let name = req_str(with, "name")?;
+                let when = req_str(with, "when")?;
+                let path = self.session.home.join("plugins").join(name).join("manifest.json");
+                let raw = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
+                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
+                let mut agent = serde_json::json!({ "when": when });
+                // A plugin whose whole surface is observation hooks names its occasion and stops there,
+                // so a step that names no call writes no `commands` — the same shape its author would.
+                if let Some(cmd) = with.get("cmd").and_then(|v| v.as_str()) {
+                    let does = with.get("does").and_then(|v| v.as_str()).unwrap_or(cmd);
+                    agent["commands"] = serde_json::json!([{ "cmd": cmd, "does": does }]);
+                }
+                manifest["agent"] = agent;
+                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                Ok(Outcome::action(format!("`{name}` now says for itself: {when}")))
+            }
             // Standing in a program that says what it was handed, so the injection has a witness. A
             // secret reaches a run as an environment variable and nowhere else: the store never held
             // it, the log is kept clear of it, and the read that says it is set says nothing more. A
@@ -343,6 +368,83 @@ impl Driver {
                         ))
                     }
                 }
+            }
+            // The entry point as an AI meets it: `plugins` names what this folder can actually call, in
+            // the words their authors wrote. Three readings live here because they fail apart — a plugin
+            // offered when its gate is shut, a line paraphrased instead of relayed, and a command handed
+            // over in a form nobody can type are three different breakages of the same key.
+            "at-entry" => {
+                let name = req_str(with, "name")?;
+                let present = req_bool(with, "present")?;
+                // Asked as the AI, which is who the document is for: the `plugins` key is what *this
+                // folder* can call, and the folder's project is the reach an AI is held to. A human
+                // facet reaches every project at once and so has no single one whose gates could be
+                // read — the key is empty for them, honestly rather than wrongly.
+                let v = self.run_json(&["agent", "--json", "--actor", "ai"])?;
+                let entry = v["plugins"]
+                    .as_array()
+                    .and_then(|rows| rows.iter().find(|p| p["name"].as_str() == Some(name)));
+                let Some(entry) = entry else {
+                    return Ok(Outcome::assert(
+                        !present,
+                        format!(
+                            "the entry point does not offer `{name}` (expected {}, {})",
+                            if present { "offered" } else { "nothing" },
+                            if present { "MISMATCH" } else { "as expected" }
+                        ),
+                    ));
+                };
+                if !present {
+                    return Ok(Outcome::assert(
+                        false,
+                        format!("the entry point offers `{name}` (expected nothing, MISMATCH)"),
+                    ));
+                }
+                // The author's own line, verbatim. A `when` the step does not name is not asked about:
+                // a plugin whose author wrote no block is still offered, and that reading is the step
+                // that names nothing here.
+                if let Some(want) = with.get("when").and_then(|v| v.as_str()) {
+                    let said = entry["when"].as_str().unwrap_or_default();
+                    if said != want {
+                        return Ok(Outcome::assert(
+                            false,
+                            format!("`{name}` says `{said}` at the entry point (expected `{want}`, MISMATCH)"),
+                        ));
+                    }
+                }
+                // What amenbo adds: the author wrote `<cmd>`, and what an AI receives has to be a line
+                // it can type — `<the command word> plugin run <name> <cmd>`. The word in front is this
+                // build's own name, so it is read back rather than dictated.
+                if let Some(face) = with.get("cmd").and_then(|v| v.as_str()) {
+                    let tail = format!(" plugin run {name} {face}");
+                    let lines: Vec<&str> = entry["commands"]
+                        .as_array()
+                        .map(|cs| cs.iter().filter_map(|c| c["cmd"].as_str()).collect())
+                        .unwrap_or_default();
+                    let typed = lines
+                        .iter()
+                        .find(|line| line.ends_with(&tail) && line.len() > tail.len());
+                    return Ok(Outcome::assert(
+                        typed.is_some(),
+                        match typed {
+                            Some(line) => format!("`{name}` hands over `{line}` — a line to type, as expected"),
+                            None => format!(
+                                "`{name}` offers {} — none of them a call to `{face}` under this build's own name (MISMATCH)",
+                                match lines.as_slice() {
+                                    [] => "no command at all".to_string(),
+                                    ls => ls.join(", "),
+                                }
+                            ),
+                        },
+                    ));
+                }
+                Ok(Outcome::assert(
+                    true,
+                    format!(
+                        "the entry point offers `{name}` — {}, as expected",
+                        entry["desc"].as_str().unwrap_or("no description")
+                    ),
+                ))
             }
             "outdated" => {
                 let name = req_str(with, "name")?;

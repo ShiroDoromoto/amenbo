@@ -840,7 +840,7 @@ fn update_cmd(
     };
     let url = latest
         .as_ref()
-        .map(|r| r.update_url().to_string())
+        .map(|r| r.update_url())
         .unwrap_or_else(|| amenbo_core::update_check::LATEST_RELEASE_PAGE.to_string());
     let newer = latest
         .as_ref()

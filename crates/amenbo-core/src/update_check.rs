@@ -88,21 +88,29 @@ impl LatestRelease {
     /// platform's installer key ([`installer_asset_key`], e.g. `macos-arm64-pkg`), or `None` if
     /// there is none. `None` is the honest answer where no installer is shipped — macOS x64 and
     /// Linux arm64 only get the CLI archive.
+    ///
+    /// This is the manifest as published: the name a **first install** fetches. The update side of it
+    /// is [`update_named`], which [`update_url`](Self::update_url) applies.
     #[must_use]
     pub fn installer_for_current_platform(&self) -> Option<&str> {
         self.assets.get(&installer_asset_key()).map(String::as_str)
     }
 
     /// The URL the "apply the update" affordance should open: the current OS's unified installer if
-    /// there is one, else the release-notes page (`notes_url`), else the latest-release page
-    /// ([`LATEST_RELEASE_PAGE`]). This is the **installer** affordance — the CLI and GUI merely
-    /// **open** this URL in the OS's default browser; the standalone CLI's in-place swap is a separate
-    /// path ([`crate::self_update`], `amenbo update --apply`).
+    /// there is one — under its **update-download name** ([`update_named`]) — else the release-notes
+    /// page (`notes_url`), else the latest-release page ([`LATEST_RELEASE_PAGE`]). This is the
+    /// **installer** affordance — the CLI and GUI merely **open** this URL in the OS's default
+    /// browser; the standalone CLI's in-place swap is a separate path ([`crate::self_update`],
+    /// `amenbo update --apply`).
+    ///
+    /// Everyone who arrives here is updating, so the installer is taken from the update side
+    /// (`AMB-D-441`): whoever opens this already has amenbo. Only the installer is renamed — the two
+    /// fallbacks are pages, not assets, and carry no count to keep apart.
     #[must_use]
-    pub fn update_url(&self) -> &str {
+    pub fn update_url(&self) -> String {
         self.installer_for_current_platform()
-            .or(self.notes_url.as_deref())
-            .unwrap_or(LATEST_RELEASE_PAGE)
+            .map(update_named)
+            .unwrap_or_else(|| self.notes_url.as_deref().unwrap_or(LATEST_RELEASE_PAGE).to_string())
     }
 }
 
@@ -141,15 +149,33 @@ fn installer_asset_key() -> String {
     format!("{}-{kind}", current_platform_key())
 }
 
+/// The update-download name of a distribution asset: the same bytes, published a second time under
+/// the first-install name plus `-update`. GitHub reports one download count per asset, so one asset
+/// serving both audiences reports a sum, and a sum cannot be split back into its parts
+/// (`AMB-D-426`); every path that fetches or opens an asset **because there is an update** takes this
+/// side of it (`AMB-D-441`).
+///
+/// The suffix lands ahead of the whole extension, which is matched from a list rather than found by
+/// hunting for a `.`: `.tar.gz` is one extension, and a file name carries dots of its own (the
+/// version, in `amenbo_2.0.1_linux_amd64.tar.gz`), so neither the first `.` nor the last one finds
+/// the right place. The list is every shape the release publishes an update copy of — the two CLI
+/// archives and the three installers. Anything else takes the suffix at its end.
+pub(crate) fn update_named(url: &str) -> String {
+    for ext in [".tar.gz", ".zip", ".AppImage", ".exe", ".pkg"] {
+        if let Some(stem) = url.strip_suffix(ext) {
+            return format!("{stem}-update{ext}");
+        }
+    }
+    format!("{url}-update")
+}
+
 /// Resolve the update URL that an explicit user action (`amenbo update`, or the GUI's "open the
 /// installer") should open. We try regardless of the config toggle — the user asked for it, so we go
 /// and fetch — but the env kill switch (`AMENBO_UPDATE_CHECK=0`), and a failed query, both fall back
 /// to the latest-release page ([`LATEST_RELEASE_PAGE`]).
 #[must_use]
 pub fn resolve_update_url() -> String {
-    check(true)
-        .map(|r| r.update_url().to_string())
-        .unwrap_or_else(|| LATEST_RELEASE_PAGE.to_string())
+    check(true).map(|r| r.update_url()).unwrap_or_else(|| LATEST_RELEASE_PAGE.to_string())
 }
 
 /// The on-disk cache envelope: when we fetched, and what we got. It carries the fetch time so the
@@ -406,16 +432,17 @@ mod tests {
     #[test]
     fn update_url_prefers_current_installer_then_falls_back() {
         let installer_key = installer_asset_key();
-        // An installer listed for the current platform is what we return.
+        // An installer listed for the current platform is what we return — under its update name,
+        // while the manifest's own listing stays the first-install one.
         let mut assets = std::collections::BTreeMap::new();
-        assets.insert(installer_key.clone(), "https://example/installer-for-me".to_string());
+        assets.insert(installer_key.clone(), "https://example/installer-for-me.pkg".to_string());
         let r = LatestRelease {
             version: "1.0.0".into(),
             notes_url: Some("https://example/releases".into()),
             assets,
         };
-        assert_eq!(r.update_url(), "https://example/installer-for-me");
-        assert_eq!(r.installer_for_current_platform(), Some("https://example/installer-for-me"));
+        assert_eq!(r.update_url(), "https://example/installer-for-me-update.pkg");
+        assert_eq!(r.installer_for_current_platform(), Some("https://example/installer-for-me.pkg"));
 
         // With no installer for the current platform we go to notes_url — a CLI archive key alone is
         // never picked.
@@ -436,6 +463,40 @@ mod tests {
             assets: Default::default(),
         };
         assert_eq!(r.update_url(), LATEST_RELEASE_PAGE);
+    }
+
+    /// The update name of every asset the release publishes a second copy of, pinned as a table
+    /// against the names `release.yml` actually copies to. The suffix lands ahead of the whole
+    /// extension, dots inside the file name notwithstanding.
+    #[test]
+    fn update_name_goes_before_the_extension() {
+        const BASE: &str = "https://github.com/ShiroDoromoto/amenbo/releases/download/v2.2.0";
+        for (published, update) in [
+            // The three unified installers, one per OS.
+            ("amenbo-darwin-arm64.pkg", "amenbo-darwin-arm64-update.pkg"),
+            ("amenbo-app-windows-x64-setup.exe", "amenbo-app-windows-x64-setup-update.exe"),
+            ("amenbo-app-linux-x86_64.AppImage", "amenbo-app-linux-x86_64-update.AppImage"),
+            // The CLI archives, whose file name carries the version's own dots.
+            ("amenbo_2.2.0_linux_amd64.tar.gz", "amenbo_2.2.0_linux_amd64-update.tar.gz"),
+            ("amenbo_2.2.0_windows_amd64.zip", "amenbo_2.2.0_windows_amd64-update.zip"),
+        ] {
+            assert_eq!(update_named(&format!("{BASE}/{published}")), format!("{BASE}/{update}"));
+        }
+        // A URL in none of those shapes takes the suffix at its end.
+        assert_eq!(update_named("https://example.com/v1.2.3/amenbo"), "https://example.com/v1.2.3/amenbo-update");
+    }
+
+    /// Over wharfy's real manifest, the running OS's affordance opens the update copy — whichever OS
+    /// runs the test, and never the name a first install fetches.
+    #[test]
+    fn update_url_opens_the_update_copy_on_every_os() {
+        let r: LatestRelease = serde_json::from_str(WHARFY_LATEST_JSON).unwrap();
+        let Some(published) = r.installer_for_current_platform() else {
+            return; // no installer for this OS/arch: the fallbacks are pages, covered elsewhere
+        };
+        let opened = r.update_url();
+        assert_ne!(opened, published, "the first-install name is not what an update opens");
+        assert!(opened.contains("-update."), "the update copy is what gets opened: {opened}");
     }
 
     #[test]

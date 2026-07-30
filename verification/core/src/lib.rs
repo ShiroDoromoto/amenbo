@@ -335,6 +335,12 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-uninstall", required: &[], refs: &[], strings: &[], binds: false },
+    // The paste that starts this folder's AI on amenbo at every session, put where the build says it
+    // goes. amenbo hands the text over and never writes that file, so somebody has to do it for the
+    // road to carry on — the driver stands in for the hand that pastes, the way `write-file` stands
+    // in for a file a person already had. `tool` is the provider, by the name the build's own
+    // catalog answers to.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "wire-ai", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     // A plugin's life on this machine. `install` fetches it from the catalog and `enable` opens its
     // gate — two separate acts on purpose, since an installed plugin that never fires is the normal
     // state. `run` calls the command face: `command` is the word the plugin's own face takes, `task`
@@ -487,6 +493,21 @@ const REGISTRY: &[OpSpec] = &[
     // The repository-side gates: what the lint found in a file, and what is in a hook slot.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "lint", required: &["path", "hits"], refs: &[], strings: &["path"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "hooks", required: &["hook", "state"], refs: &[], strings: &["hook", "state"], binds: false },
+    // Whether anything in this folder starts its AI on amenbo at session start (`wired`), and — while
+    // nothing does — which provider the folder is told about by name (`tool`). The two are one
+    // question asked from either end: the answer amenbo carries on every response until the paste
+    // lands, and the silence that follows it.
+    //
+    // `wired` is the whole vocabulary here. A folder is wired or it is not: whether the hook then
+    // fires, and whether what it injects reaches the model, is outside amenbo, so nothing here says
+    // enabled and nothing says it works.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch", required: &["wired"], refs: &[], strings: &["tool"], binds: false },
+    // The text handed over to make that happen: what it carries (`carries` — the launch instruction,
+    // which is the one part of it that is not the provider's own shape) and the file it says to put
+    // it in (`paste_into`). What is under test is the handing over, since amenbo's whole part in this
+    // is the text: a snippet that named the wrong file, or that injected something other than the
+    // launch instruction, would leave a reader pasting in good faith and no better off.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-text", required: &["tool", "carries"], refs: &[], strings: &["tool", "carries", "paste_into"], binds: false },
     // A project as it is read back: one row's fields, and whether it is in the listing at all (and
     // where). `archived: true` asks the listing that carries the archived ones.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },

@@ -284,7 +284,10 @@ wrote. The files land in the run's own throwaway space and go with it.
 One domain is not in the store at all. **`repo`** is the folder the run works in: `write-file` puts
 a file there (what an attachment ingests, what the lint is pointed at), `copy-fixture` puts one
 there from `fixtures/`, and `git-init` makes the folder a git repository, which is the only way the
-hook slots are real enough to write into. All of it stays inside the run's own throwaway folder — a
+hook slots are real enough to write into. `wire-ai` is the same kind of stand-in one tier up: amenbo
+hands over the text that starts a folder's AI on it and writes no settings file itself, so the road
+past that point exists only if someone pastes — and it pastes what the build under test handed over,
+into the file that build named. All of it stays inside the run's own throwaway folder — a
 path that is absolute, or that climbs out with `..`, is refused.
 
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store

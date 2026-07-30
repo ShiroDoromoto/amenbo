@@ -7,7 +7,7 @@ use std::process::Command;
 
 use amenbo_scenario::{Args, Domain};
 
-use crate::{req_str, unmapped, Driver, Outcome};
+use crate::{req_bool, req_str, unmapped, Driver, Outcome};
 
 impl Driver {
     pub(crate) fn repo_action(&mut self, op: &str, with: &Args) -> Result<Outcome, String> {
@@ -76,6 +76,23 @@ impl Driver {
                 ])?;
                 Ok(Outcome::action("made the run's folder a git repository on `main`".to_string()))
             }
+            // The paste itself. amenbo hands the text over and writes no settings file, so this is
+            // the hand that takes it — and it takes both halves of the answer from the build under
+            // test: the text, and the file the build says it goes in. Writing either of them down
+            // here instead would leave the road wired by the driver's own idea of the provider,
+            // which is the one thing this step must not be the judge of.
+            "wire-ai" => {
+                let tool = req_str(with, "tool")?;
+                let v = self.run_json(&["agent-hook", "snippet", tool, "--json"])?;
+                let into = v["paste_into"].as_str().ok_or("the snippet does not say where it goes")?;
+                let snippet = v["snippet"].as_str().ok_or("the snippet came back with no text")?;
+                let full = self.in_session(into)?;
+                if let Some(dir) = full.parent() {
+                    std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+                }
+                std::fs::write(&full, snippet).map_err(|e| format!("could not write {into}: {e}"))?;
+                Ok(Outcome::action(format!("pasted what {tool} was handed into {into}")))
+            }
             verb @ ("hooks-install" | "hooks-uninstall") => {
                 let sub = verb.trim_start_matches("hooks-");
                 self.run_json(&["hooks", sub, "--yes", "--json"])?;
@@ -130,6 +147,67 @@ impl Driver {
                     pass,
                     format!(
                         "hook `{hook}` is {state} (expected {want}, {})",
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            // Whether this folder starts its AI on amenbo, read off the report amenbo carries on
+            // every response until it does. There is no command that answers this on its own, and
+            // that is the design: the answer travels on whatever the reader was already running, so
+            // it reaches an AI that never thought to ask.
+            "ai-launch" => {
+                let wired = req_bool(with, "wired")?;
+                let named = with.get("tool").and_then(|v| v.as_str());
+                let v = self.run_json(&["task", "list", "--json"])?;
+                let report = &v["setup_incomplete"]["agent_hook"];
+                // A folder with nothing left to finish is told nothing at all, so the report going
+                // silent is how it says the paste landed; while it stands, `any_wired` is the same
+                // fact from the other end.
+                let is_wired = report.is_null() || report["any_wired"].as_bool() == Some(true);
+                let points_at = named.is_none_or(|tool| {
+                    report["unwired"]
+                        .as_array()
+                        .is_some_and(|all| all.iter().any(|one| one["tool"].as_str() == Some(tool)))
+                });
+                let pass = is_wired == wired && points_at;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "this folder {} its AI on amenbo{} (expected {}, {})",
+                        if is_wired { "starts" } else { "does not start" },
+                        match named {
+                            Some(tool) if points_at => format!(", and {tool} is named as unwired"),
+                            Some(tool) => format!(", and {tool} is not among the ones it names"),
+                            None => String::new(),
+                        },
+                        if wired { "wired" } else { "unwired" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            // The text that closes the gap, read from the face that hands it over. The file it names
+            // is checked beside what it carries, because the two only work together: text pasted
+            // somewhere the provider does not read leaves the folder exactly as unwired as before,
+            // and the reader with no way of telling.
+            "ai-launch-text" => {
+                let tool = req_str(with, "tool")?;
+                let carries = req_str(with, "carries")?;
+                let into = with.get("paste_into").and_then(|v| v.as_str());
+                let v = self.run_json(&["agent-hook", "snippet", tool, "--json"])?;
+                let snippet = v["snippet"].as_str().unwrap_or_default();
+                let paste_into = v["paste_into"].as_str().unwrap_or_default();
+                let carried = snippet.contains(carries);
+                let placed = into.is_none_or(|want| want == paste_into);
+                let pass = carried && placed;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "the text for {tool} {} `{carries}` and goes in {paste_into}{} ({})",
+                        if carried { "carries" } else { "does NOT carry" },
+                        match into {
+                            Some(want) if !placed => format!(" (expected {want})"),
+                            _ => String::new(),
+                        },
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))

@@ -12,10 +12,10 @@ path = "src/main.rs"
 
 [features]
 default = []
-# `cli_e2e` forks the built `amenbo` binary once per test (30 tests, ~1–2s each) — heavy by
-# *attribute*, not by logic. Gate it behind an off-by-default feature so the everyday `cargo test`
-# stays fast; CI runs it via `--features e2e`. A feature-gated test rots unless CI runs every feature
-# (see .github/workflows/ci.yml).
+# The real-binary suites (`cli_e2e`, `demo_tape`, `cli_ask`) fork the built `amenbo` binary once per
+# test (~1–2s each) — heavy by *attribute*, not by logic. Gate them behind an off-by-default feature
+# so the everyday `cargo test` stays fast; CI runs them via `--features e2e`. A feature-gated test
+# rots unless CI runs every feature (see .github/workflows/ci.yml).
 e2e = []
 
 [dependencies]
@@ -51,4 +51,10 @@ required-features = ["e2e"]
 # types, so it sits behind the same gate for the same reason.
 [[test]]
 name = "demo_tape"
+required-features = ["e2e"]
+
+# The questions amenbo puts on a terminal, driven on a real one (a pty). Same gate as the rest of the
+# real-binary suites, and Unix-only inside — a pty is what the platform hands out.
+[[test]]
+name = "cli_ask"
 required-features = ["e2e"]

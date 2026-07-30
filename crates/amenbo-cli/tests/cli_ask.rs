@@ -61,14 +61,19 @@ impl Ask {
 
     /// The same run, on a terminal, with `answers` typed into it a line at a time.
     ///
-    /// An **empty** `answers` is the other half of what this exists to walk: the terminal is closed
-    /// with nothing said, which is the end-of-input a question meets when the reader walks away or a
-    /// script closes their stdin. It is not a `no`, and this is the only way to put that to the
-    /// binary at all.
+    /// An **empty** `answers` is the other half of what this exists to walk: the end of input a
+    /// question meets when the reader walks away, which is not a `no` and cannot be put to the binary
+    /// any other way. It is sent as the `^D` a reader presses, and the terminal is left standing.
     ///
-    /// The terminal stays open while the run finishes, so a question is not answered by the stream
-    /// disappearing under it; [`ANSWER_TIMEOUT`] is what stops a run that wanted more than it was
-    /// given from hanging the suite.
+    /// **Taking the terminal away is not the same thing, and does not work.** Closing the writing end
+    /// hangs the other one up, and a hung-up terminal stops answering as one — Linux fails the
+    /// `tcgetattr` behind `is_terminal()` with `EIO` — so the run stops being interactive *before* the
+    /// question is put, and what the test then reads is the ordinary unattended face. Locally that
+    /// came out green (macOS answers the hung-up end), and it went red on CI (`AMB-T-2479`).
+    ///
+    /// `^D` is written after the answers too, so a build that asks for more than a test undertook to
+    /// answer meets an end of input rather than a terminal nobody is typing at.
+    /// [`ANSWER_TIMEOUT`] is the backstop for whatever that leaves waiting.
     fn asked(&self, args: &[&str], answers: &[&str]) -> (String, String, i32) {
         use std::fs::File;
         use std::os::fd::FromRawFd;
@@ -87,13 +92,14 @@ impl Ask {
             .expect("failed to run the binary");
 
         let mut terminal = Some(unsafe { File::from_raw_fd(master) });
-        if answers.is_empty() {
-            // Nothing to say: closing this end is the end of input the question meets.
-            terminal = None;
-        } else if let Some(tty) = terminal.as_mut() {
+        if let Some(tty) = terminal.as_mut() {
             for answer in answers {
                 writeln!(tty, "{answer}").expect("could not type the answer");
             }
+            // The end of input, as a terminal delivers one: at the start of a line, `^D` is what makes
+            // the read come back with nothing. The stream stays a terminal throughout, which is the
+            // difference between walking this branch and never reaching it (see above).
+            tty.write_all(&[0x04]).expect("could not end the input");
             tty.flush().ok();
         }
 

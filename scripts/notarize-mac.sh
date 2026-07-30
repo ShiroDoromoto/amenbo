@@ -16,7 +16,7 @@
 #
 # BOTH are notarized, and the .app is notarized FIRST, because the two travel by
 # different routes: the .pkg is the installer, while the .app is separately tarred as
-# the updater artifact (amenbo-darwin-<arch>.app.tar.gz) that the GUI self-update
+# the updater artifact (amenbo-darwin-<arch>-update.app.tar.gz) that the GUI self-update
 # consumes. A ticket stapled only to the .pkg would leave every self-update
 # unstapled. Ordering rule the Makefile depends on: staple the .app BEFORE it is
 # packaged or tarred, so both copies carry the ticket.

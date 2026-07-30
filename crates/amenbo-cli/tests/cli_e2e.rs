@@ -4309,6 +4309,50 @@ fn lint_outside_a_repository_says_so_plainly() {
     assert_eq!(code, 0, "lint needs no repository to read piped text");
 }
 
+/// `agent-hook snippet` hands over a paste, and stdout carries nothing but it: the text is meant to reach
+/// a settings file through a pipe or a redirect, and one courtesy line landing in there with it is a file
+/// the provider will not parse. amenbo's own voice — where it goes, and that amenbo did not put it there —
+/// is on stderr (`AMB-D-440`).
+#[test]
+fn agent_hook_snippet_gives_stdout_to_the_paste_and_says_where_it_goes_on_stderr() {
+    let cli = Cli::new();
+
+    let (out, err, code) = cli.run_both(&["agent-hook", "snippet", "claude-code"]);
+    assert_eq!(code, 0, "{err}");
+    let pasted: Value = serde_json::from_str(&out)
+        .unwrap_or_else(|e| panic!("stdout is not the settings file alone: {e}\n{out}"));
+    assert!(pasted["hooks"]["SessionStart"].is_array(), "the paste is not the wiring: {out}");
+    assert!(out.contains(" agent --json"), "the snippet does not launch the entry point: {out}");
+    assert!(err.contains(".claude/settings.json"), "stderr does not name the file to paste into: {err}");
+    assert!(
+        err.contains("does not write it"),
+        "stderr does not say the writing is the human's: {err}"
+    );
+
+    // A tool nobody lists is refused where the argument is read, naming what it takes — so the answer to
+    // "which ones are there" is the refusal itself, and no branch further in has to hold a second list.
+    let (err, code) = cli.run_err(&["agent-hook", "snippet", "my-editor"]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("claude-code") && err.contains("gemini-cli"), "the refusal lists no tools: {err}");
+}
+
+/// The `--json` face carries the same paste plus the file it goes in, which is what lets an AI hand both
+/// to the human in one message. `copied` says which route the text took.
+#[test]
+fn agent_hook_snippet_json_carries_the_paste_and_its_destination() {
+    let cli = Cli::new();
+
+    let doc = cli.json(&["agent-hook", "snippet", "cursor", "--json"]);
+    assert_eq!(doc["tool"], "cursor");
+    assert_eq!(doc["label"], "Cursor");
+    assert_eq!(doc["paste_into"], ".cursor/hooks.json");
+    assert_eq!(doc["copied"], false);
+    assert!(
+        doc["snippet"].as_str().is_some_and(|s| s.contains(" agent --json")),
+        "the document carries no snippet: {doc}"
+    );
+}
+
 /// The lint-hook probe asks git where the hooks live, and that one spawn rides every amenbo command. What
 /// is held here is the **count**, counted by putting a `git` on `PATH` that logs each call and delegates to
 /// the real one — not a wall-clock number, because the cost is process startup, which says more about the

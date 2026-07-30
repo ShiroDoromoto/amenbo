@@ -346,27 +346,34 @@ jobs:
             exit 1
           fi
 
-      # The automatic update fetches its own copy of the Windows and Linux installers, under a name no
-      # new install ever asks for, so the two audiences land on two assets. GitHub reports one download
-      # count per asset: an asset both audiences pull reports a sum, and a sum cannot be split back into
-      # its parts afterwards. The bytes and the detached minisign signature are copied unchanged — a
-      # signature covers content, so it still verifies, and the copy's .sig matching the new-install
-      # one is what says the two are the same build. macOS has no copy to make: its updater archive is
-      # a separate artifact from the .pkg a new install downloads, and it carries the `-update` name of
-      # its own accord, so the naming rule holds on every platform without a copy here.
+      # The automatic update fetches its own copy of every GUI installer, under a name no new install
+      # ever asks for, so the two audiences land on two assets. GitHub reports one download count per
+      # asset: an asset both audiences pull reports a sum, and a sum cannot be split back into its parts
+      # afterwards. The bytes are copied unchanged, and so is the detached minisign signature where
+      # there is one — a signature covers content, so it still verifies, and the copy's .sig matching
+      # the new-install one is what says the two are the same build. The mac .pkg has no detached
+      # signature: what vouches for it is the notarization ticket stapled inside the bytes, which the
+      # copy carries with it. (The mac updater ARCHIVE is not copied here — it is a separate artifact
+      # from the installer to begin with, and is built under its own `-update` name.)
       - name: Copy the GUI installers to their update-download names
         run: |
           set -euo pipefail
           pairs=(
             "amenbo-app-windows-x64-setup.exe:amenbo-app-windows-x64-setup-update.exe"
             "amenbo-app-linux-x86_64.AppImage:amenbo-app-linux-x86_64-update.AppImage"
+            "amenbo-darwin-arm64.pkg:amenbo-darwin-arm64-update.pkg"
+            "amenbo-darwin-amd64.pkg:amenbo-darwin-amd64-update.pkg"
           )
           for pair in "${pairs[@]}"; do
             src="dist/${pair%%:*}"
             dst="dist/${pair#*:}"
             cp "$src" "$dst"
-            cp "${src}.sig" "${dst}.sig"
-            echo "→ ${dst} (+ .sig)"
+            if [ -f "${src}.sig" ]; then
+              cp "${src}.sig" "${dst}.sig"
+              echo "→ ${dst} (+ .sig)"
+            else
+              echo "→ ${dst}"
+            fi
           done
 
       # The CLI archives split the same way, for the same reason: install.sh fetches one and `amenbo
@@ -431,6 +438,7 @@ jobs:
             dist/amenbo-app-windows-x64-setup-update.exe dist/amenbo-app-windows-x64-setup-update.exe.sig \
             dist/amenbo-app-linux-x86_64.AppImage.sig \
             dist/amenbo-app-linux-x86_64-update.AppImage dist/amenbo-app-linux-x86_64-update.AppImage.sig \
+            dist/amenbo-darwin-arm64-update.pkg dist/amenbo-darwin-amd64-update.pkg \
             dist/latest-tauri.json \
             --clobber
 
@@ -438,9 +446,9 @@ jobs:
       # never sees them — leaving them the only release assets without build provenance. wharfy verify
       # (and the weekly rot check) flags any partly-attested release red (attest_unverified), so attest
       # these here too, with the same keyless OIDC identity, bound to the exact bytes just uploaded.
-      # (What a new install downloads on Windows and Linux — the setup.exe and the AppImage — is a
-      # wharfy-declared bundle and is already attested; what rides via gh is each one's detached .sig
-      # and the update-named copy, so those are the ones listed here.)
+      # (What a new install downloads — the setup.exe, the AppImage, the two .pkg — is a wharfy-declared
+      # bundle and is already attested; what rides via gh is each one's detached .sig and the
+      # update-named copy, so those are the ones listed here.)
       - name: Attest the gh-attached updater artifacts
         uses: actions/attest-build-provenance@v4
         with:
@@ -455,6 +463,8 @@ jobs:
             dist/amenbo-app-linux-x86_64.AppImage.sig
             dist/amenbo-app-linux-x86_64-update.AppImage
             dist/amenbo-app-linux-x86_64-update.AppImage.sig
+            dist/amenbo-darwin-arm64-update.pkg
+            dist/amenbo-darwin-amd64-update.pkg
             dist/cli-update/*-update.tar.gz
             dist/cli-update/*-update.zip
             dist/latest-tauri.json
@@ -504,6 +514,7 @@ jobs:
             "amenbo-app-windows-x64-setup-update.exe" "amenbo-app-windows-x64-setup-update.exe.sig"
             "amenbo-app-linux-x86_64.AppImage.sig"
             "amenbo-app-linux-x86_64-update.AppImage" "amenbo-app-linux-x86_64-update.AppImage.sig"
+            "amenbo-darwin-arm64-update.pkg" "amenbo-darwin-amd64-update.pkg"
             "latest-tauri.json"
           )
           # The update-named CLI archives, as the copy step recorded them (wharfy names the originals,

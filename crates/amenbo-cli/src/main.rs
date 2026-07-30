@@ -2409,7 +2409,8 @@ fn plugin_uninstall_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<
 /// (`AMB-D-353`).
 ///
 /// **This command's stdout belongs to the plugin.** No courtesy line of amenbo's is printed there: the
-/// return value is meant to be consumed (`eval "$(…)"`), and anything mixed in would corrupt it. amenbo's
+/// return value is meant to be consumed (`eval "$(…)"`, `iex (…)`), and anything mixed in would corrupt
+/// it — in either shell, since the line is written to go through both (`AMB-D-444`). amenbo's
 /// own voice goes to stderr, where the plugin's diagnostics are relayed too — first, so they read as
 /// context ahead of the value rather than commentary after it. Under `--json` stdout is the document, as
 /// everywhere else, and the return value rides inside it.

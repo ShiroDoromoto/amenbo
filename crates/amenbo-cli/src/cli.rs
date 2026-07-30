@@ -431,7 +431,9 @@ pub enum PluginCmd {
     /// The other face runs itself: an observation hook fires on an event, asynchronously, and nobody waits
     /// for it. This one you call, and you get an answer — **the plugin's stdout is this command's stdout,
     /// verbatim**, so a plugin that returns a directory to enter drops straight into a shell:
-    /// `eval "$(amenbo plugin run worktree start 123)"`. Its stderr — the human-facing diagnostics — is
+    /// `eval "$(amenbo plugin run worktree start 123)"`, or `iex (amenbo plugin run worktree start 123)`
+    /// in PowerShell — the line a plugin returns is written to go through either (`AMB-D-444`), because
+    /// amenbo hands it over without knowing which shell asked. Its stderr — the human-facing diagnostics — is
     /// relayed to stderr, and a plugin that exits non-zero is a failed call whose return value is
     /// discarded rather than handed on (`AMB-D-354`).
     ///

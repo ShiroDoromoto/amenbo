@@ -26,7 +26,7 @@
 //! and consumer-owned, so integrity here rests on TLS (as the first install does); the signed
 //! `latest-tauri.json` is the GUI updater's manifest, not this one's.
 
-use crate::update_check::{current_platform_key, LatestRelease};
+use crate::update_check::{current_platform_key, update_named, LatestRelease};
 use std::path::{Path, PathBuf};
 
 /// Cap on the archive download. The CLI archive is a single vendored binary (tens of MB); this ceiling
@@ -164,27 +164,12 @@ pub fn linux_system_orphan_present() -> bool {
 
 /// The CLI archive URL for the running platform, aimed at the copy an update downloads.
 ///
-/// The manifest's `os-arch` (suffix-less) key lists what a **first install** fetches. The release
-/// carries a second copy of those same bytes under that name plus `-update`, and this is the side an
-/// update takes: GitHub reports one download count per asset, so one asset serving both audiences
-/// reports a sum, and a sum cannot be split back into its parts. `None` when this platform is not
-/// listed.
+/// The manifest's `os-arch` (suffix-less) key lists what a **first install** fetches; the release
+/// carries a second copy of those same bytes under the update name, and that is the side an update
+/// takes ([`update_named`]). `None` when this platform is not listed.
 #[must_use]
 pub fn cli_archive_url(latest: &LatestRelease) -> Option<String> {
     latest.assets.get(&current_platform_key()).map(|url| update_named(url))
-}
-
-/// Put the `-update` suffix ahead of a URL's archive extension. The two forms the CLI archive takes
-/// are matched whole rather than by hunting for a `.`: `.tar.gz` is one extension, and the version
-/// sits in the file name carrying dots of its own (`amenbo_2.0.1_linux_amd64.tar.gz`), so neither the
-/// first `.` nor the last one finds the right place. Anything else takes the suffix at its end.
-fn update_named(url: &str) -> String {
-    for ext in [".tar.gz", ".zip"] {
-        if let Some(stem) = url.strip_suffix(ext) {
-            return format!("{stem}-update{ext}");
-        }
-    }
-    format!("{url}-update")
 }
 
 /// Download the CLI archive, verify it is newer, extract the `amenbo` binary, and swap it into the
@@ -447,22 +432,6 @@ mod tests {
 
         let empty = LatestRelease { version: "9.9.9".into(), notes_url: None, assets: BTreeMap::new() };
         assert_eq!(cli_archive_url(&empty), None);
-    }
-
-    /// The suffix lands ahead of the whole extension: the version's own dots sit in the same file
-    /// name, so a split hunting for a `.` would cut inside it.
-    #[test]
-    fn update_name_goes_before_the_extension() {
-        assert_eq!(
-            update_named("https://github.com/o/r/releases/download/v2.0.1/amenbo_2.0.1_linux_amd64.tar.gz"),
-            "https://github.com/o/r/releases/download/v2.0.1/amenbo_2.0.1_linux_amd64-update.tar.gz"
-        );
-        assert_eq!(
-            update_named("https://github.com/o/r/releases/download/v2.0.1/amenbo_2.0.1_windows_amd64.zip"),
-            "https://github.com/o/r/releases/download/v2.0.1/amenbo_2.0.1_windows_amd64-update.zip"
-        );
-        // A URL in neither archive form takes the suffix at its end.
-        assert_eq!(update_named("https://example.com/v1.2.3/amenbo"), "https://example.com/v1.2.3/amenbo-update");
     }
 
     /// A version that is not newer than the running build declines as `UpToDate` — the downgrade guard

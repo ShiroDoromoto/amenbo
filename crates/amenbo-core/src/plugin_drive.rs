@@ -113,6 +113,46 @@ pub fn drive_persisted(
     Ok(Delivered { cursor: fanned.cursor, runners, replies, gapped: fanned.gapped })
 }
 
+/// What a flush moved: the drive it made, and what each queue it worked got through (`AMB-T-2470`).
+///
+/// Carries a [`Delivered`], so it inherits that type's one obligation — the `replies` inside it already ran
+/// and are somebody's answer to surface.
+#[must_use = "surface the replies inside `delivered`"]
+pub struct Flushed {
+    /// The drive itself — where the fan-out reached, the replies it gathered, whether a gap was hit. Its
+    /// `runners` are the queues this flush worked, since the launcher was the one that works them here.
+    pub delivered: Delivered,
+    /// One report per queue worked, in the order they were worked. A plugin whose lease was already held by a
+    /// live runner is not among them: nothing was taken off its queue here, and saying otherwise would credit
+    /// this flush with another runner's work.
+    pub worked: Vec<crate::plugin_runner::Worked>,
+}
+
+/// Drive the dispatcher and work every queue **to its end, in this process** — the explicit flush
+/// (`AMB-T-2470`).
+///
+/// Delivery otherwise rides along with whatever the user was actually doing: a drive fans the outbox out and
+/// starts a runner *process* per queue, because the command it rode in on must not be made to wait
+/// ([`drive_persisted`]). That leaves nothing anybody can ask for on purpose — a queue with a dead runner
+/// behind it waits for the next write, and the only way to push it was to run some unrelated command and hope
+/// the startup kick caught it.
+///
+/// This is that ask, and the difference is the launcher: [`HereRunner`](crate::plugin_runner::HereRunner)
+/// works each queue before it returns, so the caller can be told what moved. Everything else is the drive
+/// both faces make — same cursor, same fan-out transaction, same lease, same execution log — and the fan-out
+/// runs unconditionally rather than only when something was left standing ([`resume_persisted`]): a caller
+/// asking for a flush is not asking whether one is due.
+pub fn flush_persisted(
+    engine: &StoreEngine,
+    face: Face,
+    subs: &dyn Subscribers,
+    log: Option<&std::path::Path>,
+) -> Result<Flushed> {
+    let here = crate::plugin_runner::HereRunner::new(engine, subs, log);
+    let delivered = drive_persisted(engine, face, subs, Some(&here), log)?;
+    Ok(Flushed { delivered, worked: here.worked() })
+}
+
 /// Whether a previous run left delivery half-finished — **read-only, and asked of both layers**
 /// (`AMB-D-399`).
 ///
@@ -315,6 +355,54 @@ mod tests {
             ["stalled"],
             "a runner was launched for the queue nobody was working"
         );
+    }
+
+    /// A flush works the queues **before it returns** and says what left each one (`AMB-T-2470`): what an
+    /// ordinary drive hands to a process nobody watches is done here instead, which is the whole of what
+    /// makes it reportable. A row leaves the queue whether or not its plugin ran — a delivery that failed is
+    /// dropped, not retried (`AMB-D-399`) — so the count is what came off the queue, not what succeeded.
+    #[test]
+    fn a_flush_works_the_queues_here_and_says_what_left_them() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        emit(&e, "task.created", 1);
+        emit(&e, "task.created", 2);
+
+        let subs = Fixed { events: vec!["task.created"], invocation: bogus() };
+        let flushed = flush_persisted(&e, Face::Cli, &subs, None).unwrap();
+
+        assert_eq!(flushed.delivered.runners, ["fixed"], "the queue it worked is the one it took the lease on");
+        assert_eq!(flushed.worked.len(), 1, "one report per queue worked");
+        assert_eq!(flushed.worked[0].plugin, "fixed");
+        assert_eq!(flushed.worked[0].delivered, 2, "both rows came off the queue");
+        assert_eq!(flushed.worked[0].left, 0, "and it is empty by the time the flush returns");
+        assert!(
+            crate::store_engine::queued_plugins(e.conn()).unwrap().is_empty(),
+            "nothing is left waiting anywhere"
+        );
+    }
+
+    /// A queue a live runner already holds is left to it, and reported by nobody: taking it over would put
+    /// two runners on one queue, which is what the lease exists to prevent (`AMB-D-399`). The flush is not an
+    /// error for it — the runner holding it is the one that will carry the rows out.
+    #[test]
+    fn a_flush_leaves_a_queue_a_live_runner_is_on() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        // Deliver first, so the queue below is the only thing standing.
+        emit(&e, "task.created", 1);
+        let _ = drive_persisted(&e, Face::Cli, &NoSubscribers, None, None).unwrap();
+        queue(&e, "busy", 1);
+        let tx = e.write().unwrap();
+        let now = crate::time::Timestamp::now();
+        assert!(tx
+            .claim_runner("busy", "someone-else", "9999-01-01T00:00:00Z", &now.to_rfc3339_z())
+            .unwrap());
+        tx.commit().unwrap();
+
+        let flushed = flush_persisted(&e, Face::Cli, &NoSubscribers, None).unwrap();
+
+        assert!(flushed.worked.is_empty(), "another runner's work is not this flush's to report");
+        assert!(flushed.delivered.runners.is_empty(), "and no lease was taken");
+        assert_eq!(drained(&e, "busy").len(), 1, "the row is still there, for the runner that holds it");
     }
 
     /// A store that never drove carries no cursor, read back as `0`.

@@ -171,6 +171,79 @@ impl RunnerLauncher for SelfRunner {
     }
 }
 
+/// What working one queue **here** got through (`AMB-T-2470`) — the report a launcher that ran the queue
+/// itself can give, and the one a launcher that started a process cannot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Worked {
+    /// The plugin whose queue this is.
+    pub plugin: String,
+    /// How many rows left the queue — delivered, or resolved to nobody and dropped. Success is not counted
+    /// here and cannot be: a failed run takes its row off the queue too (`AMB-D-399`), and how each one
+    /// ended is the execution log's answer (`AMB-D-361`).
+    pub delivered: i64,
+    /// What is still queued now the runner has left. Zero is a queue worked to its end; anything else is a
+    /// runner that stopped short — its lease taken over, or a store that would not read — and the log says
+    /// which.
+    pub left: i64,
+}
+
+/// A launcher that works the queue **in this process**, instead of starting a runner that outlives the
+/// caller (`AMB-T-2470`).
+///
+/// [`SelfRunner`] is the shape delivery takes on its own: a drive rides along with whatever command the user
+/// actually ran, so it must not make that command wait, and a runner is therefore a process nobody watches.
+/// This is the other shape, for the caller whose whole purpose *is* the delivery — it asked for the queues to
+/// be pushed through, so it has something to wait for and something to report.
+///
+/// Everything else about the run is the same: [`start`] claims the lease before it calls a launcher and gives
+/// it back if the launch fails, and [`run_queue`] holds, extends and releases it under that same owner. What
+/// differs is only that the queue is worked before `launch` returns, which is what lets the counts be taken
+/// on either side of it.
+pub struct HereRunner<'a> {
+    engine: &'a StoreEngine,
+    subs: &'a dyn Subscribers,
+    log: Option<&'a Path>,
+    worked: std::cell::RefCell<Vec<Worked>>,
+}
+
+impl<'a> HereRunner<'a> {
+    /// A launcher over the store the drive is on, resolving subscribers the way that drive does, recording
+    /// every run in `log`.
+    pub fn new(
+        engine: &'a StoreEngine,
+        subs: &'a dyn Subscribers,
+        log: Option<&'a Path>,
+    ) -> Self {
+        Self { engine, subs, log, worked: std::cell::RefCell::new(Vec::new()) }
+    }
+
+    /// What the queues this launcher was handed got through, in the order they were worked.
+    pub fn worked(self) -> Vec<Worked> {
+        self.worked.into_inner()
+    }
+}
+
+impl RunnerLauncher for HereRunner<'_> {
+    /// Work `plugin`'s queue to its end under `owner`'s lease, counting what left it.
+    ///
+    /// The count is taken from the queue itself rather than from the run: `delivered` is how much shorter the
+    /// queue is once the runner has left, which is the one number that stays true whichever way each row went
+    /// (`AMB-D-399` drops a failed row too). A count that will not read is reported as nothing having moved —
+    /// this is a report, and failing the flush over the reading of a number would deny the caller the work
+    /// that was actually done.
+    fn launch(&self, plugin: &str, owner: &str) -> std::io::Result<()> {
+        let before = queued_count(self.engine.conn(), plugin).unwrap_or(0);
+        run_queue(self.engine, self.subs, plugin, owner, self.log);
+        let left = queued_count(self.engine.conn(), plugin).unwrap_or(0);
+        self.worked.borrow_mut().push(Worked {
+            plugin: plugin.to_string(),
+            delivered: (before - left).max(0),
+            left,
+        });
+        Ok(())
+    }
+}
+
 /// Collect `child` on a thread of its own — a launcher's only reason to hold a thread at all.
 ///
 /// A parent that never waits leaves a zombie behind on Unix for as long as *it* lives, and a long-lived face

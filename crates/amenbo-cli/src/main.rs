@@ -840,7 +840,7 @@ fn update_cmd(
     };
     let url = latest
         .as_ref()
-        .map(|r| r.update_url().to_string())
+        .map(|r| r.update_url())
         .unwrap_or_else(|| amenbo_core::update_check::LATEST_RELEASE_PAGE.to_string());
     let newer = latest
         .as_ref()
@@ -1193,6 +1193,7 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         PluginCmd::Uninstall { name } => plugin_uninstall_cmd(store, flags, &name),
         PluginCmd::Run { name, args } => plugin_run_cmd(store, flags, &name, &args),
         PluginCmd::Log { name } => plugin_log_cmd(store, flags, name.as_deref()),
+        PluginCmd::Flush => plugin_flush_cmd(store, flags),
         PluginCmd::Update { name, check, all } => {
             plugin_update_cmd(store, flags, name.as_deref(), check, all)
         }
@@ -1839,6 +1840,99 @@ fn backlog_lines(waiting: &[Waiting], now: &str) -> Vec<String> {
             )
         })
         .collect()
+}
+
+/// `plugin flush` — work the plugins' queues through **now**, in this process, and report what moved
+/// (`AMB-T-2470`, `AMB-D-399`).
+///
+/// `plugin log` already answers "is anything waiting" — a `waiting` line per queue that still owes
+/// something. What had no door was the other half: a queue whose runner was killed waits for the next
+/// *write*, so the only way to push it was to run an unrelated command and hope the startup kick caught it.
+/// This is that ask, made on purpose.
+///
+/// The drive is the one every write makes ([`dispatch`]), with one difference: the queues are worked here
+/// rather than handed to a runner process, which is what lets this command wait for them and count what
+/// left. So the report is per plugin — how many events came off its queue, and how many are still on it —
+/// and the queues this flush did not touch are named separately, because a live lease is another runner's
+/// work and crediting it here would be a lie.
+///
+/// **Not an error to leave something behind.** A runner that loses its lease mid-queue, and a delivery that
+/// failed, are both within the contract (`AMB-D-399`): the row is dropped, the log has the outcome, and
+/// nothing is retried. This exits 0 either way and points at `plugin log`, which is where a plugin's own
+/// diagnosis is.
+fn plugin_flush_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
+    // Unlike the drive that rides along with a write, an unreadable plugins directory is a failure here:
+    // this command is the delivery, so it cannot quietly do none of it.
+    let installed = plugin_installed::installed(&store.paths).map_err(CliError::from)?;
+    let subscribers = EnabledSubscribers::new(&installed, store);
+    let flushed = store.flush_plugin_delivery(Face::Cli, &subscribers).map_err(CliError::from)?;
+
+    // A `reply:true` hook ran synchronously inside the drive (`AMB-D-383`), and its stderr is an answer
+    // somebody is waiting on — relayed where the write seam relays it, so a flush reads the same.
+    for reply in &flushed.delivered.replies {
+        eprintln!("[{}] {}", reply.plugin, reply.stderr.trim_end());
+    }
+
+    // What is still standing, minus the queues this flush worked: those are reported by their own counts,
+    // and a queue named twice would read as two backlogs.
+    let now = amenbo_core::time::Timestamp::now().to_rfc3339_z();
+    let untouched: Vec<Waiting> = amenbo_core::plugin_runner::waiting(store.read_model())?
+        .into_iter()
+        .filter(|w| !flushed.worked.iter().any(|f| f.plugin == w.depth.plugin))
+        .collect();
+    let delivered: i64 = flushed.worked.iter().map(|w| w.delivered).sum();
+
+    if flags.json {
+        print_json(&json!({
+            "ok": true,
+            "action": "plugin.flush",
+            "cursor": flushed.delivered.cursor,
+            "gapped": flushed.delivered.gapped,
+            "delivered": delivered,
+            "flushed": flushed.worked.iter().map(|w| json!({
+                "plugin": w.plugin,
+                "delivered": w.delivered,
+                "left": w.left,
+            })).collect::<Vec<_>>(),
+            "queues": untouched.iter().map(|w| json!({
+                "plugin": w.depth.plugin,
+                "waiting": w.depth.waiting,
+                "oldest": w.depth.oldest,
+                "running": w.is_running(&now),
+            })).collect::<Vec<_>>(),
+            "replies": flushed.delivered.replies.iter().map(|r| json!({
+                "plugin": r.plugin,
+                "stderr": r.stderr,
+            })).collect::<Vec<_>>(),
+            "log": store.paths.plugin_log_file().display().to_string(),
+        }));
+        return Ok(0);
+    }
+
+    if flushed.worked.is_empty() && untouched.is_empty() {
+        human(flags, "Nothing was waiting: every plugin's queue is empty.");
+        return Ok(0);
+    }
+    for w in &flushed.worked {
+        let events = if w.delivered == 1 { "event" } else { "events" };
+        let line = format!("flushed  {}  {} {events} delivered", w.plugin, w.delivered);
+        human(
+            flags,
+            match w.left {
+                0 => line,
+                left => format!(
+                    "{line}, {left} still queued — the runner stopped short; `{} plugin log {}` says why",
+                    Paths::command_name(),
+                    w.plugin
+                ),
+            },
+        );
+    }
+    // The queues left to somebody else, in the words `plugin log` uses for them.
+    for line in backlog_lines(&untouched, &now) {
+        human(flags, line);
+    }
+    Ok(0)
 }
 
 /// The dispatch-cursor line `plugin log` leads with: how far this store's outbox has been fanned out onto

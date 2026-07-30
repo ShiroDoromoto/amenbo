@@ -485,6 +485,24 @@ pub enum PluginCmd {
         name: Option<String>,
     },
 
+    /// Deliver what is waiting on the plugins' queues **now**, and report what each one got through
+    /// (`AMB-D-399`).
+    ///
+    /// Delivery normally rides along with whatever you were doing: a write fans its events out and starts a
+    /// runner per queue, and amenbo makes no command wait for a plugin. When a runner is killed mid-queue,
+    /// or a fan-out dies half-done, what is left waits for the next write — which may be days away. This is
+    /// the door for pushing it through on purpose: the queues are worked **in this process**, so it returns
+    /// once they are empty and can say how much left each one, rather than starting a runner nobody watches.
+    ///
+    /// It reports per plugin how many events left its queue and how many are still on it. A queue with a
+    /// live runner on it is left alone and named as such: two runners on one queue is what the lease exists
+    /// to prevent. Nothing waiting is not an error — it says so and exits 0.
+    ///
+    /// **How each run ended is not here**: a failed delivery is dropped rather than retried (`AMB-D-399`),
+    /// and `plugin log` is where every run's outcome and the plugin's own diagnosis are written
+    /// (`AMB-D-361`). This says what moved; the log says how it went.
+    Flush,
+
     /// Bring an installed plugin onto the build the catalog publishes — or, with `--check`, only report
     /// which installs it has moved past (`AMB-D-359`).
     ///

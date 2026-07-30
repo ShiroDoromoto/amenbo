@@ -4105,6 +4105,221 @@ pub fn hook_answer(yes: bool) -> Result<(), CmdError> {
     Ok(())
 }
 
+/// One AI harness a folder could start its session on `amenbo agent` with, and the text that would do it
+/// ([`amenbo_core::harness`]).
+///
+/// The snippet travels with the row rather than being fetched on a click, because the click it is behind
+/// is a copy: a button that had to go and ask for the text first could hand over an empty clipboard, and
+/// there is no second chance to notice — the user pastes what they have. It is a few hundred bytes per
+/// unwired tool.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AgentHookToolDto {
+    /// The catalog's own id for it (`claude-code`), which is also what `agent-hook snippet` takes.
+    tool: String,
+    /// The product's name for itself, for the sentence.
+    label: String,
+    /// The file the snippet goes into, relative to the folder.
+    paste_into: String,
+    /// The configuration to paste, with this build's launch command already in it.
+    snippet: String,
+}
+
+/// The row for `one`, or `None` where the catalog no longer lists it.
+fn agent_hook_tool(one: &amenbo_core::harness::Wiring, cmd: &str) -> Option<AgentHookToolDto> {
+    let harness = amenbo_core::harness::find(one.id)?;
+    Some(AgentHookToolDto {
+        tool: harness.id.to_string(),
+        label: harness.label.to_string(),
+        paste_into: harness.paste_into.to_string(),
+        snippet: amenbo_core::harness::snippet(harness, cmd),
+    })
+}
+
+/// The question about the AI harness's session-start hook, waiting to be put about one bound folder
+/// (`AMB-D-440`) — the GUI's half of the CLI's `offer_agent_hook`.
+///
+/// Unlike the lint's [`HookOfferDto`], this one names a folder: the answer is **per project** (whether an
+/// AI is trusted to be started on amenbo here is a question whose answer changes with the place), so the
+/// surface has to say which one it is about and hand the answer back with it.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AgentHookOfferDto {
+    /// The project the answer is recorded against. `number` on the TS side, as every other id the GUI
+    /// hands back is (the default `bigint` would not survive the round trip through `invoke`).
+    #[ts(type = "number")]
+    project_id: i64,
+    /// Its name, so the question can say which project it is about.
+    project_name: String,
+    /// The folder that was probed.
+    dir: String,
+    /// What this build is called on the command line, for the same reason [`HookOfferDto::cmd`] carries
+    /// it — the dev channel answers `amenbo-dev`.
+    cmd: String,
+    /// Whether this is the one re-ask (a standing yes with nothing wired), which is worded differently:
+    /// the occasion is not a fresh reader but a paste that never landed.
+    again: bool,
+    /// The providers this folder shows a trace of that are not wired — what lets the question say which
+    /// tool it looks like. Empty where the folder traces none, and the question is still put: it is asked
+    /// once per project, and being asked once is how the feature is discovered at all.
+    named: Vec<AgentHookToolDto>,
+}
+
+/// Walk the bound folders, do what [`amenbo_core::harness::reconcile`] says about each, and return the
+/// first question left live — the GUI's half of the CLI's `agent_hook_setup`.
+///
+/// The CLI probes the folder it was run in; the GUI has no cwd, so it walks every bound folder and takes
+/// each one's own `.amenbo` as the project the answer belongs to, exactly as [`sweep_bound_repos`] does.
+///
+/// **One question, however many folders are waiting.** The rest keep their unanswered state, which is what
+/// it is for, and come round at a later startup. A wired folder nobody ever asked about is adopted here
+/// without a question reaching anyone (`AdoptWired`) — recording it is what stops amenbo putting a question
+/// whose answer is already on disk. Recording is best-effort: the row decides only whether amenbo offers
+/// again, and failing the startup over it would undo nothing.
+fn sweep_agent_hooks(store: &Store, can_ask: bool) -> Option<AgentHookOfferDto> {
+    use amenbo_core::harness::{self, Consent, ConsentAction, ConsentContext};
+
+    let cmd = amenbo_core::config::Paths::command_name();
+    let mut question = None;
+    for dir in store.bindings().all_dirs() {
+        let path = std::path::Path::new(&dir);
+        let Some(project_id) = amenbo_core::binding::read_pointer(path).and_then(|b| b.project_id)
+        else {
+            continue;
+        };
+        let found = harness::probe(path, cmd);
+        let wired = found.iter().any(harness::Wiring::wired);
+        let consent = store.harness_consent(project_id).unwrap_or(None);
+        // Only the first folder may raise a question; the others are still swept, since adopting a
+        // wiring already on disk asks nobody anything.
+        let can_ask = can_ask && question.is_none();
+        match harness::reconcile(&ConsentContext { consent, wired, can_ask }) {
+            ConsentAction::Nothing => {}
+            ConsentAction::AdoptWired => {
+                let _ = store.set_harness_consent(project_id, Consent::answered(true));
+            }
+            action => {
+                let Ok(Some(project)) = store.project(project_id) else { continue };
+                question = Some(AgentHookOfferDto {
+                    project_id,
+                    project_name: project.name,
+                    dir: dir.clone(),
+                    cmd: cmd.to_string(),
+                    again: action == ConsentAction::AskAgain,
+                    named: found
+                        .iter()
+                        .filter(|one| one.traced && !one.wired())
+                        .filter_map(|one| agent_hook_tool(one, cmd))
+                        .collect(),
+                });
+            }
+        }
+    }
+    question
+}
+
+/// The one question the GUI should put about starting this folder's AI on amenbo, or `None` when there is
+/// none. `can_ask` is the one-question-at-a-time rule reaching this surface: with the lint's modal already
+/// up this run, nothing is asked here and the sweep only adopts what is on disk — the unanswered state
+/// carries to the next startup intact, exactly as it does for the CLI's `--json` face.
+///
+/// Called **once, at app startup**, for the reason [`hook_offer`] is: probing costs a read per settings
+/// file per bound folder, and the environment does not change on a store tick.
+#[tauri::command]
+pub fn agent_hook_offer(can_ask: bool) -> Result<Option<AgentHookOfferDto>, CmdError> {
+    let store = open_store()?;
+    Ok(sweep_agent_hooks(&store, can_ask))
+}
+
+/// Write down what the user answered about this project's session-start hook. It is **per project**
+/// (`AMB-D-440`), so it takes the project the question named rather than landing on the device.
+///
+/// Whether this was the first asking or the one re-ask is not passed in but read off the record: a
+/// consent row already there means the question had been answered before, which is the only occasion
+/// [`amenbo_core::harness::reconcile`] puts it again. Recording it as spent
+/// ([`Consent::answered_again`](amenbo_core::harness::Consent::answered_again)) is what keeps the re-ask
+/// to one — a caller cannot get that wrong, because it never says.
+///
+/// **Nothing is wired by answering.** amenbo writes no provider settings file, so a yes buys the text and
+/// not the wiring, and the banner keeps reporting until the paste lands.
+///
+/// Call it **only when there is an answer**: a dismissed modal calls nothing, and the project stays
+/// unanswered for a later startup to ask again.
+#[tauri::command]
+pub fn agent_hook_answer(project_id: i64, yes: bool) -> Result<(), CmdError> {
+    use amenbo_core::harness::Consent;
+
+    let store = open_store()?;
+    let asked_before = store.harness_consent(project_id)?.is_some();
+    let answer =
+        if asked_before { Consent::answered_again(yes) } else { Consent::answered(yes) };
+    store.set_harness_consent(project_id, answer)?;
+    Ok(())
+}
+
+/// One bound folder whose AI is not being started on amenbo — the raw material the banner words itself
+/// from, never the sentence, as with [`HookNoticeDto`].
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AgentHookNoticeDto {
+    /// The project's name, so the banner can say which one it is about.
+    project_name: String,
+    /// The folder this is about, which is also what identifies the row.
+    dir: String,
+    /// What this build is called on the command line (the dev channel answers `amenbo-dev`).
+    cmd: String,
+    /// The providers traced here and not wired, each with the text to paste.
+    unwired: Vec<AgentHookToolDto>,
+}
+
+/// Where this folder's AI is not started on amenbo — the GUI's third channel for it, alongside the CLI's
+/// `--json` field and stderr line. The standing report
+/// ([`amenbo_core::harness::setup_notice`]), not [`agent_hook_offer`]'s one-time question: it tells, and
+/// the only thing that ends it is the paste landing, since amenbo will not write the file itself.
+///
+/// **It reports only what it can point at**, which is what the CLI's person-facing line does and for the
+/// same reason: a standing warning about a tool the folder shows no sign of is one the reader cannot act
+/// on. The catalog is carried on the `--json` face instead, where the reader is the harness itself and
+/// knows which one it is (`AMB-D-440`).
+///
+/// Called **once, after [`agent_hook_offer`] has had its turn**, so a folder just adopted or just answered
+/// is read in the state that left it.
+#[tauri::command]
+pub fn agent_hook_notices() -> Result<Vec<AgentHookNoticeDto>, CmdError> {
+    use amenbo_core::harness;
+
+    let store = open_store_read()?;
+    let cmd = amenbo_core::config::Paths::command_name();
+    let mut notices = Vec::new();
+    for dir in store.bindings().all_dirs() {
+        let path = std::path::Path::new(&dir);
+        let Some(project_id) = amenbo_core::binding::read_pointer(path).and_then(|b| b.project_id)
+        else {
+            continue;
+        };
+        let consent = store.harness_consent(project_id).unwrap_or(None);
+        let Some(notice) = harness::setup_notice(&harness::probe(path, cmd), consent) else {
+            continue;
+        };
+        let unwired: Vec<AgentHookToolDto> =
+            notice.unwired.iter().filter_map(|one| agent_hook_tool(one, cmd)).collect();
+        if unwired.is_empty() {
+            continue;
+        }
+        let Ok(Some(project)) = store.project(project_id) else { continue };
+        notices.push(AgentHookNoticeDto {
+            project_name: project.name,
+            dir: dir.clone(),
+            cmd: cmd.to_string(),
+            unwired,
+        });
+    }
+    Ok(notices)
+}
+
 /// What [`repair_pointers`] returns: how many folders were fixed, and how many were left waiting on
 /// a human's judgement.
 #[derive(Debug, Serialize, TS)]
@@ -7713,6 +7928,181 @@ mod tests {
         let states = amenbo_core::hooks::probe(&later_dir).unwrap();
         assert!(states.all_managed(), "the missing slot was wired under the answer already given: {states:?}");
 
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A folder with Claude Code's settings directory in it, so the probe traces the provider. `wired`
+    /// writes the two tokens `harness::probe` reads for — this build's `<cmd> agent` call and the
+    /// provider's session-start event — rather than the real snippet, which is core's to compose.
+    fn claude_folder(dir: &std::path::Path, wired: bool) {
+        let cmd = amenbo_core::config::Paths::command_name();
+        std::fs::create_dir_all(dir.join(".claude")).unwrap();
+        let text = if wired {
+            format!("{{ \"SessionStart\": \"{cmd} agent\" }}")
+        } else {
+            "{ }".to_string()
+        };
+        std::fs::write(dir.join(".claude/settings.json"), text).unwrap();
+    }
+
+    /// The GUI's half of the session-start question (`AMB-D-440`): who it is asked about, and how it ends.
+    ///
+    /// Three things are the GUI's own, and none of them is core's `reconcile` (tested there, row by row):
+    /// the answer belongs to a **project** and so has to name one; a run where the lint spoke asks nothing
+    /// (`can_ask`) while still sweeping; and whether an answer is the first or the one re-ask is read off
+    /// the record rather than passed in — which is what keeps the re-ask to one.
+    #[test]
+    fn the_agent_hook_question_names_its_project_and_the_re_ask_is_spent_once() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-agenthook-home");
+        let base = amenbo_scratch::scratch("app-agenthook-dirs");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let mut store = Store::open().unwrap();
+        let project = store
+            .project_add(amenbo_core::ops::project::NewProject {
+                name: "問われるPJ".into(),
+                view: View::Board,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap()
+            .id;
+        drop(store);
+
+        // Canonicalized, because binding records the folder that way and the walk reads it back.
+        let dir = base.join("asked");
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = std::fs::canonicalize(&dir).unwrap();
+        claude_folder(&dir, false);
+        project_bind_folder(project, dir.to_string_lossy().to_string()).unwrap();
+
+        // The lint put its question this run: nothing is asked here, and nothing about it is recorded, so
+        // the unanswered state carries to the next startup intact.
+        assert!(agent_hook_offer(false).unwrap().is_none(), "not our turn to ask");
+        assert!(
+            Store::open().unwrap().harness_consent(project).unwrap().is_none(),
+            "a run that could not ask records nothing",
+        );
+
+        let first = agent_hook_offer(true).unwrap().expect("an unwired bound folder raises the question");
+        assert_eq!(first.project_id, project, "the answer is this project's, so the question names it");
+        assert_eq!(first.dir, dir.to_string_lossy(), "and the folder it was found in");
+        assert!(!first.again, "asked for the first time");
+        assert_eq!(
+            first.named.iter().map(|one| one.tool.as_str()).collect::<Vec<_>>(),
+            ["claude-code"],
+            "the provider the folder points at, so the question can say which tool it looks like",
+        );
+        assert!(first.named[0].snippet.contains("SessionStart"), "the text a yes is asking for");
+
+        agent_hook_answer(project, true).unwrap();
+
+        // A standing yes with nothing wired — amenbo writes no settings file, so answering changed no
+        // disk — is worth exactly one more question, worded as the paste that never landed.
+        let again = agent_hook_offer(true).unwrap().expect("a yes with nothing wired is asked once more");
+        assert!(again.again, "and it says so, rather than reading as a first asking");
+
+        agent_hook_answer(project, true).unwrap();
+        assert!(
+            agent_hook_offer(true).unwrap().is_none(),
+            "the re-ask is spent by being answered: never a third time",
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// What the walk does without asking anyone, and what the banner is left with.
+    ///
+    /// A folder somebody wired by hand is the answer, so it is adopted rather than asked about — the
+    /// question amenbo must never put is one whose answer is already on disk. And the report that follows
+    /// names **only what the folder points at**, with the text to paste attached: a warning about a tool
+    /// there is no sign of is one a person cannot act on, and a copy button with nothing behind it would
+    /// leave a setup that reads as finished and is not.
+    #[test]
+    fn a_hand_wired_folder_is_adopted_and_the_notice_carries_the_text_to_paste() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-agenthooknotice-home");
+        let base = amenbo_scratch::scratch("app-agenthooknotice-dirs");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let new_project = |name: &str| -> i64 {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: name.into(),
+                    view: View::Board,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        let bound = |project: i64, leaf: &str, wired: bool| -> std::path::PathBuf {
+            let d = base.join(leaf);
+            std::fs::create_dir_all(&d).unwrap();
+            let d = std::fs::canonicalize(&d).unwrap();
+            claude_folder(&d, wired);
+            project_bind_folder(project, d.to_string_lossy().to_string()).unwrap();
+            d
+        };
+
+        let wired = new_project("自分で配線したPJ");
+        let wired_dir = bound(wired, "wired", true);
+        // Traced by no provider at all: nothing here a person could be pointed at.
+        let bare = new_project("痕跡の無いPJ");
+        let bare_dir = base.join("bare");
+        std::fs::create_dir_all(&bare_dir).unwrap();
+        let bare_dir = std::fs::canonicalize(&bare_dir).unwrap();
+        project_bind_folder(bare, bare_dir.to_string_lossy().to_string()).unwrap();
+
+        // The wired folder is adopted silently; the bare one is the only question left.
+        let asked = agent_hook_offer(true).unwrap().expect("the folder nobody wired is still asked about");
+        assert_eq!(asked.project_id, bare, "the hand-wired folder was answered by the hand that wired it");
+        assert!(asked.named.is_empty(), "there is no provider here to name");
+        assert_eq!(
+            Store::open().unwrap().harness_consent(wired).unwrap().map(|c| c.allowed),
+            Some(true),
+            "wiring it by hand is the answer, recorded without anyone being asked",
+        );
+
+        let notices = agent_hook_notices().unwrap();
+        assert_eq!(
+            notices.iter().map(|n| n.dir.as_str()).collect::<Vec<_>>(),
+            Vec::<&str>::new(),
+            "one folder is wired and the other points at nothing: no line anyone could act on",
+        );
+
+        // Now a folder that says which tool it uses, and does not run it at session start.
+        let traced = new_project("痕跡はあるが未配線のPJ");
+        let traced_dir = bound(traced, "traced", false);
+        let notices = agent_hook_notices().unwrap();
+        assert_eq!(
+            notices.iter().map(|n| n.dir.as_str()).collect::<Vec<_>>(),
+            [traced_dir.to_string_lossy()],
+            "only the folder with something to point at",
+        );
+        let tool = &notices[0].unwired[0];
+        assert_eq!(tool.tool, "claude-code");
+        assert_eq!(tool.paste_into, ".claude/settings.json", "where the text goes");
+        assert!(
+            tool.snippet.contains(amenbo_core::config::Paths::command_name()),
+            "the text carries the command this build answers to: {}",
+            tool.snippet,
+        );
+
+        // A refusal ends the report. Nothing is forbidden by it — the snippets stay there for the asking —
+        // but a reader with no setup pending is not warned about one.
+        agent_hook_answer(traced, false).unwrap();
+        assert!(agent_hook_notices().unwrap().is_empty(), "a no is silence, not a standing warning");
+
+        let _ = std::fs::remove_dir_all(&wired_dir);
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&base);
     }

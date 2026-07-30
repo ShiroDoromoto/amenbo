@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { t, tf, type CmdError, type CmdErrorPart } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookNoticeDto, AgentHookOfferDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 
 /**
@@ -601,6 +601,46 @@ export async function fetchHookNotices(): Promise<HookNoticeDto[]> {
 export async function answerHookOffer(yes: boolean): Promise<void> {
   if (!inTauri()) return;
   await invoke("hook_answer", { yes });
+}
+
+/**
+ * The one question about starting this folder's AI on `amenbo agent` at session start, or null when there
+ * is none (core's `harness::reconcile`, per bound folder). `canAsk` is the one-question-at-a-time rule:
+ * with the lint's modal already up this run it goes false, and the sweep only adopts a wiring already on
+ * disk — nothing is asked and nothing about the question is recorded, so it comes round at a later startup.
+ *
+ * Called once at startup, and it is a command rather than a read for `fetchHookOffer`'s reason: the same
+ * call is what adopts the folders somebody wired by hand. Outside Tauri there is never a question.
+ */
+export async function fetchAgentHookOffer(canAsk: boolean): Promise<AgentHookOfferDto | null> {
+  if (!inTauri()) return null;
+  return await invoke<AgentHookOfferDto | null>("agent_hook_offer", { canAsk });
+}
+
+/**
+ * The bound folders whose AI is not started on amenbo (core's `harness::setup_notice`) — the standing
+ * report behind the banner, carrying each unwired tool's snippet so the copy button has the text in hand.
+ *
+ * Called after the modal has had its turn, so a folder just adopted or just answered is read in the state
+ * that left it. Outside Tauri this is an empty array.
+ */
+export async function fetchAgentHookNotices(): Promise<AgentHookNoticeDto[]> {
+  if (!inTauri()) return [];
+  return await invoke<AgentHookNoticeDto[]>("agent_hook_notices");
+}
+
+/**
+ * Record what this **project** answered about starting its AI on amenbo. The project comes from the offer:
+ * the answer changes with the place, so unlike the lint's it is not the device's.
+ *
+ * **Call it only when there is an answer** — a dismissed modal calls nothing and leaves the project
+ * unanswered, which is the same third value `answerHookOffer` has no room for. A yes wires nothing: amenbo
+ * writes no provider settings file, so what a yes buys is the text, and the banner keeps reporting until
+ * the paste lands.
+ */
+export async function answerAgentHookOffer(projectId: number, yes: boolean): Promise<void> {
+  if (!inTauri()) return;
+  await invoke("agent_hook_answer", { projectId, yes });
 }
 
 /**

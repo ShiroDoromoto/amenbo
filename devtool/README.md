@@ -392,6 +392,49 @@ It replaces no test that talks to the real world: a fake answers what it was tol
 to answer, so it can only confirm what we already believe. The `#[ignore]`d tests
 against the real API stay.
 
+### `devtool plugin round --manifest <path.json> [--program <path>] [--set k=v] [--events <list>] [--keep]`
+
+One plugin, one lap, in a store that is thrown away afterwards:
+
+```sh
+# what a plugin's own subscriptions receive, without writing a plugin to look
+devtool plugin round --manifest ../amenbo-plugin-slack/dev/manifest.json \
+  --set webhook_url=http://127.0.0.1:9/hook
+
+# the build itself, on the events it cares about, with the store left to poke at
+devtool plugin round --manifest dev/manifest.json --program ./slack \
+  --events comment,deleted --keep
+```
+
+It raises a throwaway base (`AMENBO_HOME`, removed unless `--keep`), lays the
+plugin down **by hand** the way a plugin repo's own `make install` does — a
+directory under `plugins/` holding `manifest.json` and the executable under the
+plugin's own name — fills in what the manifest declares, opens the gate, fires
+the events an AI's writes fire, empties the queues, and then shows what the
+plugin was handed and how each run ended (`amenbo plugin log`).
+
+**The manifest is the JSON form**, the file a plugin repo already keeps for its
+own hand-install. A `.yaml` one is refused rather than converted: what an install
+lays down is JSON, and a converter here would be a second reading of a contract
+amenbo owns.
+
+**Without `--program` it installs devtool's stand-in** — a script that records
+each document it is handed and answers nothing — so "what does a subscriber
+actually receive" is answerable without writing a throwaway plugin for it. The
+subscription is still the manifest's, so what comes out is what *that* plugin
+would have been sent.
+
+**A required setting nobody named is filled** (from the field's own default or
+candidates, since a field with candidates refuses anything else), because the
+gate refuses to open while one is empty. An optional one is left empty: that is a
+state the plugin is meant to run in.
+
+**Nothing is asserted.** The receiving side — a webhook to stand in for, a
+checkout to look at afterwards — is the plugin author's, who is the only one who
+knows what "it worked" means. The queues are emptied with `amenbo plugin flush`,
+asked again while any queue is still held by a runner a write started, and a
+window that closes with something still waiting is reported as that.
+
 ## Env
 
 - `AMENBO_HOME` — not read, **set**: `devgui cli` puts the task's own store there

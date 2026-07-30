@@ -52,6 +52,8 @@ func main() {
 		agentCmd(args[1:])
 	case "fixtures":
 		fixturesCmd(args[1:])
+	case "plugin":
+		pluginCmd(args[1:])
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -74,6 +76,7 @@ Usage:
   devtool agent size       [--base main] [--json]
   devtool fixtures refresh [--catalog <url|path>] [--repo owner/name]
   devtool fixtures gui     [--fail <face>=<status|timeout>] [--port n] [--app path] [--no-launch]
+  devtool plugin round     --manifest <path.json> [--program path] [--set k=v] [--events list] [--keep]
 
 devgui seed  clone the shared dev store into the app-data of the task's own
              throwaway dev GUI, so the instance opens on the setup grown in the
@@ -119,6 +122,15 @@ fixtures     a fake outside world for GUI verification. 'refresh' captures the
              dev GUI pointed at them. --fail makes a face answer 429/500/404, or
              never answer at all — the responses the real API will not produce on
              demand, and so the branches nothing else reaches.
+plugin round run one plugin through one lap of a store that is thrown away
+             afterwards: raise it, install the build by hand the way a plugin
+             repo's own 'make install' does, fill in what its manifest declares,
+             open its gate, fire the events an AI's writes fire, empty the queues
+             and then show what the plugin was handed and how each run ended.
+             Nothing is asserted — the receiving side (a webhook to stand in for,
+             a checkout to look at) is the plugin author's. Without --program it
+             installs devtool's stand-in, which records the documents it is
+             handed, so a payload can be read without writing a plugin for it.
 agent size   print what this tree does to the 'amenbo agent --json' entry, by
              section, against the merge-base with --base. A signal, not a gate:
              it always exits 0. The entry is read once per AI session, so what

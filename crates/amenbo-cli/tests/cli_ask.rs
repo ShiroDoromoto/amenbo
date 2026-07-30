@@ -3,8 +3,8 @@
 //! amenbo asks two things once each — whether to wire the lint into this device's git hooks, and
 //! whether this folder's AI may be started on amenbo — and both are put **only where someone can
 //! answer them**: an interactive stdin, no `--json`, not an AI. A test runner has no terminal, so
-//! every other suite here goes past those branches without touching them, and the sibling
-//! `cli_e2e.rs` is not the place to fix that: what it drives is the ordinary, unattended face.
+//! every other suite here goes past those branches without touching them, and the sibling suites
+//! under `e2e/` are not the place to fix that: what they drive is the ordinary, unattended face.
 //!
 //! So this suite gives the child a terminal. `stdin` is the slave side of a pty, which is the one
 //! input `is_terminal()` reads, while `stdout` and `stderr` stay pipes — a question goes to stderr,

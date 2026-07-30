@@ -468,10 +468,12 @@ test:
 	$(MAKE) --no-print-directory scopes-gate
 	$(MAKE) --no-print-directory cli-name-gate
 	$(MAKE) --no-print-directory selfupdate-gate
-	## Two runs, not one: the same split CI makes (ci.yml), so the heavy e2e suite never shares the
+	## Two runs, not one: the same split CI makes (ci.yml), so the heavy e2e suites never share the
 	## box with the scale seeds. The build is shared, so the second run only schedules tests.
-	cargo nextest run --features scale,e2e -E 'not binary(cli_e2e)'
-	cargo nextest run --features scale,e2e -E 'binary(cli_e2e)'
+	## `cli_e2e_*` is every slice of the e2e suite (crates/amenbo-cli/tests/e2e), named by prefix so a
+	## new one lands on the right side of the split without this line being touched.
+	cargo nextest run --features scale,e2e -E 'not binary(/^cli_e2e/)'
+	cargo nextest run --features scale,e2e -E 'binary(/^cli_e2e/)'
 	cargo test --doc --features scale,e2e
 	$(MAKE) --no-print-directory doc-gate
 	## The app crate's build.rs (tauri_build) checks that tauri.conf.json's externalBin=binaries/amenbo

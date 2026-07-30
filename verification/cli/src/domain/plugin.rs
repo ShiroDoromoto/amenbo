@@ -105,6 +105,18 @@ impl Driver {
                     "called `{name} {command}` — it returned {value} byte(s)"
                 )))
             }
+            // Work the queues in this process rather than leave them to a runner nobody watches, which
+            // is what makes what moved reportable at all. What it says is read by the assert that
+            // follows it; the state it leaves behind is read by `waiting`, as ever.
+            "flush" => {
+                let v = self.run_json(&["plugin", "flush", "--json"])?;
+                let delivered = v["delivered"].as_i64().unwrap_or(0);
+                let held = v["queues"].as_array().map_or(0, Vec::len);
+                self.last_flush = Some(v);
+                Ok(Outcome::action(format!(
+                    "flushed {delivered} event(s), leaving {held} queue(s) to the runners on them"
+                )))
+            }
             "update" => {
                 let name = req_str(with, "name")?;
                 let v = self.run_json(&["plugin", "update", name, "--json"])?;
@@ -555,6 +567,36 @@ impl Driver {
                             "holds nothing this machine is not already on"
                         },
                         if present { "one offered" } else { "none" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            "flushed" => {
+                let want = req_i64(with, "delivered")?;
+                let last = self
+                    .last_flush
+                    .as_ref()
+                    .ok_or("no `plugin flush` has been run yet, so there is no report to read")?;
+                let delivered = last["delivered"].as_i64().unwrap_or(0);
+                let named = with.get("held").and_then(|v| v.as_str());
+                // A queue named here has to be one the flush reported leaving alone. Reading it back
+                // off the store instead would pass just as well for a flush that never ran.
+                let stepped_around = named.is_none_or(|plugin| {
+                    last["queues"]
+                        .as_array()
+                        .is_some_and(|queues| queues.iter().any(|q| q["plugin"].as_str() == Some(plugin)))
+                });
+                let pass = delivered == want && stepped_around;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "the flush got {delivered} event(s) through{} (expected {want}{}, {})",
+                        match named {
+                            Some(plugin) if stepped_around => format!(" and left `{plugin}`'s queue to its runner"),
+                            Some(plugin) => format!(" and said nothing about `{plugin}`'s queue"),
+                            None => String::new(),
+                        },
+                        named.map(|plugin| format!(" and `{plugin}` left alone")).unwrap_or_default(),
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))

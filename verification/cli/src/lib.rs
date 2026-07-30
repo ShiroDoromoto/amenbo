@@ -71,6 +71,10 @@ pub(crate) struct Driver {
     /// and is deliberately kept out of the execution log, so this is the only place a later step can
     /// read it from — which is why the assert that reads it has to follow its call.
     last_run: Option<serde_json::Value>,
+    /// What the last `plugin flush` reported. Kept for the same reason as the line above: what a
+    /// flush got through, and which queues it stepped around, is said once as it returns and is
+    /// nowhere to be read afterwards — the store shows the state, not who declined to touch it.
+    last_flush: Option<serde_json::Value>,
     /// The files the `store` actions wrote, under the same names. A scenario has one binding
     /// namespace — the loader keeps it unique across both — and which of the two maps a name lands
     /// in follows from the op that bound it: nothing in the store is a path, and no archive is an id.
@@ -100,6 +104,7 @@ impl Driver {
             project_id: 0,
             bindings: HashMap::new(),
             last_run: None,
+            last_flush: None,
             artifacts: HashMap::new(),
             catalogs: HashMap::new(),
             refusal: None,

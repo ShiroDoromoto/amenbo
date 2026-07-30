@@ -141,6 +141,19 @@ steps_cli:
       name: worktree
       count: 0
 
+  # And pushing delivery through by hand, with nothing owed, is not an error: it says nothing was
+  # waiting and comes back clean. A door that failed when there was nothing behind it would be one
+  # nobody could reach for without first knowing the answer.
+  - type: action
+    domain: plugin
+    op: flush
+
+  - type: assert
+    domain: plugin
+    op: flushed
+    with:
+      delivered: 0
+
   # Now the other half — what has not run. A row leaves a queue the moment its plugin replies, so the
   # only backlog there is is the one a plugin is still working, and the driver leaves this one taking
   # its time. Ten seconds is the window the two asserts below read in, not a wait the run makes.
@@ -163,6 +176,30 @@ steps_cli:
   # One event owed, and a runner holding the queue — which is the ordinary "it is taking a while", and
   # the reading a person opens this command for. The count alone would not say that much: the same one
   # event with nothing running it is a queue nobody is on, a different diagnosis entirely.
+  - type: assert
+    domain: plugin
+    op: waiting
+    with:
+      name: worktree
+      count: 1
+      running: true
+
+  # Pushed by hand while a runner is on it, the queue is left where it is: one queue is worked by one
+  # runner, and that is what the lease is for. The flush names it rather than passing over it in
+  # silence — and the naming is the half only the report can answer, since a queue still standing
+  # looks the same whether it was stepped around or nobody ever asked.
+  - type: action
+    domain: plugin
+    op: flush
+
+  - type: assert
+    domain: plugin
+    op: flushed
+    with:
+      delivered: 0
+      held: worktree
+
+  # And nothing was taken from under the runner: the row is still its to carry out.
   - type: assert
     domain: plugin
     op: waiting

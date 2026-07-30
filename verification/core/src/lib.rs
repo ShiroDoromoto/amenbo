@@ -350,6 +350,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "disable", required: &["name"], refs: &[], strings: &["name"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "uninstall", required: &["name"], refs: &[], strings: &["name"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "run", required: &["name", "command"], refs: &["task"], strings: &["name", "command"], binds: false },
+    // Push what is waiting on the queues through, here and now. Delivery otherwise rides along with
+    // whatever was being done, so this is the door for a backlog that has stopped moving — and, like
+    // `plugin run`, what it reports is read by an assert that has to follow it (`flushed`).
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "flush", required: &[], refs: &[], strings: &[], binds: false },
     // Moving an installed plugin onto the build the catalog publishes, and back off it again. `update`
     // re-walks the install door over the new asset and retains the build it replaced; `rollback` puts
     // that retained pair back, and consumes it, so a second one has nothing to return to.
@@ -588,6 +592,11 @@ const REGISTRY: &[OpSpec] = &[
     // and `running` whether a runner still holds the lease: the same count with and without one are
     // different diagnoses (a plugin taking its time, against a queue nobody is on).
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "waiting", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // What the flush just before it got through: `delivered` is how many events came off the queues it
+    // worked, and `held` names a plugin whose queue it left to the runner already on it. The second is
+    // the half a state read cannot answer — a queue still standing looks the same whether the flush
+    // stepped around it or was never run at all — which is why the report is read rather than the store.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "flushed", required: &["delivered"], refs: &[], strings: &["held"], binds: false },
     // Whether the catalog holds a different build of an installed plugin — the question `update --check`
     // answers, and the only way to read from outside which build a machine is on (a manifest carries no
     // version number, so there is no number to compare).

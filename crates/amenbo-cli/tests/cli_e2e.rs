@@ -4403,6 +4403,58 @@ fn a_wired_folder_is_told_nothing() {
     );
 }
 
+/// The question amenbo cannot put on the `--json` face is closed from the outside: the report names the
+/// command that writes the answer back, an AI puts the question to the human, and recording their answer
+/// takes the question off the report (`AMB-D-440`). The wiring is a separate fact, so the report itself
+/// stands — nothing has been pasted.
+#[test]
+fn an_ai_records_the_humans_answer_and_the_question_stops_being_carried() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+
+    let doc = cli.json(&["task", "list", "--json", "--actor", "ai"]);
+    let asked = doc["setup_incomplete"]["agent_hook"]["record_answer"].as_str();
+    assert!(
+        asked.is_some_and(|how| how.contains("agent-hook answer")),
+        "the open question does not name the way back: {doc}"
+    );
+
+    let done = cli.json(&["agent-hook", "answer", "yes", "--json", "--actor", "ai"]);
+    assert_eq!(done["allowed"], true);
+    // A yes is an answer, not a wiring: what is still owed is the paste, and the document says so.
+    assert!(
+        done["next"].as_str().is_some_and(|next| next.contains("agent-hook snippet")),
+        "a yes leaves the paste owed, and the document does not say it: {done}"
+    );
+
+    let doc = cli.json(&["task", "list", "--json", "--actor", "ai"]);
+    let report = &doc["setup_incomplete"]["agent_hook"];
+    assert!(report["record_answer"].is_null(), "an answered question is still being asked: {report}");
+    assert_eq!(report["any_wired"], false, "consent is not wiring: {report}");
+}
+
+/// A `no` is "stop asking", and it stops the report with it — but it forbids nothing: the snippet is still
+/// handed over to whoever asks for it.
+#[test]
+fn a_recorded_no_ends_the_report_and_bars_nothing() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+    std::fs::create_dir_all(cli.home.join(".claude")).unwrap();
+
+    let (out, code) = cli.run(&["agent-hook", "answer", "no", "--actor", "ai"]);
+    assert_eq!(code, 0, "{out}");
+
+    let doc = cli.json(&["task", "list", "--json", "--actor", "ai"]);
+    assert!(doc.get("setup_incomplete").is_none(), "a reader who said no is still being told: {doc}");
+    let (_, err, code) = cli.run_both(&["task", "list"]);
+    assert_eq!(code, 0);
+    assert!(!err.contains("agent-hook"), "a reader who said no is still being warned: {err}");
+
+    let (snippet, code) = cli.run(&["agent-hook", "snippet", "claude-code"]);
+    assert_eq!(code, 0, "a no closed the door, not just the question");
+    assert!(snippet.contains(" agent --json"), "the text is still handed over: {snippet}");
+}
+
 /// The `--json` face carries the same paste plus the file it goes in, which is what lets an AI hand both
 /// to the human in one message. `copied` says which route the text took.
 #[test]

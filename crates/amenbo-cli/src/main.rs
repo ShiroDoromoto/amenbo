@@ -406,7 +406,9 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
         // Hands over catalog text (`AMB-D-440`) — no store, and nothing of this folder's read either.
-        | Command::AgentHook { .. }
+        // Its sibling `answer` is not here: it writes this project's row, so it declares a facet like
+        // every other write.
+        | Command::AgentHook { sub: AgentHookCmd::Snippet { .. } }
         // A runner fires the hooks a facet's own writes already queued: it creates nothing, assigns
         // nothing, and was handed the store to work (`AMB-T-2175`). So was a plugin calling amenbo back,
         // whose window comes from the gate it fired through rather than from a facet (`AMB-D-406`).
@@ -455,6 +457,9 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         // to stamp a facet onto.
         | Command::Plugin { .. }
         | Command::Hooks { .. }
+        // The AI-harness consent, like the lint's: a per-project row that records an answer, with no
+        // author to stamp and no activity behind it.
+        | Command::AgentHook { .. }
         | Command::Config { .. } // settings live in the user layer and leave no activity behind
         | Command::Bind { .. } => false, // only writes the `.amenbo` pointer (no facet recorded)
         // Sub-command groups that are reads.
@@ -2876,8 +2881,13 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             unreachable!("handled before open")
         }
         Command::Hooks { sub } => return hooks_cmd(&mut store, flags, sub),
+        // The recording face is the one that needs this folder: the answer is kept against the project
+        // it is bound to, so unlike `snippet` it opens the store like any other write.
+        Command::AgentHook { sub: AgentHookCmd::Answer { answer } } => {
+            return agent_hook_answer_cmd(&store, flags, answer == "yes")
+        }
         Command::AgentHook { .. } => {
-            unreachable!("handled before open")
+            unreachable!("`agent-hook snippet` is handled before open")
         }
     }
     Ok(0)
@@ -2933,6 +2943,63 @@ fn agent_hook_snippet_cmd(flags: &Flags, tool: &str, copy: bool) -> Result<i32, 
     }
     if !copy {
         println!("{snippet}");
+    }
+    Ok(0)
+}
+
+/// `amenbo agent-hook answer <yes|no>` — write down what a person answered about starting this folder's
+/// AI on amenbo (`AMB-D-440`).
+///
+/// **The answer only exists if someone is asked, and amenbo asks no one here.** The question is put on a
+/// terminal a person is watching; on the `--json` face it is carried as a report for the AI reading it,
+/// which is what puts the question to the human. Without a way back in, that face's question could never
+/// be closed and the report would stand for ever — so this is the door: the AI asks, the person answers,
+/// and this records the answer as theirs.
+///
+/// **It records, and that is all it does.** Where the lint's `hooks install` consents *by* writing the
+/// hooks, nothing here reads or writes a settings file: a `yes` is an answer, not a wiring, and the paste
+/// is still the person's to make. So a `yes` is followed by the line that hands over the text, rather
+/// than by anything having changed on disk.
+///
+/// The row is the project's, not the folder's, and replaces whatever it said before — a person may say
+/// yes today and no tomorrow. What carries over is whether the one re-ask has been spent
+/// ([`amenbo_core::harness::Consent::asked_again`]): that is a memory of what amenbo has already put to
+/// them, which an answer to the question is no reason to hand back.
+fn agent_hook_answer_cmd(store: &Store, flags: &Flags, yes: bool) -> Result<i32, CliError> {
+    use amenbo_core::harness::Consent;
+
+    let cmd = Paths::command_name();
+    let Some(project) = binding_project(store) else {
+        return Err(CliError {
+            code: "not_found",
+            message: "this folder is not bound to a project, so there is nowhere to record the answer"
+                .to_string(),
+            hint: Some(format!("bind it first: `{cmd} bind --project <name or id>`")),
+            exit: 1,
+        });
+    };
+    // Keep the re-ask's memory: it says what amenbo has already asked, which is a different fact from
+    // what was answered.
+    let spent = store.harness_consent(project).unwrap_or(None).is_some_and(|had| had.asked_again);
+    let answer = Consent { allowed: yes, asked_again: spent };
+    store.set_harness_consent(project, answer).map_err(CliError::from)?;
+
+    if flags.json {
+        print_json(&json!({
+            "ok": true,
+            "action": "agent-hook.answer",
+            "allowed": answer.allowed,
+            // What is left to do after a yes: amenbo writes no settings file, so the paste is still owed.
+            "next": yes.then(|| format!("{cmd} agent-hook snippet <tool>")),
+        }));
+        return Ok(0);
+    }
+    if yes {
+        human(flags, "Recorded: yes — this project may have its AI started on amenbo.");
+        human(flags, format!("amenbo writes no settings file, so the text is still to be pasted: `{cmd} agent-hook snippet <tool>`."));
+    } else {
+        human(flags, "Recorded: no — amenbo will not ask about this again.");
+        human(flags, format!("Nothing is forbidden by it: `{cmd} agent-hook snippet <tool>` hands the text over whenever you want it."));
     }
     Ok(0)
 }
@@ -3485,6 +3552,10 @@ fn report_unwired_harnesses(
                 // The catalog, because a harness that left no trace in the folder is still the one reading
                 // this and can name itself (`AMB-D-440`).
                 "tools": harness::HARNESSES.iter().map(|one| one.id).collect::<Vec<_>>(),
+                // While nobody has answered, the reader here is the one who can put the question to a
+                // person — amenbo cannot, on this face. Naming the way back is what lets that answer land;
+                // once there is one on record, there is no question left to carry.
+                "record_answer": consent.is_none().then(|| format!("{cmd} agent-hook answer <yes|no>")),
             }),
         );
     } else if !flags.quiet {

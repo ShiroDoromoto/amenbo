@@ -657,6 +657,18 @@ pub enum AgentHookCmd {
         #[arg(long)]
         copy: bool,
     },
+
+    /// Record what a person answered when asked whether this folder's AI may be started on amenbo —
+    /// the way an AI writes back an answer it obtained on amenbo's behalf, since amenbo puts no
+    /// question to a non-interactive face. **It records the answer and touches nothing else**: no
+    /// settings file is read or written here, so a `yes` still leaves the paste to be made
+    /// (`agent-hook snippet <tool>` is the text), and a `no` only means amenbo stops asking — the
+    /// snippet stays available. The answer is kept per project, so it covers every folder bound to it.
+    Answer {
+        /// what the person answered
+        #[arg(value_parser = ["yes", "no"])]
+        answer: String,
+    },
 }
 
 /// The tool names `agent-hook snippet` takes, read off the catalog itself (`AMB-D-440`) — so a harness

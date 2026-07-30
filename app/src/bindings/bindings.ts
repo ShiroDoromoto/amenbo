@@ -38,6 +38,94 @@ export type ActorDto = { name: string, kind: "human" | "ai",
 avatar?: string, };
 
 /**
+ * One bound folder whose AI is not being started on amenbo — the raw material the banner words itself
+ * from, never the sentence, as with [`HookNoticeDto`].
+ */
+export type AgentHookNoticeDto = { 
+/**
+ * The project's name, so the banner can say which one it is about.
+ */
+projectName: string, 
+/**
+ * The folder this is about, which is also what identifies the row.
+ */
+dir: string, 
+/**
+ * What this build is called on the command line (the dev channel answers `amenbo-dev`).
+ */
+cmd: string, 
+/**
+ * The providers traced here and not wired, each with the text to paste.
+ */
+unwired: Array<AgentHookToolDto>, };
+
+/**
+ * The question about the AI harness's session-start hook, waiting to be put about one bound folder
+ * (`AMB-D-440`) — the GUI's half of the CLI's `offer_agent_hook`.
+ *
+ * Unlike the lint's [`HookOfferDto`], this one names a folder: the answer is **per project** (whether an
+ * AI is trusted to be started on amenbo here is a question whose answer changes with the place), so the
+ * surface has to say which one it is about and hand the answer back with it.
+ */
+export type AgentHookOfferDto = { 
+/**
+ * The project the answer is recorded against. `number` on the TS side, as every other id the GUI
+ * hands back is (the default `bigint` would not survive the round trip through `invoke`).
+ */
+projectId: number, 
+/**
+ * Its name, so the question can say which project it is about.
+ */
+projectName: string, 
+/**
+ * The folder that was probed.
+ */
+dir: string, 
+/**
+ * What this build is called on the command line, for the same reason [`HookOfferDto::cmd`] carries
+ * it — the dev channel answers `amenbo-dev`.
+ */
+cmd: string, 
+/**
+ * Whether this is the one re-ask (a standing yes with nothing wired), which is worded differently:
+ * the occasion is not a fresh reader but a paste that never landed.
+ */
+again: boolean, 
+/**
+ * The providers this folder shows a trace of that are not wired — what lets the question say which
+ * tool it looks like. Empty where the folder traces none, and the question is still put: it is asked
+ * once per project, and being asked once is how the feature is discovered at all.
+ */
+named: Array<AgentHookToolDto>, };
+
+/**
+ * One AI harness a folder could start its session on `amenbo agent` with, and the text that would do it
+ * ([`amenbo_core::harness`]).
+ *
+ * The snippet travels with the row rather than being fetched on a click, because the click it is behind
+ * is a copy: a button that had to go and ask for the text first could hand over an empty clipboard, and
+ * there is no second chance to notice — the user pastes what they have. It is a few hundred bytes per
+ * unwired tool.
+ */
+export type AgentHookToolDto = { 
+/**
+ * The catalog's own id for it (`claude-code`), which is also what `agent-hook snippet` takes.
+ */
+tool: string, 
+/**
+ * The product's name for itself, for the sentence.
+ */
+label: string, 
+/**
+ * The file the snippet goes into, relative to the folder.
+ */
+pasteInto: string, 
+/**
+ * The configuration to paste, with this build's launch command already in it.
+ */
+snippet: string, };
+
+/**
  * One row of the collapsible "Archived (N)" section at the foot of the sidebar. These never ride
  * in the snapshot's `ProjectDto` (which comes from `project_overview` — active projects only), so
  * they are fetched over a dedicated read path, `project_list_archived`. Restoring navigates to the

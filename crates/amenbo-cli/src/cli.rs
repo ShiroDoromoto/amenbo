@@ -531,8 +531,10 @@ pub enum PluginCmd {
     /// holds it back from anywhere. `plugin config set` is the way past it.
     ///
     /// `--check` is cheap on purpose: with nothing installed no catalog is read at all, and otherwise a
-    /// cached catalog younger than an hour answers with no request. Applying always asks for the current
-    /// index, since replacing a binary on an hour-old answer is not the same bargain.
+    /// cached catalog younger than an hour answers with no request. It says which of the two it did, so
+    /// "nothing has changed" is never read for "nothing had changed an hour ago"; `--check --fresh` fetches
+    /// the index first when that distance matters — after publishing, say. Applying always asks for the
+    /// current index, since replacing a binary on an hour-old answer is not the same bargain.
     Update {
         /// the installed plugin to update; omit it with --all or --check
         name: Option<String>,
@@ -542,6 +544,9 @@ pub enum PluginCmd {
         /// apply every update the catalog holds, one plugin at a time
         #[arg(long)]
         all: bool,
+        /// with --check: fetch the catalog now instead of letting a cache under an hour old answer
+        #[arg(long)]
+        fresh: bool,
     },
 
     /// Undo the last `plugin update` for one plugin, restoring the build it retained (`AMB-D-359`).

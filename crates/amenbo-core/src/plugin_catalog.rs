@@ -190,7 +190,58 @@ pub fn cache_file(paths: &Paths) -> PathBuf {
 /// envelope this one refuses. `None` is "we have no local copy", never an error to show: the caller's
 /// answer to it is to fetch.
 pub fn cached(paths: &Paths) -> Option<Catalog> {
-    cached_at(&cache_file(paths))
+    cached_at(&cache_file(paths)).map(|(catalog, _)| catalog)
+}
+
+/// How a catalog's rows reached a read: off the network in this call, or out of the cache — and how old
+/// that copy is (`AMB-D-359`).
+///
+/// It exists because the freshness boundary makes "nothing has changed" and "nothing had changed an hour
+/// ago" the same answer, and a reader cannot tell them apart from the rows alone. Cheapness is the point
+/// of the boundary and is not in question; what the boundary must not do is let a report claim currency it
+/// does not have. So every read says which of the two it is, and a face that reports the rows reports this
+/// beside them.
+/// It is three states and not two because the two cache arms leave a reader with different next moves:
+/// asking again reaches the network in one and has just failed to in the other.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Freshness {
+    /// Fetched in this call: the rows are the index as it stands.
+    Fetched,
+    /// The cache answered and **no request was made** — it was inside the freshness window. `age` is how
+    /// long ago that copy was written, which is the distance between what is reported and what is
+    /// published.
+    Cached { age: Duration },
+    /// The network was asked and did not answer, so the cache of that age stood in for it. Kept apart
+    /// from [`Cached`](Freshness::Cached) because it is the arm where asking again changes nothing.
+    Offline { age: Duration },
+}
+
+impl Freshness {
+    /// How old the copy that answered is — zero for a fetch, since it is the index as it stands.
+    #[must_use]
+    pub fn age(self) -> Duration {
+        match self {
+            Freshness::Fetched => Duration::ZERO,
+            Freshness::Cached { age } | Freshness::Offline { age } => age,
+        }
+    }
+
+    /// Of two reads, the one that vouches for less: the older copy, and — at equal age — the one that
+    /// could not reach the network, since that is the fact a reader has to act on.
+    ///
+    /// A merged view is only as current as its stalest shelf, so this is how several catalogs' reads
+    /// become the one answer a face reports ([`Discovery::freshness`]).
+    fn weaker(self, other: Freshness) -> Freshness {
+        let rank = |read: Freshness| match read {
+            Freshness::Fetched => 0,
+            Freshness::Cached { .. } => 1,
+            Freshness::Offline { .. } => 2,
+        };
+        match (self.age(), rank(self)).cmp(&(other.age(), rank(other))) {
+            std::cmp::Ordering::Less => other,
+            _ => self,
+        }
+    }
 }
 
 /// Fetch the catalog and replace the cache with it — the explicit "get the current index" path.
@@ -199,7 +250,7 @@ pub fn cached(paths: &Paths) -> Option<Catalog> {
 /// existing cache intact. Individual entries the intake dropped are still cached: they are what the
 /// catalog actually served, and re-parsing the cache reproduces the same drops.
 pub fn refresh(paths: &Paths) -> Result<Catalog> {
-    refresh_to(&catalog_url(), &cache_file(paths))
+    refresh_to(&catalog_url(), &cache_file(paths)).map(|(catalog, _)| catalog)
 }
 
 /// The catalog to work from: the current one when the network answers, the cached one when it does not
@@ -207,7 +258,7 @@ pub fn refresh(paths: &Paths) -> Result<Catalog> {
 ///
 /// Fails only when both are unavailable: nothing fetched, and nothing cached.
 pub fn load(paths: &Paths) -> Result<Catalog> {
-    load_to(&catalog_url(), &cache_file(paths))
+    load_to(&catalog_url(), &cache_file(paths)).map(|(catalog, _)| catalog)
 }
 
 /// The catalog for a read that is *incidental* — a check hanging off something the user did anyway
@@ -218,7 +269,7 @@ pub fn load(paths: &Paths) -> Result<Catalog> {
 /// The distinction is the point: an install wants the newest index it can get, while a check wants to be
 /// cheap enough that it can be offered often.
 pub fn fresh(paths: &Paths) -> Result<Catalog> {
-    fresh_to(&catalog_url(), &cache_file(paths))
+    fresh_to(&catalog_url(), &cache_file(paths)).map(|(catalog, _)| catalog)
 }
 
 // ---- the catalog fetch/cache mechanism, keyed on a named cache file ----
@@ -229,34 +280,50 @@ pub fn fresh(paths: &Paths) -> Result<Catalog> {
 // are the official-catalog spellings of these, and the fold behind `discover` / `for_install` drives the
 // registered ones.
 
-/// [`cached`] against a named cache file.
-fn cached_at(cache_file: &std::path::Path) -> Option<Catalog> {
+/// What one catalog read yields: the rows, and how they were come by. The pair travels together because
+/// separating them is exactly the bug — rows whose currency has to be guessed at afterwards.
+type Read = Result<(Catalog, Freshness)>;
+
+/// [`cached`] against a named cache file, with the age of the copy that answered.
+///
+/// A cache whose mtime is in the future has no age that means anything, and reads as freshly written
+/// rather than as an error: it is the caller's freshness boundary, not this, that decides what to do with
+/// an implausible clock ([`cache_age_at`] answers `None` there, so the boundary falls through to a fetch).
+fn cached_at(cache_file: &std::path::Path) -> Option<(Catalog, Freshness)> {
     let json = std::fs::read_to_string(cache_file).ok()?;
-    parse(&json).ok()
+    let catalog = parse(&json).ok()?;
+    let age = cache_age_at(cache_file).unwrap_or_default();
+    Some((catalog, Freshness::Cached { age }))
 }
 
 /// [`refresh`] against a named URL and cache file — the seam a test drives, and where a registered
 /// third-party catalog enters (`AMB-T-1980`).
-fn refresh_to(url: &str, cache_file: &std::path::Path) -> Result<Catalog> {
+fn refresh_to(url: &str, cache_file: &std::path::Path) -> Read {
     let json = fetch(url)?;
     let catalog = parse(&json)?;
     write_cache_at(cache_file, &json)?;
-    Ok(catalog)
+    Ok((catalog, Freshness::Fetched))
 }
 
 /// [`load`] against a named URL and cache file — see [`refresh_to`].
-fn load_to(url: &str, cache_file: &std::path::Path) -> Result<Catalog> {
+fn load_to(url: &str, cache_file: &std::path::Path) -> Read {
     match refresh_to(url, cache_file) {
-        Ok(catalog) => Ok(catalog),
-        Err(fetch_error) => cached_at(cache_file).ok_or(fetch_error),
+        Ok(read) => Ok(read),
+        // The fetch was tried and did not answer, so what comes back is the cache and says which kind of
+        // cache read it was: asking for the network is not the same as having reached it, and a reader
+        // told to "fetch it now" after a fetch has just failed is being sent nowhere.
+        Err(fetch_error) => match cached_at(cache_file) {
+            Some((catalog, read)) => Ok((catalog, Freshness::Offline { age: read.age() })),
+            None => Err(fetch_error),
+        },
     }
 }
 
 /// [`fresh`] against a named URL and cache file.
-fn fresh_to(url: &str, cache_file: &std::path::Path) -> Result<Catalog> {
+fn fresh_to(url: &str, cache_file: &std::path::Path) -> Read {
     if cache_age_at(cache_file).is_some_and(|age| age < FRESH_FOR) {
-        if let Some(catalog) = cached_at(cache_file) {
-            return Ok(catalog);
+        if let Some(read) = cached_at(cache_file) {
+            return Ok(read);
         }
     }
     load_to(url, cache_file)
@@ -778,6 +845,10 @@ pub struct DiscoveredSource {
     /// How many entries this catalog offered (before cross-catalog de-duplication) — `0` when it was not
     /// reachable.
     pub offered: usize,
+    /// How this catalog's rows were come by on this read, and `None` where it did not answer at all.
+    /// Per source because the shelves are read independently: one can be fetched in the same call that
+    /// another is served from an hour-old cache.
+    pub freshness: Option<Freshness>,
 }
 
 /// One entry as browsing sees it: the catalog entry, plus which catalog served it.
@@ -889,6 +960,18 @@ impl Discovery {
         }
     }
 
+    /// How current this whole view is: the **weakest** read among the catalogs that answered, and `None`
+    /// when none did (`AMB-D-359`).
+    ///
+    /// The weakest, because a merged list is one answer and can only vouch for as much as its stalest
+    /// shelf — reporting the freshest read of several would let one fetched catalog speak for rows that
+    /// came off an hour-old cache. `None` is its own state and not "fresh": nothing was read, so the empty
+    /// list underneath it means nothing was learned, not that there is nothing to learn.
+    #[must_use]
+    pub fn freshness(&self) -> Option<Freshness> {
+        self.sources.iter().filter_map(|s| s.freshness).reduce(Freshness::weaker)
+    }
+
     /// Find one entry by plugin name across the merged view — what an install resolves against
     /// (`AMB-D-389`).
     ///
@@ -948,6 +1031,20 @@ pub fn discover(paths: &Paths) -> Discovery {
     merge(paths, fresh_to)
 }
 
+/// The same merged view, with the network asked first — what somebody who said "go and look" gets.
+///
+/// [`discover`] answers from a cache inside the freshness window, which is what makes a browse cheap and
+/// is exactly what a reader asks past when they want the index as it stands right now. Each catalog is
+/// read the way [`load`] does, so a source that cannot be reached still contributes its cache and the
+/// view says so ([`Discovery::freshness`]) rather than claiming a fetch that did not happen.
+///
+/// It is not a failure when nothing answers — that is [`for_install`]'s rule, because an install must not
+/// proceed on nothing, while a report of an empty view is still a report.
+#[must_use]
+pub fn discover_now(paths: &Paths) -> Discovery {
+    merge(paths, load_to)
+}
+
 /// The same merged view, read the way an install must read it (`AMB-D-389`).
 ///
 /// [`discover`] is for a browse, so it answers from a cache inside the freshness window; this asks each
@@ -959,7 +1056,7 @@ pub fn discover(paths: &Paths) -> Discovery {
 /// unreachable catalog is not a failure — its entries are simply not among the ones that can be resolved,
 /// which is the same deal a browse gets.
 pub fn for_install(paths: &Paths) -> Result<Discovery> {
-    let merged = merge(paths, load_to);
+    let merged = discover_now(paths);
     if merged.sources.iter().any(|s| s.reachable) {
         return Ok(merged);
     }
@@ -983,15 +1080,17 @@ pub fn cached_view(paths: &Paths) -> Discovery {
 
 /// Fold the official catalog and every registered one into a single view, each catalog read by `read`.
 ///
-/// The two callers differ only in that function ([`fresh_to`] for a browse, [`load_to`] for an install),
-/// and in nothing else: same order, same official-wins rule, same clearing of the marks only the official
-/// index grants. Keeping the fold in one place is what stops the view an install resolves against from
-/// drifting away from the one the user was looking at when they chose.
+/// The callers differ only in that function ([`fresh_to`] for a browse, [`load_to`] where the network is
+/// asked first, the cache alone for a listing), and in nothing else: same order, same official-wins rule,
+/// same clearing of the marks only the official index grants. Keeping the fold in one place is what stops
+/// the view an install resolves against from drifting away from the one the user was looking at when they
+/// chose — and it is where each shelf's [`Freshness`] is kept, so the merged answer can say how current it
+/// is instead of leaving every face to guess.
 ///
 /// A name a later catalog repeats is recorded as a [`Dropped::Duplicate`] and set aside in
 /// [`Discovery::shadowed`] rather than thrown away: it is out of the list because a name gets one row,
 /// not because that catalog stopped publishing it, and an update resolving by origin still has to find it.
-fn merge(paths: &Paths, read: impl Fn(&str, &std::path::Path) -> Result<Catalog>) -> Discovery {
+fn merge(paths: &Paths, read: impl Fn(&str, &std::path::Path) -> Read) -> Discovery {
     let mut entries: Vec<DiscoveredEntry> = Vec::new();
     let mut shadowed: Vec<DiscoveredEntry> = Vec::new();
     let mut sources_meta: Vec<DiscoveredSource> = Vec::new();
@@ -1003,9 +1102,11 @@ fn merge(paths: &Paths, read: impl Fn(&str, &std::path::Path) -> Result<Catalog>
                     fingerprint: Option<String>,
                     key: Option<String>,
                     official: bool,
-                    catalog: Result<Catalog>| {
+                    catalog: Read| {
+        let mut freshness = None;
         let (reachable, offered) = match catalog {
-            Ok(catalog) => {
+            Ok((catalog, read)) => {
+                freshness = Some(read);
                 let offered = catalog.entries.len();
                 dropped.extend(catalog.dropped);
                 for mut entry in catalog.entries {
@@ -1031,7 +1132,8 @@ fn merge(paths: &Paths, read: impl Fn(&str, &std::path::Path) -> Result<Catalog>
             }
             Err(_) => (false, 0),
         };
-        sources_meta.push(DiscoveredSource { url, name, fingerprint, official, reachable, offered });
+        sources_meta
+            .push(DiscoveredSource { url, name, fingerprint, official, reachable, offered, freshness });
     };
 
     fold(
@@ -1256,7 +1358,7 @@ mod tests {
     fn load_falls_back_to_the_cache_when_the_fetch_fails() {
         let paths = paths_at("offline");
         write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
-        let catalog = load_to(UNREACHABLE, &cache_file(&paths)).expect("the cache answers");
+        let (catalog, _) = load_to(UNREACHABLE, &cache_file(&paths)).expect("the cache answers");
         assert!(catalog.find("worktree").is_some());
         assert!(
             refresh_to(UNREACHABLE, &cache_file(&paths)).is_err(),
@@ -1278,7 +1380,7 @@ mod tests {
         // intake. Run it by hand (`cargo nextest run -p amenbo-core plugin_catalog -- --ignored`) when
         // the catalog's producer changes.
         let paths = paths_at("live");
-        let catalog =
+        let (catalog, _) =
             refresh_to(OFFICIAL_CATALOG_URL, &cache_file(&paths)).expect("the published catalog answers");
         assert!(catalog.dropped.is_empty(), "nothing published had to be dropped: {:?}", catalog.dropped);
         assert!(cached(&paths).is_some(), "and the fetch replaced the cache");
@@ -1302,6 +1404,56 @@ mod tests {
     #[test]
     fn no_cache_has_no_age() {
         assert!(cache_age_at(&cache_file(&paths_at("ageless"))).is_none());
+    }
+
+    /// Every read says how it was come by, because the rows cannot (`AMB-D-359`). The two that matter are
+    /// the ones a reader would otherwise confuse: a cache inside the window answering with no request, and
+    /// a fetch that was attempted and fell back to the cache. Neither may report itself as a fetch.
+    #[test]
+    fn a_read_says_whether_it_reached_the_network_or_the_cache() {
+        let paths = paths_at("freshness");
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
+
+        let (_, inside) = fresh_to(UNREACHABLE, &cache_file(&paths)).expect("the cache answers");
+        assert!(
+            matches!(inside, Freshness::Cached { .. }),
+            "inside the window no request is made, and the read says so: {inside:?}",
+        );
+
+        // Asked for the network and did not get it. Calling that a fetch would make `--fresh` a lie, and
+        // calling it an ordinary cache read would send the reader to fetch again — so it is its own arm.
+        let (_, fell_back) = load_to(UNREACHABLE, &cache_file(&paths)).expect("the cache answers");
+        assert!(matches!(fell_back, Freshness::Offline { .. }), "{fell_back:?}");
+
+        assert!(
+            cached_at(&cache_file(&paths_at("ageless-read"))).is_none(),
+            "no cache is no read at all, rather than a zero-age one",
+        );
+    }
+
+    /// A merged view is one answer and can only vouch for as much as its stalest shelf.
+    #[test]
+    fn a_merged_view_is_as_current_as_its_weakest_read() {
+        let hour = Freshness::Cached { age: Duration::from_secs(3600) };
+        let minute = Freshness::Cached { age: Duration::from_secs(60) };
+        let offline = Freshness::Offline { age: Duration::from_secs(60) };
+        assert_eq!(Freshness::Fetched.weaker(hour), hour, "a cache outranks a fetch");
+        assert_eq!(hour.weaker(Freshness::Fetched), hour, "whichever side it is on");
+        assert_eq!(minute.weaker(hour), hour, "and the older of two caches");
+        assert_eq!(
+            Freshness::Fetched.weaker(Freshness::Fetched),
+            Freshness::Fetched,
+            "two fetches are a fetch",
+        );
+        assert_eq!(
+            minute.weaker(offline),
+            offline,
+            "at equal age, a shelf that could not be reached is the fact to report",
+        );
+        assert_eq!(offline.weaker(hour), hour, "but age still comes first");
+
+        let none = Discovery { entries: vec![], shadowed: vec![], sources: vec![], dropped: vec![] };
+        assert!(none.freshness().is_none(), "no shelf answered: not 'fresh', and not an empty result");
     }
 
     // ---- the detail document (`AMB-D-385`) ----

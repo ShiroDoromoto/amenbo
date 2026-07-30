@@ -463,6 +463,48 @@ fn project(name: &str) -> crate::ops::project::NewProject {
     }
 }
 
+/// The AI-harness consent is per project, because the answer changes with the place: an AI runs the
+/// backlog in one folder and the person runs it in another. No row is "never asked", which is the state
+/// the whole question hangs on.
+#[test]
+fn the_harness_consent_is_recorded_per_project_and_survives_a_reopen() {
+    use crate::harness::Consent;
+
+    let (mut s, dir) = fresh_store("harness-consent");
+    let a = s.project_add(project("PJ A")).unwrap();
+    let b = s.project_add(project("PJ B")).unwrap();
+
+    // Never asked — not a `no`, which is the distinction a row cannot lose.
+    assert_eq!(s.harness_consent(a.id).unwrap(), None);
+
+    s.set_harness_consent(a.id, Consent::answered(true)).unwrap();
+    assert_eq!(s.harness_consent(a.id).unwrap(), Some(Consent { allowed: true, asked_again: false }));
+    assert_eq!(s.harness_consent(b.id).unwrap(), None, "and only that project's");
+
+    // The one re-ask is recorded as spent, whichever way it went.
+    s.set_harness_consent(a.id, Consent::answered_again(true)).unwrap();
+    assert_eq!(s.harness_consent(a.id).unwrap(), Some(Consent { allowed: true, asked_again: true }));
+
+    // A refusal replaces the answer rather than adding a second row.
+    s.set_harness_consent(a.id, Consent::answered(false)).unwrap();
+    assert_eq!(s.harness_consent(a.id).unwrap(), Some(Consent { allowed: false, asked_again: false }));
+
+    drop(s);
+    let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
+    assert_eq!(
+        s.harness_consent(a.id).unwrap(),
+        Some(Consent { allowed: false, asked_again: false }),
+        "the answer outlives the process that recorded it"
+    );
+
+    // The answer is about the project, so it goes when the project does.
+    s.set_harness_consent(b.id, Consent::answered(true)).unwrap();
+    s.project_delete(b.id, crate::model::ActorKind::Human).unwrap();
+    assert_eq!(s.harness_consent(b.id).unwrap(), None);
+    assert!(s.harness_consent(a.id).unwrap().is_some(), "and only that project's");
+    fs::remove_dir_all(&dir).ok();
+}
+
 /// The lint-hook opt-out is per project and outlives the process that recorded it — `hooks uninstall`
 /// says "not this one", and it keeps saying it on this clone and the next. The *answer* is not here at
 /// all: it is one per device, in `config.hook_consent`.

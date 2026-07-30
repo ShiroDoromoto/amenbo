@@ -58,7 +58,7 @@
 //! | what the row is | example | `ON DELETE` |
 //! |---|---|---|
 //! | a concept someone can point at | a comment, a dependency edge, a decision↔task link, a commit anchor, a classification value | `RESTRICT` (+ the delete op takes the children first) |
-//! | amenbo's own settings for a project | `plugin_config`, `plugin_secret`, `plugin_enable`, `hook_optout` | `CASCADE` |
+//! | amenbo's own settings for a project | `plugin_config`, `plugin_secret`, `plugin_enable`, `hook_optout`, `harness_consent` | `CASCADE` |
 //! | optional entity reference (keep the child, drop the reference) | none in the registry today | `SET NULL` |
 //!
 //! So `RESTRICT` is what holds the ops to the rule: leave a child behind and the parent's `DELETE` stops
@@ -957,6 +957,28 @@ plain_tables! {
     /// cascade retires the row without a GC pass.
     hook_optout {
         project_id: integer("PRIMARY KEY REFERENCES project(id) ON DELETE CASCADE"),
+    }
+
+    /// The **AI-harness consent** — whether amenbo may offer to have this project's folder start its AI
+    /// on `amenbo agent` (`AMB-D-440`). One row per project, and the row is the answer: a project with no
+    /// row has never been asked, which is what keeps "asked and refused" apart from "never asked".
+    ///
+    /// Per project, unlike the lint's device-wide answer, because this one's answer changes with the
+    /// place: handing a folder's task management to an AI somewhere and keeping it by hand elsewhere is
+    /// an ordinary way to work, and the wiring lands in settings a team may share. Per project and not
+    /// per provider, too — the question is about the feature, and a second harness appearing later is not
+    /// a second question ([`crate::harness`]).
+    ///
+    /// Device-local like `hook_optout` and for the same reason: it is an answer, not a record of the
+    /// project's work, so it is out of `export`'s way and carries no observation event. What it never is
+    /// is a mirror of the settings on disk — those are read every time ([`crate::harness::probe`]) and
+    /// the two meet only in [`crate::harness::reconcile`].
+    ///
+    /// CASCADE: the answer is *about* the project, so it has nothing left to say once the project is gone.
+    harness_consent {
+        project_id: integer("PRIMARY KEY REFERENCES project(id) ON DELETE CASCADE"),
+        allowed: integer,
+        asked_again: integer,
     }
 }
 

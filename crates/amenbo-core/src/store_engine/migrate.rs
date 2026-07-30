@@ -254,6 +254,24 @@ pub const STEPS: &[Step] = &[
         // fired for them, and inventing a project to hold them would be worse than letting them go.
         apply: Apply::Custom(move_plugin_settings_into_the_store),
     },
+    Step {
+        to: 16,
+        name: "add harness_consent, a project's answer on being asked to start its AI on amenbo",
+        // `AMB-D-440`. The genesis batch creates a table an older store is missing at open, so this DDL
+        // has usually run before the chain reaches here — writing it down anyway is what makes the chain
+        // say when the table arrived, rather than leaving a reader of the frozen shapes to guess.
+        //
+        // **Unseeded, and there is nothing it could be seeded from.** No row is the unanswered state, and
+        // nobody has been asked this question yet: inventing a `yes` for every existing project would be
+        // consenting on their behalf, and a `no` would silence a question never put.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS harness_consent (\
+               project_id INTEGER PRIMARY KEY REFERENCES project(id) ON DELETE CASCADE NOT NULL, \
+               allowed INTEGER NOT NULL, \
+               asked_again INTEGER NOT NULL\
+             );",
+        ),
+    },
 ];
 
 /// v4: the lint-hook question stopped being one per project and became one for the device

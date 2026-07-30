@@ -5,40 +5,39 @@ name: CI
 # separate runs. Runner minutes are unchanged — each job still gets its own
 # runner — but the run list, status, and concurrency group are unified.
 #
-# Trigger scope: the run that guards main is the **queue's**, and it is the only one that decides — see
-# the trigger comment below for why a pull request still runs this workflow at all. `concurrency`
-# cancels an in-progress run when a newer commit supersedes it, on pull requests alone.
+# Trigger scope: `push` is restricted to `main` so a feature/Dependabot branch
+# doesn't run the suite twice (once for the push, once for the PR). Pre-merge
+# validation happens via `pull_request`; `push: main` is the post-merge backstop
+# on the merge target itself (and the only gate for branches merged without a
+# PR). `concurrency` cancels an in-progress run when a newer commit (e.g. a
+# Dependabot rebase) supersedes it — but only on PRs, see below.
 #
-# Cost: this repo is public, so Actions minutes are free — the net is drawn by what a change can
-# affect: the `changes` path gate below runs each build/test job only when a change could have moved
-# it, and a queue run opens every gate because the tree it judges is the one about to land. Jobs run
-# on Linux. The
+# Cost: this repo is public, so Actions minutes are free — the net is no longer drawn
+# to save minutes but by what a change can affect: the `changes` path gate below runs
+# each build/test job only when a change could have moved it. Jobs run on Linux. The
 # host crate IS clippy+test gated (the `app-rust` job below), but the native Tauri
 # .app *bundle* (macOS only) is deliberately NOT built here — it is a distribution
 # artifact reserved for a tag/dispatch trigger, not a test gate.
 
-# **The merge queue's run is the one that decides.** main is reached only through the queue, which
-# tests "main as it stands, plus this pull request" and merges what comes back green — so the tree
-# that was tested is the tree that lands, whichever order two branches arrive in. A queue run carries
-# no path filter (see `changes` below): a job that does not run reports nothing, and a required check
-# with no result holds the whole queue.
-#
-# A `pull_request` run is not a gate here, and is kept for the dependency bot alone: its pull request
-# arrives with the out-of-workspace lockfiles unresolved, and the repair that completes it
-# (dependabot-automerge.yml) starts from this workflow finishing. Every other pull request is tested
-# once, in the queue.
 on:
-  merge_group:
+  push:
+    branches: [main]
   pull_request:
 
-# Superseding is a pull-request idea here, which is why the group key differs per event.
+# Superseding is a PR-only idea here, which is why the group key differs per event.
 #
-# On a pull request the path filter below diffs against the merge base, so every run sees the
-# branch's WHOLE diff — a newer run subsumes the one it cancels, and the group is keyed by ref so a
-# rebase/force-push supersedes the run it made obsolete.
+# On a PR the path filter below diffs against the merge base, so every run sees the
+# branch's WHOLE diff — a newer run subsumes the one it cancels, and the group is
+# keyed by ref so a rebase/force-push supersedes the run it made obsolete.
 #
-# A queue run is keyed by its own candidate SHA instead, so it is never cancelled: each candidate is
-# a different tree, and the queue is waiting on this run's verdict to decide whether that tree lands.
+# On `push` the filter sees only THAT push's diff, so a superseded main run takes
+# its changes down with it: push A touches Rust, push B (shell only) supersedes A,
+# B's filter reports rust=false, and A's Rust change is never compiled while main
+# says green. Keying push runs by SHA gives each commit its own group, so no main
+# run is ever cancelled — neither in-progress (cancel-in-progress) nor pending
+# (a group holds one pending run, and a third arrival evicts the one waiting).
+# Main is pushed on every merge now, and that is fine: an extra run costs nothing
+# next to a green main that was never built.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
@@ -73,9 +72,6 @@ jobs:
   changes:
     name: detect changed paths
     runs-on: ubuntu-latest
-    # A pull_request run belongs to the dependency bot (see the trigger comment above); everything
-    # else is tested in the queue. The gated jobs `needs: changes`, so refusing here refuses them all.
-    if: ${{ github.event_name != 'pull_request' || github.actor == 'dependabot[bot]' }}
     # On pull_request events dorny/paths-filter lists changed files via the GitHub
     # API, which needs pull-requests:read. The repo's default token is
     # contents/metadata/packages:read only, so without this the job fails with
@@ -85,25 +81,18 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    # A queue run answers `true` to everything: the tree it is judging is the one about to land, and a
-    # skipped job leaves a required check with no result, which the queue waits on forever. The event
-    # is read first in each expression because a filter output is the string `false`, and a non-empty
-    # string is truthy — `outputs.rust || <event>` would answer `false`.
     outputs:
-      rust: ${{ github.event_name == 'merge_group' || steps.filter.outputs.rust == 'true' }}
-      verification: ${{ github.event_name == 'merge_group' || steps.filter.outputs.verification == 'true' }}
-      gui: ${{ github.event_name == 'merge_group' || steps.filter.outputs.gui == 'true' }}
-      go: ${{ github.event_name == 'merge_group' || steps.filter.outputs.go == 'true' }}
-      shell: ${{ github.event_name == 'merge_group' || steps.filter.outputs.shell == 'true' }}
-      cargo_deps: ${{ github.event_name == 'merge_group' || steps.filter.outputs.cargo_deps == 'true' }}
-      npm_deps: ${{ github.event_name == 'merge_group' || steps.filter.outputs.npm_deps == 'true' }}
-      catalog_key: ${{ github.event_name == 'merge_group' || steps.filter.outputs.catalog_key == 'true' }}
+      rust: ${{ steps.filter.outputs.rust }}
+      verification: ${{ steps.filter.outputs.verification }}
+      gui: ${{ steps.filter.outputs.gui }}
+      go: ${{ steps.filter.outputs.go }}
+      shell: ${{ steps.filter.outputs.shell }}
+      cargo_deps: ${{ steps.filter.outputs.cargo_deps }}
+      npm_deps: ${{ steps.filter.outputs.npm_deps }}
+      catalog_key: ${{ steps.filter.outputs.catalog_key }}
     steps:
       - uses: actions/checkout@v7
-      # The filter reads a pull request's diff through the API. A queue candidate has no pull request
-      # to diff, and nothing to decide either, so it is not asked.
-      - if: ${{ github.event_name != 'merge_group' }}
-        uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -581,8 +570,6 @@ jobs:
   comment-guard:
     name: Comment guard (placement, form, vocabulary)
     runs-on: ubuntu-latest
-    # Same door as `changes`: a pull_request run is the dependency bot's alone.
-    if: ${{ github.event_name != 'pull_request' || github.actor == 'dependabot[bot]' }}
     env:
       ESORP_VERSION: 0.6.0
       ESORP_SHA256: bd0a8136aa859892e21b51270ba6202e40529e100c0e8aeb5558726822e257c2
@@ -611,8 +598,6 @@ jobs:
   tree-guards:
     name: Tree guards (internal-note refs, test prose, CLI shim, change scopes, CLI name, dev self-update)
     runs-on: ubuntu-latest
-    # Same door as `changes`: a pull_request run is the dependency bot's alone.
-    if: ${{ github.event_name != 'pull_request' || github.actor == 'dependabot[bot]' }}
     # Backstop for the local pre-commit hook, which runs the first two scans over
     # staged additions only. All have fixed patterns — no secret needed. The rest
     # are the odd ones out: they assert an invariant across a whole tree rather than
@@ -649,47 +634,3 @@ jobs:
         run: |
           chmod +x guards/check-dev-selfupdate.sh
           guards/check-dev-selfupdate.sh
-
-  # **The single check the queue is told to watch.** A ruleset names checks by job, and naming eleven of
-  # them would go stale on the first job renamed or added. Worse, a job that legitimately stands aside —
-  # the lockfile check steps aside for the bot's own pull requests — leaves a required name with no
-  # result, and a required check with no result is what the queue waits on instead of merging. So the
-  # queue watches this one job: it always runs, it waits for every other, and it fails when any of them
-  # failed or was cancelled. A **skipped** job is not a failure: a job with nothing to judge judged
-  # nothing.
-  #
-  # On a pull request nothing else runs at all (see the trigger comment), so this comes back green
-  # having tested nothing — which is the point: it lets a pull request enter the queue, and the queue's
-  # own run of this same workflow is what decides whether the tree lands.
-  all-green:
-    name: CI green
-    runs-on: ubuntu-latest
-    if: always()
-    needs:
-      - changes
-      - rust
-      - verification
-      - gui-web
-      - go
-      - rot-gates
-      - cargo-license
-      - npm-license
-      - app-rust
-      - out-of-workspace-locks
-      - comment-guard
-      - tree-guards
-    steps:
-      - name: Refuse if any job did not come back green
-        env:
-          RESULTS: ${{ toJSON(needs) }}
-          EVENT: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          echo "$RESULTS"
-          if [ "$EVENT" = pull_request ]; then
-            echo "a pull request is judged in the merge queue — this run tests nothing"
-          fi
-          if printf '%s' "$RESULTS" | grep -qE '"result": *"(failure|cancelled)"'; then
-            echo "a job did not come back green (see the results above)" >&2
-            exit 1
-          fi

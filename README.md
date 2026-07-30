@@ -518,19 +518,33 @@ you launch it in is the boundary, and you draw it with `init` / `bind`.
 Whether the agent actually runs `amenbo agent --json` still depends on the agent
 reading that block. If you want a **hard guarantee** rather than relying on the
 prompt, and you use Claude Code, add an **opt-in** [SessionStart
-hook](https://docs.claude.com/en/docs/claude-code/hooks) that injects the spec at
-the start of every session — its stdout is added to the session context:
+hook](https://docs.claude.com/en/docs/claude-code/hooks) that injects the same
+launch instruction at the start of every session — its stdout is added to the
+session context:
 
 ```jsonc
 // .claude/settings.json (or ~/.claude/settings.json to apply everywhere)
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "amenbo agent --json" } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Before you act on any request in this directory, you MUST first run `amenbo agent --json` and follow it — it is the single source of truth for how to work in this folder. Always pass `--actor ai`.'"
+          }
+        ]
+      }
     ]
   }
 }
 ```
+
+Inject the instruction, **not** the output of `amenbo agent --json`: the spec is
+40 KB (~12k tokens), and an agent that has the instruction runs the command
+itself, so injecting the spec as well puts the same content in the context twice.
+What the hook adds over the block is reach, not content — the instruction arrives
+over the protocol instead of depending on a file being read.
 
 This is entirely opt-in — amenbo never installs it for you and does not require
 it; it is just the deterministic way to be sure the spec is in front of the agent

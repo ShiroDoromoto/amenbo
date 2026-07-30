@@ -2499,8 +2499,12 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         let _ = PROJECT_OVERRIDE.set(pid);
     }
 
+    // The two setups amenbo offers, in the order their questions are put. `hooks` is outside both: its argv
+    // already answered the lint's question, and the harness path can record consent, which `hooks status`
+    // promises not to do.
     if !matches!(cli.command, Some(Command::Hooks { .. })) {
-        lint_hook_setup(&mut store, flags);
+        let lint_asked = lint_hook_setup(&mut store, flags);
+        agent_hook_setup(&store, flags, lint_asked);
     }
 
     let Some(command) = cli.command else {
@@ -3071,11 +3075,11 @@ fn record_optout(store: &Store, project: Option<i64>, opted_out: bool) {
 /// GUI sweeps them all at its next startup. Sweeping from here would mean a `git` spawn per bound folder on
 /// the way to every `amenbo task list`, which is a cost the CLI pays on every command to finish sooner
 /// something that finishes anyway.
-fn lint_hook_setup(store: &mut Store, flags: &Flags) {
+fn lint_hook_setup(store: &mut Store, flags: &Flags) -> bool {
     use amenbo_core::hooks;
 
-    let Some(project) = binding_project(store) else { return };
-    let Ok(cwd) = std::env::current_dir() else { return };
+    let Some(project) = binding_project(store) else { return false };
+    let Ok(cwd) = std::env::current_dir() else { return false };
     let consent = store.config.hook_consent;
     let opted_out = store.hook_opted_out(project).unwrap_or(false);
     let can_ask = !flags.json && flags.actor != Some(ActorKind::Ai) && std::io::stdin().is_terminal();
@@ -3092,6 +3096,9 @@ fn lint_hook_setup(store: &mut Store, flags: &Flags) {
         eprintln!("⚠ amenbo's lint block in {names} had been changed or removed — restored it.");
     }
     report_unfinished_setup(flags, &cwd, answered, states, consent, opted_out);
+    // Whether a question was actually put here — the only branch that returns an answer is the one that
+    // asked for it, which is what the next setup needs to know to hold its own question back.
+    answered.is_some()
 }
 
 /// Report that the lint is not actually running, on every response until it is — a standing signal, where
@@ -3121,12 +3128,17 @@ fn report_unfinished_setup(
         // Empty slots only — the ones install is sure to wire. A stranger's slot is not reported: install
         // either already coexisted with it (under a yes) or refuses it (a tracked hook), so "run install"
         // there would be a promise it cannot keep.
-        set_setup_report(json!({
-            "unwired": notice.unwired.iter().map(|slot| json!({
-                "hook": slot.name(),
-                "fix": format!("{cmd} hooks install"),
-            })).collect::<Vec<_>>(),
-        }));
+        set_setup_report(
+            "unwired",
+            json!(notice
+                .unwired
+                .iter()
+                .map(|slot| json!({
+                    "hook": slot.name(),
+                    "fix": format!("{cmd} hooks install"),
+                }))
+                .collect::<Vec<_>>()),
+        );
     } else if !flags.quiet {
         let slots = notice.unwired.iter().map(|slot| slot.name()).collect::<Vec<_>>().join(", ");
         eprintln!("⚠ `{cmd} lint` is not running on your commits ({slots}).");
@@ -3234,6 +3246,170 @@ fn ask_yes_no(prompt: &str) -> Option<bool> {
         return None;
     }
     Some(matches!(buf.trim(), "y" | "Y" | "yes"))
+}
+
+/// The session-start hook's two duties, run before the command the user came for (`AMB-D-440`): the one
+/// question, where it can be answered, and the standing report of what is not wired.
+///
+/// **amenbo writes nothing here.** Every other setup path in this file ends in amenbo writing a file; this
+/// one ends in text a person pastes, which is why the report cannot be ended by an answer — only by the
+/// paste landing ([`amenbo_core::harness::setup_notice`]).
+///
+/// `lint_asked` holds the one-question-at-a-time rule: two prompts in one run, over two different things,
+/// is how a reader ends up answering neither on purpose. The lint's question goes first because it is the
+/// older one and it has a `no` that closes it for good; this one is put on the next run, having recorded
+/// nothing, which is exactly what the unanswered state is for.
+fn agent_hook_setup(store: &Store, flags: &Flags, lint_asked: bool) {
+    use amenbo_core::harness::{self, Consent, ConsentAction, ConsentContext};
+
+    let Some(project) = binding_project(store) else { return };
+    let Ok(cwd) = std::env::current_dir() else { return };
+    let cmd = Paths::command_name();
+    let found = harness::probe(&cwd, cmd);
+    let recorded = store.harness_consent(project).unwrap_or(None);
+    let can_ask = !flags.json
+        && flags.actor != Some(ActorKind::Ai)
+        && std::io::stdin().is_terminal()
+        && !lint_asked;
+    let wired = found.iter().any(harness::Wiring::wired);
+
+    let action = harness::reconcile(&ConsentContext { consent: recorded, wired, can_ask });
+    let answered = match action {
+        ConsentAction::Nothing => None,
+        // Wired before anyone asked: the hand that did it answered, so write that down rather than put a
+        // question whose answer is already on disk.
+        ConsentAction::AdoptWired => Some(Consent::answered(true)),
+        ConsentAction::Ask => offer_agent_hook(&found, cmd, false),
+        ConsentAction::AskAgain => offer_agent_hook(&found, cmd, true),
+    };
+    if let Some(answer) = answered {
+        // Best-effort, like the lint's note: the row decides only whether amenbo offers again, and failing
+        // the command the user actually ran over it would undo nothing.
+        let _ = store.set_harness_consent(project, answer);
+    }
+    // A run that just put the question has said all of this at length, and repeating it underneath as a
+    // warning reads as nagging about something that was handed over a line ago. The report is a standing
+    // signal, so the next run carries it — nothing on disk changed here either way.
+    if !matches!(action, ConsentAction::Ask | ConsentAction::AskAgain) {
+        report_unwired_harnesses(flags, &found, answered.or(recorded), cmd);
+    }
+}
+
+/// Put the question about the session-start hook, and hand over what a yes asked for. `again` words the
+/// one re-ask, whose occasion is not a fresh reader but a wiring that has gone missing.
+///
+/// A yes is answered with the text, or with the line that prints it: what a reader can do with a yes is
+/// paste, so an offer that recorded consent and said nothing else would have taken an answer and given
+/// nothing back. A no says how to come back, because it closes the question and not the door.
+fn offer_agent_hook(
+    found: &[amenbo_core::harness::Wiring],
+    cmd: &str,
+    again: bool,
+) -> Option<amenbo_core::harness::Consent> {
+    use amenbo_core::harness::Consent;
+
+    let named: Vec<&amenbo_core::harness::Wiring> =
+        found.iter().filter(|one| one.traced && !one.wired()).collect();
+    let mut prompt = String::new();
+    if again {
+        // The occasion is a standing yes with nothing wired, and amenbo cannot tell a paste that never
+        // happened from one a clone did not carry — so the wording says the only thing it knows, which is
+        // that the text has not landed. Claiming either story would be wrong half the time.
+        prompt.push_str(
+            "You said yes to this before, and nothing here starts the AI on amenbo yet — the text may not have been pasted, or a clone did not carry it.\n",
+        );
+    } else {
+        prompt.push_str(
+            "amenbo can have this folder's AI read its instruction at the start of every session, through your tool's own session-start hook — so it arrives even when the managed block is not read.\n",
+        );
+    }
+    prompt.push_str("amenbo writes no settings file: it hands you the text, and you paste it.\n");
+    if let [one] = named.as_slice() {
+        prompt.push_str(&format!("This folder looks like {}'s. ", one.label));
+    }
+    prompt.push_str(if again {
+        "Want the text again? amenbo will not ask a third time."
+    } else {
+        "Asked once for this project. Want the text?"
+    });
+
+    let yes = ask_yes_no(&prompt)?;
+    match (yes, named.as_slice()) {
+        // One tool, and the answer is yes: the paste itself, which is the whole of what was asked for.
+        (true, [one]) => match amenbo_core::harness::find(one.id) {
+            Some(harness) => eprintln!(
+                "\nPaste this into {} — amenbo does not write it for you:\n\n{}\n",
+                harness.paste_into,
+                amenbo_core::harness::snippet(harness, cmd)
+            ),
+            None => eprintln!("Get it with: {cmd} agent-hook snippet {}", one.id),
+        },
+        // No tool named, or several: which one is the reader's to say, and the command lists them.
+        (true, _) => eprintln!("Get the text for your tool: {cmd} agent-hook snippet <tool>"),
+        (false, _) => eprintln!(
+            "amenbo will not ask again — `{cmd} agent-hook snippet <tool>` whenever you want it."
+        ),
+    }
+    Some(if again { Consent::answered_again(yes) } else { Consent::answered(yes) })
+}
+
+/// Report that this folder's AI is not being started on amenbo, on every response until it is — the
+/// standing signal, where [`offer_agent_hook`] is a one-time question. Under `--json` it lands as a field
+/// on the answer the caller already parses, which is the one surface an AI is sure to read: it can then
+/// hand the human the snippet, which is the only way this setup ever finishes, since amenbo will not write
+/// the file itself.
+///
+/// **The two faces do not report the same set, because they are told which provider by different things**
+/// (`AMB-D-440`: the trace and the self-declaration). A person is shown only what amenbo can point at — a
+/// provider whose own directory is in this folder, unwired — because a standing warning about a tool there
+/// is no sign of is a line they cannot act on, arriving on every command they run. The `--json` face
+/// carries the catalog as well, since the reader there is the harness itself and knows which one it is even
+/// where the folder shows nothing. The one-time question is put in either case: it is asked once per
+/// project, and being asked once is how the feature is ever discovered.
+///
+/// A warning either way: the command the user ran succeeds regardless, and text goes to stderr so stdout
+/// stays pipeable.
+fn report_unwired_harnesses(
+    flags: &Flags,
+    found: &[amenbo_core::harness::Wiring],
+    consent: Option<amenbo_core::harness::Consent>,
+    cmd: &str,
+) {
+    use amenbo_core::harness;
+
+    let Some(notice) = harness::setup_notice(found, consent) else { return };
+    if flags.json {
+        set_setup_report(
+            "agent_hook",
+            json!({
+                "unwired": notice.unwired.iter().map(|one| json!({
+                    "tool": one.id,
+                    "label": one.label,
+                    "fix": format!("{cmd} agent-hook snippet {}", one.id),
+                })).collect::<Vec<_>>(),
+                "any_wired": notice.any_wired,
+                // The catalog, because a harness that left no trace in the folder is still the one reading
+                // this and can name itself (`AMB-D-440`).
+                "tools": harness::HARNESSES.iter().map(|one| one.id).collect::<Vec<_>>(),
+            }),
+        );
+    } else if !flags.quiet {
+        match notice.unwired.as_slice() {
+            // Nothing to point at: the folder shows no provider of its own, so there is no line here a
+            // person could act on. The question already offered them the feature, and the `--json` face
+            // above still carries it for the reader that can name itself.
+            [] => {}
+            [one] => {
+                eprintln!("⚠ {} here does not run `{cmd} agent` at session start — the instruction reaches it only through the managed block.", one.label);
+                eprintln!("  The text to paste: {cmd} agent-hook snippet {}", one.id);
+            }
+            several => {
+                let labels = several.iter().map(|one| one.label).collect::<Vec<_>>().join(", ");
+                eprintln!("⚠ {labels} here do not run `{cmd} agent` at session start.");
+                eprintln!("  The text to paste, one tool at a time: {cmd} agent-hook snippet <tool>");
+            }
+        }
+    }
 }
 
 // ───────────────────────── helpers ─────────────────────────

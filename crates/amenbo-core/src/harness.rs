@@ -46,6 +46,12 @@ pub struct Harness {
     /// disk is read as every `*.json` directly inside it — the shape a provider that takes any filename
     /// under a hooks directory needs, with no second vocabulary for the ones that name a single file.
     pub places: &'static [&'static str],
+    /// The directory whose presence in a folder says **this provider is used here** — the trace a notice
+    /// names a provider by (`AMB-D-440`). It is carried per row rather than derived from
+    /// [`places`](Harness::places), because the directory a place sits in is not always the provider's:
+    /// `.github` belongs to GitHub and is in nearly every repository, while `.github/hooks` is the one
+    /// that says this provider's hooks are kept here. Every place is inside it.
+    pub home: &'static str,
     /// The file [`snippet`] is written for, so the offer can say where the text goes. One of
     /// [`places`](Harness::places): a snippet pasted where a probe does not look would read as unwired
     /// forever.
@@ -69,6 +75,7 @@ pub static HARNESSES: &[Harness] = &[
         // `settings.local.json` is the same folder's settings kept out of the repository, and a user who
         // wired it there has wired it: leaving it out would ask them again forever.
         places: &[".claude/settings.json", ".claude/settings.local.json"],
+        home: ".claude",
         paste_into: ".claude/settings.json",
         // Plain stdout is what this one adds to the session, so the command is the instruction itself.
         template: r#"{
@@ -92,6 +99,7 @@ pub static HARNESSES: &[Harness] = &[
         label: "GitHub Copilot CLI",
         event: "sessionStart",
         places: &[".github/hooks"],
+        home: ".github/hooks",
         paste_into: ".github/hooks/amenbo.json",
         template: r#"{
   "version": 1,
@@ -111,6 +119,7 @@ pub static HARNESSES: &[Harness] = &[
         label: "Cursor",
         event: "sessionStart",
         places: &[".cursor/hooks.json"],
+        home: ".cursor",
         paste_into: ".cursor/hooks.json",
         template: r#"{
   "version": 1,
@@ -131,6 +140,7 @@ pub static HARNESSES: &[Harness] = &[
         // Two files, one wiring: this provider reads hooks from its own file or from inline tables in the
         // folder's `config.toml`, and either is where a user may have written it.
         places: &[".codex/hooks.json", ".codex/config.toml"],
+        home: ".codex",
         paste_into: ".codex/hooks.json",
         template: r#"{
   "hooks": {
@@ -153,6 +163,7 @@ pub static HARNESSES: &[Harness] = &[
         label: "Gemini CLI",
         event: "SessionStart",
         places: &[".gemini/settings.json"],
+        home: ".gemini",
         paste_into: ".gemini/settings.json",
         template: r#"{
   "hooks": {
@@ -209,6 +220,11 @@ pub struct Wiring {
     pub label: &'static str,
     /// Where the wiring was found, relative to the probed folder — `None` when there is none.
     pub wired_at: Option<PathBuf>,
+    /// Whether the folder shows a trace of this provider being used here — its [`home`](Harness::home)
+    /// directory exists. It is what lets a notice name the provider this user actually has instead of
+    /// reciting the catalog, and it is independent of the wiring: a traced provider is usually the
+    /// unwired one worth mentioning, and an untraced one is not evidence of anything either way.
+    pub traced: bool,
 }
 
 impl Wiring {
@@ -233,6 +249,7 @@ pub fn probe(dir: &Path, cmd: &str) -> Vec<Wiring> {
             id: harness.id,
             label: harness.label,
             wired_at: wired_at(dir, harness, cmd),
+            traced: dir.join(harness.home).is_dir(),
         })
         .collect()
 }
@@ -367,6 +384,50 @@ pub fn reconcile(ctx: &ConsentContext) -> ConsentAction {
     }
 }
 
+/// What a folder still has to say about its session-start wiring (`AMB-D-440`) — the standing signal,
+/// where [`reconcile`] is a question asked once.
+///
+/// It is a warning and never a refusal: nothing here is a reason to fail a command, and a folder whose AI
+/// is not wired works exactly as it always did — it just reads the instruction only if it reads the
+/// managed block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Notice {
+    /// The providers this folder shows a trace of that are not wired — the ones to name, in catalog
+    /// order. Empty where the folder traces none, which is its own state rather than a shorter list:
+    /// there the reader is the one who knows which harness they are, and the catalog is what they pick
+    /// from ([`HARNESSES`]).
+    ///
+    /// A face built for a person shows only what this list can point at: a standing warning about a tool
+    /// the folder shows no sign of is one they cannot act on, and it arrives on every command. A face read
+    /// by the harness itself has the catalog too — it knows which one it is (`AMB-D-440`).
+    pub unwired: Vec<Wiring>,
+    /// Whether anything at all is wired here. A folder with one provider wired and another traced and
+    /// unwired still has something to say, but it is not the same thing as a folder where nothing starts
+    /// its AI on amenbo at all.
+    pub any_wired: bool,
+}
+
+/// What to report about `found`, or `None` when there is nothing to report.
+///
+/// Two things silence it, and neither is "the question was answered":
+///
+/// - **A refusal** (`allowed: false`). The report exists to finish a setup, and a reader who said no has
+///   no setup pending. The snippets stay there for the asking.
+/// - **A folder that is wired, with no traced provider left out.** Something here starts the AI on
+///   amenbo, which is the whole of what this was about.
+///
+/// A standing yes does **not** silence it: consent is not wiring, and amenbo writes no settings file, so
+/// the only thing that ends this report is the paste actually landing.
+pub fn setup_notice(found: &[Wiring], consent: Option<Consent>) -> Option<Notice> {
+    if consent.is_some_and(|answer| !answer.allowed) {
+        return None;
+    }
+    let any_wired = found.iter().any(Wiring::wired);
+    let unwired: Vec<Wiring> =
+        found.iter().filter(|one| one.traced && !one.wired()).cloned().collect();
+    (!unwired.is_empty() || !any_wired).then_some(Notice { unwired, any_wired })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -400,6 +461,13 @@ mod tests {
             assert!(
                 harness.places.iter().any(|place| harness.paste_into.starts_with(place)),
                 "{} is pasted somewhere it is not probed",
+                harness.id
+            );
+            // The trace has to be this provider's own directory, which is what makes its presence say
+            // anything: a home some other place sits outside of is a home holding the wrong thing.
+            assert!(
+                harness.places.iter().all(|place| place.starts_with(harness.home)),
+                "{} keeps settings outside the home it is traced by",
                 harness.id
             );
         }
@@ -569,5 +637,66 @@ mod tests {
     fn the_event_is_matched_whatever_its_casing() {
         let dir = folder("casing", ".cursor/hooks.json", r#"{"hooks":{"SESSIONSTART":[{"command":"amenbo agent --json"}]}}"#);
         assert!(wiring(&probe(&dir, "amenbo"), "cursor").wired());
+    }
+
+    /// A trace is the provider's **own** directory. `.github` is in nearly every repository and says
+    /// nothing about whether this provider is used here, which is why the row carries `.github/hooks`
+    /// instead — get this wrong and every repository on earth is told to wire a tool it does not have.
+    #[test]
+    fn a_trace_is_the_providers_own_directory_and_not_a_shared_one() {
+        let dir = amenbo_scratch::scratch("harness-trace");
+        std::fs::create_dir_all(dir.join(".github/workflows")).unwrap();
+        std::fs::create_dir_all(dir.join(".claude")).unwrap();
+        let found = probe(&dir, "amenbo");
+
+        assert!(wiring(&found, "claude-code").traced, "a folder with .claude uses Claude Code");
+        assert!(!wiring(&found, "github-copilot").traced, "a .github is not this provider's hooks");
+        assert!(!wiring(&found, "cursor").traced);
+        // Traced is not wired: the settings file is not even there.
+        assert!(!wiring(&found, "claude-code").wired());
+    }
+
+    /// What the standing report says, state by state. It is the wiring that ends it, never the answer:
+    /// amenbo writes no settings file, so a yes leaves the setup exactly as unfinished as it found it.
+    #[test]
+    fn the_report_ends_when_the_paste_lands_or_the_reader_says_no() {
+        let bare = |id: &'static str, traced| Wiring { id, label: id, wired_at: None, traced };
+        let wired = |id: &'static str| Wiring {
+            id,
+            label: id,
+            wired_at: Some(PathBuf::from("somewhere")),
+            traced: true,
+        };
+
+        // Nothing traced and nothing wired: still worth saying, since the reader knows their own harness
+        // even where the folder shows none.
+        let quiet_folder = [bare("claude-code", false), bare("cursor", false)];
+        let notice = setup_notice(&quiet_folder, None).expect("a folder wired to nothing has something to say");
+        assert!(notice.unwired.is_empty(), "there is nothing to name: {notice:?}");
+        assert!(!notice.any_wired);
+
+        // A traced provider that is not wired is named.
+        let traced = [bare("claude-code", true), bare("cursor", false)];
+        let notice = setup_notice(&traced, None).expect("a traced provider unwired is the case for saying so");
+        assert_eq!(notice.unwired.iter().map(|w| w.id).collect::<Vec<_>>(), ["claude-code"]);
+
+        // Wired, with nothing else traced: nothing left to finish.
+        assert_eq!(setup_notice(&[wired("claude-code"), bare("cursor", false)], None), None);
+
+        // Wired, and another provider traced and unwired: that one is still named.
+        let mixed = [wired("claude-code"), bare("cursor", true)];
+        let notice = setup_notice(&mixed, Some(Consent::answered(true))).expect("the other one is unwired");
+        assert_eq!(notice.unwired.iter().map(|w| w.id).collect::<Vec<_>>(), ["cursor"]);
+        assert!(notice.any_wired, "one wired provider is not none");
+
+        // A standing yes does not end it — only the paste does.
+        assert!(setup_notice(&traced, Some(Consent::answered(true))).is_some());
+        assert!(setup_notice(&quiet_folder, Some(Consent::answered_again(true))).is_some());
+
+        // A refusal ends it, whatever the folder holds.
+        for consent in [Consent::answered(false), Consent::answered_again(false)] {
+            assert_eq!(setup_notice(&traced, Some(consent)), None, "{consent:?}");
+            assert_eq!(setup_notice(&quiet_folder, Some(consent)), None, "{consent:?}");
+        }
     }
 }

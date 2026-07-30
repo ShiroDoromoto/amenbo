@@ -4336,6 +4336,73 @@ fn agent_hook_snippet_gives_stdout_to_the_paste_and_says_where_it_goes_on_stderr
     assert!(err.contains("claude-code") && err.contains("gemini-cli"), "the refusal lists no tools: {err}");
 }
 
+/// A folder whose AI is not started on amenbo says so on every response until it is — and under `--json`
+/// it says so in a field, which is the one surface an AI is sure to read (`AMB-D-440`). The provider it
+/// names is the one the folder shows a trace of, and the fix is the command that prints the paste.
+#[test]
+fn an_unwired_folder_reports_the_tool_it_traces_and_how_to_get_its_paste() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+    // A folder that uses Claude Code, with nothing wired in it.
+    std::fs::create_dir_all(cli.home.join(".claude")).unwrap();
+
+    let doc = cli.json(&["task", "list", "--json"]);
+    let report = &doc["setup_incomplete"]["agent_hook"];
+    assert_eq!(report["unwired"][0]["tool"], "claude-code");
+    assert_eq!(report["unwired"][0]["label"], "Claude Code");
+    assert!(
+        report["unwired"][0]["fix"].as_str().is_some_and(|fix| fix.contains("agent-hook snippet claude-code")),
+        "the report does not say how to get the paste: {report}"
+    );
+    assert_eq!(report["any_wired"], false);
+    // The catalog rides along, because a harness that left no trace still knows which one it is.
+    assert!(report["tools"].as_array().is_some_and(|all| all.len() >= 5), "{report}");
+
+    // The text face says it on stderr, and the command the user actually ran still succeeds.
+    let (out, err, code) = cli.run_both(&["task", "list"]);
+    assert_eq!(code, 0, "the report is a warning, not a refusal: {err}");
+    assert!(err.contains("agent-hook snippet claude-code"), "stderr does not name the way out: {err}");
+    assert!(!out.contains("agent-hook"), "the report leaked into stdout: {out}");
+}
+
+/// A folder that shows no AI tool of its own is told nothing **as a person** — a warning naming no tool is
+/// one nobody can act on, and it would arrive on every command — while the `--json` face still carries it,
+/// because the reader there is the harness and knows which one it is (`AMB-D-440`).
+#[test]
+fn a_folder_that_traces_no_tool_says_it_only_where_the_reader_can_name_its_own() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+
+    let (_, err, code) = cli.run_both(&["task", "list"]);
+    assert_eq!(code, 0);
+    assert!(!err.contains("agent-hook"), "a person was warned about a tool amenbo cannot see: {err}");
+
+    let doc = cli.json(&["task", "list", "--json"]);
+    let report = &doc["setup_incomplete"]["agent_hook"];
+    assert_eq!(report["any_wired"], false, "the AI is told what the folder is missing: {doc}");
+    assert!(report["unwired"].as_array().is_some_and(|named| named.is_empty()), "{report}");
+    assert!(report["tools"].as_array().is_some_and(|all| all.len() >= 5), "{report}");
+}
+
+/// Once the paste has landed the report stops — and only then. It is the wiring that ends it, since amenbo
+/// never writes that file itself.
+#[test]
+fn a_wired_folder_is_told_nothing() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+    std::fs::create_dir_all(cli.home.join(".claude")).unwrap();
+
+    let (snippet, code) = cli.run(&["agent-hook", "snippet", "claude-code"]);
+    assert_eq!(code, 0);
+    std::fs::write(cli.home.join(".claude/settings.json"), snippet).unwrap();
+
+    let doc = cli.json(&["task", "list", "--json"]);
+    assert!(
+        doc.get("setup_incomplete").is_none(),
+        "a folder that starts its AI on amenbo has nothing left to finish: {doc}"
+    );
+}
+
 /// The `--json` face carries the same paste plus the file it goes in, which is what lets an AI hand both
 /// to the human in one message. `copied` says which route the text took.
 #[test]

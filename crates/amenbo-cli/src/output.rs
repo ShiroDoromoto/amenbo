@@ -2,7 +2,6 @@
 //! confirmation handling.
 
 use std::io::{IsTerminal, Write};
-use std::sync::OnceLock;
 
 use amenbo_core::config::Paths;
 use amenbo_core::model::ActorKind;
@@ -293,15 +292,29 @@ impl From<amenbo_core::Error> for CliError {
     }
 }
 
-/// The unfinished-setup report to hang on every `--json` response, set once per run from argv and the
-/// filesystem. Unset means there is nothing to report, which is the ordinary case and stays free: a run
+/// The unfinished-setup report to hang on every `--json` response, filled in per run from argv and the
+/// filesystem. Empty means there is nothing to report, which is the ordinary case and stays free: a run
 /// that never calls [`set_setup_report`] serialises exactly what it always did.
-static SETUP_REPORT: OnceLock<serde_json::Value> = OnceLock::new();
+///
+/// It is a map rather than one value because more than one setup can be unfinished at a time — the lint
+/// hooks and the session-start hook are independent, each reported by the code that reads it — and every
+/// one of them has to arrive on the same response, since the field is read by a caller who parses it once.
+static SETUP_REPORT: std::sync::Mutex<Option<serde_json::Map<String, serde_json::Value>>> =
+    std::sync::Mutex::new(None);
 
-/// Declare what setup is unfinished, so [`print_json`] carries it. Idempotent by construction — one run
-/// decides this once, before any output.
-pub fn set_setup_report(report: serde_json::Value) {
-    let _ = SETUP_REPORT.set(report);
+/// Declare one thing whose setup is unfinished, under its own key, so [`print_json`] carries it. Each
+/// reporter decides its own key once, before any output; a second call under the same key replaces it.
+pub fn set_setup_report(key: &str, report: serde_json::Value) {
+    if let Ok(mut held) = SETUP_REPORT.lock() {
+        held.get_or_insert_with(serde_json::Map::new).insert(key.to_string(), report);
+    }
+}
+
+/// The report as it stands, or `None` when nothing is unfinished.
+fn setup_report() -> Option<serde_json::Value> {
+    let held = SETUP_REPORT.lock().ok()?;
+    let map = held.as_ref()?;
+    (!map.is_empty()).then(|| serde_json::Value::Object(map.clone()))
 }
 
 /// Pretty-print a JSON value to stdout, carrying the unfinished-setup report when there is one. The report
@@ -310,10 +323,10 @@ pub fn set_setup_report(report: serde_json::Value) {
 /// when the payload is a JSON object and only when something is actually unfinished, so the ordinary
 /// response is untouched and a payload that is not an object cannot be corrupted into one.
 pub fn print_json<T: Serialize>(value: &T) {
-    let s = match (SETUP_REPORT.get(), serde_json::to_value(value)) {
+    let s = match (setup_report(), serde_json::to_value(value)) {
         (Some(report), Ok(mut v)) => {
             if let Some(obj) = v.as_object_mut() {
-                obj.insert("setup_incomplete".to_string(), report.clone());
+                obj.insert("setup_incomplete".to_string(), report);
             }
             serde_json::to_string_pretty(&v)
         }

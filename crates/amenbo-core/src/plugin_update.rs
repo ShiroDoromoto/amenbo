@@ -74,7 +74,12 @@
 //! [`plugin_catalog::fresh`], whose freshness boundary means a trigger arriving inside the window is
 //! answered from the cache. What a check costs beyond that is one small document per plugin whose digest
 //! moved — nothing when nothing did, which is the ordinary case, and that is what keeps a check cheap
-//! enough to hang off a listing (`AMB-D-359`).
+//! enough to hang off a listing (`AMB-D-359`). Somebody who asks past the window gets a fetch and only
+//! then ([`Reach::Now`]) — the window is a default, not a ceiling.
+//!
+//! **And every check says what it was measured against** ([`Against`]). The boundary that makes a check
+//! cheap also makes "nothing has changed" and "nothing had changed an hour ago" the same rows and the same
+//! count, so the read is carried out beside the verdict rather than left for a reader to assume.
 
 use std::path::PathBuf;
 
@@ -175,29 +180,89 @@ fn confirm(paths: &Paths, candidate: &Candidate) -> Result<Update> {
 
 /// Every installed plugin the catalog lists a different entry for, with the document that says what moved.
 ///
-/// With nothing installed the answer is "no updates" without a catalog read at all — there is nothing to
-/// compare it against, and a check should not spend a fetch to say so. Otherwise the list comes from
-/// [`plugin_catalog::fresh`], so a check inside the freshness window costs no network at all and one
-/// outside it costs a single fetch of the whole index; each candidate that comes out of it then costs one
-/// small document ([`confirm`]), which is the price of the detail riding a document away.
+/// The list alone, for a caller that has nowhere to put what it was measured against — [`check`] is the
+/// same read with that carried out beside it, and is what a face reporting to a person should use.
+pub fn available(paths: &Paths) -> Result<Vec<Update>> {
+    Ok(check(paths, Reach::Incidental)?.updates)
+}
+
+/// How far a check goes for its catalog (`AMB-D-359`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reach {
+    /// The incidental read: a cache inside the freshness window answers with no request at all. What
+    /// makes a check cheap enough to be offered alongside anything else.
+    Incidental,
+    /// Ask the network first, whatever the cache's age. What somebody who has just published wants, and
+    /// the only way past a window that is otherwise invisible from the answer.
+    Now,
+}
+
+/// What a check was measured against — the other half of its verdict (`AMB-D-359`).
+///
+/// It is three states and not two because "no catalog was read" happens two ways that mean opposite
+/// things: there was nothing to compare one against, or there was and none could be had. Folding them
+/// together is how an empty list comes to look like a finding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Against {
+    /// Nothing is installed, so no catalog was read at all. An empty verdict, and a true one.
+    NothingInstalled,
+    /// A catalog answered, read this way ([`plugin_catalog::Freshness`]) — the weakest read among the
+    /// shelves that answered, since the verdict is only as current as the stalest of them.
+    Catalog(plugin_catalog::Freshness),
+    /// A catalog was wanted and not had: nothing fetched anywhere, and nothing cached. The verdict below
+    /// is empty because nothing was learned, which is not the same as nothing having moved.
+    Unavailable,
+}
+
+/// A check's whole answer: what has moved, and what that was measured against.
+#[derive(Debug)]
+pub struct Checked {
+    /// Every installed plugin the catalog lists a different entry for.
+    pub updates: Vec<Update>,
+    /// How current the answer is — see [`Against`].
+    pub against: Against,
+}
+
+/// [`available`], with what the answer was measured against carried out beside it (`AMB-D-359`).
+///
+/// The two travel together because they come off one read: asking the catalog a second time to find out
+/// how fresh the first answer was would be answering about a different read. That pairing is the whole
+/// point — the freshness window makes "nothing has changed" and "nothing had changed an hour ago" the same
+/// rows, and a face that reports the rows without it cannot tell a reader which one they are looking at.
+///
+/// The short-circuit is here rather than in a caller: with nothing installed there is nothing to compare a
+/// catalog to, so none is read and [`Against::NothingInstalled`] says why the answer names no catalog.
+/// Otherwise the index is read once — no network at all inside the freshness window under
+/// [`Reach::Incidental`], one fetch of the whole index otherwise — and each candidate that comes out of it
+/// then costs one small document ([`confirm`]), which is the price of the detail riding a document away.
 ///
 /// **A candidate whose document cannot be read is passed over.** A detail that will not fetch, will not
 /// parse or is not the one the entry listed is not an update anyone could apply right now, and one such
 /// plugin must not cost the report of every other (`AMB-D-352`'s posture). Naming a plugin — `plugin
 /// update <name>` — is what asks for the reason rather than the omission.
 ///
-/// Fails only when there is no catalog at all to compare against: nothing fetched and nothing cached.
-/// Being offline with a cached copy is not a failure — the answer is then as fresh as the cache, which is
-/// the deal a static index buys (`AMB-D-347`).
-pub fn available(paths: &Paths) -> Result<Vec<Update>> {
+/// No catalog at all is not a failure: the verdict comes back empty with [`Against::Unavailable`] beside
+/// it, which is the honest shape — being offline costs freshness, not function (`AMB-D-347`), and a caller
+/// that could not read one has to be able to say so rather than report nothing found. The only failure is
+/// not being able to read what is installed.
+pub fn check(paths: &Paths, reach: Reach) -> Result<Checked> {
     let installed = plugin_installed::installed(paths)?;
     if installed.is_empty() {
-        return Ok(Vec::new());
+        return Ok(Checked { updates: Vec::new(), against: Against::NothingInstalled });
     }
-    Ok(compare(&installed, &plugin_catalog::discover(paths))
+    let view = match reach {
+        Reach::Incidental => plugin_catalog::discover(paths),
+        Reach::Now => plugin_catalog::discover_now(paths),
+    };
+    let against = match view.freshness() {
+        Some(read) => Against::Catalog(read),
+        None => Against::Unavailable,
+    };
+    let updates = compare(&installed, &view)
         .iter()
         .filter_map(|candidate| confirm(paths, candidate).ok())
-        .collect())
+        .collect();
+    Ok(Checked { updates, against })
 }
 
 /// The update **candidates** a cached catalog already knows of — the surface a listing shows without
@@ -786,6 +851,7 @@ mod tests {
                 official: false,
                 reachable,
                 offered: 0,
+                freshness: reachable.then_some(crate::plugin_catalog::Freshness::Fetched),
             }],
             dropped: Vec::new(),
         }

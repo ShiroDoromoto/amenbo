@@ -178,6 +178,25 @@ impl Cli {
         )
     }
 
+    /// Run the binary with extra environment on top of the harness's, and return (stdout, exit_code).
+    ///
+    /// For the commands that reach outside the machine: the plugin catalog's URL has to be pinned at
+    /// something that never answers, or the test spends the real index's availability on a question it
+    /// already seeded the answer to on disk.
+    fn run_env(&self, env: &[(&str, &str)], args: &[&str]) -> (String, i32) {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_amenbo"));
+        command
+            .env("AMENBO_HOME", &self.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&self.home)
+            .args(with_actor(args, "human"));
+        for (key, value) in env {
+            command.env(key, value);
+        }
+        let out = command.output().expect("failed to run the binary");
+        (String::from_utf8_lossy(&out.stdout).to_string(), exit_code(&out))
+    }
+
     /// Test helper: create one project and return its id. `task add` always needs a project, so tests
     /// about assignment / status / the mailbox — where the home project is incidental — use this.
     fn a_project(&self) -> String {
@@ -5103,6 +5122,101 @@ fn the_listing_marks_a_plugin_the_catalog_has_a_different_build_of() {
         out.lines().find(|l| l.contains("worktree")).unwrap().contains("[update available]"),
         "the badge is on worktree's line: {out}"
     );
+}
+
+/// `plugin update --check` says **which catalog it answered from** (`AMB-D-359`).
+///
+/// The freshness window is what makes a check cheap, and it is also what makes "nothing has changed" and
+/// "nothing had changed an hour ago" the same rows and the same `count`. That is the bug this pins: a
+/// reader who has just published reads the first and goes looking for a broken comparison. `--fresh` is
+/// the way past the window, and it is honest about failing — a fetch that was asked for and did not happen
+/// still reports the cache.
+#[test]
+fn an_update_check_says_how_current_the_catalog_it_answered_from_is() {
+    // Nothing answers here, so every arm below is decided by what is on disk rather than by the real
+    // index — including the `--fresh` one, whose point is what it says when the fetch does not land.
+    const UNREACHABLE: [(&str, &str); 1] =
+        [("AMENBO_PLUGIN_CATALOG_URL", "http://127.0.0.1:1/catalog.json")];
+
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    // Nothing installed: no catalog is read at all, and the report says as much rather than reporting a
+    // catalog it never went for.
+    let (out, code) = cli.run_env(&UNREACHABLE, &["plugin", "update", "--check"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(!out.contains("Catalog:"), "no catalog was read, so none is reported on: {out}");
+    let empty: Value = serde_json::from_str(
+        &cli.run_env(&UNREACHABLE, &["plugin", "update", "--check", "--json"]).0,
+    )
+    .unwrap();
+    assert_eq!(empty["catalog"]["read"], "not_needed", "and `--json` says which of the two it is");
+
+    install_plugin(&cli, "worktree", serde_json::json!([]));
+
+    // With something installed and no catalog at all, the empty verdict is the absence of a reading —
+    // said in as many words, because it is the one an empty list is most easily mistaken for.
+    let (out, code) = cli.run_env(&UNREACHABLE, &["plugin", "update", "--check"]);
+    assert_eq!(code, 0, "a check that could read nothing still reports: {out}");
+    assert!(out.contains("none answered"), "{out}");
+    let none: Value = serde_json::from_str(
+        &cli.run_env(&UNREACHABLE, &["plugin", "update", "--check", "--json"]).0,
+    )
+    .unwrap();
+    assert_eq!(none["catalog"]["read"], "unavailable");
+    assert_eq!(none["count"], 0, "nothing was learned — which is not nothing having moved");
+
+    // A cache written just now: inside the freshness window, so the check answers off it with no request.
+    let registry = cli.home.join("plugins").join("registry");
+    std::fs::create_dir_all(&registry).unwrap();
+    let catalog = serde_json::json!({
+        "catalog_v": 1,
+        "generated_at": "2026-07-23T04:57:10Z",
+        "plugins": [{
+            "name": "worktree", "desc": "a plugin", "author": "amenbo",
+            "repo": "ShiroDoromoto/amenbo", "os": ["macos", "linux", "windows"],
+            "category": "workflow",
+            "detail_sum": format!("sha256:{}", "d".repeat(64)),
+        }],
+    });
+    std::fs::write(registry.join("official.json"), serde_json::to_vec(&catalog).unwrap()).unwrap();
+
+    let (out, code) = cli.run_env(&UNREACHABLE, &["plugin", "update", "--check"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("the copy cached"), "the answer is dated: {out}");
+    assert!(out.contains("--fresh"), "and the way past the window is named: {out}");
+    assert!(
+        out.contains("Everything installed matches"),
+        "the verdict is still there, now with something to read it inside: {out}"
+    );
+
+    let cached: Value = serde_json::from_str(
+        &cli.run_env(&UNREACHABLE, &["plugin", "update", "--check", "--json"]).0,
+    )
+    .unwrap();
+    assert_eq!(cached["catalog"]["read"], "cached");
+    assert!(cached["catalog"]["age_seconds"].as_u64().is_some(), "how old, in seconds");
+    assert_eq!(cached["count"], 0, "the digest matches what is installed");
+
+    // Asked for the network and did not reach it. Reporting this as a fetch is the one answer that would
+    // make the flag worse than not having it.
+    let (out, code) = cli.run_env(&UNREACHABLE, &["plugin", "update", "--check", "--fresh"]);
+    assert_eq!(code, 0, "a fetch that failed is not a failed command: {out}");
+    assert!(out.contains("could not be reached"), "{out}");
+    let asked: Value = serde_json::from_str(
+        &cli.run_env(&UNREACHABLE, &["plugin", "update", "--check", "--fresh", "--json"]).0,
+    )
+    .unwrap();
+    assert_eq!(asked["catalog"]["read"], "offline", "asking is not reaching");
+    assert!(
+        !out.contains("--fresh"),
+        "and it does not send them to fetch again after a fetch just failed: {out}"
+    );
+
+    // Applying already fetches the current index every time, so there is nothing for the flag to turn on
+    // there. Refused rather than ignored — a flag that quietly did nothing would read as one that worked.
+    let (_, code) = cli.run_env(&UNREACHABLE, &["plugin", "update", "--all", "--fresh"]);
+    assert_eq!(code, 2, "--fresh outside a check is a misuse");
 }
 
 /// `plugin validate --json` hands back what it read only when the manifest passes: a parse error read

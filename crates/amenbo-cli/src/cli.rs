@@ -515,9 +515,13 @@ pub enum PluginCmd {
     ///
     /// Detection is the catalog amenbo already fetches whole laid beside the manifest sitting next to
     /// each installed binary — no central server, and no per-plugin request. A manifest carries no
-    /// version number, so what is compared is the checksum of this machine's asset (`AMB-D-381`): the
-    /// digest of the exact bytes that would run here, and therefore the build's identity. It reports *different*, not *newer* — the catalog is the authority
-    /// on what is published, including a rollback.
+    /// version number, so what is compared is `detail_sum` (`AMB-D-438`): one digest per catalog entry,
+    /// over the whole document an install acts on — the assets, the config schema, the compatibility
+    /// floor, and what the plugin says for itself at the AI's entry point. That is why **an update which
+    /// changes no binary is still an update**: comparing the executables would hide every one of them.
+    /// The asset checksums are still checked where they mean something (`AMB-D-381`), at the install
+    /// door — the bytes that arrive must be the bytes the entry published. It reports *different*, not
+    /// *newer* — the catalog is the authority on what is published, including a rollback.
     ///
     /// **Nothing is ever applied on amenbo's own account**: naming a plugin, or `--all`, is the whole
     /// consent. Applying re-walks the install door over the new asset — the catalog signature, then this
@@ -531,8 +535,10 @@ pub enum PluginCmd {
     /// holds it back from anywhere. `plugin config set` is the way past it.
     ///
     /// `--check` is cheap on purpose: with nothing installed no catalog is read at all, and otherwise a
-    /// cached catalog younger than an hour answers with no request. Applying always asks for the current
-    /// index, since replacing a binary on an hour-old answer is not the same bargain.
+    /// cached catalog younger than an hour answers with no request. It says which of the two it did, so
+    /// "nothing has changed" is never read for "nothing had changed an hour ago"; `--check --fresh` fetches
+    /// the index first when that distance matters — after publishing, say. Applying always asks for the
+    /// current index, since replacing a binary on an hour-old answer is not the same bargain.
     Update {
         /// the installed plugin to update; omit it with --all or --check
         name: Option<String>,
@@ -542,6 +548,9 @@ pub enum PluginCmd {
         /// apply every update the catalog holds, one plugin at a time
         #[arg(long)]
         all: bool,
+        /// with --check: fetch the catalog now instead of letting a cache under an hour old answer
+        #[arg(long)]
+        fresh: bool,
     },
 
     /// Undo the last `plugin update` for one plugin, restoring the build it retained (`AMB-D-359`).

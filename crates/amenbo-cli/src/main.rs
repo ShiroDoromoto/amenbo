@@ -1199,8 +1199,8 @@ fn plugin_cmd(store: &mut Store, flags: &Flags, sub: PluginCmd) -> Result<i32, C
         PluginCmd::Run { name, args } => plugin_run_cmd(store, flags, &name, &args),
         PluginCmd::Log { name } => plugin_log_cmd(store, flags, name.as_deref()),
         PluginCmd::Flush => plugin_flush_cmd(store, flags),
-        PluginCmd::Update { name, check, all } => {
-            plugin_update_cmd(store, flags, name.as_deref(), check, all)
+        PluginCmd::Update { name, check, all, fresh } => {
+            plugin_update_cmd(store, flags, name.as_deref(), check, all, fresh)
         }
         PluginCmd::Rollback { name } => plugin_rollback_cmd(store, flags, &name),
         PluginCmd::Config { sub } => match sub {
@@ -1973,6 +1973,7 @@ fn plugin_update_cmd(
     name: Option<&str>,
     check: bool,
     all: bool,
+    fresh: bool,
 ) -> Result<i32, CliError> {
     let cmd = Paths::command_name();
     let misuse = |message: String, hint: String| CliError {
@@ -1981,8 +1982,18 @@ fn plugin_update_cmd(
         hint: Some(hint),
         exit: 2,
     };
+    // `--fresh` is about the freshness boundary, and only the report sits behind one: applying already
+    // asks for the current index every time, so on that side it would name a thing to turn off that is
+    // never on. Refused rather than ignored — a flag that quietly does nothing reads as one that worked.
+    if fresh && !check {
+        return Err(misuse(
+            "--fresh is about the report's freshness, and applying always fetches the current index"
+                .to_string(),
+            format!("Drop it: `{cmd} plugin update <name>` / `--all` already asks for the current catalog. `{cmd} plugin update --check --fresh` is where it means something."),
+        ));
+    }
     match (check, all, name) {
-        (true, false, None) => plugin_update_check_cmd(store, flags),
+        (true, false, None) => plugin_update_check_cmd(store, flags, fresh),
         (true, _, _) => Err(misuse(
             "--check reports every install and applies nothing".to_string(),
             format!("Pass --check on its own, or drop it to apply: `{cmd} plugin update <name>` / `--all`."),
@@ -2010,9 +2021,19 @@ fn plugin_update_cmd(
 ///
 /// A plugin the catalog does not list is not reported: installed by hand, or delisted since, and neither
 /// is something an update could answer.
-fn plugin_update_check_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
-    let updates =
-        amenbo_core::plugin_update::available(&store.paths).map_err(CliError::from)?;
+///
+/// **It says which catalog it answered from.** Inside the freshness window no request is made, so "nothing
+/// has changed" and "nothing had changed an hour ago" are the same rows and the same count — and a reader
+/// who has just published reads the first and goes looking for a broken comparison. The line costs nothing
+/// and is the whole difference between the two. `fresh` is the way past the window for the reader who
+/// wants the index as it stands now; the default stays the cheap read, which is what lets a check be
+/// offered freely at all (`AMB-D-359`).
+fn plugin_update_check_cmd(store: &Store, flags: &Flags, fresh: bool) -> Result<i32, CliError> {
+    use amenbo_core::plugin_update::Reach;
+
+    let reach = if fresh { Reach::Now } else { Reach::Incidental };
+    let checked = amenbo_core::plugin_update::check(&store.paths, reach).map_err(CliError::from)?;
+    let (updates, against) = (&checked.updates, checked.against);
     let here = amenbo_core::plugin_manifest::Platform::here();
 
     if flags.json {
@@ -2034,15 +2055,91 @@ fn plugin_update_check_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError
                 })
             })
             .collect();
-        print_json(&json!({ "count": rows.len(), "updates": rows }));
-    } else if updates.is_empty() {
-        human(flags, "Everything installed matches what the catalog publishes.");
+        print_json(&json!({
+            "count": rows.len(),
+            "updates": rows,
+            "catalog": catalog_read_json(against),
+        }));
     } else {
-        for u in &updates {
+        // Before the verdict, not after it: the frame is what the count is to be read inside, and a reader
+        // who takes `0` at face value has already stopped reading by the time a footnote arrives.
+        if let Some(line) = catalog_read_line(against) {
+            human(flags, line);
+        }
+        if updates.is_empty() {
+            human(flags, "Everything installed matches what the catalog publishes.");
+        }
+        for u in updates {
             human(flags, format!("{}  update available  {}", u.name, u.available.desc));
         }
     }
     Ok(0)
+}
+
+/// How current the answer is, for `--json` — the same fact [`catalog_read_line`] puts in a sentence.
+///
+/// Always an object, never null: the states that read no catalog say which they are (`not_needed` for
+/// nothing installed, `unavailable` for nothing reachable), because a reader parsing this has to be able
+/// to tell an empty list that means "nothing has moved" from one that means "nothing was learned". The two
+/// cache arms are apart for the same reason — `cached` made no request, `offline` made one and it failed.
+fn catalog_read_json(against: amenbo_core::plugin_update::Against) -> serde_json::Value {
+    use amenbo_core::plugin_catalog::Freshness;
+    use amenbo_core::plugin_update::Against;
+
+    match against {
+        Against::Catalog(Freshness::Fetched) => json!({ "read": "fetched", "age_seconds": 0 }),
+        Against::Catalog(Freshness::Cached { age }) => {
+            json!({ "read": "cached", "age_seconds": age.as_secs() })
+        }
+        Against::Catalog(Freshness::Offline { age }) => {
+            json!({ "read": "offline", "age_seconds": age.as_secs() })
+        }
+        Against::NothingInstalled => json!({ "read": "not_needed" }),
+        Against::Unavailable => json!({ "read": "unavailable" }),
+    }
+}
+
+/// The one line saying how current the rows below it are, or `None` where there are no rows to frame.
+///
+/// `--fresh` is named on the one arm where it changes anything: a cache that answered with no request
+/// made. Telling a reader to fetch after a fetch has just failed sends them nowhere, which is why core
+/// keeps the two cache reads apart at all.
+fn catalog_read_line(against: amenbo_core::plugin_update::Against) -> Option<String> {
+    use amenbo_core::plugin_catalog::Freshness;
+    use amenbo_core::plugin_update::Against;
+
+    let cmd = Paths::command_name();
+    Some(match against {
+        Against::Catalog(Freshness::Fetched) => "Catalog: fetched just now.".to_string(),
+        Against::Catalog(Freshness::Cached { age }) => format!(
+            "Catalog: the copy cached {} answered, with no request made — `{cmd} plugin update --check --fresh` fetches it now.",
+            how_long_ago(age)
+        ),
+        Against::Catalog(Freshness::Offline { age }) => format!(
+            "Catalog: could not be reached, so the copy cached {} answered.",
+            how_long_ago(age)
+        ),
+        Against::Unavailable => {
+            "Catalog: none answered — nothing fetched, and nothing cached. Nothing below is a verdict."
+                .to_string()
+        }
+        // Nothing is installed, so no catalog was read and there is nothing whose currency to report. The
+        // line below already says the whole of it, and a note about a catalog nobody needed would only
+        // suggest something went wrong.
+        Against::NothingInstalled => return None,
+    })
+}
+
+/// A duration as a reader would say it: the largest unit that leaves a number bigger than one, since the
+/// question this answers is "roughly how stale", not "how many seconds".
+fn how_long_ago(age: std::time::Duration) -> String {
+    let secs = age.as_secs();
+    match secs {
+        0..=90 => format!("{secs}s ago"),
+        91..=5399 => format!("{}m ago", secs / 60),
+        5400..=86_399 => format!("{}h ago", secs / 3600),
+        _ => format!("{}d ago", secs / 86_400),
+    }
 }
 
 /// `plugin update <name>` — put the catalog's build of one plugin in place (`AMB-D-359`).

@@ -1,19 +1,19 @@
 name: Dependabot auto-merge
 
-# Merge a Dependabot PR once CI has passed on it — nobody has to watch the queue.
+# Send a Dependabot PR into the merge queue once its lockfiles are complete — nobody has to watch it.
 #
-# Why not GitHub's own auto-merge button: it only waits for *required* status
-# checks, and required checks come from branch protection / rulesets, which this
-# repo cannot have (private on the Free plan — the protection API answers 403
-# "Upgrade to GitHub Pro"). With no required checks, native auto-merge merges
-# immediately, i.e. before CI says anything. So the wait is done here instead:
-# fire on CI *completing*, and merge only if it completed green.
+# The merge itself is the queue's: this asks for auto-merge, and the queue tests "main as it stands,
+# plus this PR" before landing it, exactly as it does for a person's PR. What this workflow adds is
+# the one repair the bot cannot make for itself (see `lockstep`), which has to happen *before* the
+# queue judges the tree.
 #
-# `workflow_run` runs in the context of the base repo with a normal GITHUB_TOKEN,
-# so a fork PR cannot reach these permissions — the usual pull_request_target
-# hazard does not apply. The token still cannot approve a PR (a token cannot
-# approve its own repo's PRs), but approval is not required here: no branch
-# protection means merge needs no review.
+# It fires on CI finishing on the PR because that is the event that carries a writable token: a
+# `pull_request` run raised by Dependabot gets a read-only one, so nothing there can push. That is
+# also why CI still runs on pull requests at all (ci.yml says so at its trigger).
+#
+# `workflow_run` runs in the context of the base repo with a normal GITHUB_TOKEN, so a fork PR cannot
+# reach these permissions — the usual pull_request_target hazard does not apply. The token cannot
+# approve a PR, and none is needed: the queue's own checks are what stand between a bump and main.
 #
 # Merging is automatic. SHIPPING is not: releases stay an explicit human/AI step
 # (wharfy), so bumps accumulate on main until someone cuts one deliberately.
@@ -94,7 +94,7 @@ jobs:
           echo "pushed the re-resolved lockfiles onto ${BRANCH} (PR #${pr})"
 
   merge:
-    name: Merge green Dependabot PRs
+    name: Send green Dependabot PRs into the merge queue
     runs-on: ubuntu-latest
     needs: lockstep
     if: >-
@@ -105,8 +105,8 @@ jobs:
       # workflow_run does not carry the PR, only the head branch it ran on. Find
       # the open PR for that branch and check it really is Dependabot's before
       # touching it (the actor check above is about who triggered CI; this is
-      # about who owns the branch being merged).
-      - name: Find the PR and merge it if it is Dependabot's
+      # about who owns the branch being queued).
+      - name: Find the PR and queue it if it is Dependabot's
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -116,8 +116,8 @@ jobs:
           pr="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open \
                   --json number,author --jq '.[0] | select(.author.login == "app/dependabot") | .number')"
           if [ -z "$pr" ]; then
-            echo "no open Dependabot PR on $BRANCH — nothing to merge"
+            echo "no open Dependabot PR on $BRANCH — nothing to queue"
             exit 0
           fi
-          echo "merging PR #$pr ($BRANCH), CI was green"
-          gh pr merge "$pr" --repo "$REPO" --squash --delete-branch
+          echo "queueing PR #$pr ($BRANCH), its lockfiles are complete"
+          gh pr merge "$pr" --repo "$REPO" --auto --merge --delete-branch

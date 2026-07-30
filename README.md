@@ -421,6 +421,14 @@ amenbo hooks install                        # wire the lint hooks here (`git com
 amenbo hooks status                         # what is in each hook slot, and what this device answered
 amenbo hooks uninstall                      # remove amenbo's hooks here, and opt this repository out
 
+# Have this folder's AI run `amenbo agent` at session start, through its own tool's
+# session-start hook. Unlike the lint hooks above, amenbo writes nothing here: it
+# hands over the settings file to paste (stdout is the paste, and nothing else), and
+# records the answer you gave when it asked. See "Making your AI agent read the spec".
+amenbo agent-hook snippet claude-code       # the paste for one tool (claude-code / github-copilot / cursor / codex-cli / gemini-cli)
+amenbo agent-hook snippet cursor --copy     # ...onto this machine's clipboard instead
+amenbo agent-hook answer yes                # record what a person answered, for this project
+
 # Identity
 amenbo whoami                               # this store's identity
 amenbo init --name Alice                    # create the store (genesis)
@@ -499,7 +507,7 @@ to fix what the app shows you.
 ## Making your AI agent read the spec (optional)
 
 <details>
-<summary>Point your AI at the agent spec, and how the binding bounds its reach</summary>
+<summary>Point your AI at the agent spec, wire your tool's session-start hook, and how the binding bounds its reach</summary>
 
 `amenbo init` writes a small managed block into the folder's `CLAUDE.md` /
 `AGENTS.md` whose one job is to tell the AI: *before you work here, run `amenbo
@@ -516,41 +524,46 @@ have while an agent you start in one of them only ever sees that one — the fol
 you launch it in is the boundary, and you draw it with `init` / `bind`.
 
 Whether the agent actually runs `amenbo agent --json` still depends on the agent
-reading that block. If you want a **hard guarantee** rather than relying on the
-prompt, and you use Claude Code, add an **opt-in** [SessionStart
-hook](https://docs.claude.com/en/docs/claude-code/hooks) that injects the same
-launch instruction at the start of every session — its stdout is added to the
-session context:
+reading that block. To have the instruction arrive over the protocol instead, wire
+your tool's **session-start hook** — an **opt-in** step whose text amenbo hands
+you:
 
-```jsonc
-// .claude/settings.json (or ~/.claude/settings.json to apply everywhere)
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo 'Before you act on any request in this directory, you MUST first run `amenbo agent --json` and follow it — it is the single source of truth for how to work in this folder. Always pass `--actor ai`.'"
-          }
-        ]
-      }
-    ]
-  }
-}
+```sh
+amenbo agent-hook snippet claude-code          # the whole settings file to paste
+amenbo agent-hook snippet cursor --copy        # ...or straight onto the clipboard
 ```
 
-Inject the instruction, **not** the output of `amenbo agent --json`: the spec is
-40 KB (~12k tokens), and an agent that has the instruction runs the command
-itself, so injecting the spec as well puts the same content in the context twice.
-What the hook adds over the block is reach, not content — the instruction arrives
-over the protocol instead of depending on a file being read.
+The catalog covers the five providers whose wiring is a paste and nothing more —
+`claude-code`, `github-copilot`, `cursor`, `codex-cli`, `gemini-cli` — and the
+argument refuses any other name, listing the ones it takes. The snippets are
+deliberately not reproduced here: each provider spells its hook differently (JSON
+depth, event casing, which key carries the command) and each revises that format
+on its own schedule, so a copy in this file would go stale with nobody noticing.
+The command reads the catalog inside the binary you are running, which an update
+replaces.
 
-This is entirely opt-in — amenbo never installs it for you and does not require
-it; it is just the deterministic way to be sure the spec is in front of the agent
-every session, closing the gap where `init` writes the block mid-session (so it
-does not bind until the *next* one). Use a `UserPromptSubmit` hook instead if you
-would rather re-inject it on each prompt.
+**amenbo writes no settings file.** `agent-hook snippet` puts the paste on stdout
+and nothing else — so it pipes into a file or a clipboard — and says on stderr
+which file it belongs in. Putting it there is yours to do. When amenbo asks
+whether this folder's AI may be started on amenbo at all, `agent-hook answer
+<yes|no>` records what you said and touches no settings file either; a `no` only
+stops the asking, and the snippet stays available.
+
+What the hook injects is the **launch instruction** — the same line the managed
+block carries — and **not** the output of `amenbo agent --json`: the spec is 40 KB
+(~12k tokens), and an agent that has the instruction runs the command itself, so
+injecting the spec as well puts the same content in the context twice. What the
+hook adds over the block is reach, not content — the instruction arrives over the
+protocol instead of depending on a file being read. It also closes the gap where
+`init` writes the block mid-session (so it does not bind until the *next* one).
+
+**"Wired" is as far as anyone can tell you.** amenbo reads those settings files
+and reports whether the wiring is written in them; it never claims the hook fires.
+What happens after that is outside amenbo — some providers load project-level
+settings only under trust, some do not feed a session-start hook's output into the
+context at all, and a release has been known to stop it firing. This is why the
+managed block stays in place whatever the hook says: it is the one receiver that
+survives every provider.
 
 </details>
 

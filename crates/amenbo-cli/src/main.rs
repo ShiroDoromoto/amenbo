@@ -112,7 +112,12 @@ fn real_main() -> i32 {
     // Nothing is inferred from the context of the call: an environment variable would propagate into
     // every process amenbo starts, and a human default would let an undeclared AI write as a person and
     // read past its binding.
-    let actor = match decide_facet(parsed.actor.as_deref(), uses_facet(&parsed.command)) {
+    //
+    // On the plugin face one of those two consumers is already served before the command line is read: the
+    // reach came with the launch. So the door asks for a facet only where one is still used — the shape of
+    // that is `facet_required` below.
+    let plugin_face = amenbo_core::plugin_callback::window_declared();
+    let actor = match decide_facet(parsed.actor.as_deref(), facet_required(&parsed.command, plugin_face)) {
         Ok(a) => a,
         Err(err) => {
             // No Flags yet, so render the error with a minimal set.
@@ -410,6 +415,84 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // Everything else — every write, and every read that surfaces store content.
         _ => true,
     }
+}
+
+/// Does this command **stamp** the facet — into created_by / assign / activity? The write half of
+/// [`uses_facet`]'s two consumers, asked on its own by [`facet_required`].
+///
+/// False is every read, and with them the faces that change something while naming no author: the machine's
+/// own settings and plugin state (config / bind / hooks / the whole plugin group, whose per-project rows
+/// carry no facet), and the maintenance ops that move the truth source wholesale rather than record an act in
+/// it (backup / restore / hard-erase / export). Everything else defaults to true (**fail-closed**), and a
+/// variant misjudged here still cannot stamp a facet nobody named: [`Flags::facet`] answers `facet_required`
+/// where the value is taken.
+fn stamps_facet(cmd: &Option<Command>) -> bool {
+    let Some(c) = cmd else { return false }; // no args = discover (a read)
+    match c {
+        // Pure reads / discovery / local settings / transport (record no facet).
+        Command::Agent { .. }
+        | Command::Version
+        | Command::Update { .. } // installs a build; nothing of it lands in the store
+        | Command::Whoami
+        | Command::Status { .. }
+        | Command::Activity { .. }
+        | Command::Validate { .. }
+        | Command::Backup { .. } // reads the truth source into a snapshot file; records no facet or activity
+        | Command::Restore { .. } // replaces the truth source from a snapshot; maintenance op, records no facet or activity
+        | Command::HardErase { .. } // physically erases append-only content; maintenance op, records no facet or activity
+        | Command::Export { .. }
+        | Command::Lint { .. } // reads the text it is handed; no store, so nothing to stamp a facet onto
+        | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
+        | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
+        // A runner fires the hooks a facet's own writes already queued; it creates nothing and assigns
+        // nothing, so there is no author for it to stamp (`AMB-T-2175`).
+        | Command::PluginRunner { .. }
+        // `validate` reads a manifest file the author names and touches no store at all; the rest of the
+        // group moves this machine's plugin state and the plugin's own per-project rows (settings, the
+        // enable gate). Those are local settings like `config`: they carry no author and leave no activity
+        // to stamp a facet onto.
+        | Command::Plugin { .. }
+        | Command::Hooks { .. }
+        | Command::Config { .. } // settings live in the user layer and leave no activity behind
+        | Command::Bind { .. } => false, // only writes the `.amenbo` pointer (no facet recorded)
+        // Sub-command groups that are reads.
+        Command::Doctor { fix } => *fix, // only --fix writes
+        // Anything that is not a read (list/show) counts as a write.
+        Command::Project { sub } => !matches!(sub, ProjectCmd::List { .. } | ProjectCmd::Show { .. }),
+        Command::Dimension { sub } => !matches!(sub, DimensionCmd::List { .. } | DimensionCmd::Show { .. }),
+        Command::Task { sub } => match sub {
+            TaskCmd::List { .. } | TaskCmd::Show { .. } => false,
+            // The commit group nests: `task commit list` is a read, add/rm stamp a facet.
+            TaskCmd::Commit { sub } => !matches!(sub, TaskCommitCmd::List { .. }),
+            _ => true,
+        },
+        Command::Comment { sub } => !matches!(sub, CommentCmd::List { .. }),
+        Command::Decision { sub } => !matches!(
+            sub,
+            DecisionCmd::List { .. } | DecisionCmd::Show { .. } | DecisionCmd::Comment { sub: DecisionCommentCmd::List { .. } }
+        ),
+        // `attach` group: only `rm` writes; ls/show/open/save are reads. (Adds happen under task/decision
+        // attach.)
+        Command::Attach { sub } => matches!(sub, AttachCmd::Rm { .. }),
+        // The rest (Init …) stamp created_by and friends, so default to true (fail-closed).
+        _ => true,
+    }
+}
+
+/// Must this invocation declare a facet at the door? [`uses_facet`] names the facet's two consumers; this
+/// asks which of them is left for the command line to answer.
+///
+/// On the **plugin face** — amenbo launched this process as a plugin and handed it a window
+/// ([`window_declared`](amenbo_core::plugin_callback::window_declared)) — the reach is that window
+/// (`AMB-D-406`), and `run` opens the store through it whichever facet is named. The reach-drawing consumer
+/// is therefore already served, and a read there uses no facet at all: the read-back an author is shown
+/// (`amenbo task show <id> --json`, no facet) is a call in which nothing is decided by one. A write is
+/// untouched — it still stamps who acted, and the payload the plugin was handed already names that actor.
+///
+/// The two are intersected, so this face never asks for *more* than the ordinary one however a variant falls
+/// in [`stamps_facet`].
+fn facet_required(cmd: &Option<Command>, plugin_face: bool) -> bool {
+    uses_facet(cmd) && (!plugin_face || stamps_facet(cmd))
 }
 
 /// The command tree clap parses with, worded for the CLI **this build installs**
@@ -7027,6 +7110,61 @@ mod tests {
         // The rest of the plugin group moves per-project rows, so only `validate` is outside.
         assert!(uses_facet(&Some(Command::Plugin { sub: PluginCmd::List })));
         assert!(uses_facet(&Some(Command::Plugin { sub: PluginCmd::Enable { name: "p".to_string() } })));
+    }
+
+    /// `stamps_facet` is the write half alone: it must not claim a read, because on the plugin face this is
+    /// the whole of what `--actor` is still demanded by.
+    #[test]
+    fn stamps_facet_is_the_write_half_alone() {
+        assert!(!stamps_facet(&None)); // discover
+        assert!(!stamps_facet(&Some(Command::Task { sub: TaskCmd::Show { id: "x".to_string() } })));
+        assert!(!stamps_facet(&Some(Command::Task { sub: TaskCmd::List { project: None, filter: None, sort: "order".to_string(), limit: None, offset: None } })));
+        assert!(!stamps_facet(&Some(Command::Comment { sub: CommentCmd::List { task: "x".to_string(), limit: None, offset: None } })));
+        assert!(!stamps_facet(&Some(Command::Status { scope: "today".to_string() })));
+        assert!(!stamps_facet(&Some(Command::Doctor { fix: false })));
+        // Changing something while naming no author: this machine's settings and its plugin state.
+        assert!(!stamps_facet(&Some(Command::Plugin { sub: PluginCmd::Enable { name: "p".to_string() } })));
+        // Writes name an author.
+        assert!(stamps_facet(&Some(Command::Comment { sub: CommentCmd::Add { task: "x".to_string(), text: "t".to_string() } })));
+        assert!(stamps_facet(&Some(Command::Task { sub: TaskCmd::Status { id: "x".to_string(), status: "in_progress".to_string() } })));
+        assert!(stamps_facet(&Some(Command::Task { sub: TaskCmd::Done { id: "x".to_string() } })));
+        assert!(stamps_facet(&Some(Command::Doctor { fix: true })));
+    }
+
+    /// The door's own line (`AMB-T-2460`): a plugin reads back with no facet, because the window it was
+    /// launched with is what draws the reach — while a write from the same plugin still declares who acted.
+    /// Off the plugin face nothing moves, and no command is asked for a facet on the plugin face that the
+    /// ordinary face lets through.
+    #[test]
+    fn the_plugin_face_asks_for_a_facet_only_where_one_is_still_used() {
+        let read = Some(Command::Task { sub: TaskCmd::Show { id: "x".to_string() } });
+        let discover = None;
+        let write = Some(Command::Comment { sub: CommentCmd::Add { task: "x".to_string(), text: "t".to_string() } });
+        // The read-back the author's documentation shows, and the bare discover beside it.
+        assert!(facet_required(&read, false), "off the plugin face a read draws the reach from the facet");
+        assert!(!facet_required(&read, true));
+        assert!(facet_required(&discover, false));
+        assert!(!facet_required(&discover, true));
+        // A write stamps who acted on either face.
+        assert!(facet_required(&write, false));
+        assert!(facet_required(&write, true));
+        // Never stricter than the ordinary face.
+        for cmd in [
+            None,
+            Some(Command::Version),
+            Some(Command::Agent { command: None, full: false }),
+            Some(Command::Update { print: false, apply: false, rollback: false }),
+            Some(Command::Bind { project: None, dir: None, force: false }),
+            Some(Command::Plugin { sub: PluginCmd::List }),
+            Some(Command::Doctor { fix: false }),
+            Some(Command::Doctor { fix: true }),
+            Some(Command::Task { sub: TaskCmd::Done { id: "x".to_string() } }),
+        ] {
+            assert!(
+                !facet_required(&cmd, true) || facet_required(&cmd, false),
+                "the plugin face asks for a facet where the ordinary face does not: {cmd:?}"
+            );
+        }
     }
 
     /// The only faces allowed through without a binding are the ones that never read the store. Loosen this

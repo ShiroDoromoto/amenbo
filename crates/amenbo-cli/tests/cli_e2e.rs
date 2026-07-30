@@ -2443,6 +2443,58 @@ fn facet_required_stops_every_operation_that_uses_the_facet() {
     assert_eq!(code, 0, "a read with an explicit facet passes");
 }
 
+/// The read-back a plugin makes (`AMB-D-406`) is the one read that needs no facet: amenbo launched the
+/// process and handed it the window (`AMENBO_PLUGIN_REACH`), so the reach is already fixed and `--actor`
+/// would decide nothing. That is what the author's documentation shows — `amenbo task show <id> --json`,
+/// no facet — and what `AMB-T-2460` found stopping with facet_required. A write from the same plugin still
+/// stamps who acted, so it is still refused without one, and the window still bounds what can be read.
+#[test]
+fn a_plugin_reads_back_with_no_facet_and_still_declares_one_to_write() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.a_project();
+    let tid = id_str(&cli.json(&["task", "add", "--title", "seen", "--project", &pid, "--json"])["task"]["id"]);
+    // A task the window does not cover: the bound project is a different one from the plugin's gate.
+    let outside = cli.bound_project();
+    let unseen = id_str(&cli.json(&["task", "add", "--title", "unseen", "--project", &outside, "--json"])["task"]["id"]);
+
+    // A plugin's process: the store and the window named in the environment, and no facet anywhere — the
+    // CWD is not the bound folder either, since a plugin's is whatever its launcher happened to be in.
+    let plugin = |args: &[&str]| -> (String, String, i32) {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &cli.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .env("AMENBO_PLUGIN_REACH", amenbo_core::idref::project(pid.parse().unwrap()))
+            .current_dir(&cli.home)
+            .args(args)
+            .output()
+            .expect("run amenbo");
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            String::from_utf8_lossy(&out.stderr).to_string(),
+            exit_code(&out),
+        )
+    };
+
+    // The read-back, exactly as it is written for authors.
+    let (stdout, stderr, code) = plugin(&["task", "show", &tid, "--json"]);
+    assert_eq!(code, 0, "a plugin's read-back must pass with no facet: {stderr}");
+    let shown: Value = serde_json::from_str(&stdout).expect("the read-back answers JSON");
+    assert_eq!(shown["title"], "seen");
+
+    // The window, not the facet, is what bounds it: the project it fires for is all it may read.
+    let (_out, stderr, code) = plugin(&["task", "show", &unseen, "--json"]);
+    assert_ne!(code, 0, "a task outside the window must not be readable");
+    assert!(stderr.contains("out_of_reach"), "should be out_of_reach: {stderr}");
+
+    // A write names an author, and the window supplies none — so this is still facet_required.
+    let (_out, stderr, code) = plugin(&["comment", "add", &tid, "--text", "from a plugin", "--json"]);
+    assert_eq!(code, 2, "a plugin's write must still declare a facet: {stderr}");
+    assert!(stderr.contains("facet_required"), "should return facet_required: {stderr}");
+    let (_out, stderr, code) = plugin(&["comment", "add", &tid, "--text", "from a plugin", "--actor", "ai", "--json"]);
+    assert_eq!(code, 0, "with the facet declared the write goes through: {stderr}");
+}
+
 /// `plugin run` hands everything after the plugin's name to the plugin, dashes and all — so a facet
 /// written where every other amenbo command takes it, on the end, never reaches amenbo. The failure is
 /// `facet_required`, and on its own it says nothing about the `--actor ai` the person can see they typed.

@@ -62,6 +62,21 @@ pub fn managed_block_version(text: &str) -> Option<u32> {
     find_begin_marker(text).map(|(_, _, v)| v)
 }
 
+/// The one instruction the managed block carries, on a single line: run `agent --json` before acting,
+/// and declare the facet. `cmd` is the launch command name, as in [`managed_block_body`].
+///
+/// It is a function of its own because the block is no longer the only place it is said — a session-start
+/// hook injects this same line ([`crate::harness`]), which is the whole of what such a hook is for. Two
+/// copies of a sentence drift; this one has a test holding it to the block's wording, so rewording the
+/// block moves what the hooks inject with it.
+pub fn launch_instruction(cmd: &str) -> String {
+    format!(
+        "Before you act on any request in this directory, you MUST first run \
+         `{cmd} agent --json` and follow it — it is the single source of truth for how to work in \
+         this folder. Always pass `--actor ai`."
+    )
+}
+
 /// Body of the managed block (without the markers): English-based, plus the directive naming the
 /// language to talk to the human in. `cmd` is the launch command name
 /// ([`crate::config::Paths::command_name`] — `amenbo` in production, `amenbo-dev` on the dev
@@ -350,6 +365,21 @@ mod tests {
 
     fn body() -> String {
         managed_block_body("Japanese", "amenbo")
+    }
+
+    /// The block wraps the instruction over three lines; a hook injects it as one. Comparing them with
+    /// the whitespace flattened is what makes them one sentence with two renderings rather than two
+    /// sentences that happen to agree today.
+    #[test]
+    fn the_block_and_the_hooks_say_the_same_thing() {
+        fn flat(text: &str) -> String {
+            text.split_whitespace().collect::<Vec<_>>().join(" ")
+        }
+        assert!(
+            flat(&body()).contains(&flat(&launch_instruction("amenbo"))),
+            "the block no longer carries the instruction the hooks inject:\n{}",
+            body()
+        );
     }
 
     #[test]

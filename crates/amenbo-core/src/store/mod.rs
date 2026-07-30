@@ -260,6 +260,27 @@ impl Store {
         )
     }
 
+    /// Drive delivery and work every queue **to its end, in this process** — the flush a caller asks for on
+    /// purpose (`AMB-T-2470`, [`plugin_drive::flush_persisted`](crate::plugin_drive::flush_persisted)).
+    ///
+    /// Same cursor and same fan-out as the two mounts above; what differs is that no runner process is
+    /// started — the queues are worked here, so this returns only once they are empty (or a runner stopped
+    /// short) and can say how much left each one. There is no `runner_argv` for that reason: nothing re-runs
+    /// this executable, so no face has to name its own entry point. A queue a live runner already holds is
+    /// left to it and reported by nobody here.
+    pub fn flush_plugin_delivery(
+        &self,
+        face: crate::plugin_drive::Face,
+        subs: &dyn crate::plugin_dispatch::Subscribers,
+    ) -> Result<crate::plugin_drive::Flushed> {
+        crate::plugin_drive::flush_persisted(
+            &self.engine,
+            face,
+            subs,
+            Some(&self.paths.plugin_log_file()),
+        )
+    }
+
     /// Stop delivering to a plugin: throw away what is waiting for it and end the runner working it, on one
     /// transaction (`AMB-D-399`). Returns how many queued rows went.
     ///

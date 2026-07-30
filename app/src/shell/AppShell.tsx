@@ -15,6 +15,7 @@ import { SettingsScreen } from "../screens/SettingsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { OnboardingSetup } from "../screens/OnboardingSetup";
 import { HookConsentModal } from "../screens/HookConsentModal";
+import { AgentHookConsentModal } from "../screens/AgentHookConsentModal";
 import { NewProjectScreen } from "../screens/NewProjectScreen";
 import { ProjectSettingsScreen } from "../screens/ProjectSettingsScreen";
 import { TaskDetailPane } from "../screens/TaskDetailPane";
@@ -29,9 +30,9 @@ import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollaps
 import { dismissUpdate, isUpdateDismissed, sessionDismissCovers, type SessionDismiss } from "../core/updateDismissed";
 import { RefNavProvider } from "../core/refNav";
 import { currentLang, doctorText, t, tn, tf } from "../core/i18n";
-import { fetchStaleManagedBlocks, resyncManagedBlocks, fetchOrphanBindings, forgetOrphanBindings, fetchPointerIssues, repairPointers, fetchHookNotices, openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
+import { fetchStaleManagedBlocks, resyncManagedBlocks, fetchOrphanBindings, forgetOrphanBindings, fetchPointerIssues, repairPointers, fetchHookNotices, fetchAgentHookNotices, openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
 import type { UpdateProgress } from "../core/mutations";
-import type { DoctorIssueDto, HookNoticeDto, StaleBlockDto } from "../bindings/bindings";
+import type { AgentHookNoticeDto, DoctorIssueDto, HookNoticeDto, StaleBlockDto } from "../bindings/bindings";
 
 /** `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the ⚙ in the board toolbar. */
 export type Nav = { type: "view" | "project" | "projectSettings"; id: string };
@@ -79,7 +80,19 @@ export function AppShell() {
   // waits for this rather than talking over it — and reads the disk only once the answers have been written to it.
   // The modal may report done more than once; latching a boolean is what makes that harmless.
   const [hooksAsked, setHooksAsked] = useState(false);
-  const onHooksAsked = useCallback(() => setHooksAsked(true), []);
+  // Whether the lint modal actually put its question this startup. One question at a time is a rule about the
+  // run and not about the dialog, so the session-start hook's question stands down when this one spoke — the
+  // same rule the CLI keeps with its `lint_asked`. Its banner is not held back by it: what was withheld is the
+  // question, and the standing report was never the thing saying it twice.
+  const [lintDidAsk, setLintDidAsk] = useState(false);
+  const onHooksAsked = useCallback((didAsk: boolean) => {
+    setLintDidAsk(didAsk);
+    setHooksAsked(true);
+  }, []);
+  // The same latch one question further down the queue: the session-start hook's banner waits for its own
+  // modal, which in turn waits for the lint's.
+  const [agentHookAsked, setAgentHookAsked] = useState(false);
+  const onAgentHookAsked = useCallback(() => setAgentHookAsked(true), []);
 
   const lang = useSyncExternalStore(subscribe, currentLang);
 
@@ -318,6 +331,7 @@ export function AppShell() {
       <ManagedBlockBanner />
       <OrphanBindingBanner />
       <HookSetupBanner asked={hooksAsked} />
+      <AgentHookSetupBanner asked={agentHookAsked} />
       <div
         className={`shell__body ${showRight ? "" : "shell__body--no-right"}${sidebarCollapsed ? " shell__body--sidebar-collapsed" : ""}`}
         style={{ "--rightpane-w": `${rightWidth}px`, "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}
@@ -435,6 +449,12 @@ export function AppShell() {
       {/* First-run setup owns the screen while it is up: the hooks question is asked about repositories, which
           is not what someone still choosing a language came here for, and it keeps its turn until then. */}
       {!needsSetup && <HookConsentModal onDone={onHooksAsked} />}
+      {/* Next in the one-question queue: it fetches nothing until the lint's modal is done (`turn`), and puts
+          no question at all on a startup where that one spoke (`canAsk`) — the sweep still runs, so a folder
+          somebody wired by hand is adopted without anyone being asked. */}
+      {!needsSetup && (
+        <AgentHookConsentModal turn={hooksAsked} canAsk={!lintDidAsk} onDone={onAgentHookAsked} />
+      )}
     </div>
     </RefNavProvider>
   );
@@ -862,6 +882,81 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
         </div>
       )}
     </>
+  );
+}
+
+// The GUI's channel for what core's `harness::setup_notice` found — the same report the CLI puts in its
+// `--json` field and on stderr: this folder's AI is not started on `amenbo agent` when a session opens
+// (`AMB-D-440`). It tells and stops nothing, which keeps it apart from the modal that asks
+// (`AgentHookConsentModal`).
+//
+// **What it adds over the CLI's line is the copy button**, and that is the whole point of the surface: the
+// wiring is a paste the reader performs, amenbo never writes the file, so how easily the text reaches the
+// clipboard is how often the setup is finished. One button per unwired tool, since the text differs per
+// tool and pasting the wrong one wires nothing.
+//
+// **It reports only what the folder points at** — a provider whose own directory is here, unwired — because
+// that is the CLI's person-facing rule and holds for the same reason: a standing warning about a tool there
+// is no sign of is a line nobody can act on. The catalog belongs on the `--json` face, where the reader is
+// the harness itself and can name which one it is.
+//
+// It renders only once the modal is done asking (`asked`), because asking about the hook and warning about
+// the hook in the same breath says one thing twice — the same order `HookSetupBanner` keeps. A recorded "no"
+// is silent here (core decides). A recorded "yes" is **not**: consent is not wiring, so the only thing that
+// ends this report is the paste landing. Dismissible with the ✕ for the session; outside Tauri it is always
+// empty, hence hidden.
+export function AgentHookSetupBanner({ asked }: { asked: boolean }) {
+  const [notices, setNotices] = useState<AgentHookNoticeDto[]>([]);
+  const [dismissed, setDismissed] = useState(false);
+  // Which tool's text was last copied, so the button can say so. Keyed by folder and tool together: the
+  // same tool appears under every folder that traces it, and a copy in one must not light up the others.
+  const [copied, setCopied] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!inTauri() || !asked) return;
+    let alive = true;
+    fetchAgentHookNotices()
+      .then((n) => alive && setNotices(n))
+      .catch(() => {}); // A failure to detect is swallowed (we just do not show the banner).
+    return () => {
+      alive = false;
+    };
+  }, [asked]);
+
+  if (dismissed || notices.length === 0) return null;
+
+  const copy = async (key: string, snippet: string) => {
+    try {
+      await navigator.clipboard.writeText(snippet);
+      setCopied(key);
+      setTimeout(() => setCopied(null), 1200);
+    } catch { /* where the clipboard is unavailable, quietly skip */ }
+  };
+
+  return (
+    <div className="healthbanner managedblock-banner" role="alert">
+      <span className="healthbanner__icon" aria-hidden>⚠</span>
+      <div className="healthbanner__body">
+        <div className="healthbanner__title">{t("agentHookSetup.title")}</div>
+        {notices.map((n) => (
+          <div key={n.dir} className="healthbanner__line">
+            <div>{tf("agentHookSetup.where", { project: n.projectName, dir: n.dir })}</div>
+            {n.unwired.map((tool) => {
+              const key = `${n.dir} ${tool.tool}`;
+              return (
+                <div key={tool.tool}>
+                  {tf("agentHookSetup.unwired", { tool: tool.label, cmd: `${n.cmd} agent`, file: tool.pasteInto })}{" "}
+                  <button className="healthbanner__action" onClick={() => void copy(key, tool.snippet)}>
+                    {copied === key ? t("agentHookSetup.copied") : t("agentHookSetup.copy")}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
+    </div>
   );
 }
 

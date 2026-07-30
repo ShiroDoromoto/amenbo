@@ -20,8 +20,10 @@
 //!   nothing left to read (`AMB-D-407`). A live record is read back by the plugin itself (`AMB-D-406`), so
 //!   only the unreadable half travels on the wire. This is `AMB-D-348`'s foreseen additive extension: a
 //!   *before* captured at the ops write point, for the events that need one.
-//! - **The parent** (`parent`) — what a vanished child hung on, by id (`AMB-D-407`): a removed comment
-//!   names its task. The one relation a deletion takes with it, so it travels beside the record.
+//! - **The parent** (`parent`) — the task a comment hangs on, by id (`AMB-D-407`), on both of the comment
+//!   events. A removed comment names it because the deletion took the relation with it; a posted one names
+//!   it because no read answers for a comment by its own id, which is where the read-back of a live record
+//!   (`AMB-D-406`) stops short.
 //! - **Version** `v` — a single integer for the whole contract, `1` today. Adding a field does **not**
 //!   bump it: a consumer ignores keys it does not know, so new fields are additive and silent. `v`
 //!   rises only on a breaking change to an existing field's meaning (see `AMB-D-349`).
@@ -122,13 +124,15 @@ pub struct Payload {
     /// be undone later.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub record: Option<serde_json::Value>,
-    /// The record the vanished one **hung on**, by id (`AMB-D-407`): a removed comment names the task it
-    /// was posted to. Absent on everything else.
+    /// The record the event's record **hangs on**, by id (`AMB-D-407`): the task a comment was posted to,
+    /// on the comment events. Absent on everything else, and absent on a comment event an older store
+    /// appended without one.
     ///
-    /// `id` names the record the event is about and nothing else, so a subscriber that hears only "comment
-    /// 5 is gone" cannot say where it was — and unlike every other relation, this one cannot be looked up
-    /// afterwards, because looking it up is exactly what the deletion removed. Named on its own rather than
-    /// left inside `record` so routing does not depend on knowing amenbo's field names.
+    /// `id` names the record the event is about and nothing else, so a subscriber that hears "comment 5"
+    /// cannot say where it is. For a removal the relation cannot be looked up afterwards either, because
+    /// looking it up is exactly what the deletion removed; for an addition it cannot be looked up at all,
+    /// since a comment is read as part of a task's timeline and never by its own id. Named on its own rather
+    /// than left inside `record` so routing does not depend on knowing amenbo's field names.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<i64>,
 }
@@ -188,7 +192,9 @@ impl Payload {
         Self::base(name::DECISION_REJECTED, id, actor, at)
     }
 
-    /// `comment.added` — a comment was added; `id` is the comment's id.
+    /// `comment.added` — a comment was added; `id` is the comment's id. The task it was posted to rides on
+    /// `parent` when the emit point read one (`AMB-D-407`); this constructor builds the event without it,
+    /// which is also the shape a row appended before the capture existed rebuilds to.
     pub fn comment_added(id: i64, actor: ActorKind, at: Timestamp) -> Self {
         Self::base(name::COMMENT_ADDED, id, actor, at)
     }
@@ -424,6 +430,32 @@ mod tests {
         assert_eq!(rebuilt.parent, Some(42));
         let wire = serde_json::to_string(&rebuilt).unwrap();
         assert!(wire.contains(r#""parent":42"#), "it goes out as its own field: {wire}");
+    }
+
+    /// A posted comment rebuilds naming the task it is on (`AMB-T-2467`) — the same field a removal uses,
+    /// for the reason that outlives the removal: nothing reads a comment by its own id, so the id alone
+    /// leaves a subscriber unable to say what the comment is about.
+    #[test]
+    fn a_posted_comment_rebuilds_naming_the_task_it_is_on() {
+        use crate::store_engine::OutboxRow;
+        let row = OutboxRow {
+            id: 9,
+            event: "comment.added".to_string(),
+            record_id: 5,
+            actor: "ai".to_string(),
+            at: "2026-07-22T09:00:00Z".to_string(),
+            new_state: None,
+            project: Some(1),
+            record: None,
+            parent: Some(42),
+        };
+        let rebuilt = Payload::from_outbox_row(&row).unwrap();
+        assert_eq!(rebuilt.parent, Some(42));
+        let wire = serde_json::to_string(&rebuilt).unwrap();
+        assert_eq!(
+            wire,
+            r#"{"v":1,"event":"comment.added","id":5,"actor":"ai","at":"2026-07-22T09:00:00Z","parent":42}"#
+        );
     }
 
     #[test]

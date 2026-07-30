@@ -75,9 +75,9 @@ pub struct EventRow<'a> {
     /// reads it (`AMB-D-407`) — captured by the caller at the emit door, the last instant it exists.
     /// `None` on every other event: a record still there is read back by name, not carried.
     pub record: Option<&'a str>,
-    /// The id of the record the vanished one hung on — a removed comment's task (`AMB-D-407`), resolved
-    /// by the caller at the emit door while the row is still there. `None` when the event's record has no
-    /// parent, which is every event but a child's deletion.
+    /// The id of the record this event's record hangs on — a comment's task (`AMB-D-407`), resolved by the
+    /// caller at the emit door while the row is still there. `None` when the event's record has no parent
+    /// a subscriber cannot reach on its own, which is every event but the two a comment fires.
     pub parent: Option<i64>,
 }
 
@@ -122,7 +122,8 @@ pub struct OutboxRow {
     /// The vanished record's shape as JSON (`AMB-D-407`), as it was captured; `None` on an event whose
     /// record is still there to read, and on a deletion from before the column existed.
     pub record: Option<String>,
-    /// The id of the record the vanished one hung on (`AMB-D-407`); `None` when it had no parent.
+    /// The id of the record this event's record hangs on — a comment's task (`AMB-D-407`); `None` when the
+    /// event names none, and on a row an older store appended before the column existed.
     pub parent: Option<i64>,
 }
 

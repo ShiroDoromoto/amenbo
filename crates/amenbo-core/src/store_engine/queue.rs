@@ -55,7 +55,8 @@ pub struct QueuedEvent<'a> {
     /// The vanished record's shape as JSON, copied off the outbox row (`AMB-D-407`). The runner builds
     /// the payload from this row alone, and for a deletion there is nothing left to read it off.
     pub record: Option<&'a str>,
-    /// The id of the record the vanished one hung on, copied off the outbox row (`AMB-D-407`).
+    /// The id of the record this event's record hangs on — a comment's task — copied off the outbox row
+    /// (`AMB-D-407`).
     pub parent: Option<i64>,
 }
 

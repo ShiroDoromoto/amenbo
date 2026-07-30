@@ -85,17 +85,24 @@ fn gone_record(tx: &WriteTx<'_>, event: &str, record_id: i64) -> Result<Option<S
     Ok(shape)
 }
 
-/// The record the event's record **hung on**, for a child whose deletion takes that relation with it
-/// (`AMB-D-407`) — a removed comment's task. Read at the same door, and for the same reason: after the
-/// `DELETE` there is no row left to ask which task the comment was on.
+/// The record the event's record **hangs on**, by id (`AMB-D-407`) — the task a comment was posted to, on
+/// both of the comment events. Read at the same door as [`project_of`], and for a removal for the same
+/// reason: after the `DELETE` there is no row left to ask which task the comment was on.
 ///
-/// Only the deletions. A live child is read back by name (`AMB-D-406`) and says what it belongs to itself,
-/// so `comment.added` names no parent — the answer is one call away and cannot go stale on the way.
+/// A comment that was *added* is still there, and yet it needs the same field, because the read-back that
+/// covers every other live record (`AMB-D-406`) has no door onto a comment: a timeline is asked for by
+/// task (`comment list <task>`), so a subscriber holding a comment's id has no call that answers whose
+/// comment it is. On the wire the two events state one fact — a comment's id does not say where the
+/// comment is — so they state it in one field.
+///
+/// The task events name no parent: a task is read back by its own id, and what it belongs to comes with it.
 fn parent_of(tx: &WriteTx<'_>, event: &str, record_id: i64) -> Result<Option<i64>> {
     use crate::plugin_payload::name as ev;
     use crate::store_engine::read;
     match event {
-        ev::COMMENT_REMOVED => Ok(read::task_comment(tx.conn(), record_id)?.map(|c| c.task_id)),
+        ev::COMMENT_ADDED | ev::COMMENT_REMOVED => {
+            Ok(read::task_comment(tx.conn(), record_id)?.map(|c| c.task_id))
+        }
         _ => Ok(None),
     }
 }

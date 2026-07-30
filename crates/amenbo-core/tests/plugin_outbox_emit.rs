@@ -201,13 +201,15 @@ fn an_event_whose_record_survives_carries_no_shape() {
     store.set_task_status(task, TaskStatus::InProgress, ActorKind::Ai).unwrap();
     assert_eq!(only(&store, h).record, None, "nor does a status change");
 
-    // A comment that is still there says what it belongs to itself, one call away (`AMB-D-406`), so the
-    // event names no parent either — only the deletion, which takes that answer with it, does.
+    // A comment that is still there carries no shape either — and yet it names its task, because a comment
+    // is read as part of a task's timeline and never by its own number: `parent` is the one relation the
+    // wire has to state while the record is alive (`AMB-T-2467`).
     let h = head(&store);
     store.add_task_comment(task, ActorKind::Ai, "残るコメント").unwrap();
     let ev = only(&store, h);
     assert_eq!(ev.event, "comment.added");
-    assert_eq!(ev.parent, None, "a live comment is asked, not told");
+    assert_eq!(ev.record, None, "the comment is still there to be read");
+    assert_eq!(ev.parent, Some(task), "and its task is named, since the comment's own id is no way in");
 }
 
 /// A task deleted with comments on it fires one `comment.removed` per comment and then its own
@@ -287,7 +289,8 @@ fn deleting_a_project_fires_deleted_for_every_task_it_carried_off() {
 }
 
 /// Adding a task comment fires `comment.added`: `id` is the comment's own (not the task's), actor its
-/// author, no `new`.
+/// author, no `new` — and the task it was posted to on `parent`, since a comment's id is not something a
+/// subscriber can look the task up by (`AMB-T-2467`).
 #[test]
 fn adding_a_task_comment_fires_comment_added() {
     let mut store = temp_store();
@@ -302,6 +305,7 @@ fn adding_a_task_comment_fires_comment_added() {
     assert_eq!(ev.actor, "ai");
     assert_eq!(ev.new_state, None);
     assert_eq!(ev.project, Some(project), "a comment's project is the project of the task it hangs on");
+    assert_eq!(ev.parent, Some(task), "the task the comment was posted to is named on the event");
 }
 
 /// Taking a task comment back fires `comment.removed` — the pair of `comment.added` (`AMB-D-401`), on the

@@ -2,10 +2,12 @@ name: Dependabot auto-merge
 
 # Merge a Dependabot PR once CI has passed on it — nobody has to watch the queue.
 #
-# Why not GitHub's own auto-merge button: it waits for *required* status checks, and this repo declares
-# none — its ruleset on main holds the history to append-only and nothing else. With no required check
-# to wait for, native auto-merge merges at once, before CI has said anything. So the wait is done here
-# instead: fire on CI *completing*, and merge only if it completed green.
+# Why not GitHub's own auto-merge button: it only waits for *required* status
+# checks, and required checks come from branch protection / rulesets, which this
+# repo cannot have (private on the Free plan — the protection API answers 403
+# "Upgrade to GitHub Pro"). With no required checks, native auto-merge merges
+# immediately, i.e. before CI says anything. So the wait is done here instead:
+# fire on CI *completing*, and merge only if it completed green.
 #
 # `workflow_run` runs in the context of the base repo with a normal GITHUB_TOKEN,
 # so a fork PR cannot reach these permissions — the usual pull_request_target
@@ -118,6 +120,4 @@ jobs:
             exit 0
           fi
           echo "merging PR #$pr ($BRANCH), CI was green"
-          # A merge commit, which is the one method this repository allows: a squash rewrites the commit,
-          # and a rewritten commit is one a task's recorded SHA no longer names.
-          gh pr merge "$pr" --repo "$REPO" --merge --delete-branch
+          gh pr merge "$pr" --repo "$REPO" --squash --delete-branch

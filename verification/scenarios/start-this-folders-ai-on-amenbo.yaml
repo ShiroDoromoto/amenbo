@@ -10,6 +10,12 @@
 #
 # Nothing in it is visible from inside the workspace's own tests: the settings file is a real file in
 # a real folder, and the folder is what answers for it.
+#
+# The screen walks the same road from the other end, and what it needs is the state standing before
+# the run: a folder bound to a project this device holds, with the provider's own directory in it and
+# nothing about amenbo in that, and the question about that project never answered here. The app puts
+# the question on the sweep it does at startup, so the run opens with it up — drive it stepped
+# (`--step`), since answering it is what the shot after it is of.
 id: start-this-folders-ai-on-amenbo
 title: A folder that does not start its AI on amenbo says so, hands over what wires it, and stops saying it once that lands
 description: >
@@ -70,3 +76,40 @@ steps_cli:
     op: ai-launch
     with:
       wired: true
+
+steps_gui:
+  # The question, put where it can be answered. What raises it is the state — a bound folder that is
+  # not wired — and it names the provider the folder traces rather than leaving the reader to work out
+  # which of five it means.
+  - type: assert
+    domain: repo
+    op: ai-launch-question
+    with:
+      tool: claude-code
+
+  # The yes. All it buys is the text: amenbo writes no settings file on this surface either, so the
+  # wiring stays in the reader's hands here exactly as it does in the terminal.
+  - type: action
+    domain: repo
+    op: ai-launch-consent
+    with:
+      answer: "yes"
+
+  # And the folder is still reported. This is the line the screen road is here for: a yes that took
+  # the report away with it would leave a setup reading as finished with nothing wired, and only the
+  # paste landing ends the telling. The file it names is the one the text goes into.
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with:
+      tool: claude-code
+      paste_into: .claude/settings.json
+
+  # The way on from the report: the button that takes its text. Where the text goes is the clipboard,
+  # which no shot reads back, so the road ends at the press — what the text carries is held from the
+  # other end, by the road above.
+  - type: action
+    domain: repo
+    op: ai-launch-copy
+    with:
+      tool: claude-code

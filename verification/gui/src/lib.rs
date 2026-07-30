@@ -236,6 +236,12 @@ impl Instructor {
     /// its boxes are ticked and which chip the field wears. The candidates are drawn whichever answer
     /// is held, so their words are on every shot of the road, and the chip is a word of the interface
     /// — neither is something the presence of text can settle.
+    ///
+    /// The two `ai-launch` readings are judged on what is not the interface's own words either. The
+    /// question is judged on the provider it names, which is that provider's name in any language; the
+    /// report is judged on the file the text goes into, which is the one thing on the road only the
+    /// report says — the question names no file, so a shot of the question standing where the report
+    /// should be reads as the miss it is.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -253,6 +259,12 @@ impl Instructor {
             }
             (Domain::Folder, "ways-in") => {
                 Some(Expectation { text: arg_str(with, "absent")?.to_string(), present: false })
+            }
+            (Domain::Repo, "ai-launch-question") => {
+                Some(Expectation { text: arg_str(with, "tool")?.to_string(), present: true })
+            }
+            (Domain::Repo, "ai-launch-notice") => {
+                Some(Expectation { text: arg_str(with, "paste_into")?.to_string(), present: true })
             }
             _ => None,
         }
@@ -340,6 +352,20 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "key")?
             ),
+            // Answering the startup question, and taking the text it leads to. Dismissing the dialog is
+            // not one of the answers on offer here: it puts the question off and records nothing, which
+            // is a road that ends where it started rather than one this scenario walks.
+            (Domain::Repo, "ai-launch-consent") => match req(with, "answer")? {
+                "yes" => "Answer the question about starting this folder's AI on amenbo with the button that says the text will be handed over.".to_string(),
+                "no" => "Answer the question about starting this folder's AI on amenbo with the button that declines it.".to_string(),
+                other => {
+                    return Err(format!("action `ai-launch-consent` does not know the answer `{other}`"))
+                }
+            },
+            (Domain::Repo, "ai-launch-copy") => format!(
+                "In the report standing about this folder, press the button beside \"{}\" that takes its text.",
+                req(with, "tool")?
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -403,6 +429,15 @@ impl Instructor {
             (Domain::Folder, "open-existing") => format!(
                 "Confirm the open card asks which project to link the folder to — with \"{}\", one of the projects on this device, chosen in it.",
                 req(with, "project")?
+            ),
+            (Domain::Repo, "ai-launch-question") => format!(
+                "Confirm the app is asking whether this folder's AI may be started on amenbo, and that it says the folder looks like \"{}\"'s.",
+                req(with, "tool")?
+            ),
+            (Domain::Repo, "ai-launch-notice") => format!(
+                "Confirm the app still reports this folder as one whose AI is not started on amenbo: \"{}\" is named, with \"{}\" as the file its text goes into.",
+                req(with, "tool")?,
+                req(with, "paste_into")?
             ),
             // Which of the three answers the form is holding. The state is the whole question here:
             // the value a screen shows is its ticks, and two of the three answers leave every box
@@ -1056,6 +1091,65 @@ steps_gui:
         let exp = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the command is what must not be read back");
         assert_eq!(exp, Expectation { text: "bind --project".to_string(), present: false });
         assert!(ins.expectation(&s.steps(Driver::Gui)[3]).is_none(), "a name the whole window carries is not a reading");
+    }
+
+    /// Starting a folder's AI on amenbo, as the screen walks it: the question, the yes, the report
+    /// that is still standing after it, and the button that hands the text over. The two readings are
+    /// what tells those screens apart — the provider's name for the question, and the file only the
+    /// report names for the report — so a yes that quietly took the report away is a red and not a
+    /// shot of the same words twice.
+    #[test]
+    fn the_screen_road_that_starts_a_folders_ai_reads_the_tool_then_the_file() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: repo
+    op: ai-launch-question
+    with: { tool: claude-code }
+  - type: action
+    domain: repo
+    op: ai-launch-consent
+    with: { answer: "yes" }
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with: { tool: claude-code, paste_into: .claude/settings.json }
+  - type: action
+    domain: repo
+    op: ai-launch-copy
+    with: { tool: claude-code }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("\"claude-code\"") && lines[0].contains("asking"), "got: {}", lines[0]);
+        assert!(lines[1].contains("handed over"), "got: {}", lines[1]);
+        assert!(lines[2].contains("\".claude/settings.json\"") && lines[2].contains("still reports"), "got: {}", lines[2]);
+        assert!(lines[3].contains("\"claude-code\"") && lines[3].contains("takes its text"), "got: {}", lines[3]);
+
+        let question = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the provider is what names the question");
+        assert_eq!(question, Expectation { text: "claude-code".to_string(), present: true });
+        // The tool's name is written the catalog's way and drawn the reader's way; the fold is what
+        // leaves those the same words.
+        assert!(fold("This folder looks like Claude Code's.").contains(&fold("claude-code")));
+        let notice = ins.expectation(&s.steps(Driver::Gui)[2]).expect("the file is what only the report names");
+        assert_eq!(notice, Expectation { text: ".claude/settings.json".to_string(), present: true });
+    }
+
+    /// An answer the road does not have is refused where it is written, not carried to a screen as an
+    /// instruction nobody can act on — the same way an unmapped op is.
+    #[test]
+    fn a_consent_answered_with_neither_yes_nor_no_is_refused() {
+        let step = Step::Action {
+            domain: Domain::Repo,
+            op: "ai-launch-consent".to_string(),
+            with: [("answer".to_string(), serde_yaml::Value::from("later"))].into_iter().collect(),
+            bind: None,
+        };
+        let err = Instructor::new().render(&step).unwrap_err();
+        assert!(err.contains("later"), "got: {err}");
     }
 
     #[test]

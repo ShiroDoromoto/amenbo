@@ -341,6 +341,17 @@ const REGISTRY: &[OpSpec] = &[
     // in for a file a person already had. `tool` is the provider, by the name the build's own
     // catalog answers to.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "wire-ai", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
+    // The moves the same road is made of on screen, where the question is put in a dialog and the text
+    // is handed over by a button. Answering is a move and not a note beside the file: a yes is what a
+    // reader gives before anything is handed over, and the report standing afterwards is only evidence
+    // of anything if the run is what answered. The copy is the handing over itself — it puts the text
+    // on the clipboard, which no screenshot reads, so the road ends at the press and what the text says
+    // is held from the other end (`ai-launch-text`).
+    //
+    // A screen road alone: a terminal asks inline and prints the text where it stands, so the CLI
+    // driver never meets either of these.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-consent", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-copy", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     // A plugin's life on this machine. `install` fetches it from the catalog and `enable` opens its
     // gate — two separate acts on purpose, since an installed plugin that never fires is the normal
     // state. `run` calls the command face: `command` is the word the plugin's own face takes, `task`
@@ -512,6 +523,14 @@ const REGISTRY: &[OpSpec] = &[
     // is the text: a snippet that named the wrong file, or that injected something other than the
     // launch instruction, would leave a reader pasting in good faith and no better off.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-text", required: &["tool", "carries"], refs: &[], strings: &["tool", "carries", "paste_into"], binds: false },
+    // What the screen says about the same folder, which it says in two places rather than one answer.
+    // The question names the provider it traces (`tool`); the report that is still standing after a yes
+    // names it again and the file the text goes into (`paste_into`). The file is what tells the two
+    // apart on a shot, since the question never names one — and that the report outlives the yes is the
+    // line the screen road exists for: consent is not wiring, and only the paste landing ends the
+    // telling.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-question", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-notice", required: &["tool", "paste_into"], refs: &[], strings: &["tool", "paste_into"], binds: false },
     // A project as it is read back: one row's fields, and whether it is in the listing at all (and
     // where). `archived: true` asks the listing that carries the archived ones.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },

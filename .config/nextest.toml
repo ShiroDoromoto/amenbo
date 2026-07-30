@@ -5,7 +5,7 @@
 #
 # Wiring notes:
 # - nextest does **not** run doctests. The gate picks those up separately with `cargo test --doc`.
-# - `--all-features` is not usable: it turns on `sharing`, which breaks cli_e2e's solo-mode
+# - `--all-features` is not usable: it turns on `sharing`, which breaks the cli_e2e_* suites' solo-mode
 #   assumption. Heavy suites are listed explicitly as `--features scale,e2e`.
 
 [profile.default]

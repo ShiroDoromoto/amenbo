@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [features]
 default = []
-# The real-binary suites (`cli_e2e`, `demo_tape`, `cli_ask`) fork the built `amenbo` binary once per
+# The real-binary suites (`cli_e2e_*`, `demo_tape`, `cli_ask`) fork the built `amenbo` binary once per
 # test (~1–2s each) — heavy by *attribute*, not by logic. Gate them behind an off-by-default feature
 # so the everyday `cargo test` stays fast; CI runs them via `--features e2e`. A feature-gated test
 # rots unless CI runs every feature (see .github/workflows/ci.yml).
@@ -42,9 +42,70 @@ libc = "0.2"
 amenbo-scratch.workspace = true
 amenbo-static-host.workspace = true
 
-# Real-binary end-to-end suite. Gated behind `e2e`; build/run it with `cargo test --features e2e`.
+# The real-binary end-to-end suite, one target per surface it walks (`tests/e2e/`), all sharing
+# `tests/e2e/harness.rs`. Every one of them is gated behind `e2e`; build/run them with
+# `cargo test --features e2e`, and aim at one with `--test cli_e2e_<surface>`. The `cli_e2e_` prefix
+# is load-bearing: it is what CI and the Makefile name the suite by, to run it on a box of its own
+# (`-E 'binary(/^cli_e2e/)'`), so a new slice added here joins that run by being named like its
+# siblings. Cargo does not find a target under a subdirectory on its own, hence the explicit `path`.
 [[test]]
-name = "cli_e2e"
+name = "cli_e2e_task"
+path = "tests/e2e/task.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_decision"
+path = "tests/e2e/decision.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_comment"
+path = "tests/e2e/comment.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_project"
+path = "tests/e2e/project.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_store"
+path = "tests/e2e/store.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_reach"
+path = "tests/e2e/reach.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_dimension"
+path = "tests/e2e/dimension.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_activity"
+path = "tests/e2e/activity.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_hooks"
+path = "tests/e2e/hooks.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_process"
+path = "tests/e2e/process.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_plugin"
+path = "tests/e2e/plugin.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_plugin_run"
+path = "tests/e2e/plugin_run.rs"
 required-features = ["e2e"]
 
 # The README demo's script, replayed against this build. It forks the binary once per line the film

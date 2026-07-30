@@ -146,13 +146,13 @@ retired).
 ```bash
 cargo build
 cargo test                              # fast: unit + light integration suites
-cargo test --features scale,e2e         # full: also the scaling guard and real-binary cli_e2e
+cargo test --features scale,e2e         # full: also the scaling guard and the real-binary cli_e2e_* suites
 cargo run -p amenbo-cli -- agent --json   # the single source of truth for the CLI
 ```
 
 The heaviest tests are gated behind cargo features so the everyday `cargo test`
 stays sub-second: the read-hotpath scaling guard behind `scale`, the real-binary
-`cli_e2e` suite behind `e2e`. CI enables both (`--features scale,e2e`).
+`cli_e2e_*` suites behind `e2e`. CI enables both (`--features scale,e2e`).
 
 For the full run, [`cargo-nextest`](https://nexte.st) is faster (per-test process
 isolation + parallelism) and prints per-test timings so the slow tests are easy to

@@ -1,0 +1,252 @@
+//! The harness every `cli_e2e_*` suite runs on: a throwaway `AMENBO_HOME`, the built binary, and the
+//! few readings of its output that every slice needs.
+//!
+//! One copy, pulled into each suite as a module, so how a test reaches the binary is written once
+//! and changed once. Each suite uses the part of it that its own subject needs, which is what the
+//! file-wide `dead_code` allow is for: an unused helper here means a suite that did not need it, not
+//! a helper nobody uses.
+
+#![allow(dead_code)]
+
+use std::process::Command;
+
+use serde_json::Value;
+
+/// A fresh, isolated AMENBO_HOME for each test.
+pub(crate) fn temp_home() -> std::path::PathBuf {
+    amenbo_scratch::scratch("home")
+}
+
+/// The child's exit code — or a stop that names the signal that ended it.
+///
+/// A signalled child has no code at all, and folding that into a number (`-1`) makes it read as an
+/// ordinary non-zero exit: the assertion that follows blames the command's behaviour, so whoever
+/// pushed reads the red as their own change breaking something. It is a different fact — the run did
+/// not fail, it was ended, usually after it had already written its answer — and it has only ever been
+/// seen on CI's combined scale+e2e run, where re-running the same commit came back green
+/// (`AMB-T-2103`). Say which signal, where the fact is still known.
+pub(crate) fn exit_code(out: &std::process::Output) -> i32 {
+    match out.status.code() {
+        Some(code) => code,
+        None => panic!(
+            "the amenbo child was ended by {}, not by a command that failed — no assertion was reached.\n\
+             Re-run before suspecting the change: this has been seen on CI's combined scale+e2e run only.\n\
+             stdout: {}\nstderr: {}",
+            signal_name(&out.status),
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr),
+        ),
+    }
+}
+
+/// Name the signal that ended a child, since the number alone is what nobody remembers. The few that
+/// can plausibly land here are named; anything else is reported as its number.
+#[cfg(unix)]
+pub(crate) fn signal_name(status: &std::process::ExitStatus) -> String {
+    use std::os::unix::process::ExitStatusExt;
+    match status.signal() {
+        Some(sig) => {
+            let known = match sig {
+                6 => " (SIGABRT)",
+                9 => " (SIGKILL — an out-of-memory kill arrives as this)",
+                11 => " (SIGSEGV)",
+                13 => " (SIGPIPE — a write to a pipe nobody is reading)",
+                _ => "",
+            };
+            format!("signal {sig}{known}")
+        }
+        None => "no exit code and no signal".to_string(),
+    }
+}
+
+/// Off Unix there is no signal to name: a child that ends without a code is all the platform says.
+#[cfg(not(unix))]
+pub(crate) fn signal_name(_status: &std::process::ExitStatus) -> String {
+    "no exit code".to_string()
+}
+
+/// `args` with the facet declared on the command line — `--actor <facet>` appended, which is the one
+/// input amenbo is to take it by (`AMB-D-408`). A test that declares its own facet in `args` is left
+/// alone, so `--actor ai` in a call still means what it says. The flag beats anything the environment
+/// carries, so a run is the same whatever the shell the tests were started from had set.
+pub(crate) fn with_actor<'a>(args: &[&'a str], facet: &'a str) -> Vec<&'a str> {
+    let mut with = args.to_vec();
+    if !args.contains(&"--actor") {
+        with.extend_from_slice(&["--actor", facet]);
+    }
+    with
+}
+
+pub(crate) struct Cli {
+    pub(crate) home: std::path::PathBuf,
+}
+
+impl Cli {
+    pub(crate) fn new() -> Cli {
+        let home = temp_home();
+        // Isolate the CWD too, so the .amenbo / AGENTS.md that init drops never land in the repo.
+        std::fs::create_dir_all(&home).unwrap();
+        Cli { home }
+    }
+
+    /// Run the binary and return (stdout, exit_code).
+    pub(crate) fn run(&self, args: &[&str]) -> (String, i32) {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &self.home)
+            // No update check: the tests never reach GitHub and never touch the real OS cache (hermetic).
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&self.home)
+            // A write with no facet from a non-interactive caller (the test runner has no TTY) is refused
+            // with facet_required, so every call declares one; a test that names its own is left alone.
+            .args(with_actor(args, "human"))
+            .output()
+            .expect("failed to run the binary");
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            exit_code(&out),
+        )
+    }
+
+    /// Run `--json` from a different CWD against the same `AMENBO_HOME`. Needed to exercise behaviour
+    /// **outside** a bound folder — a folder you never run amenbo in gets no automatic follow-up.
+    pub(crate) fn json_from(&self, cwd: &std::path::Path, args: &[&str]) -> Value {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &self.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(cwd)
+            .args(with_actor(args, "human"))
+            .output()
+            .expect("failed to run the binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+        assert_eq!(exit_code(&out), 0, "command {args:?} exited non-zero: {stdout}");
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("failed to parse JSON {args:?}: {e}\n{stdout}"))
+    }
+
+    /// Run with `--json` and parse stdout as JSON.
+    pub(crate) fn json(&self, args: &[&str]) -> Value {
+        let (stdout, code) = self.run(args);
+        assert_eq!(code, 0, "command {args:?} exited non-zero: {stdout}");
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("failed to parse JSON {args:?}: {e}\n{stdout}"))
+    }
+
+    /// Run with `--json`, piping `stdin` in — for the body options' `-`, whose whole point is text that
+    /// never passes through the shell.
+    pub(crate) fn json_stdin(&self, args: &[&str], stdin: &str) -> Value {
+        use std::io::Write;
+        let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &self.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&self.home)
+            .args(with_actor(args, "human"))
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("failed to run the binary");
+        child.stdin.as_mut().unwrap().write_all(stdin.as_bytes()).unwrap();
+        drop(child.stdin.take());
+        let out = child.wait_with_output().expect("failed to wait for the binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+        assert_eq!(exit_code(&out), 0, "command {args:?} exited non-zero: {stdout}");
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("failed to parse JSON {args:?}: {e}\n{stdout}"))
+    }
+
+    /// Run the binary and return (stdout, stderr, exit_code) — for a command that succeeds on stdout
+    /// while also emitting an advisory on stderr (the two streams inspected together).
+    pub(crate) fn run_both(&self, args: &[&str]) -> (String, String, i32) {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &self.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&self.home)
+            .args(with_actor(args, "human"))
+            .output()
+            .expect("failed to run the binary");
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            String::from_utf8_lossy(&out.stderr).to_string(),
+            exit_code(&out),
+        )
+    }
+
+    /// Run the binary and return (stderr, exit_code); used for the error paths.
+    pub(crate) fn run_err(&self, args: &[&str]) -> (String, i32) {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &self.home)
+            // No update check: the tests never reach GitHub and never touch the real OS cache (hermetic).
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&self.home)
+            // The facet, declared the same way `run` declares it.
+            .args(with_actor(args, "human"))
+            .output()
+            .expect("failed to run the binary");
+        (
+            String::from_utf8_lossy(&out.stderr).to_string(),
+            exit_code(&out),
+        )
+    }
+
+    /// Run the binary with extra environment on top of the harness's, and return (stdout, exit_code).
+    ///
+    /// For the commands that reach outside the machine: the plugin catalog's URL has to be pinned at
+    /// something that never answers, or the test spends the real index's availability on a question it
+    /// already seeded the answer to on disk.
+    pub(crate) fn run_env(&self, env: &[(&str, &str)], args: &[&str]) -> (String, i32) {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_amenbo"));
+        command
+            .env("AMENBO_HOME", &self.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&self.home)
+            .args(with_actor(args, "human"));
+        for (key, value) in env {
+            command.env(key, value);
+        }
+        let out = command.output().expect("failed to run the binary");
+        (String::from_utf8_lossy(&out.stdout).to_string(), exit_code(&out))
+    }
+
+    /// Test helper: create one project and return its id. `task add` always needs a project, so tests
+    /// about assignment / status / the mailbox — where the home project is incidental — use this.
+    pub(crate) fn a_project(&self) -> String {
+        id_str(&self.json(&["project", "add", "--name", "P", "--json"])["project"]["id"])
+    }
+
+    /// Test helper: the project this CWD's `.amenbo` points at (the default project `init` made, first
+    /// in the listing). AI-facet work is confined to the bound project, so **tests acting as the AI must
+    /// target this one** — the separate project `a_project` creates is outside the AI's reach.
+    pub(crate) fn bound_project(&self) -> String {
+        id_str(&self.json(&["project", "list", "--json"])["projects"][0]["id"])
+    }
+}
+
+/// Turn a JSON id into a string that can be handed back as a CLI argument. project / dimension /
+/// dimension_value ids are **numbers** (decision and friends are strings), so `as_str()` won't do.
+pub(crate) fn id_str(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n.to_string(),
+        other => panic!("not an id JSON value: {other}"),
+    }
+}
+
+/// Plant an installed plugin under the test's app-data: the manifest (the install marker) plus the
+/// executable named after it, which is the whole on-disk shape `plugin_installed::read` looks for.
+pub(crate) fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {
+    let dir = cli.home.join("plugins").join(name);
+    std::fs::create_dir_all(&dir).unwrap();
+    let manifest = serde_json::json!({
+        "name": name,
+        "desc": "テスト用",
+        "author": "amenbo",
+        "repo": "ShiroDoromoto/amenbo-plugin-test",
+        "os": ["macos", "linux", "windows"],
+        "category": "workflow",
+        "url": "https://example.com/x.tar.gz",
+        "checksum": "sha256:deadbeef",
+        // What an install records of the detail document it was installed from (`AMB-D-386`) — the
+        // value a later catalog fetch compares against to say the plugin has moved.
+        "detail_sum": format!("sha256:{}", "d".repeat(64)),
+        "config": config,
+    });
+    std::fs::write(dir.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    std::fs::write(dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX)), b"#!/bin/sh\n").unwrap();
+}

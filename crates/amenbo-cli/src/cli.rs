@@ -322,6 +322,16 @@ pub enum Command {
         sub: HooksCmd,
     },
 
+    /// Hand over the configuration that makes an AI tool run `amenbo agent` when a session starts — the
+    /// session-start hook, which reaches the model over the protocol instead of hoping the managed block
+    /// in CLAUDE.md/AGENTS.md is read. **amenbo never writes a provider's settings**: this hands you the
+    /// text and the file to put it in, and pasting is yours. Not `hooks`, which is git's plumbing and is
+    /// amenbo's to write.
+    AgentHook {
+        #[command(subcommand)]
+        sub: AgentHookCmd,
+    },
+
     /// Physically erase content from this store's truth source.
     ///
     /// An ordinary delete removes the row but leaves its bytes in the file's freed pages, and editing a
@@ -612,6 +622,32 @@ pub enum PluginConfigCmd {
         /// the setting's key, as the manifest declares it
         key: String,
     },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AgentHookCmd {
+    /// Print the whole settings file to paste for one AI tool, with this build's launch instruction
+    /// already in it. **stdout is the paste and nothing else**, so it pipes to a clipboard
+    /// (`amenbo agent-hook snippet claude-code | pbcopy`) or a file; where it goes, and that amenbo
+    /// wrote nothing, is said on stderr. `--copy` hands it to this machine's clipboard instead. Opens
+    /// no store: it needs no bound folder, and reads nothing about this one.
+    Snippet {
+        /// the AI tool to be wired
+        #[arg(value_parser = harness_ids())]
+        tool: String,
+        /// put it on this machine's clipboard instead of printing it
+        #[arg(long)]
+        copy: bool,
+    },
+}
+
+/// The tool names `agent-hook snippet` takes, read off the catalog itself (`AMB-D-440`) — so a harness
+/// added there is offered in `--help` and accepted here with nothing else to update, and a name nobody
+/// lists is refused by clap with the whole list rather than by a branch further in.
+fn harness_ids() -> clap::builder::PossibleValuesParser {
+    clap::builder::PossibleValuesParser::new(
+        amenbo_core::harness::HARNESSES.iter().map(|harness| harness.id).collect::<Vec<_>>(),
+    )
 }
 
 #[derive(Subcommand, Debug)]

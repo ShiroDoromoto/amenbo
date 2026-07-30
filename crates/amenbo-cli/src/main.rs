@@ -400,6 +400,8 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         | Command::Lint { .. } // reads the text it is handed; no store to reach into
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
+        // Hands over catalog text (`AMB-D-440`) — no store, and nothing of this folder's read either.
+        | Command::AgentHook { .. }
         // A runner fires the hooks a facet's own writes already queued: it creates nothing, assigns
         // nothing, and was handed the store to work (`AMB-T-2175`). So was a plugin calling amenbo back,
         // whose window comes from the gate it fired through rather than from a facet (`AMB-D-406`).
@@ -509,7 +511,8 @@ fn requires_pointer(cmd: &Option<Command>) -> bool {
 /// pointer elsewhere, and the hazard belongs to the folder that receives the pointer rather than to the one
 /// the command was typed in. A `--dir` that names no directory is left to `bind` to report.
 ///
-/// Out of reach are the commands that place no pointer and read no store (`version` / `update` / `lint`),
+/// Out of reach are the commands that place no pointer and read no store (`version` / `update` / `lint` /
+/// `agent-hook`),
 /// and `unbind` — the way *out*. Refusing that one would strand a pointer an older build wrote, leaving a
 /// text editor as the only way to remove it, and its single store write forgets this folder's registration:
 /// that cleans the binding up rather than driving the backlog with it. So is `plugin-runner`: it is handed
@@ -522,6 +525,7 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         | Some(Command::Lint { .. })
         | Some(Command::GithookPreCommit)
         | Some(Command::GithookCommitMsg { .. })
+        | Some(Command::AgentHook { .. })
         | Some(Command::PluginRunner { .. })
         | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
         | Some(Command::Unbind { .. }) => None,
@@ -2222,6 +2226,13 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // the same store-free footing as `lint`. It sits ahead of the exec guard so an author can run it in
         // any directory (their plugin's, a CI checkout), not only a bound one.
         Some(Command::Plugin { sub: PluginCmd::Validate { path } }) => return plugin_validate_cmd(flags, path.clone()),
+        // `agent-hook snippet` reads the catalog and this build's own name, and that is all it needs
+        // (`AMB-D-440`): store-free like `lint`, so the answer is the same in a bound folder, a fresh
+        // clone, and a checkout nobody has bound at all — which is where somebody wiring their tool for
+        // the first time is standing.
+        Some(Command::AgentHook { sub: AgentHookCmd::Snippet { tool, copy } }) => {
+            return agent_hook_snippet_cmd(flags, tool, *copy)
+        }
         Some(Command::Version) if !store_reachable() => {
             advise_linux_system_orphan();
             return version_unbound(flags);
@@ -2684,8 +2695,119 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             unreachable!("handled before open")
         }
         Command::Hooks { sub } => return hooks_cmd(&mut store, flags, sub),
+        Command::AgentHook { .. } => {
+            unreachable!("handled before open")
+        }
     }
     Ok(0)
+}
+
+/// `amenbo agent-hook snippet <tool>` — hand over the configuration that wires one AI tool to run
+/// `amenbo agent` at session start (`AMB-D-440`). It hands text over and writes nothing: the provider's
+/// settings file stays the user's, here as everywhere in this feature.
+///
+/// **This command's stdout belongs to the paste**, the way `plugin run`'s belongs to the plugin. The
+/// snippet is meant to be consumed — piped to a clipboard, redirected into the file — so a courtesy line
+/// printed alongside it would end up inside the settings file, where it stops the provider from parsing
+/// it. Where the text goes, and that amenbo did not put it there, is said on stderr; under `--json`
+/// stdout is the document and the snippet rides inside it.
+///
+/// `--copy` is that pipe, for the hand that would rather not type it — the same string, through the
+/// clipboard tool this platform has, and nothing about the text changes with the route.
+fn agent_hook_snippet_cmd(flags: &Flags, tool: &str, copy: bool) -> Result<i32, CliError> {
+    use amenbo_core::harness;
+
+    // clap's parser for this argument is built from the catalog itself, so a name nobody lists was
+    // already refused with the whole list — by the time it is here, it is a row.
+    let harness = harness::find(tool).expect("the argument's parser accepts only the catalog's own ids");
+    let cmd = Paths::command_name();
+    let snippet = harness::snippet(harness, cmd);
+
+    if copy {
+        copy_to_clipboard(&snippet)?;
+    }
+    if flags.json {
+        print_json(&json!({
+            "ok": true,
+            "action": "agent-hook.snippet",
+            "tool": harness.id,
+            "label": harness.label,
+            "paste_into": harness.paste_into,
+            "copied": copy,
+            "snippet": snippet,
+        }));
+        return Ok(0);
+    }
+    if !flags.quiet {
+        let where_to = if copy {
+            format!("{} is on the clipboard: paste it into", harness.label)
+        } else {
+            format!("{}: paste this into", harness.label)
+        };
+        eprintln!(
+            "{where_to} {} in this folder — amenbo does not write it for you.\n\
+             Then this folder's AI runs `{cmd} agent --json` at the start of every session.",
+            harness.paste_into
+        );
+    }
+    if !copy {
+        println!("{snippet}");
+    }
+    Ok(0)
+}
+
+/// Put `text` on this machine's clipboard, through whatever tool this platform hands it over with.
+///
+/// On a Linux desktop that is Wayland's or X11's tool and nothing on the machine reliably says which, so
+/// the answer is whichever one is installed and runs — tried in that order. A machine with none of them
+/// (a container, an ssh session) is not a failure to work around: it is refused, naming the pipe, which
+/// is the same text through a route that exists everywhere.
+fn copy_to_clipboard(text: &str) -> Result<(), CliError> {
+    use std::io::Write;
+
+    #[cfg(target_os = "macos")]
+    let tools: &[(&str, &[&str])] = &[("pbcopy", &[])];
+    #[cfg(target_os = "windows")]
+    let tools: &[(&str, &[&str])] = &[("clip", &[])];
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    let tools: &[(&str, &[&str])] =
+        &[("wl-copy", &[]), ("xclip", &["-selection", "clipboard"]), ("xsel", &["--clipboard", "--input"])];
+
+    for (program, args) in tools {
+        let spawned = amenbo_core::sys::command(program)
+            .args(*args)
+            .stdin(std::process::Stdio::piped())
+            .spawn();
+        let Ok(mut child) = spawned else { continue };
+        // A clipboard tool that took the text and then failed is not one to fall through from: it was
+        // there, and reporting the pipe would be answering a question nobody asked.
+        let written = child.stdin.take().is_some_and(|mut pipe| pipe.write_all(text.as_bytes()).is_ok());
+        let ended = child.wait().map_err(|e| CliError {
+            code: "io_error",
+            message: format!("could not hand the snippet to {program}: {e}"),
+            hint: None,
+            exit: 1,
+        })?;
+        if written && ended.success() {
+            return Ok(());
+        }
+        return Err(CliError {
+            code: "io_error",
+            message: format!("{program} did not take the snippet"),
+            hint: Some(format!("pipe it instead: `{} agent-hook snippet <tool> | {program}`", Paths::command_name())),
+            exit: 1,
+        });
+    }
+    let pipe = tools.first().map(|(program, _)| *program).unwrap_or("pbcopy");
+    Err(CliError {
+        code: "io_error",
+        message: "no clipboard tool on this machine".to_string(),
+        hint: Some(format!(
+            "print it and pipe it yourself: `{} agent-hook snippet <tool> | {pipe}`",
+            Paths::command_name()
+        )),
+        exit: 1,
+    })
 }
 
 /// `amenbo hooks …`: the explicit faces of the lint hook, usable whatever the device answered — a `no`
@@ -7011,6 +7133,9 @@ mod tests {
         assert!(!uses_facet(&Some(Command::Bind { project: None, dir: None, force: false })));
         assert!(!uses_facet(&Some(Command::Lint { paths: Vec::new(), stdin: false })));
         assert!(!uses_facet(&Some(Command::GithookPreCommit)));
+        assert!(!uses_facet(&Some(Command::AgentHook {
+            sub: AgentHookCmd::Snippet { tool: "claude-code".to_string(), copy: false }
+        })));
         assert!(!uses_facet(&Some(Command::Plugin { sub: PluginCmd::Validate { path: "p.yaml".to_string() } })));
         // Reads that surface store content draw the reach, so they use the facet too.
         assert!(uses_facet(&None)); // discover: this project's work

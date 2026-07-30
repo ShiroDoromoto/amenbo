@@ -308,7 +308,11 @@ its plugin replies, so the backlog `plugin log` reports is the window a slow plu
 every plugin the catalog publishes answers in the time a process takes to start. `plugin echo-program`
 leaves one answering with the config it was handed, which is the only witness a setting's delivery has:
 it travels on the child process — as an environment variable for a secret, in the stdin document for
-everything else — and the published plugins use their settings rather than report them. They are the
+everything else — and the published plugins use their settings rather than report them.
+`plugin read-back-program` leaves one calling amenbo back, which is the only witness the read-back
+route has: an event names a record and carries none of it, so the content is fetched by running the
+binary with the store and the window amenbo handed over — and the published plugins work everything
+out from the repository they are called in, asking amenbo nothing. They are the
 same idea as `repo write-file`: the
 state on disk a scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach
 for one only when the line under test is what amenbo does about that state.

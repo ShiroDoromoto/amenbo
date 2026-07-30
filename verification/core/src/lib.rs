@@ -408,6 +408,16 @@ const REGISTRY: &[OpSpec] = &[
     // What it reads back is amenbo's own doing: which value, at which tier, and whether there is one
     // left at all.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "echo-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // An installed plugin whose program calls amenbo back. A payload names a record and carries none of
+    // it, so the route to the content is the binary itself, run from inside the plugin with the store and
+    // the window amenbo put in its environment — and no plugin in the official catalog takes it (the one
+    // published there works out everything it does from the repository it is called in). So the only
+    // witness that the environment really arrives, that a call made through it needs no facet, and that
+    // the window is what bounds it, is a plugin that makes the call: the driver stands one in, the way
+    // `echo-program` stands in the only witness an injected secret has. Its faces are `read` and `write`,
+    // each taking the id of a task an earlier step bound and handing everything under `args` to amenbo
+    // verbatim — so the call under test is written in the scenario rather than buried in the driver.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "read-back-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // An installed plugin that takes `seconds` to answer. A queue only holds rows while its plugin is
     // still on one — the runner takes the row off the moment the plugin replies, whichever end it
     // reached — so a backlog is not a state a scenario can arrive at by using amenbo: it would be

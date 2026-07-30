@@ -1,0 +1,149 @@
+# The content behind an id. What reaches a plugin is an event naming a record and nothing of the
+# record itself, so the way to what is in it is amenbo: the plugin runs the binary and reads its
+# `--json`. There is no second protocol to keep — the author already has the commands — and what makes
+# the route work is what amenbo puts in the child's environment when it launches it: the store to
+# open, and the window it may read through. Neither is anything a plugin's own working directory could
+# answer, since that directory is whatever its launcher happened to be standing in.
+#
+# The facet is the half a shipped build has already had wrong. A read through the window declares no
+# actor, because the window has already settled how far the reader gets — so the line every author was
+# handed is a bare `amenbo <read> --json`, and a build that asks for an actor turns that line into an
+# error on the author's first run. A write is the other half: it is stamped with who acted, and no
+# environment variable can supply that, so it stays refused until the plugin says. Only a call made
+# from inside a launched plugin can tell the two apart.
+#
+# The plugin making the calls is one the driver stands in for (see the op's own note). The plugin the
+# official catalog publishes works everything it does out of the repository it is called in and asks
+# amenbo nothing, so nothing on the shelf walks this road.
+id: read-the-store-from-inside-a-plugin
+title: A plugin reads a record back with no facet, is held to the window it was launched with, and still names an author to write
+description: >
+  Install and enable a plugin, and leave it calling amenbo back. Ask it to read a task this scenario
+  registered, and read the record off what it returns — the call it made named no actor, and the
+  window is why it did not have to. Ask it for a task in another project, and read the refusal: the
+  window it was handed is the whole of what it may see, and it is not the folder it happens to stand
+  in. Then a write with nothing said about who is writing, which is refused for that reason alone —
+  and the same write with the author named, which lands on the task's timeline.
+steps_cli:
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # A command face answers only through an open gate, and that gate is also the window: the plugin
+  # fires for this project, so this project is what it may read.
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: read-back-program
+    with:
+      name: worktree
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — read back from inside a plugin
+    as: seed
+
+  # And one the window does not cover. A project is the unit the gate is opened in, so a second
+  # project is where "outside" lives — there is no smaller way to stand outside a window.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: scenario-other
+    as: other
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — filed where the plugin cannot see it
+    as: unseen
+
+  - type: action
+    domain: task
+    op: move
+    with:
+      target: unseen
+      project: other
+
+  # The read-back, as it is written for authors: the task's id, `--json`, and no actor anywhere. What
+  # comes back is the record, which is the only thing that says the store and the window both arrived.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: read
+      task: seed
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: read back from inside a plugin
+
+  # The same call, one project over. The window bounds the read and says so by name — a plugin that
+  # could read the rest of the device would be observing what it was never let in on.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: read
+      task: unseen
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: out_of_reach
+
+  # A write from the same process, through the same window. Nothing here says who is writing, and the
+  # window cannot say it for them — a record of who acted is not a question of how far one may read.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: write
+      task: seed
+      args:
+        - "--text"
+        - "written from inside a plugin"
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: facet_required
+
+  # And with the author named, the write goes through — the door is shut on an unsigned write, not on
+  # a plugin. What proves it is the timeline the comment landed on, not what the call handed back.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: write
+      task: seed
+      args:
+        - "--text"
+        - "written from inside a plugin"
+        - "--actor"
+        - "ai"
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: written from inside a plugin

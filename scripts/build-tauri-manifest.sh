@@ -24,14 +24,15 @@ pub_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # Linux's updater artifact is the AppImage itself (Tauri v2 re-uses it — no .tar.gz); its .sig rides
 # beside it. A row whose .sig is absent is skipped, so a keyless build simply drops that platform.
 #
-# Windows and Linux name a `-update` copy of the installer a new install downloads, not that installer
-# itself. GitHub reports one download count per asset, so an asset serving both audiences reports a sum
-# that cannot be split back into its parts. The release job makes the copies — same bytes, same
-# signature — before it calls this script. macOS needs none: a new install there is the .pkg, so the
-# .app.tar.gz below already carries updates alone.
+# Every row names an asset carrying `-update`, on every platform. GitHub reports one download count per
+# asset, so an asset serving both audiences reports a sum that cannot be split back into its parts —
+# and reading which assets are the update ones is then one rule about the name rather than one rule per
+# suffix. Windows and Linux reach it by copying the installer under that name (same bytes, same
+# signature; the release job makes the copies before it calls this script); macOS has no copy to make,
+# its updater archive being a separate artifact already, so it simply carries the name.
 rows=(
-  "darwin-aarch64:amenbo-darwin-arm64.app.tar.gz"
-  "darwin-x86_64:amenbo-darwin-amd64.app.tar.gz"
+  "darwin-aarch64:amenbo-darwin-arm64-update.app.tar.gz"
+  "darwin-x86_64:amenbo-darwin-amd64-update.app.tar.gz"
   "windows-x86_64:amenbo-app-windows-x64-setup-update.exe"
   "linux-x86_64:amenbo-app-linux-x86_64-update.AppImage"
 )

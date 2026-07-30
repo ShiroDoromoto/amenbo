@@ -100,7 +100,7 @@ GUI_PKG_AMD64 := $(DIST_DIR)/amenbo-darwin-amd64.pkg
 # re-sign), we tar the RE-SIGNED .app ourselves so the updater delivers the same fixed-leaf .app the
 # installer does (notification authorization survives updates). The tar is AppleDouble-free
 # (COPYFILE_DISABLE) — a stray ._ file breaks the update's signature seal — then minisign-signed.
-MAC_UPDATER_DIST := $(DIST_DIR)/amenbo-darwin-$(MAC_GUI_ARCH).app.tar.gz
+MAC_UPDATER_DIST := $(DIST_DIR)/amenbo-darwin-$(MAC_GUI_ARCH)-update.app.tar.gz
 # The Linux GUI bundle is built inside a container for an explicit arch, pinned via --platform.
 # amd64 is the default (Linux desktop is overwhelmingly x86_64); override with
 # LINUX_GUI_ARCH=arm64. The AppImage's own arch token is x86_64/aarch64, matching the tool's

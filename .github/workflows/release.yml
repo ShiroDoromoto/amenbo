@@ -127,10 +127,10 @@ jobs:
             dist/amenbo-darwin-amd64
             dist/amenbo-darwin-arm64.pkg
             dist/amenbo-darwin-amd64.pkg
-            dist/amenbo-darwin-arm64.app.tar.gz
-            dist/amenbo-darwin-arm64.app.tar.gz.sig
-            dist/amenbo-darwin-amd64.app.tar.gz
-            dist/amenbo-darwin-amd64.app.tar.gz.sig
+            dist/amenbo-darwin-arm64-update.app.tar.gz
+            dist/amenbo-darwin-arm64-update.app.tar.gz.sig
+            dist/amenbo-darwin-amd64-update.app.tar.gz
+            dist/amenbo-darwin-amd64-update.app.tar.gz.sig
           if-no-files-found: error
 
   linux:
@@ -351,8 +351,9 @@ jobs:
       # count per asset: an asset both audiences pull reports a sum, and a sum cannot be split back into
       # its parts afterwards. The bytes and the detached minisign signature are copied unchanged — a
       # signature covers content, so it still verifies, and the copy's .sig matching the new-install
-      # one is what says the two are the same build. macOS needs no copy: a new install there is the
-      # .pkg, so its .app.tar.gz already carries updates alone.
+      # one is what says the two are the same build. macOS has no copy to make: its updater archive is
+      # a separate artifact from the .pkg a new install downloads, and it carries the `-update` name of
+      # its own accord, so the naming rule holds on every platform without a copy here.
       - name: Copy the GUI installers to their update-download names
         run: |
           set -euo pipefail
@@ -424,8 +425,8 @@ jobs:
           fi
           scripts/build-tauri-manifest.sh "$TAG" dist
           gh release upload "$TAG" \
-            dist/amenbo-darwin-arm64.app.tar.gz dist/amenbo-darwin-arm64.app.tar.gz.sig \
-            dist/amenbo-darwin-amd64.app.tar.gz dist/amenbo-darwin-amd64.app.tar.gz.sig \
+            dist/amenbo-darwin-arm64-update.app.tar.gz dist/amenbo-darwin-arm64-update.app.tar.gz.sig \
+            dist/amenbo-darwin-amd64-update.app.tar.gz dist/amenbo-darwin-amd64-update.app.tar.gz.sig \
             dist/amenbo-app-windows-x64-setup.exe.sig \
             dist/amenbo-app-windows-x64-setup-update.exe dist/amenbo-app-windows-x64-setup-update.exe.sig \
             dist/amenbo-app-linux-x86_64.AppImage.sig \
@@ -444,10 +445,10 @@ jobs:
         uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
-            dist/amenbo-darwin-arm64.app.tar.gz
-            dist/amenbo-darwin-arm64.app.tar.gz.sig
-            dist/amenbo-darwin-amd64.app.tar.gz
-            dist/amenbo-darwin-amd64.app.tar.gz.sig
+            dist/amenbo-darwin-arm64-update.app.tar.gz
+            dist/amenbo-darwin-arm64-update.app.tar.gz.sig
+            dist/amenbo-darwin-amd64-update.app.tar.gz
+            dist/amenbo-darwin-amd64-update.app.tar.gz.sig
             dist/amenbo-app-windows-x64-setup.exe.sig
             dist/amenbo-app-windows-x64-setup-update.exe
             dist/amenbo-app-windows-x64-setup-update.exe.sig
@@ -497,8 +498,8 @@ jobs:
           expected+=("latest.json")
           # The Tauri updater artifacts + manifest attached alongside (gh, not wharfy).
           expected+=(
-            "amenbo-darwin-arm64.app.tar.gz" "amenbo-darwin-arm64.app.tar.gz.sig"
-            "amenbo-darwin-amd64.app.tar.gz" "amenbo-darwin-amd64.app.tar.gz.sig"
+            "amenbo-darwin-arm64-update.app.tar.gz" "amenbo-darwin-arm64-update.app.tar.gz.sig"
+            "amenbo-darwin-amd64-update.app.tar.gz" "amenbo-darwin-amd64-update.app.tar.gz.sig"
             "amenbo-app-windows-x64-setup.exe.sig"
             "amenbo-app-windows-x64-setup-update.exe" "amenbo-app-windows-x64-setup-update.exe.sig"
             "amenbo-app-linux-x86_64.AppImage.sig"

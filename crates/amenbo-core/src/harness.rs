@@ -274,6 +274,99 @@ fn contains_ignoring_case(text: &str, needle: &str) -> bool {
     text.to_ascii_lowercase().contains(&needle.to_ascii_lowercase())
 }
 
+/// A project's answer to being asked whether amenbo may have its folder start an AI on `amenbo agent`
+/// (`AMB-D-440`) — the row of `harness_consent`, read and written through [`crate::overview`].
+///
+/// There is no `Unanswered` variant: never having answered is the *absence* of a row (`Option::None`),
+/// which is what keeps "asked and refused" apart from "never asked" — the first must never be asked
+/// again, the second must. The same shape as the lint's [`crate::hooks::HookConsent`], and for the same
+/// reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Consent {
+    /// Whether the offer was accepted. A `false` is "don't ask again", and forbids nothing: the snippets
+    /// stay there for the asking.
+    pub allowed: bool,
+    /// Whether the standing yes has already been put again after its wiring went missing. It is the
+    /// memory that makes "once more" once: without it a yes with nothing wired asks at every startup
+    /// forever, since answering it changes nothing on disk.
+    pub asked_again: bool,
+}
+
+impl Consent {
+    /// The answer to the question as first put.
+    pub fn answered(allowed: bool) -> Consent {
+        Consent { allowed, asked_again: false }
+    }
+
+    /// The answer to [`ConsentAction::AskAgain`] — the one re-ask, recorded as spent whichever way it
+    /// went, so it is not put a third time.
+    pub fn answered_again(allowed: bool) -> Consent {
+        Consent { allowed, asked_again: true }
+    }
+}
+
+/// The two facts [`reconcile`] weighs, plus what the surface asking is able to do.
+pub struct ConsentContext {
+    /// The answer on record for this project, `None` when it has never been asked.
+    pub consent: Option<Consent>,
+    /// Whether **any** harness is wired in this folder ([`probe`]). One bit, because the question is
+    /// about the feature: a second provider appearing later is not a second question.
+    pub wired: bool,
+    /// Whether this surface can put a question to a person. False for `--json`, an AI and a script,
+    /// where a prompt would hang on a terminal nobody is watching.
+    pub can_ask: bool,
+}
+
+/// What to do about the consent, once the record and the folder have been read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsentAction {
+    /// Put the question, and record the answer with [`Consent::answered`].
+    Ask,
+    /// Nothing was ever answered here, but a harness is already wired: the user's own hand is the
+    /// answer, so record [`Consent::answered(true)`](Consent::answered) without asking anyone anything.
+    AdoptWired,
+    /// A standing yes with nothing wired — deleted, or a clone that never carried the settings. Put the
+    /// question one more time and record the answer with [`Consent::answered_again`].
+    AskAgain,
+    /// Say nothing about the consent. It does **not** mean the folder is wired: an unwired provider is
+    /// still reported, which is a separate duty from this question.
+    Nothing,
+}
+
+/// Read the answer and the folder against each other and say what to do — the drift table (`AMB-D-440`),
+/// which the tests below walk row by row.
+///
+/// The rungs, in order:
+///
+/// 1. **A refusal** is silent from there on, whatever the folder holds.
+/// 2. **Never asked, and already wired**: somebody wired this by hand, and that is the answer. Recording
+///    it rather than asking is what stops amenbo putting a question whose answer is on disk in front of
+///    it.
+/// 3. **Never asked, nothing wired**: the one question — and only where it can be answered.
+/// 4. **A standing yes with nothing wired**: asked once more, and only once. The wiring can go for
+///    reasons that are not a change of mind (a fresh clone, a settings file a team rewrote), so it is
+///    worth one question — and no more than one, because the answer cannot fix it.
+///
+/// **Once ever, not once per absence.** The re-ask is spent when it is answered and never comes back:
+/// this question's failure mode is nagging about a file amenbo will not write, and the user who wants it
+/// again can ask for the snippet whenever they like.
+///
+/// A machine caller is never asked (`can_ask`), and nothing is recorded when it is not — the unanswered
+/// state carries intact to the next surface that can ask, and what the machine gets instead is the
+/// unwired harnesses in its output.
+pub fn reconcile(ctx: &ConsentContext) -> ConsentAction {
+    match ctx.consent {
+        Some(Consent { allowed: false, .. }) => ConsentAction::Nothing,
+        None if ctx.wired => ConsentAction::AdoptWired,
+        None if ctx.can_ask => ConsentAction::Ask,
+        None => ConsentAction::Nothing,
+        Some(Consent { asked_again, .. }) if !ctx.wired && !asked_again && ctx.can_ask => {
+            ConsentAction::AskAgain
+        }
+        Some(_) => ConsentAction::Nothing,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -433,6 +526,42 @@ mod tests {
             wiring(&probe(&dir, "amenbo"), "codex-cli").wired_at,
             Some(PathBuf::from(".codex/config.toml"))
         );
+    }
+
+    /// The drift table, walked row by row (`AMB-D-440`). The record decides whether to ask; the folder
+    /// is read every time; neither stands in for the other.
+    #[test]
+    fn the_record_and_the_folder_meet_row_by_row() {
+        let ask = |consent, wired| reconcile(&ConsentContext { consent, wired, can_ask: true });
+
+        // Never asked, nothing wired: the one question.
+        assert_eq!(ask(None, false), ConsentAction::Ask);
+        // Never asked, but wired by hand: the disk is the answer, so take it and stay quiet.
+        assert_eq!(ask(None, true), ConsentAction::AdoptWired);
+        // A yes that is wired has nothing left to say.
+        assert_eq!(ask(Some(Consent::answered(true)), true), ConsentAction::Nothing);
+        // A yes whose wiring went missing: once more.
+        assert_eq!(ask(Some(Consent::answered(true)), false), ConsentAction::AskAgain);
+        // And once is once.
+        assert_eq!(ask(Some(Consent::answered_again(true)), false), ConsentAction::Nothing);
+        // A refusal is silent either way, and a spent re-ask does not revive it.
+        for consent in [Consent::answered(false), Consent::answered_again(false)] {
+            for wired in [true, false] {
+                assert_eq!(ask(Some(consent), wired), ConsentAction::Nothing, "{consent:?} {wired}");
+            }
+        }
+    }
+
+    /// A surface that cannot put a question asks none — and records nothing, so the unanswered state
+    /// reaches the next surface that can. Adopting a wiring already on disk is not asking, so it still
+    /// happens.
+    #[test]
+    fn a_machine_caller_is_never_asked() {
+        let machine = |consent, wired| reconcile(&ConsentContext { consent, wired, can_ask: false });
+
+        assert_eq!(machine(None, false), ConsentAction::Nothing);
+        assert_eq!(machine(Some(Consent::answered(true)), false), ConsentAction::Nothing);
+        assert_eq!(machine(None, true), ConsentAction::AdoptWired);
     }
 
     /// The event token is matched however the provider spells it.

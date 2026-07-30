@@ -335,6 +335,23 @@ impl Store {
     pub fn set_hook_optout(&self, project_id: i64, opted_out: bool) -> Result<()> {
         crate::overview::set_hook_optout(&self.engine, project_id, opted_out)
     }
+
+    /// What this project answered about having its folder start an AI on `amenbo agent`
+    /// ([`crate::harness`]), or `None` when it has never been asked. It says what was answered, never
+    /// what the provider settings hold — those are read every time, and the two meet in
+    /// [`crate::harness::reconcile`].
+    pub fn harness_consent(&self, project_id: i64) -> Result<Option<crate::harness::Consent>> {
+        crate::overview::harness_consent(&self.engine, project_id)
+    }
+
+    /// Record this project's answer to that question.
+    pub fn set_harness_consent(
+        &self,
+        project_id: i64,
+        consent: crate::harness::Consent,
+    ) -> Result<()> {
+        crate::overview::set_harness_consent(&self.engine, project_id, consent)
+    }
 }
 
 /// The read-only check that makes cleaning up phantom empty stores (`doctor --fix`) safe. It reads the

@@ -1,8 +1,8 @@
 //! The **overview tables** of the unified database.
 //!
-//! Folder bindings, read receipts, the inbox archive and the lint-hook consent are device-local
-//! overview state: per-machine, never synced, and — unlike a task or a decision — not a record of any
-//! one project. They are ordinary tables of the one database, declared by
+//! Folder bindings, read receipts, the inbox archive, the lint-hook consent and the AI-harness consent
+//! are device-local overview state: per-machine, never synced, and — unlike a task or a decision — not a
+//! record of any one project. They are ordinary tables of the one database, declared by
 //! [`crate::store_engine::schema::schema_sql`].
 //!
 //! This module is the read/write path onto them, written against a bare [`StoreEngine`] rather than a
@@ -16,6 +16,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction};
 
 use crate::binding::Registry;
 use crate::error::Result;
+use crate::harness::Consent;
 use crate::read_receipts::ReadReceipts;
 use crate::store_engine::schema::col;
 use crate::store_engine::sql::{Col, Delete, Insert, Int, Pred, Select, Sort, Sql, Table};
@@ -29,6 +30,7 @@ const RR: col::read_receipt::Cols = col::read_receipt::ALL;
 const IA: col::inbox_archive::Cols = col::inbox_archive::ALL;
 const MN: col::mailbox_notified::Cols = col::mailbox_notified::ALL;
 const HO: col::hook_optout::Cols = col::hook_optout::ALL;
+const HC: col::harness_consent::Cols = col::harness_consent::ALL;
 
 /// `store_meta` key for the mailbox's single last-seen instant. A scalar, so it lives in the KV
 /// singleton table rather than the per-task `read_receipt` table.
@@ -271,6 +273,47 @@ pub fn set_hook_optout(engine: &StoreEngine, project_id: i64, opted_out: bool) -
             .execute(engine.conn())
             .map_err(StoreEngineError::from)?;
     }
+    Ok(())
+}
+
+// ───────────────────────── AI-harness consent ─────────────────────────
+
+/// This project's answer on being asked to start its AI on `amenbo agent`, or `None` when it has never
+/// been asked (`AMB-D-440`). The absence of a row is the unanswered state, so there is nothing here to
+/// tell apart from a `no` that was actually given.
+///
+/// It is **not** a mirror of the settings on disk: what a folder is wired with is read every time
+/// ([`crate::harness::probe`]), and the two meet in [`crate::harness::reconcile`] alone.
+pub fn harness_consent(engine: &StoreEngine, project_id: i64) -> Result<Option<Consent>> {
+    let mut sel = Select::new();
+    let (allowed, asked_again) = (sel.col(HC.allowed), sel.col(HC.asked_again));
+    let mut sql = Sql::from(&sel, HC.table);
+    sql.push_where(Some(&Pred::eq(HC.project_id, project_id)));
+    let found: Option<(i64, i64)> = engine
+        .conn()
+        .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((allowed.get(r)?, asked_again.get(r)?))
+        })
+        .optional()
+        .map_err(StoreEngineError::from)?;
+    Ok(found.map(|(allowed, asked_again)| Consent {
+        allowed: allowed != 0,
+        asked_again: asked_again != 0,
+    }))
+}
+
+/// Record this project's answer, replacing whatever it said before. The answer to the question as first
+/// put is [`Consent::answered`]; the answer to the one re-ask is [`Consent::answered_again`], which is
+/// what spends it.
+pub fn set_harness_consent(engine: &StoreEngine, project_id: i64, consent: Consent) -> Result<()> {
+    Insert::into(HC.table)
+        .set(HC.project_id, project_id)
+        .set(HC.allowed, i64::from(consent.allowed))
+        .set(HC.asked_again, i64::from(consent.asked_again))
+        .on_conflict_update(HC.project_id)
+        .sql()
+        .execute(engine.conn())
+        .map_err(StoreEngineError::from)?;
     Ok(())
 }
 

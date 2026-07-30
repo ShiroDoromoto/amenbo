@@ -102,6 +102,17 @@ pub fn reach_from_env() -> Result<Option<Reach>> {
     }
 }
 
+/// Was this process launched as a plugin at all? The question asked ahead of decoding, by a caller that
+/// needs to know only *that* a window was handed over — the CLI's facet door, which stops asking for a facet
+/// to draw a reach the window already fixed.
+///
+/// A value this build cannot read still declares a window (and loses it): [`reach_from_env`] fails on it a
+/// moment later with a message naming the variable, so answering `false` here would replace that with a
+/// complaint about something else entirely.
+pub fn window_declared() -> bool {
+    reach_from_env().map_or(true, |window| window.is_some())
+}
+
 /// A [`REACH_ENV`] value amenbo did not write.
 fn unreadable(value: &str) -> Error {
     // The ref's shape, spelled by the module that owns every ref's spelling rather than by a literal here.

@@ -910,6 +910,8 @@ export function AgentHookSetupBanner({ asked }: { asked: boolean }) {
   const [dismissed, setDismissed] = useState(false);
   // Which tool's text was last copied, so the button can say so. Keyed by folder and tool together: the
   // same tool appears under every folder that traces it, and a copy in one must not light up the others.
+  // The two are joined on a byte no path and no tool id can carry, written as the escape it is — a file
+  // holding one for real reads as binary, and every grep over this tree walks past it without a word.
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
@@ -942,7 +944,7 @@ export function AgentHookSetupBanner({ asked }: { asked: boolean }) {
           <div key={n.dir} className="healthbanner__line">
             <div>{tf("agentHookSetup.where", { project: n.projectName, dir: n.dir })}</div>
             {n.unwired.map((tool) => {
-              const key = `${n.dir} ${tool.tool}`;
+              const key = `${n.dir}\0${tool.tool}`;
               return (
                 <div key={tool.tool}>
                   {tf("agentHookSetup.unwired", { tool: tool.label, cmd: `${n.cmd} agent`, file: tool.pasteInto })}{" "}

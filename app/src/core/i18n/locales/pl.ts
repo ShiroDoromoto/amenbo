@@ -441,6 +441,7 @@ export const pl: Translation = {
     "agentHookSetup.title": "AI tego katalogu nie startuje na amenbo",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: przy starcie sesji nie uruchamia `{cmd}`. Przekaż poniższy tekst swojemu AI — to ono zmieni {file}.",
+    "agentHookSetup.pick": "Którego narzędzia używasz w tym katalogu?",
     "agentHookSetup.copy": "Skopiuj tekst",
     "agentHookSetup.copied": "Skopiowano",
     "app.crashTitle": "Coś poszło nie tak",

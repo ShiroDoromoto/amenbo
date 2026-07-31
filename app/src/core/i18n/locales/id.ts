@@ -415,6 +415,7 @@ export const id: Translation = {
     "agentHookSetup.title": "AI folder ini tidak dimulai dengan amenbo",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: tidak menjalankan `{cmd}` saat sesi dimulai. Berikan teks di bawah ini ke AI Anda — AI yang menyunting {file}.",
+    "agentHookSetup.pick": "Alat mana yang Anda pakai di folder ini?",
     "agentHookSetup.copy": "Salin teksnya",
     "agentHookSetup.copied": "Tersalin",
     "app.crashTitle": "Ada yang tidak beres",

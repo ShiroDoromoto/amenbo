@@ -892,18 +892,19 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
 //
 // **What it adds over the CLI's line is the copy button**, and that is the whole point of the surface: the
 // wiring is an edit the reader has their own AI make, amenbo never writes the file, so how easily the text
-// reaches the clipboard is how often the setup is finished. One button per unwired tool, since the text
-// differs per tool and handing over the wrong one wires nothing.
+// reaches the clipboard is how often the setup is finished. The text differs per tool and handing over the
+// wrong one wires nothing, so where there is more than one on offer the reader picks which, and the button
+// carries that one.
 //
 // **The text is on screen, not behind the button.** What it asks for is an edit to a file the reader owns,
 // by an AI of theirs — so the moment to read it is before it is handed over, and a copy button with the
 // text hidden behind it is a copy taken on trust. It scrolls in place rather than being folded away: a
 // disclosure would put it one click from being copied unread, which is the state this avoids.
 //
-// **It reports only what the folder points at** — a provider whose own directory is here, unwired — because
-// that is the CLI's person-facing rule and holds for the same reason: a standing warning about a tool there
-// is no sign of is a line nobody can act on. The catalog belongs on the `--json` face, where the reader is
-// the harness itself and can name which one it is.
+// **A folder that points at no tool is offered the catalog**, rather than shown nothing (core decides which
+// — `harness::offered`). That folder is not a rare one: it is every folder nobody has run an AI in yet,
+// which is exactly where a reader has just been asked and said yes. This is where the surface parts from
+// the CLI's person-facing line, which is printed on every command and so stays with what it can name.
 //
 // It renders only once the modal is done asking (`asked`), because asking about the hook and warning about
 // the hook in the same breath says one thing twice — the same order `HookSetupBanner` keeps. A recorded "no"
@@ -918,6 +919,9 @@ export function AgentHookSetupBanner({ asked }: { asked: boolean }) {
   // The two are joined on a byte no path and no tool id can carry, written as the escape it is — a file
   // holding one for real reads as binary, and every grep over this tree walks past it without a word.
   const [copied, setCopied] = useState<string | null>(null);
+  // Which tool the reader picked, per folder. Unset means the first on offer — which is the only one where
+  // the folder points at exactly one, and the head of the catalog where it points at none.
+  const [picked, setPicked] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!inTauri() || !asked) return;
@@ -945,23 +949,36 @@ export function AgentHookSetupBanner({ asked }: { asked: boolean }) {
       <span className="healthbanner__icon" aria-hidden>⚠</span>
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("agentHookSetup.title")}</div>
-        {notices.map((n) => (
-          <div key={n.dir} className="healthbanner__line">
-            <div>{tf("agentHookSetup.where", { project: n.projectName, dir: n.dir })}</div>
-            {n.unwired.map((tool) => {
-              const key = `${n.dir}\0${tool.tool}`;
-              return (
-                <div key={tool.tool}>
-                  {tf("agentHookSetup.unwired", { tool: tool.label, cmd: `${n.cmd} agent`, file: tool.pasteInto })}{" "}
-                  <button className="healthbanner__action" onClick={() => void copy(key, tool.request)}>
-                    {copied === key ? t("agentHookSetup.copied") : t("agentHookSetup.copy")}
-                  </button>
-                  <pre className="agenthook__request">{tool.request}</pre>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+        {notices.map((n) => {
+          const tool = n.offered.find((one) => one.tool === picked[n.dir]) ?? n.offered[0];
+          const key = `${n.dir}\0${tool.tool}`;
+          return (
+            <div key={n.dir} className="healthbanner__line">
+              <div>{tf("agentHookSetup.where", { project: n.projectName, dir: n.dir })}</div>
+              {/* Only where there is a choice to make. With one on offer the folder has already said which
+                  tool it is, and a picker holding a single value asks a question that has no other answer. */}
+              {n.offered.length > 1 && (
+                <select
+                  className="agenthook__pick"
+                  aria-label={t("agentHookSetup.pick")}
+                  value={tool.tool}
+                  onChange={(e) => setPicked((was) => ({ ...was, [n.dir]: e.target.value }))}
+                >
+                  {n.offered.map((one) => (
+                    <option key={one.tool} value={one.tool}>{one.label}</option>
+                  ))}
+                </select>
+              )}
+              <div>
+                {tf("agentHookSetup.unwired", { tool: tool.label, cmd: `${n.cmd} agent`, file: tool.pasteInto })}{" "}
+                <button className="healthbanner__action" onClick={() => void copy(key, tool.request)}>
+                  {copied === key ? t("agentHookSetup.copied") : t("agentHookSetup.copy")}
+                </button>
+                <pre className="agenthook__request">{tool.request}</pre>
+              </div>
+            </div>
+          );
+        })}
       </div>
       <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
     </div>

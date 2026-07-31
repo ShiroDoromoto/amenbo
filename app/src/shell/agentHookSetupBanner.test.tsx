@@ -65,7 +65,7 @@ function notice(over: Partial<AgentHookNoticeDto> = {}): AgentHookNoticeDto {
     projectName: "案件X",
     dir: "/w/案件X",
     cmd: "amenbo",
-    unwired: [tool()],
+    offered: [tool()],
     ...over,
   };
 }
@@ -79,6 +79,9 @@ async function render(asked: boolean) {
 /** The copy buttons, in the order they are on screen. */
 const copyButtons = () =>
   [...container.querySelectorAll<HTMLButtonElement>(".healthbanner__action")];
+
+/** The text shown in the one folder's block, which is what the copy button carries. */
+const shownRequest = () => container.querySelector(".agenthook__request")?.textContent;
 
 beforeEach(() => {
   hoisted.notices = [];
@@ -146,7 +149,7 @@ describe("the session-start hook setup banner", () => {
 
   // The point of the surface. The text is what finishes the setup, since amenbo will not write the file.
   it("copies that tool's own text, and says it did", async () => {
-    hoisted.notices = [notice({ unwired: [tool({ request: "REQUEST-A" })] })];
+    hoisted.notices = [notice({ offered: [tool({ request: "REQUEST-A" })] })];
     await render(true);
 
     await act(async () => { copyButtons()[0].click(); });
@@ -158,7 +161,7 @@ describe("the session-start hook setup banner", () => {
   // Read before it is handed on. The text asks an AI of the reader's to edit a file of theirs, so it is on
   // screen in full — not summarised, and not folded behind the button that copies it.
   it("shows the whole text on screen, before anything is copied", async () => {
-    hoisted.notices = [notice({ unwired: [tool({ request: "REQUEST-A\nsecond line" })] })];
+    hoisted.notices = [notice({ offered: [tool({ request: "REQUEST-A\nsecond line" })] })];
     await render(true);
 
     const shown = container.querySelector(".agenthook__request");
@@ -166,28 +169,48 @@ describe("the session-start hook setup banner", () => {
     expect(clipboard, "nothing was copied to make it visible").toEqual([]);
   });
 
-  // Two tools traced in one folder is two texts, and handing over the wrong one wires nothing — so it is one
-  // button each, and the "copied" mark belongs to the one that was pressed.
-  it("gives every unwired tool its own button, carrying its own text", async () => {
+  // More than one on offer is more than one text, and handing over the wrong one wires nothing — so the
+  // reader picks, and what is shown and what is copied both follow that pick.
+  it("lets the reader pick which tool, and shows and copies that one's text", async () => {
     hoisted.notices = [notice({
-      unwired: [
+      offered: [
         tool({ tool: "claude-code", label: "Claude Code", request: "REQUEST-A" }),
         tool({ tool: "cursor", label: "Cursor", pasteInto: ".cursor/hooks.json", request: "REQUEST-B" }),
       ],
     })];
     await render(true);
 
-    expect(copyButtons()).toHaveLength(2);
-    await act(async () => { copyButtons()[1].click(); });
+    // The first on offer until the reader says otherwise, and one text on screen — not both.
+    expect(copyButtons()).toHaveLength(1);
+    expect(shownRequest()).toBe("REQUEST-A");
+
+    const pick = container.querySelector<HTMLSelectElement>(".agenthook__pick")!;
+    await act(async () => {
+      pick.value = "cursor";
+      pick.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(shownRequest(), "the text on screen follows the pick").toBe("REQUEST-B");
+    expect(container.textContent).toContain(".cursor/hooks.json");
+    await act(async () => { copyButtons()[0].click(); });
     expect(clipboard).toEqual(["REQUEST-B"]);
+  });
+
+  // A folder that points at one tool has already answered which; a picker holding a single value is a
+  // question with no other answer.
+  it("asks nothing where there is only one on offer", async () => {
+    hoisted.notices = [notice({ offered: [tool()] })];
+    await render(true);
+
+    expect(container.querySelector(".agenthook__pick")).toBeNull();
   });
 
   // The same tool appears under every folder that traces it, so a copy in one folder must not light up the
   // button in the other — the mark says which text is actually on the clipboard.
   it("marks only the button that was pressed, across folders sharing a tool", async () => {
     hoisted.notices = [
-      notice({ unwired: [tool({ request: "REQUEST-X" })] }),
-      notice({ projectName: "案件Y", dir: "/w/案件Y", unwired: [tool({ request: "REQUEST-Y" })] }),
+      notice({ offered: [tool({ request: "REQUEST-X" })] }),
+      notice({ projectName: "案件Y", dir: "/w/案件Y", offered: [tool({ request: "REQUEST-Y" })] }),
     ];
     await render(true);
 

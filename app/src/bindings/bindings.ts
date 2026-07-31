@@ -55,9 +55,12 @@ dir: string,
  */
 cmd: string, 
 /**
- * The providers traced here and not wired, each with the text that asks for the wiring.
+ * The providers to put in front of the reader, each with the text that asks for the wiring: the
+ * ones this folder points at, or the whole catalog where it points at none
+ * ([`amenbo_core::harness::offered`]). Never empty — a banner with nothing to hand over is the one
+ * thing this must not be.
  */
-unwired: Array<AgentHookToolDto>, };
+offered: Array<AgentHookToolDto>, };
 
 /**
  * The question about the AI harness's session-start hook, waiting to be put about one bound folder

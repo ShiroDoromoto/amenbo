@@ -4127,15 +4127,14 @@ pub struct AgentHookToolDto {
     request: String,
 }
 
-/// The row for `one`, or `None` where the catalog no longer lists it.
-fn agent_hook_tool(one: &amenbo_core::harness::Wiring, cmd: &str) -> Option<AgentHookToolDto> {
-    let harness = amenbo_core::harness::find(one.id)?;
-    Some(AgentHookToolDto {
+/// The row for one catalog entry.
+fn agent_hook_tool(harness: &amenbo_core::harness::Harness, cmd: &str) -> AgentHookToolDto {
+    AgentHookToolDto {
         tool: harness.id.to_string(),
         label: harness.label.to_string(),
         paste_into: harness.paste_into.to_string(),
         request: amenbo_core::harness::request(harness, cmd),
-    })
+    }
 }
 
 /// The question about the AI harness's session-start hook, waiting to be put about one bound folder
@@ -4212,7 +4211,8 @@ fn sweep_agent_hooks(store: &Store, can_ask: bool) -> Option<AgentHookOfferDto> 
                     named: found
                         .iter()
                         .filter(|one| one.traced && !one.wired())
-                        .filter_map(|one| agent_hook_tool(one, cmd))
+                        .filter_map(|one| harness::find(one.id))
+                        .map(|one| agent_hook_tool(one, cmd))
                         .collect(),
                 });
             }
@@ -4272,8 +4272,11 @@ pub struct AgentHookNoticeDto {
     dir: String,
     /// What this build is called on the command line (the dev channel answers `amenbo-dev`).
     cmd: String,
-    /// The providers traced here and not wired, each with the text that asks for the wiring.
-    unwired: Vec<AgentHookToolDto>,
+    /// The providers to put in front of the reader, each with the text that asks for the wiring: the
+    /// ones this folder points at, or the whole catalog where it points at none
+    /// ([`amenbo_core::harness::offered`]). Never empty — a banner with nothing to hand over is the one
+    /// thing this must not be.
+    offered: Vec<AgentHookToolDto>,
 }
 
 /// Where this folder's AI is not started on amenbo — the GUI's third channel for it, alongside the CLI's
@@ -4281,10 +4284,12 @@ pub struct AgentHookNoticeDto {
 /// ([`amenbo_core::harness::setup_notice`]), not [`agent_hook_offer`]'s one-time question: it tells, and
 /// the only thing that ends it is the wiring landing, since amenbo will not write the file itself.
 ///
-/// **It reports only what it can point at**, which is what the CLI's person-facing line does and for the
-/// same reason: a standing warning about a tool the folder shows no sign of is one the reader cannot act
-/// on. The catalog is carried on the `--json` face instead, where the reader is the harness itself and
-/// knows which one it is (`AMB-D-440`).
+/// **What it hands over is never empty**, which is where it parts from the CLI's person-facing line. That
+/// line is printed on every command, so it stays with providers it can name — a warning about a tool the
+/// folder shows no sign of is one the reader cannot act on. This surface is raised once and can let the
+/// reader choose, so a folder that names nothing is offered the catalog rather than dropped
+/// ([`amenbo_core::harness::offered`]): the reader who has just answered yes is exactly the one whose
+/// folder has no trace in it yet, and a yes that hands over nothing is the promise broken (`AMB-D-440`).
 ///
 /// Called **once, after [`agent_hook_offer`] has had its turn**, so a folder just adopted or just answered
 /// is read in the state that left it.
@@ -4305,9 +4310,9 @@ pub fn agent_hook_notices() -> Result<Vec<AgentHookNoticeDto>, CmdError> {
         let Some(notice) = harness::setup_notice(&harness::probe(path, cmd), consent) else {
             continue;
         };
-        let unwired: Vec<AgentHookToolDto> =
-            notice.unwired.iter().filter_map(|one| agent_hook_tool(one, cmd)).collect();
-        if unwired.is_empty() {
+        let offered: Vec<AgentHookToolDto> =
+            harness::offered(&notice).into_iter().map(|one| agent_hook_tool(one, cmd)).collect();
+        if offered.is_empty() {
             continue;
         }
         let Ok(Some(project)) = store.project(project_id) else { continue };
@@ -4315,7 +4320,7 @@ pub fn agent_hook_notices() -> Result<Vec<AgentHookNoticeDto>, CmdError> {
             project_name: project.name,
             dir: dir.clone(),
             cmd: cmd.to_string(),
-            unwired,
+            offered,
         });
     }
     Ok(notices)
@@ -8162,23 +8167,35 @@ mod tests {
             "wiring it by hand is the answer, recorded without anyone being asked",
         );
 
+        // One folder is wired and has nothing left to finish; the other points at no tool, and is the
+        // case this surface exists for — it is offered the catalog to pick from rather than nothing,
+        // since a reader who has just said yes there would otherwise be handed no text at all.
         let notices = agent_hook_notices().unwrap();
         assert_eq!(
             notices.iter().map(|n| n.dir.as_str()).collect::<Vec<_>>(),
-            Vec::<&str>::new(),
-            "one folder is wired and the other points at nothing: no line anyone could act on",
+            [bare_dir.to_string_lossy()],
+            "the wired folder is done; the one pointing at nothing still has to be handed something",
+        );
+        assert_eq!(
+            notices[0].offered.len(),
+            amenbo_core::harness::HARNESSES.len(),
+            "a folder pointing at nothing is offered every tool, not none",
         );
 
         // Now a folder that says which tool it uses, and does not run it at session start.
         let traced = new_project("痕跡はあるが未配線のPJ");
         let traced_dir = bound(traced, "traced", false);
         let notices = agent_hook_notices().unwrap();
+        let traced_notice = notices
+            .iter()
+            .find(|n| n.dir == traced_dir.to_string_lossy())
+            .expect("the folder that points at a tool is reported");
         assert_eq!(
-            notices.iter().map(|n| n.dir.as_str()).collect::<Vec<_>>(),
-            [traced_dir.to_string_lossy()],
-            "only the folder with something to point at",
+            traced_notice.offered.iter().map(|one| one.tool.as_str()).collect::<Vec<_>>(),
+            ["claude-code"],
+            "a folder that points somewhere is offered that, not the whole catalog",
         );
-        let tool = &notices[0].unwired[0];
+        let tool = &traced_notice.offered[0];
         assert_eq!(tool.tool, "claude-code");
         assert_eq!(tool.paste_into, ".claude/settings.json", "where the text goes");
         assert!(
@@ -8194,10 +8211,13 @@ mod tests {
             tool.request,
         );
 
-        // A refusal ends the report. Nothing is forbidden by it — the text stays there for the asking —
-        // but a reader with no setup pending is not warned about one.
+        // A refusal ends the report — for the project that gave it, and no other. Nothing is forbidden by
+        // it, the text stays there for the asking, but a reader with no setup pending is not warned.
         agent_hook_answer(traced, false).unwrap();
-        assert!(agent_hook_notices().unwrap().is_empty(), "a no is silence, not a standing warning");
+        assert!(
+            !agent_hook_notices().unwrap().iter().any(|n| n.dir == traced_dir.to_string_lossy()),
+            "a no is silence, not a standing warning",
+        );
 
         let _ = std::fs::remove_dir_all(&wired_dir);
         let _ = std::fs::remove_dir_all(&tmp);

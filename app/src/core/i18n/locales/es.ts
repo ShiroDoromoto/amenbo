@@ -435,6 +435,7 @@ export const es: Translation = {
     "agentHookSetup.title": "La IA de esta carpeta no arranca con amenbo",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: no ejecuta `{cmd}` al iniciar la sesión. Dale el texto de abajo a tu IA: ella edita {file}.",
+    "agentHookSetup.pick": "¿Qué herramienta usas en esta carpeta?",
     "agentHookSetup.copy": "Copiar el texto",
     "agentHookSetup.copied": "Copiado",
     "app.crashTitle": "Algo salió mal",

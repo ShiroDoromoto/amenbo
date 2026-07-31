@@ -415,6 +415,7 @@ export const th: Translation = {
     "agentHookSetup.title": "AI ของโฟลเดอร์นี้ไม่ได้เริ่มด้วย amenbo",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: ตอนเริ่มเซสชันไม่ได้เรียก `{cmd}` ส่งข้อความด้านล่างให้ AI ของคุณ — AI จะเป็นคนแก้ {file}",
+    "agentHookSetup.pick": "ในโฟลเดอร์นี้คุณใช้เครื่องมือตัวไหน",
     "agentHookSetup.copy": "คัดลอกข้อความ",
     "agentHookSetup.copied": "คัดลอกแล้ว",
     "app.crashTitle": "มีบางอย่างผิดพลาด",

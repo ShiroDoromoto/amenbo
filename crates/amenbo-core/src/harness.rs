@@ -470,6 +470,29 @@ pub fn setup_notice(found: &[Wiring], consent: Option<Consent>) -> Option<Notice
     (!unwired.is_empty() || !any_wired).then_some(Notice { unwired, any_wired })
 }
 
+/// The harnesses to put in front of a reader who has asked for the text, in catalog order: the ones the
+/// folder points at, or — where it points at none — the catalog (`AMB-D-440`).
+///
+/// **A reader who says yes must be handed something.** [`Notice::unwired`] is what amenbo can *name*, and
+/// a folder that traces no provider names none: the offer there is not a shorter list but the whole
+/// catalog, out of which the reader picks the tool they know they use. Anything else takes a yes and gives
+/// nothing back, which is the state a folder nobody has run an AI in yet is always in.
+///
+/// **What is offered stays inside the catalog**, even when nothing is traced. amenbo can only see wiring
+/// it knows the shape of ([`probe`]), so a text written for some provider outside it would land somewhere
+/// no probe reads — and the report, which only the wiring ends, would go on saying this folder is unwired
+/// for ever.
+///
+/// Whether a face uses this at all is the face's own call: a line printed on every command has to be one
+/// the reader can act on, so the CLI's person-facing warning stays with what it can name. A surface that
+/// asks once, and can let the reader choose, is where the catalog belongs.
+pub fn offered(notice: &Notice) -> Vec<&'static Harness> {
+    if notice.unwired.is_empty() {
+        return HARNESSES.iter().collect();
+    }
+    notice.unwired.iter().filter_map(|one| find(one.id)).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -773,6 +796,34 @@ mod tests {
         for consent in [Consent::answered(false), Consent::answered_again(false)] {
             assert_eq!(setup_notice(&traced, Some(consent)), None, "{consent:?}");
             assert_eq!(setup_notice(&quiet_folder, Some(consent)), None, "{consent:?}");
+        }
+    }
+
+    /// What a reader who asked for the text is handed. The case this exists for is the folder that traces
+    /// nothing — a new one, where nobody has run an AI yet — which named no provider and so, on a surface
+    /// that showed only named ones, handed over nothing at all.
+    #[test]
+    fn a_folder_that_names_no_provider_is_offered_the_catalog() {
+        let bare = |id: &'static str, traced| Wiring { id, label: id, wired_at: None, traced };
+
+        let quiet_folder = [bare("claude-code", false), bare("cursor", false)];
+        let notice = setup_notice(&quiet_folder, None).unwrap();
+        assert_eq!(
+            offered(&notice).iter().map(|h| h.id).collect::<Vec<_>>(),
+            HARNESSES.iter().map(|h| h.id).collect::<Vec<_>>(),
+            "a folder pointing at nothing is offered everything, in catalog order",
+        );
+
+        // Where the folder does point somewhere, that is the offer: the reader is not asked to pick out of
+        // five when amenbo can already see which one they use.
+        let traced = [bare("claude-code", true), bare("cursor", false)];
+        let notice = setup_notice(&traced, None).unwrap();
+        assert_eq!(offered(&notice).iter().map(|h| h.id).collect::<Vec<_>>(), ["claude-code"]);
+
+        // Everything offered is a row of the catalog — amenbo only sees wiring it knows the shape of, so a
+        // text for anything else would land where no probe reads and the report would never end.
+        for harness in offered(&notice) {
+            assert!(find(harness.id).is_some(), "{} is offered and not listed", harness.id);
         }
     }
 }

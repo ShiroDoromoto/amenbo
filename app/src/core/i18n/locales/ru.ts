@@ -444,6 +444,7 @@ export const ru: Translation = {
     "agentHookSetup.title": "ИИ этой папки не запускается на amenbo",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: при старте сессии не выполняет `{cmd}`. Передайте текст ниже своему ИИ — файл {file} правит он.",
+    "agentHookSetup.pick": "Каким инструментом вы пользуетесь в этой папке?",
     "agentHookSetup.copy": "Скопировать текст",
     "agentHookSetup.copied": "Скопировано",
     "app.crashTitle": "Что-то пошло не так",

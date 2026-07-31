@@ -423,6 +423,7 @@ export const de: Translation = {
     "agentHookSetup.title": "Die KI dieses Ordners wird nicht mit amenbo gestartet",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: führt beim Sitzungsstart kein `{cmd}` aus. Gib den Text unten deiner KI — sie bearbeitet {file}.",
+    "agentHookSetup.pick": "Welches Werkzeug nutzt du in diesem Ordner?",
     "agentHookSetup.copy": "Text kopieren",
     "agentHookSetup.copied": "Kopiert",
     "app.crashTitle": "Etwas ist schiefgelaufen",

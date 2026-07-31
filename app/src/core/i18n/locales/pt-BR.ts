@@ -436,6 +436,7 @@ export const ptBR: Translation = {
     "agentHookSetup.title": "A IA desta pasta não é iniciada no amenbo",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: não executa `{cmd}` ao iniciar a sessão. Dê o texto abaixo à sua IA — é ela que edita {file}.",
+    "agentHookSetup.pick": "Qual ferramenta você usa nesta pasta?",
     "agentHookSetup.copy": "Copiar o texto",
     "agentHookSetup.copied": "Copiado",
     "app.crashTitle": "Algo deu errado",

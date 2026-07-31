@@ -412,6 +412,7 @@ export const nl: Translation = {
     "agentHookSetup.title": "De AI van deze map start niet met amenbo",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: voert bij sessiebegin geen `{cmd}` uit. Geef de tekst hieronder aan je AI — die past {file} aan.",
+    "agentHookSetup.pick": "Welk gereedschap gebruik je in deze map?",
     "agentHookSetup.copy": "Tekst kopiëren",
     "agentHookSetup.copied": "Gekopieerd",
     "app.crashTitle": "Er ging iets mis",

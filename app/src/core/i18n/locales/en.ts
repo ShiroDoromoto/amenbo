@@ -442,6 +442,7 @@ const ui = {
   "agentHookSetup.title": "This folder's AI is not started on amenbo",
   "agentHookSetup.where": "{project} — {dir}",
   "agentHookSetup.unwired": "{tool}: does not run `{cmd}` at session start. Give the text below to your AI — it edits {file}.",
+  "agentHookSetup.pick": "Which tool do you use in this folder?",
   "agentHookSetup.copy": "Copy the text",
   "agentHookSetup.copied": "Copied",
   "app.crashTitle": "Something went wrong",

@@ -412,6 +412,7 @@ export const hi: Translation = {
     "agentHookSetup.title": "इस फ़ोल्डर का AI amenbo से शुरू नहीं होता",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: सेशन शुरू होने पर `{cmd}` नहीं चलाता। नीचे का टेक्स्ट अपने AI को दें — {file} में बदलाव वही करेगा।",
+    "agentHookSetup.pick": "इस फ़ोल्डर में आप कौन सा टूल इस्तेमाल करते हैं?",
     "agentHookSetup.copy": "टेक्स्ट कॉपी करें",
     "agentHookSetup.copied": "कॉपी हो गया",
     "app.crashTitle": "कुछ गड़बड़ हो गई",

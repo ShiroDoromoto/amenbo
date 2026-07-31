@@ -426,6 +426,7 @@ export const ja: Translation = {
     "agentHookSetup.title": "このフォルダの AI が amenbo から始まっていません",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: セッション開始時に `{cmd}` を実行していません。下のテキストを AI に渡してください（{file} を直すのは AI です）。",
+    "agentHookSetup.pick": "このフォルダで使っているツールはどれですか？",
     "agentHookSetup.copy": "テキストをコピー",
     "agentHookSetup.copied": "コピーしました",
     "app.crashTitle": "予期しないエラーが発生しました",

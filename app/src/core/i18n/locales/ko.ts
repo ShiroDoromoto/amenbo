@@ -411,6 +411,7 @@ export const ko: Translation = {
     "agentHookSetup.title": "이 폴더의 AI가 amenbo로 시작하지 않습니다",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: 세션 시작 때 `{cmd}` 을(를) 실행하지 않습니다. 아래 텍스트를 쓰시는 AI 에게 주세요. {file} 을(를) 고치는 것은 AI 입니다.",
+    "agentHookSetup.pick": "이 폴더에서 쓰시는 도구는 어느 것입니까?",
     "agentHookSetup.copy": "텍스트 복사",
     "agentHookSetup.copied": "복사했습니다",
     "app.crashTitle": "문제가 생겼습니다",

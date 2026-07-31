@@ -415,6 +415,7 @@ export const vi: Translation = {
     "agentHookSetup.title": "AI của thư mục này không khởi động bằng amenbo",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: lúc bắt đầu phiên không chạy `{cmd}`. Hãy đưa đoạn văn bản dưới đây cho AI của bạn — chính AI sửa {file}.",
+    "agentHookSetup.pick": "Bạn dùng công cụ nào trong thư mục này?",
     "agentHookSetup.copy": "Chép đoạn văn bản",
     "agentHookSetup.copied": "Đã chép",
     "app.crashTitle": "Có gì đó trục trặc",

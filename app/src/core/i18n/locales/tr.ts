@@ -412,6 +412,7 @@ export const tr: Translation = {
     "agentHookSetup.title": "Bu klasörün yapay zekâsı amenbo ile başlamıyor",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: oturum başında `{cmd}` çalıştırmıyor. Aşağıdaki metni yapay zekânıza verin — {file} dosyasını o düzenler.",
+    "agentHookSetup.pick": "Bu klasörde hangi aracı kullanıyorsunuz?",
     "agentHookSetup.copy": "Metni kopyala",
     "agentHookSetup.copied": "Kopyalandı",
     "app.crashTitle": "Bir şeyler ters gitti",

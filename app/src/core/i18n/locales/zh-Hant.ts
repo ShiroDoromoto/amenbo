@@ -412,6 +412,7 @@ export const zhHant: Translation = {
     "agentHookSetup.title": "這個資料夾的 AI 沒有從 amenbo 開始",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}：工作階段開始時沒有執行 `{cmd}`。把下面的文字交給你的 AI——由它來改 {file}。",
+    "agentHookSetup.pick": "你在這個資料夾裡用的是哪個工具？",
     "agentHookSetup.copy": "複製文字",
     "agentHookSetup.copied": "已複製",
     "app.crashTitle": "出了點問題",

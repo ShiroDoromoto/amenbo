@@ -441,6 +441,7 @@ export const uk: Translation = {
     "agentHookSetup.title": "ШІ цієї теки не запускається на amenbo",
     "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: на старті сесії не виконує `{cmd}`. Передайте текст нижче своєму ШІ — файл {file} править він.",
+    "agentHookSetup.pick": "Яким інструментом ви користуєтесь у цій теці?",
     "agentHookSetup.copy": "Скопіювати текст",
     "agentHookSetup.copied": "Скопійовано",
     "app.crashTitle": "Щось пішло не так",

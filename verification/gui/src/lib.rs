@@ -263,6 +263,10 @@ impl Instructor {
     /// should be reads as the miss it is. `ai-launch-folder` is judged on the folder's own name, which
     /// the reader gave it and the interface has no word of its own for; the board the report stands on
     /// names no folder anywhere else, so finding one on that shot is finding it in the list.
+    ///
+    /// `ai-launch-answer` is the one of them that is a `Review`, for the reason `plugin config`'s state
+    /// is: all three of its answers — the yes, the no, and the never asked — are drawn as words of the
+    /// interface, and which of them is standing is not something the presence of text can settle.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -443,6 +447,13 @@ impl Instructor {
                 "In the panel the yes opened, press the button that takes the text for \"{}\".",
                 req(with, "tool")?
             ),
+            // Dropping the answer, from the project's own face. It names no answer, since it does not put
+            // one: what it leaves behind is the project as it was before it was ever asked, and which
+            // answer was there is said by the assert in front of it.
+            (Domain::Repo, "ai-launch-consent-clear") => {
+                "In this project's own settings, press the button that clears its answer about starting its AI on amenbo."
+                    .to_string()
+            }
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -538,6 +549,17 @@ impl Instructor {
                 req(with, "tool")?,
                 req(with, "paste_into")?
             ),
+            // The record, read on the project's own face. Each state is read together with what the way
+            // back out of it is doing, since that is the half a reader acts on: an answer is there to be
+            // taken back, and where there is none the button that would take it back must be shut.
+            (Domain::Repo, "ai-launch-answer") => match req(with, "answer")? {
+                "yes" => "Confirm this project's own settings say it answered yes to having its AI started on amenbo, with the way to clear that answer open.".to_string(),
+                "no" => "Confirm this project's own settings say it answered no to having its AI started on amenbo, with the way to clear that answer open — a refusal is silent from then on, so this is the only way back.".to_string(),
+                "unanswered" => "Confirm this project's own settings say it has not been asked yet — neither a yes nor a no — and that there is nothing left to clear.".to_string(),
+                other => {
+                    return Err(format!("assert `ai-launch-answer` does not know the answer `{other}`"))
+                }
+            },
             // Which folders that one text is still waiting on. The line says "under" on purpose: what is
             // under test is a list standing beneath a single request, so a screen carrying the request
             // once per folder is the miss it catches — and a road naming several folders writes a step
@@ -1492,6 +1514,53 @@ steps_gui:
         // The list carries whole paths and the scenario names the folder alone; the fold leaves the one
         // inside the other.
         assert!(fold("/Users/reader/work/frontend").contains(&fold("frontend")));
+    }
+
+    /// The way back out of a refusal, read where the record is kept: the no standing, the press, and the
+    /// project back to never having been asked. Neither read is a reading — all three answers are words
+    /// of the interface — so what the pair has to carry is the difference between them in the
+    /// instruction, which is what an eye closes them on.
+    #[test]
+    fn clearing_the_answer_reads_the_refusal_then_a_project_never_asked() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: repo
+    op: ai-launch-answer
+    with: { answer: "no" }
+  - type: action
+    domain: repo
+    op: ai-launch-consent-clear
+  - type: assert
+    domain: repo
+    op: ai-launch-answer
+    with: { answer: unanswered }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("answered no") && lines[0].contains("only way back"), "got: {}", lines[0]);
+        assert!(lines[1].contains("clears its answer"), "got: {}", lines[1]);
+        assert!(lines[2].contains("not been asked yet") && lines[2].contains("nothing left to clear"), "got: {}", lines[2]);
+        assert!(
+            s.steps(Driver::Gui).iter().all(|st| ins.expectation(st).is_none()),
+            "an answer drawn in the interface's own words is not a reading"
+        );
+    }
+
+    /// An answer the record cannot hold is refused where it is written, the same way a consent answered
+    /// with neither yes nor no is.
+    #[test]
+    fn an_answer_the_record_does_not_hold_is_refused() {
+        let step = Step::Assert {
+            domain: Domain::Repo,
+            op: "ai-launch-answer".to_string(),
+            with: [("answer".to_string(), serde_yaml::Value::from("maybe"))].into_iter().collect(),
+        };
+        let err = Instructor::new().render(&step).unwrap_err();
+        assert!(err.contains("maybe"), "got: {err}");
     }
 
     /// An answer the road does not have is refused where it is written, not carried to a screen as an

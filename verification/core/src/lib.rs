@@ -361,11 +361,17 @@ const REGISTRY: &[OpSpec] = &[
     // amenbo knows, and the only way to show they are all reachable is to reach one the folder shows no
     // trace of and read the text change to it (`ai-launch-notice` on that tool's own file).
     //
-    // A screen road alone: a terminal asks inline and prints the text where it stands, so the CLI
-    // driver never meets any of these three.
+    // And dropping the answer, which is a move of its own rather than a third answer: it puts the project
+    // back to never having been asked, so the question comes again. A refusal is silent from then on, and
+    // this is the only way out of one.
+    //
+    // A screen road alone: a terminal asks inline and prints the text where it stands, so there is
+    // nothing there to answer, to choose between, or to press — and the answer it writes it never reads
+    // back, so it has no face to clear it from either.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-consent", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-pick", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-copy", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-consent-clear", required: &[], refs: &[], strings: &[], binds: false },
     // A plugin's life on this machine. `install` fetches it from the catalog and `enable` opens its
     // gate — two separate acts on purpose, since an installed plugin that never fires is the normal
     // state. `run` calls the command face: `command` is the word the plugin's own face takes, `task`
@@ -594,6 +600,11 @@ const REGISTRY: &[OpSpec] = &[
     // telling.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-question", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-notice", required: &["tool", "paste_into"], refs: &[], strings: &["tool", "paste_into"], binds: false },
+    // The record the question left behind, read where the project keeps its own face. `answer` is `yes`,
+    // `no` or `unanswered` — three states and not a truth value, because unanswered is what the question
+    // is put from: a screen that could only say yes or no would report a refusal from a project nobody
+    // has opened yet, and the way out of a refusal would be offered where there is nothing to take back.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-answer", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
     // A folder named among the ones that one text is still waiting on. Consent is answered for a project
     // and the paste lands in a folder, so what a reader who answered yes still owes is a list — and the
     // report puts its text up once with that list under it rather than repeating the request per folder.

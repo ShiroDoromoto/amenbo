@@ -1,0 +1,66 @@
+# The question about starting a project's AI on amenbo is put once and never again, and a no is silent
+# from then on. That is what makes this road necessary rather than convenient: a reader who declined —
+# by mistake, or before they knew what it bought — has nothing left on any screen to change their mind
+# with. The record is the only thing standing, so the way back has to be where the record is read.
+#
+# So the project's own settings carry both halves: what this project answered, and the button that drops
+# it. Dropping is not a third answer. It puts the project back to never having been asked, which is the
+# state the question is put from — and the question comes again the next time the project is opened.
+#
+# Hence three states and not a truth value. Yes, no, and never asked are three different screens, and the
+# third is the one a yes/no cannot name: a screen that folded it into the no would report a refusal from
+# every project nobody has opened since this arrived, and would offer to take back an answer that is not
+# there.
+#
+# Hence a road for the screen alone. The terminal writes the answer and never reads it back, so it has no
+# face to read the record on and none to clear it from.
+#
+# Every line here is closed by an eye rather than by a reading. All three answers are drawn as words of
+# the interface, and which of them is standing is not something the presence of text on a shot settles.
+#
+# What this wants standing before the run: a device holding the project named below, with its answer
+# about starting its AI on amenbo recorded as a no — put the refusal in the store the build under test
+# opens (`devtool devgui cli`). Where the run starts does not matter: the first step is the arrival. The
+# screen moves at the press, so drive it stepped (`--step`) and carry out each move at the hand-back
+# before it.
+id: take-back-a-no-about-starting-this-projects-ai
+title: A project that declined having its AI started on amenbo can take the refusal back, and is asked again
+description: >
+  Arrive on the settings a project keeps for itself, with a no on the record and nothing anywhere else
+  saying so. Read the refusal where it is kept, drop it, and read what dropping left: not a yes and not a
+  no, but a project that has never been asked — with nothing further to clear, since there is no longer an
+  answer to take back. A screen that lost the refusal in silence, or that left it standing after the
+  press, is what this road exists to catch.
+steps_gui:
+  # The arrival. It is a step rather than a note in front of the road so that the screen the record is
+  # read on is shot, and so the read below cannot be reached by a hand tidying the screen while the run
+  # is held.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  # The refusal, where it is kept. Nothing else on any screen says it — that is the whole reason this
+  # face carries it — so a settings page that showed the answer only when it was a yes would leave a
+  # reader with no way of knowing what they had said.
+  - type: assert
+    domain: repo
+    op: ai-launch-answer
+    with:
+      answer: "no"
+
+  # The way back. It takes no answer of its own: what it leaves behind is the project as it stood before
+  # anyone asked.
+  - type: action
+    domain: repo
+    op: ai-launch-consent-clear
+
+  # And that is where it left it. Never asked is not a no, and the difference is the whole point of the
+  # press — the question is put from this state, so the next opening puts it again. The button that
+  # brought the screen here is shut now, since there is nothing left to take back.
+  - type: assert
+    domain: repo
+    op: ai-launch-answer
+    with:
+      answer: unanswered

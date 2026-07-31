@@ -415,9 +415,11 @@ Some ops exist for one road only, and the registry carries them all the same: op
 answering which project it asks for are moves a screen's road is made of and a terminal's has none
 of, so they are written in `steps_gui` and the CLI driver maps neither. A driver maps the ops it
 meets; one it does not meet is not its to map. Answering the question an opened project puts, choosing
-which tool the text is for, and pressing the button that hands it over (`repo ai-launch-consent` /
-`ai-launch-pick` / `ai-launch-copy`), are the same kind: a terminal asks inline and prints the text
-where it stands, so there is nothing there to answer, to choose between, or to press.
+which tool the text is for, pressing the button that hands it over, and dropping the answer again
+(`repo ai-launch-consent` / `ai-launch-pick` / `ai-launch-copy` / `ai-launch-consent-clear`), are the
+same kind: a terminal asks inline and prints the text where it stands, so there is nothing there to
+answer, to choose between, or to press — and the answer it writes it never reads back, so it has no
+face to clear it from either.
 
 Bindings belong to the road they are made on. A `target:` in `steps_gui` resolves against
 `steps_gui` alone, because the two lists are never walked in one run.

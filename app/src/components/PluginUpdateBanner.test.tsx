@@ -19,7 +19,9 @@ vi.mock("../core/pluginUpdates", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../core/pluginUpdates")>();
   return {
     ...orig,
-    usePluginUpdates: () => ({ updates: hoisted.updates, loading: false, error: undefined }),
+    usePluginUpdates: () => ({
+      updates: hoisted.updates, catalog: { read: "fetched" }, loading: false, error: undefined,
+    }),
     refreshPluginUpdates: () => { hoisted.refreshed++; },
     applyPluginUpdate: (name: string) => { hoisted.applied.push(name); return Promise.resolve(true); },
     applyAllPluginUpdates: () => {

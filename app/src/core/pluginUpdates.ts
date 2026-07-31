@@ -16,13 +16,16 @@
 // The dismissal is keyed by the **build** offered, not by the plugin, which is what makes a quiet banner stay
 // quiet without going silent: dismissing the offer of one build says nothing about the next one, and a plugin
 // whose catalog entry moves again surfaces on its own.
+import { agoSecondsLabel, t, tf } from "./i18n";
 import { invoke } from "./ipc";
 import { inTauri } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
 import type {
+  PluginCatalogReadDto,
   PluginUpdateDto,
   PluginUpdateOutcomeDto,
   PluginUpdateReachDto,
+  PluginUpdatesDto,
 } from "../bindings/bindings";
 
 /** One installed plugin the catalog holds a different build of (generated DTO). */
@@ -31,8 +34,14 @@ export type PluginUpdate = PluginUpdateDto;
 export type PluginUpdateOutcome = PluginUpdateOutcomeDto;
 /** How far a check goes for its catalog (generated DTO). */
 export type PluginUpdateReach = PluginUpdateReachDto;
+/** What a check was measured against — how current its verdict is (generated DTO). */
+export type PluginCatalogRead = PluginCatalogReadDto;
+/** A check's whole answer: what has moved, and what that was measured against (generated DTO). */
+export type PluginUpdatesAnswer = PluginUpdatesDto;
 
-const NONE: PluginUpdate[] = [];
+// The empty answer, held so the reference is stable across renders. `notNeeded` is the honest arm for it:
+// where this stands in — outside Tauri, and before the first read lands — no catalog was read at all.
+const NONE: PluginUpdatesAnswer = { updates: [], catalog: { read: "notNeeded" } };
 const KEY = "amenbo.pluginUpdatesDismissed";
 
 // The reach the next read will use. It is latched here rather than passed, because the query layer refetches
@@ -48,29 +57,36 @@ let reachNow = false;
  * project.
  *
  * How far it goes is whatever the trigger that started it declared (`refreshPluginUpdates`), spent here so
- * the next read is back to the cheap one.
+ * the next read is back to the cheap one. **What comes back carries what it was measured against**, off the
+ * same read: an empty list is the ordinary answer and it means two different things, so the frame travels
+ * with it rather than being asked for separately.
  *
  * Outside Tauri — `npm run dev` in a browser — there is no plugins directory and no catalog cache, so the
  * mock says nothing is waiting rather than inventing an offer.
  */
-export async function fetchPluginUpdates(): Promise<PluginUpdate[]> {
+export async function fetchPluginUpdates(): Promise<PluginUpdatesAnswer> {
   const reach: PluginUpdateReach = reachNow ? "now" : "incidental";
   reachNow = false;
   if (!inTauri()) return NONE;
-  return invoke<PluginUpdate[]>("plugin_updates", { reach });
+  return invoke<PluginUpdatesAnswer>("plugin_updates", { reach });
 }
 
 /**
- * The updates waiting, for the banner. One live query for the whole app: the banner is mounted once, and
- * every trigger is an invalidation of this key rather than a second reader.
+ * The updates waiting and how current they are. One live query for the whole app: the banner is mounted
+ * once, and every trigger is an invalidation of this key rather than a second reader.
  */
 export function usePluginUpdates(): {
   updates: PluginUpdate[];
+  catalog: PluginCatalogRead;
   loading: boolean;
   error: unknown;
 } {
-  const { data, loading, error } = useQuery<PluginUpdate[]>(["plugin-updates"], fetchPluginUpdates);
-  return { updates: data ?? NONE, loading, error };
+  const { data, loading, error } = useQuery<PluginUpdatesAnswer>(
+    ["plugin-updates"],
+    fetchPluginUpdates,
+  );
+  const answer = data ?? NONE;
+  return { updates: answer.updates, catalog: answer.catalog, loading, error };
 }
 
 /**
@@ -85,6 +101,23 @@ export function usePluginUpdates(): {
 export function refreshPluginUpdates(reach: PluginUpdateReach): void {
   if (reach === "now") reachNow = true;
   invalidateQueries((key) => key[0] === "plugin-updates");
+}
+
+/**
+ * The one line saying how current the verdict beside it is, or `null` where there is nothing to frame.
+ *
+ * `notNeeded` is the empty one: nothing is installed, so no catalog was read and none is missing. A note
+ * about a catalog nobody needed would only suggest something went wrong.
+ */
+export function catalogReadLine(catalog: PluginCatalogRead): string | null {
+  const ago = () => agoSecondsLabel(catalog.ageSeconds ?? 0);
+  switch (catalog.read) {
+    case "fetched": return t("plugins.updates.catalog.fetched");
+    case "cached": return tf("plugins.updates.catalog.cached", { ago: ago() });
+    case "offline": return tf("plugins.updates.catalog.offline", { ago: ago() });
+    case "unavailable": return t("plugins.updates.catalog.unavailable");
+    case "notNeeded": return null;
+  }
 }
 
 /** Refetch what an applied update changed: the offer itself, and the installs whose build just moved. */

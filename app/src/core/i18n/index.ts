@@ -39,7 +39,8 @@ import { formatNumber } from "./format";
 export { currentLang, dateLocale, DEFAULT_LANG, guessLang, langEndonym, LANGS, normalizeLang, type Lang } from "./lang";
 // Dates, times and numbers are not dictionary entries — `Intl` writes them (see ./format).
 export {
-  agoLabel, dueLabel, formatDay, formatDayTime, formatNumber, monthLabel, weekdayLabels,
+  agoLabel, agoSecondsLabel, dueLabel, formatDay, formatDayTime, formatNumber, monthLabel,
+  weekdayLabels,
 } from "./format";
 export type { ViewKind } from "./keys";
 

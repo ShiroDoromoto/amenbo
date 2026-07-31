@@ -544,6 +544,33 @@ registered: boolean,
 pinsANewKey: boolean, };
 
 /**
+ * What a check was measured against (`AMB-D-359`) — the other half of its verdict, so a face can frame the
+ * rows it is about to draw.
+ *
+ * The freshness boundary makes "nothing has changed" and "nothing had changed an hour ago" the same empty
+ * list, and the two states that read no catalog at all are opposites — nothing to compare, or nothing
+ * reachable to compare against — so `read` keeps five arms rather than folding any of them together.
+ */
+export type PluginCatalogReadDto = { 
+/**
+ * How the catalog behind the verdict was read. `fetched` — asked and answered, so the rows are the
+ * index as it stands; `cached` — inside the freshness window, so **no request was made**; `offline` —
+ * one was made and failed, so a copy of that age stood in; `notNeeded` — nothing is installed, so no
+ * catalog was read; `unavailable` — one was wanted and neither fetched nor cached, so nothing below is
+ * a verdict.
+ */
+read: "fetched" | "cached" | "offline" | "notNeeded" | "unavailable", 
+/**
+ * How old the copy that answered is, for the two arms a cache stood in on. Absent everywhere else —
+ * a fetch has no age to report, and the arms that read no catalog have no copy at all.
+ *
+ * Seconds in a `u32`, which the face reads as a plain number: an age this does not fit is a hundred
+ * years of cache, and saturating there says "as stale as it gets", which is the only reading anyone
+ * wants from it.
+ */
+ageSeconds?: number, };
+
+/**
  * One catalog that fed the merged list — the official one first, then each registered third-party
  * one in registration order.
  */
@@ -911,6 +938,19 @@ error?: string, };
  * so a command that picked one for everybody would be wrong for the rest.
  */
 export type PluginUpdateReachDto = "incidental" | "now";
+
+/**
+ * A check's whole answer: what has moved, and what that was measured against.
+ */
+export type PluginUpdatesDto = { 
+/**
+ * Every installed plugin the catalog holds a different build of.
+ */
+updates: Array<PluginUpdateDto>, 
+/**
+ * How current that list is — see [`PluginCatalogReadDto`].
+ */
+catalog: PluginCatalogReadDto, };
 
 /**
  * One setting a plugin will ask for, as its author declared it — and nothing a store holds for it.

@@ -5176,6 +5176,62 @@ pub struct PluginUpdateDto {
     missing: Vec<String>,
 }
 
+/// What a check was measured against (`AMB-D-359`) — the other half of its verdict, so a face can frame the
+/// rows it is about to draw.
+///
+/// The freshness boundary makes "nothing has changed" and "nothing had changed an hour ago" the same empty
+/// list, and the two states that read no catalog at all are opposites — nothing to compare, or nothing
+/// reachable to compare against — so `read` keeps five arms rather than folding any of them together.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginCatalogReadDto {
+    /// How the catalog behind the verdict was read. `fetched` — asked and answered, so the rows are the
+    /// index as it stands; `cached` — inside the freshness window, so **no request was made**; `offline` —
+    /// one was made and failed, so a copy of that age stood in; `notNeeded` — nothing is installed, so no
+    /// catalog was read; `unavailable` — one was wanted and neither fetched nor cached, so nothing below is
+    /// a verdict.
+    #[ts(type = r#""fetched" | "cached" | "offline" | "notNeeded" | "unavailable""#)]
+    read: String,
+    /// How old the copy that answered is, for the two arms a cache stood in on. Absent everywhere else —
+    /// a fetch has no age to report, and the arms that read no catalog have no copy at all.
+    ///
+    /// Seconds in a `u32`, which the face reads as a plain number: an age this does not fit is a hundred
+    /// years of cache, and saturating there says "as stale as it gets", which is the only reading anyone
+    /// wants from it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    age_seconds: Option<u32>,
+}
+
+impl From<amenbo_core::plugin_update::Against> for PluginCatalogReadDto {
+    fn from(against: amenbo_core::plugin_update::Against) -> Self {
+        use amenbo_core::plugin_catalog::Freshness;
+        use amenbo_core::plugin_update::Against;
+
+        let secs = |age: std::time::Duration| Some(u32::try_from(age.as_secs()).unwrap_or(u32::MAX));
+        let (read, age_seconds) = match against {
+            Against::Catalog(Freshness::Fetched) => ("fetched", None),
+            Against::Catalog(Freshness::Cached { age }) => ("cached", secs(age)),
+            Against::Catalog(Freshness::Offline { age }) => ("offline", secs(age)),
+            Against::NothingInstalled => ("notNeeded", None),
+            Against::Unavailable => ("unavailable", None),
+        };
+        Self { read: read.to_string(), age_seconds }
+    }
+}
+
+/// A check's whole answer: what has moved, and what that was measured against.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginUpdatesDto {
+    /// Every installed plugin the catalog holds a different build of.
+    updates: Vec<PluginUpdateDto>,
+    /// How current that list is — see [`PluginCatalogReadDto`].
+    catalog: PluginCatalogReadDto,
+}
+
 /// How one plugin fared in [`plugin_update_apply_all`] — a failure is a row, not the end of the run.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
@@ -5231,22 +5287,26 @@ impl From<PluginUpdateReachDto> for amenbo_core::plugin_update::Reach {
 /// would look like it did nothing. A fetch that fails still falls back to the cache, so asking costs
 /// freshness at worst and never function.
 ///
+/// **The verdict travels with what it was measured against** ([`PluginCatalogReadDto`]). An empty list is
+/// the ordinary answer and it means two different things — nothing has moved, or nothing recent enough to
+/// tell was read — so the face is handed both halves off the one read rather than left to assume.
+///
 /// The `settings` judgment takes no project: a plugin has a gate per project (`AMB-D-434`)
 /// and an update replaces the build for all of them, so every gate it is enabled at is judged. That is what
 /// lets the banner be answered the same way from the screens that are in no project at all. Off the main
 /// thread, because past the boundary this fetches.
 #[tauri::command]
-pub async fn plugin_updates(
-    reach: PluginUpdateReachDto,
-) -> Result<Vec<PluginUpdateDto>, CmdError> {
-    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<PluginUpdateDto>, CmdError> {
+pub async fn plugin_updates(reach: PluginUpdateReachDto) -> Result<PluginUpdatesDto, CmdError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<PluginUpdatesDto, CmdError> {
         let paths = amenbo_core::config::Paths::resolve()?;
-        let updates = amenbo_core::plugin_update::check(&paths, reach.into())?.updates;
-        if updates.is_empty() {
-            return Ok(Vec::new());
+        let checked = amenbo_core::plugin_update::check(&paths, reach.into())?;
+        let catalog = PluginCatalogReadDto::from(checked.against);
+        if checked.updates.is_empty() {
+            return Ok(PluginUpdatesDto { updates: Vec::new(), catalog });
         }
         let store = open_store_read()?;
-        updates
+        let updates = checked
+            .updates
             .into_iter()
             .map(|u| {
                 // The two gates that hold an update back, in the order the apply path applies them: a build
@@ -5267,7 +5327,8 @@ pub async fn plugin_updates(
                     missing,
                 })
             })
-            .collect()
+            .collect::<Result<Vec<_>, CmdError>>()?;
+        Ok(PluginUpdatesDto { updates, catalog })
     })
     .await
     .map_err(|e| -> CmdError { format!("checking for a plugin update did not finish: {e}").into() })?

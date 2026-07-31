@@ -9,12 +9,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NONE_SELECTED } from "../core/pluginInstalls";
 import type { PluginConfigField, PluginInstall } from "../core/pluginInstalls";
 import type { PluginProjectRowDto, PluginWantedSettingDto } from "../bindings/bindings";
-import type { PluginUpdate } from "../core/pluginUpdates";
+import type { PluginCatalogRead, PluginUpdate } from "../core/pluginUpdates";
 
 const hoisted = vi.hoisted(() => ({
   installs: [] as PluginInstall[],
   /** What the catalog holds beyond what is installed — the offer each row draws from. */
   updates: [] as PluginUpdate[],
+  /** What that offer was measured against — the frame the count is to be read inside. */
+  catalog: { read: "fetched" } as PluginCatalogRead,
   /** Which plugins had an update applied, and which were put back a build. */
   applied: [] as string[],
   rolledBack: [] as string[],
@@ -74,7 +76,9 @@ vi.mock("../core/pluginUpdates", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../core/pluginUpdates")>();
   return {
     ...orig,
-    usePluginUpdates: () => ({ updates: hoisted.updates, loading: false, error: undefined }),
+    usePluginUpdates: () => ({
+      updates: hoisted.updates, catalog: hoisted.catalog, loading: false, error: undefined,
+    }),
     refreshPluginUpdates: () => {},
     applyPluginUpdate: (name: string) => {
       hoisted.applied.push(name);
@@ -104,7 +108,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
 });
 
 import { PluginInstalledScreen } from "./PluginInstalledScreen";
-import { t, tn, tf } from "../core/i18n";
+import { agoSecondsLabel, t, tn, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -186,6 +190,7 @@ beforeEach(() => {
   hoisted.removed = [];
   hoisted.wrote = [];
   hoisted.updates = [];
+  hoisted.catalog = { read: "fetched" };
   hoisted.applied = [];
   hoisted.rolledBack = [];
   hoisted.asked = [];
@@ -610,6 +615,32 @@ describe("moving one plugin's build from its row", () => {
     );
     expect(button(t("plugins.updates.apply"))).toBeUndefined();
     expect(button(t("plugins.cfg.open"))).toBeTruthy();
+  });
+
+  // The freshness window makes "nothing has changed" and "nothing had changed an hour ago" the same empty
+  // list, so what the check was measured against is on screen beside it — the whole reason 0 can be read.
+  it("says which catalog the count was measured against", () => {
+    hoisted.installs = [row({ name: "notify" })];
+    hoisted.catalog = { read: "cached", ageSeconds: 1800 };
+    render();
+
+    expect(container.textContent).toContain(
+      tf("plugins.updates.catalog.cached", { ago: agoSecondsLabel(1800) }),
+    );
+
+    hoisted.catalog = { read: "unavailable" };
+    render();
+    expect(container.textContent).toContain(t("plugins.updates.catalog.unavailable"));
+  });
+
+  // Nothing installed reads no catalog at all, and the empty screen says the whole of it. A note about a
+  // catalog nobody needed would only suggest something went wrong.
+  it("says nothing about a catalog when there was nothing to compare", () => {
+    hoisted.catalog = { read: "notNeeded" };
+    render();
+
+    expect(container.textContent).not.toContain(t("plugins.updates.catalog.fetched"));
+    expect(container.textContent).not.toContain(t("plugins.updates.catalog.unavailable"));
   });
 
   it("says why an incompatible build is not offered", () => {

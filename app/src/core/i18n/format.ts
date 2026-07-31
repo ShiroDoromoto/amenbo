@@ -76,7 +76,19 @@ function relative(value: number, unit: Intl.RelativeTimeFormatUnit, locale: stri
 export function agoLabel(at: string, locale: string = dateLocale(), now: number = Date.now()): string {
   const ms = new Date(at).getTime();
   if (!Number.isFinite(ms)) return "";
-  const secs = Math.max(0, Math.floor((now - ms) / 1000));
+  return agoSecondsLabel((now - ms) / 1000, locale);
+}
+
+/**
+ * The same wording from an age rather than an instant — what a backend reports when the fact it holds is
+ * "this copy is that many seconds old", with no timestamp to hand.
+ *
+ * The unit is the largest one the gap fills, and anything shorter than a minute is "just now": the question
+ * these answer is roughly how stale, not how many seconds.
+ */
+export function agoSecondsLabel(seconds: number, locale: string = dateLocale()): string {
+  if (!Number.isFinite(seconds)) return "";
+  const secs = Math.max(0, Math.floor(seconds));
   if (secs < 60) return relative(0, "second", locale);
   if (secs < 3600) return relative(-Math.floor(secs / 60), "minute", locale);
   if (secs < 86_400) return relative(-Math.floor(secs / 3600), "hour", locale);

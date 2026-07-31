@@ -11,6 +11,7 @@ import {
 } from "../core/pluginInstalls";
 import {
   applyPluginUpdate,
+  catalogReadLine,
   clearDismissedPluginUpdates,
   refreshPluginUpdates,
   rollbackPlugin,
@@ -37,9 +38,13 @@ export function PluginInstalledScreen() {
   const { installs, loading, error } = usePluginInstalls();
   // Opening this screen is one of the update triggers (`AMB-D-359`) — core answers from the catalog's
   // freshness window, so arriving here inside the hour costs nothing. The offer itself is the shell's banner;
-  // what this screen reads it for is the "nothing is waiting" the banner has no reason to say.
-  const { updates, loading: checking } = usePluginUpdates();
+  // what this screen reads it for is what the banner has no reason to say: the "nothing is waiting", and
+  // the catalog that answer was measured against.
+  const { updates, catalog, loading: checking } = usePluginUpdates();
   const [checked, setChecked] = useState(false);
+  // What the count below was measured against, said whenever there is a count to frame. Nothing installed
+  // is the one state that reads no catalog, and the empty screen already says the whole of it.
+  const framing = checking ? null : catalogReadLine(catalog);
   useEffect(() => { refreshPluginUpdates("incidental"); }, []);
   // What the last uninstall took, kept here because the row that did it is gone by the time it is drawn.
   const [removed, setRemoved] = useState<{ name: string; parts: string } | null>(null);
@@ -49,6 +54,11 @@ export function PluginInstalledScreen() {
       <div className="filterbar">
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>🧩 {t("plugins.installed")}</span>
         <span className="topbar__spacer" style={{ flex: 1 }} />
+        {/* Ahead of the verdict, not after it: a reader who takes "up to date" at face value has already
+            stopped reading by the time a footnote arrives. */}
+        {framing && (
+          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{framing}</span>
+        )}
         {checked && !checking && updates.length === 0 && (
           <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.updates.none")}</span>
         )}

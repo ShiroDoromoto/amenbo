@@ -432,7 +432,7 @@ impl Instructor {
                 req(with, "project")?
             ),
             (Domain::Repo, "ai-launch-question") => format!(
-                "Confirm the app is asking whether this folder's AI may be started on amenbo, and that it says the folder looks like \"{}\"'s.",
+                "Confirm the app is asking whether this folder's work may be run on amenbo by the reader's AI, and that what it hands over is named as a text for \"{}\"'s settings.",
                 req(with, "tool")?
             ),
             (Domain::Repo, "ai-launch-notice") => format!(

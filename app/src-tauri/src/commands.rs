@@ -4270,8 +4270,6 @@ pub struct AgentHookNoticeDto {
     project_name: String,
     /// The folder this is about, which is also what identifies the row.
     dir: String,
-    /// What this build is called on the command line (the dev channel answers `amenbo-dev`).
-    cmd: String,
     /// The providers to put in front of the reader, each with the text that asks for the wiring: the
     /// ones this folder points at, or the whole catalog where it points at none
     /// ([`amenbo_core::harness::offered`]). Never empty — a banner with nothing to hand over is the one
@@ -4316,12 +4314,7 @@ pub fn agent_hook_notices() -> Result<Vec<AgentHookNoticeDto>, CmdError> {
             continue;
         }
         let Ok(Some(project)) = store.project(project_id) else { continue };
-        notices.push(AgentHookNoticeDto {
-            project_name: project.name,
-            dir: dir.clone(),
-            cmd: cmd.to_string(),
-            offered,
-        });
+        notices.push(AgentHookNoticeDto { project_name: project.name, dir: dir.clone(), offered });
     }
     Ok(notices)
 }

@@ -172,26 +172,29 @@ describe("the session-start hook consent modal", () => {
     expect(container.textContent).toContain("/w/案件X");
   });
 
-  // amenbo hands over text and writes no provider settings file, so a reader must not come away thinking a
-  // yes wired anything. It is on screen before the click, not after it.
-  it("says amenbo writes no settings file, before the answer is given", async () => {
-    hoisted.offer = offer();
+  // What a yes buys, said before the click and not after it: amenbo writes no provider settings file, so a
+  // reader must not come away thinking the answer wired anything — the text, and an AI of theirs, do that.
+  it("says what a yes hands over and who makes the edit, before the answer is given", async () => {
+    hoisted.offer = offer({ named: [tool()] });
     await render();
-    expect(container.textContent).toContain(t("agentHook.noWrite"));
+    expect(container.textContent).toContain(tf("agentHook.why", { tool: "Claude Code" }));
   });
 
   it("names the tool when the folder points at exactly one", async () => {
     hoisted.offer = offer({ named: [tool()] });
     await render();
-    expect(container.textContent).toContain(tf("agentHook.looksLike", { tool: "Claude Code" }));
+    expect(container.textContent).toContain("Claude Code");
   });
 
   // With several traced, which one the reader is using is theirs to say — and the banner lists them all
-  // afterwards, each with its own text.
-  it("names none when the folder points at several", async () => {
+  // afterwards, each with its own text. The sentence stays whole either way: "your tool" stands where the
+  // name would be, so what the text does is said to every reader, named tool or not.
+  it("names none when the folder points at several, and still says what the text does", async () => {
     hoisted.offer = offer({ named: [tool(), tool({ tool: "cursor", label: "Cursor" })] });
     await render();
-    expect(container.textContent).not.toContain(tf("agentHook.looksLike", { tool: "Claude Code" }));
+
+    expect(container.textContent).not.toContain("Claude Code");
+    expect(container.textContent).toContain(tf("agentHook.why", { tool: t("agentHook.someTool") }));
   });
 
   // The question is asked about a state, and a folder that traces nothing is in that state too. Withholding
@@ -211,15 +214,16 @@ describe("the session-start hook consent modal", () => {
   });
 
   // The re-ask has a different occasion — a standing yes with nothing wired — and says so, plus that it is
-  // the last time. Reading the first-asking wording there would be a plain lie about what happened.
-  it("words the one re-ask as a paste that never landed, and says it is the last", async () => {
-    hoisted.offer = offer({ again: true });
+  // the last time. It leads with that and keeps what the text does after it: the first asking was months and
+  // a screen ago, so a panel that only said "you already agreed" would ask for a yes to something unstated.
+  it("words the one re-ask as a wiring that never landed, says it is the last, and still says what the text does", async () => {
+    hoisted.offer = offer({ again: true, named: [tool()] });
     await render();
 
     const text = container.textContent ?? "";
     expect(text).toContain(t("agentHook.again"));
     expect(text).toContain(t("agentHook.scopeAgain"));
-    expect(text).not.toContain(t("agentHook.why"));
+    expect(text).toContain(tf("agentHook.why", { tool: "Claude Code" }));
   });
 
   it("keeps the question up when the answer failed, so the failure is never recorded as consent", async () => {

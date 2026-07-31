@@ -10,9 +10,9 @@
 // started on amenbo here is a question whose answer genuinely changes with the place, so the modal names
 // the project and hands the answer back with it.
 //
-// **A yes wires nothing.** amenbo does not write into a user's provider settings — it hands over text they
-// paste — so the whole of what a yes buys is the text, and the setup banner is where it arrives (with the
-// copy button). That is also why the record cannot end the banner: only the paste landing does.
+// **A yes wires nothing.** amenbo does not write into a user's provider settings — it hands over a text for
+// an AI of theirs to act on — so the whole of what a yes buys is the text, and the setup banner is where it
+// arrives (with the copy button). That is also why the record cannot end the banner: only the edit landing does.
 //
 // Three values, two buttons, exactly as `HookConsentModal` has them: dismissing is "not now" and records
 // nothing, which is why Esc must not be wired to `answer(false)` — that answer means "never ask again".
@@ -91,20 +91,24 @@ export function AgentHookConsentModal({ turn, canAsk, onDone }: {
   };
 
   // Named only where the folder points at exactly one tool. With several, which one is the reader's to say,
-  // and the banner lists them all afterwards; with none, there is nothing to name and the hint carries the
-  // command that prints any of them.
-  const only = offer.named.length === 1 ? offer.named[0] : null;
+  // and the banner lists them all afterwards; with none, there is nothing to name. Either way the sentence
+  // is the same one, with "your tool" standing where a name would be — a folder that traces nothing is
+  // owed the same account of what the text does as one that traces Claude Code.
+  const tool = offer.named.length === 1 ? offer.named[0].label : t("agentHook.someTool");
 
   return (
     <div className="hookconsent__overlay">
       <div className="hookconsent__modal" role="dialog" aria-modal="true" aria-labelledby="agenthook-title">
         <div className="hookconsent__title" id="agenthook-title">{t("agentHook.title")}</div>
-        <div className="hookconsent__why">{t(offer.again ? "agentHook.again" : "agentHook.why")}</div>
+        {/* The re-ask leads with what happened since the first one, and is put before — not instead of —
+            what the text does: the reader answered this months ago on a screen they no longer have, so a
+            panel that only said "you already agreed" would ask for a second yes to something unstated. */}
+        {offer.again && <div className="hookconsent__why">{t("agentHook.again")}</div>}
+        {/* What a yes buys, in the reader's terms: the text, the hand that makes the edit — theirs, not
+            amenbo's — and what their AI does differently afterwards. Said before the buttons, because it
+            is the whole of what is being agreed to. */}
+        <div className="hookconsent__why">{tf("agentHook.why", { tool })}</div>
         <div className="hookconsent__scope">{tf("agentHook.where", { project: offer.projectName, dir: offer.dir })}</div>
-        {/* Said before the buttons, because it is what a yes does and does not do: amenbo hands over text,
-            and the wiring stays in the reader's hands. */}
-        <div className="hookconsent__scope">{t("agentHook.noWrite")}</div>
-        {only && <div className="hookconsent__scope">{tf("agentHook.looksLike", { tool: only.label })}</div>}
 
         {error && <div className="hookconsent__error">{error}</div>}
 

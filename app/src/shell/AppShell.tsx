@@ -970,7 +970,7 @@ export function AgentHookSetupBanner({ asked }: { asked: boolean }) {
                 </select>
               )}
               <div>
-                {tf("agentHookSetup.unwired", { tool: tool.label, cmd: `${n.cmd} agent`, file: tool.pasteInto })}{" "}
+                {tf("agentHookSetup.unwired", { tool: tool.label, file: tool.pasteInto })}{" "}
                 <button className="healthbanner__action" onClick={() => void copy(key, tool.request)}>
                   {copied === key ? t("agentHookSetup.copied") : t("agentHookSetup.copy")}
                 </button>

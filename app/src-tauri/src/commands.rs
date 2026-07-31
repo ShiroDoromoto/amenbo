@@ -4261,6 +4261,32 @@ pub fn agent_hook_answer(project_id: i64, yes: bool) -> Result<(), CmdError> {
     Ok(())
 }
 
+/// What this project answered about starting its AI on amenbo: `true` for yes, `false` for no, and
+/// `None` for a project that has never been asked. Three values and not two — never asked is what the
+/// question is put from, and a screen that folded it into "no" would report a refusal nobody gave
+/// (`AMB-D-459`).
+///
+/// This is the settings screen reading the record, so it says only what was answered. Whether the
+/// wiring is actually in place is a different fact, read from the folder every time and reported by
+/// [`agent_hook_notices`].
+#[tauri::command]
+pub fn agent_hook_consent(project_id: i64) -> Result<Option<bool>, CmdError> {
+    let store = open_store_read()?;
+    Ok(store.harness_consent(project_id)?.map(|had| had.allowed))
+}
+
+/// Take this project's answer off the record, back to never having been asked — the way out of a
+/// refusal, which silences the question for good on its own (`AMB-D-459`). The next startup puts it
+/// again, since the state it reads is the one a project starts in.
+///
+/// Clearing a project that never answered is the state asked for rather than an error.
+#[tauri::command]
+pub fn agent_hook_consent_clear(project_id: i64) -> Result<(), CmdError> {
+    let store = open_store()?;
+    store.clear_harness_consent(project_id)?;
+    Ok(())
+}
+
 /// One bound folder whose AI is not being started on amenbo — the raw material the banner words itself
 /// from, never the sentence, as with [`HookNoticeDto`].
 #[derive(Serialize, TS)]

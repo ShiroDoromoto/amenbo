@@ -20,6 +20,8 @@ const hoisted = vi.hoisted(() => ({
   gated: [] as { name: string; projectId: number; enabled: boolean }[],
   /** Canned answers for the confirm dialog, consumed from the front; once exhausted, everything is OK. */
   answers: [] as boolean[],
+  /** What this project answered about starting its AI on amenbo — null for never asked. */
+  consent: null as boolean | null,
   /** The writes that were called, arguments and all. */
   calls: [] as Array<Array<number | string>>,
 }));
@@ -60,6 +62,12 @@ vi.mock("../core/mutations", () => {
     pickFolder: () => Promise.resolve(null),
     updateProject: record("updateProject"), deleteProject: record("deleteProject"),
     setProjectArchived: record("setProjectArchived"),
+    fetchAgentHookConsent: () => Promise.resolve(hoisted.consent),
+    clearAgentHookConsent: (projectId: number) => {
+      hoisted.calls.push(["clearAgentHookConsent", projectId]);
+      hoisted.consent = null;
+      return Promise.resolve();
+    },
   };
 });
 
@@ -98,6 +106,7 @@ const button = (r: HTMLElement, text: string) =>
 beforeEach(() => {
   hoisted.folders = [];
   hoisted.installs = [];
+  hoisted.consent = null;
   hoisted.gated.length = 0;
   hoisted.answers.length = 0;
   hoisted.calls.length = 0;
@@ -302,5 +311,59 @@ describe("this project's plugin crossings", () => {
     await render([]);
     await press(t("plugins.disable"));
     expect(hoisted.gated).toEqual([{ name: "worktree", projectId: 1, enabled: false }]);
+  });
+});
+
+/** The consent section, found by its heading. */
+function harnessSection(): HTMLElement {
+  const head = Array.from(container.querySelectorAll(".settings__h")).find(
+    (h) => h.textContent === t("projset.harness"),
+  );
+  return head!.closest(".settings__section") as HTMLElement;
+}
+const clearButton = () =>
+  Array.from(harnessSection().querySelectorAll("button")).find(
+    (b) => b.textContent === t("projset.harnessClear"),
+  ) as HTMLButtonElement;
+
+// The way back out of an answer that is otherwise final (`AMB-D-459`). What the section is judged on is
+// that its three states stay three: a refusal and a project nobody has asked are both silent everywhere
+// else, and this is the one screen that tells them apart.
+describe("the answer about starting this project's AI on amenbo", () => {
+  it("shows a yes as a yes, with the way back out of it offered", async () => {
+    hoisted.consent = true;
+    await render([]);
+    expect(harnessSection().textContent).toContain(t("projset.harnessYes"));
+    expect(clearButton().disabled).toBe(false);
+  });
+
+  it("shows a refusal as a refusal rather than as silence", async () => {
+    hoisted.consent = false;
+    await render([]);
+    expect(harnessSection().textContent).toContain(t("projset.harnessNo"));
+    expect(harnessSection().textContent).not.toContain(t("projset.harnessUnanswered"));
+    expect(clearButton().disabled).toBe(false);
+  });
+
+  // Never asked is not a no: it is the state the question is put from, so there is nothing to clear.
+  it("keeps a project that was never asked apart from one that said no, and offers it no clearing", async () => {
+    hoisted.consent = null;
+    await render([]);
+    expect(harnessSection().textContent).toContain(t("projset.harnessUnanswered"));
+    expect(clearButton().disabled).toBe(true);
+  });
+
+  it("clears a refusal, landing the screen on never-asked without a reload", async () => {
+    hoisted.consent = false;
+    await render([]);
+
+    await act(async () => {
+      clearButton().click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(hoisted.calls).toContainEqual(["clearAgentHookConsent", 1]);
+    expect(harnessSection().textContent).toContain(t("projset.harnessUnanswered"));
+    expect(clearButton().disabled).toBe(true);
   });
 });

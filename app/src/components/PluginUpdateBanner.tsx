@@ -22,9 +22,11 @@ import { subscribeOutsideStore } from "../core/snapshot";
  * is not offered as a button but named, with the way to the screen where it can be resolved. That split is
  * the whole reason this is a banner and not a notification: it is quiet when there is nothing to decide.
  *
- * **Nothing here holds a timer** (`AMB-D-331`). It re-asks on a focus return, whenever a plugin screen is
- * opened, and when the user asks explicitly — and core answers those from the catalog's freshness window, so
- * the triggers cost nothing inside the hour.
+ * **Nothing here holds a timer** (`AMB-D-331`). It re-asks on a focus return and whenever a plugin screen is
+ * opened, and core answers those from the catalog's freshness window, so the triggers cost nothing inside the
+ * hour. The one trigger that does go and look is the button somebody presses (`AMB-D-462`), which is on the
+ * installed screen and not here — the window is there to keep the automatic triggers cheap, and a press is
+ * not one of them.
  *
  * The ✕ dismisses the **builds** currently offered, persisted (`core/pluginUpdates`): the same offer stays
  * quiet across launches, and a plugin whose catalog entry moves again comes back on its own.
@@ -43,7 +45,7 @@ export function PluginUpdateBanner({ onOpenInstalled }: {
 
   // The focus return that found the store unmoved: a plugin catalog does not live in the store, so nothing
   // else would refetch it there (every other reconcile ends in a full invalidation, which does).
-  useEffect(() => subscribeOutsideStore(refreshPluginUpdates), []);
+  useEffect(() => subscribeOutsideStore(() => refreshPluginUpdates("incidental")), []);
 
   // A plain report auto-clears; one carrying a failure stays until the next run, because it is the only
   // place the reason is said.

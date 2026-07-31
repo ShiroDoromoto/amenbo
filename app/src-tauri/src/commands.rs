@@ -10,7 +10,7 @@ use amenbo_core::model::{ActorKind, DimensionRole, Priority, TaskStatus};
 use amenbo_core::time::Timestamp;
 use amenbo_core::{query, Store};
 use chrono::NaiveDate;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// Fail with the reason if the startup migration ([`crate::migrate::run`]) is **still running** or
@@ -5191,24 +5191,57 @@ pub struct PluginUpdateOutcomeDto {
     error: Option<String>,
 }
 
+/// How far a check goes for its catalog (`AMB-D-462`) — the wire form of
+/// [`amenbo_core::plugin_update::Reach`].
+///
+/// It crosses the boundary because only the caller knows which trigger it is. The face re-asks from several
+/// (a focus return, a plugin screen opening, a button somebody pressed) and they do not want the same read,
+/// so a command that picked one for everybody would be wrong for the rest.
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub enum PluginUpdateReachDto {
+    /// An automatic trigger: a cache inside the freshness window answers with no request at all.
+    Incidental,
+    /// Somebody asked in so many words. Go to the catalog whatever the cache's age.
+    Now,
+}
+
+impl From<PluginUpdateReachDto> for amenbo_core::plugin_update::Reach {
+    fn from(reach: PluginUpdateReachDto) -> Self {
+        match reach {
+            PluginUpdateReachDto::Incidental => Self::Incidental,
+            PluginUpdateReachDto::Now => Self::Now,
+        }
+    }
+}
+
 /// Which installed plugins the catalog holds a different build of, and which of them need a decision first
 /// (`AMB-D-359`) — the GUI's `plugin update --check`.
 ///
-/// **It never adds traffic of its own.** The comparison reads the catalog through its freshness boundary
-/// (`amenbo_core::plugin_update::available`), so a trigger arriving inside the window is answered from the
-/// cache and one outside it costs a single fetch of the whole index — which is what lets the face re-ask on
-/// a focus return, on opening the plugin screens and on an explicit "check now" without a resident timer.
-/// Nothing installed costs no read at all.
+/// **The automatic triggers add no traffic of their own.** Under [`PluginUpdateReachDto::Incidental`] the
+/// comparison reads the catalog through its freshness boundary, so a trigger arriving inside the window is
+/// answered from the cache and one outside it costs a single fetch of the whole index — which is what lets
+/// the face re-ask on a focus return and on opening the plugin screens without a resident timer. Nothing
+/// installed costs no read at all.
+///
+/// **What a person pressed goes and looks** ([`PluginUpdateReachDto::Now`], `AMB-D-462`). The boundary is
+/// there to keep the automatic triggers cheap, and one press is not part of that reckoning: answered from a
+/// cache, "no updates" would mean "none an hour ago" while reading as the stronger thing, and the button
+/// would look like it did nothing. A fetch that fails still falls back to the cache, so asking costs
+/// freshness at worst and never function.
 ///
 /// The `settings` judgment takes no project: a plugin has a gate per project (`AMB-D-434`)
 /// and an update replaces the build for all of them, so every gate it is enabled at is judged. That is what
 /// lets the banner be answered the same way from the screens that are in no project at all. Off the main
 /// thread, because past the boundary this fetches.
 #[tauri::command]
-pub async fn plugin_updates() -> Result<Vec<PluginUpdateDto>, CmdError> {
+pub async fn plugin_updates(
+    reach: PluginUpdateReachDto,
+) -> Result<Vec<PluginUpdateDto>, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<PluginUpdateDto>, CmdError> {
         let paths = amenbo_core::config::Paths::resolve()?;
-        let updates = amenbo_core::plugin_update::available(&paths)?;
+        let updates = amenbo_core::plugin_update::check(&paths, reach.into())?.updates;
         if updates.is_empty() {
             return Ok(Vec::new());
         }

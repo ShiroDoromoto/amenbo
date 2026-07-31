@@ -903,6 +903,16 @@ applied: boolean,
 error?: string, };
 
 /**
+ * How far a check goes for its catalog (`AMB-D-462`) — the wire form of
+ * [`amenbo_core::plugin_update::Reach`].
+ *
+ * It crosses the boundary because only the caller knows which trigger it is. The face re-asks from several
+ * (a focus return, a plugin screen opening, a button somebody pressed) and they do not want the same read,
+ * so a command that picked one for everybody would be wrong for the rest.
+ */
+export type PluginUpdateReachDto = "incidental" | "now";
+
+/**
  * One setting a plugin will ask for, as its author declared it — and nothing a store holds for it.
  *
  * This is what the market shows **before** anything is installed (`AMB-D-385`), and it is also what an

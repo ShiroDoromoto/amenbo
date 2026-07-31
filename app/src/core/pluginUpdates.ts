@@ -2,10 +2,12 @@
 // (`AMB-D-359`).
 //
 // Detection is core's and nothing is duplicated here: `plugin_updates` compares what this machine holds
-// against the catalog it already fetches, through that catalog's freshness boundary. So the face is free to
-// re-ask at the moments that matter — a focus return, opening a plugin screen, an explicit "check now" — and
-// amenbo still holds no timer and opens no connection it would not have opened anyway (`AMB-D-331`'s posture,
-// applied to plugins).
+// against the catalog it already fetches. **How far it goes is the trigger's to say** (`AMB-D-462`). The
+// automatic ones — a focus return, opening a plugin screen — read through the catalog's freshness boundary, so
+// the face can re-ask at every moment that matters while amenbo still holds no timer and opens no connection
+// it would not have opened anyway (`AMB-D-331`'s posture, applied to plugins). An explicit "check now" goes to
+// the catalog instead: what the boundary saves is the cost of the automatic triggers, and a press is not one
+// of them.
 //
 // **An offer, never an application.** Nothing here updates anything on its own: `applyPluginUpdate` runs only
 // when a button was pressed, and the gates it passes (signature, checksum, compatibility, the `required`
@@ -17,15 +19,27 @@
 import { invoke } from "./ipc";
 import { inTauri } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
-import type { PluginUpdateDto, PluginUpdateOutcomeDto } from "../bindings/bindings";
+import type {
+  PluginUpdateDto,
+  PluginUpdateOutcomeDto,
+  PluginUpdateReachDto,
+} from "../bindings/bindings";
 
 /** One installed plugin the catalog holds a different build of (generated DTO). */
 export type PluginUpdate = PluginUpdateDto;
 /** How one plugin fared in an "update all" (generated DTO). */
 export type PluginUpdateOutcome = PluginUpdateOutcomeDto;
+/** How far a check goes for its catalog (generated DTO). */
+export type PluginUpdateReach = PluginUpdateReachDto;
 
 const NONE: PluginUpdate[] = [];
 const KEY = "amenbo.pluginUpdatesDismissed";
+
+// The reach the next read will use. It is latched here rather than passed, because the query layer refetches
+// through a fetcher it captured at mount: a trigger has no way to hand its own intent to the read it starts.
+// `now` is sticky until a read spends it — an automatic trigger landing in between must not spend what a
+// person asked for — and the read that spends it leaves the cheap default behind.
+let reachNow = false;
 
 /**
  * Ask core which installed plugins have a newer build waiting (Tauri: `plugin_updates`), with the "needs a
@@ -33,12 +47,17 @@ const KEY = "amenbo.pluginUpdatesDismissed";
  * replaces the build for every project at once (`AMB-D-434`), and this is asked from screens that are in no
  * project.
  *
+ * How far it goes is whatever the trigger that started it declared (`refreshPluginUpdates`), spent here so
+ * the next read is back to the cheap one.
+ *
  * Outside Tauri — `npm run dev` in a browser — there is no plugins directory and no catalog cache, so the
  * mock says nothing is waiting rather than inventing an offer.
  */
 export async function fetchPluginUpdates(): Promise<PluginUpdate[]> {
+  const reach: PluginUpdateReach = reachNow ? "now" : "incidental";
+  reachNow = false;
   if (!inTauri()) return NONE;
-  return invoke<PluginUpdate[]>("plugin_updates", {});
+  return invoke<PluginUpdate[]>("plugin_updates", { reach });
 }
 
 /**
@@ -54,8 +73,17 @@ export function usePluginUpdates(): {
   return { updates: data ?? NONE, loading, error };
 }
 
-/** Re-ask core — the one call behind every trigger (focus return, a plugin screen opening, "check now"). */
-export function refreshPluginUpdates(): void {
+/**
+ * Re-ask core — the one call behind every trigger (focus return, a plugin screen opening, "check now"), with
+ * the trigger saying how far its answer should go (`AMB-D-462`).
+ *
+ * `incidental` is what an automatic trigger asks for: the freshness window answers it from the cache, which
+ * is what lets there be several of them without a resident timer. `now` is for a button somebody pressed —
+ * an answer off the cache would say "no updates" while meaning "none an hour ago", and the press would look
+ * like it did nothing.
+ */
+export function refreshPluginUpdates(reach: PluginUpdateReach): void {
+  if (reach === "now") reachNow = true;
   invalidateQueries((key) => key[0] === "plugin-updates");
 }
 

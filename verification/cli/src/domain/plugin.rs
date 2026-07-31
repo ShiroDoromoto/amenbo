@@ -170,7 +170,14 @@ impl Driver {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
                 self.declare_field(name, key, with, serde_json::json!({}))?;
-                Ok(Outcome::action(format!("`{name}` now declares `{key}`")))
+                // Whether the plugin can work without an answer is the difference the scenario after this
+                // turns on, so the evidence line says which of the two was written.
+                Ok(Outcome::action(match opt_bool(with, "required") {
+                    Some(true) => {
+                        format!("`{name}` now declares `{key}`, and cannot be enabled while it is empty")
+                    }
+                    _ => format!("`{name}` now declares `{key}`"),
+                }))
             }
             // The same door for a setting the author marked secret. That flag is the whole of what
             // sends a value down the other road — off every export, injected as an environment
@@ -928,6 +935,9 @@ impl Driver {
     ///
     /// `over` is what that op adds to a plain line: the `secret` flag, the candidates and their default.
     /// The label is display text no scenario reads back, so a step that names none is given the key.
+    ///
+    /// A step's own `required` rides along whichever op it came through, since the flag that says a plugin
+    /// cannot work without an answer is orthogonal to the shape that answer takes.
     fn declare_field(&self, name: &str, key: &str, with: &Args, over: serde_json::Value) -> Result<(), String> {
         let path = self.session.home.join("plugins").join(name).join("manifest.json");
         let raw = std::fs::read_to_string(&path)
@@ -946,8 +956,9 @@ impl Driver {
             return Err(format!("`{name}` already declares a setting called `{key}`"));
         }
         let label = with.get("label").and_then(|v| v.as_str()).unwrap_or(key);
+        let must_be_answered = with.get("required").and_then(|v| v.as_bool()).unwrap_or(false);
         let mut field = serde_json::json!({
-            "key": key, "label": label, "secret": false, "required": false
+            "key": key, "label": label, "secret": false, "required": must_be_answered
         });
         for (k, v) in over.as_object().into_iter().flatten() {
             field[k] = v.clone();

@@ -396,6 +396,11 @@ const REGISTRY: &[OpSpec] = &[
     // one in has nothing to fill in until the driver writes the declaration. It is the shape most of what
     // `plugin config` does is about, and the only one the two below cannot stand in for: a secret is never
     // read back, and a choice answers with candidates rather than with what was typed.
+    //
+    // `required: true` writes the flag that says the plugin cannot work without an answer, which is what
+    // an enable at a crossing holding no value for it is refused over. It is a word on this declaration
+    // rather than an op of its own: the field written is the same field, and what the flag changes is
+    // what amenbo then does about an empty one.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-setting", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
     // An installed plugin declaring a setting its author marked secret. Which settings a plugin takes
     // is the author's word and amenbo never invents one, so the only honest way to reach this state is
@@ -502,6 +507,15 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone, like the switch it stands next to: a terminal has no picker, and nothing to
     // draw a row on.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "draw-crossing", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
+    // Opening the settings a crossing holds, inside that crossing's own row. It is the move a refusal
+    // leaves a person needing: an enable turned away for want of a value is turned away about one
+    // crossing, and the row that said so is where the value goes in. Which project the form writes for is
+    // therefore never asked — the row has answered it — and a step that names the crossing is naming the
+    // row, not a second picker.
+    //
+    // A screen road alone: a terminal writes the value with a command that names the setting, so there is
+    // no form to open and nowhere for one to be opened inside.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "open-config-in-row", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
     // A setting offering candidates, as the form answers it: a box per candidate, and a button under
     // the field. `config-choose` leaves the named ones ticked and every other one clear;
     // `config-choose-none` clears them all, which is the answer that is not the same as never having
@@ -692,6 +706,22 @@ const REGISTRY: &[OpSpec] = &[
     // says it is holding — so `state` is what a road there is written on, with `equals` naming the
     // candidates a chosen one leaves ticked.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "state"], binds: false },
+    // What a crossing's row says about the settings kept there, which is a reading of the row and not of
+    // one field: the mark a crossing wears while it owes a value, the form standing open inside the row,
+    // and the row saying a value is held. Whether the plugin fires there is the other reading of the same
+    // row, and the two are asked apart — an enable refused for want of a value leaves a row that is
+    // marked and off, and one word could not say both halves of that.
+    //
+    // Three screens rather than two, for the reason the row's other reading has three: `required-empty`
+    // is the mark, worn before anything is pressed, since a warning that arrives only after the refusal
+    // arrives too late; `open` is the settings standing open in that same row, asking for no project,
+    // which is the whole of what reaching them from the row means; `filled` is the row saying the value
+    // is in.
+    //
+    // A screen road alone, and a `Review` on every state. The marks are words of the interface, and what
+    // `open` turns on is a picker that is *not* there — a reading answers which words are on a shot, so
+    // neither is something it can settle.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "settings-in", required: &["name", "project", "state"], refs: &[], strings: &["name", "project", "state"], binds: false },
     // A catalog in the browsing view: whether it is a source at all (`present`), whether the browse
     // could reach it, and — `pinned_key` — whether a key of its is what plugins from it would be
     // trusted on. The last is the half that decides installability rather than visibility, and it is
@@ -919,9 +949,10 @@ impl Scenario {
 
             // The yes/no args are booleans wherever they appear: `present` asks whether something is
             // there, `ok` what verdict a check is expected to come back with, `running` whether
-            // anything is working a queue, and the two key questions whether a catalog serves a
-            // signing key and whether one of its is pinned.
-            for key in ["present", "ok", "running", "publishes_key", "pinned_key"] {
+            // anything is working a queue, `required` whether a declared setting is one its plugin
+            // cannot work without, and the two key questions whether a catalog serves a signing key
+            // and whether one of its is pinned.
+            for key in ["present", "ok", "running", "required", "publishes_key", "pinned_key"] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));
@@ -1256,6 +1287,24 @@ steps_cli:
 "#;
         let errs = load_str(yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("`ok` must be a boolean")));
+    }
+
+    /// `required` says whether a declared setting is one its plugin cannot work without, and a word that
+    /// merely reads like a yes would reach the manifest as text rather than as the flag an enable is
+    /// refused over.
+    #[test]
+    fn a_non_boolean_required_flag_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps_cli:
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with: { name: worktree, key: base, required: "yes" }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`required` must be a boolean")));
     }
 
     /// The refusal vocabulary: an action may declare that amenbo will turn it away, and the code it

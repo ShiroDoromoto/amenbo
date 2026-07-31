@@ -225,7 +225,9 @@ hand tidying the screen while the run is held. The screen roads are written that
 walks the arrival screen, the card, the picker and the board it lands on,
 `say-where-a-plugin-fires` walks one plugin's row through the four states one switch leaves it in,
 `put-a-plugin-to-work-from-the-project` walks the same crossing from the other face — the arrival, the
-picker that draws the row, and the switch inside it — and
+picker that draws the row, and the switch inside it —
+`fill-in-what-a-plugin-cannot-fire-without` walks one row from the mark it wears through the refusal, the
+settings opened inside it and the press that then goes through, and
 `choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
 the button back to the author's default.
 
@@ -305,7 +307,9 @@ would go unwalked until one does. `declare-setting` writes the plain kind, the l
 reads back; `declare-secret` writes the flag that sends a value down the other road, which fails
 silently and in plain text; `declare-choice` writes a setting whose answers the author listed, and the
 default that stands until someone gives one, which is what keeps a choice made, a choice declined and a
-question nobody has answered apart. `plugin slow-program` leaves an installed plugin
+question nobody has answered apart. Any of the three takes `required: true`, the flag that says the
+plugin cannot work without an answer — the fail-closed enable is refused while the crossing holds none,
+and no published plugin declares that either. `plugin slow-program` leaves an installed plugin
 taking seconds to answer, which is the only way a queue holds anything to read: a row leaves the moment
 its plugin replies, so the backlog `plugin log` reports is the window a slow plugin holds open, and
 every plugin the catalog publishes answers in the time a process takes to start. `plugin echo-program`
@@ -387,6 +391,11 @@ them. The step is then judged like an assert: refused with that code passes, **g
 fails** — that is the regression it exists to catch — and being refused for some *other* reason
 fails too, since a different guard is not the one the line is about. A refused operation produces
 nothing, so it takes no `as:`.
+
+A screen has no exit status to compare, so on a `steps_gui` road the word changes the **instruction**: it
+tells the operator that being turned away is the step going right rather than their own hand going wrong,
+and the shot they leave is the screen carrying the refusal. Which guard refused is then read by the assert
+after it — a screen offers a sentence, never a code.
 
 ### `steps_cli` / `steps_gui` — one goal, a road apiece
 

@@ -190,7 +190,17 @@ impl Instructor {
     fn render(&mut self, step: &Step) -> Result<String, String> {
         match step {
             Step::Action { domain, op, with, bind } => {
-                let text = self.action(*domain, op, with)?;
+                let mut text = self.action(*domain, op, with)?;
+                // A step that says the screen will turn it away. The code `refused:` names is what a
+                // driver reading an exit status compares against, and there is no exit status here — so
+                // what it does on this road is tell the operator that being refused is the step going
+                // right, rather than their own hand going wrong. Which guard did the refusing is left to
+                // the assert after it: what a screen offers is a sentence, not a code.
+                if with.contains_key("refused") {
+                    text.push_str(
+                        " Expect it to be turned away rather than to go through — the refusal is what this step walks.",
+                    );
+                }
                 if let Some(name) = bind {
                     if let Some(title) = arg_str(with, "title") {
                         self.labels.insert(name.clone(), title.to_string());
@@ -241,6 +251,10 @@ impl Instructor {
     /// its boxes are ticked and which chip the field wears. The candidates are drawn whichever answer
     /// is held, so their words are on every shot of the road, and the chip is a word of the interface
     /// — neither is something the presence of text can settle.
+    ///
+    /// `settings-in` is a `Review` on all three of its states. Two of them are marks the row wears, which
+    /// are words of the interface; the third turns on a picker that is not there, and a reading answers
+    /// which words are on a shot and never which are missing from the right part of it.
     ///
     /// The two `ai-launch` readings are judged on what is not the interface's own words either. The
     /// question is judged on the provider it names, which is that provider's name in any language; the
@@ -357,6 +371,30 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "project")?
             ),
+            // The settings, opened from inside the row. Where they are opened from is the whole of this
+            // step: a form reached from the crossing needs no project answered, and one reached anywhere
+            // else would be asking the question the row has already answered.
+            (Domain::Plugin, "open-config-in-row") => format!(
+                "In the row where \"{}\" crosses \"{}\", open the settings kept there — from inside that row and nowhere else on the screen.",
+                req(with, "name")?,
+                req(with, "project")?
+            ),
+            // A line the reader types, in the form standing open. Saving belongs to the move for the
+            // reason it does on a choice: a shot of a filled box nobody committed would be evidence of a
+            // value the store never received. An empty value is the clear, and on a form that is the
+            // button under the field rather than something to type.
+            (Domain::Plugin, "config-set") => {
+                let name = req(with, "name")?;
+                let key = req(with, "key")?;
+                match req(with, "value")? {
+                    "" => format!(
+                        "In the settings for \"{name}\", press the button under \"{key}\" that empties it."
+                    ),
+                    value => format!(
+                        "In the settings for \"{name}\", type \"{value}\" into \"{key}\" and save."
+                    ),
+                }
+            }
             // Answering a choice on the form it is drawn on. Saving belongs to the move rather than
             // standing as a step of its own: the form holds an answer nobody has committed yet, so a
             // shot of ticked boxes left unsaved would be evidence of an answer the store never
@@ -517,6 +555,27 @@ impl Instructor {
                     ),
                     other => {
                         return Err(format!("assert `config` on screen does not know the state `{other}`"))
+                    }
+                }
+            }
+            // What the crossing's row says about the settings kept there. The mark is read on the row and
+            // not on a field, because that is where a person meets it: they are about to press a switch,
+            // and what stops them is the row saying the press would be refused.
+            (Domain::Plugin, "settings-in") => {
+                let name = req(with, "name")?;
+                let project = req(with, "project")?;
+                match req(with, "state")? {
+                    "required-empty" => format!(
+                        "Confirm the row where \"{name}\" crosses \"{project}\" is marked as owing a setting the plugin cannot be enabled without."
+                    ),
+                    "open" => format!(
+                        "Confirm the settings for \"{name}\" are standing open inside that same row — the one crossing \"{project}\" — and that nothing in them asks which project they are for."
+                    ),
+                    "filled" => format!(
+                        "Confirm the row where \"{name}\" crosses \"{project}\" says the settings there are filled in, and no longer that a required one is empty."
+                    ),
+                    other => {
+                        return Err(format!("assert `settings-in` does not know the state `{other}`"))
                     }
                 }
             }
@@ -1077,6 +1136,93 @@ steps_gui:
         for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
             assert!(ins.expectation(st).is_none(), "step {i} is closed by an eye, not by a reading");
         }
+    }
+
+    /// The refusal road: the row is marked before the switch is pressed, the press is expected to be
+    /// turned away, the settings open inside that same row and ask for no project, the value goes in
+    /// there, and the mark gives way. The refused press is the one line whose instruction says so — a
+    /// screen has no code to compare, so the word reaches the operator instead of a comparison.
+    #[test]
+    fn a_refused_switch_is_answered_in_the_row_that_refused_it() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: settings-in
+    with: { name: worktree, project: Greenhouse, state: required-empty }
+  - type: action
+    domain: plugin
+    op: enable-in
+    with: { name: worktree, project: Greenhouse, refused: invalid_plugin_settings_required }
+  - type: action
+    domain: plugin
+    op: open-config-in-row
+    with: { name: worktree, project: Greenhouse }
+  - type: assert
+    domain: plugin
+    op: settings-in
+    with: { name: worktree, project: Greenhouse, state: open }
+  - type: action
+    domain: plugin
+    op: config-set
+    with: { name: worktree, key: base, value: main }
+  - type: assert
+    domain: plugin
+    op: settings-in
+    with: { name: worktree, project: Greenhouse, state: filled }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("owing a setting the plugin cannot be enabled without"), "got: {}", lines[0]);
+        assert!(lines[1].contains("turned away rather than to go through"), "got: {}", lines[1]);
+        assert!(lines[2].contains("open the settings kept there"), "got: {}", lines[2]);
+        assert!(lines[3].contains("nothing in them asks which project"), "got: {}", lines[3]);
+        assert!(lines[4].contains("type \"main\" into \"base\"") && lines[4].contains("save"), "got: {}", lines[4]);
+        assert!(lines[5].contains("filled in"), "got: {}", lines[5]);
+
+        for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
+            assert!(ins.expectation(st).is_none(), "step {i} is closed by an eye, not by a reading");
+        }
+    }
+
+    /// A state the row cannot be in is refused by name, the way the row's other reading refuses one.
+    #[test]
+    fn an_unknown_settings_state_is_refused() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: settings-in
+    with: { name: worktree, project: Greenhouse, state: half-filled }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let err = ins.render(&s.steps(Driver::Gui)[0]).expect_err("an unknown state has no instruction");
+        assert!(err.contains("half-filled"), "got: {err}");
+    }
+
+    /// An empty value is the clear, and a form clears a field with the button under it rather than with
+    /// something typed — so the instruction has to name the button, not an empty pair of quotes.
+    #[test]
+    fn clearing_a_setting_on_a_form_is_the_button_under_the_field() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: plugin
+    op: config-set
+    with: { name: worktree, key: base, value: "" }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let line = ins.render(&s.steps(Driver::Gui)[0]).unwrap();
+        assert!(line.contains("press the button under \"base\" that empties it"), "got: {line}");
     }
 
     /// A screen road that says which answer a choice holds without saying which of the three it is has

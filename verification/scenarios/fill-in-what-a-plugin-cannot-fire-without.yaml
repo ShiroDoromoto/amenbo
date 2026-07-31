@@ -1,0 +1,210 @@
+# A plugin whose author says it cannot work without a value does not fire until that value is there. The
+# check is fail-closed and it is the crossing's: what is missing is missing in one project, so the refusal
+# is about one crossing and so is the place it is answered.
+#
+# What the two roads share is the goal — turned away, filled in, through — and they part on where the
+# answer goes. A terminal is handed the refusal and a command to type; a screen has to put the answer
+# within reach of the sentence that refused, or the reader is left holding a reason and no way to act on
+# it.
+#
+# Hence the screen road's shape. The mark is read before the switch is pressed, because a warning that
+# only arrives after the refusal arrives too late. The settings are opened inside the row rather than
+# anywhere else on the screen, because a form reached from a crossing has no project left to ask about —
+# the row has answered — and a second place to choose one is a second answer that can disagree. And the
+# switch is pressed twice on the same row, which is what "answered without leaving it" has to mean.
+#
+# Like every line that installs a plugin, the road below goes to the catalog over the network on purpose
+# (see `put-a-plugin-on-the-machine.yaml`): a refusal about a plugin's settings is a face of a plugin that
+# is really there.
+id: fill-in-what-a-plugin-cannot-fire-without
+title: A plugin short of a setting its author calls required is refused rather than half-enabled, and the value goes in where the refusal was read
+description: >
+  Install the official `worktree` plugin and give it a setting its author says it cannot work without,
+  with nothing filled in for it. Turn it on and be turned away — nothing fires, which is the whole of
+  fail-closed. Fill the setting in, turn it on again, and read it firing. On screen the same road is
+  walked without leaving one row: the crossing is drawn, it is already marked as owing the value before
+  anything is pressed, the switch is refused, the settings open inside that row and ask for no project,
+  the value goes in there, the mark gives way to a row saying the settings are filled, and the second
+  press goes through.
+steps_cli:
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # What a plugin cannot work without is its author's word like everything else it takes, and no plugin
+  # in the official catalog declares a setting at all — so the declaration is written onto the installed
+  # manifest here (see the op's own note). Everything after it is amenbo's own doing.
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: base
+      label: Base branch
+      required: true
+
+  # The premise, said out loud: this project holds nothing for it. The refusal below is about the value
+  # being absent, and a road that never said so would read the same over one that was filled in.
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: base
+      set: false
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+      refused: invalid_plugin_settings_required
+
+  # Fail-closed is the half a refusal does not prove on its own: a gate that opened anyway and reported
+  # a problem would look identical from the terminal.
+  - type: assert
+    domain: plugin
+    op: listed
+    with:
+      name: worktree
+      enabled: false
+
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: base
+      value: main
+
+  # The same press as before, and this time nothing is in front of it. What made the difference is the
+  # value, not a second way in — there is no flag that enables a plugin anyway.
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: listed
+    with:
+      name: worktree
+      enabled: true
+
+  - type: action
+    domain: plugin
+    op: uninstall
+    with:
+      name: worktree
+
+# What the road wants in front of it is the device the road above builds by hand: the project named below
+# on this machine, the official `worktree` plugin installed in the store the build under test opens, its
+# manifest declaring `base` as a setting the plugin cannot work without, nothing filled in for it, and its
+# gate shut everywhere. Stand that with `devtool devgui cli` and the same declaration the road above
+# makes. Where the run starts does not matter: the first step is the arrival. Every step after it moves
+# the screen, so drive it stepped (`--step`) and carry out each move at the hand-back before it.
+#
+# Every line is closed by an eye rather than by a reading. What the row says about its settings it says in
+# chips, and a chip is a word of the interface; the one reading that is not a chip turns on a picker being
+# absent, which no reading of the words on a shot can settle either.
+steps_gui:
+  # The face the refusal is met on. A plugin is reached from the project's own settings as well as from
+  # its own screen, and this is the face where being refused and then having nowhere to go would leave a
+  # reader stuck: the plugin's screen at least lists the crossings, while here the plugin is one row among
+  # this project's.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  # The crossing has to exist before anything can be said about it. What is listed here is what there is
+  # something to say about — on, or filled in — and this crossing is neither yet.
+  - type: action
+    domain: plugin
+    op: draw-crossing
+    with:
+      name: worktree
+      project: Greenhouse
+
+  # The mark, on a row nobody has pressed the switch in. This is the reading that has to come first: a
+  # row that only wore it after the refusal would be telling a reader something they had already found
+  # out the hard way.
+  - type: assert
+    domain: plugin
+    op: settings-in
+    with:
+      name: worktree
+      project: Greenhouse
+      state: required-empty
+
+  - type: action
+    domain: plugin
+    op: enable-in
+    with:
+      name: worktree
+      project: Greenhouse
+      refused: invalid_plugin_settings_required
+
+  # Nothing was turned on. The row is the same row the picker drew, still offering to turn the plugin on
+  # — which is what a screen has instead of an exit code.
+  - type: assert
+    domain: project
+    op: plugin-row
+    with:
+      project: Greenhouse
+      plugin: worktree
+      state: drawn
+
+  # And the move the refusal leaves a person needing. The settings are in the row that refused them, so
+  # the answer goes in without going anywhere.
+  - type: action
+    domain: plugin
+    op: open-config-in-row
+    with:
+      name: worktree
+      project: Greenhouse
+
+  - type: assert
+    domain: plugin
+    op: settings-in
+    with:
+      name: worktree
+      project: Greenhouse
+      state: open
+
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: base
+      value: main
+
+  # The mark gives way. The row now says what it has rather than what it lacks, which is the same row
+  # answering the same question with the value in it.
+  - type: assert
+    domain: plugin
+    op: settings-in
+    with:
+      name: worktree
+      project: Greenhouse
+      state: filled
+
+  - type: action
+    domain: plugin
+    op: enable-in
+    with:
+      name: worktree
+      project: Greenhouse
+
+  - type: assert
+    domain: project
+    op: plugin-row
+    with:
+      project: Greenhouse
+      plugin: worktree
+      state: firing

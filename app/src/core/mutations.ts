@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { t, tf, type CmdError, type CmdErrorPart } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AgentHookNoticeDto, AgentHookOfferDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookOfferDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 
 /**
@@ -623,19 +623,6 @@ export async function fetchAgentHookOffer(
 }
 
 /**
- * The bound folders whose AI is not started on amenbo (core's `harness::setup_notice`) — the standing
- * report behind the banner, carrying each unwired tool's request so the banner can show it and the copy
- * button has it in hand.
- *
- * Called after the modal has had its turn, so a folder just adopted or just answered is read in the state
- * that left it. Outside Tauri this is an empty array.
- */
-export async function fetchAgentHookNotices(): Promise<AgentHookNoticeDto[]> {
-  if (!inTauri()) return [];
-  return await invoke<AgentHookNoticeDto[]>("agent_hook_notices");
-}
-
-/**
  * What one project still has to wire, grouped by harness — the standing row on the project screen
  * (`AMB-D-459`). Each entry carries the tool's request once and the folders of this project waiting for
  * it, so the text goes up a single time however many folders are behind it.
@@ -670,7 +657,7 @@ export async function answerAgentHookOffer(projectId: number, yes: boolean): Pro
  * the same as an unanswered project everywhere else, because both are silent.
  *
  * It says what was answered and nothing about the wiring, which is read from the folder every time
- * (`fetchAgentHookNotices`). Outside Tauri there is no record to read.
+ * (`fetchAgentHookProjectWiring`). Outside Tauri there is no record to read.
  */
 export async function fetchAgentHookConsent(projectId: number): Promise<boolean | null> {
   if (!inTauri()) return null;

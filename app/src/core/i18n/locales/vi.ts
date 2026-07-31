@@ -417,7 +417,6 @@ export const vi: Translation = {
     "agentHook.scopeAgain": "Sẽ không hỏi lần thứ ba.",
     "agentHook.hint": "`{cmd} agent-hook snippet <tool>` in nó ra bất cứ lúc nào bạn muốn.",
     "agentHookSetup.title": "Còn một bước nữa là AI sẽ giữ công việc này trong amenbo",
-    "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: hãy đưa đoạn văn bản dưới đây cho AI của bạn để sửa {file}; từ đó, AI của bạn đọc cách làm việc với amenbo ở đầu mỗi phiên và ghi lại công việc thành nhiệm vụ.",
     "agentHookSetup.pick": "Bạn dùng công cụ nào trong thư mục này?",
     "agentHookSetup.copy": "Chép đoạn văn bản",

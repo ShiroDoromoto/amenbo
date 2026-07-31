@@ -29,11 +29,16 @@ import type { AgentHookWiringDto } from "../bindings/bindings";
  * `projectId` is the project being looked at — the row answers for that one alone, which is what lets it
  * name folders the reader can walk to from here.
  *
+ * `turn` is the one-question-at-a-time rule reaching this surface: false while the question about this
+ * project is still up, and nothing is fetched or drawn until it goes true. The disk it reads is the disk
+ * that question writes to — a refusal recorded there silences this — so reading ahead of it would report a
+ * setup the reader has just declined.
+ *
  * It reads settings files on disk, so it is fetched when the project changes and not on every store tick:
  * a task moving on the board cannot wire a folder. A failure to read is swallowed and draws nothing — a
  * report that could not be made is not a report of trouble.
  */
-export function AgentHookWiringRow({ projectId }: { projectId: number }) {
+export function AgentHookWiringRow({ projectId, turn }: { projectId: number; turn: boolean }) {
   const [waiting, setWaiting] = useState<AgentHookWiringDto[]>([]);
   // Which tool the reader picked. Unset means the first on offer — the only one where the project's folders
   // point at exactly one, and the head of the catalog where they point at none.
@@ -47,13 +52,14 @@ export function AgentHookWiringRow({ projectId }: { projectId: number }) {
     setWaiting([]);
     setPicked(null);
     setCopied(null);
+    if (!turn) return;
     fetchAgentHookProjectWiring(projectId)
       .then((rows) => alive && setWaiting(rows))
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [projectId]);
+  }, [projectId, turn]);
 
   if (waiting.length === 0) return null;
 

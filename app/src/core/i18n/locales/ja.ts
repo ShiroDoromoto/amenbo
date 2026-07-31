@@ -428,7 +428,6 @@ export const ja: Translation = {
     "agentHook.scopeAgain": "3度目は訊きません。",
     "agentHook.hint": "`{cmd} agent-hook snippet <tool>` でいつでも取り出せます。",
     "agentHookSetup.title": "AI にタスク管理を任せる準備が、あと1手残っています",
-    "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: 下のテキストを AI に渡して {file} を直してもらうと、AI はセッションのたびに amenbo の使い方を読み込み、作業をタスクに残します。",
     "agentHookSetup.pick": "このフォルダで使っているツールはどれですか？",
     "agentHookSetup.copy": "テキストをコピー",

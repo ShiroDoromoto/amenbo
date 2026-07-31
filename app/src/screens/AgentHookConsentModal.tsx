@@ -13,8 +13,8 @@
 // **A yes wires nothing, so the yes has to hand over the text.** amenbo does not write into a user's
 // provider settings — it hands over a text for an AI of theirs to act on — so the whole of what a yes buys
 // is the text, and this modal is where it arrives: the picker for which tool it is for, the text itself, and
-// the copy button. The startup banner used to be that place; the question now finishes what it started
-// (`AMB-D-459`).
+// the copy button. Nothing behind it is the receiving end any more, so the question finishes what it
+// started (`AMB-D-459`).
 //
 // Three values, two buttons, exactly as `HookConsentModal` has them: dismissing is "not now" and records
 // nothing, which is why Esc must not be wired to `answer(false)` — that answer means "never ask again".
@@ -31,20 +31,26 @@ import type { AgentHookOfferDto } from "../bindings/bindings";
  * raised, and this one comes round the next time the project is opened.
  *
  * `onDone` fires once there is nothing left on screen — answered and read, waved past, or never there —
- * which is what lets the setup banner wait its turn. A failure to fetch counts as done, so a surface that
- * could not ask does not also mute the one that only tells. It can fire more than once, so it must be
+ * which is what lets the standing row about that project's folders wait its turn. **It names the project it
+ * is about**, which is not always the one on screen: a navigation commits before the new project's probe
+ * comes back, and what is settled is settled per project. A failure to fetch counts as done, so a surface
+ * that could not ask does not also mute the one that only tells. It can fire more than once, so it must be
  * idempotent.
  */
 export function AgentHookConsentModal({ projectId, turn, canAsk, onDone }: {
   projectId: number | null;
   turn: boolean;
   canAsk: boolean;
-  onDone?: () => void;
+  onDone?: (project: number | null) => void;
 }) {
   const [offer, setOffer] = useState<AgentHookOfferDto | null>(null);
   // The same offer once it has been said yes to: the question is over, and what is left is the hand-over.
   const [handover, setHandover] = useState<AgentHookOfferDto | null>(null);
-  const [asked, setAsked] = useState(false);
+  // Which project the probe has come back about, wrapped so that "the view holding no project" (`null`)
+  // stays apart from "nothing has come back yet". It is a project and not a flag because `onDone` names
+  // one: an effect that fires on the render a navigation commits still sees the value it had, so a flag
+  // would report the project just left as the one on screen.
+  const [askedFor, setAskedFor] = useState<{ project: number | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Which tool the reader picked. Unset means the first on offer — the only one where the folders point at
@@ -59,21 +65,25 @@ export function AgentHookConsentModal({ projectId, turn, canAsk, onDone }: {
 
   useEffect(() => {
     // Whatever was on screen belonged to the project we were on; a different one is a different question.
+    // What the probe came back with goes with it: settled is settled per project, and telling the row
+    // behind us that this one is settled before it has been looked at is the one moment it must not read
+    // the disk — a refusal, which is what silences it, may be on that project's record (`AMB-D-459`).
+    setAskedFor(null);
     setOffer(null);
     setHandover(null);
     setError(null);
     setPicked(null);
     setCopied(false);
-    if (!turn) return; // The queue has not reached us; the banner is waiting on the lint's modal, not ours.
+    if (!turn) return; // The queue has not reached us; the row is waiting on the lint's modal, not ours.
     if (projectId === null || putOff.current.has(projectId)) {
-      setAsked(true); // Nothing to ask here, which the banner behind us is waiting to hear.
+      setAskedFor({ project: projectId }); // Nothing to ask here, which the row behind us waits to hear.
       return;
     }
     let alive = true;
     fetchAgentHookOffer(projectId, canAsk)
       .then((o) => alive && setOffer(o))
       .catch(() => {}) // A failure to detect is swallowed: we ask nothing rather than block the app.
-      .finally(() => alive && setAsked(true));
+      .finally(() => alive && setAskedFor({ project: projectId }));
     return () => {
       alive = false;
     };
@@ -82,8 +92,8 @@ export function AgentHookConsentModal({ projectId, turn, canAsk, onDone }: {
   }, [turn, canAsk, projectId]);
 
   useEffect(() => {
-    if (asked && !offer && !handover) onDone?.();
-  }, [asked, offer, handover, onDone]);
+    if (askedFor && !offer && !handover) onDone?.(askedFor.project);
+  }, [askedFor, offer, handover, onDone]);
 
   // Dropping the question is the whole of "not now": nothing is called, so nothing is recorded, and a later
   // launch finds it waiting. Closing the hand-over is the same gesture with nothing left to decide.

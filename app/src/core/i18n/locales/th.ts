@@ -417,7 +417,6 @@ export const th: Translation = {
     "agentHook.scopeAgain": "จะไม่ถามเป็นครั้งที่สาม",
     "agentHook.hint": "`{cmd} agent-hook snippet <tool>` พิมพ์มันออกมาได้ทุกเมื่อ",
     "agentHookSetup.title": "เหลืออีกขั้นเดียว AI ก็จะเก็บงานนี้ไว้ใน amenbo",
-    "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: ส่งข้อความด้านล่างให้ AI ของคุณแก้ {file} จากนั้น AI จะอ่านวิธีทำงานกับ amenbo ทุกครั้งที่เริ่มเซสชัน และบันทึกงานเป็นทาสก์",
     "agentHookSetup.pick": "ในโฟลเดอร์นี้คุณใช้เครื่องมือตัวไหน",
     "agentHookSetup.copy": "คัดลอกข้อความ",

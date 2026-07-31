@@ -446,7 +446,6 @@ const ui = {
   "agentHook.scopeAgain": "We will not ask a third time.",
   "agentHook.hint": "`{cmd} agent-hook snippet <tool>` prints it whenever you want it.",
   "agentHookSetup.title": "One step is left before your AI keeps this work in amenbo",
-  "agentHookSetup.where": "{project} — {dir}",
   "agentHookSetup.unwired": "{tool}: give the text below to your AI to edit {file}, and your AI reads how to work with amenbo at the start of every session and records the work as tasks.",
   "agentHookSetup.pick": "Which tool do you use in this folder?",
   "agentHookSetup.copy": "Copy the text",

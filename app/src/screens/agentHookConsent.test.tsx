@@ -26,13 +26,23 @@ const hoisted = vi.hoisted(() => ({
   failWith: null as string | null,
   /** How many times the modal reported it has nothing left on screen. */
   done: 0,
+  /** The project each of those reports named — which is not always the one on screen. */
+  doneFor: [] as (number | null)[],
   /** What the copy button put on the clipboard. */
   clipboard: [] as string[],
+  /** When set, the next probe does not answer until `release` is called — one still in flight. */
+  hold: false,
+  release: null as null | (() => void),
 }));
 
 vi.mock("../core/mutations", () => ({
   fetchAgentHookOffer: (projectId: number, canAsk: boolean) => {
     hoisted.fetchedWith.push({ projectId, canAsk });
+    if (hoisted.hold) {
+      return new Promise((resolve) => {
+        hoisted.release = () => resolve(hoisted.offer);
+      });
+    }
     return Promise.resolve(hoisted.offer);
   },
   answerAgentHookOffer: (projectId: number, yes: boolean) => {
@@ -78,7 +88,10 @@ async function render(over: { projectId?: number | null; turn?: boolean; canAsk?
       projectId: over.projectId === undefined ? 7 : over.projectId,
       turn: over.turn ?? true,
       canAsk: over.canAsk ?? true,
-      onDone: () => (hoisted.done += 1),
+      onDone: (project: number | null) => {
+        hoisted.done += 1;
+        hoisted.doneFor.push(project);
+      },
     }));
   });
 }
@@ -108,6 +121,9 @@ beforeEach(() => {
   hoisted.fetchedWith = [];
   hoisted.failWith = null;
   hoisted.done = 0;
+  hoisted.doneFor = [];
+  hoisted.hold = false;
+  hoisted.release = null;
   hoisted.clipboard = [];
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
@@ -141,7 +157,7 @@ describe("the session-start hook consent modal", () => {
 
     expect(hoisted.fetchedWith).toEqual([]);
     expect(container.textContent).toBe("");
-    expect(hoisted.done, "there is nothing to ask here, which the banner is waiting to hear").toBeGreaterThan(0);
+    expect(hoisted.done, "there is nothing to ask here, which the row is waiting to hear").toBeGreaterThan(0);
   });
 
   // The trigger is the opening of a project (`AMB-D-459`), so walking into another one asks about that one.
@@ -162,7 +178,7 @@ describe("the session-start hook consent modal", () => {
     await render({ canAsk: false });
 
     expect(hoisted.fetchedWith).toEqual([{ projectId: 7, canAsk: false }]);
-    expect(hoisted.done, "it has nothing to ask, so the banner may take its turn").toBeGreaterThan(0);
+    expect(hoisted.done, "it has nothing to ask, so the row may take its turn").toBeGreaterThan(0);
   });
 
   it("asks nothing when core has nothing to ask", async () => {
@@ -383,6 +399,21 @@ describe("the session-start hook consent modal", () => {
       await render();
       await click(t("agentHook.yes"));
       expect(hoisted.done).toBe(0);
+    });
+
+    // Walking into another project. What is settled is settled per project, and the report names which —
+    // the row behind reads the disk the moment it hears its own project named, and hearing it before that
+    // project has been looked at is reading about one where a refusal may be on the record.
+    it("names the project it probed, never the one it has only just arrived at", async () => {
+      await render({ projectId: 7 });
+      expect(hoisted.doneFor, "the first is settled — there was nothing to ask").toEqual([7]);
+
+      hoisted.hold = true; // core has not come back about the next one
+      await render({ projectId: 8 });
+      expect(hoisted.doneFor, "the next is not named until it does").not.toContain(8);
+
+      await act(async () => hoisted.release?.());
+      expect(hoisted.doneFor).toContain(8);
     });
   });
 });

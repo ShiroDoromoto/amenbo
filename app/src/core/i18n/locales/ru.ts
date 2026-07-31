@@ -443,7 +443,6 @@ export const ru: Translation = {
     "agentHook.scopeAgain": "В третий раз спрашивать не будем.",
     "agentHook.hint": "`{cmd} agent-hook snippet <tool>` напечатает его в любой момент.",
     "agentHookSetup.title": "До того как ИИ начнёт вести эту работу в amenbo, остался один шаг",
-    "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: передайте текст ниже своему ИИ, чтобы он поправил {file}: после этого ваш ИИ в начале каждой сессии читает, как работать с amenbo, и записывает работу задачами.",
     "agentHookSetup.pick": "Каким инструментом вы пользуетесь в этой папке?",
     "agentHookSetup.copy": "Скопировать текст",

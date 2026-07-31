@@ -63,6 +63,7 @@ const DONE_COLUMN_CAP = 20;
  */
 export function BoardScreen({
   projectId, headerSlot, selectedTaskId, onSelectTask, selectedDecisionId, onSelectDecision, onComposeTask, onOpenSettings,
+  hookQuestionDone,
 }: {
   projectId: number;
   // Where the project header (toolbar) is drawn. It is portalled into AppShell's full-width header row, so the
@@ -74,6 +75,10 @@ export function BoardScreen({
   onSelectDecision: (id: number | null) => void;
   onComposeTask: (target: ComposeTarget) => void;
   onOpenSettings: () => void;
+  // Whether the question about this project's session-start wiring is over for now — answered, waved past,
+  // or never there. The standing row waits for it: asking and telling in one breath says one thing twice,
+  // and a refusal answered there is what silences the row (`AMB-D-459`).
+  hookQuestionDone: boolean;
 }) {
   const store = useStore();
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
@@ -217,8 +222,8 @@ export function BoardScreen({
       {headerSlot && createPortal(toolbar, headerSlot)}
 
       {/* Above both tabs, because it is about the project and not about what is being looked at in it.
-          It draws nothing until this project has a folder left to wire (`AMB-D-459`). */}
-      <AgentHookWiringRow projectId={projectId} />
+          It draws nothing until this project's question is over and a folder is left to wire (`AMB-D-459`). */}
+      <AgentHookWiringRow projectId={projectId} turn={hookQuestionDone} />
 
       {tab === "decisions" && (
         <DecisionsScreen

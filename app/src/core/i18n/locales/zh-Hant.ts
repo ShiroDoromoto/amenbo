@@ -414,7 +414,6 @@ export const zhHant: Translation = {
     "agentHook.scopeAgain": "不會問第三次。",
     "agentHook.hint": "`{cmd} agent-hook snippet <tool>` 隨時都能印出來。",
     "agentHookSetup.title": "離 AI 把這些工作記進 amenbo，還差一步",
-    "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}：把下面的文字交給你的 AI 去改 {file}，此後 AI 每次工作階段開始都會讀一遍 amenbo 的用法，並把工作記成任務。",
     "agentHookSetup.pick": "你在這個資料夾裡用的是哪個工具？",
     "agentHookSetup.copy": "複製文字",

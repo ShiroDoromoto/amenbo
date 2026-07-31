@@ -4,6 +4,7 @@ import { PluginGate } from "../components/PluginGate";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
 import {
+  firesAnywhere,
   uninstallPlugin,
   usePluginInstalls,
   type PluginInstall,
@@ -150,7 +151,7 @@ function InstalledRow({ install, update, projects, onRemoved }: {
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
   // The badge is about the plugin, so it reads the whole list: on in some project, or on in none.
-  const firing = install.enabledProjects.length > 0;
+  const firing = firesAnywhere(install);
   // What the last build move did, said on the row it was about — the offer is gone by the time it is drawn.
   const [moved, setMoved] = useState<string | null>(null);
 

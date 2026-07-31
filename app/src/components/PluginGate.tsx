@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { errText, t, tn } from "../core/i18n";
-import { setPluginEnabled, type PluginInstall } from "../core/pluginInstalls";
+import { enabledIn, setPluginEnabled, type PluginInstall } from "../core/pluginInstalls";
 
 /**
  * One installed plugin's switch, wherever a face draws it — the market's detail and the installed
@@ -45,8 +45,8 @@ export function PluginGate({ install, projects, lead }: {
   };
 
   // In the store's own order, so the same two projects do not swap places between two rows.
-  const on = projects.filter((p) => install.enabledProjects.includes(p.id));
-  const off = projects.filter((p) => !install.enabledProjects.includes(p.id));
+  const on = projects.filter((p) => enabledIn(install, p.id));
+  const off = projects.filter((p) => !enabledIn(install, p.id));
 
   return (
     <div className="pluggate">

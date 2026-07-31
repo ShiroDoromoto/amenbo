@@ -80,9 +80,10 @@ const entry = (name: string) => ({
   featured: false,
 });
 
-const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => ({
+/** One installed plugin; `on` names the projects it fires in, as rows of those crossings. */
+const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?: number[] }): PluginInstall => ({
   compatible: true,
-  enabledProjects: [],
+  projects: on.map((project) => ({ project, enabled: true, hasValue: false, requiredUnset: false })),
   config: [],
   rollback: false,
   ...over,
@@ -136,7 +137,7 @@ describe("installing from the market", () => {
     expect(container.textContent).toContain(t("plugins.installed"));
     expect(container.textContent).not.toContain(t("plugins.enabledChip"));
 
-    hoisted.installs = [row({ name: "notify", enabledProjects: [7] })];
+    hoisted.installs = [row({ name: "notify", on: [7] })];
     render();
     expect(container.textContent).toContain(t("plugins.enabledChip"));
   });
@@ -165,7 +166,7 @@ describe("what the install face says once a plugin has landed", () => {
   // Where it is on is the row's to say (`AMB-D-412`); this face is about what exists and what is here.
   it("says the same thing for a plugin already on somewhere", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
+    hoisted.installs = [row({ name: "notify", on: [1] })];
     render();
     open(0);
     expect(detail()!.textContent).toContain(t("plugins.landedInert"));

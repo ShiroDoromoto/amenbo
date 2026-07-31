@@ -336,6 +336,30 @@ impl Store {
         Ok(projects)
     }
 
+    /// Every project holding a value for one plugin — either road, since a setting is a setting whichever
+    /// table the author's `secret` flag sent it to (`AMB-D-356`). Ascending, each project once.
+    ///
+    /// The value-side twin of [`Self::projects_with_plugin_enabled`], and asked for the same reason: a
+    /// project that filled a plugin in and then turned it off still has settings there
+    /// ([`crate::plugin_config::intersections`] draws it a row), and no gate would name it.
+    pub fn projects_with_plugin_values(&self, plugin: &str) -> Result<Vec<i64>> {
+        let conn = self.engine.conn();
+        let mut projects = Vec::new();
+        for id in crate::store_engine::read::plugin_config_row_ids(conn, plugin)? {
+            if let Some(row) = crate::store_engine::read::plugin_config_row_by_id(conn, id)? {
+                projects.push(row.project_id);
+            }
+        }
+        for id in crate::store_engine::read::plugin_secret_row_ids(conn, plugin)? {
+            if let Some(row) = crate::store_engine::read::plugin_secret_row_by_id(conn, id)? {
+                projects.push(row.project_id);
+            }
+        }
+        projects.sort_unstable();
+        projects.dedup();
+        Ok(projects)
+    }
+
     /// A single task comment; `None` if there is none (a row exists ⇒ it is live). The id is a comment id, which
     /// is not a conversational ref, so this is itself a reach entry point — `decision promote` reads the
     /// body of a task comment through here.

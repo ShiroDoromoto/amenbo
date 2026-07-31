@@ -175,9 +175,15 @@ describe("invariants held by the rows of the linked-folder list", () => {
   });
 });
 
-/** One installed plugin, on in no project until a test says otherwise. */
-function install(over: Partial<PluginInstall> & { name: string }): PluginInstall {
-  return { compatible: true, enabledProjects: [], config: [], rollback: false, ...over };
+/** One installed plugin, on in no project until a test names one in `on`. */
+function install({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?: number[] }): PluginInstall {
+  return {
+    compatible: true,
+    projects: on.map((project) => ({ project, enabled: true, hasValue: false, requiredUnset: false })),
+    config: [],
+    rollback: false,
+    ...over,
+  };
 }
 
 /** The plugins section, found by its heading. */
@@ -195,8 +201,8 @@ const offered = (el: HTMLSelectElement) => Array.from(el.options).map((o) => o.t
 describe("the plugins turned on for this project", () => {
   it("lists the ones on here, and offers the rest", async () => {
     hoisted.installs = [
-      install({ name: "worktree", enabledProjects: [1, 2] }),
-      install({ name: "notify", enabledProjects: [2] }),
+      install({ name: "worktree", on: [1, 2] }),
+      install({ name: "notify", on: [2] }),
     ];
     await render([]);
 
@@ -206,7 +212,7 @@ describe("the plugins turned on for this project", () => {
   });
 
   it("says so when this project has none on, without hiding what is installed", async () => {
-    hoisted.installs = [install({ name: "notify", enabledProjects: [2] })];
+    hoisted.installs = [install({ name: "notify", on: [2] })];
     await render([]);
     expect(pluginsSection().textContent).toContain(t("projset.pluginsNoneOn"));
     expect(offered(picker())).toEqual([t("projset.pluginsAdd"), "notify"]);
@@ -231,7 +237,7 @@ describe("the plugins turned on for this project", () => {
   });
 
   it("turns one off from the row it is listed on", async () => {
-    hoisted.installs = [install({ name: "worktree", enabledProjects: [1] })];
+    hoisted.installs = [install({ name: "worktree", on: [1] })];
     await render([]);
     const off = Array.from(pluginsSection().querySelectorAll("button")).find(
       (b) => b.textContent === t("plugins.disable"),

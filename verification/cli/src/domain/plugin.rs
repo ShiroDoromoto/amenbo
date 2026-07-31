@@ -161,81 +161,48 @@ impl Driver {
                     "left `{name}` recording a detail document the catalog no longer names"
                 )))
             }
-            // Adding a secret setting to what an installed plugin says it takes. amenbo reads the
-            // schema off the installed manifest and never invents a field, so this is the author's
-            // declaration arriving the only way it can while no published plugin carries one (see
-            // the registry). What the scenario then walks — where the value is kept, what a read
-            // gives back, what a backup carries — is amenbo's own, untouched.
+            // Adding a plain line to what an installed plugin says it takes. amenbo reads the schema
+            // off the installed manifest and never invents a field, so this is the author's declaration
+            // arriving the only way it can while no published plugin carries one (see the registry).
+            // What the scenario then walks — where the value is kept, what a read gives back, what
+            // clearing it does — is amenbo's own, untouched.
+            "declare-setting" => {
+                let name = req_str(with, "name")?;
+                let key = req_str(with, "key")?;
+                self.declare_field(name, key, with, serde_json::json!({}))?;
+                Ok(Outcome::action(format!("`{name}` now declares `{key}`")))
+            }
+            // The same door for a setting the author marked secret. That flag is the whole of what
+            // sends a value down the other road — off every export, injected as an environment
+            // variable — and no published plugin sets it, so the road exists only once this is written.
             "declare-secret" => {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
-                let label = with.get("label").and_then(|v| v.as_str()).unwrap_or(key);
-                let path = self.session.home.join("plugins").join(name).join("manifest.json");
-                let raw = std::fs::read_to_string(&path)
-                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
-                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
-                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
-                // A plugin that takes no settings at all carries no list, which is a list to add to
-                // all the same — the schema is absent, not closed.
-                if manifest["config"].is_null() {
-                    manifest["config"] = serde_json::json!([]);
-                }
-                let fields = manifest["config"]
-                    .as_array_mut()
-                    .ok_or_else(|| format!("{}'s config schema is not a list of fields", path.display()))?;
-                if fields.iter().any(|f| f["key"].as_str() == Some(key)) {
-                    return Err(format!("`{name}` already declares a setting called `{key}`"));
-                }
-                fields.push(serde_json::json!({
-                    "key": key, "label": label, "secret": true, "required": false
-                }));
-                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
-                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                self.declare_field(name, key, with, serde_json::json!({ "secret": true }))?;
                 Ok(Outcome::action(format!("`{name}` now declares `{key}` as a secret setting")))
             }
-            // Adding a setting whose answers the author listed, and the one that stands until someone
-            // answers. Same road in as `declare-secret`, and for the same reason: candidates are the
-            // author's to declare, no published plugin declares any, and what the scenario walks
-            // afterwards — which answer is held, what a read says about it, what a run receives — is
-            // amenbo's own. The label a candidate carries is display text the scenario never reads
-            // back, so each one is labelled with its own value rather than given wording to keep in
-            // step.
+            // And for a setting whose answers the author listed, with the one that stands until someone
+            // answers. Same reason again: candidates are the author's to declare and no published plugin
+            // declares any, so the half of `plugin config` that keeps three answers apart — a choice
+            // made, none of them chosen, nobody asked yet — would go unwalked. The label a candidate
+            // carries is display text the scenario never reads back, so each one is labelled with its
+            // own value rather than given wording to keep in step.
             "declare-choice" => {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
-                let label = with.get("label").and_then(|v| v.as_str()).unwrap_or(key);
                 let options = req_str(with, "options")?;
-                let path = self.session.home.join("plugins").join(name).join("manifest.json");
-                let raw = std::fs::read_to_string(&path)
-                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
-                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
-                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
-                if manifest["config"].is_null() {
-                    manifest["config"] = serde_json::json!([]);
-                }
-                let fields = manifest["config"]
-                    .as_array_mut()
-                    .ok_or_else(|| format!("{}'s config schema is not a list of fields", path.display()))?;
-                if fields.iter().any(|f| f["key"].as_str() == Some(key)) {
-                    return Err(format!("`{name}` already declares a setting called `{key}`"));
-                }
                 let candidates: Vec<serde_json::Value> = options
                     .split(',')
                     .map(|value| serde_json::json!({ "value": value, "label": value }))
                     .collect();
-                let mut field = serde_json::json!({
-                    "key": key, "label": label, "type": "multi", "options": candidates,
-                    "secret": false, "required": false
-                });
+                let mut over = serde_json::json!({ "type": "multi", "options": candidates });
                 // A field that declares no default is the other shape a choice comes in — one where
                 // nothing stands in for an answer nobody gave — so the key is left off rather than
                 // written empty, which the manifest would read as a default of the empty string.
                 if let Some(default) = with.get("default").and_then(|v| v.as_str()) {
-                    field["default"] = serde_json::json!(default);
+                    over["default"] = serde_json::json!(default);
                 }
-                fields.push(field);
-                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
-                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                self.declare_field(name, key, with, over)?;
                 Ok(Outcome::action(format!(
                     "`{name}` now offers `{options}` as the answers to `{key}`"
                 )))
@@ -932,6 +899,40 @@ impl Driver {
             .and_then(|v| v.as_str())
             .map(str::to_string)
             .ok_or_else(|| "a catalog is named by `url:` or by the `target:` a `catalog-stand` bound".to_string())
+    }
+
+    /// Write one field onto an installed plugin's declared schema — the one road the three `declare-`
+    /// setting ops take, since what separates them is the field they write and nothing else.
+    ///
+    /// `over` is what that op adds to a plain line: the `secret` flag, the candidates and their default.
+    /// The label is display text no scenario reads back, so a step that names none is given the key.
+    fn declare_field(&self, name: &str, key: &str, with: &Args, over: serde_json::Value) -> Result<(), String> {
+        let path = self.session.home.join("plugins").join(name).join("manifest.json");
+        let raw = std::fs::read_to_string(&path)
+            .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+        let mut manifest: serde_json::Value = serde_json::from_str(&raw)
+            .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
+        // A plugin that takes no settings at all carries no list, which is a list to add to all the
+        // same — the schema is absent, not closed.
+        if manifest["config"].is_null() {
+            manifest["config"] = serde_json::json!([]);
+        }
+        let fields = manifest["config"]
+            .as_array_mut()
+            .ok_or_else(|| format!("{}'s config schema is not a list of fields", path.display()))?;
+        if fields.iter().any(|f| f["key"].as_str() == Some(key)) {
+            return Err(format!("`{name}` already declares a setting called `{key}`"));
+        }
+        let label = with.get("label").and_then(|v| v.as_str()).unwrap_or(key);
+        let mut field = serde_json::json!({
+            "key": key, "label": label, "secret": false, "required": false
+        });
+        for (k, v) in over.as_object().into_iter().flatten() {
+            field[k] = v.clone();
+        }
+        fields.push(field);
+        std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+            .map_err(|e| format!("could not write {}: {e}", path.display()))
     }
 }
 

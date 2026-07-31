@@ -296,13 +296,14 @@ where there is nothing to repair — and a sweep that sweeps nothing looks exact
 what `store doctor-fix` puts right. `plugin stale-manifest` leaves an installed plugin recording a
 build the catalog has moved past, which is what `plugin update` puts right — the catalog publishes one
 build, and an asset is trusted only by the key of the catalog that served it, so there is no second
-build to install first and no way to sign one into existence. `plugin declare-secret` puts a secret setting into what an
-installed plugin says it takes: what is secret is the author's word, amenbo never invents a field, and
-no plugin in the official catalog declares one — so the secret route, which fails silently and in plain
-text, would otherwise go unwalked until one does. `plugin declare-choice` puts in the other kind for the
-same reason — a setting whose answers the author listed, and the default that stands until someone gives
-one — which is what keeps a choice made, a choice declined and a question nobody has answered
-apart. `plugin slow-program` leaves an installed plugin
+build to install first and no way to sign one into existence. The three `plugin declare-…` ops put a setting into what an
+installed plugin says it takes: what a plugin takes is the author's word, amenbo never invents a field,
+and **no plugin in the official catalog declares one at all** — so every road through `plugin config`
+would go unwalked until one does. `declare-setting` writes the plain kind, the line a reader types and
+reads back; `declare-secret` writes the flag that sends a value down the other road, which fails
+silently and in plain text; `declare-choice` writes a setting whose answers the author listed, and the
+default that stands until someone gives one, which is what keeps a choice made, a choice declined and a
+question nobody has answered apart. `plugin slow-program` leaves an installed plugin
 taking seconds to answer, which is the only way a queue holds anything to read: a row leaves the moment
 its plugin replies, so the backlog `plugin log` reports is the window a slow plugin holds open, and
 every plugin the catalog publishes answers in the time a process takes to start. `plugin echo-program`

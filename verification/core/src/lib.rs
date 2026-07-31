@@ -382,6 +382,13 @@ const REGISTRY: &[OpSpec] = &[
     // be signed into existence to install first. So the driver writes the disagreement, and the real
     // catalog is the build that is moved to — the same idea as `folder legacy-pointer`.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "stale-manifest", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // An installed plugin declaring the plainest setting there is: a line the reader types, kept in the
+    // ordinary store and read back as it was written. The same reason the two below it exist reaches this
+    // one first — **no plugin in the official catalog declares any setting at all**, so a road that fills
+    // one in has nothing to fill in until the driver writes the declaration. It is the shape most of what
+    // `plugin config` does is about, and the only one the two below cannot stand in for: a secret is never
+    // read back, and a choice answers with candidates rather than with what was typed.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-setting", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
     // An installed plugin declaring a setting its author marked secret. Which settings a plugin takes
     // is the author's word and amenbo never invents one, so the only honest way to reach this state is
     // for a plugin that declares one to be published — and no plugin in the official catalog does. The

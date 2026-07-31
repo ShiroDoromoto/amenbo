@@ -7,7 +7,8 @@
 id: tell-a-plugin-what-it-needs-to-know
 title: A plugin's setting is filled in for the project, taken back, and never invented — and a secret one reaches the run it is for and comes back out nowhere, until a removal takes it
 description: >
-  Install the official `worktree` plugin, fill in the setting its manifest declares, and read it back.
+  Install the official `worktree` plugin, put a setting on what its manifest declares, fill it in and
+  read it back.
   Take it away through the door an empty value opens, and see the read say the project holds nothing.
   Then a key the manifest never declared: it is refused, because a plugin is told only what its author
   said it takes. Finally the other route a value can take: a setting the author marked secret is filled
@@ -21,6 +22,18 @@ steps_cli:
     op: install
     with:
       name: worktree
+
+  # What a plugin takes is its author's word and amenbo invents none of it — and no plugin in the
+  # official catalog declares a setting at all, so a road that fills one in has nothing to fill in until
+  # the declaration is written onto the installed manifest (see the op's own note). Everything after it
+  # is amenbo's own doing.
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: base
+      label: Base branch
 
   # Which project the value belongs to is never named here — it is the folder's binding, the same thing
   # that decides everything else this run reaches.
@@ -70,8 +83,7 @@ steps_cli:
       refused: invalid_value
 
   # The other route a value can take. What is secret is the author's word — the flag on the field —
-  # and no plugin in the official catalog carries one, so the declaration is put onto the installed
-  # manifest here (see the op's own note). From this step on, everything is amenbo's own doing.
+  # so the declaration goes on the same way the first one did, wearing that flag.
   - type: action
     domain: plugin
     op: declare-secret

@@ -4738,11 +4738,6 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
                 }
             }
         }
-        DimensionCmd::Rename { id, name } => {
-            let did = store.resolve_dimension(None, &id).map_err(CliError::from)?;
-            let d = store.dimension_update(did, Some(&name), None, None, None).map_err(CliError::from)?;
-            write_envelope(flags, "dimension.rename", "dimension", serde_json::to_value(&d).unwrap(), Some(vec!["name".to_string()]), false, format!("✓ Renamed dimension: {}", dimension_label(d.id)));
-        }
         DimensionCmd::Update { id, name, notes, ordered, time_axis } => {
             let did = store.resolve_dimension(None, &id).map_err(CliError::from)?;
             let mut changed = Vec::new();
@@ -4790,12 +4785,6 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
             let period = dated.then_some((start_on, end_on));
             let v = store.dimension_value_add(did, &name, period).map_err(CliError::from)?;
             write_envelope(flags, "dimension.value-add", "dimension_value", serde_json::to_value(&v).unwrap(), None, false, format!("✓ Added value: {} ({})", v.name, dimension_value_label(v.id)));
-        }
-        DimensionCmd::ValueRename { dimension, value, name } => {
-            let did = store.resolve_dimension(None, &dimension).map_err(CliError::from)?;
-            let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
-            let v = store.dimension_value_update(vid, Some(&name), None).map_err(CliError::from)?;
-            write_envelope(flags, "dimension.value-rename", "dimension_value", serde_json::to_value(&v).unwrap(), Some(vec!["name".to_string()]), false, format!("✓ Renamed value: {}", dimension_value_label(v.id)));
         }
         DimensionCmd::ValueUpdate { dimension, value, name, start, end, clear_start, clear_end } => {
             let did = store.resolve_dimension(None, &dimension).map_err(CliError::from)?;

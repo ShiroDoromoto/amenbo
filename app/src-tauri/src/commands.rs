@@ -3053,7 +3053,8 @@ pub fn dimension_add(project_id: i64, name: String) -> Result<WriteAck, CmdError
     Ok(WriteAck::new(&["tasks"]))
 }
 
-/// Rename a dimension (same shape as the CLI's `dimension rename`).
+/// Rename a dimension — the name alone, which is the one edit the screen makes inline (the rest of the
+/// axis is edited through `dimension_update`).
 #[tauri::command]
 pub fn dimension_rename(id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
@@ -3116,7 +3117,7 @@ pub fn dimension_value_add(dimension_id: i64, name: String) -> Result<WriteAck, 
     Ok(WriteAck::new(&["tasks"]))
 }
 
-/// Rename a dimension value (same shape as the CLI's `dimension value-rename`).
+/// Rename a dimension value — the name alone, the value's counterpart of [`dimension_rename`].
 #[tauri::command]
 pub fn dimension_value_rename(value_id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {

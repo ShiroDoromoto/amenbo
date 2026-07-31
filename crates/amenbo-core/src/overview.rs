@@ -317,6 +317,21 @@ pub fn set_harness_consent(engine: &StoreEngine, project_id: i64, consent: Conse
     Ok(())
 }
 
+/// Take the answer off the record, putting this project back to never having been asked (`AMB-D-459`).
+/// Deleting the row is the only way back: the unanswered state *is* the absence of one, so there is no
+/// value to write. It takes the re-ask along with it — what is spent is spent against an answer, and
+/// there is no longer one.
+///
+/// Clearing what was never answered is the asked-for state rather than an error, as with the opt-out.
+pub fn clear_harness_consent(engine: &StoreEngine, project_id: i64) -> Result<()> {
+    Delete::from(HC.table)
+        .filter(Pred::eq(HC.project_id, project_id))
+        .sql()
+        .execute(engine.conn())
+        .map_err(StoreEngineError::from)?;
+    Ok(())
+}
+
 /// Prune the rows of a `task_id`-keyed overview table down to the ids `keep` accepts, in one
 /// transaction. Shared by the receipts and the archive: both are device-local sets of task ids whose
 /// tasks may have been deleted since.

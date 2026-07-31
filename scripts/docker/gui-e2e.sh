@@ -60,6 +60,10 @@ amenbo init --name Alice --actor ai
 # it can see. The question here is whether the board repaints, not whether a newcomer is greeted, so
 # the store arrives already welcomed.
 amenbo config set onboarded true --actor ai
+# A folder that has never answered whether its AI may be started on amenbo is asked on the way in,
+# and that question sits over the board the same way. A `no` is what closes it: it only means amenbo
+# stops asking. Nothing here is about the wiring — a question left standing hides the card under test.
+amenbo agent-hook answer no --actor ai
 amenbo task add --title "SEED TASK BEFORE GUI" --actor ai
 
 echo "== start Xvfb"

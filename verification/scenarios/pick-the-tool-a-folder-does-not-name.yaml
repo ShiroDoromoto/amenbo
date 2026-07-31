@@ -17,8 +17,8 @@
 # What this wants standing before the run: one folder bound to a project this device holds, with nothing
 # in it — no provider's directory, nothing about amenbo — and the question about that project never
 # answered here. It should be the only folder bound, so that every file named on screen is named about
-# this one. The app puts the question on the sweep it does at startup, so the run opens with it up —
-# drive it stepped (`--step`), since answering it is what the shot after it is of.
+# this one. The app puts the question when that project is opened, and it opens on a project — so the
+# run opens with it up. Drive it stepped (`--step`), since answering it is what the shot after it is of.
 id: pick-the-tool-a-folder-does-not-name
 title: A folder that shows no sign of any AI tool is handed the catalog, and the tool the reader picks is the tool the text is for
 description: >
@@ -37,7 +37,7 @@ steps_gui:
     with:
       answer: "yes"
 
-  # And something is standing there. With nothing to go on, the report leads with the first tool in the
+  # And something is handed over. With nothing to go on, the panel leads with the first tool in the
   # catalog rather than an empty line — the file it names is that tool's, which is how a shot tells this
   # apart from the tool picked below.
   - type: assert

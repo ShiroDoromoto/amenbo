@@ -15,8 +15,8 @@
 # The screen walks the same road from the other end, and what it needs is the state standing before
 # the run: a folder bound to a project this device holds, with the provider's own directory in it and
 # nothing about amenbo in that, and the question about that project never answered here. The app puts
-# the question on the sweep it does at startup, so the run opens with it up — drive it stepped
-# (`--step`), since answering it is what the shot after it is of.
+# the question when that project is opened, and it opens on a project — so the run opens with it up.
+# Drive it stepped (`--step`), since answering it is what the shot after it is of.
 id: start-this-folders-ai-on-amenbo
 title: A folder that does not start its AI on amenbo says so, hands over what wires it, and stops saying it once that lands
 description: >
@@ -97,9 +97,10 @@ steps_gui:
     with:
       answer: "yes"
 
-  # And the folder is still reported. This is the line the screen road is here for: a yes that took
-  # the report away with it would leave a setup reading as finished with nothing wired, and only the
-  # wiring landing ends the telling. The file it names is the one the text is about.
+  # And the text arrives, in the panel the yes opened. This is the line the screen road is here for: a
+  # yes buys the text and nothing else — amenbo writes no settings file — so a yes that ended the
+  # exchange would leave a setup reading as finished with nothing wired. The file it names is the one
+  # the text is about.
   - type: assert
     domain: repo
     op: ai-launch-notice
@@ -107,9 +108,9 @@ steps_gui:
       tool: claude-code
       paste_into: .claude/settings.json
 
-  # The way on from the report: the button that takes its text. Where the text goes is the clipboard,
-  # which no shot reads back, so the road ends at the press — what the text carries is held from the
-  # other end, by the road above.
+  # The way on from there: the button that takes the text. Where it goes is the clipboard, which no
+  # shot reads back, so the road ends at the press — what the text carries is held from the other end,
+  # by the road above.
   - type: action
     domain: repo
     op: ai-launch-copy

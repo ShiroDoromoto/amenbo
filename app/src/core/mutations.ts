@@ -604,17 +604,22 @@ export async function answerHookOffer(yes: boolean): Promise<void> {
 }
 
 /**
- * The one question about starting this folder's AI on `amenbo agent` at session start, or null when there
- * is none (core's `harness::reconcile`, per bound folder). `canAsk` is the one-question-at-a-time rule:
- * with the lint's modal already up this run it goes false, and the sweep only adopts a wiring already on
- * disk — nothing is asked and nothing about the question is recorded, so it comes round at a later startup.
+ * The one question about starting this project's AI on `amenbo agent` at session start, or null when there
+ * is none (core's `harness::reconcile`, over the project's bound folders taken together). `canAsk` is the
+ * one-question-at-a-time rule: with the lint's modal already up this run it goes false, and the probe only
+ * adopts a wiring already on disk — nothing is asked and nothing about the question is recorded, so it
+ * comes round the next time the project is opened.
  *
- * Called once at startup, and it is a command rather than a read for `fetchHookOffer`'s reason: the same
- * call is what adopts the folders somebody wired by hand. Outside Tauri there is never a question.
+ * Called when a project is opened (`AMB-D-459`), and it is a command rather than a read for
+ * `fetchHookOffer`'s reason: the same call is what adopts a project somebody wired by hand. Outside Tauri
+ * there is never a question.
  */
-export async function fetchAgentHookOffer(canAsk: boolean): Promise<AgentHookOfferDto | null> {
+export async function fetchAgentHookOffer(
+  projectId: number,
+  canAsk: boolean,
+): Promise<AgentHookOfferDto | null> {
   if (!inTauri()) return null;
-  return await invoke<AgentHookOfferDto | null>("agent_hook_offer", { canAsk });
+  return await invoke<AgentHookOfferDto | null>("agent_hook_offer", { projectId, canAsk });
 }
 
 /**

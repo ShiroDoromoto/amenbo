@@ -346,9 +346,9 @@ const ui = {
   "plugins.installNote": "Installing does not run it. Enabling is what lets it fire.",
   "plugins.landedInert": "It is here, and it runs nothing yet.", "plugins.turnItOn": "Turn it on",
   "plugins.installed": "Installed", "plugins.enabledChip": "Enabled",
-  "plugins.disable": "Disable",
-  "plugins.gate.onIn": "Enabled in", "plugins.gate.offEverywhere": "Off everywhere",
-  "plugins.gate.addProject": "Enable in a project…",
+  "plugins.enable": "Enable", "plugins.disable": "Disable",
+  "plugins.gate.offEverywhere": "Off everywhere",
+  "plugins.gate.addProject": "Add a project…",
   "plugins.incompatible": "This build of amenbo cannot run it",
   "plugins.droppedQueued.one": "{n} waiting event was dropped. Nothing arrives while it is off, and enabling it again starts from now.", "plugins.droppedQueued.other": "{n} waiting events were dropped. Nothing arrives while it is off, and enabling it again starts from now.",
   // the installed screen (the "manage what you have" tab)
@@ -359,9 +359,7 @@ const ui = {
   "plugins.emptyInstalledNote": "The market is where you add one.",
   // the settings form, generated from the schema the plugin's author declared
   "plugins.cfg.open": "Settings", "plugins.cfg.hide": "Hide settings",
-  "plugins.cfg.requiredUnset.one": "{n} required setting not provided", "plugins.cfg.requiredUnset.other": "{n} required settings not provided",
-  "plugins.cfg.pickProject": "Pick a project",
-  "plugins.cfg.pickProjectNote": "Pick the project whose settings you are writing.",
+  "plugins.cfg.requiredEmpty": "Required setting not provided", "plugins.cfg.filled": "Settings provided",
   "plugins.cfg.required": "Required", "plugins.cfg.unset": "Not provided", "plugins.cfg.held": "Provided",
   "plugins.cfg.default": "Default", "plugins.cfg.noneChosen": "None chosen",
   "plugins.cfg.restoreDefault": "Restore the default",

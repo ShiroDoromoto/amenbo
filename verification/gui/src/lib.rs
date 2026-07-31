@@ -318,16 +318,17 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "source")?
             ),
-            // The switch, moved one project at a time. Picking a project is the whole of the enable,
-            // so the instruction stops there — a step telling anyone to confirm anything afterwards
-            // would be inviting a screen the run has not shot yet.
+            // The switch, moved one project at a time — and it lives in that project's row, so the
+            // picker only draws the row. A project already crossing the plugin has its row standing,
+            // and picking it again is not offered; the instruction covers both by naming where the
+            // switch is rather than how the row got there.
             (Domain::Plugin, "enable-in") => format!(
-                "In the row for \"{}\", pick \"{}\" among the projects offered beside the switch.",
+                "Under \"{}\", find the row for \"{}\" — adding that project from the picker if it has none yet — and turn the plugin on there.",
                 req(with, "name")?,
                 req(with, "project")?
             ),
             (Domain::Plugin, "disable-in") => format!(
-                "In the row for \"{}\", shut the gate beside \"{}\" — one of the projects the row names.",
+                "Under \"{}\", turn the plugin off in the row for \"{}\".",
                 req(with, "name")?,
                 req(with, "project")?
             ),
@@ -407,10 +408,10 @@ impl Instructor {
                 let project = req(with, "project")?;
                 match present(with) {
                     true => format!(
-                        "Confirm the row for \"{name}\" names \"{project}\" among the projects it fires in."
+                        "Confirm \"{name}\" has a row for \"{project}\", and that row says the plugin is on there."
                     ),
                     false => format!(
-                        "Confirm the row for \"{name}\" does not name \"{project}\" among the projects it fires in."
+                        "Confirm \"{name}\" is not on in \"{project}\": either it has no row for that project, or the row it has offers to turn the plugin on rather than off."
                     ),
                 }
             }
@@ -864,10 +865,10 @@ steps_gui:
         assert_eq!(exp, Expectation { text: "Channel webhook".to_string(), present: true });
     }
 
-    /// The gate line: the switch is moved a project at a time, and read back the same way — including
-    /// the reading that matters most, the project left firing after another one's gate was shut. Every
-    /// line of it is a `Review`: what it names is a project, and the projects are down the side of the
-    /// screen whether or not the row names one.
+    /// The gate line: the switch is moved a project at a time — in that project's own row — and read
+    /// back the same way, including the reading that matters most, the project left firing after
+    /// another one's gate was shut. Every line of it is a `Review`: what it names is a project, and the
+    /// projects are down the side of the screen whether or not a row names one.
     #[test]
     fn the_gate_moves_one_project_at_a_time_and_is_read_back_by_an_eye() {
         let yaml = r#"
@@ -894,10 +895,10 @@ steps_gui:
         let s = load(yaml);
         let mut ins = Instructor::new();
         let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
-        assert!(lines[0].contains("pick \"Greenhouse\""), "got: {}", lines[0]);
-        assert!(lines[1].contains("names \"Greenhouse\""), "got: {}", lines[1]);
-        assert!(lines[2].contains("shut the gate beside \"Greenhouse\""), "got: {}", lines[2]);
-        assert!(lines[3].contains("does not name \"Greenhouse\""), "got: {}", lines[3]);
+        assert!(lines[0].contains("the row for \"Greenhouse\""), "got: {}", lines[0]);
+        assert!(lines[1].contains("a row for \"Greenhouse\""), "got: {}", lines[1]);
+        assert!(lines[2].contains("off in the row for \"Greenhouse\""), "got: {}", lines[2]);
+        assert!(lines[3].contains("not on in \"Greenhouse\""), "got: {}", lines[3]);
 
         for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
             assert!(ins.expectation(st).is_none(), "step {i} names a project, which no reading settles");

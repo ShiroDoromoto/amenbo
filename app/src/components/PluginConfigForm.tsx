@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { PluginWantedSettingDto } from "../bindings/bindings";
-import { errText, t, tn } from "../core/i18n";
+import { errText, t } from "../core/i18n";
 import {
   NONE_SELECTED,
   setPluginConfig,
@@ -27,27 +27,23 @@ import {
  * to draw — which is why setting one asks for it twice: with nothing to compare against afterwards, the
  * second box is the only check on a typo.
  *
- * **Every value is one project's** (`AMB-D-434`), secret or not, so the form edits one project and says
- * which. That is not the gate: which project a plugin *fires* in is its enable row, while a setting is
- * something any plugin can carry in a project it is off in — so the project is named here whether or
- * not the plugin is on in it.
+ * **Every value is one project's** (`AMB-D-434`), secret or not, so the form edits one project — and
+ * **which one is the caller's to say** (`AMB-D-447`): it is drawn inside the row for a crossing, and
+ * that row has already answered. A picker of its own would be a second place to choose a project on a
+ * screen that has one, and the two would not agree.
  *
- * The author's schema comes from the install (it is the same wherever you stand) and what is *held*
- * is read for the named project, which is why the two arrive separately: until a project is picked
- * there is a form to draw and nothing to draw in it.
+ * That is not the gate: which project a plugin *fires* in is its enable row, while a setting is
+ * something any plugin can carry in a project it is off in — so a crossing has a form whether or not
+ * the plugin is on there.
  *
- * The project is the form's own, not the screen's (`AMB-D-412`) — a plugin is on in as many projects as
- * it is on in, and the one whose settings are being written is a separate question from all of them.
+ * The author's schema comes from the install (it is the same wherever you stand) and what is *held* is
+ * read for the named project, which is why the two arrive separately.
  */
-export function PluginConfigForm({ install, projects }: {
+export function PluginConfigForm({ install, projectId }: {
   install: PluginInstall;
-  /** The projects a value can be written for — the store's, for the picker. */
-  projects: { id: number; name: string }[];
+  /** The project whose values are being written — the crossing this form was opened inside. */
+  projectId: number;
 }) {
-  // Which project's values are on screen. A store with exactly one project answers it already: naming
-  // it would be asking a question with a single answer.
-  const [picked, setPicked] = useState<number | null>(null);
-  const projectId = picked ?? (projects.length === 1 ? projects[0].id : null);
   // Only what the user actually typed, keyed by field. Kept apart from the stored values so a refetch
   // never argues with a half-typed box, and so a cleared box reads as "clear this", not as "unchanged".
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -60,9 +56,7 @@ export function PluginConfigForm({ install, projects }: {
   const [done, setDone] = useState<"plugins.cfg.saved" | "plugins.cfg.cleared" | null>(null);
   const { fields } = usePluginConfig(install.name, projectId);
 
-  // With no project named there is nowhere to write: a setting belongs to a project and to nothing else.
-  const unnamedProject = projectId == null;
-  // What that project holds for a key — absent while no project is named, which is not "unset".
+  // What that project holds for a key — absent until the read lands, which is not "unset".
   const heldFor = (key: string): PluginConfigField | undefined => fields.find((f) => f.key === key);
   const stored = (f: PluginWantedSettingDto) => heldFor(f.key)?.value ?? "";
   const shown = (f: PluginWantedSettingDto) => edits[f.key] ?? stored(f);
@@ -76,13 +70,6 @@ export function PluginConfigForm({ install, projects }: {
       edit === "" ? f.defaultValue ?? "" : edit ?? heldFor(f.key)?.value ?? f.defaultValue ?? "";
     return answer === "" || answer === NONE_SELECTED ? [] : answer.split(",");
   };
-  // How many `required` settings this project holds no value for — what an enable in it is refused
-  // over. Zero while no project is named: nothing was read, so nothing is missing. A field carrying a
-  // default is never unanswered (`AMB-D-415`), which is the same reading the enable gate takes.
-  const declared = (key: string) => install.config.find((f) => f.key === key);
-  const missing = fields.filter(
-    (f) => f.required && declared(f.key)?.defaultValue == null && !held(f),
-  ).length;
 
   const run = async (op: () => Promise<unknown>, said: typeof done) => {
     setBusy(true);
@@ -128,32 +115,6 @@ export function PluginConfigForm({ install, projects }: {
 
   return (
     <div className="plugcfg">
-      <div className="pluggate">
-        <select
-          value={projectId ?? ""}
-          disabled={busy}
-          onChange={(e) => {
-            setPicked(e.target.value === "" ? null : Number(e.target.value));
-            setEdits({});
-            setDone(null);
-          }}
-          style={{ fontSize: "var(--fs-xs)" }}
-        >
-          <option value="">{t("plugins.cfg.pickProject")}</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-        {/* Why an enable in *this* project is refused (`AMB-D-356`), said where the values are — the
-            gate lists projects, and a count that named none of them would not say whose. */}
-        {missing > 0 && (
-          <span className="chip chip--warn">{tn("plugins.cfg.requiredUnset", missing)}</span>
-        )}
-        {unnamedProject && (
-          <div className="pluggate__note faint">{t("plugins.cfg.pickProjectNote")}</div>
-        )}
-      </div>
-
       {install.config.map((f) => (
         <div key={f.key} className="plugcfg__field">
           {/* A choice is a group of boxes, each with its own label, so the caption above it names the
@@ -174,11 +135,9 @@ export function PluginConfigForm({ install, projects }: {
             ) : f.defaultValue != null ? (
               <span className="chip">{t("plugins.cfg.default")}</span>
             ) : (
-              !unnamedProject && (
-                <span className={f.required ? "chip chip--warn" : "chip"}>
-                  {t("plugins.cfg.unset")}
-                </span>
-              )
+              <span className={f.required ? "chip chip--warn" : "chip"}>
+                {t("plugins.cfg.unset")}
+              </span>
             )}
           </label>
           {f.secret ? (
@@ -252,7 +211,7 @@ export function PluginConfigForm({ install, projects }: {
           {held(heldFor(f.key)) && (
             <button
               className="feed__action"
-              disabled={busy || unnamedProject}
+              disabled={busy}
               onClick={() => void onClear(f)}
             >
               {/* The same write either way — an empty value — said as what it does here: a field with a
@@ -264,7 +223,7 @@ export function PluginConfigForm({ install, projects }: {
       ))}
 
       <div className="pluggate">
-        <button className="btn" disabled={busy || unnamedProject} onClick={() => void onSave()}>
+        <button className="btn" disabled={busy} onClick={() => void onSave()}>
           {busy ? t("plugins.cfg.saving") : t("plugins.cfg.save")}
         </button>
         {done && !busy && (

@@ -1,6 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { PluginConfigForm } from "../components/PluginConfigForm";
-import { PluginGate } from "../components/PluginGate";
+import { PluginCrossings } from "../components/PluginCrossings";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
 import {
@@ -28,10 +27,10 @@ import { getSnapshot, subscribe } from "../core/snapshot";
 // whether or not the index that offered them is up. The cost is that nothing here shows what the catalog
 // knows (a description, an author) — those belong to the market's copy of the entry, not to the install.
 //
-// Everything a row can *do* is one control (`PluginGate`), the same one the market's detail draws, so a
-// switch cannot mean two different things on two screens. **The screen holds no project of its own**
-// (`AMB-D-412`): each row names the projects it is on in, so no single choice up here can decide what a
-// row is allowed to say.
+// Everything a plugin can *do* here is done at a crossing (`PluginCrossings`, `AMB-D-447`): one row per
+// project, carrying that project's switch and that project's settings. **The screen holds no project of
+// its own** (`AMB-D-412`): the rows name their own, so no single choice up here can decide what a row is
+// allowed to say.
 
 export function PluginInstalledScreen() {
   const projects = useSyncExternalStore(subscribe, () => getSnapshot().projects);
@@ -119,20 +118,19 @@ function removedParts(r: PluginRemoved): string {
 }
 
 /**
- * One installed plugin: its name, which switch it has, and that switch.
+ * One installed plugin: its name, and the crossings it has with the projects on this device.
  *
  * Installed and enabled are two facts (`AMB-D-351`), and a plugin that is here but fires nothing is the
- * ordinary state — so the row leads with the name and lets the gate say where it stands, rather than
- * badging "installed" on a screen where everything is.
+ * ordinary state — so the plugin's line leads with the name and lets the rows below say where it stands,
+ * rather than badging "installed" on a screen where everything is.
  *
  * **An open gate is not the same as a plugin that fires** (`AMB-D-359`). A build this amenbo cannot speak
  * to — a payload contract that is not ours, a version floor above us — is handed no event, whatever its
- * switch says. So an incompatible row wears that instead of the plain "enabled", and the gate below it
- * carries core's own reason: an enabled plugin sitting silent is exactly the state a badge has to name.
+ * switch says. So an incompatible plugin wears that instead of the plain "enabled", and the rows below it
+ * carry core's own reason: an enabled plugin sitting silent is exactly the state a badge has to name.
  *
- * The settings sit under the switch, and only for a plugin whose author declared any: a `required`
- * setting with no value is what an enable is refused for (`AMB-D-356`), so the way to fill it in belongs
- * beside the switch that will say no.
+ * The settings are not a section of their own: a value is one project's (`AMB-D-434`), so it is filled in
+ * inside that project's row, beside the switch that would be refused without it (`AMB-D-447`).
  *
  * **The build moves from here too** (`AMB-D-359`). The banner takes updates in bulk for whoever just wants
  * them; this row is the other half of the same offer, for choosing one plugin at a time — and it is where
@@ -149,7 +147,6 @@ function InstalledRow({ install, update, projects, onRemoved }: {
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState(false);
   // The badge is about the plugin, so it reads the whole list: on in some project, or on in none.
   const firing = firesAnywhere(install);
   // What the last build move did, said on the row it was about — the offer is gone by the time it is drawn.
@@ -219,15 +216,7 @@ function InstalledRow({ install, update, projects, onRemoved }: {
             </>
           ) : null}
         </div>
-        <PluginGate install={install} projects={projects} />
-        {install.config.length > 0 && (
-          <div className="pluggate">
-            <button className="feed__action" onClick={() => setSettings((s) => !s)}>
-              {settings ? t("plugins.cfg.hide") : t("plugins.cfg.open")}
-            </button>
-          </div>
-        )}
-        {settings && <PluginConfigForm install={install} projects={projects} />}
+        <PluginCrossings install={install} projects={projects} />
         {(update || install.rollback || moved) && (
           <div className="pluggate">
             {/* An offer that needs a decision is named instead of offered as a button that would only be

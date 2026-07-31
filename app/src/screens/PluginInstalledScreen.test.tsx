@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 // The installed screen answers "what does this machine hold, and is it firing" (`AMB-D-351`) without ever
-// reading the catalog. These tests hold it to that: every install is listed with its switch, the switch
-// moves from here through the same control the market draws, and a gate still waits to be told which
-// project it speaks for (`AMB-D-434`).
+// reading the catalog. These tests hold it to that: every install is listed, each project × plugin
+// crossing is a row of its own (`AMB-D-447`), and everything that crossing can do — its switch, its
+// settings — happens in that row, for the project it names and no other (`AMB-D-434`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NONE_SELECTED } from "../core/pluginInstalls";
 import type { PluginConfigField, PluginInstall } from "../core/pluginInstalls";
-import type { PluginWantedSettingDto } from "../bindings/bindings";
+import type { PluginProjectRowDto, PluginWantedSettingDto } from "../bindings/bindings";
 import type { PluginUpdate } from "../core/pluginUpdates";
 
 const hoisted = vi.hoisted(() => ({
@@ -108,10 +108,19 @@ import { t, tn, tf } from "../core/i18n";
 let container: HTMLDivElement;
 let root: Root;
 
+/** One crossing of a plugin with a project: off and holding nothing, until a test says otherwise. */
+const at = (project: number, over: Partial<PluginProjectRowDto> = {}): PluginProjectRowDto => ({
+  project,
+  enabled: false,
+  hasValue: false,
+  requiredUnset: false,
+  ...over,
+});
+
 /** One installed plugin; `on` names the projects it fires in, as rows of those crossings. */
 const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?: number[] }): PluginInstall => ({
   compatible: true,
-  projects: on.map((project) => ({ project, enabled: true, hasValue: false, requiredUnset: false })),
+  projects: on.map((project) => at(project, { enabled: true })),
   config: [],
   rollback: false,
   ...over,
@@ -155,10 +164,8 @@ const select = (el: HTMLSelectElement, value: string) => {
   el.value = value;
   el.dispatchEvent(new Event("change", { bubbles: true }));
 };
-/** The form's own select: which project's settings are being written. */
-const formProject = () => container.querySelector<HTMLSelectElement>(".plugcfg select")!;
-/** The gate's own select: picking a project on it is the enable. */
-const gatePicker = () => container.querySelector<HTMLSelectElement>(".pluggate select")!;
+/** One plugin's picker: what it offers is the projects it has no crossing with yet. */
+const gatePicker = (i = 0) => rows()[i].querySelector<HTMLSelectElement>("select")!;
 /** What a select offers, in order. */
 const options = (el: HTMLSelectElement) => Array.from(el.options).map((o) => o.textContent);
 /** Every badge on screen, in order — the row's own state, told apart from the prose around it. */
@@ -228,14 +235,18 @@ describe("what this machine holds", () => {
 });
 
 describe("moving a gate from the list", () => {
-  // Picking the project is the enable (`AMB-D-434`): turning a plugin on is itself the permission to
-  // run its code, so nothing is asked beside it.
-  it("enables the project picked from the row", async () => {
+  // Picking a project draws its crossing; the switch is in the row (`AMB-D-447`). A crossing has to exist
+  // before what an enable would be refused over can be read there, or filled in.
+  it("draws the crossing for the project picked, and enables from that row", async () => {
     hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
     hoisted.installs = [row({ name: "notify" })];
     render();
 
-    await act(async () => { select(gatePicker(), "2"); });
+    act(() => { select(gatePicker(), "2"); });
+    expect(chips()).toEqual(["beta"]);
+    expect(hoisted.gated, "picking writes nothing on its own").toEqual([]);
+
+    await act(async () => { button(t("plugins.enable"))!.click(); });
     expect(hoisted.gated).toEqual([{ name: "notify", projectId: 2, enabled: true }]);
   });
 
@@ -256,16 +267,20 @@ describe("moving a gate from the list", () => {
     hoisted.installs = [row({ name: "notify", on: [1, 3] })];
     render();
 
-    expect(chips()).toEqual([t("plugins.enabledChip"), "alpha", "gamma"]);
+    expect(chips()).toEqual([
+      t("plugins.enabledChip"),
+      "alpha", t("plugins.enabledChip"),
+      "gamma", t("plugins.enabledChip"),
+    ]);
     expect(options(gatePicker())).toEqual([t("plugins.gate.addProject"), "beta"]);
   });
 
-  // On in every project there is: there is nothing left to add, so nothing is offered.
+  // A crossing with every project there is: nothing is left to add, so nothing is offered.
   it("drops the picker when there is no project left to add", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [row({ name: "notify", on: [1] })];
     render();
-    expect(container.querySelector(".pluggate select")).toBeNull();
+    expect(container.querySelector("select")).toBeNull();
   });
 
   // The discard a disable makes is real and there is no other trace of it: those events are not
@@ -294,7 +309,11 @@ describe("moving a gate from the list", () => {
     render();
     expect(container.textContent).toContain("needs amenbo 9.0");
     expect(container.textContent).toContain(t("plugins.incompatibleChip"));
-    expect(gatePicker().disabled).toBe(true);
+
+    // The crossing still draws — a project can hold settings for a plugin that cannot run — and it is
+    // the switch there, not the picker, that is shut.
+    act(() => { select(gatePicker(), "1"); });
+    expect(button(t("plugins.enable"))!.disabled).toBe(true);
   });
 });
 
@@ -312,7 +331,7 @@ describe("a plugin this build cannot speak to", () => {
       }),
     ];
     render();
-    expect(chips()).toEqual([t("plugins.notFiring"), "alpha"]);
+    expect(chips()).toEqual([t("plugins.notFiring"), "alpha", t("plugins.enabledChip")]);
     // Core's own line, not a second judgement of our own.
     expect(container.textContent).toContain("payload v2, this build speaks v1");
   });
@@ -321,7 +340,7 @@ describe("a plugin this build cannot speak to", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [row({ name: "notify", on: [1] })];
     render();
-    expect(chips()).toEqual([t("plugins.enabledChip"), "alpha"]);
+    expect(chips()).toEqual([t("plugins.enabledChip"), "alpha", t("plugins.enabledChip")]);
   });
 });
 
@@ -329,28 +348,32 @@ describe("a plugin this build cannot speak to", () => {
 // nothing in it: a text box and a masked pair are the two kinds there are, every value is the project's
 // on screen, and all of them go out through the one write boundary.
 describe("the settings form", () => {
-  it("offers settings only for a plugin that declares any, and counts what an enable will refuse over", () => {
+  it("offers settings at a crossing only for a plugin that declares any, and marks the refusal there", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [
-      row({ name: "notify", config: [field({ key: "webhook", required: true })] }),
-      row({ name: "quiet" }),
+      row({
+        name: "notify",
+        config: [field({ key: "webhook", required: true })],
+        projects: [at(1, { requiredUnset: true })],
+      }),
+      row({ name: "quiet", on: [1] }),
     ];
     hoisted.held = { notify: { 1: [field({ key: "webhook", required: true })] } };
     render();
 
+    // The mark is the crossing's, and it is readable before the switch is pressed (`AMB-D-447`).
+    expect(rows()[0].textContent).toContain(t("plugins.cfg.requiredEmpty"));
     expect(button(t("plugins.cfg.open"))).toBeTruthy();
-    // The count is the form's: it is about one project's values, and the form is what names one.
-    act(() => { button(t("plugins.cfg.open"))!.click(); });
-    expect(container.textContent).toContain(tn("plugins.cfg.requiredUnset", 1));
-    // The row that declares nothing has nothing to open.
+    // The plugin that declares nothing has nothing to open, at any crossing.
     expect(rows()[1].textContent).not.toContain(t("plugins.cfg.open"));
   });
 
-  it("writes a text setting for the project on screen, and only what changed", async () => {
+  it("writes a text setting for the project whose row it is in, and only what changed", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
     hoisted.installs = [
       row({
         name: "notify",
+        on: [7],
         config: [field({ key: "events" }), field({ key: "room" })],
       }),
     ];
@@ -368,18 +391,16 @@ describe("the settings form", () => {
     ]);
   });
 
-  // A setting belongs to a project and to nothing else (`AMB-D-434`), so with none named there is
-  // nowhere to write and the form says so rather than guessing one.
-  it("waits for a project before it will write a setting", async () => {
+  // A setting belongs to a project and to nothing else (`AMB-D-434`), and the row it is opened in has
+  // already said which (`AMB-D-447`) — so the form asks nobody a second time.
+  it("writes for the project whose row it was opened in, without asking again", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }, { id: 8, name: "beta" }];
-    hoisted.installs = [row({ name: "notify", config: [field({ key: "events" })] })];
+    hoisted.installs = [row({ name: "notify", on: [8], config: [field({ key: "events" })] })];
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
 
-    expect(container.textContent).toContain(t("plugins.cfg.pickProjectNote"));
-    expect(button(t("plugins.cfg.save"))!.disabled).toBe(true);
+    expect(container.querySelector(".plugcfg select"), "no picker of its own").toBeNull();
 
-    act(() => { select(formProject(), "8"); });
     act(() => { type(boxes()[0], "deploy"); });
     await act(async () => { button(t("plugins.cfg.save"))!.click(); });
 
@@ -391,7 +412,7 @@ describe("the settings form", () => {
   // A secret is written and never read back, so the second box is the only check on a typo there is.
   it("asks for a secret twice, and writes nothing when the two do not match", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", config: [field({ key: "token", secret: true })] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: [field({ key: "token", secret: true })] })];
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
 
@@ -421,7 +442,7 @@ describe("the settings form", () => {
       ],
       defaultValue: "task.done",
     });
-    hoisted.installs = [row({ name: "notify", config: [events] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: [events] })];
     hoisted.held = { notify: { 7: [events] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -448,7 +469,7 @@ describe("the settings form", () => {
       options: [{ value: "task.done", label: "Done" }],
       value: "task.done",
     });
-    hoisted.installs = [row({ name: "notify", config: [events] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: [events] })];
     hoisted.held = { notify: { 7: [events] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -472,7 +493,7 @@ describe("the settings form", () => {
       value: NONE_SELECTED,
       state: "none",
     });
-    hoisted.installs = [row({ name: "notify", config: [events] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: [events] })];
     hoisted.held = { notify: { 7: [events] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -487,25 +508,30 @@ describe("the settings form", () => {
     expect(boxes()[0].checked).toBe(true);
   });
 
-  // A field the author put a default behind is never unanswered (`AMB-D-415`), so it is not one of the
-  // settings an enable is refused over — the count has to read it the way the gate does.
-  it("does not count a required setting that carries a default as missing", () => {
+  // A crossing the install says nothing about — one just drawn from the picker — takes its mark from the
+  // author's schema, and reads it the way the enable gate does: a field the author put a default behind is
+  // never unanswered (`AMB-D-415`), so it is not something an enable would be refused over.
+  it("marks a fresh crossing only over a required setting with no default behind it", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
-    const withDefault = field({ key: "events", required: true, defaultValue: "task.done" });
     hoisted.installs = [
-      row({ name: "notify", config: [withDefault, field({ key: "webhook", required: true })] }),
+      row({
+        name: "notify",
+        config: [field({ key: "events", required: true, defaultValue: "task.done" })],
+      }),
+      row({ name: "hooks", config: [field({ key: "webhook", required: true })] }),
     ];
-    hoisted.held = { notify: { 1: [withDefault, field({ key: "webhook", required: true })] } };
     render();
-    act(() => { button(t("plugins.cfg.open"))!.click(); });
+    act(() => { select(gatePicker(0), "1"); });
+    act(() => { select(gatePicker(1), "1"); });
 
-    expect(container.textContent).toContain(tn("plugins.cfg.requiredUnset", 1));
+    expect(rows()[0].textContent).not.toContain(t("plugins.cfg.requiredEmpty"));
+    expect(rows()[1].textContent).toContain(t("plugins.cfg.requiredEmpty"));
   });
 
   // Clearing is the same door as setting: an empty value is "not provided", which is what `required` reads.
   it("clears a held setting with an empty value", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", config: [field({ key: "events" })] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: [field({ key: "events" })] })];
     hoisted.held = { notify: { 7: [field({ key: "events", value: "push" })] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -536,7 +562,10 @@ describe("moving one plugin's build from its row", () => {
   // A hold is not a button: the settings the new schema wants are opened from this same row, which is why
   // the offer is named here rather than sending anyone elsewhere.
   it("names an offer that needs a decision instead of offering it", () => {
-    hoisted.installs = [row({ name: "notify", config: [field({ key: "token", required: true })] })];
+    hoisted.projects = [{ id: 1, name: "alpha" }];
+    hoisted.installs = [
+      row({ name: "notify", on: [1], config: [field({ key: "token", required: true })] }),
+    ];
     hoisted.updates = [offer({ name: "notify", hold: "settings", missing: ["token"] })];
     render();
 

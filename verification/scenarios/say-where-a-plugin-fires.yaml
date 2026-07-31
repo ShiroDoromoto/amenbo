@@ -6,14 +6,15 @@
 # itself either way. What catches it is a row that names more than one project, and then names one
 # fewer.
 #
-# Hence a road written for the screen alone. A row names every project wherever it is read, but a
+# Hence a road written for the screen alone. The rows name every project wherever they are read, but a
 # terminal moves the switch belonging to the folder it stands in — there is no flag for another one —
-# so a road written for it can only ever put one name on the row. Picking a project beside the row is
-# where a second one comes from, which makes the screen the only place the list can be watched growing
-# and the only place shutting one can be seen leaving the other alone.
+# so a road written for it can only ever put one name on the list. Picking a project beside the plugin
+# is where a second one comes from, which makes the screen the only place the list can be watched
+# growing and the only place shutting one can be seen leaving the other alone.
 #
-# Picking **is** the enable: turning a plugin on is itself the permission to run its code, so there is
-# no second question under the picker, and no step here answers one.
+# The switch is in the row and not in the picker: picking draws the crossing, and turning the plugin on
+# there is itself the permission to run its code, so there is no third question and no step here answers
+# one.
 #
 # What the road wants in front of it is a device holding the two projects named below, with the
 # official `worktree` plugin installed and its gate shut everywhere — stand the projects and install
@@ -23,15 +24,15 @@
 #
 # Every line is closed by an eye rather than by a reading. What each one names is a project, and the
 # projects run down the side of every screen: a reading that finds the name cannot say it came from
-# the row, and one that misses it would be reading a screen the row is not even on.
+# the row, and one that misses it would be reading a screen the rows are not even on.
 id: say-where-a-plugin-fires
 title: A plugin's switch is a project's — the row names every project it fires in, and shutting one leaves the others firing
 description: >
-  Start with the plugin installed and firing nowhere, and turn it on in one project by picking that
-  project beside the row. Turn it on in a second, and read the row naming both — which is the whole of
-  what a truth value cannot say. Then shut the first project's gate and read the row twice: the
-  project just shut is gone from it, and the other one is still there, still firing, untouched by a
-  switch moved somewhere else.
+  Start with the plugin installed and firing nowhere, and turn it on in one project by drawing that
+  project's row and pressing the switch in it. Turn it on in a second, and read both rows saying so —
+  which is the whole of what a truth value cannot say. Then shut the first project's gate and read the
+  two rows again: the one just shut offers to turn the plugin back on, and the other is still firing,
+  untouched by a switch moved somewhere else.
 steps_gui:
   # Off everywhere is a state the row has to be able to say, or the readings after it would pass over
   # a row that names every project on the device.

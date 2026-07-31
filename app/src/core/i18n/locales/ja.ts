@@ -337,9 +337,9 @@ export const ja: Translation = {
     "plugins.installNote": "入れただけでは動きません。実行するには有効化が要ります。",
     "plugins.landedInert": "入りました。まだ何も動きません。", "plugins.turnItOn": "有効にしに行く",
     "plugins.installed": "インストール済み", "plugins.enabledChip": "有効",
-    "plugins.disable": "無効にする",
-    "plugins.gate.onIn": "有効なプロジェクト", "plugins.gate.offEverywhere": "どこでも無効",
-    "plugins.gate.addProject": "プロジェクトを選んで有効にする",
+    "plugins.enable": "有効にする", "plugins.disable": "無効にする",
+    "plugins.gate.offEverywhere": "どこでも無効",
+    "plugins.gate.addProject": "プロジェクトを足す",
     "plugins.incompatible": "この版の amenbo では動きません",
     "plugins.droppedQueued.other": "未配達の {n} 件を捨てました。無効な間の出来事は届かず、有効に戻しても今からです。",
     // the installed screen (the "manage what you have" tab)
@@ -350,9 +350,7 @@ export const ja: Translation = {
     "plugins.emptyInstalledNote": "マーケットから入れられます。",
     // the settings form, generated from the schema the plugin's author declared
     "plugins.cfg.open": "設定", "plugins.cfg.hide": "設定を閉じる",
-    "plugins.cfg.requiredUnset.other": "必須の未入力 {n} 件",
-    "plugins.cfg.pickProject": "プロジェクトを選択",
-    "plugins.cfg.pickProjectNote": "設定を書くプロジェクトを選んでください。",
+    "plugins.cfg.requiredEmpty": "必須の設定が空", "plugins.cfg.filled": "設定あり",
     "plugins.cfg.required": "必須", "plugins.cfg.unset": "未入力", "plugins.cfg.held": "設定済み",
     "plugins.cfg.default": "既定", "plugins.cfg.noneChosen": "どれも選ばない",
     "plugins.cfg.restoreDefault": "既定に戻す",

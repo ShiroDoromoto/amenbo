@@ -212,7 +212,9 @@ steps_cli:
 # plugin installed in the store the build under test opens, its manifest declaring `events` as a choice
 # of `task.done` / `task.rejected` / `task.blocked` with `task.done` standing as the default, and nothing
 # answered for it yet. Stand that with `devtool devgui cli` and the same declaration the road above
-# makes, open the plugin's settings on the installed plugins screen, and start the run there. Every step
+# makes. Then, on the installed plugins screen, open the plugin's settings inside the row for the project
+# you are standing in — adding that project from the picker beside the plugin if it has no row yet, since
+# a value belongs to a crossing and the row is the one that names it — and start the run there. Every step
 # moves the screen, so drive it stepped (`--step`) and carry out each move at the hand-back before it.
 #
 # Every line is closed by an eye rather than by a reading. What a form says here is which of its boxes

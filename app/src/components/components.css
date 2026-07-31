@@ -560,8 +560,7 @@ button.feed__target:hover { color: var(--c-accent); }
 
 /* ---------- the standing row for folders whose AI is not started on amenbo ---------- */
 /* It sits on the project's surface rather than across the top of the app, so it wears the surface's own
-   colours — the warning band is for what a startup check found, and this is work left. There is no close
-   button: it goes when the last folder behind it is wired. */
+   colours — the warning band is for what a startup check found, and this is work left. */
 .agenthookrow {
   display: flex; flex-direction: column; gap: var(--s-2);
   margin: var(--s-4) var(--s-5) 0; padding: var(--s-4);
@@ -586,7 +585,10 @@ button.feed__target:hover { color: var(--c-accent); }
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .agenthookrow__pick { align-self: flex-start; padding: var(--s-1) var(--s-2); font-size: var(--fs-sm); }
-.agenthookrow .btn { align-self: flex-start; }
+/* Copy, no, close — in that order, and wrapping rather than shrinking, since the row is narrow enough for
+   three buttons to meet the edge in a language that spells them out. */
+.agenthookrow__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.agenthookrow__error { font-size: var(--fs-sm); color: var(--c-danger); }
 
 /* ---------- pager (list/smart-view windowing) ---------- */
 .pager { display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: var(--s-3); }
@@ -694,15 +696,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .hookconsent__action--never { color: var(--c-text-muted); }
 .hookconsent__action:disabled { opacity: 0.5; cursor: default; }
 .hookconsent__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-3); }
-/* The folders one question covers: the text is one, and these are the paths it goes in. */
-.hookconsent__folders { font-size: var(--fs-xs); color: var(--c-text-muted); word-break: break-all; margin-bottom: var(--s-4); }
-.hookconsent__folders div + div { margin-top: var(--s-1); }
-/* Which tool the text is for, where the folders do not say. Sits above the sentence it changes. */
-.hookconsent__pick { display: block; margin-bottom: var(--s-3); padding: var(--s-2); font: inherit; font-size: var(--fs-xs); color: var(--c-text); background: var(--c-surface-2); border: 1px solid var(--c-border); border-radius: var(--r-md); }
-/* The text the copy button hands over, shown rather than hidden behind it: it asks an AI of the reader's
-   to edit a file of theirs, so it is read before it is handed on. Capped and scrolled, so the modal keeps
-   its buttons on screen however long the text is. */
-.hookconsent__request { max-height: 14em; overflow: auto; margin: var(--s-2) 0 var(--s-3); padding: var(--s-3); background: var(--c-surface-2); border-radius: var(--r-md); font-size: var(--fs-xs); font-family: var(--font-mono); white-space: pre-wrap; word-break: break-word; }
 
 /* ---------- the classification management panel (DimensionManager) ---------- */
 .dimmgr { width: min(560px, 100%); max-height: 82vh; display: flex; flex-direction: column; gap: var(--s-4); }

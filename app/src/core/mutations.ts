@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { t, tf, type CmdError, type CmdErrorPart } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AgentHookOfferDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 
 /**
@@ -604,28 +604,10 @@ export async function answerHookOffer(yes: boolean): Promise<void> {
 }
 
 /**
- * The one question about starting this project's AI on `amenbo agent` at session start, or null when there
- * is none (core's `harness::reconcile`, over the project's bound folders taken together). `canAsk` is the
- * one-question-at-a-time rule: with the lint's modal already up this run it goes false, and the probe only
- * adopts a wiring already on disk — nothing is asked and nothing about the question is recorded, so it
- * comes round the next time the project is opened.
- *
- * Called when a project is opened (`AMB-D-459`), and it is a command rather than a read for
- * `fetchHookOffer`'s reason: the same call is what adopts a project somebody wired by hand. Outside Tauri
- * there is never a question.
- */
-export async function fetchAgentHookOffer(
-  projectId: number,
-  canAsk: boolean,
-): Promise<AgentHookOfferDto | null> {
-  if (!inTauri()) return null;
-  return await invoke<AgentHookOfferDto | null>("agent_hook_offer", { projectId, canAsk });
-}
-
-/**
- * What one project still has to wire, grouped by harness — the standing row on the project screen
- * (`AMB-D-459`). Each entry carries the tool's request once and the folders of this project waiting for
- * it, so the text goes up a single time however many folders are behind it.
+ * What one project still has to wire, grouped by harness — the standing row on the project screen, which
+ * is the GUI's only face for this (`AMB-D-459`, `AMB-D-460`). Each entry carries the tool's request once
+ * and the folders of this project waiting for it, so the text goes up a single time however many folders
+ * are behind it.
  *
  * Empty once every folder is wired, which is how the row goes away; empty as well where the project
  * answered no, since core keeps a refusal silent. Refetched when the project changes, not on every store
@@ -638,13 +620,13 @@ export async function fetchAgentHookProjectWiring(projectId: number): Promise<Ag
 }
 
 /**
- * Record what this **project** answered about starting its AI on amenbo. The project comes from the offer:
- * the answer changes with the place, so unlike the lint's it is not the device's.
+ * Record what this **project** answered about starting its AI on amenbo. It takes a project rather than
+ * the device: the answer changes with the place, so unlike the lint's it is not one answer for everything.
  *
- * **Call it only when there is an answer** — a dismissed modal calls nothing and leaves the project
- * unanswered, which is the same third value `answerHookOffer` has no room for. A yes wires nothing: amenbo
- * writes no provider settings file, so what a yes buys is the text, and the banner keeps reporting until
- * the paste lands.
+ * **Call it only when there is an answer.** On this surface that means the row's "no" — the close button
+ * records nothing and leaves the project unanswered, which is the same third value `answerHookOffer` has
+ * no room for (`AMB-D-460`). A yes wires nothing either: amenbo writes no provider settings file, so what
+ * a yes buys is the text, and the row keeps reporting until the paste lands.
  */
 export async function answerAgentHookOffer(projectId: number, yes: boolean): Promise<void> {
   if (!inTauri()) return;
@@ -653,8 +635,9 @@ export async function answerAgentHookOffer(projectId: number, yes: boolean): Pro
 
 /**
  * What this project answered about starting its AI on amenbo — true, false, or null where it has never
- * been asked. The third value is the one the project settings screen exists to show: a refusal reads
- * the same as an unanswered project everywhere else, because both are silent.
+ * been asked. The third value is the one the project settings screen exists to show: a refusal is the
+ * answer that takes the standing row away, and an unanswered project looks no different once the wiring
+ * has landed.
  *
  * It says what was answered and nothing about the wiring, which is read from the folder every time
  * (`fetchAgentHookProjectWiring`). Outside Tauri there is no record to read.
@@ -665,8 +648,8 @@ export async function fetchAgentHookConsent(projectId: number): Promise<boolean 
 }
 
 /**
- * Forget this project's answer, putting it back to never having been asked, so the question is put again
- * the next time the project is opened. This is the only way back from a no.
+ * Forget this project's answer, putting it back to never having been asked, so the standing row comes
+ * back the next time the project is opened. This is the only way back from a no.
  *
  * Clearing a project that never answered is the state asked for, not an error.
  */

@@ -15,7 +15,6 @@ import { SettingsScreen } from "../screens/SettingsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { OnboardingSetup } from "../screens/OnboardingSetup";
 import { HookConsentModal } from "../screens/HookConsentModal";
-import { AgentHookConsentModal } from "../screens/AgentHookConsentModal";
 import { NewProjectScreen } from "../screens/NewProjectScreen";
 import { ProjectSettingsScreen } from "../screens/ProjectSettingsScreen";
 import { TaskDetailPane } from "../screens/TaskDetailPane";
@@ -80,24 +79,7 @@ export function AppShell() {
   // waits for this rather than talking over it — and reads the disk only once the answers have been written to it.
   // The modal may report done more than once; latching a boolean is what makes that harmless.
   const [hooksAsked, setHooksAsked] = useState(false);
-  // Whether the lint modal actually put its question this startup. One question at a time is a rule about the
-  // run and not about the dialog, so the session-start hook's question stands down when this one spoke — the
-  // same rule the CLI keeps with its `lint_asked`. Its banner is not held back by it: what was withheld is the
-  // question, and the standing report was never the thing saying it twice.
-  const [lintDidAsk, setLintDidAsk] = useState(false);
-  const onHooksAsked = useCallback((didAsk: boolean) => {
-    setLintDidAsk(didAsk);
-    setHooksAsked(true);
-  }, []);
-  // The same latch one question further down the queue: the standing row about a project's unwired folders
-  // waits for the question about that project, which in turn waits for the lint's modal (`AMB-D-459`).
-  //
-  // It holds **which project** the question is over for, not a yes/no, and the modal names that project
-  // rather than it being read off the screen. The question follows the reader from one project to the next,
-  // so a boolean latched at the first would let the row read the disk ahead of the question everywhere
-  // after — and a refusal recorded there is exactly what silences it.
-  const [agentHookAskedFor, setAgentHookAskedFor] = useState<number | null>(null);
-  const onAgentHookAsked = useCallback((project: number | null) => setAgentHookAskedFor(project), []);
+  const onHooksAsked = useCallback(() => setHooksAsked(true), []);
 
   const lang = useSyncExternalStore(subscribe, currentLang);
 
@@ -365,7 +347,6 @@ export function AppShell() {
               onSelectDecision={selectDecision}
               onComposeTask={openCompose}
               onOpenSettings={() => navTo({ type: "projectSettings", id: nav.id })}
-              hookQuestionDone={agentHookAskedFor === Number(nav.id)}
             />
           )}
           {nav.type === "projectSettings" && (
@@ -454,18 +435,6 @@ export function AppShell() {
       {/* First-run setup owns the screen while it is up: the hooks question is asked about repositories, which
           is not what someone still choosing a language came here for, and it keeps its turn until then. */}
       {!needsSetup && <HookConsentModal onDone={onHooksAsked} />}
-      {/* Next in the one-question queue: it fetches nothing until the lint's modal is done (`turn`), and puts
-          no question at all on a startup where that one spoke (`canAsk`) — the probe still runs, so a project
-          somebody wired by hand is adopted without anyone being asked. What raises it is the project on
-          screen (`AMB-D-459`), so it follows the reader from one project to the next and asks nowhere else. */}
-      {!needsSetup && (
-        <AgentHookConsentModal
-          projectId={nav.type === "project" ? Number(nav.id) : null}
-          turn={hooksAsked}
-          canAsk={!lintDidAsk}
-          onDone={onAgentHookAsked}
-        />
-      )}
     </div>
     </RefNavProvider>
   );

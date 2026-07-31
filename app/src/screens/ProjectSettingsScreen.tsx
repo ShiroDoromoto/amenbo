@@ -316,16 +316,17 @@ function FoldersSection({ projectId }: { projectId: number }) {
 }
 
 /**
- * What this project answered when it was asked to have its AI start on amenbo, and the way back out of
- * that answer (`AMB-D-459`).
+ * What this project answered about starting its AI on amenbo, and the way back out of that answer
+ * (`AMB-D-459`, `AMB-D-460`).
  *
- * The answer is put once, when the project is opened, and never again — which leaves a refusal with no
- * way back, since a no is silent from then on. This is that way back: clearing drops the record, and
- * the project returns to never having been asked, so the next opening puts the question again.
+ * A no is silence from then on: the standing row it ends is the surface the answer is given on, so once
+ * it is given there is nothing left on screen to take it back with. This is that way back — clearing
+ * drops the record, the project returns to never having been answered, and opening it again brings the
+ * row back.
  *
- * **Three states, not two.** Unanswered is not a no: it is what the question is put from, and a screen
- * that showed only yes/no would report a refusal from a project that has simply never been opened since
- * the feature arrived. Clearing is offered only where there is an answer to clear.
+ * **Three states, not two.** Unanswered is not a no: it is what a project starts in, and a screen that
+ * showed only yes/no would report a refusal from a project that has simply never said anything. Clearing
+ * is offered only where there is an answer to clear.
  *
  * What is shown is the record alone. Whether the wiring is actually in the folder is read from disk
  * every time and reported by the standing row, not from here — a yes buys the text, never the wiring.

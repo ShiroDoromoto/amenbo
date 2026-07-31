@@ -38,52 +38,6 @@ export type ActorDto = { name: string, kind: "human" | "ai",
 avatar?: string, };
 
 /**
- * The question about the AI harness's session-start hook, waiting to be put about one project
- * (`AMB-D-440`, `AMB-D-459`) — the GUI's half of the CLI's `offer_agent_hook`.
- *
- * Unlike the lint's [`HookOfferDto`], this one names a project: the answer is **per project** (whether an
- * AI is trusted to be started on amenbo here is a question whose answer changes with the place), so the
- * surface has to say which one it is about and hand the answer back with it.
- *
- * **One question carries every folder.** The text is the same wherever it is pasted — what differs is the
- * path it is pasted in — so the folders travel as a list beside a single set of tools, and nothing is
- * stacked per folder (`AMB-D-459`).
- */
-export type AgentHookOfferDto = { 
-/**
- * The project the answer is recorded against. `number` on the TS side, as every other id the GUI
- * hands back is (the default `bigint` would not survive the round trip through `invoke`).
- */
-projectId: number, 
-/**
- * Its name, so the question can say which project it is about.
- */
-projectName: string, 
-/**
- * The project's bound folders, which are also the places the text is to be pasted in. Never empty:
- * a question is only raised where nothing in the project is wired, so every folder here is one the
- * wiring is missing from.
- */
-dirs: Array<string>, 
-/**
- * What this build is called on the command line, for the same reason [`HookOfferDto::cmd`] carries
- * it — the dev channel answers `amenbo-dev`.
- */
-cmd: string, 
-/**
- * Whether this is the one re-ask (a standing yes with nothing wired), which is worded differently:
- * the occasion is not a fresh reader but a wiring that never landed.
- */
-again: boolean, 
-/**
- * The tools to put in front of the reader, each with the text that asks for the wiring: the ones
- * these folders point at, or the whole catalog where they point at none
- * ([`amenbo_core::harness::offered`]). Never empty — the yes has to hand over something, and the
- * folder that traces nothing is exactly the one a reader has just said yes in (`AMB-D-459`).
- */
-offered: Array<AgentHookToolDto>, };
-
-/**
  * One AI harness a folder could start its session on `amenbo agent` with, and the text that would do it
  * ([`amenbo_core::harness`]).
  *

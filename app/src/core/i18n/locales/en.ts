@@ -89,7 +89,7 @@ const ui = {
   "projset.folderLegacyPointer": "This folder's .amenbo is in the old pre-migration format, so which project it names can't be read. Re-link to rewrite it in the current format.",
   "projset.folderNoPointer": "not linked", "projset.folderNoPointerHint": "This folder has no .amenbo, so an AI launched here does not resolve to this project. Re-link to write the pointer back.",
   "projset.harness": "Starting your AI on amenbo",
-  "projset.harnessHint": "What this project answered when it was asked to have its AI run this work on amenbo. Clearing the answer puts the question back the next time you open this project.",
+  "projset.harnessHint": "What this project answered when it was asked to have its AI run this work on amenbo. Clearing the answer puts the notice back the next time you open this project.",
   "projset.harnessAnswer": "Answer",
   "projset.harnessYes": "Yes",
   "projset.harnessNo": "No",
@@ -433,32 +433,16 @@ const ui = {
   "hookSetup.unwired": "{slots}: no hook there. `{cmd}` installs it.",
   "hookRestored.title": "amenbo restored its lint block",
   "hookRestored.slots": "{slots}: the block had been changed or removed — restored it to the current version.",
-  "agentHook.title": "Have your AI run this folder's work on amenbo?",
-  "agentHook.why": "We hand you a text. Give it to your AI to edit {tool}'s settings, and your AI reads how to work with amenbo at the start of every session and records the work as tasks without being asked.",
-  "agentHook.again": "You said yes to this before, and the setting is still not in place — a clone may not have carried it.",
-  "agentHook.where": "{project} — {dir}",
-  // Stands in for the tool's name where the folder does not settle on one, so the sentence above reads the
-  // same either way.
-  "agentHook.someTool": "your tool",
-  "agentHook.yes": "Give me the text",
-  "agentHook.no": "No",
-  "agentHook.scope": "We ask this once.",
-  "agentHook.scopeAgain": "We will not ask a third time.",
-  "agentHook.hint": "`{cmd} agent-hook snippet <tool>` prints it whenever you want it.",
-  "agentHookSetup.title": "One step is left before your AI keeps this work in amenbo",
-  "agentHookSetup.unwired": "{tool}: give the text below to your AI to edit {file}, and your AI reads how to work with amenbo at the start of every session and records the work as tasks.",
-  "agentHookSetup.pick": "Which tool do you use in this folder?",
-  "agentHookSetup.copy": "Copy the text",
-  "agentHookSetup.copied": "Copied",
-  // The standing row on a project's own screen. Its own keys rather than the banner's: the banner speaks
-  // for the device and names a project per row, this speaks for one project and names its folders — and
-  // the banner is on its way out (`AMB-D-459`), which a shared key would take these with.
+  // The standing row on a project's own screen — the whole of what the GUI says about the session-start
+  // hook. It speaks for one project and names that project's folders, and the last of its buttons is the
+  // "no" that ends it.
   "agentHookWiring.title": "Folders here that still start their AI without amenbo",
   "agentHookWiring.what": "{tool}: give the text below to your AI to edit {file}, and your AI reads how to work with amenbo at the start of every session and records the work as tasks.",
   "agentHookWiring.folders": "Once in each of these folders:",
   "agentHookWiring.pick": "Which tool do you use here?",
   "agentHookWiring.copy": "Copy the text",
   "agentHookWiring.copied": "Copied",
+  "agentHookWiring.no": "No",
   "app.crashTitle": "Something went wrong",
   "app.crashHint": "The screen failed to render. Reload to recover — your data is safe.",
   "app.crashReload": "Reload",

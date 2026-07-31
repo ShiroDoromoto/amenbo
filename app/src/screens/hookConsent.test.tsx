@@ -26,9 +26,6 @@ const hoisted = vi.hoisted(() => ({
   fetchFails: false,
   /** How many times the modal reported it has nothing left to ask (what lets the setup banner take its turn). */
   done: 0,
-  /** What it reported alongside: whether a question was actually put this run (what lets the next question in
-   *  the queue stand down for this startup). */
-  didAsk: [] as boolean[],
 }));
 
 vi.mock("../core/mutations", () => ({
@@ -58,12 +55,7 @@ function offer(over: Partial<HookOfferDto> = {}): HookOfferDto {
 
 async function render() {
   await act(async () => {
-    root.render(createElement(HookConsentModal, {
-      onDone: (didAsk: boolean) => {
-        hoisted.done += 1;
-        hoisted.didAsk.push(didAsk);
-      },
-    }));
+    root.render(createElement(HookConsentModal, { onDone: () => { hoisted.done += 1; } }));
   });
 }
 
@@ -94,7 +86,6 @@ beforeEach(() => {
   hoisted.failWith = null;
   hoisted.fetchFails = false;
   hoisted.done = 0;
-  hoisted.didAsk = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -203,19 +194,6 @@ describe("the lint hook consent modal", () => {
       expect(hoisted.done).toBeGreaterThan(0);
     });
 
-    // One question at a time is a rule about the **run**, not about the dialog: the session-start hook's
-    // question stands down for this startup when this one spoke, and stands down for nothing when it did not.
-    it("says whether a question was actually put, so the next one knows whether to stand down", async () => {
-      hoisted.offer = offer();
-      await render();
-      await click(t("hooks.yes"));
-      expect(hoisted.didAsk.every((asked) => asked), "it asked").toBe(true);
-    });
-
-    it("says no question was put when there was nothing to ask", async () => {
-      await render();
-      expect(hoisted.didAsk.some((asked) => asked), "nothing was asked").toBe(false);
-    });
 
     // The failed answer left the question up, so the banner must keep waiting rather than warn behind the modal.
     it("does not say so when an answer failed and the question is still up", async () => {

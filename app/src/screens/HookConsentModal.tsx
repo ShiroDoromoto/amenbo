@@ -27,26 +27,17 @@ import type { HookOfferDto } from "../bindings/bindings";
  * never one. It is what lets the setup banner wait its turn: the banner reports what is still unwired,
  * and asking someone about the hooks while warning them about the hooks says one thing twice. A failure to
  * fetch counts as done, so a surface that could not ask does not also mute the one that only tells.
- *
- * Its argument says whether a question was actually put, which the next question in the queue needs: one
- * question at a time is a rule about the run, not about the dialog, so the session-start hook's question
- * (`AgentHookConsentModal`) stands down for this startup when this one spoke.
  */
-export function HookConsentModal({ onDone }: { onDone?: (didAsk: boolean) => void }) {
+export function HookConsentModal({ onDone }: { onDone?: () => void }) {
   const [offer, setOffer] = useState<HookOfferDto | null>(null);
   const [asked, setAsked] = useState(false);
-  const [didAsk, setDidAsk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     fetchHookOffer()
-      .then((o) => {
-        if (!alive) return;
-        if (o) setDidAsk(true); // Latched: the question was put, whatever became of it afterwards.
-        setOffer(o);
-      })
+      .then((o) => alive && setOffer(o))
       .catch(() => {}) // A failure to detect is swallowed: we ask nothing rather than block the app.
       .finally(() => alive && setAsked(true));
     return () => {
@@ -57,8 +48,8 @@ export function HookConsentModal({ onDone }: { onDone?: (didAsk: boolean) => voi
   // Reported once the fetch has landed, so "nothing to ask" is never confused with "not asked yet". It can
   // fire more than once (the question leaving, then a re-render), so `onDone` must be idempotent.
   useEffect(() => {
-    if (asked && !offer) onDone?.(didAsk);
-  }, [asked, offer, didAsk, onDone]);
+    if (asked && !offer) onDone?.();
+  }, [asked, offer, onDone]);
 
   // Dropping the question is the whole of "not now": nothing is called, so nothing is recorded, and the
   // next startup finds it waiting.

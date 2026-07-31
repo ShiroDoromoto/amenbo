@@ -1,30 +1,42 @@
 {
+  "agent": {
+    "commands": [
+      {
+        "cmd": "start <task-id>",
+        "does": "Cuts a worktree for the task outside the repository, and returns the line to cd into it"
+      },
+      {
+        "cmd": "finish <task-id>",
+        "does": "Removes that worktree and its branch, once the work has been merged"
+      }
+    ],
+    "when": "Starting work on a task that will produce commits, and wanting it isolated"
+  },
   "assets": {
     "linux-arm64": {
-      "checksum": "sha256:a3b1ae53a6650e05673783d9d9e686b03c31582d488639a5af667f87e90988a5",
-      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-worktree/releases/download/v1/worktree-v1-linux-arm64.tar.gz"
+      "checksum": "sha256:56548a3f5a1211eef50afa341092936c04404bab6968ea3748904cdd66f39a57",
+      "signature": "untrusted comment: signature from minisign secret key\nRUSgV8uCt8tyYgGjSMYIookvjS1kBcoTkqFhnw/COERv7piWqzX4DbyvlSHfKpYRvrgBBIEntJ89MPsJac799Q8EXG/VfXZk9wY=\ntrusted comment: timestamp:1785464718\tfile:worktree-linux-arm64\thashed\nYKU3Xn6tIzyNDL/IWgQPqaJf8caIc0twiFpenaGu7TsFXpYQq1Hu2GTcXQt9HwI6Z6KrjWrAZMK3gSwqsenHDg==\n",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-worktree/releases/download/v3/worktree-v3-linux-arm64.tar.gz"
     },
     "linux-x64": {
-      "checksum": "sha256:f74ec13fc4341dba8bb64071651f86fb374bb932e0f15a8799bed8de014c06ac",
-      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-worktree/releases/download/v1/worktree-v1-linux-x64.tar.gz"
+      "checksum": "sha256:21eba8722b09ff637433de60497609e45266de710bc19103cc0365e98fe4bf26",
+      "signature": "untrusted comment: signature from minisign secret key\nRUSgV8uCt8tyYtD3nE9MoopCdqiASQxY2+KFMU0PCiny8qMOA/seR+yhv7sJnkV2Y8bxTnGAoEgdJ6zm1pACWKPpawoWGdyiAQM=\ntrusted comment: timestamp:1785464719\tfile:worktree-linux-x64\thashed\n6aox9koK9Ry2FXQLXO7UGLfgEW+EeD+mFvIBj4z/+qlJ7Garq/xOfZTlQTbrvOfRyqPxt7rgIRRzb+BDv8kkCw==\n",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-worktree/releases/download/v3/worktree-v3-linux-x64.tar.gz"
     },
     "macos": {
-      "checksum": "sha256:a6c1027eb54606d4f5e67176faeefefff3b64161b03fd76faff5908e093bf07c",
-      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-worktree/releases/download/v1/worktree-v1-macos-universal.tar.gz"
+      "checksum": "sha256:7336210a8e65bad9a95da74c9507ae2a483ed39a440d23d5b9fa43fb8cc78892",
+      "signature": "untrusted comment: signature from minisign secret key\nRUSgV8uCt8tyYlgP7kRDAkj335oC7+lutpMzIS8dNyMXYRo4DQ7lyyw7gD32osX/U6fu8ZaZR5uj3GBLBDOlWcU/FiwH6x/zTgQ=\ntrusted comment: timestamp:1785464719\tfile:worktree-macos\thashed\n/t21TWPC54rRecqZRAF2rkWYkFoOY/YgxVLblaDbdlEpa8+lZhdbQpQgMyPQrCze+cEJG15LnxiNrVf8qVgADA==\n",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-worktree/releases/download/v3/worktree-v3-macos-universal.tar.gz"
+    },
+    "windows-x64": {
+      "checksum": "sha256:bc90139cff8bd5d7e60a5209d1e9120fb64761f94b61b8e63201e0466f6f13a7",
+      "signature": "untrusted comment: signature from minisign secret key\nRUSgV8uCt8tyYmrCTlopj9nKCap5aCMnqYKn8ryY4I+w6emOAMKGLcUWs68Ci9qTIc52qcvnBS1BVlaDEaESeBJBjl079N0ViA4=\ntrusted comment: timestamp:1785464720\tfile:worktree-windows-x64\thashed\nKlUZtgW/2ZIf8rD6Yi8+Y3DHqdNZb13Sdjn+ePl80XqbMrPkqVJ4sVJuHtJtLy/cZCpYXVudVTeRJHGg4HNPAg==\n",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-worktree/releases/download/v3/worktree-v3-windows-x64.tar.gz"
     }
   },
-  "config": [
-    {
-      "key": "base",
-      "label": "Base branch",
-      "required": false,
-      "secret": false
-    }
-  ],
   "events": [
     "task.status_changed"
   ],
   "name": "worktree",
-  "payload_v": 1,
-  "scope": "project"
+  "payload_v": 1
 }

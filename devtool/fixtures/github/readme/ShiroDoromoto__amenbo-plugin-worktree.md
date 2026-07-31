@@ -34,6 +34,14 @@ eval "$(amenbo plugin run worktree start 123)"
 amenbo plugin run worktree finish 123
 ```
 
+`start` returns one `cd` line and amenbo passes it through untouched, so the shell you
+are standing in is the one that runs it. The line itself is the same in either dialect;
+only the way to feed it differs:
+
+```powershell
+iex (amenbo plugin run worktree start 123)
+```
+
 | | |
 |---|---|
 | `start <id> [--base <branch>]` | Add a worktree for the task on a fresh branch `task/<id>`, and return the `cd` into it. |
@@ -44,15 +52,15 @@ task, commenting on it and closing it are `amenbo task …`, run from the main r
 is the whole division of labour — amenbo owns the task's state, the plugin owns the
 checkout.
 
+Without `--base`, both commands answer with the branch the repository is standing on: a
+worktree is cut from it, and a branch is torn down only once it has reached it. Nothing
+has to be filled in first, and no repository is asked what its trunk is called. `--base`
+names another one — for taking a task's work into a release branch, say, and tearing the
+worktree down against that.
+
 ### Settings
 
-| key | what it does |
-|---|---|
-| `base` | The branch a worktree is cut from when `--base` is not given. Defaults to `main`. |
-
-```sh
-amenbo plugin config set worktree base develop
-```
+This plugin declares none.
 
 ## Install
 
@@ -91,16 +99,20 @@ rests on keeping them apart:
 
 - **stdout is the machine return value.** amenbo relays it to the caller verbatim, which
   is why `start` prints one `cd` line and why `eval "$(…)"` works at all. A summary
-  leaking into stdout would be evaluated as a shell command.
+  leaking into stdout would be evaluated as a shell command. Nothing downstream knows
+  which shell will read the line, so it is written in the form both dialects agree on —
+  a single-quoted path, which is literal to each of them. The one path that has no such
+  form is one carrying a single quote, and `start` refuses it rather than return a line
+  that works on the machine it was baked for and breaks on the other.
 - **stderr is for humans.** Summaries, refusals, context.
 - **the exit code is the verdict.** Non-zero means the return value is broken; amenbo
   discards it and reports a failed call.
 
 The stdin document is smaller on this face — no event fired — and carries the plugin's
-own non-secret settings:
+own non-secret settings, which for this one is an empty object since it declares none:
 
 ```json
-{ "v": 1, "config": { "base": "main" } }
+{ "v": 1, "config": {} }
 ```
 
 **`v` is the contract version**, and it is first on the wire. New fields are added
@@ -131,18 +143,30 @@ the two can be read against each other — but nothing about a hand-install is v
 The real install route resolves the catalog entry and checks the asset's provenance
 before anything lands on disk.
 
-To cut a release, `make dist` builds the assets the catalog entry points at — one
-universal build for every Mac, one per architecture on Linux — and prints their digests:
+### Releases
+
+The distributables are baked in CI, not on a machine: pushing a `v*` tag runs
+[`release.yml`](.github/workflows/release.yml), which bakes every asset key the catalog entry
+publishes — one universal build for every Mac, one per architecture on Linux and Windows —
+uploads them, and prints their digests in the run summary for the entry to quote. `make dist`
+is the same build, to check one before tagging it:
 
 ```sh
-make dist                                    # → dist/worktree-v1-*.tar.gz + sha256 digests
-gh release create v1 dist/*.tar.gz           # publish them
+make dist      # → dist/worktree-<version>-*.tar.gz + sha256 digests
 ```
+
+The version in those names is the tag being released, so nothing has to be bumped by hand for a
+release to be named after itself; run off a commit no tag stands on, the build calls itself `dev`.
+
+That run is on a Mac for `lipo` alone, which folds the two Mac architectures into the universal
+asset; the Go builds all cross-compile. **A release is not a distribution:** nothing installs
+from those bytes until the catalog entry points at them, and the signature that blesses an asset
+is the catalog's, made on merge.
 
 ## Requirements
 
 - git 2.31 or newer (`git rev-parse --path-format`)
-- macOS or Linux
+- macOS, Linux or Windows
 
 ## License
 

@@ -1,0 +1,112 @@
+{
+  "assets": {
+    "linux-arm64": {
+      "checksum": "sha256:cbc8de6ff631864667d8e9b332ff60160d0304e53e03573969506b45f625e664",
+      "signature": "untrusted comment: signature from minisign secret key\nRUSgV8uCt8tyYofkjMWXz4QNDdDBIyvt16rB49+3fku8YzddieoH9k9+mlo/3y3s7OQjzEvijCVUs1ACKkS8tgkH8IBZuil0PwQ=\ntrusted comment: timestamp:1785454306\tfile:slack-linux-arm64\thashed\nIw7BXFx59JJQbvCtPyhRCqr/zHeaDIP632z0Lkl4Y9/TybaQTFXdkEfo8fQf2UrnJvdr3gAjDNPhfClIh2lMAw==\n",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-slack/releases/download/v1/slack-v1-linux-arm64.tar.gz"
+    },
+    "linux-x64": {
+      "checksum": "sha256:16cae669dacccbcde569f0333a3cf5b15b0b9de59e607509ba7fa63047c13531",
+      "signature": "untrusted comment: signature from minisign secret key\nRUSgV8uCt8tyYnEkx+epbIr+CCgYaX7p6ncghN5sanIsvMpTEdR9RpuERzjZzt1m8f/CYw+NTMquPN7wk/OYqKS8B3QYsfOxug4=\ntrusted comment: timestamp:1785454306\tfile:slack-linux-x64\thashed\nM2s5d03N2/dhHZIDgGJ5AK6N8ao1nCrNNsnx5X0DAdj+DXvnISjaP7Omi9G8C7YFJQZZ9bE2q2whk7meXPEaAg==\n",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-slack/releases/download/v1/slack-v1-linux-x64.tar.gz"
+    },
+    "macos-arm64": {
+      "checksum": "sha256:34e200519cb8af68bb8542156a1ec07cca0eb8865a64b7a1dc811a681e10028f",
+      "signature": "untrusted comment: signature from minisign secret key\nRUSgV8uCt8tyYleVaJ7hiLJjAWrl/i7NPHMUxVgL6msSa38Ui5ntOpsk4JpX+dLAq1B1Qn2O7KEJm/U3b6LC1mCTOYgqQddBygs=\ntrusted comment: timestamp:1785454307\tfile:slack-macos-arm64\thashed\nFEdaa/XY2akmloncfoPglBB/Tc3kAfqDz3D1zIOcRlwvaQVzODXJKd7NqrNUi/kWVvTmEtI8ATzvSp3jjpDEBw==\n",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-slack/releases/download/v1/slack-v1-macos-arm64.tar.gz"
+    },
+    "macos-x64": {
+      "checksum": "sha256:60bbe7e02ddf429baa483f36c74d4c01ff0f7fd0a4fa0fd71951852224d51c34",
+      "signature": "untrusted comment: signature from minisign secret key\nRUSgV8uCt8tyYry6lCLQYXY9n5dsN/5Y3TFqRdZ7H6AkguUJLqfo7FiFwogMkrK470J6jFjpDwrKmwox2Ry2Mpw2hV3eE832ag8=\ntrusted comment: timestamp:1785454307\tfile:slack-macos-x64\thashed\n8fMpeNO8NqCXKhlxZSIA8X2YN+1ev3iCGrgh82Zbn0PS2b1qyX8HaItq1BRlY9gEBdUenTmXHzzgBnonadNhDg==\n",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-slack/releases/download/v1/slack-v1-macos-x64.tar.gz"
+    },
+    "windows-arm64": {
+      "checksum": "sha256:e3eafb8f72250e48782d4e0f3a0abedfa2572a9cee1684364d076dfb2eb728ae",
+      "signature": "untrusted comment: signature from minisign secret key\nRUSgV8uCt8tyYv/YQkE01T6BTWgLgz0IPFKXgi0fS914UqV9ELgn4ioLitNiku6AKpT/jT+ZCIYM9a6k/ptcGD+n9IBvlGndPAw=\ntrusted comment: timestamp:1785454308\tfile:slack-windows-arm64\thashed\n9eo/b9/3g2lSdPvkI/Jg15jNyJoN57d3JgyiqedsA8Ar0Zz5j2ys/vVIYx6i/Ue6F6uabiWZXS4SUqChEZj5BA==\n",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-slack/releases/download/v1/slack-v1-windows-arm64.tar.gz"
+    },
+    "windows-x64": {
+      "checksum": "sha256:f0d034127a1c0acc0eec1fcf8a0be791e61f893daff52ffde739b049d8e17125",
+      "signature": "untrusted comment: signature from minisign secret key\nRUSgV8uCt8tyYotB6jE1fx1jp4g6YW4uLzvdYC1BzxgE1JK4qlwYU26K8m3LFhOWQMIeGB8+7uI/WBj55WS7CDI6pgqm2annNww=\ntrusted comment: timestamp:1785454308\tfile:slack-windows-x64\thashed\nkRMi5NbBtt2egE3j6JJOUgjkhq4vxkCVYFvgTcASCsYhgcN7q+g/ndtXS8IvNEGBjKXGk1gz1g6kCsVootnoBg==\n",
+      "url": "https://github.com/ShiroDoromoto/amenbo-plugin-slack/releases/download/v1/slack-v1-windows-x64.tar.gz"
+    }
+  },
+  "config": [
+    {
+      "key": "webhook_url",
+      "label": "Slack webhook URL",
+      "required": true,
+      "secret": true
+    },
+    {
+      "default": "task.created,task.status_changed,task.done,task.rejected",
+      "key": "events",
+      "label": "What to report",
+      "options": [
+        {
+          "label": "A task was created",
+          "value": "task.created"
+        },
+        {
+          "label": "A task's status moved",
+          "value": "task.status_changed"
+        },
+        {
+          "label": "A task was finished",
+          "value": "task.done"
+        },
+        {
+          "label": "A task was decided against",
+          "value": "task.rejected"
+        },
+        {
+          "label": "A task was assigned",
+          "value": "task.assigned"
+        },
+        {
+          "label": "A task moved to another project",
+          "value": "task.moved"
+        },
+        {
+          "label": "A task was deleted",
+          "value": "task.deleted"
+        },
+        {
+          "label": "A decision was accepted",
+          "value": "decision.accepted"
+        },
+        {
+          "label": "A decision was rejected",
+          "value": "decision.rejected"
+        },
+        {
+          "label": "A comment was added",
+          "value": "comment.added"
+        },
+        {
+          "label": "A comment was taken back",
+          "value": "comment.removed"
+        }
+      ],
+      "required": false,
+      "secret": false,
+      "type": "multi"
+    }
+  ],
+  "events": [
+    "task.created",
+    "task.status_changed",
+    "task.done",
+    "task.rejected",
+    "task.assigned",
+    "task.moved",
+    "task.deleted",
+    "decision.accepted",
+    "decision.rejected",
+    "comment.added",
+    "comment.removed"
+  ],
+  "min_amenbo": "3.1.0",
+  "name": "slack",
+  "payload_v": 1
+}

@@ -1,16 +1,15 @@
 {
-  "version": "1.8.0",
-  "notes_url": "https://github.com/ShiroDoromoto/amenbo/releases/tag/v1.8.0",
+  "version": "3.1.0",
+  "notes_url": "https://github.com/ShiroDoromoto/amenbo/releases/tag/v3.1.0",
   "assets": {
-    "linux-arm64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.8.0/amenbo_1.8.0_linux_arm64.tar.gz",
-    "linux-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.8.0/amenbo_1.8.0_linux_amd64.tar.gz",
-    "linux-x64-deb": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.8.0/amenbo-app-linux-amd64.deb",
-    "linux-x64-rpm": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.8.0/amenbo-app-linux-x86_64.rpm",
-    "macos-arm64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.8.0/amenbo_1.8.0_darwin_arm64.tar.gz",
-    "macos-arm64-pkg": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.8.0/amenbo-darwin-arm64.pkg",
-    "macos-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.8.0/amenbo_1.8.0_darwin_amd64.tar.gz",
-    "macos-x64-pkg": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.8.0/amenbo-darwin-amd64.pkg",
-    "windows-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.8.0/amenbo_1.8.0_windows_amd64.zip",
-    "windows-x64-exe": "https://github.com/ShiroDoromoto/amenbo/releases/download/v1.8.0/amenbo-app-windows-x64-setup.exe"
+    "linux-arm64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v3.1.0/amenbo_3.1.0_linux_arm64.tar.gz",
+    "linux-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v3.1.0/amenbo_3.1.0_linux_amd64.tar.gz",
+    "linux-x64-appimage": "https://github.com/ShiroDoromoto/amenbo/releases/download/v3.1.0/amenbo-app-linux-x86_64.AppImage",
+    "macos-arm64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v3.1.0/amenbo_3.1.0_darwin_arm64.tar.gz",
+    "macos-arm64-pkg": "https://github.com/ShiroDoromoto/amenbo/releases/download/v3.1.0/amenbo-darwin-arm64.pkg",
+    "macos-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v3.1.0/amenbo_3.1.0_darwin_amd64.tar.gz",
+    "macos-x64-pkg": "https://github.com/ShiroDoromoto/amenbo/releases/download/v3.1.0/amenbo-darwin-amd64.pkg",
+    "windows-x64": "https://github.com/ShiroDoromoto/amenbo/releases/download/v3.1.0/amenbo_3.1.0_windows_amd64.zip",
+    "windows-x64-exe": "https://github.com/ShiroDoromoto/amenbo/releases/download/v3.1.0/amenbo-app-windows-x64-setup.exe"
   }
 }

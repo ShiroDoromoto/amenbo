@@ -1,19 +1,36 @@
 {
   "catalog_v": 1,
-  "generated_at": "2026-07-27T04:06:50Z",
+  "generated_at": "2026-07-31T02:25:20Z",
   "plugins": [
+    {
+      "added_at": "2026-07-31T08:31:23+09:00",
+      "author": "amenbo",
+      "category": "notification",
+      "desc": "Report what your AI did to a Slack channel",
+      "detail_sum": "sha256:70273f63ecda0fd065569993acd953904a81d3f94856d383b9c94b49c66850d3",
+      "featured": false,
+      "name": "slack",
+      "official": true,
+      "os": [
+        "macos",
+        "windows",
+        "linux"
+      ],
+      "repo": "ShiroDoromoto/amenbo-plugin-slack"
+    },
     {
       "added_at": "2026-07-26T20:55:16+09:00",
       "author": "amenbo",
       "category": "workflow",
       "desc": "Isolate each task in its own git worktree",
-      "detail_sum": "sha256:7a70034ea751466aa3b8dd201896406b30ed647c762be32241546f418f24b16e",
+      "detail_sum": "sha256:4f0d1f02f02c4409d92ee228240dbf15097d3cfa9d1da89ef10ecf66b9636343",
       "featured": false,
       "name": "worktree",
       "official": true,
       "os": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "repo": "ShiroDoromoto/amenbo-plugin-worktree"
     }

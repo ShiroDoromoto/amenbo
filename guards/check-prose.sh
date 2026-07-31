@@ -29,19 +29,23 @@
 # those from a genuine slip, so english-only cannot be pointed at them. What is
 # judged here is the complement: the files where any Japanese at all is a slip.
 #
-# That complement holds while these formats carry no data. A fixture — Japanese
-# sample rows parked in .json rather than in the .ts they live in today — would be
-# the one file here where Japanese is right, and this guard would call it wrong.
-# The tree holds no such file, so the line is not drawn around one; should that
-# change, narrow the set rather than teach the guard an exception.
+# That complement holds while these formats carry no data. The set is narrowed
+# around a file that carries some, rather than the guard taught an exception:
+# what a capture says is the producer's to write, and a rule about how we write
+# has no claim on it.
 #
-# Two files are left out, each for a reason that cannot rot into a list:
+# Three things are left out, each for a reason that cannot rot into a list:
 #   - esorp.yaml, the declaration itself. Its rules have to spell the words they
 #     forbid, so it fails every one it defines — no-history's pattern alone trips
 #     no-history, english-only and internal-ref. check-doc-refs.sh carves itself
 #     out for the same reason.
 #   - Lock files, which are generated. A rule about how we write cannot bind a
 #     file we do not write, and a violation there would be unfixable by hand.
+#   - devtool/fixtures, which is captured. Those documents are copied out of the
+#     outside world so a fake one answers exactly as the real one does, and what
+#     a copy is worth is that a producer made it. Editing one to pass a guard
+#     over our own prose leaves a document nobody ever sent, which is the single
+#     thing a fixture must not be.
 #
 # The whole tree is judged, not the changed part: these files are clean, so a
 # violation anywhere is the commit's to answer for. The comment guard reads its
@@ -75,7 +79,7 @@ fi
 if [ ${#FILES[@]} -eq 0 ]; then
   while IFS= read -r -d '' f; do
     case "$f" in
-      esorp.yaml|*-lock.json|*.lock) continue ;;
+      esorp.yaml|*-lock.json|*.lock|devtool/fixtures/*) continue ;;
     esac
     FILES+=("$f")
   done < <(git ls-files -z '*.md' '*.toml' '*.yml' '*.yaml' '*.json' '*.mod')

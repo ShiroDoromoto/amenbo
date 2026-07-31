@@ -6,7 +6,7 @@ import {
   removeCatalogSource, sortPlugins, unreachableSources, usePluginCatalog,
   type PluginCatalog, type PluginCatalogProbe, type PluginEntry, type PluginLayer, type PluginSort,
 } from "../core/pluginCatalog";
-import { installOf, usePluginInstalls, type PluginInstall } from "../core/pluginInstalls";
+import { firesAnywhere, installOf, usePluginInstalls, type PluginInstall } from "../core/pluginInstalls";
 import { refreshPluginUpdates } from "../core/pluginUpdates";
 import { PluginDetail } from "./PluginDetail";
 
@@ -427,9 +427,7 @@ function PluginCard({ entry, install, onOpen }: {
             <>
               {" "}
               <span className="chip">
-                {install.enabledProjects.length > 0
-                  ? t("plugins.enabledChip")
-                  : t("plugins.installed")}
+                {firesAnywhere(install) ? t("plugins.enabledChip") : t("plugins.installed")}
               </span>
             </>
           )}

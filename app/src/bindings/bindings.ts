@@ -777,11 +777,12 @@ export type PluginInstallDto = {
  */
 name: string, 
 /**
- * Every project holding this plugin's gate open (`AMB-D-412`). Empty means off everywhere, which is
- * an answer; a truth value read from one project is not, because it hides the projects it is still
- * firing in.
+ * Every "project × plugin" intersection this plugin has a row at (`AMB-D-447`) — the projects holding
+ * its gate open, and the projects holding a value while it is off. Empty means nowhere, which is an
+ * answer; a truth value read from one project is not, because it hides the projects it is still
+ * firing in (`AMB-D-412`).
  */
-enabledProjects: number[], 
+projects: Array<PluginProjectRowDto>, 
 /**
  * Whether this build can speak to it at all (`AMB-D-359`). An open gate on an incompatible plugin
  * fires nothing, and amenbo updates underneath an install, so this is not derivable from a gate.
@@ -803,6 +804,30 @@ config: Array<PluginWantedSettingDto>,
  * it, so this is false for a plugin that was never updated and false again once it is used.
  */
 rollback: boolean, };
+
+/**
+ * One "project × plugin" intersection, as both plugin faces draw a row for it (`AMB-D-447`) — the state
+ * of that one crossing, read with the install rather than one project at a time.
+ */
+export type PluginProjectRowDto = { 
+/**
+ * The project this row is for.
+ */
+project: number, 
+/**
+ * Whether the plugin fires in it (`AMB-D-434`).
+ */
+enabled: boolean, 
+/**
+ * Whether it holds a value for any setting the author declares. Off with values is an ordinary state,
+ * so this is a fact of its own and not a reading of the gate.
+ */
+hasValue: boolean, 
+/**
+ * Whether a `required` setting is empty here — the reason an enable at this crossing would be
+ * refused (`AMB-D-351`), said before the switch is pressed rather than after.
+ */
+requiredUnset: boolean, };
 
 /**
  * What an uninstall actually found and removed (`AMB-D-357`) — the receipt the face reports from.

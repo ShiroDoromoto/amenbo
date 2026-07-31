@@ -228,6 +228,65 @@ pub fn satisfied_keys(
     Ok(satisfied)
 }
 
+/// One "project × plugin" intersection, as the faces draw a row for it (`AMB-D-447`) — the whole state of
+/// that one crossing, so a row is drawn from a single answer rather than from one read per project.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Intersection {
+    /// The project this row is for.
+    pub project: i64,
+    /// Whether the plugin fires in it — that project's gate, and nothing else (`AMB-D-434`).
+    pub enabled: bool,
+    /// Whether it holds a value for any setting the author declares. Off with values is an ordinary state
+    /// (`AMB-D-434`), which is why it is a fact of its own and not a reading of the gate.
+    pub has_value: bool,
+    /// Whether a `required` setting is empty here — an enable would be refused at this crossing
+    /// (`AMB-D-351`), which is the one thing a face wants to say *before* the switch is pressed.
+    pub required_unset: bool,
+}
+
+/// Every intersection this plugin has a row at (`AMB-D-447`): the projects it fires in, and the projects
+/// that hold a value for it while it is off. Ordered by project id, so two reads draw the rows in the same
+/// order.
+///
+/// It is the read behind a face that lists crossings rather than projects. The alternative — asking
+/// [`get`] per project, per field — is the same walk done once per row by the caller, and leaves each face
+/// to decide for itself what "has a value" and "would be refused" mean; both readings are made here, off
+/// the author's `fields`, so the two faces cannot drift.
+///
+/// A project whose only rows are for keys the author no longer declares is not one of these: there is
+/// nothing on the schema to draw for it, and a row that offered nothing to fill in would be a project the
+/// user cannot get rid of.
+pub fn intersections(
+    store: &Store,
+    plugin: &str,
+    fields: &[ConfigField],
+) -> Result<Vec<Intersection>> {
+    let enabled = store.projects_with_plugin_enabled(plugin)?;
+    let mut projects = enabled.clone();
+    projects.extend(store.projects_with_plugin_values(plugin)?);
+    projects.sort_unstable();
+    projects.dedup();
+
+    let mut rows = Vec::new();
+    for project in projects {
+        let satisfied = satisfied_keys(store, plugin, fields, project)?;
+        let on = enabled.contains(&project);
+        if !on && satisfied.is_empty() {
+            continue;
+        }
+        rows.push(Intersection {
+            project,
+            enabled: on,
+            has_value: !satisfied.is_empty(),
+            required_unset: !crate::plugin_trust::missing_required(fields, |f| {
+                satisfied.iter().any(|k| k == &f.key)
+            })
+            .is_empty(),
+        });
+    }
+    Ok(rows)
+}
+
 /// The `required` settings a **candidate** build would leave unset, judged at **every** gate the plugin is
 /// enabled at right now (`AMB-D-359`) — the resolution behind an update's `approve` gate, so a face only has
 /// to word the refusal it already knows how to word.
@@ -579,6 +638,87 @@ mod tests {
         // The last gate that wanted it is satisfied, so the same build goes through.
         set(&mut store, &required_field("webhook_url"), "slack", short, "https://hooks/y").unwrap();
         assert!(required_unset_for_update(&store, &available).unwrap().is_empty());
+    }
+
+    /// The rows a face draws (`AMB-D-447`): every project the plugin fires in, and every project holding a
+    /// value while it is off — a project with neither is not a crossing anyone is looking at.
+    #[test]
+    fn the_rows_are_what_fires_and_what_holds_a_value() {
+        let (mut store, _dir) = store_at("intersections");
+        let firing = mk_project(&mut store, "firing");
+        let off_with_value = mk_project(&mut store, "off-with-value");
+        mk_project(&mut store, "untouched");
+        let fields = vec![text_field("channel")];
+
+        crate::plugin_trust::enable(&mut store, "slack", firing, &fields, |_| true).unwrap();
+        set(&mut store, &text_field("channel"), "slack", off_with_value, "#general").unwrap();
+
+        assert_eq!(
+            intersections(&store, "slack", &fields).unwrap(),
+            vec![
+                Intersection {
+                    project: firing,
+                    enabled: true,
+                    has_value: false,
+                    required_unset: false,
+                },
+                Intersection {
+                    project: off_with_value,
+                    enabled: false,
+                    has_value: true,
+                    required_unset: false,
+                },
+            ],
+        );
+    }
+
+    /// The mark a row carries before anyone presses its switch (`AMB-D-351`): a `required` setting with no
+    /// value at this crossing is exactly why an enable there would be refused.
+    #[test]
+    fn a_row_says_when_a_required_setting_is_empty_at_that_crossing() {
+        let (mut store, _dir) = store_at("intersections-required");
+        let short = mk_project(&mut store, "short");
+        let filled = mk_project(&mut store, "filled");
+        let fields = vec![required_field("webhook_url")];
+
+        crate::plugin_trust::enable(&mut store, "slack", short, &fields, |_| true).unwrap();
+        set(&mut store, &required_field("webhook_url"), "slack", filled, "https://hooks/x").unwrap();
+
+        let rows = intersections(&store, "slack", &fields).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(rows[0].required_unset, "the gate that is short of the value is marked");
+        assert!(!rows[1].required_unset, "the project that filled it in is not");
+    }
+
+    /// A secret is a value like any other here: which table the author's flag sent it to (`AMB-D-356`)
+    /// does not decide whether the project has a row.
+    #[test]
+    fn a_secret_alone_puts_a_project_on_the_list() {
+        let (mut store, _dir) = store_at("intersections-secret");
+        let p = mk_project(&mut store, "p");
+        let fields = vec![secret_field("webhook_url")];
+        set(&mut store, &secret_field("webhook_url"), "slack", p, "https://hooks/x").unwrap();
+
+        assert_eq!(
+            intersections(&store, "slack", &fields).unwrap(),
+            vec![Intersection {
+                project: p,
+                enabled: false,
+                has_value: true,
+                required_unset: false,
+            }],
+        );
+    }
+
+    /// A value left behind for a key the author has since dropped draws no row — there would be nothing on
+    /// the schema to fill in there.
+    #[test]
+    fn a_value_for_an_undeclared_key_draws_no_row() {
+        let (mut store, _dir) = store_at("intersections-undeclared");
+        let p = mk_project(&mut store, "p");
+        set(&mut store, &text_field("dropped"), "slack", p, "x").unwrap();
+
+        assert!(intersections(&store, "slack", &[text_field("channel")]).unwrap().is_empty());
     }
 
     #[test]

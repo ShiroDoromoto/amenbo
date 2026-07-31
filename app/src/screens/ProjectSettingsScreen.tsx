@@ -7,7 +7,7 @@ import {
   bindFolder, deleteProject, fetchBoundFolders, fetchProjectSettings, openTerminal,
   pickFolder, revealFolder, setProjectArchived, unbindFolder, updateProject,
 } from "../core/mutations";
-import { setPluginEnabled, usePluginInstalls } from "../core/pluginInstalls";
+import { enabledIn, setPluginEnabled, usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf, viewLabel } from "../core/i18n";
@@ -341,8 +341,8 @@ function PluginsSection({ projectId }: { projectId: number }) {
     }
   };
 
-  const on = installs.filter((i) => i.enabledProjects.includes(projectId));
-  const off = installs.filter((i) => !i.enabledProjects.includes(projectId));
+  const on = installs.filter((i) => enabledIn(i, projectId));
+  const off = installs.filter((i) => !enabledIn(i, projectId));
 
   return (
     <div className="settings__section">

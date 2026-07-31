@@ -4891,6 +4891,25 @@ pub struct PluginDetailDto {
     incompatible_reason: Option<String>,
 }
 
+/// One "project × plugin" intersection, as both plugin faces draw a row for it (`AMB-D-447`) — the state
+/// of that one crossing, read with the install rather than one project at a time.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginProjectRowDto {
+    /// The project this row is for.
+    #[ts(type = "number")]
+    project: i64,
+    /// Whether the plugin fires in it (`AMB-D-434`).
+    enabled: bool,
+    /// Whether it holds a value for any setting the author declares. Off with values is an ordinary state,
+    /// so this is a fact of its own and not a reading of the gate.
+    has_value: bool,
+    /// Whether a `required` setting is empty here — the reason an enable at this crossing would be
+    /// refused (`AMB-D-351`), said before the switch is pressed rather than after.
+    required_unset: bool,
+}
+
 /// One plugin this machine holds, as the market draws its state on top of the catalog entry of the same
 /// name (`AMB-D-351`). Installed and enabled are two facts, not one: an installed plugin that fires
 /// nothing is the ordinary state.
@@ -4900,11 +4919,11 @@ pub struct PluginDetailDto {
 pub struct PluginInstallDto {
     /// The plugin's name — the key the market joins this row onto a catalog entry by.
     name: String,
-    /// Every project holding this plugin's gate open (`AMB-D-412`). Empty means off everywhere, which is
-    /// an answer; a truth value read from one project is not, because it hides the projects it is still
-    /// firing in.
-    #[ts(type = "number[]")]
-    enabled_projects: Vec<i64>,
+    /// Every "project × plugin" intersection this plugin has a row at (`AMB-D-447`) — the projects holding
+    /// its gate open, and the projects holding a value while it is off. Empty means nowhere, which is an
+    /// answer; a truth value read from one project is not, because it hides the projects it is still
+    /// firing in (`AMB-D-412`).
+    projects: Vec<PluginProjectRowDto>,
     /// Whether this build can speak to it at all (`AMB-D-359`). An open gate on an incompatible plugin
     /// fires nothing, and amenbo updates underneath an install, so this is not derivable from a gate.
     compatible: bool,
@@ -4946,16 +4965,27 @@ fn config_field_row(
     })
 }
 
-/// Read one installed plugin into its DTO, naming every project it fires in (`AMB-D-412`).
+/// Read one installed plugin into its DTO, naming every intersection it has a row at (`AMB-D-447`) — the
+/// projects it fires in (`AMB-D-412`) and the projects that filled it in without turning it on.
 fn install_row(
     store: &Store,
     plugin: &amenbo_core::plugin_subscribe::InstalledPlugin,
 ) -> Result<PluginInstallDto, CmdError> {
     let why = amenbo_core::plugin_compat::check(&plugin.manifest).err();
     let config = plugin.manifest.config.iter().map(wanted_setting).collect();
+    let projects =
+        amenbo_core::plugin_config::intersections(store, &plugin.name, &plugin.manifest.config)?
+            .into_iter()
+            .map(|at| PluginProjectRowDto {
+                project: at.project,
+                enabled: at.enabled,
+                has_value: at.has_value,
+                required_unset: at.required_unset,
+            })
+            .collect();
     Ok(PluginInstallDto {
         name: plugin.name.clone(),
-        enabled_projects: store.projects_with_plugin_enabled(&plugin.name)?,
+        projects,
         compatible: why.is_none(),
         incompatible_reason: why.map(|why| why.to_string()),
         config,
@@ -4963,12 +4993,14 @@ fn install_row(
     })
 }
 
-/// What this machine has installed, and which projects each one fires in — the state the market draws
-/// over the catalog it is browsing (`AMB-D-351`).
+/// What this machine has installed, and the state of every "project × plugin" intersection each one has a
+/// row at — the state the market draws over the catalog it is browsing (`AMB-D-351`).
 ///
 /// **It is asked from nowhere in particular** (`AMB-D-412`). Every row names the projects holding its
 /// gate open, so a face draws the whole answer without first choosing a project to look through — and a
 /// plugin still running somewhere else cannot be hidden by where the screen happened to be standing.
+/// Each of those names carries its crossing's whole state (`AMB-D-447`), so drawing the rows costs this
+/// one read rather than one per project.
 ///
 /// Reads the app-data `plugins/` directory and this store, and nothing else — no network, no catalog
 /// fetch — so it answers the same offline, and a directory that will not read as an install is skipped
@@ -5524,16 +5556,19 @@ mod tests {
         // Installed is not enabled: the row is here, and it names no project at all.
         let rows = plugin_installs().unwrap();
         assert_eq!(rows.len(), 1, "the plant reads as installed");
-        assert!(rows[0].enabled_projects.is_empty(), "off everywhere is an empty list, not a false");
+        assert!(rows[0].projects.is_empty(), "off everywhere is an empty list, not a false");
 
         let row = || plugin_installs().unwrap().into_iter().find(|r| r.name == "notify").unwrap();
+        let firing = || -> Vec<i64> {
+            row().projects.iter().filter(|p| p.enabled).map(|p| p.project).collect()
+        };
         assert!(plugin_set_enabled("notify".into(), Some(project_id), true).unwrap().enabled);
-        assert_eq!(row().enabled_projects, vec![project_id]);
+        assert_eq!(firing(), vec![project_id]);
 
         // A second project's switch is its own, and the list carries both rather than the one a caller
         // happened to ask through.
         assert!(plugin_set_enabled("notify".into(), Some(other_id), true).unwrap().enabled);
-        let mut on = row().enabled_projects;
+        let mut on = firing();
         on.sort_unstable();
         assert_eq!(on, vec![project_id, other_id]);
 
@@ -5542,13 +5577,67 @@ mod tests {
         let off_gate = plugin_set_enabled("notify".into(), Some(project_id), false).unwrap();
         assert!(!off_gate.enabled);
         assert_eq!(off_gate.dropped_queued, 0, "nothing was queued, so nothing was thrown away");
-        assert_eq!(row().enabled_projects, vec![other_id], "the other project is still firing");
+        assert_eq!(firing(), vec![other_id], "the other project is still firing");
 
         // Without a project there is no switch to move.
         assert!(
             plugin_set_enabled("notify".into(), None, true).is_err(),
             "there is no device-wide answer for a gate to fall back on"
         );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// What the row of a crossing carries besides its switch (`AMB-D-447`): a project that filled the
+    /// plugin in without turning it on is on the list at all, and a project whose `required` setting is
+    /// empty carries the mark saying an enable there would be refused — both answered by the read that
+    /// lists the installs, so a face draws its rows without asking once per project.
+    #[test]
+    fn each_crossing_carries_its_values_and_the_refusal_ahead_of_the_switch() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("plugin-crossing");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let project = |name: &str| {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: name.into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        let filled = project("埋めたPJ");
+        let short = project("必須が空のPJ");
+        plant_plugin_with(
+            &tmp,
+            "notify",
+            serde_json::json!([
+                {"key": "token", "label": "APIトークン", "secret": true, "required": true},
+                {"key": "events", "label": "通知するイベント", "secret": false, "required": false},
+            ]),
+        );
+        let rows = || plugin_installs().unwrap().into_iter().find(|r| r.name == "notify").unwrap().projects;
+
+        // Nobody has touched it anywhere: there is no crossing to draw, which is itself the answer.
+        assert!(rows().is_empty(), "installed alone puts no project on the list");
+
+        plugin_config_set("notify".into(), "token".into(), "t".into(), Some(filled)).unwrap();
+        plugin_config_set("notify".into(), "events".into(), "deploy".into(), Some(short)).unwrap();
+
+        let drawn = rows();
+        assert_eq!(drawn.len(), 2, "a value puts a project on the list with the gate still shut");
+        assert_eq!((drawn[0].project, drawn[0].enabled, drawn[0].has_value), (filled, false, true));
+        assert!(!drawn[0].required_unset, "everything the author requires is held here");
+        assert_eq!((drawn[1].project, drawn[1].enabled, drawn[1].has_value), (short, false, true));
+        assert!(drawn[1].required_unset, "the required setting is empty at this crossing");
+
+        // The mark is not decoration: it is core's own refusal, said before the switch is pressed.
+        assert!(plugin_set_enabled("notify".into(), Some(short), true).is_err());
+        assert!(plugin_set_enabled("notify".into(), Some(filled), true).unwrap().enabled);
+        assert!(rows()[0].enabled, "the gate opened where nothing was in the way");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

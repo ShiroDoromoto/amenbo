@@ -108,9 +108,10 @@ import { t, tn, tf } from "../core/i18n";
 let container: HTMLDivElement;
 let root: Root;
 
-const row = (over: Partial<PluginInstall> & { name: string }): PluginInstall => ({
+/** One installed plugin; `on` names the projects it fires in, as rows of those crossings. */
+const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?: number[] }): PluginInstall => ({
   compatible: true,
-  enabledProjects: [],
+  projects: on.map((project) => ({ project, enabled: true, hasValue: false, requiredUnset: false })),
   config: [],
   rollback: false,
   ...over,
@@ -197,7 +198,7 @@ const render = () => act(() => root.render(createElement(PluginInstalledScreen))
 describe("what this machine holds", () => {
   it("lists every install, and says which switch each one has", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify" }), row({ name: "worktree", enabledProjects: [1] })];
+    hoisted.installs = [row({ name: "notify" }), row({ name: "worktree", on: [1] })];
     render();
 
     expect(rows()).toHaveLength(2);
@@ -240,7 +241,7 @@ describe("moving a gate from the list", () => {
 
   it("turns one off from beside the project it is on in", async () => {
     hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
-    hoisted.installs = [row({ name: "notify", enabledProjects: [2] })];
+    hoisted.installs = [row({ name: "notify", on: [2] })];
     render();
     await act(async () => { button(t("plugins.disable"))!.click(); });
     expect(hoisted.gated).toEqual([{ name: "notify", projectId: 2, enabled: false }]);
@@ -252,7 +253,7 @@ describe("moving a gate from the list", () => {
     hoisted.projects = [
       { id: 1, name: "alpha" }, { id: 2, name: "beta" }, { id: 3, name: "gamma" },
     ];
-    hoisted.installs = [row({ name: "notify", enabledProjects: [1, 3] })];
+    hoisted.installs = [row({ name: "notify", on: [1, 3] })];
     render();
 
     expect(chips()).toEqual([t("plugins.enabledChip"), "alpha", "gamma"]);
@@ -262,7 +263,7 @@ describe("moving a gate from the list", () => {
   // On in every project there is: there is nothing left to add, so nothing is offered.
   it("drops the picker when there is no project left to add", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
+    hoisted.installs = [row({ name: "notify", on: [1] })];
     render();
     expect(container.querySelector(".pluggate select")).toBeNull();
   });
@@ -272,7 +273,7 @@ describe("moving a gate from the list", () => {
   // a line every time would train the eye past the one time it matters, which is the CLI's line too.
   it("says how many waiting events a disable threw away, and stays quiet when none did", async () => {
     hoisted.projects = [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }];
-    hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
+    hoisted.installs = [row({ name: "notify", on: [1] })];
     hoisted.droppedQueued = 3;
     render();
     await act(async () => { button(t("plugins.disable"))!.click(); });
@@ -305,7 +306,7 @@ describe("a plugin this build cannot speak to", () => {
     hoisted.installs = [
       row({
         name: "notify",
-        enabledProjects: [1],
+        on: [1],
         compatible: false,
         incompatibleReason: "payload v2, this build speaks v1",
       }),
@@ -318,7 +319,7 @@ describe("a plugin this build cannot speak to", () => {
 
   it("leaves a compatible row wearing the plain enabled badge", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", enabledProjects: [1] })];
+    hoisted.installs = [row({ name: "notify", on: [1] })];
     render();
     expect(chips()).toEqual([t("plugins.enabledChip"), "alpha"]);
   });

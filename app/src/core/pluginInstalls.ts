@@ -39,10 +39,13 @@ const NO_FIELDS: PluginConfigField[] = [];
 export const NONE_SELECTED = "none";
 
 /**
- * Read what is installed, and which projects each one fires in (Tauri: `plugin_installs`).
+ * Read what is installed, and the state of every project × plugin crossing each one has a row at
+ * (Tauri: `plugin_installs`, `AMB-D-447`).
  *
  * **It is asked from nowhere in particular** (`AMB-D-412`): every row names its own projects, so no face
- * has to pick one to look through, and a plugin left on somewhere else cannot be drawn as "off".
+ * has to pick one to look through, and a plugin left on somewhere else cannot be drawn as "off". Each
+ * crossing arrives whole — on or off, whether it holds a value, whether a `required` one is empty — so a
+ * face draws its rows from this one read instead of asking again per project.
  *
  * Outside Tauri — `npm run dev` in a browser — there is no plugins directory to read, so the mock says
  * nothing is installed rather than inventing state.
@@ -174,6 +177,22 @@ export async function uninstallPlugin(name: string): Promise<PluginRemoved | nul
   // An offer to update what is no longer here would be an offer to install it again (`AMB-D-359`).
   invalidateQueries((key) => key[0] === "plugin-updates");
   return removed;
+}
+
+/**
+ * Whether the plugin fires in one project — that crossing's gate (`AMB-D-434`). A project with no row is
+ * one that never held the plugin on and never filled it in, which reads the same as off.
+ */
+export function enabledIn(install: PluginInstall, projectId: number): boolean {
+  return install.projects.some((p) => p.project === projectId && p.enabled);
+}
+
+/**
+ * Whether the plugin fires anywhere at all — the one-line reading a badge about the *plugin* wants
+ * (`AMB-D-412`). Which projects is a row's to name.
+ */
+export function firesAnywhere(install: PluginInstall): boolean {
+  return install.projects.some((p) => p.enabled);
 }
 
 /** The row for one catalog entry's name, or `undefined` when this machine does not hold it. */

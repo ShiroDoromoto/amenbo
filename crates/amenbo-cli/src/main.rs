@@ -2581,7 +2581,13 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // delivery a previous run left standing is picked up now, whatever this invocation was called to do.
     // A plugin calling amenbo back is not a startup — it is a read from inside a run that was already
     // driven — so it makes none.
-    if plugin_window.is_none() {
+    //
+    // Neither does a flush, and for the opposite reason: that command *is* the delivery, and the kick
+    // does the same drive with the other launcher — handing every queue to a runner process before the
+    // command that was asked to work them, and to say what moved, ever reaches one. What it left to
+    // report was then somebody else's work by definition, which is nothing (`AMB-T-2507`). Nothing is
+    // lost by standing down for it: the flush drives both layers, unconditionally, and waits.
+    if plugin_window.is_none() && !matches!(cli.command, Some(Command::Plugin { sub: PluginCmd::Flush })) {
         resume_dispatch(&store);
     }
 

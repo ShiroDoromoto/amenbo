@@ -154,6 +154,71 @@ steps_cli:
     with:
       delivered: 0
 
+  # And the same door with something behind it, which is what it was put there for. Delivery rides along
+  # with the write that caused it, so a push by hand carries something only where that drive never
+  # happened — the driver shuts what is installed away, and the write below is left standing.
+  #
+  # The plugin is stood in with one that answers at once and does nothing else: what is under test is
+  # what amenbo carries, and the checkout the real program would make from a status change is not part
+  # of it.
+  - type: action
+    domain: plugin
+    op: echo-program
+    with:
+      name: worktree
+
+  # A task of this step's own, so the one below is the first move this one makes: reserving is a
+  # compare-and-swap out of `todo`, and a task already moved has no second such move to write.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the write whose delivery is left standing
+    as: parked
+
+  - type: action
+    domain: plugin
+    op: installed-dir
+    with:
+      readable: false
+
+  # A status change is an event the plugin subscribes to. With nobody resolvable it is delivered to
+  # nobody — and rather than pass it over, amenbo leaves it standing to be handed on later.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: parked
+      status: in_progress
+
+  - type: action
+    domain: plugin
+    op: installed-dir
+    with:
+      readable: true
+
+  # The push, with the event from before it standing. This is the reading the whole command is for: it
+  # carries the delivery out here rather than handing it to a runner nobody watches, so what got through
+  # is a number it can answer with.
+  - type: action
+    domain: plugin
+    op: flush
+
+  - type: assert
+    domain: plugin
+    op: flushed
+    with:
+      delivered: 1
+
+  # And nothing is owed afterwards: what the flush carried is off the queue, which is the state a
+  # delivery layer that kept up is in.
+  - type: assert
+    domain: plugin
+    op: waiting
+    with:
+      name: worktree
+      count: 0
+
   # Now the other half — what has not run. A row leaves a queue the moment its plugin replies, so the
   # only backlog there is is the one a plugin is still working, and the driver leaves this one taking
   # its time. Ten seconds is the window the two asserts below read in, not a wait the run makes.

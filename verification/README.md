@@ -313,7 +313,11 @@ everything else — and the published plugins use their settings rather than rep
 `plugin read-back-program` leaves one calling amenbo back, which is the only witness the read-back
 route has: an event names a record and carries none of it, so the content is fetched by running the
 binary with the store and the window amenbo handed over — and the published plugins work everything
-out from the repository they are called in, asking amenbo nothing. They are the
+out from the repository they are called in, asking amenbo nothing. `plugin installed-dir` shuts what
+is installed away and gives it back, which is the only way a write's delivery is left standing:
+delivery rides along with the write that caused it, so a push made by hand carries something only
+where that drive never ran — and amenbo skips it exactly when the installed plugins will not read.
+They are the
 same idea as `repo write-file`: the
 state on disk a scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach
 for one only when the line under test is what amenbo does about that state.

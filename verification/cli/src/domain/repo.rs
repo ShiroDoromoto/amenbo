@@ -76,22 +76,25 @@ impl Driver {
                 ])?;
                 Ok(Outcome::action("made the run's folder a git repository on `main`".to_string()))
             }
-            // The paste itself. amenbo hands the text over and writes no settings file, so this is
-            // the hand that takes it — and it takes both halves of the answer from the build under
-            // test: the text, and the file the build says it goes in. Writing either of them down
-            // here instead would leave the road wired by the driver's own idea of the provider,
-            // which is the one thing this step must not be the judge of.
+            // The edit the handed-over text asks for. amenbo writes no settings file, so this stands
+            // in for the AI the reader gives that text to — and it takes both halves of the answer
+            // from the build under test: the configuration the request carries, and the file the
+            // build says it belongs in. Writing either of them down here instead would leave the road
+            // wired by the driver's own idea of the provider, which is the one thing this step must
+            // not be the judge of. It is the `configuration` field and not the request, because the
+            // request is prose: an AI reads it, a provider does not.
             "wire-ai" => {
                 let tool = req_str(with, "tool")?;
                 let v = self.run_json(&["agent-hook", "snippet", tool, "--json"])?;
-                let into = v["paste_into"].as_str().ok_or("the snippet does not say where it goes")?;
-                let snippet = v["snippet"].as_str().ok_or("the snippet came back with no text")?;
+                let into = v["paste_into"].as_str().ok_or("the text does not say where it goes")?;
+                let configuration =
+                    v["configuration"].as_str().ok_or("the text came with no configuration")?;
                 let full = self.in_session(into)?;
                 if let Some(dir) = full.parent() {
                     std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
                 }
-                std::fs::write(&full, snippet).map_err(|e| format!("could not write {into}: {e}"))?;
-                Ok(Outcome::action(format!("pasted what {tool} was handed into {into}")))
+                std::fs::write(&full, configuration).map_err(|e| format!("could not write {into}: {e}"))?;
+                Ok(Outcome::action(format!("made the edit {tool}'s text asks for, in {into}")))
             }
             verb @ ("hooks-install" | "hooks-uninstall") => {
                 let sub = verb.trim_start_matches("hooks-");
@@ -186,17 +189,17 @@ impl Driver {
                 ))
             }
             // The text that closes the gap, read from the face that hands it over. The file it names
-            // is checked beside what it carries, because the two only work together: text pasted
-            // somewhere the provider does not read leaves the folder exactly as unwired as before,
-            // and the reader with no way of telling.
+            // is checked beside what it carries, because the two only work together: a configuration
+            // landing somewhere the provider does not read leaves the folder exactly as unwired as
+            // before, and the reader with no way of telling.
             "ai-launch-text" => {
                 let tool = req_str(with, "tool")?;
                 let carries = req_str(with, "carries")?;
                 let into = with.get("paste_into").and_then(|v| v.as_str());
                 let v = self.run_json(&["agent-hook", "snippet", tool, "--json"])?;
-                let snippet = v["snippet"].as_str().unwrap_or_default();
+                let request = v["request"].as_str().unwrap_or_default();
                 let paste_into = v["paste_into"].as_str().unwrap_or_default();
-                let carried = snippet.contains(carries);
+                let carried = request.contains(carries);
                 let placed = into.is_none_or(|want| want == paste_into);
                 let pass = carried && placed;
                 Ok(Outcome::assert(

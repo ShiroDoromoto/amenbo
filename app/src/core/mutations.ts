@@ -619,7 +619,8 @@ export async function fetchAgentHookOffer(canAsk: boolean): Promise<AgentHookOff
 
 /**
  * The bound folders whose AI is not started on amenbo (core's `harness::setup_notice`) — the standing
- * report behind the banner, carrying each unwired tool's snippet so the copy button has the text in hand.
+ * report behind the banner, carrying each unwired tool's request so the banner can show it and the copy
+ * button has it in hand.
  *
  * Called after the modal has had its turn, so a folder just adopted or just answered is read in the state
  * that left it. Outside Tauri this is an empty array.

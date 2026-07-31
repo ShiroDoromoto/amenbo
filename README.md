@@ -423,9 +423,10 @@ amenbo hooks uninstall                      # remove amenbo's hooks here, and op
 
 # Have this folder's AI run `amenbo agent` at session start, through its own tool's
 # session-start hook. Unlike the lint hooks above, amenbo writes nothing here: it
-# hands over the settings file to paste (stdout is the paste, and nothing else), and
-# records the answer you gave when it asked. See "Making your AI agent read the spec".
-amenbo agent-hook snippet claude-code       # the paste for one tool (claude-code / github-copilot / cursor / codex-cli / gemini-cli)
+# hands over a request to give the AI you work with (stdout is that text, and
+# nothing else), and records the answer you gave when it asked. See "Making your AI
+# agent read the spec".
+amenbo agent-hook snippet claude-code       # the text for one tool (claude-code / github-copilot / cursor / codex-cli / gemini-cli)
 amenbo agent-hook snippet cursor --copy     # ...onto this machine's clipboard instead
 amenbo agent-hook answer yes                # record what a person answered, for this project
 
@@ -529,25 +530,32 @@ your tool's **session-start hook** — an **opt-in** step whose text amenbo hand
 you:
 
 ```sh
-amenbo agent-hook snippet claude-code          # the whole settings file to paste
+amenbo agent-hook snippet claude-code          # the text to give the AI you work with
 amenbo agent-hook snippet cursor --copy        # ...or straight onto the clipboard
 ```
 
-The catalog covers the five providers whose wiring is a paste and nothing more —
-`claude-code`, `github-copilot`, `cursor`, `codex-cli`, `gemini-cli` — and the
-argument refuses any other name, listing the ones it takes. The snippets are
+What it prints is a **request**, written to be handed to that AI: it carries the
+settings, the file they belong in, and that whatever is already in that file
+stays. So a folder whose settings are not empty needs no merge worked out by hand,
+which is the case for everyone who already has hooks of their own.
+
+The catalog covers the five providers whose wiring is a settings file and nothing
+more — `claude-code`, `github-copilot`, `cursor`, `codex-cli`, `gemini-cli` — and
+the argument refuses any other name, listing the ones it takes. The settings are
 deliberately not reproduced here: each provider spells its hook differently (JSON
 depth, event casing, which key carries the command) and each revises that format
 on its own schedule, so a copy in this file would go stale with nobody noticing.
 The command reads the catalog inside the binary you are running, which an update
 replaces.
 
-**amenbo writes no settings file.** `agent-hook snippet` puts the paste on stdout
-and nothing else — so it pipes into a file or a clipboard — and says on stderr
-which file it belongs in. Putting it there is yours to do. When amenbo asks
-whether this folder's AI may be started on amenbo at all, `agent-hook answer
-<yes|no>` records what you said and touches no settings file either; a `no` only
-stops the asking, and the snippet stays available.
+**amenbo writes no settings file.** `agent-hook snippet` puts that text on stdout
+and nothing else — so it pipes into a clipboard — and says on stderr which file it
+is about; `--copy` takes the clipboard route and prints the text on stderr as it
+goes, so you read it before you hand it on. Whether to give it to an AI, and what
+that AI then changes, stays yours. When amenbo asks whether this folder's AI may
+be started on amenbo at all, `agent-hook answer <yes|no>` records what you said and
+touches no settings file either; a `no` only stops the asking, and the text stays
+available.
 
 What the hook injects is the **launch instruction** — the same line the managed
 block carries — and **not** the output of `amenbo agent --json`: the spec is 40 KB

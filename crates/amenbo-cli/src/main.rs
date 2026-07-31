@@ -2991,18 +2991,19 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     Ok(0)
 }
 
-/// `amenbo agent-hook snippet <tool>` — hand over the configuration that wires one AI tool to run
+/// `amenbo agent-hook snippet <tool>` — hand over the request that has one AI tool wired to run
 /// `amenbo agent` at session start (`AMB-D-440`). It hands text over and writes nothing: the provider's
 /// settings file stays the user's, here as everywhere in this feature.
 ///
-/// **This command's stdout belongs to the paste**, the way `plugin run`'s belongs to the plugin. The
-/// snippet is meant to be consumed — piped to a clipboard, redirected into the file — so a courtesy line
-/// printed alongside it would end up inside the settings file, where it stops the provider from parsing
-/// it. Where the text goes, and that amenbo did not put it there, is said on stderr; under `--json`
-/// stdout is the document and the snippet rides inside it.
+/// **This command's stdout belongs to the text**, the way `plugin run`'s belongs to the plugin. What it
+/// prints is meant to be consumed — piped to a clipboard, handed to the AI the reader works with — so a
+/// courtesy line printed alongside it would ride into the request as though it were part of it. Where
+/// the text is going, and that amenbo did not wire anything itself, is said on stderr; under `--json`
+/// stdout is the document and both the request and the configuration ride inside it.
 ///
-/// `--copy` is that pipe, for the hand that would rather not type it — the same string, through the
-/// clipboard tool this platform has, and nothing about the text changes with the route.
+/// `--copy` is that pipe, for the hand that would rather not type it — and it prints the request on
+/// stderr as it goes, because a copy nobody read is a text taken on trust: the reader is about to hand
+/// it to something that edits their files, and the one moment to see what it asks for is this one.
 fn agent_hook_snippet_cmd(flags: &Flags, tool: &str, copy: bool) -> Result<i32, CliError> {
     use amenbo_core::harness;
 
@@ -3010,10 +3011,10 @@ fn agent_hook_snippet_cmd(flags: &Flags, tool: &str, copy: bool) -> Result<i32, 
     // already refused with the whole list — by the time it is here, it is a row.
     let harness = harness::find(tool).expect("the argument's parser accepts only the catalog's own ids");
     let cmd = Paths::command_name();
-    let snippet = harness::snippet(harness, cmd);
+    let request = harness::request(harness, cmd);
 
     if copy {
-        copy_to_clipboard(&snippet)?;
+        copy_to_clipboard(&request)?;
     }
     if flags.json {
         print_json(&json!({
@@ -3023,24 +3024,28 @@ fn agent_hook_snippet_cmd(flags: &Flags, tool: &str, copy: bool) -> Result<i32, 
             "label": harness.label,
             "paste_into": harness.paste_into,
             "copied": copy,
-            "snippet": snippet,
+            "request": request,
+            // The payload on its own, for a caller standing in for the AI that carries the request out.
+            // Reading it back out of the request's prose would make that caller the judge of prose it
+            // does not own.
+            "configuration": harness::configuration(harness, cmd),
         }));
         return Ok(0);
     }
     if !flags.quiet {
-        let where_to = if copy {
-            format!("{} is on the clipboard: paste it into", harness.label)
-        } else {
-            format!("{}: paste this into", harness.label)
-        };
         eprintln!(
-            "{where_to} {} in this folder — amenbo does not write it for you.\n\
-             Then this folder's AI runs `{cmd} agent --json` at the start of every session.",
+            "Give this to the AI you work with in this folder — it edits {}, and amenbo writes nothing.\n\
+             Once that lands, this folder's AI runs `{cmd} agent --json` at the start of every session.",
             harness.paste_into
         );
+        // On the clipboard route stdout stays empty, so this is the only place the text is shown — and
+        // it is shown either way, since what a reader is about to hand over is what they should read.
+        if copy {
+            eprintln!("\n{request}\n");
+        }
     }
     if !copy {
-        println!("{snippet}");
+        println!("{request}");
     }
     Ok(0)
 }
@@ -3055,7 +3060,7 @@ fn agent_hook_snippet_cmd(flags: &Flags, tool: &str, copy: bool) -> Result<i32, 
 /// and this records the answer as theirs.
 ///
 /// **It records, and that is all it does.** Where the lint's `hooks install` consents *by* writing the
-/// hooks, nothing here reads or writes a settings file: a `yes` is an answer, not a wiring, and the paste
+/// hooks, nothing here reads or writes a settings file: a `yes` is an answer, not a wiring, and the edit
 /// is still the person's to make. So a `yes` is followed by the line that hands over the text, rather
 /// than by anything having changed on disk.
 ///
@@ -3087,14 +3092,14 @@ fn agent_hook_answer_cmd(store: &Store, flags: &Flags, yes: bool) -> Result<i32,
             "ok": true,
             "action": "agent-hook.answer",
             "allowed": answer.allowed,
-            // What is left to do after a yes: amenbo writes no settings file, so the paste is still owed.
+            // What is left to do after a yes: amenbo writes no settings file, so the wiring is still owed.
             "next": yes.then(|| format!("{cmd} agent-hook snippet <tool>")),
         }));
         return Ok(0);
     }
     if yes {
         human(flags, "Recorded: yes — this project may have its AI started on amenbo.");
-        human(flags, format!("amenbo writes no settings file, so the text is still to be pasted: `{cmd} agent-hook snippet <tool>`."));
+        human(flags, format!("amenbo writes no settings file, so the wiring is still to be done: `{cmd} agent-hook snippet <tool>` is the text that asks your AI for it."));
     } else {
         human(flags, "Recorded: no — amenbo will not ask about this again.");
         human(flags, format!("Nothing is forbidden by it: `{cmd} agent-hook snippet <tool>` hands the text over whenever you want it."));
@@ -3130,7 +3135,7 @@ fn copy_to_clipboard(text: &str) -> Result<(), CliError> {
         let written = child.stdin.take().is_some_and(|mut pipe| pipe.write_all(text.as_bytes()).is_ok());
         let ended = child.wait().map_err(|e| CliError {
             code: "io_error",
-            message: format!("could not hand the snippet to {program}: {e}"),
+            message: format!("could not hand the text to {program}: {e}"),
             hint: None,
             exit: 1,
         })?;
@@ -3139,7 +3144,7 @@ fn copy_to_clipboard(text: &str) -> Result<(), CliError> {
         }
         return Err(CliError {
             code: "io_error",
-            message: format!("{program} did not take the snippet"),
+            message: format!("{program} did not take the text"),
             hint: Some(format!("pipe it instead: `{} agent-hook snippet <tool> | {program}`", Paths::command_name())),
             exit: 1,
         });
@@ -3582,7 +3587,7 @@ fn offer_agent_hook(
             "amenbo can have this folder's AI read its instruction at the start of every session, through your tool's own session-start hook — so it arrives even when the managed block is not read.\n",
         );
     }
-    prompt.push_str("amenbo writes no settings file: it hands you the text, and you paste it.\n");
+    prompt.push_str("amenbo writes no settings file: it hands you the text to give your AI, and your AI makes the edit.\n");
     if let [one] = named.as_slice() {
         prompt.push_str(&format!("This folder looks like {}'s. ", one.label));
     }
@@ -3594,12 +3599,12 @@ fn offer_agent_hook(
 
     let yes = ask_yes_no(&prompt)?;
     match (yes, named.as_slice()) {
-        // One tool, and the answer is yes: the paste itself, which is the whole of what was asked for.
+        // One tool, and the answer is yes: the text itself, which is the whole of what was asked for.
         (true, [one]) => match amenbo_core::harness::find(one.id) {
             Some(harness) => eprintln!(
-                "\nPaste this into {} — amenbo does not write it for you:\n\n{}\n",
+                "\nGive this to the AI you work with here — it edits {}, and amenbo writes nothing:\n\n{}\n",
                 harness.paste_into,
-                amenbo_core::harness::snippet(harness, cmd)
+                amenbo_core::harness::request(harness, cmd)
             ),
             None => eprintln!("Get it with: {cmd} agent-hook snippet {}", one.id),
         },
@@ -3615,7 +3620,7 @@ fn offer_agent_hook(
 /// Report that this folder's AI is not being started on amenbo, on every response until it is — the
 /// standing signal, where [`offer_agent_hook`] is a one-time question. Under `--json` it lands as a field
 /// on the answer the caller already parses, which is the one surface an AI is sure to read: it can then
-/// hand the human the snippet, which is the only way this setup ever finishes, since amenbo will not write
+/// hand the human the text, which is the only way this setup ever finishes, since amenbo will not write
 /// the file itself.
 ///
 /// **The two faces do not report the same set, because they are told which provider by different things**
@@ -3664,12 +3669,12 @@ fn report_unwired_harnesses(
             [] => {}
             [one] => {
                 eprintln!("⚠ {} here does not run `{cmd} agent` at session start — the instruction reaches it only through the managed block.", one.label);
-                eprintln!("  The text to paste: {cmd} agent-hook snippet {}", one.id);
+                eprintln!("  The text to give your AI: {cmd} agent-hook snippet {}", one.id);
             }
             several => {
                 let labels = several.iter().map(|one| one.label).collect::<Vec<_>>().join(", ");
                 eprintln!("⚠ {labels} here do not run `{cmd} agent` at session start.");
-                eprintln!("  The text to paste, one tool at a time: {cmd} agent-hook snippet <tool>");
+                eprintln!("  The text to give your AI, one tool at a time: {cmd} agent-hook snippet <tool>");
             }
         }
     }

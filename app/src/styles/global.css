@@ -91,6 +91,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The re-sync affordance for an outdated managed block. It wears the accent colour
    (guidance plus an action) to stay distinct from the integrity error's warning colour. */
 .managedblock-banner { background: var(--c-accent); }
+/* The text the copy button hands over, shown rather than hidden behind it: it asks an AI of the
+   reader's to edit a file of theirs, so it is read before it is handed on. Capped and scrolled, so a
+   banner cannot push the app off the screen. */
+.agenthook__request {
+  max-height: 11em; overflow: auto;
+  margin: var(--s-1) 0 var(--s-2);
+  padding: var(--s-2);
+  background: rgba(0, 0, 0, 0.18); border-radius: var(--r-sm);
+  font-size: var(--fs-xs); font-family: var(--font-mono);
+  white-space: pre-wrap; word-break: break-word;
+}
 
 /* ---------- topbar ---------- */
 .topbar {

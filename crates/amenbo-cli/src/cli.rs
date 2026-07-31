@@ -525,8 +525,10 @@ pub enum PluginCmd {
     /// **Nothing is ever applied on amenbo's own account**: naming a plugin, or `--all`, is the whole
     /// consent. Applying re-walks the install door over the new asset — the catalog signature, then this
     /// OS's checksum (`AMB-D-351`) — and retains the build it replaced beside the new one, so there is
-    /// something to go back to. It **keeps** the plugin's gate, its settings and its secrets: an update is
-    /// not a re-install, and wiping those is `uninstall`'s job (`AMB-D-357`). Any step that refuses —
+    /// something to go back to. It **keeps** the plugin's gate and every setting the new build still
+    /// declares: an update is not a re-install, and wiping a plugin's settings wholesale is `uninstall`'s
+    /// job (`AMB-D-357`). What it does take is a value under a key the new build has **stopped** declaring
+    /// (`AMB-D-456`) — nothing would read it again, and a rollback does not bring it back. Any step that refuses —
     /// a build this amenbo cannot speak to, an asset that will not verify, a new schema whose `required`
     /// settings have no value where the plugin is enabled — leaves the working plugin exactly as it was.
     /// That last check is asked of **every** gate the plugin is enabled at, not of the folder you happen to
@@ -558,7 +560,8 @@ pub enum PluginCmd {
     /// puts both back — the same shape self-update's `update --rollback` uses (`AMB-D-341`). Offline and
     /// instant: nothing is fetched and nothing is re-verified, because the retained build already passed
     /// the door on its way in and a rollback is a deliberate return to it. It leaves the gate, the
-    /// settings and the secrets alone, exactly as the update did.
+    /// settings and the secrets alone — including a value the update purged for want of a declaration,
+    /// which stays gone: what is retained is one generation of the build and its manifest (`AMB-D-456`).
     ///
     /// Goes back **one** build, and only one: the retained copy is consumed, so a second rollback has
     /// nothing to restore and says so. Refused, changing nothing, when the plugin is not installed or was

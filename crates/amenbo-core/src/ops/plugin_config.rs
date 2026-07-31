@@ -82,6 +82,30 @@ pub fn forget_plugin(tx: &WriteTx<'_>, plugin: &str) -> Result<usize> {
     Ok(ids.len())
 }
 
+/// Delete every value this plugin holds under a key `declared` does not name, in every project, inside
+/// the caller's transaction — the purge an **update** runs once the new build is in place (`AMB-D-456`:
+/// bytes do not outlive the declaration that asked for them). Returns how many rows went.
+///
+/// It is keyed on what is declared **now**, not on a diff of two manifests: the rule is that a value is
+/// kept only while something asks for it, so a row nothing declares goes whether its key left in this
+/// update or was never declared at all. That makes it idempotent — a second run over the same declaration
+/// finds nothing — and self-healing, since a run that could not finish is simply redone by the next one.
+///
+/// It crosses projects for the reason [`forget_plugin`] does: the declaration is the plugin's, and it is
+/// the same declaration in every project.
+pub fn forget_undeclared(tx: &WriteTx<'_>, plugin: &str, declared: &[&str]) -> Result<usize> {
+    let mut gone = 0;
+    for id in read::plugin_config_row_ids(tx.conn(), plugin)? {
+        let row = read::plugin_config_row_by_id(tx.conn(), id)?
+            .expect("the row id was just read from the same transaction");
+        if !declared.contains(&row.field_key.as_str()) {
+            tx.delete_record("plugin_config", id)?;
+            gone += 1;
+        }
+    }
+    Ok(gone)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,6 +205,48 @@ mod tests {
                 read::plugin_config_value(tx.conn(), b, "worktree", "base").unwrap().as_deref(),
                 Some("main"),
                 "another plugin's rows are untouched",
+            );
+        });
+    }
+
+    /// The purge an update runs (`AMB-D-456`): a key the new manifest no longer declares loses its value
+    /// in every project, and the keys it still declares keep theirs.
+    #[test]
+    fn forgetting_the_undeclared_keeps_what_the_declaration_still_names() {
+        with_tx(|tx| {
+            let a = mk_project(tx, "a");
+            let b = mk_project(tx, "b");
+            set(tx, a, "slack", "channel", Some("#a")).unwrap();
+            set(tx, a, "slack", "legacy", Some("dropped")).unwrap();
+            set(tx, b, "slack", "legacy", Some("dropped-too")).unwrap();
+            set(tx, b, "worktree", "legacy", Some("kept")).unwrap();
+
+            assert_eq!(forget_undeclared(tx, "slack", &["channel"]).unwrap(), 2);
+            assert_eq!(
+                read::plugin_config_value(tx.conn(), a, "slack", "channel").unwrap().as_deref(),
+                Some("#a"),
+            );
+            assert_eq!(read::plugin_config_value(tx.conn(), a, "slack", "legacy").unwrap(), None);
+            assert_eq!(read::plugin_config_value(tx.conn(), b, "slack", "legacy").unwrap(), None);
+            assert_eq!(
+                read::plugin_config_value(tx.conn(), b, "worktree", "legacy").unwrap().as_deref(),
+                Some("kept"),
+                "another plugin's key of the same name is not this plugin's residue",
+            );
+        });
+    }
+
+    /// Nothing to purge is the ordinary update: a declaration that still names every stored key takes
+    /// nothing, however many keys it grew.
+    #[test]
+    fn forgetting_the_undeclared_takes_nothing_when_every_key_is_still_declared() {
+        with_tx(|tx| {
+            let p = mk_project(tx, "p");
+            set(tx, p, "slack", "channel", Some("#a")).unwrap();
+            assert_eq!(forget_undeclared(tx, "slack", &["channel", "added"]).unwrap(), 0);
+            assert_eq!(
+                read::plugin_config_value(tx.conn(), p, "slack", "channel").unwrap().as_deref(),
+                Some("#a"),
             );
         });
     }

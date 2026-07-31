@@ -5,7 +5,7 @@
 use amenbo_scenario::{Args, Domain};
 
 use crate::{opt_bool, req_str, unmapped, Driver, Outcome};
-use crate::judge::{judge_field, judge_timeline};
+use crate::judge::{judge_field, judge_found, judge_timeline};
 
 impl Driver {
     pub(crate) fn decision_action(&mut self, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
@@ -129,6 +129,11 @@ impl Driver {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["decision", "comment", "list", &target.to_string(), "--json"])?;
                 judge_timeline("decision", target, with, &v["comments"])
+            }
+            "found" => {
+                let target = self.resolve(with)?;
+                let hits = self.search(with)?;
+                judge_found("decision", &format!("AMB-D-{target}"), req_str(with, "words")?, with, &hits["hits"])
             }
             "field" => {
                 let target = self.resolve(with)?;

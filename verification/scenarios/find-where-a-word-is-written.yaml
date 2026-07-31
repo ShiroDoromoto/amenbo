@@ -1,0 +1,135 @@
+# Finding where a word is written. A listing answers which records match; this answers which places
+# carry the word, which is the question anyone holding half a memory of something actually asks. The
+# line holds the three faces a reader lands on (a title, a body, a remark on it), the two narrowings,
+# and the rule that decides what counts as a match at all.
+id: find-where-a-word-is-written
+title: A word leads to the places it is written — a title, a body, a comment — and the narrowings leave the rest out
+description: >
+  Write one word into a task's title, another into its notes and a third into a comment on it, and
+  write the first word into a decision as well. Then ask for each word and check the face it comes
+  back on. What is under test is that the answer names the place: a search that returned the right
+  record on the wrong face, or that quietly returned everything, reads as a green list either way, so
+  every arm names the face it expects and every narrowing is asserted from both sides.
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO TASK — the retention window
+    as: window
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: window
+      notes: the window is measured in days, never in rows
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: window
+      text: the sweep runs nightly
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — retention of the outbox
+    as: outbox
+
+  # The three faces of one record. Each word was written in exactly one of them, so a search that
+  # answered on the wrong face would be caught here rather than read as a hit.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: window
+      face: title
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: measured
+      target: window
+      face: body
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: sweep
+      target: window
+      face: comment
+
+  # The same word, written on another record entirely: a search crosses the two sides, and reaching
+  # a decision is not something a task listing could do at all.
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      face: title
+
+  # Words are ANDed over the RECORD, not over one face: the title carries the first word and the
+  # comment the second, and the title is still a place the reader is sent to.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention nightly
+      target: window
+      face: title
+
+  # A word nobody wrote leaves nothing standing, however much of the query the record does carry.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention unwritten
+      target: window
+      present: false
+
+  # `--kind` keeps one side, or one face. The decision is out of a search narrowed to tasks, and the
+  # task's title is out of one narrowed to comments — the record still matches, the face does not.
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      kind: task
+      present: false
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: window
+      kind: comment
+      present: false
+
+  # `--filter` is the task list's own grammar, and it is task vocabulary: it narrows the task side,
+  # and the decisions fall away rather than answering a question about a status they do not have.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: window
+      filter: "status:todo"
+      face: title
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      filter: "status:todo"
+      present: false

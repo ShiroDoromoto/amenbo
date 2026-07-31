@@ -5,7 +5,7 @@
 use amenbo_scenario::{Args, Domain};
 
 use crate::{opt_bool, req_str, unmapped, Driver, Outcome};
-use crate::judge::{judge_field, judge_listing, judge_timeline};
+use crate::judge::{judge_field, judge_found, judge_listing, judge_timeline};
 
 impl Driver {
     pub(crate) fn task_action(&mut self, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
@@ -153,6 +153,11 @@ impl Driver {
                 let v = self.run_json(&["task", "list", "--filter", filter, "--json"])?;
                 let rows = v["tasks"].as_array().map(Vec::as_slice).unwrap_or(&[]);
                 judge_listing("task", target, &format!("`{filter}`"), rows, with)
+            }
+            "found" => {
+                let target = self.resolve(with)?;
+                let hits = self.search(with)?;
+                judge_found("task", &format!("AMB-T-{target}"), req_str(with, "words")?, with, &hits["hits"])
             }
             "status-bucket" => {
                 let target = self.resolve(with)?;

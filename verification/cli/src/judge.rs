@@ -6,7 +6,7 @@
 
 use amenbo_scenario::Args;
 
-use crate::{opt_bool, req_str, Outcome};
+use crate::{opt_bool, req_str, Driver, Outcome};
 
 /// Judge a listing assert: is the row in this listing, and — when the step names a `position` — is it
 /// where the order says it is. `position` is the only place a reorder shows: order is the store's to
@@ -48,6 +48,69 @@ pub(crate) fn judge_listing(
             "{noun} {id} {} {listing} (expected {}, {})",
             if found { "is present in" } else { "is absent from" },
             if present { "present" } else { "absent" },
+            if pass { "as expected" } else { "MISMATCH" }
+        ),
+    ))
+}
+
+impl Driver {
+    /// The one read a `found` assert stands on: the words a step names, and the narrowings it may name
+    /// beside them. Shared by both sides because a search crosses them — the same invocation answers for
+    /// a task and for a decision, and only the ref it is judged against differs.
+    ///
+    /// The words go over as separate arguments, which is how a person types them: a shell splits them,
+    /// and the binary ANDs them.
+    pub(crate) fn search(&self, with: &Args) -> Result<serde_json::Value, String> {
+        let words = req_str(with, "words")?;
+        let mut args: Vec<String> = vec!["search".into()];
+        args.extend(words.split_whitespace().map(str::to_string));
+        for key in ["kind", "filter"] {
+            if let Some(value) = with.get(key).and_then(|v| v.as_str()) {
+                args.push(format!("--{key}"));
+                args.push(value.to_string());
+            }
+        }
+        args.push("--json".into());
+        self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())
+    }
+}
+
+/// Judge a search assert: is the word written on this record — and, when the step names a `face`, is it
+/// written *there*. The hits carry the ref rather than a bare id, so the side is named by the caller
+/// (`AMB-T` / `AMB-D`) and a task and a decision that happen to share a number cannot be mistaken for
+/// each other.
+///
+/// A face is what separates this from a listing: a listing can only say a record matched, and what a
+/// search is for is saying where. `present: false` is the same question in reverse — the proof that a
+/// narrowing (`kind`, `filter`) really left something out.
+pub(crate) fn judge_found(
+    noun: &str,
+    id_ref: &str,
+    words: &str,
+    with: &Args,
+    hits: &serde_json::Value,
+) -> Result<Outcome, String> {
+    let rows = hits.as_array().map(Vec::as_slice).unwrap_or(&[]);
+    let face = with.get("face").and_then(|v| v.as_str());
+    let mine: Vec<&serde_json::Value> =
+        rows.iter().filter(|h| h["ref"].as_str() == Some(id_ref)).collect();
+    let found = match face {
+        Some(want) => mine.iter().any(|h| h["face"].as_str() == Some(want)),
+        None => !mine.is_empty(),
+    };
+    let present = opt_bool(with, "present").unwrap_or(true);
+    let pass = found == present;
+    let where_ = match face {
+        Some(want) => format!(" on its {want}"),
+        None => String::new(),
+    };
+    Ok(Outcome::assert(
+        pass,
+        format!(
+            "{noun} {id_ref} {} `{words}`{where_} ({} hit(s) of its own, expected {}, {})",
+            if found { "is a place that carries" } else { "is not a place that carries" },
+            mine.len(),
+            if present { "found" } else { "not found" },
             if pass { "as expected" } else { "MISMATCH" }
         ),
     ))

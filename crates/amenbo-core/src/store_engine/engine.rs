@@ -13,6 +13,7 @@ use serde::Serialize;
 
 use super::schema;
 use super::schema::col;
+use super::search;
 use super::sql::{Delete, Exists, Expr, Insert, Pred, Select, Sql, Update};
 
 /// The plain tables this module speaks to, named through the generated identifiers: the store's
@@ -253,6 +254,10 @@ impl StoreEngine {
     /// Write one field: UPSERT it straight into its read-model column. A single local store has no
     /// out-of-order writes, so the latest write to a field is simply the current value — no LWW check.
     /// Rejects a `(dataset, col)` the registry does not know (a coding defect at the mutation layer).
+    ///
+    /// A column the word index carries has its normalised copy rewritten in the same breath
+    /// ([`super::search`]): this is the *only* path a record's text takes into the store, so an index
+    /// kept here cannot fall behind by a write path that forgot it.
     pub fn set_field(&self, dataset: &str, row: i64, col: &str, val: Value) -> Result<()> {
         let ds = schema::dataset(dataset).ok_or_else(|| StoreEngineError::UnknownDataset(dataset.into()))?;
         if !ds.writable(col) {
@@ -267,10 +272,19 @@ impl StoreEngine {
             .sql()
             .execute(&self.conn)?;
         Update::table(ds.as_table())
-            .set_value(col, val)
+            .set_value(col, val.clone())
             .filter(Pred::eq(ds.id_col(), row))
             .sql()
             .execute(&self.conn)?;
+        if search::indexes_field(dataset, col) {
+            // Anything but text has no word in it, and the column is one the registry declares as text —
+            // so a NULL is the absence of text, which the copy records by holding no row.
+            let text = match &val {
+                Value::Text(s) => s.as_str(),
+                _ => "",
+            };
+            search::put_doc(&self.conn, dataset, row, col, text)?;
+        }
         Ok(())
     }
 
@@ -377,6 +391,12 @@ impl StoreEngine {
         let ds = schema::dataset(dataset)
             .ok_or_else(|| StoreEngineError::UnknownDataset(dataset.into()))?;
         Delete::from(ds.as_table()).filter(Pred::eq(ds.id_col(), row)).sql().execute(&self.conn)?;
+        // The word index's copy of this record goes with it. Its rows name their record polymorphically,
+        // so no `REFERENCES` can take them — this sweep is what stands in for the constraint, on the same
+        // funnel every record delete passes through.
+        if search::indexes_dataset(dataset) {
+            search::drop_record(&self.conn, dataset, row)?;
+        }
         Ok(())
     }
 

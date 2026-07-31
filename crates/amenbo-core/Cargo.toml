@@ -54,6 +54,11 @@ minisign-verify = "0.2"
 # and reads are issued from inside the write transaction — both are lost the moment a second library
 # opens its own connection. The typed layer amenbo needs is built on top of this one.
 rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl", "hooks"] }
+# NFKC for the word index's normalised copy (`store_engine::search`): the width fold that brings `ＡＩ`
+# and `AI` — and half-width kana and its voicing mark — together is a Unicode table, not a rule that can
+# be written out. Case folding and the kana fold are `std` and arithmetic respectively; only this one
+# needs the data. The rust-lang unicode-rs crate, data-only and no_std-capable.
+unicode-normalization = "0.1"
 # Whole-device backup: the `.amenbo-backup` archive is an uncompressed tar bundling the database's
 # `VACUUM INTO` snapshot plus `manifest.json`. tar streams entries file-by-file, so memory stays
 # bounded; no compression — SQLite snapshots compress poorly and streaming stays simpler.

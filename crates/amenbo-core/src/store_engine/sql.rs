@@ -529,7 +529,7 @@ impl Pred {
 
     /// `<col> LIKE ? ESCAPE '\'` — a substring/prefix match whose pattern binds as a value; text
     /// columns only. The `ESCAPE` is the pair to the caller's escaping of `%` / `_` / `\` in the
-    /// pattern (`escape_like` in [`super::read`]): a user's literal `%` must not become a wildcard.
+    /// pattern ([`super::search::escape_like`]): a user's literal `%` must not become a wildcard.
     pub fn like<E: Expr<Ty = Text>>(col: E, pattern: impl Into<String>) -> Self {
         Self::raw(format!("{} LIKE ? ESCAPE '\\'", col.to_sql()), vec![Value::Text(pattern.into())])
     }

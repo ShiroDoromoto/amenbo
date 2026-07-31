@@ -515,7 +515,7 @@ fn spec_as_authored() -> Value {
                 "start": ["today", "future", "none"],
                 "priority": ["high", "medium", "low", "none"],
                 "project": ["<id>", "<name (exact)>", "(human only — an AI's list is already its bound project)"],
-                "text": ["<substring match over title + notes + comment bodies>"],
+                "text": ["<substring match over title + notes + comment bodies (folded: width, case, hiragana=katakana)>"],
                 "number": ["AMB-T-<n>", "<n>", "#<n> / T-<n> (bare forms, still accepted)", "AMB-D-<n>"],
                 "ref": ["alias of number"],
                 "assignee": ["none", "me", "me-ai", "<user name or ID>"],

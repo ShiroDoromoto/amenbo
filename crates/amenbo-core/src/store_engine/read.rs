@@ -6,9 +6,11 @@
 //! The filter grammar is parsed by [`crate::query::Filter`]; this module only maps an already-parsed
 //! [`Filter`] to a `WHERE` clause.
 //!
-//! Note on `text:` — [`crate::query`] matches it as a case-insensitive **substring of the title, the
-//! notes, or any live comment body**, which this maps to `LIKE` (with an EXISTS over `task_comment`
-//! for the comment arm). That is the whole of full-text here.
+//! Note on `text:` — the words go to the **word index** ([`super::search`]), never to the record's own
+//! columns: a term matches a normalised copy of the title, the notes, or any live comment body, and the
+//! record it belongs to is reached from there. So this module states *which faces belong to which
+//! record*, and leaves what a term means — the trigram index above three characters, a scan of the copy
+//! below it — to the index.
 
 use std::collections::HashMap;
 
@@ -18,6 +20,7 @@ use rusqlite::OptionalExtension;
 use rusqlite::Row;
 
 use super::schema::col;
+use super::search;
 use super::sql::{
     same, Col, Count, Exists, Expr, Int, NotNull, Nullability, Nullable, Pred, Select, Sort, Sql,
     Text as SqlText, Union,
@@ -387,6 +390,33 @@ const TDV: col::task_dimension_value::Cols = col::task_dimension_value::of("tdv"
 const FEED: col::change_feed::Cols = col::change_feed::ALL;
 const META: col::store_meta::Cols = col::store_meta::ALL;
 
+/// The word index's copy, as the two subqueries below alias it.
+const SD: col::search_doc::Cols = col::search_doc::of("sd");
+
+/// One term of a task's word filter: it matches when the term lands on **any** face of the task — its
+/// own title or notes, or the body of one of its live comments.
+///
+/// Both arms seek the copy by its face key (`search_doc_face`), so the cost is the task's own handful of
+/// rows rather than a walk of the index per candidate task; the comment arm reaches the task's comments
+/// through `task_comment_by_task` first, for the same reason the substring scan it replaces did. Which
+/// path the term itself takes inside those rows — the trigram index or a scan of the copy — is
+/// [`search::term_pred`]'s to decide, and does not change what matching means.
+fn task_text_term(term: &str) -> Pred {
+    const TC: col::task_comment::Cols = col::task_comment::of("tc");
+    let own = Exists::over(SD.table)
+        .filter(Pred::eq(SD.owner_kind, search::DATASET_TASK))
+        .filter(same(SD.owner_id, T.id))
+        .filter(search::term_pred(SD, term))
+        .pred();
+    let in_comment = Exists::over(SD.table)
+        .join(TC.table, same(TC.id, SD.owner_id))
+        .filter(Pred::eq(SD.owner_kind, search::DATASET_TASK_COMMENT))
+        .filter(same(TC.task_id, T.id))
+        .filter(search::term_pred(SD, term))
+        .pred();
+    own.or(in_comment)
+}
+
 /// The predicates an already-parsed [`Filter`] stands for — one per filter term, each carrying its own
 /// bind values ([`Pred`]), so the caller can `AND` them, negate them or hand them to two statements
 /// without anything to keep in step.
@@ -445,19 +475,12 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         preds.push(Pred::eq(T.project_id, project_id));
     }
     if let Some(t) = &f.text {
-        // `query` matches `text:` as a case-insensitive substring over title + notes + a live comment
-        // body. The comment arm is an EXISTS over `task_comment` (seek by the `task_comment_by_task`
-        // index), keeping it O(result) rather than a per-task comment scan.
-        const TC: col::task_comment::Cols = col::task_comment::of("tc");
-        let like = || format!("%{}%", escape_like(&t.to_lowercase()));
-        preds.push(
-            Pred::like(T.title.lower(), like())
-                .or(Pred::like(T.notes.lower(), like()))
-                .or(Exists::over(TC.table)
-                    .filter(same(TC.task_id, T.id))
-                    .filter(Pred::like(TC.text.lower(), like()))
-                    .pred()),
-        );
+        // `text:` matches over the word index's normalised copy: the task's own faces (title, notes) and
+        // the faces of its live comments. Every term must land somewhere on the task — the terms are
+        // ANDed, each on any one face — so a two-word text is two predicates, not one.
+        for term in search::terms(t) {
+            preds.push(task_text_term(&term));
+        }
     }
     if let Some(nf) = &f.number {
         // Conversational-number filter (`number:`/`ref:`). A `D-` typed value names a decision, so it
@@ -1401,23 +1424,37 @@ pub fn decision_comment_list(conn: &Connection, decision_id: i64) -> Result<Vec<
     Ok(rows)
 }
 
-/// The decision ids with at least one live comment whose body matches `needle` (a case-insensitive
-/// substring) — the comment arm of `decision list`'s `text:` filter, the counterpart of the task
-/// side's EXISTS over `task_comment` (see the `text:` note at the top of this module). The caller
-/// reads this set **once** and folds it into the in-memory text match, so the whole listing costs one
-/// extra query rather than a per-decision comment scan. Ids come back distinct and in id order.
-pub fn decisions_with_comment_text(conn: &Connection, needle: &str) -> Result<Vec<i64>> {
-    const C: col::decision_comment::Cols = col::decision_comment::ALL;
+/// The decisions every one of `terms` lands on — the whole of `decision list`'s `text:` filter, read
+/// **once** and folded into the in-memory match as a set membership, so the listing costs one extra
+/// query rather than a per-decision scan. A term may land on any of the decision's faces: its title, its
+/// body, or the body of one of its live comments (the same reach the task side has).
+///
+/// No terms is no constraint — an all-whitespace text asks nothing, so every decision comes back rather
+/// than none. Ids come back in id order.
+pub fn decisions_matching_text(conn: &Connection, terms: &[String]) -> Result<Vec<i64>> {
+    const D: col::decision::Cols = col::decision::of("d");
+    const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
     let mut sel = Select::new();
-    sel.distinct();
-    let decision_id = sel.col(C.decision_id);
-    let mut sql = Sql::from(&sel, C.table);
-    let like = format!("%{}%", escape_like(&needle.to_lowercase()));
-    sql.push_where(Some(&Pred::like(C.text.lower(), like)))
-        .order_by([Sort::by(C.decision_id)]);
+    let id = sel.col(D.id);
+    let mut sql = Sql::from(&sel, D.table);
+    let preds = terms.iter().map(|term| {
+        let own = Exists::over(SD.table)
+            .filter(Pred::eq(SD.owner_kind, search::DATASET_DECISION))
+            .filter(same(SD.owner_id, D.id))
+            .filter(search::term_pred(SD, term))
+            .pred();
+        let in_comment = Exists::over(SD.table)
+            .join(DC.table, same(DC.id, SD.owner_id))
+            .filter(Pred::eq(SD.owner_kind, search::DATASET_DECISION_COMMENT))
+            .filter(same(DC.decision_id, D.id))
+            .filter(search::term_pred(SD, term))
+            .pred();
+        own.or(in_comment)
+    });
+    sql.push_where(Pred::all(preds).as_ref()).order_by([Sort::by(D.id)]);
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let ids = stmt
-        .query_map(rusqlite::params_from_iter(sql.params()), |r| decision_id.get(r))
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| id.get(r))
         .map_err(StoreEngineError::from)?
         .collect::<rusqlite::Result<Vec<i64>>>()
         .map_err(StoreEngineError::from)?;
@@ -4193,18 +4230,6 @@ pub fn live_task_titles(conn: &Connection, project: Option<i64>) -> Result<Vec<(
     Ok(rows)
 }
 
-/// Escape LIKE metacharacters so a `text:` term matches literally (paired with `ESCAPE '\'`).
-fn escape_like(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for ch in s.chars() {
-        if matches!(ch, '\\' | '%' | '_') {
-            out.push('\\');
-        }
-        out.push(ch);
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4865,5 +4890,38 @@ mod tests {
         // rather than warning on every superseded ground at once.
         tx.set_field("decision_edge", edge, "drawn_at", Value::Null).unwrap();
         assert!(!premise_change_since(tx.conn(), held).unwrap().unwrap().any());
+    }
+
+    /// Several terms are ANDed, and each is free to land on a **different** face of the same decision
+    /// (`AMB-D-450`) — the reading a search box needs, since the filter grammar splits on whitespace and
+    /// cannot carry more than one word.
+    #[test]
+    fn every_term_must_land_on_the_decision_but_not_on_one_face() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        // One transaction, because a record is created field by field: its reference columns hold their
+        // default until the field that fills them lands, and only a transaction defers the check that long.
+        let tx = e.transaction().unwrap();
+        e.put_record("project", 1, &[("name", text("PJ"))]).unwrap();
+        let mk = |id: i64, title: &str, body: &str| {
+            e.put_record(
+                "decision",
+                id,
+                &[("project_id", Value::Integer(1)), ("title", text(title)), ("body", text(body))],
+            )
+            .unwrap();
+        };
+        mk(1, "索引の設計", "走査の経路も持つ");
+        mk(2, "索引の設計", "別の話");
+        mk(3, "索引の設計", "無関係");
+        e.put_record("decision_comment", 7, &[("decision_id", Value::Integer(2)), ("text", text("走査の経路"))])
+            .unwrap();
+        tx.commit().unwrap();
+
+        let ids = |q: &str| decisions_matching_text(e.conn(), &search::terms(q)).unwrap();
+        assert_eq!(ids("索引"), vec![1, 2, 3], "one term, one face");
+        assert_eq!(ids("索引 走査"), vec![1, 2], "the second term may land on the body or on a comment");
+        assert_eq!(ids("索引 走査 別の話"), vec![2], "three terms, three faces of one decision");
+        assert!(ids("索引 存在しない語").is_empty());
+        assert_eq!(ids("   "), vec![1, 2, 3], "no term is no constraint");
     }
 }

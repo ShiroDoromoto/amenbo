@@ -891,3 +891,60 @@ fn commit_filter_walks_git_back_to_the_task() {
     let (_out, code) = cli.run(&["task", "list", "--project", &pid, "--filter", "commit:", "--json"]);
     assert_ne!(code, 0, "an empty commit value is refused, not treated as match-nothing");
 }
+
+/// `text:` over the word index (`AMB-D-450`), end to end: it reaches every face of a task — its title,
+/// its notes, the body of a comment on it — and it folds width, case and kana on both sides, so a word
+/// typed one way finds the same word written another.
+///
+/// Both paths are exercised on purpose: a term of three characters or more is answered by the trigram
+/// index, a shorter one by a scan of the same normalised copy, and neither is allowed to mean something
+/// the other does not.
+#[test]
+fn a_word_filter_reaches_every_face_and_folds_the_spellings() {
+    let cli = Cli::new();
+    let pid = cli.a_project();
+
+    let a_task = |title: &str, notes: &str| -> String {
+        id_str(&cli.json(&[
+            "task", "add", "--project", &pid, "--title", title, "--notes", notes, "--json",
+        ])["task"]["id"])
+    };
+    let titled = a_task("全文検索の索引を張る", "");
+    let noted = a_task("別件", "ＡＩ が引く経路の Search");
+    let commented = a_task("三件目", "");
+    cli.json(&["comment", "add", &commented, "--text", "さーばの設定を直す", "--json"]);
+
+    let ids_for = |term: &str| -> Vec<String> {
+        let mut ids: Vec<String> = cli.json(&[
+            "task", "list", "--project", &pid, "--filter", &format!("text:{term}"), "--json",
+        ])["tasks"]
+            .as_array()
+            .expect("tasks is an array")
+            .iter()
+            .map(|t| id_str(&t["id"]))
+            .collect();
+        ids.sort();
+        ids
+    };
+
+    // The three faces, each found on its own.
+    assert_eq!(ids_for("全文検索"), vec![titled.clone()], "the title");
+    assert_eq!(ids_for("引く経路"), vec![noted.clone()], "the notes");
+    assert_eq!(ids_for("設定を直す"), vec![commented.clone()], "a comment body");
+
+    // The foldings, on the index path and on the scan path alike.
+    assert_eq!(ids_for("SEARCH"), vec![noted.clone()], "case");
+    assert_eq!(ids_for("サーバ"), vec![commented.clone()], "kana");
+    assert_eq!(ids_for("ai"), vec![noted.clone()], "width and case, on a two-character term");
+    assert_eq!(ids_for("検索"), vec![titled.clone()], "a two-character term the index cannot hold");
+
+    // A word nobody wrote is an empty result, and the index is a substring match rather than a bag of
+    // triples: the same characters in another order do not match.
+    assert!(ids_for("全文一致").is_empty());
+    assert!(ids_for("索引全文").is_empty());
+
+    // A rewrite is followed, and so is a deletion.
+    cli.json(&["task", "update", &titled, "--title", "番号で引く", "--json"]);
+    assert!(ids_for("全文検索").is_empty(), "the old title is no longer a word the task holds");
+    assert_eq!(ids_for("番号で引く"), vec![titled.clone()]);
+}

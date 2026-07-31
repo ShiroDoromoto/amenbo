@@ -272,7 +272,28 @@ pub const STEPS: &[Step] = &[
              );",
         ),
     },
+    Step {
+        to: 17,
+        name: "fill in the word index from the text every record already holds",
+        // `AMB-D-450`. The genesis batch creates the copy table, its FTS5 index and the triggers between
+        // them, so by the time the chain reaches here an older store has them — **empty**. Nothing has
+        // been written since they appeared, and the index is only ever written by a field write, so
+        // without this step every record that existed before the upgrade would be invisible to a word.
+        //
+        // Seeded, unlike every column-adding step above, and seeded from the records themselves rather
+        // than from a guess: the index is derived, so "what it should hold" is not a judgement call —
+        // it is what `search::rebuild` reads back out of the columns it copies.
+        apply: Apply::Custom(fill_the_word_index),
+    },
 ];
+
+/// v17: build the word index for a store whose records predate it. It is exactly the rebuild any repair
+/// would run (`AMB-D-450` — the index holds no truth of its own), so there is nothing here for the chain
+/// to freeze: a store carrying no text ends with an empty index, which is what an empty store means.
+fn fill_the_word_index(ctx: &Ctx<'_>) -> Result<()> {
+    super::search::rebuild(ctx.tx)?;
+    Ok(())
+}
 
 /// v4: the lint-hook question stopped being one per project and became one for the device
 /// (`crate::hooks`), so the `hook_consent` table has no one left to answer for. Dropping it would throw
@@ -1780,5 +1801,50 @@ mod tests {
         assert!(!is_well_formed(BACKWARDS));
         assert!(!is_well_formed(BELOW_BASELINE));
         assert!(is_well_formed(ADD_COLUMN));
+    }
+
+    /// **v17 on every shape the chain starts from.** The word index is created by genesis, so an older
+    /// store gets the tables at open — and empty. A record written before the upgrade is only in the
+    /// index because the step put it there, and without that step it would be a task nobody can find by
+    /// its own title, on exactly the stores nobody's tests are run against (`AMB-D-450`).
+    ///
+    /// Both a long term and a short one, since they take different paths to the same copy: seeding one
+    /// and not the other would leave half the question unasked.
+    #[test]
+    fn the_word_index_is_filled_in_for_records_that_predate_it() {
+        // The version the index arrived at, named literally: this is a question about *that* step, and
+        // a store born at it or later already writes its copies through the field-write funnel.
+        const WORD_INDEX_VERSION: i64 = 17;
+        for born in OLDEST_FROZEN_VERSION..WORD_INDEX_VERSION {
+            let dir = scratch(&format!("word-index-v{born}"));
+            let engine = store_at(&dir, born);
+            // Written straight into the table, as a build of that age wrote it: the index did not exist
+            // then, so nothing about this row can have reached it.
+            engine
+                .conn()
+                .execute("INSERT INTO task (id, title, notes) VALUES (1, ?1, '')", ["全文検索の索引"])
+                .unwrap();
+            let found = |term: &str| -> bool {
+                use crate::store_engine::{schema::col, search, sql::Expr};
+                const SD: col::search_doc::Cols = col::search_doc::of("sd");
+                let pred = search::term_pred(SD, &search::normalize(term));
+                let sql = format!(
+                    "SELECT EXISTS(SELECT 1 FROM search_doc sd WHERE {} = 1 AND {})",
+                    SD.owner_id.to_sql(),
+                    pred.sql(),
+                );
+                engine
+                    .conn()
+                    .query_row(&sql, rusqlite::params_from_iter(pred.params()), |r| r.get::<_, bool>(0))
+                    .unwrap()
+            };
+            assert!(!found("全文検索"), "v{born}: nothing is in the index before the chain runs");
+
+            run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+            assert!(found("全文検索"), "v{born}: a long term reaches the record the step indexed");
+            assert!(found("検索"), "v{born}: and so does a short one, by the scan path");
+            std::fs::remove_dir_all(&dir).ok();
+        }
     }
 }

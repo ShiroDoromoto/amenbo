@@ -69,6 +69,39 @@ steps_cli:
       target: beta
       present: false
 
+  # The wording is matched on a folded copy, so a word reaches the task however it was typed — width
+  # and case are not differences anyone means by them. Asserted from both sides, like every arm here.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — ＧＡＭＭＡ, the one spelled the wide way
+    as: gamma
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "text:gamma"
+      target: gamma
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "text:gamma"
+      target: beta
+      present: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "text:ALPHA"
+      target: alpha
+      present: true
+
   - type: action
     domain: task
     op: status

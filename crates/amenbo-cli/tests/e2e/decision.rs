@@ -370,3 +370,43 @@ fn a_decision_listing_row_names_what_superseded_it() {
         assert!(named(&row(&after, id)).is_empty());
     }
 }
+
+/// `decision list --filter text:` runs over the same word index the task side does (`AMB-D-450`): it
+/// reaches a decision's title, its body and the body of a comment on it, folded the same way.
+#[test]
+fn a_decision_word_filter_reaches_every_face_and_folds_the_spellings() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "検索PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    let a_decision = |title: &str, body: &str| -> String {
+        id_str(&cli.json(&[
+            "decision", "add", "--project", &pid, "--title", title, "--body", body, "--json",
+        ])["decision"]["id"])
+    };
+    let titled = a_decision("全文検索を索引に載せる", "本文はそのまま持つ");
+    let bodied = a_decision("別の決定", "ＡＩ が読む Search の面");
+    let commented = a_decision("三件目", "本文には無い");
+    cli.json(&["decision", "comment", "add", &commented, "--text", "さーばの側で寄せる", "--json"]);
+
+    let ids_for = |term: &str| -> Vec<String> {
+        let mut ids: Vec<String> = cli.json(&[
+            "decision", "list", "--project", &pid, "--filter", &format!("text:{term}"), "--json",
+        ])["decisions"]
+            .as_array()
+            .expect("decisions is an array")
+            .iter()
+            .map(|d| id_str(&d["id"]))
+            .collect();
+        ids.sort();
+        ids
+    };
+
+    assert_eq!(ids_for("全文検索"), vec![titled.clone()], "the title");
+    assert_eq!(ids_for("読む"), vec![bodied.clone()], "the body");
+    assert_eq!(ids_for("寄せる"), vec![commented.clone()], "a comment body");
+    assert_eq!(ids_for("SEARCH"), vec![bodied.clone()], "case, on the index path");
+    assert_eq!(ids_for("サーバ"), vec![commented.clone()], "kana");
+    assert_eq!(ids_for("ai"), vec![bodied.clone()], "a two-character term takes the scan path");
+    assert!(ids_for("全文一致").is_empty());
+}

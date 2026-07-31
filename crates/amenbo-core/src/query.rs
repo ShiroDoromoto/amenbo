@@ -1449,15 +1449,15 @@ impl DecisionFilter {
     /// Whether a decision was superseded lives in the edges, not in a column on the decision, so the
     /// caller looks it up and passes it in. Likewise the two id sets read once and passed in so nothing
     /// is re-queried per decision: `linked_to_task` = the live decisions linked to the task named by
-    /// `task:` (or `None` when `task:` was not given), and `comment_text_hits` = the decisions whose
-    /// comment body matched `text:` (or `None` when `text:` was not given) — the comment arm of the
-    /// text search, mirroring the task side's EXISTS over `task_comment`.
+    /// `task:` (or `None` when `task:` was not given), and `text_hits` = the decisions `text:` landed on
+    /// (or `None` when `text:` was not given), read whole off the word index — title, body and comment
+    /// bodies alike — so the words are folded there and not a second time here.
     fn matches(
         &self,
         d: &crate::model::Decision,
         superseded: bool,
         linked_to_task: Option<&[i64]>,
-        comment_text_hits: Option<&[i64]>,
+        text_hits: Option<&[i64]>,
     ) -> bool {
         if self.task.is_some() && !linked_to_task.is_some_and(|ids| ids.contains(&d.id)) {
             return false;
@@ -1472,17 +1472,11 @@ impl DecisionFilter {
                 return false;
             }
         }
-        if let Some(text) = &self.text {
-            let needle = text.to_lowercase();
-            // Text matches the title, the body, or any live comment body — the comment arm resolved by
-            // the caller into `comment_text_hits` (a set membership, not a per-decision re-query).
-            let in_comment = comment_text_hits.is_some_and(|ids| ids.contains(&d.id));
-            if !in_comment
-                && !d.title.to_lowercase().contains(&needle)
-                && !d.body.to_lowercase().contains(&needle)
-            {
-                return false;
-            }
+        if self.text.is_some() && !text_hits.is_some_and(|ids| ids.contains(&d.id)) {
+            // The whole of `text:` is the caller's one read off the word index (a set membership, not a
+            // per-decision re-query): every face a word may land on is in there, so there is nothing
+            // left to re-check against the record's own columns.
+            return false;
         }
         debug_assert!(self.project_ref.is_none(), "DecisionFilter::resolve was not run");
         if let Some(project_id) = self.project_id {
@@ -1531,11 +1525,12 @@ pub struct DecisionListParams {
     pub project_id: Option<i64>,
     pub filter_expr: Option<String>,
     /// The free-text term, given **structurally** instead of through `filter_expr`'s `text:` key — the
-    /// same term, reaching the same three places (title, body, any live comment body). It exists because
-    /// the filter grammar splits on whitespace and so cannot carry a phrase: a search box hands over
-    /// whatever was typed, spaces and all, and spelling that back into an expression would silently drop
-    /// everything after the first word. When both are given this one wins, on the grounds that a caller
-    /// reaching for it is one that could not say what it means in the grammar.
+    /// same words, reaching the same three places (title, body, any live comment body). It exists because
+    /// the filter grammar splits on whitespace and so cannot carry more than one word: a search box hands
+    /// over whatever was typed, spaces and all, and spelling that back into an expression would silently
+    /// drop everything after the first. Several words are ANDed, each free to land on a different face
+    /// (`AMB-D-450`). When both are given this one wins, on the grounds that a caller reaching for it is
+    /// one that could not say what it means in the grammar.
     pub text: Option<String>,
     /// `decided` / `created` / `number` / `title` / `status` (leading `-` for descending). Empty is the
     /// default ([`DECISION_SORT_DEFAULT`]), so a caller that builds these params in code and leaves the
@@ -1600,10 +1595,14 @@ pub fn decision_list(
         None => None,
     };
 
-    // The comment arm of `text:` — the decisions whose comment body matches, read once (the title and
-    // body arms stay in the in-memory match below). None when no `text:` was given.
-    let comment_text_hits = match &filter.text {
-        Some(t) => Some(read::decisions_with_comment_text(conn, t).map_err(crate::error::engine_on(conn))?),
+    // `text:` in full — the decisions every term lands on, over the word index, read once. The
+    // in-memory match below then asks only whether a decision is in this set, so the words are folded
+    // the one way the index folds them rather than a second way here. None when no `text:` was given.
+    let text_hits = match &filter.text {
+        Some(t) => {
+            let terms = crate::store_engine::search::terms(t);
+            Some(read::decisions_matching_text(conn, &terms).map_err(crate::error::engine_on(conn))?)
+        }
         None => None,
     };
 
@@ -1643,7 +1642,7 @@ pub fn decision_list(
                 &e.decision,
                 !e.superseded_by.is_empty(),
                 linked_to_task.as_deref(),
-                comment_text_hits.as_deref(),
+                text_hits.as_deref(),
             )
         })
         .collect();

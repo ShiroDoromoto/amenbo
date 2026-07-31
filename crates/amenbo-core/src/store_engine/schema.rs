@@ -900,6 +900,25 @@ plain_tables! {
         expires_at: text,
     }
 
+    /// The **word index's normalised copy** — one row per indexed text face (`AMB-D-450`). It is
+    /// derived, never authoritative: [`crate::store_engine::search::rebuild`] reconstructs every row of
+    /// it from the record columns it copies, which is why it is a plain table rather than a
+    /// [`Dataset`](crate::store_engine::schema::Dataset) — `export` carries the records, and a copy
+    /// travelling beside them could only ever come to disagree with them.
+    ///
+    /// `owner_kind` / `owner_id` name the record polymorphically (as `attachment.target_*` does), so no
+    /// `REFERENCES` can hold it and the engine's delete funnel sweeps it by hand. `field` is the column
+    /// the copy is of; the three together are the row's key (`search_doc_face`). `norm` is the copy —
+    /// the FTS5 index over it (`search_fts`) and the short-term scan both read this one column, so the
+    /// two paths can never fold a word differently.
+    search_doc {
+        id: integer("PRIMARY KEY"),
+        owner_kind: text,
+        owner_id: bigint,
+        field: text,
+        norm: text,
+    }
+
     /// The device-local **folder bindings** — the project's main dir, one row per project
     /// ([`crate::binding::Registry`] resolves by it). The key is the project's `INTEGER` id, as a
     /// *natural* key: the record shape would force a surrogate `id`. No `REFERENCES project(id)`: a
@@ -1001,9 +1020,9 @@ PRAGMA journal_mode = WAL;
 -- is seconds rather than milliseconds on a board of ten thousand tasks.
 CREATE INDEX IF NOT EXISTS task_dependency_by_task   ON task_dependency(task_id);
 CREATE INDEX IF NOT EXISTS task_dependency_by_blocker ON task_dependency(blocked_by_id);
--- `text:` full-text spans comment bodies: `read::push_filter` adds an EXISTS over `task_comment` per
--- candidate task. Without this index that subquery scans every comment once per task; keyed by
--- `task_id` it seeks only the task's own comments (O(result)).
+-- A word filter spans comment bodies: `read::task_text_term` reaches a task's comments through this
+-- index on its way to their copies in `search_doc`. Without it that subquery scans every comment once
+-- per task; keyed by `task_id` it seeks only the task's own comments (O(result)).
 CREATE INDEX IF NOT EXISTS task_comment_by_task       ON task_comment(task_id);
 -- A decision's `comment list` seeks its own comments by `decision_id` (mirrors `task_comment_by_task`),
 -- so the read stays O(result) instead of scanning every decision comment.
@@ -1051,6 +1070,28 @@ CREATE INDEX IF NOT EXISTS task_by_project   ON task(project_id);
 -- The project slug's uniqueness. This index *is* the constraint — the column decl cannot carry
 -- `UNIQUE` (see `SLUG`). NULLs are distinct in SQLite, so rows without a slug coexist.
 CREATE UNIQUE INDEX IF NOT EXISTS project_by_slug ON project(slug);
+-- One copy per text face. The triple is the natural key, so a field write upserts the face it already
+-- has rather than appending a second, and its leading columns serve the read that seeks one record's
+-- own faces (`owner_kind`, `owner_id`) — which is how a word filter stays O(result) instead of walking
+-- the whole index once per candidate row.
+CREATE UNIQUE INDEX IF NOT EXISTS search_doc_face ON search_doc(owner_kind, owner_id, field);
+-- The trigram index over that copy, and the three triggers that keep it in step. External-content
+-- (`content='search_doc'`), so the text is stored once: the index holds only the trigrams, and the row
+-- it points at is the copy itself. The triggers are the seam — a doc row cannot be written without its
+-- trigrams following, whatever code wrote it — and they are pure SQL because the folding
+-- (`store_engine::search::normalize`) has already happened by the time a row reaches this table.
+CREATE VIRTUAL TABLE IF NOT EXISTS search_fts
+    USING fts5(norm, content = 'search_doc', content_rowid = 'id', tokenize = 'trigram');
+CREATE TRIGGER IF NOT EXISTS search_doc_insert AFTER INSERT ON search_doc BEGIN
+    INSERT INTO search_fts(rowid, norm) VALUES (new.id, new.norm);
+END;
+CREATE TRIGGER IF NOT EXISTS search_doc_delete AFTER DELETE ON search_doc BEGIN
+    INSERT INTO search_fts(search_fts, rowid, norm) VALUES ('delete', old.id, old.norm);
+END;
+CREATE TRIGGER IF NOT EXISTS search_doc_update AFTER UPDATE ON search_doc BEGIN
+    INSERT INTO search_fts(search_fts, rowid, norm) VALUES ('delete', old.id, old.norm);
+    INSERT INTO search_fts(rowid, norm) VALUES (new.id, new.norm);
+END;
 "#;
 
 /// The `CREATE TABLE IF NOT EXISTS` DDL for the plain tables: exactly the columns declared, in the order
@@ -1152,11 +1193,26 @@ pub fn is_legacy_keyed(conn: &rusqlite::Connection) -> rusqlite::Result<bool> {
     )
 }
 
+/// Is `table` part of the **word index** rather than the store's content — the normalised copy, the FTS5
+/// virtual table over it, or one of the shadow tables FTS5 keeps beside itself
+/// (`search_fts_data`, `search_fts_idx`, `search_fts_docsize`, `search_fts_config`)?
+///
+/// The distinction is what an emptiness question needs: the index is derived from records
+/// ([`crate::store_engine::search`]), so a row here is never a record someone would lose, and FTS5's own
+/// bookkeeping holds rows from the moment the table is created — a fresh store would otherwise read as
+/// content-bearing the instant genesis ran.
+pub fn is_derived_index_table(table: &str) -> bool {
+    table == crate::store_engine::search::DOC_TABLE
+        || table.starts_with(crate::store_engine::search::FTS_TABLE)
+}
+
 /// Does this store hold **no record in any table** — the emptiness proof the writing open takes before
 /// it may clear a pre-consolidation store to genesis (`store::open::reconcile_legacy_key_space`).
-/// Every table SQLite carries is asked, **bar** its own `sqlite_%` bookkeeping and this
-/// build's `store_meta` (store-level scalars — the schema/format stamps, never records); one row
-/// anywhere else makes the store non-empty. The tables are enumerated from `sqlite_master`, not the
+/// Every table SQLite carries is asked, **bar** its own `sqlite_%` bookkeeping, this
+/// build's `store_meta` (store-level scalars — the schema/format stamps, never records) and the word
+/// index ([`is_derived_index_table`], which holds a copy of records rather than records, and whose FTS5
+/// bookkeeping carries rows from the moment the index is created); one row anywhere else makes the store
+/// non-empty. The tables are enumerated from `sqlite_master`, not the
 /// registry, on purpose: a pre-consolidation store carries tables the registry no longer declares
 /// (`story`, `oplog`), and a row in one of those must count too — clearing a store that still holds one
 /// would destroy it. Raw by necessity for the same reason [`is_legacy_keyed`] is: the question is asked
@@ -1166,7 +1222,11 @@ pub fn table_content_is_empty(conn: &rusqlite::Connection) -> rusqlite::Result<b
         "SELECT name FROM sqlite_master \
            WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'store_meta'",
     )?;
-    let tables = stmt.query_map([], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    let tables = stmt
+        .query_map([], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .into_iter()
+        .filter(|t| !is_derived_index_table(t));
     for table in tables {
         // `table` is an identifier read back from `sqlite_master`, not caller input; quote it as an
         // identifier (doubling any embedded quote) since it cannot be bound as a parameter.

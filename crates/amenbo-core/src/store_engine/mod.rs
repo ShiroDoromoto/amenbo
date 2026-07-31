@@ -21,6 +21,7 @@ pub mod runner;
 pub mod schema;
 #[cfg(test)]
 pub mod schema_frozen;
+pub mod search;
 pub mod sql;
 pub mod write;
 

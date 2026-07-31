@@ -1905,6 +1905,168 @@ fn sort_decisions(decisions: &mut [&crate::model::Decision], sort: &str) -> Resu
     })
 }
 
+// ───────────────────────── search ─────────────────────────
+
+/// The order hits come back in (`AMB-D-449`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SearchSort {
+    /// The default: the face first ([`HitFace`]), and within a face the newest first. A word in a name is
+    /// a stronger answer to "where is this written" than the same word in a paragraph.
+    #[default]
+    Face,
+    /// The plain timeline, newest first — the face's weight taken off.
+    Newest,
+    /// The plain timeline, oldest first.
+    Oldest,
+}
+
+/// The default sort, named here rather than only in the CLI's `default_value`, so the in-code default and
+/// the command-line one are the same string.
+pub const SEARCH_SORT_DEFAULT: &str = "face";
+
+/// How many hits a search returns when the caller names no limit. Unlike a listing, `search` **has** a
+/// default ceiling (`AMB-D-449`): one hit carries a snippet, so a query with no limit on it would answer
+/// a common word with a wall of text. The total says how much was left behind.
+pub const SEARCH_LIMIT_DEFAULT: usize = 20;
+
+impl SearchSort {
+    /// Parse the `--sort` spec. `-` leads a descending key, as everywhere else here; `face` has no
+    /// descending form, because the weight of a face is not a scale to walk backwards.
+    pub fn parse(spec: &str) -> Result<Self> {
+        match spec.trim() {
+            "" | "face" => Ok(Self::Face),
+            "-time" => Ok(Self::Newest),
+            "time" => Ok(Self::Oldest),
+            other => Err(Error::invalid(format!(
+                "unknown sort key '{other}' (face/time/-time; `face` weights the face, `-time` is newest first)"
+            ))),
+        }
+    }
+
+    /// The spec this order was written as — what the result echoes back.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Face => "face",
+            Self::Newest => "-time",
+            Self::Oldest => "time",
+        }
+    }
+}
+
+pub use crate::store_engine::search::HitFace;
+
+/// One place a word is written: the face it landed on, the record that face belongs to, and a short
+/// excerpt around the match.
+#[derive(Clone, Debug, Serialize)]
+pub struct SearchHit {
+    /// Which face of the record the words are on.
+    pub face: HitFace,
+    /// Which side the record is: `task` or `decision`. The face alone does not say — a title is either.
+    pub kind: String,
+    /// The record's conversational ref (`AMB-T-<n>` / `AMB-D-<n>`) and its title: what the reader opens to
+    /// read the whole of it.
+    pub r#ref: String,
+    pub title: String,
+    /// The comment the words are in, or the one the attachment hangs off (`AMB-TC-<n>` / `AMB-DC-<n>`).
+    /// `None` when the hit is on the record's own faces.
+    pub comment: Option<String>,
+    /// The hit's own instant: a comment's posting time, or when the text it sits in was last written.
+    pub at: Timestamp,
+    /// The excerpt, in the characters the person wrote ([`crate::store_engine::search::snippet`]). A
+    /// pointer at where something is written, not the reading itself — the whole text is `show` and
+    /// `comment list`'s to give.
+    pub snippet: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct SearchQueryEcho {
+    /// The words as they were typed.
+    pub text: String,
+    pub sort: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct SearchResult {
+    pub query: SearchQueryEcho,
+    /// How many hits this page holds.
+    pub count: usize,
+    /// How many there are in all — what tells the reader a default ceiling left something behind.
+    pub total_matched: usize,
+    pub hits: Vec<SearchHit>,
+}
+
+#[derive(Default)]
+pub struct SearchParams {
+    /// The words, as typed. Split on whitespace and folded by the index ([`crate::store_engine::search`]).
+    pub text: String,
+    pub sort: SearchSort,
+    /// Page size. `None` takes [`SEARCH_LIMIT_DEFAULT`] — this is the one read where "no limit named" is
+    /// not "everything".
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
+/// The `search` read: every place the words are written, hit by hit (`AMB-D-449`).
+///
+/// Selection, order and paging are all the engine's ([`crate::store_engine::read::search_hits`]) — the
+/// page is cut in SQL, so a common word costs the page rather than the store. What is left here is the
+/// shape a face reads: the record's ref, the comment's ref where there is one, the instant parsed back
+/// out of its stored spelling, and the snippet — which is cut here, on the page's rows alone, because
+/// cutting it is work per hit and only these hits are shown.
+///
+/// `reach` is **always** taken as an argument: forcing the scope to be declared in the type means a read
+/// that forgets it does not compile.
+pub fn search(
+    conn: &rusqlite::Connection,
+    reach: crate::reach::Reach,
+    params: SearchParams,
+) -> Result<SearchResult> {
+    let terms = crate::store_engine::search::terms(&params.text);
+    let page = crate::store_engine::read::search_hits(
+        conn,
+        reach,
+        &terms,
+        params.sort,
+        Some(params.limit.unwrap_or(SEARCH_LIMIT_DEFAULT)),
+        params.offset.unwrap_or(0),
+    )
+    .map_err(crate::error::engine_on(conn))?;
+
+    let hits = page
+        .hits
+        .into_iter()
+        .map(|h| {
+            let is_task = h.owner_kind == crate::store_engine::search::DATASET_TASK;
+            SearchHit {
+                face: h.face,
+                r#ref: if is_task {
+                    crate::idref::task(h.owner_id)
+                } else {
+                    crate::idref::decision(h.owner_id)
+                },
+                comment: h.comment_id.map(|id| {
+                    if is_task {
+                        crate::idref::task_comment(id)
+                    } else {
+                        crate::idref::decision_comment(id)
+                    }
+                }),
+                kind: h.owner_kind,
+                title: h.owner_title,
+                at: Timestamp::parse_rfc3339(&h.at).unwrap_or_default(),
+                snippet: crate::store_engine::search::snippet(&h.text, &terms),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Ok(SearchResult {
+        query: SearchQueryEcho { text: params.text, sort: params.sort.as_str().to_string() },
+        count: hits.len(),
+        total_matched: page.total_matched,
+        hits,
+    })
+}
+
 /// `discover` (bare `amenbo`, with no arguments): today's tasks plus what to do next. The raw material
 /// is `status`, read from the engine with indexed SQL ([`status`]); [`discover_from`] assembles it.
 pub fn discover(conn: &rusqlite::Connection, reach: crate::reach::Reach) -> Result<DiscoverResult> {
@@ -2366,5 +2528,92 @@ mod filter_tests {
         .unwrap();
         assert_eq!(page.ids, vec![a], "only the bound project's rows");
         assert_eq!(page.total_matched, 1, "the pre-paging total is counted within the reach too");
+    }
+
+    /// One task with the same word on its title, its notes and a comment — the fixture the search reads.
+    fn worded_task(tx: &WriteTx<'_>, title: &str, notes: &str, project_id: i64) -> i64 {
+        ops::task::add(
+            tx,
+            ops::task::NewTask {
+                title: title.to_string(),
+                notes: notes.to_string(),
+                project_id: Some(project_id),
+                due_on: None,
+                start_on: None,
+                priority: None,
+                created_by_kind: None,
+            },
+        )
+        .expect("add task")
+        .id
+    }
+
+    /// What a face is handed: the record's own ref and title, the comment's ref when the words are on a
+    /// timeline, and an excerpt of the text they landed in.
+    #[test]
+    fn search_hands_back_the_place_the_words_are_written() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pj = proj(tx, "PJ");
+        let t = worded_task(tx, "全文検索の索引", "索引は走査で引く", pj);
+        let c = ops::comment::add_comment(tx, t, ActorKind::Ai, "索引の話をここでする").expect("comment");
+
+        let r = search(
+            tx.conn(),
+            crate::reach::Reach::All,
+            SearchParams { text: "索引".to_string(), ..Default::default() },
+        )
+        .unwrap();
+
+        assert_eq!((r.count, r.total_matched), (3, 3));
+        assert_eq!(r.query.sort, SEARCH_SORT_DEFAULT, "the order is echoed as it was written");
+        let faces: Vec<HitFace> = r.hits.iter().map(|h| h.face).collect();
+        assert_eq!(faces, vec![HitFace::Title, HitFace::Body, HitFace::Comment]);
+        assert!(r.hits.iter().all(|h| h.kind == "task" && h.r#ref == crate::idref::task(t)));
+        assert_eq!(r.hits[0].title, "全文検索の索引");
+        assert_eq!(r.hits[1].snippet, "索引は走査で引く", "the excerpt is of the face it landed on");
+        assert_eq!(r.hits[0].comment, None, "the record's own face sits on no timeline");
+        assert_eq!(
+            r.hits[2].comment.as_deref(),
+            Some(crate::idref::task_comment(c.id).as_str()),
+            "the comment to open to find the words"
+        );
+    }
+
+    /// A hit carries a snippet, so `search` is the one read that **has** a ceiling of its own: no limit
+    /// named is not "everything". The total says what the ceiling left behind.
+    #[test]
+    fn search_holds_an_unlimited_query_to_its_default_ceiling() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pj = proj(tx, "PJ");
+        for i in 0..SEARCH_LIMIT_DEFAULT + 5 {
+            worded_task(tx, &format!("索引 {i}"), "", pj);
+        }
+        let run = |limit| {
+            search(
+                tx.conn(),
+                crate::reach::Reach::All,
+                SearchParams { text: "索引".to_string(), limit, ..Default::default() },
+            )
+            .unwrap()
+        };
+        let capped = run(None);
+        assert_eq!(capped.count, SEARCH_LIMIT_DEFAULT);
+        assert_eq!(capped.total_matched, SEARCH_LIMIT_DEFAULT + 5, "the total is of the hits, not the page");
+        assert_eq!(run(Some(3)).count, 3, "a caller's own limit is taken as it is");
+    }
+
+    /// The `--sort` spec: the default weights the face, and the two timeline forms take that weight off.
+    /// An unknown key is an error rather than a quiet fallback to the default order.
+    #[test]
+    fn search_sort_parses_the_face_and_the_two_timeline_forms() {
+        assert_eq!(SearchSort::parse(SEARCH_SORT_DEFAULT).unwrap(), SearchSort::Face);
+        assert_eq!(SearchSort::parse("").unwrap(), SearchSort::default());
+        assert_eq!(SearchSort::parse("-time").unwrap(), SearchSort::Newest);
+        assert_eq!(SearchSort::parse("time").unwrap(), SearchSort::Oldest);
+        assert_eq!(SearchSort::Newest.as_str(), "-time", "the spec round-trips into the echo");
+        assert!(SearchSort::parse("-face").is_err(), "a face has no descending form");
+        assert!(SearchSort::parse("due").unwrap_err().to_string().contains("face/time/-time"));
     }
 }

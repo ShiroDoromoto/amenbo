@@ -21,8 +21,9 @@ use rusqlite::Row;
 
 use super::schema::col;
 use super::search;
+use super::search::HitFace;
 use super::sql::{
-    same, Col, Count, Exists, Expr, Int, NotNull, Nullability, Nullable, Pred, Select, Sort, Sql,
+    same, Col, Count, Exists, Expr, Int, NotNull, Nullability, Nullable, Pred, Select, Slot, Sort, Sql,
     Text as SqlText, Union,
 };
 use super::{StoreEngineError, Result};
@@ -443,6 +444,34 @@ fn task_text_term(term: &str) -> Pred {
         .filter(attachment_term(search::DATASET_TASK_COMMENT, TC.id, term))
         .pred();
     own.or(in_comment).or(on_value).or(on_axis).or(attached).or(attached_to_comment)
+}
+
+/// The decision's columns as the decision-side word queries name them: `FROM decision d`. The mirror of
+/// [`T`], and the alias [`decision_text_term`] correlates its subqueries to.
+const DEC: col::decision::Cols = col::decision::of("d");
+
+/// One term of a decision's word filter — the mirror of [`task_text_term`], reaching the decision's own
+/// title and body, the body of one of its live comments, and the name of something attached to it or to
+/// one of those comments. The labels are the one difference: only a task is placed on an axis.
+fn decision_text_term(term: &str) -> Pred {
+    const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
+    let own = Exists::over(SD.table)
+        .filter(Pred::eq(SD.owner_kind, search::DATASET_DECISION))
+        .filter(same(SD.owner_id, DEC.id))
+        .filter(search::term_pred(SD, term))
+        .pred();
+    let in_comment = Exists::over(SD.table)
+        .join(DC.table, same(DC.id, SD.owner_id))
+        .filter(Pred::eq(SD.owner_kind, search::DATASET_DECISION_COMMENT))
+        .filter(same(DC.decision_id, DEC.id))
+        .filter(search::term_pred(SD, term))
+        .pred();
+    let attached = attachment_term(search::DATASET_DECISION, DEC.id, term);
+    let attached_to_comment = Exists::over(DC.table)
+        .filter(same(DC.decision_id, DEC.id))
+        .filter(attachment_term(search::DATASET_DECISION_COMMENT, DC.id, term))
+        .pred();
+    own.or(in_comment).or(attached).or(attached_to_comment)
 }
 
 /// One term against the names of whatever is attached to `(target_type, target)` — the filename a blob
@@ -1476,31 +1505,11 @@ pub fn decision_comment_list(conn: &Connection, decision_id: i64) -> Result<Vec<
 /// No terms is no constraint — an all-whitespace text asks nothing, so every decision comes back rather
 /// than none. Ids come back in id order.
 pub fn decisions_matching_text(conn: &Connection, terms: &[String]) -> Result<Vec<i64>> {
-    const D: col::decision::Cols = col::decision::of("d");
-    const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
     let mut sel = Select::new();
-    let id = sel.col(D.id);
-    let mut sql = Sql::from(&sel, D.table);
-    let preds = terms.iter().map(|term| {
-        let own = Exists::over(SD.table)
-            .filter(Pred::eq(SD.owner_kind, search::DATASET_DECISION))
-            .filter(same(SD.owner_id, D.id))
-            .filter(search::term_pred(SD, term))
-            .pred();
-        let in_comment = Exists::over(SD.table)
-            .join(DC.table, same(DC.id, SD.owner_id))
-            .filter(Pred::eq(SD.owner_kind, search::DATASET_DECISION_COMMENT))
-            .filter(same(DC.decision_id, D.id))
-            .filter(search::term_pred(SD, term))
-            .pred();
-        let attached = attachment_term(search::DATASET_DECISION, D.id, term);
-        let attached_to_comment = Exists::over(DC.table)
-            .filter(same(DC.decision_id, D.id))
-            .filter(attachment_term(search::DATASET_DECISION_COMMENT, DC.id, term))
-            .pred();
-        own.or(in_comment).or(attached).or(attached_to_comment)
-    });
-    sql.push_where(Pred::all(preds).as_ref()).order_by([Sort::by(D.id)]);
+    let id = sel.col(DEC.id);
+    let mut sql = Sql::from(&sel, DEC.table);
+    sql.push_where(Pred::all(terms.iter().map(|term| decision_text_term(term))).as_ref())
+        .order_by([Sort::by(DEC.id)]);
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let ids = stmt
         .query_map(rusqlite::params_from_iter(sql.params()), |r| id.get(r))
@@ -1508,6 +1517,422 @@ pub fn decisions_matching_text(conn: &Connection, terms: &[String]) -> Result<Ve
         .collect::<rusqlite::Result<Vec<i64>>>()
         .map_err(StoreEngineError::from)?;
     Ok(ids)
+}
+
+/// One hit of a word search as SQL hands it over: the face it landed on, whose face it is, when it is
+/// dated, and the text it landed in — from which the query layer cuts the snippet
+/// ([`search::snippet`]). One row is one place a word is written, so a record with the word in its title
+/// and in two of its comments is three rows.
+pub struct SearchHitRow {
+    pub face: HitFace,
+    /// Which side the owner is: [`search::DATASET_TASK`] or [`search::DATASET_DECISION`]. Every hit
+    /// belongs to one of the two, including the faces that are not held on the record itself — a label is
+    /// the task's by the placement, an attachment by what it hangs off.
+    pub owner_kind: String,
+    pub owner_id: i64,
+    pub owner_title: String,
+    /// The comment the words are in, or the one the attachment hangs off — the timeline entry the reader
+    /// needs to open to find them. `None` for a hit on the record's own faces.
+    pub comment_id: Option<i64>,
+    /// The hit's **own** instant (`AMB-D-449`): a comment is dated by when it was posted, anything else by
+    /// when the text it sits in was last written.
+    pub at: String,
+    /// The face's text **as it was written** — the fold is the index's copy, never what comes back here.
+    pub text: String,
+}
+
+/// One page of hits: the total before paging, and the page itself.
+pub struct SearchPage {
+    pub total_matched: usize,
+    pub hits: Vec<SearchHitRow>,
+}
+
+/// The row shape every arm of the hit query projects, held to by the compiler ([`Union`]).
+type HitSlots =
+    (Slot<i64>, Slot<String>, Slot<i64>, Slot<String>, Slot<Option<i64>>, Slot<String>, Slot<String>);
+
+/// Project one arm's row — the seam that keeps twelve arms saying the same thing in the same order.
+///
+/// The face travels as its rank ([`HitFace::tier`]) rather than as a name, because the rank is what the
+/// compound query orders by and the mapping back is total. `text` arrives as an **expression** rather
+/// than a column: one face is a `COALESCE` of two (an attachment carries a filename or a url, never
+/// both), and the rest hand in their own registry column through [`Expr::to_sql`].
+#[allow(clippy::too_many_arguments)]
+fn hit_slots(
+    sel: &mut Select,
+    face: HitFace,
+    owner_kind: &str,
+    owner_id: Col<Int>,
+    owner_title: Col<SqlText>,
+    comment_id: Option<Col<Int>>,
+    at: Col<SqlText>,
+    text: String,
+) -> HitSlots {
+    let tier = sel.expr::<i64>(face.tier().to_string());
+    // The kind is grammar here, not data: the two spellings are this module's own constants.
+    let kind = sel.expr::<String>(format!("'{owner_kind}'"));
+    let id = sel.col(owner_id);
+    let title = sel.col(owner_title);
+    let comment = match comment_id {
+        Some(c) => sel.col(c.nullable()),
+        None => sel.expr::<Option<i64>>("NULL"),
+    };
+    let at = sel.col(at);
+    let text = sel.expr::<String>(text);
+    (tier, kind, id, title, comment, at, text)
+}
+
+/// Does this record's own copy of `columns` carry any of the terms — the question that makes one arm's
+/// row a hit. Any term, not every one: what has to carry them all is the **record**, and that is the
+/// caller's other predicate ([`task_text_term`] / [`decision_text_term`]).
+fn face_hit(dataset: &str, id: Col<Int>, columns: &[&str], terms: &[String]) -> Pred {
+    let any_column = Pred::any(columns.iter().map(|c| Pred::eq(SD.field, *c)));
+    let any_term = Pred::any(terms.iter().map(|t| search::term_pred(SD, t)));
+    let mut sub = Exists::over(SD.table)
+        .filter(Pred::eq(SD.owner_kind, dataset))
+        .filter(same(SD.owner_id, id))
+        .filter(any_term.unwrap_or_else(Pred::never));
+    if let Some(p) = any_column {
+        sub = sub.filter(p);
+    }
+    sub.pred()
+}
+
+/// One arm's `WHERE`: this face carries a term, the record carries them all, and — inside a closed reach
+/// — the record is the one project's.
+fn hit_where(face: Pred, record: &Option<Pred>, scope: &Option<Pred>) -> Option<Pred> {
+    Pred::all([Some(face), record.clone(), scope.clone()].into_iter().flatten())
+}
+
+/// Every place `terms` are written, as hits (`AMB-D-449`) — the read behind `search`.
+///
+/// **What a hit is.** One row per (record, face): the task's own title or notes, the decision's title or
+/// body, one comment's text on either, a label the task was placed on, or the name of something attached
+/// to either — or to one of those comments. The faces are [`search::FACES`]'s to list; this is where each
+/// one is said to be a task's or a decision's, which the index itself does not know.
+///
+/// **Where the AND sits.** Every term has to land on the **record**, on any of its faces, which is the
+/// same rule the list filters match by ([`task_text_term`] / [`decision_text_term`]) — so the two mouths
+/// can never disagree about whether a word reaches a record (`AMB-D-449`). A face is then shown when it
+/// carries *any* of them: a search for two words returns the places each is written, rather than only the
+/// places both happen to sit together.
+///
+/// **The order arrives with the rows.** The page is cut in SQL, so the sort cannot be something the
+/// reader applies to what it was handed. The compound query names its order by position, which is the
+/// projection's to say ([`Slot::ordinal`]).
+pub fn search_hits(
+    conn: &Connection,
+    reach: crate::reach::Reach,
+    terms: &[String],
+    sort: crate::query::SearchSort,
+    limit: Option<usize>,
+    offset: usize,
+) -> Result<SearchPage> {
+    // No words is no search — and, unlike a filter, not "no constraint": every record's every face is not
+    // an answer to "where is this written".
+    if terms.is_empty() {
+        return Ok(SearchPage { total_matched: 0, hits: Vec::new() });
+    }
+    let project_id = reach.narrow(None).map_err(StoreEngineError::OutOfReach)?;
+    let started = std::time::Instant::now();
+
+    const TC: col::task_comment::Cols = col::task_comment::of("tc");
+    const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
+    const A: col::attachment::Cols = col::attachment::of("a");
+    const DIM: col::dimension::Cols = col::dimension::of("dim");
+    const DV: col::dimension_value::Cols = col::dimension_value::of("dv");
+    const TASK: &str = search::DATASET_TASK;
+    const DECISION: &str = search::DATASET_DECISION;
+
+    // The record-level AND, and the reach, computed once and cloned into every arm that owns that side.
+    let task_all = Pred::all(terms.iter().map(|t| task_text_term(t)));
+    let decision_all = Pred::all(terms.iter().map(|t| decision_text_term(t)));
+    let task_scope = project_id.map(|pid| Pred::eq(T.project_id, pid));
+    let decision_scope = project_id.map(|pid| Pred::eq(DEC.project_id, pid));
+    // What an attachment hangs off, as the join that reaches it: polymorphic, so the target kind is half
+    // of the condition.
+    let hangs_off = |kind: &str, target: Col<Int>| same(A.target_id, target).and(Pred::eq(A.target_type, kind));
+
+    let (slots, mut sql) = Union::all(|sel| {
+        // A task's title.
+        let slots =
+            hit_slots(sel, HitFace::Title, TASK, T.id, T.title, None, T.updated_at, T.title.to_sql());
+        let mut tail = Sql::from_table(T.table);
+        tail.push_where(
+            hit_where(face_hit(TASK, T.id, &["title"], terms), &task_all, &task_scope).as_ref(),
+        );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // A task's notes.
+        let slots =
+            hit_slots(sel, HitFace::Body, TASK, T.id, T.title, None, T.updated_at, T.notes.to_sql());
+        let mut tail = Sql::from_table(T.table);
+        tail.push_where(
+            hit_where(face_hit(TASK, T.id, &["notes"], terms), &task_all, &task_scope).as_ref(),
+        );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // A decision's title.
+        let slots = hit_slots(
+            sel,
+            HitFace::Title,
+            DECISION,
+            DEC.id,
+            DEC.title,
+            None,
+            DEC.updated_at,
+            DEC.title.to_sql(),
+        );
+        let mut tail = Sql::from_table(DEC.table);
+        tail.push_where(
+            hit_where(face_hit(DECISION, DEC.id, &["title"], terms), &decision_all, &decision_scope)
+                .as_ref(),
+        );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // A decision's body.
+        let slots = hit_slots(
+            sel,
+            HitFace::Body,
+            DECISION,
+            DEC.id,
+            DEC.title,
+            None,
+            DEC.updated_at,
+            DEC.body.to_sql(),
+        );
+        let mut tail = Sql::from_table(DEC.table);
+        tail.push_where(
+            hit_where(face_hit(DECISION, DEC.id, &["body"], terms), &decision_all, &decision_scope)
+                .as_ref(),
+        );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // A comment on a task — dated by when it was posted.
+        let slots = hit_slots(
+            sel,
+            HitFace::Comment,
+            TASK,
+            T.id,
+            T.title,
+            Some(TC.id),
+            TC.created_at,
+            TC.text.to_sql(),
+        );
+        let mut tail = Sql::from_table(TC.table);
+        tail.join(T.table, same(T.id, TC.task_id)).push_where(
+            hit_where(face_hit(search::DATASET_TASK_COMMENT, TC.id, &["text"], terms), &task_all, &task_scope)
+                .as_ref(),
+        );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // A comment on a decision.
+        let slots = hit_slots(
+            sel,
+            HitFace::Comment,
+            DECISION,
+            DEC.id,
+            DEC.title,
+            Some(DC.id),
+            DC.created_at,
+            DC.text.to_sql(),
+        );
+        let mut tail = Sql::from_table(DC.table);
+        tail.join(DEC.table, same(DEC.id, DC.decision_id)).push_where(
+            hit_where(
+                face_hit(search::DATASET_DECISION_COMMENT, DC.id, &["text"], terms),
+                &decision_all,
+                &decision_scope,
+            )
+            .as_ref(),
+        );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // A label the task was placed on — the value's name.
+        let slots =
+            hit_slots(sel, HitFace::Label, TASK, T.id, T.title, None, DV.updated_at, DV.name.to_sql());
+        let mut tail = Sql::from_table(TDV.table);
+        tail.join(T.table, same(T.id, TDV.task_id))
+            .join(DV.table, same(DV.id, TDV.value_id))
+            .push_where(
+                hit_where(
+                    face_hit(search::DATASET_DIMENSION_VALUE, DV.id, &["name"], terms),
+                    &task_all,
+                    &task_scope,
+                )
+                .as_ref(),
+            );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // The axis that label is a value of, reached through the same placement.
+        let slots =
+            hit_slots(sel, HitFace::Label, TASK, T.id, T.title, None, DIM.updated_at, DIM.name.to_sql());
+        let mut tail = Sql::from_table(TDV.table);
+        tail.join(T.table, same(T.id, TDV.task_id))
+            .join(DIM.table, same(DIM.id, TDV.dimension_id))
+            .push_where(
+                hit_where(
+                    face_hit(search::DATASET_DIMENSION, DIM.id, &["name"], terms),
+                    &task_all,
+                    &task_scope,
+                )
+                .as_ref(),
+            );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // Something attached to a task.
+        let slots = hit_slots(
+            sel,
+            HitFace::Attachment,
+            TASK,
+            T.id,
+            T.title,
+            None,
+            A.updated_at,
+            attachment_name(A),
+        );
+        let mut tail = Sql::from_table(A.table);
+        tail.join(T.table, hangs_off(TASK, T.id)).push_where(
+            hit_where(
+                face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
+                &task_all,
+                &task_scope,
+            )
+            .as_ref(),
+        );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // Something attached to a decision.
+        let slots = hit_slots(
+            sel,
+            HitFace::Attachment,
+            DECISION,
+            DEC.id,
+            DEC.title,
+            None,
+            A.updated_at,
+            attachment_name(A),
+        );
+        let mut tail = Sql::from_table(A.table);
+        tail.join(DEC.table, hangs_off(DECISION, DEC.id)).push_where(
+            hit_where(
+                face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
+                &decision_all,
+                &decision_scope,
+            )
+            .as_ref(),
+        );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // Something pinned to a comment on a task: the task's, by the same reading that puts the
+        // comment's own body here.
+        let slots = hit_slots(
+            sel,
+            HitFace::Attachment,
+            TASK,
+            T.id,
+            T.title,
+            Some(TC.id),
+            A.updated_at,
+            attachment_name(A),
+        );
+        let mut tail = Sql::from_table(A.table);
+        tail.join(TC.table, hangs_off(search::DATASET_TASK_COMMENT, TC.id))
+            .join(T.table, same(T.id, TC.task_id))
+            .push_where(
+                hit_where(
+                    face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
+                    &task_all,
+                    &task_scope,
+                )
+                .as_ref(),
+            );
+        (slots, tail)
+    })
+    .arm(|sel| {
+        // Something pinned to a comment on a decision.
+        let slots = hit_slots(
+            sel,
+            HitFace::Attachment,
+            DECISION,
+            DEC.id,
+            DEC.title,
+            Some(DC.id),
+            A.updated_at,
+            attachment_name(A),
+        );
+        let mut tail = Sql::from_table(A.table);
+        tail.join(DC.table, hangs_off(search::DATASET_DECISION_COMMENT, DC.id))
+            .join(DEC.table, same(DEC.id, DC.decision_id))
+            .push_where(
+                hit_where(
+                    face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
+                    &decision_all,
+                    &decision_scope,
+                )
+                .as_ref(),
+            );
+        (slots, tail)
+    })
+    .into_parts();
+
+    // The total is counted over the arms as they stand, before the page is cut from them.
+    let mut counted = Select::new();
+    let matched = counted.count_all();
+    let count = Sql::from_sub(&counted, &sql, "hit");
+    let total = conn
+        .query_row(count.text(), rusqlite::params_from_iter(count.params()), |r| matched.get(r))
+        .map_err(StoreEngineError::from)? as usize;
+
+    let (tier, kind, owner_id, owner_title, comment_id, at, text) = slots;
+    let (tier_n, at_n, id_n) = (tier.ordinal(), at.ordinal(), owner_id.ordinal());
+    // Newest first within whatever leads: the current context is on the new side of a store that only
+    // accumulates. The id breaks the remaining ties so a page boundary never wobbles between two reads.
+    let order = match sort {
+        crate::query::SearchSort::Face => format!(" ORDER BY {tier_n}, {at_n} DESC, {id_n} DESC"),
+        crate::query::SearchSort::Newest => format!(" ORDER BY {at_n} DESC, {tier_n}, {id_n} DESC"),
+        crate::query::SearchSort::Oldest => format!(" ORDER BY {at_n}, {tier_n}, {id_n}"),
+    };
+    sql.push(order).limit(limit.map(|n| n as i64).unwrap_or(-1)).offset(offset as i64);
+
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let hits = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok(SearchHitRow {
+                // The rank was written by this query, so there is no other face it could name.
+                face: HitFace::from_tier(tier.get(r)?).expect("the tier this query projects"),
+                owner_kind: kind.get(r)?,
+                owner_id: owner_id.get(r)?,
+                owner_title: owner_title.get(r)?,
+                comment_id: comment_id.get(r)?,
+                at: at.get(r)?,
+                text: text.get(r)?,
+            })
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<SearchHitRow>>>()
+        .map_err(StoreEngineError::from)?;
+
+    crate::perf::record_query("engine.search_hits", total, hits.len(), started.elapsed());
+    Ok(SearchPage { total_matched: total, hits })
+}
+
+/// What an attachment is called, as one expression: the filename it came in under, or the address the
+/// link points at. Exactly one of the two is present on any row, so the `COALESCE` is a choice between a
+/// value and an absence rather than between two values; the empty string is the third arm only so the
+/// column can be read as text whatever the row holds.
+fn attachment_name(a: col::attachment::Cols) -> String {
+    format!("COALESCE({}, {}, '')", a.filename.to_sql(), a.url.to_sql())
 }
 
 /// One decision linked to a task (the reverse of decision→tasks): its conversational number, title and
@@ -4972,5 +5397,248 @@ mod tests {
         assert_eq!(ids("索引 走査 別の話"), vec![2], "three terms, three faces of one decision");
         assert!(ids("索引 存在しない語").is_empty());
         assert_eq!(ids("   "), vec![1, 2, 3], "no term is no constraint");
+    }
+
+    /// A store the hit-level search reads: one word written on every face there is — a task's title and
+    /// notes, a comment on it, a decision's title, a label another task was placed on, and the name of a
+    /// file attached to that task — plus one task in another project, for the reach.
+    fn search_store() -> StoreEngine {
+        let e = StoreEngine::open_in_memory().unwrap();
+        let tx = e.transaction().unwrap();
+        let at = |t: &str| ("updated_at", text(t));
+        e.put_record("project", 1, &[("name", text("PJ"))]).unwrap();
+        e.put_record("project", 2, &[("name", text("別 PJ"))]).unwrap();
+        e.put_record(
+            "task",
+            1,
+            &[
+                ("project_id", Value::Integer(1)),
+                ("title", text("全文検索の索引")),
+                ("notes", text("索引は走査の経路も持つ")),
+                at("2026-07-01T00:00:00Z"),
+            ],
+        )
+        .unwrap();
+        e.put_record(
+            "task",
+            2,
+            &[("project_id", Value::Integer(1)), ("title", text("名前で引く")), at("2026-07-02T00:00:00Z")],
+        )
+        .unwrap();
+        e.put_record(
+            "task",
+            3,
+            &[("project_id", Value::Integer(2)), ("title", text("索引を別 PJ で")), at("2026-07-09T00:00:00Z")],
+        )
+        .unwrap();
+        e.put_record(
+            "task_comment",
+            5,
+            &[
+                ("task_id", Value::Integer(1)),
+                ("text", text("索引の話をここでする")),
+                ("created_at", text("2026-07-03T00:00:00Z")),
+            ],
+        )
+        .unwrap();
+        e.put_record(
+            "decision",
+            1,
+            &[
+                ("project_id", Value::Integer(1)),
+                ("title", text("索引を退役させる")),
+                ("body", text("読み手がいない")),
+                at("2026-07-05T00:00:00Z"),
+            ],
+        )
+        .unwrap();
+        e.put_record(
+            "dimension",
+            1,
+            &[("project_id", Value::Integer(1)), ("name", text("フェーズ")), at("2026-07-04T00:00:00Z")],
+        )
+        .unwrap();
+        e.put_record(
+            "dimension_value",
+            1,
+            &[("dimension_id", Value::Integer(1)), ("name", text("索引の期")), at("2026-07-04T00:00:00Z")],
+        )
+        .unwrap();
+        e.put_record(
+            "task_dimension_value",
+            1,
+            &[
+                ("task_id", Value::Integer(2)),
+                ("dimension_id", Value::Integer(1)),
+                ("value_id", Value::Integer(1)),
+            ],
+        )
+        .unwrap();
+        e.put_record(
+            "attachment",
+            1,
+            &[
+                ("target_type", text("task")),
+                ("target_id", Value::Integer(2)),
+                ("kind", text("blob")),
+                ("filename", text("索引ログ.md")),
+                at("2026-07-06T00:00:00Z"),
+            ],
+        )
+        .unwrap();
+        tx.commit().unwrap();
+        e
+    }
+
+    /// One hit, as these tests read it: the face, whose it is, and the comment it sits on if any.
+    fn line(h: &SearchHitRow) -> String {
+        let owner = if h.owner_kind == search::DATASET_TASK {
+            crate::idref::task(h.owner_id)
+        } else {
+            crate::idref::decision(h.owner_id)
+        };
+        match h.comment_id {
+            Some(c) => format!("{:?} {owner} #{c}", h.face),
+            None => format!("{:?} {owner}", h.face),
+        }
+    }
+
+    /// The hits one query reaches inside the bound project, in the order they come back.
+    fn found(e: &StoreEngine, q: &str, sort: crate::query::SearchSort, limit: Option<usize>, offset: usize) -> (usize, Vec<String>) {
+        let page = search_hits(e.conn(), crate::reach::Reach::binding(1), &search::terms(q), sort, limit, offset)
+            .unwrap();
+        (page.total_matched, page.hits.iter().map(line).collect())
+    }
+
+    /// A hit is one **place** a word is written, and every face the index carries is one: the record's own
+    /// title and body, a comment on it, a label the task was placed on, and the name of something attached
+    /// to it. The default order is the face first, and the newest first inside a face (`AMB-D-449`).
+    #[test]
+    fn a_hit_names_the_face_it_landed_on_and_whose_it_is() {
+        let e = search_store();
+        let (total, hits) = found(&e, "索引", crate::query::SearchSort::Face, None, 0);
+        assert_eq!(
+            hits,
+            vec![
+                // Two titles, the newer first.
+                "Title AMB-D-1",
+                "Title AMB-T-1",
+                "Body AMB-T-1",
+                "Comment AMB-T-1 #5",
+                "Label AMB-T-2",
+                "Attachment AMB-T-2",
+            ]
+        );
+        assert_eq!(total, hits.len(), "the total counts the same hits when nothing is paged off");
+    }
+
+    /// The hit carries the text it landed in, as it was written — the snippet is cut from this, and the
+    /// index's folded copy never comes back out.
+    #[test]
+    fn a_hit_carries_the_text_the_person_wrote() {
+        let e = search_store();
+        let page = search_hits(
+            e.conn(),
+            crate::reach::Reach::binding(1),
+            &search::terms("ＡＩ 索引"),
+            crate::query::SearchSort::Face,
+            None,
+            0,
+        )
+        .unwrap();
+        assert!(page.hits.is_empty(), "a word nobody wrote holds the record back");
+
+        let page = search_hits(
+            e.conn(),
+            crate::reach::Reach::binding(1),
+            &search::terms("索引ログ"),
+            crate::query::SearchSort::Face,
+            None,
+            0,
+        )
+        .unwrap();
+        assert_eq!(page.hits[0].text, "索引ログ.md", "the attachment's own name, whichever column holds it");
+    }
+
+    /// Every term has to land on the **record** — the rule the list filters match by, so the two mouths
+    /// cannot disagree about whether a word reaches a record — while a face is shown for carrying *any* of
+    /// them, which is what makes the answer "here is where each word is written".
+    #[test]
+    fn the_terms_are_anded_over_the_record_and_a_face_shows_any_of_them() {
+        let e = search_store();
+        let (_, hits) = found(&e, "索引 走査", crate::query::SearchSort::Face, None, 0);
+        assert_eq!(
+            hits,
+            vec!["Title AMB-T-1", "Body AMB-T-1", "Comment AMB-T-1 #5"],
+            "the decision carries only one of the two words, so none of its faces is a place"
+        );
+        assert_eq!(
+            found(&e, "索引 存在しない語", crate::query::SearchSort::Face, None, 0).1.len(),
+            0,
+            "a word nothing carries empties the answer"
+        );
+    }
+
+    /// `--sort` takes the face's weight off and reads the plain timeline, by the hit's **own** instant: a
+    /// comment's posting time, and for anything else when the text it sits in was last written.
+    #[test]
+    fn the_sort_can_drop_the_faces_weight_for_the_plain_timeline() {
+        let e = search_store();
+        let (_, newest) = found(&e, "索引", crate::query::SearchSort::Newest, None, 0);
+        assert_eq!(
+            newest,
+            vec![
+                "Attachment AMB-T-2",
+                "Title AMB-D-1",
+                "Label AMB-T-2",
+                "Comment AMB-T-1 #5",
+                "Title AMB-T-1",
+                "Body AMB-T-1",
+            ]
+        );
+        let (_, oldest) = found(&e, "索引", crate::query::SearchSort::Oldest, None, 0);
+        assert_eq!(oldest.first().unwrap(), "Title AMB-T-1", "the other end of the same line");
+        assert_eq!(oldest.len(), newest.len());
+    }
+
+    /// The page is cut in SQL, and the total counts what it was cut from — which is what tells a reader
+    /// that a default ceiling left something behind.
+    #[test]
+    fn the_page_is_cut_from_the_hits_and_the_total_counts_them_all() {
+        let e = search_store();
+        let (total, page) = found(&e, "索引", crate::query::SearchSort::Face, Some(2), 1);
+        assert_eq!(total, 6, "the total is of the hits, not of the page");
+        assert_eq!(page, vec!["Title AMB-T-1", "Body AMB-T-1"]);
+        assert!(found(&e, "索引", crate::query::SearchSort::Face, Some(2), 99).1.is_empty());
+    }
+
+    /// The reach is the search's too: a bound project does not answer with another's records, and no
+    /// binding reaches everything.
+    #[test]
+    fn the_reach_narrows_the_hits_to_the_project_it_is_bound_to() {
+        let e = search_store();
+        assert!(
+            !found(&e, "索引", crate::query::SearchSort::Face, None, 0).1.contains(&"Title AMB-T-3".to_string()),
+            "the other project's task is out of a bound reach"
+        );
+        let all = search_hits(
+            e.conn(),
+            crate::reach::Reach::All,
+            &search::terms("索引"),
+            crate::query::SearchSort::Face,
+            None,
+            0,
+        )
+        .unwrap();
+        assert!(all.hits.iter().map(line).any(|l| l == "Title AMB-T-3"));
+    }
+
+    /// No words is not "no constraint" here, the way it is in a filter: every face of every record is not
+    /// an answer to where a word is written.
+    #[test]
+    fn a_search_with_no_words_is_no_search() {
+        let e = search_store();
+        let (total, hits) = found(&e, "   ", crate::query::SearchSort::Face, None, 0);
+        assert_eq!((total, hits.len()), (0, 0));
     }
 }

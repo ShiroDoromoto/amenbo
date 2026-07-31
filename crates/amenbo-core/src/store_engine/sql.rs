@@ -1382,6 +1382,17 @@ impl<V> Clone for Slot<V> {
 }
 impl<V> Copy for Slot<V> {}
 
+impl<V> Slot<V> {
+    /// This item's **1-based position** in the select list — the only name a compound query's `ORDER BY`
+    /// can call it by. The arms of a [`Union`] each spell their own expressions, so there is no column
+    /// the order could name; SQLite orders such a query by position instead, and taking the position
+    /// from the slot keeps the order tied to the projection rather than to a number written out beside
+    /// it (which a column inserted above would silently move).
+    pub fn ordinal(&self) -> usize {
+        self.index + 1
+    }
+}
+
 impl<V: rusqlite::types::FromSql> Slot<V> {
     /// Read this item out of a row of the query its [`Select`] built.
     pub fn get(&self, row: &rusqlite::Row<'_>) -> rusqlite::Result<V> {

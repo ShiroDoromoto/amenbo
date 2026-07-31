@@ -20,6 +20,8 @@
 //! ([`plugin_dispatch::fan_out`](crate::plugin_dispatch::fan_out)) and who runs a queue are above this
 //! seam.
 
+use std::collections::HashMap;
+
 use rusqlite::Connection;
 
 use super::engine::{Result, StoreEngineError};
@@ -152,14 +154,15 @@ pub fn queued_for(conn: &Connection, plugin: &str, limit: i64) -> Result<Vec<Que
     Ok(rows)
 }
 
-/// How many rows one plugin still owes — the whole of its queue, not a page of it (`AMB-D-417`).
+/// How many rows one plugin still owes — the whole of its queue, not a page of it.
 ///
-/// The runner counts this once before a pass and hands each plugin what is left after its own run, so the
-/// count has to be over every row waiting: counting the page it is about to read would say *nothing behind
-/// you* to a plugin with hundreds of rows behind it, which is the one thing the number is for.
+/// The whole queue is what makes the number worth reading: counting the page a reader is about to take
+/// would say *nothing behind you* on a queue with hundreds of rows still on it. A flush takes it on either
+/// side of a run to report what left the queue and what is still owed.
 ///
-/// [`backlog`] answers the same question for every plugin at once, and is what a diagnosis wants. This is
-/// the one-plugin form, for the runner that already knows whose queue it is on.
+/// [`queued_count_by_project`] is the split a run is handed (`AMB-D-457`) — a run reaches one project, so
+/// the number it can act on is that project's. [`backlog`] answers the same question for every plugin at
+/// once, for a diagnosis. This is the whole-plugin form, for a caller that means the whole plugin.
 pub fn queued_count(conn: &Connection, plugin: &str) -> Result<i64> {
     let q = col::plugin_queue::ALL;
     let mut sel = Select::new();
@@ -171,6 +174,40 @@ pub fn queued_count(conn: &Connection, plugin: &str) -> Result<i64> {
         .query_row(rusqlite::params_from_iter(sql.params()), |r| waiting.get(r))
         .map_err(StoreEngineError::from)?;
     Ok(count)
+}
+
+/// How many rows one plugin still owes **per project** — the same whole-queue count as [`queued_count`],
+/// split at the seam a run is scoped to (`AMB-D-457`).
+///
+/// A run reaches one project and no other: its gate, its settings and its secrets are all resolved at the
+/// project × plugin crossing (`AMB-D-434`), so a number covering every project is a number no run could act
+/// on. Counted here, the projects do not touch each other — what one owes says nothing about the next.
+///
+/// Rows stamped with no project (`NULL`) are counted as one group of their own, under `None`: a record in
+/// no project is not a missing answer, and its events are as deliverable as any other's. A plugin with
+/// nothing queued comes back empty rather than with zeroes — the caller reads an absent key as `0`.
+pub fn queued_count_by_project(
+    conn: &Connection,
+    plugin: &str,
+) -> Result<HashMap<Option<i64>, i64>> {
+    let q = col::plugin_queue::ALL;
+    let mut sel = Select::new();
+    let project = sel.col(q.project);
+    let waiting = sel.count_all();
+    let mut sql = Sql::from(&sel, q.table);
+    sql.push_where(Some(&Pred::eq(q.plugin, plugin)));
+    // Written out because it is the grouping itself, not a column of the projection. SQLite groups every
+    // `NULL` together, which is exactly the one "no project" group this wants.
+    sql.push(format!(" GROUP BY {}", q.project.to_sql()));
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((project.get(r)?, waiting.get(r)?))
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<HashMap<_, _>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
 }
 
 /// One plugin's queue, counted rather than read: how much it still owes, and since when.
@@ -462,6 +499,52 @@ mod tests {
         assert_eq!(queued_count(e.conn(), "slack").unwrap(), 3);
         assert_eq!(queued_for(e.conn(), "slack", 2).unwrap().len(), 2, "while a page reads only its page");
         assert_eq!(queued_count(e.conn(), "email").unwrap(), 1, "and each queue is counted alone");
+    }
+
+    /// The per-project count splits one plugin's queue at the seam a run is scoped to (`AMB-D-457`): each
+    /// project answers for its own rows, rows carrying no project are one group under `None`, and another
+    /// plugin's queue is no part of the answer. A plugin with nothing waiting comes back empty.
+    #[test]
+    fn a_queue_is_counted_per_project_with_no_project_as_its_own_group() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        assert!(
+            queued_count_by_project(e.conn(), "slack").unwrap().is_empty(),
+            "an empty queue names no project"
+        );
+
+        let queue_in = |plugin: &str, project: Option<i64>, id: i64| {
+            let tx = e.write().unwrap();
+            tx.queue_event(&QueuedEvent {
+                plugin,
+                face: "cli",
+                event: "task.created",
+                record_id: id,
+                actor: "ai",
+                at: "2026-07-25T09:00:00Z",
+                new_state: None,
+                project,
+                record: None,
+                parent: None,
+            })
+            .unwrap();
+            tx.commit().unwrap();
+        };
+        queue_in("slack", Some(1), 1);
+        queue_in("slack", Some(1), 2);
+        queue_in("slack", Some(2), 3);
+        queue_in("slack", None, 4);
+        queue_in("email", Some(1), 5);
+
+        let counted = queued_count_by_project(e.conn(), "slack").unwrap();
+        assert_eq!(counted.get(&Some(1)), Some(&2));
+        assert_eq!(counted.get(&Some(2)), Some(&1), "the next project's rows are counted alone");
+        assert_eq!(counted.get(&None), Some(&1), "and a row in no project is a group of its own");
+        assert_eq!(counted.len(), 3, "another plugin's row is on another plugin's queue");
+        assert_eq!(
+            counted.values().sum::<i64>(),
+            queued_count(e.conn(), "slack").unwrap(),
+            "the shares add up to the whole"
+        );
     }
 
     /// The backlog counts each queue and dates it by its oldest row — the two facts a diagnosis reads.

@@ -35,7 +35,8 @@ pub use engine::{
 pub use hydrate::hydrate_database;
 pub use outbox::{events_since, outbox_head, EventRow, OutboxRow, OutboxSlice};
 pub use queue::{
-    backlog, dequeue, queued_count, queued_for, queued_plugins, QueueDepth, QueueRow, QueuedEvent,
+    backlog, dequeue, queued_count, queued_count_by_project, queued_for, queued_plugins, QueueDepth,
+    QueueRow, QueuedEvent,
 };
 pub use runner::{lease_of, Lease};
 pub use read::{

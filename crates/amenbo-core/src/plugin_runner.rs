@@ -14,11 +14,12 @@
 //!   leaves only by releasing it on the transaction that finds its queue empty. Both sides pass through one
 //!   write lock, so there is no gap between "nothing left" and "nobody running" for an event to fall into:
 //!   whichever lands first, the other sees the state it left.
-//! - **Every run is told how much is behind it** ([`QUEUE_REMAINING_VAR`], `AMB-D-417`). A plugin sees one
-//!   event per launch and has no way to know that forty-nine more are already queued for it, so the one
-//!   thing standing between a project deletion and fifty messages is a number only the runner can give.
-//!   Delivery itself is unchanged — nothing is held back, and whether to batch on the number is entirely
-//!   the plugin's call.
+//! - **Every run is told how much is behind it, within the project it reaches** ([`REACH_QUEUE_REMAINING_VAR`],
+//!   `AMB-D-417`, `AMB-D-457`). A plugin sees one event per launch and has no way to know that forty-nine
+//!   more are already queued for it, so the one thing standing between a project deletion and fifty messages
+//!   is a number only the runner can give. It is counted per project because a run reaches one project
+//!   (`AMB-D-434`) and can act on no other's rows. Delivery itself is unchanged — nothing is held back, and
+//!   whether to batch on the number is entirely the plugin's call.
 //! - **Nothing is killed for being slow.** A runner has nobody behind it but the rest of its own plugin's
 //!   queue, so a hook is waited on to its end ([`plugin_hooks::run_queued`](crate::plugin_hooks::run_queued))
 //!   rather than cut off at five seconds — being cut off mid-work is exactly the half-done outside effect
@@ -60,6 +61,7 @@
 //! because amenbo cannot see what the other side did with the event either way (`AMB-D-399`) — which is why
 //! the contract asks a plugin to be safe to run twice, rather than asking amenbo to be sure.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -68,7 +70,8 @@ use crate::config::Paths;
 use crate::error::Result;
 use crate::plugin_dispatch::{hook_for, Subscribers};
 use crate::store_engine::{
-    backlog, lease_of, queued_count, queued_for, queued_plugins, Lease, QueueDepth, StoreEngine,
+    backlog, lease_of, queued_count, queued_count_by_project, queued_for, queued_plugins, Lease,
+    QueueDepth, StoreEngine,
 };
 use crate::time::Timestamp;
 
@@ -76,18 +79,24 @@ use crate::time::Timestamp;
 /// reading until its queue is empty, so this bounds memory and nothing else.
 const RUN_PAGE: i64 = 256;
 
-/// The environment variable a plugin is told **how many events are still behind this one** under
-/// (`AMB-D-417`).
+/// The environment variable a plugin is told **how many events are still behind this one, within the
+/// project this run reaches** under (`AMB-D-417`, `AMB-D-457`).
 ///
 /// A plugin is run once per event and cannot see its own queue, so batching — one message for the fifty
 /// events a project deletion emitted, rather than fifty — is something only the runner can make possible.
 /// It does not do the batching: amenbo delivers as fast as it can, in order (`AMB-D-399`), and what a
 /// plugin does with the number is the plugin's business. It only says what it knows.
 ///
-/// **`0` means the queue is empty as of this launch, not that nothing more is coming.** An event queued a
-/// moment later is delivered like any other, so a plugin that flushes on `0` may end up sending twice —
-/// two messages instead of one, never a message lost.
-pub const QUEUE_REMAINING_VAR: &str = "AMENBO_PLUGIN_QUEUE_REMAINING";
+/// **The number is the run's own project's, which is why the name carries `REACH`** (`AMB-D-457`). A run
+/// fires through one project's gate and holds one project's settings and secrets (`AMB-D-434`), so a total
+/// across projects would be a number this run could not act on: reaching `0` on it, a run would send for
+/// events it cannot address, and rows waiting in another project would sit until something else happened
+/// there. Rows carrying no project are one such group of their own, and the number is always given.
+///
+/// **`0` means this project's queue is empty as of this launch, not that nothing more is coming.** An event
+/// queued a moment later is delivered like any other, so a plugin that flushes on `0` may end up sending
+/// twice — two messages instead of one, never a message lost.
+pub const REACH_QUEUE_REMAINING_VAR: &str = "AMENBO_PLUGIN_REACH_QUEUE_REMAINING";
 
 /// How far ahead a runner holds its lease, pushed out again before every row it takes and while one runs.
 ///
@@ -399,8 +408,9 @@ pub fn run_queue(
     loop {
         // What this pass has to get through, counted once over the whole queue rather than per row
         // (`AMB-D-417`): a number counted again for every launch would sit at whatever is waiting right
-        // now, so a plugin batching on it would never see the queue end while writes kept arriving.
-        let counted = match queued_count(engine.conn(), plugin) {
+        // now, so a plugin batching on it would never see the queue end while writes kept arriving. Counted
+        // per project (`AMB-D-457`), because that is as far as any one run reaches.
+        let counted = match queued_count_by_project(engine.conn(), plugin) {
             Ok(counted) => counted,
             Err(e) => return warn_stop(plugin, &e.to_string()),
         };
@@ -409,12 +419,25 @@ pub fn run_queue(
             Err(e) => return warn_stop(plugin, &e.to_string()),
         };
         // Rows queued between the count and the read belong to the next pass — the number handed out must
-        // only fall — but the page in hand is work this pass is certainly doing, so it is the floor.
-        let mut left = counted.max(rows.len() as i64);
+        // only fall — but the page in hand is work this pass is certainly doing, so it is the floor. Each
+        // project's floor is its own share of the page: the projects never draw on each other's counts.
+        let mut left = counted;
+        let mut in_page: HashMap<Option<i64>, i64> = HashMap::new();
         for row in &rows {
-            // What stays behind once this row has been run, whether or not it reaches a plugin: a row that
-            // resolves to nobody still leaves the queue.
-            left -= 1;
+            *in_page.entry(row.project).or_default() += 1;
+        }
+        for (project, on_page) in in_page {
+            let counted = left.entry(project).or_default();
+            *counted = (*counted).max(on_page);
+        }
+        for row in &rows {
+            // What stays behind in this row's project once it has been run, whether or not it reaches a
+            // plugin: a row that resolves to nobody still leaves the queue.
+            let remaining = {
+                let counted = left.entry(row.project).or_default();
+                *counted = (*counted - 1).max(0);
+                *counted
+            };
             match hold(engine, plugin, owner) {
                 Ok(true) => {}
                 Ok(false) => return taken_over(plugin),
@@ -422,7 +445,8 @@ pub fn run_queue(
             }
             match hook_for(subs, row) {
                 Ok(Some(mut hook)) => {
-                    hook.invocation = hook.invocation.env(QUEUE_REMAINING_VAR, left.to_string());
+                    hook.invocation =
+                        hook.invocation.env(REACH_QUEUE_REMAINING_VAR, remaining.to_string());
                     crate::plugin_hooks::run_queued(
                         &hook,
                         log,
@@ -590,6 +614,12 @@ mod tests {
     }
 
     fn queue(e: &StoreEngine, plugin: &str, record_id: i64) {
+        queue_in(e, plugin, None, record_id);
+    }
+
+    /// Queue one row stamped with `project` — what the fan-out copies off the outbox row (`AMB-D-405`), and
+    /// what the number a run is handed is counted by (`AMB-D-457`).
+    fn queue_in(e: &StoreEngine, plugin: &str, project: Option<i64>, record_id: i64) {
         let tx = e.write().unwrap();
         tx.queue_event(&QueuedEvent {
             plugin,
@@ -599,7 +629,7 @@ mod tests {
             actor: "ai",
             at: "2026-07-25T09:00:00Z",
             new_state: None,
-            project: None,
+            project,
             record: None,
             parent: None,
         })
@@ -750,7 +780,7 @@ mod tests {
         fn resolve(&self, _event: &str, _project: Option<i64>, _face: Face) -> Vec<Subscriber> {
             let invocation = PluginInvocation::new("/bin/sh")
                 .arg("-c")
-                .arg(format!("echo \"${QUEUE_REMAINING_VAR}\" >> {}", self.out.display()));
+                .arg(format!("echo \"${REACH_QUEUE_REMAINING_VAR}\" >> {}", self.out.display()));
             vec![Subscriber::new(self.plugin, invocation)]
         }
         fn resolve_one(
@@ -774,8 +804,10 @@ mod tests {
     }
 
     /// What every plugin is told is how much is behind it, counted once for the pass and handed down one
-    /// per run (`AMB-D-417`): five queued events are `4,3,2,1,0`, and the last one is the only `0`. A real
-    /// child is the only place the number is visible, so this is unix-only like the other end-to-end runs.
+    /// per run (`AMB-D-417`): five queued events are `4,3,2,1,0`, and the last one is the only `0`. These
+    /// rows carry no project, which is a group like any other and gets its number like any other
+    /// (`AMB-D-457`). A real child is the only place the number is visible, so this is unix-only like the
+    /// other end-to-end runs.
     #[cfg(unix)]
     #[test]
     fn each_run_is_told_how_many_are_still_behind_it() {
@@ -793,6 +825,35 @@ mod tests {
         run_queue(&e, &Reporting { plugin: "slack", out: out.clone() }, "slack", "mine", None);
 
         assert_eq!(reported(&out), ["4", "3", "2", "1", "0"], "counted down to the end of the queue");
+    }
+
+    /// Each project counts down its own rows and nobody else's (`AMB-D-457`). A run reaches one project, so
+    /// the number it is handed has to be that project's: with three rows in one project and one in another,
+    /// interleaved, the runs read `2,0,1,0` — where a total across the plugin would read `3,2,1,0` and tell
+    /// the lone run of the second project that three deliveries were still behind it, none of which it could
+    /// address.
+    #[cfg(unix)]
+    #[test]
+    fn each_project_counts_down_its_own_rows() {
+        let dir = amenbo_scratch::scratch("plugin-runner-remaining-per-project");
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("remaining.txt");
+        let _ = std::fs::remove_file(&out);
+
+        let e = StoreEngine::open_in_memory().unwrap();
+        queue_in(&e, "slack", Some(1), 1);
+        queue_in(&e, "slack", Some(2), 2);
+        queue_in(&e, "slack", Some(1), 3);
+        queue_in(&e, "slack", Some(1), 4);
+        claim(&e, "slack", "mine");
+
+        run_queue(&e, &Reporting { plugin: "slack", out: out.clone() }, "slack", "mine", None);
+
+        assert_eq!(
+            reported(&out),
+            ["2", "0", "1", "0"],
+            "one project's rows count down past the other's, which reaches 0 on its only row"
+        );
     }
 
     /// The number never grows while a pass is being counted down (`AMB-D-417`). An event queued *during* the

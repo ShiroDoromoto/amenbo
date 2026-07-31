@@ -349,12 +349,16 @@ const REGISTRY: &[OpSpec] = &[
     // in for a file a person already had. `tool` is the provider, by the name the build's own
     // catalog answers to.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "wire-ai", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
-    // The moves the same road is made of on screen, where the question is put in a dialog and the text
-    // is handed over by a button. Answering is a move and not a note beside the file: a yes is what a
-    // reader gives before anything is handed over, and the report standing afterwards is only evidence
-    // of anything if the run is what answered. The copy is the handing over itself — it puts the text
-    // on the clipboard, which no screenshot reads, so the road ends at the press and what the text says
-    // is held from the other end (`ai-launch-text`).
+    // The moves the same road is made of on screen, where the report stands on the project's own board and
+    // carries every button there is. The copy is the handing over itself — it puts the text on the
+    // clipboard, which no screenshot reads, so the road ends at the press and what the text says is held
+    // from the other end (`ai-launch-text`).
+    //
+    // `ai-launch-consent` is the refusal, and the screen takes no other answer: nothing here asks, so
+    // there is no yes to give, and the one button that writes anything is the one that ends the report.
+    // It is a move and not a note beside the file, because the record it leaves is only evidence of
+    // anything if the run is what wrote it. The answer travels as a value rather than being folded into
+    // the op's name, so a road reads as an answer given rather than as a button pressed.
     //
     // Choosing which tool the text is for, where more than one is on offer. It is the move that says the
     // offer is a catalog and not a single line: a folder that points at no provider is handed every one
@@ -362,7 +366,7 @@ const REGISTRY: &[OpSpec] = &[
     // trace of and read the text change to it (`ai-launch-notice` on that tool's own file).
     //
     // And dropping the answer, which is a move of its own rather than a third answer: it puts the project
-    // back to never having been asked, so the question comes again. A refusal is silent from then on, and
+    // back to never having been asked, so the report comes back. A refusal is silent from then on, and
     // this is the only way out of one.
     //
     // A screen road alone: a terminal asks inline and prints the text where it stands, so there is
@@ -591,19 +595,17 @@ const REGISTRY: &[OpSpec] = &[
     // is the text: a snippet that named the wrong file, or that injected something other than the
     // launch instruction, would leave a reader pasting in good faith and no better off.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-text", required: &["tool", "carries"], refs: &[], strings: &["tool", "carries", "paste_into"], binds: false },
-    // What the screen says about the same wiring, which it says in more than one place rather than in one
-    // answer.
-    // The question names the provider it traces (`tool`); the report that is still standing after a yes
-    // names it again and the file the text goes into (`paste_into`). The file is what tells the two
-    // apart on a shot, since the question never names one — and that the report outlives the yes is the
-    // line the screen road exists for: consent is not wiring, and only the paste landing ends the
-    // telling.
-    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-question", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
+    // What the screen says about the same wiring: the report standing on the project's own board, which
+    // names the provider it traces (`tool`) and the file the text goes into (`paste_into`). The file is
+    // the half that carries the reading, since it is the one thing on the road that appears nowhere else
+    // on that screen — and that the report outlives an answer is the line the screen road exists for:
+    // consent is not wiring, and only the paste landing ends the telling.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-notice", required: &["tool", "paste_into"], refs: &[], strings: &["tool", "paste_into"], binds: false },
-    // The record the question left behind, read where the project keeps its own face. `answer` is `yes`,
-    // `no` or `unanswered` — three states and not a truth value, because unanswered is what the question
-    // is put from: a screen that could only say yes or no would report a refusal from a project nobody
-    // has opened yet, and the way out of a refusal would be offered where there is nothing to take back.
+    // The record, read where the project keeps its own face. `answer` is `yes`, `no` or `unanswered` —
+    // three states and not a truth value, because unanswered is what a project starts in: a screen that
+    // could only say yes or no would report a refusal from a project nobody has answered for, and the way
+    // out of a refusal would be offered where there is nothing to take back. The yes reaches the record
+    // from the terminal, which is where the question is still put.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-answer", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
     // A folder named among the ones that one text is still waiting on. Consent is answered for a project
     // and the paste lands in a folder, so what a reader who answered yes still owes is a list — and the

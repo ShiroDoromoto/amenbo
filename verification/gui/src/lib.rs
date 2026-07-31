@@ -256,15 +256,14 @@ impl Instructor {
     /// are words of the interface; the third turns on a picker that is not there, and a reading answers
     /// which words are on a shot and never which are missing from the right part of it.
     ///
-    /// The three `ai-launch` readings are judged on what is not the interface's own words either. The
-    /// question is judged on the provider it names, which is that provider's name in any language; the
-    /// hand-over is judged on the file the text goes into, which is the one thing on the road only the
-    /// hand-over says — the question names no file, so a shot of the question standing where the text
-    /// should be reads as the miss it is. `ai-launch-folder` is judged on the folder's own name, which
-    /// the reader gave it and the interface has no word of its own for; the board the report stands on
-    /// names no folder anywhere else, so finding one on that shot is finding it in the list.
+    /// The two `ai-launch` readings are judged on what is not the interface's own words either. The
+    /// hand-over is judged on the file the text goes into, which is the one thing on the road that
+    /// appears nowhere else on that board, so a shot taken where the report is not standing reads as the
+    /// miss it is. `ai-launch-folder` is judged on the folder's own name, which the reader gave it and
+    /// the interface has no word of its own for; the board the report stands on names no folder anywhere
+    /// else, so finding one on that shot is finding it in the list.
     ///
-    /// `ai-launch-answer` is the one of them that is a `Review`, for the reason `plugin config`'s state
+    /// `ai-launch-answer` is the third of them and a `Review`, for the reason `plugin config`'s state
     /// is: all three of its answers — the yes, the no, and the never asked — are drawn as words of the
     /// interface, and which of them is standing is not something the presence of text can settle.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
@@ -284,9 +283,6 @@ impl Instructor {
             }
             (Domain::Folder, "ways-in") => {
                 Some(Expectation { text: arg_str(with, "absent")?.to_string(), present: false })
-            }
-            (Domain::Repo, "ai-launch-question") => {
-                Some(Expectation { text: arg_str(with, "tool")?.to_string(), present: true })
             }
             (Domain::Repo, "ai-launch-notice") => {
                 Some(Expectation { text: arg_str(with, "paste_into")?.to_string(), present: true })
@@ -425,12 +421,11 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "key")?
             ),
-            // Answering the question the opened project puts, and taking the text it leads to. Dismissing the dialog is
-            // not one of the answers on offer here: it puts the question off and records nothing, which
-            // is a road that ends where it started rather than one this scenario walks.
+            // The one answer the report takes, and the only button on it that writes anything. Closing the
+            // report is not among them: it records nothing and is spent the moment the project is opened
+            // again, which is a road that ends where it started rather than one this scenario walks.
             (Domain::Repo, "ai-launch-consent") => match req(with, "answer")? {
-                "yes" => "Answer the question about starting this folder's AI on amenbo with the button that says the text will be handed over.".to_string(),
-                "no" => "Answer the question about starting this folder's AI on amenbo with the button that declines it.".to_string(),
+                "no" => "On the report about this project's folders, press the button that declines having their AI started on amenbo.".to_string(),
                 other => {
                     return Err(format!("action `ai-launch-consent` does not know the answer `{other}`"))
                 }
@@ -440,11 +435,11 @@ impl Instructor {
             // the folder shows no trace of is what proves the catalog is standing behind the picker,
             // since the text that follows is that tool's and no other's.
             (Domain::Repo, "ai-launch-pick") => format!(
-                "In the panel the yes opened, choose \"{}\" among the tools it offers text for.",
+                "On the report about this project's folders, choose \"{}\" among the tools it offers text for.",
                 req(with, "tool")?
             ),
             (Domain::Repo, "ai-launch-copy") => format!(
-                "In the panel the yes opened, press the button that takes the text for \"{}\".",
+                "On the report about this project's folders, press the button that takes the text for \"{}\".",
                 req(with, "tool")?
             ),
             // Dropping the answer, from the project's own face. It names no answer, since it does not put
@@ -540,12 +535,8 @@ impl Instructor {
                 "Confirm the open card asks which project to link the folder to — with \"{}\", one of the projects on this device, chosen in it.",
                 req(with, "project")?
             ),
-            (Domain::Repo, "ai-launch-question") => format!(
-                "Confirm the app is asking whether this folder's work may be run on amenbo by the reader's AI, and that what it hands over is named as a text for \"{}\"'s settings.",
-                req(with, "tool")?
-            ),
             (Domain::Repo, "ai-launch-notice") => format!(
-                "Confirm the app hands over the text that wires this folder rather than closing on the answer: \"{}\" is named, with \"{}\" as the file its text goes into.",
+                "Confirm the project's board carries the report about starting its folders' AI on amenbo, with nothing asked and nothing over it: \"{}\" is named, with \"{}\" as the file its text goes into.",
                 req(with, "tool")?,
                 req(with, "paste_into")?
             ),
@@ -554,8 +545,8 @@ impl Instructor {
             // taken back, and where there is none the button that would take it back must be shut.
             (Domain::Repo, "ai-launch-answer") => match req(with, "answer")? {
                 "yes" => "Confirm this project's own settings say it answered yes to having its AI started on amenbo, with the way to clear that answer open.".to_string(),
-                "no" => "Confirm this project's own settings say it answered no to having its AI started on amenbo, with the way to clear that answer open — a refusal is silent from then on, so this is the only way back.".to_string(),
-                "unanswered" => "Confirm this project's own settings say it has not been asked yet — neither a yes nor a no — and that there is nothing left to clear.".to_string(),
+                "no" => "Confirm this project's own settings say it answered no to having its AI started on amenbo, with the way to clear that answer open — a refusal takes the report away for good, so this is the only way back.".to_string(),
+                "unanswered" => "Confirm this project's own settings say it has not been answered for — neither a yes nor a no — and that there is nothing left to clear.".to_string(),
                 other => {
                     return Err(format!("assert `ai-launch-answer` does not know the answer `{other}`"))
                 }
@@ -1400,25 +1391,16 @@ steps_gui:
         assert!(ins.expectation(&s.steps(Driver::Gui)[3]).is_none(), "a name the whole window carries is not a reading");
     }
 
-    /// Starting a folder's AI on amenbo, as the screen walks it: the question, the yes, the text it
-    /// hands over, and the button that takes a copy of it. The two readings are what tells those
-    /// screens apart — the provider's name for the question, and the file only the hand-over names for
-    /// the hand-over — so a yes that closed on the answer is a red and not a shot of the same words
-    /// twice.
+    /// Starting a folder's AI on amenbo, as the screen walks it: the report standing on the board, and
+    /// the button that takes a copy of the text. The file it names is the reading — it appears nowhere
+    /// else on that board — so a shot taken where the report is not standing is a red and not a shot of
+    /// the same words somewhere else.
     #[test]
-    fn the_screen_road_that_starts_a_folders_ai_reads_the_tool_then_the_file() {
+    fn the_screen_road_that_starts_a_folders_ai_reads_the_file_the_text_goes_into() {
         let yaml = r#"
 id: x
 title: y
 steps_gui:
-  - type: assert
-    domain: repo
-    op: ai-launch-question
-    with: { tool: claude-code }
-  - type: action
-    domain: repo
-    op: ai-launch-consent
-    with: { answer: "yes" }
   - type: assert
     domain: repo
     op: ai-launch-notice
@@ -1431,18 +1413,14 @@ steps_gui:
         let s = load(yaml);
         let mut ins = Instructor::new();
         let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
-        assert!(lines[0].contains("\"claude-code\"") && lines[0].contains("asking"), "got: {}", lines[0]);
-        assert!(lines[1].contains("handed over"), "got: {}", lines[1]);
-        assert!(lines[2].contains("\".claude/settings.json\"") && lines[2].contains("hands over"), "got: {}", lines[2]);
-        assert!(lines[3].contains("\"claude-code\"") && lines[3].contains("takes the text"), "got: {}", lines[3]);
+        assert!(lines[0].contains("\".claude/settings.json\"") && lines[0].contains("report"), "got: {}", lines[0]);
+        assert!(lines[1].contains("\"claude-code\"") && lines[1].contains("takes the text"), "got: {}", lines[1]);
 
-        let question = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the provider is what names the question");
-        assert_eq!(question, Expectation { text: "claude-code".to_string(), present: true });
+        let notice = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the file is what only the report names");
+        assert_eq!(notice, Expectation { text: ".claude/settings.json".to_string(), present: true });
         // The tool's name is written the catalog's way and drawn the reader's way; the fold is what
         // leaves those the same words.
         assert!(fold("This folder looks like Claude Code's.").contains(&fold("claude-code")));
-        let notice = ins.expectation(&s.steps(Driver::Gui)[2]).expect("the file is what only the hand-over names");
-        assert_eq!(notice, Expectation { text: ".claude/settings.json".to_string(), present: true });
     }
 
     /// The same road in a folder that names no tool: the pick is what carries the screen from one
@@ -1517,11 +1495,11 @@ steps_gui:
     }
 
     /// The way back out of a refusal, read where the record is kept: the no standing, the press, and the
-    /// project back to never having been asked. Neither read is a reading — all three answers are words
-    /// of the interface — so what the pair has to carry is the difference between them in the
+    /// project back to never having been answered for. Neither read is a reading — all three answers are
+    /// words of the interface — so what the pair has to carry is the difference between them in the
     /// instruction, which is what an eye closes them on.
     #[test]
-    fn clearing_the_answer_reads_the_refusal_then_a_project_never_asked() {
+    fn clearing_the_answer_reads_the_refusal_then_a_project_never_answered_for() {
         let yaml = r#"
 id: x
 title: y
@@ -1543,7 +1521,7 @@ steps_gui:
         let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
         assert!(lines[0].contains("answered no") && lines[0].contains("only way back"), "got: {}", lines[0]);
         assert!(lines[1].contains("clears its answer"), "got: {}", lines[1]);
-        assert!(lines[2].contains("not been asked yet") && lines[2].contains("nothing left to clear"), "got: {}", lines[2]);
+        assert!(lines[2].contains("not been answered for") && lines[2].contains("nothing left to clear"), "got: {}", lines[2]);
         assert!(
             s.steps(Driver::Gui).iter().all(|st| ins.expectation(st).is_none()),
             "an answer drawn in the interface's own words is not a reading"
@@ -1564,17 +1542,20 @@ steps_gui:
     }
 
     /// An answer the road does not have is refused where it is written, not carried to a screen as an
-    /// instruction nobody can act on — the same way an unmapped op is.
+    /// instruction nobody can act on — the same way an unmapped op is. A yes is one of them here: the
+    /// screen no longer asks, so there is no button on it that gives one.
     #[test]
-    fn a_consent_answered_with_neither_yes_nor_no_is_refused() {
-        let step = Step::Action {
-            domain: Domain::Repo,
-            op: "ai-launch-consent".to_string(),
-            with: [("answer".to_string(), serde_yaml::Value::from("later"))].into_iter().collect(),
-            bind: None,
-        };
-        let err = Instructor::new().render(&step).unwrap_err();
-        assert!(err.contains("later"), "got: {err}");
+    fn a_consent_answered_with_anything_but_the_refusal_is_refused() {
+        for answer in ["later", "yes"] {
+            let step = Step::Action {
+                domain: Domain::Repo,
+                op: "ai-launch-consent".to_string(),
+                with: [("answer".to_string(), serde_yaml::Value::from(answer))].into_iter().collect(),
+                bind: None,
+            };
+            let err = Instructor::new().render(&step).unwrap_err();
+            assert!(err.contains(answer), "got: {err}");
+        }
     }
 
     #[test]

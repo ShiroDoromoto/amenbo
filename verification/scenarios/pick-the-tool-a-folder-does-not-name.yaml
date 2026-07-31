@@ -3,9 +3,9 @@
 # where the question about starting this folder's AI on amenbo is worth putting, because nobody has
 # started anything here.
 #
-# What a yes buys is text, and text for one tool is not text for another: the settings differ, and so
-# does the file they go in. So a folder that names no tool cannot be handed one line — it is handed the
-# catalog, and the reader says which of those five they use. That is the whole of this road, and the
+# What is handed over is text, and text for one tool is not text for another: the settings differ, and
+# so does the file they go in. So a folder that names no tool cannot be handed one line — it is handed
+# the catalog, and the reader says which of those five they use. That is the whole of this road, and the
 # reason it is walked apart from the traced folder's: there, the folder has already answered which tool
 # it is and the picker never appears.
 #
@@ -15,31 +15,24 @@
 # screen turning into that tool's.
 #
 # What this wants standing before the run: one folder bound to a project this device holds, with nothing
-# in it — no provider's directory, nothing about amenbo — and the question about that project never
-# answered here. It should be the only folder bound, so that every file named on screen is named about
-# this one. The app puts the question when that project is opened, and it opens on a project — so the
-# run opens with it up. Drive it stepped (`--step`), since answering it is what the shot after it is of.
+# in it — no provider's directory, nothing about amenbo — and that project's answer never refused here.
+# It should be the only folder bound, so that every file named on screen is named about this one. The app
+# draws the report when that project is opened, and it opens on a project — so the run opens with it
+# standing. Drive it stepped (`--step`), since the pick is what the shot after it is of.
 id: pick-the-tool-a-folder-does-not-name
 title: A folder that shows no sign of any AI tool is handed the catalog, and the tool the reader picks is the tool the text is for
 description: >
-  The reader says yes in a folder nobody has run an AI in yet. What comes back is not nothing and not a
-  guess: the report stands with the first of the tools amenbo knows, and a picker beside it holding the
-  rest. Picking one the folder shows no trace of turns the text into that tool's — its settings, and the
-  file they go in — and the button hands that one over. A yes answered with an empty report, or with a
-  picker whose choice the text does not follow, is the promise this road exists to keep.
+  The reader opens a project whose folder nobody has run an AI in yet. What the report carries is not
+  nothing and not a guess: it stands with the first of the tools amenbo knows, and a picker beside it
+  holding the rest. Picking one the folder shows no trace of turns the text into that tool's — its
+  settings, and the file they go in — and the button hands that one over. A report that came back empty,
+  or a picker whose choice the text does not follow, is the promise this road exists to keep.
 steps_gui:
-  # The yes, given where amenbo has no provider's name to put in the question. Nothing is wired by it —
-  # amenbo writes no settings file on this surface either — so all it buys is the text, which is the
-  # thing under test: a folder with no trace in it must not be the one where a yes comes back empty.
-  - type: action
-    domain: repo
-    op: ai-launch-consent
-    with:
-      answer: "yes"
-
-  # And something is handed over. With nothing to go on, the panel leads with the first tool in the
-  # catalog rather than an empty line — the file it names is that tool's, which is how a shot tells this
-  # apart from the tool picked below.
+  # Something is handed over, where amenbo has no provider's name to go on. With nothing to read off the
+  # folder, the report leads with the first tool in the catalog rather than an empty line — the file it
+  # names is that tool's, which is how a shot tells this apart from the tool picked below. This is the
+  # thing under test: a folder with no trace in it must not be the one where the report comes back
+  # empty.
   - type: assert
     domain: repo
     op: ai-launch-notice

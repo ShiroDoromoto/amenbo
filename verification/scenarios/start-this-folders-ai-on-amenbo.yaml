@@ -14,9 +14,9 @@
 #
 # The screen walks the same road from the other end, and what it needs is the state standing before
 # the run: a folder bound to a project this device holds, with the provider's own directory in it and
-# nothing about amenbo in that, and the question about that project never answered here. The app puts
-# the question when that project is opened, and it opens on a project — so the run opens with it up.
-# Drive it stepped (`--step`), since answering it is what the shot after it is of.
+# nothing about amenbo in that, and that project's answer never refused here — a no is what takes the
+# report away. The app draws the report when that project is opened, and it opens on a project — so the
+# run opens with it standing. Drive it stepped (`--step`), since the copy is a move the shot follows.
 id: start-this-folders-ai-on-amenbo
 title: A folder that does not start its AI on amenbo says so, hands over what wires it, and stops saying it once that lands
 description: >
@@ -79,28 +79,12 @@ steps_cli:
       wired: true
 
 steps_gui:
-  # The question, put where it can be answered. What raises it is the state — a bound folder that is
-  # not wired — and it names the provider the folder traces rather than leaving the reader to work out
-  # which of five it means.
-  - type: assert
-    domain: repo
-    op: ai-launch-question
-    with:
-      tool: claude-code
-
-  # The yes. All it buys is the text: amenbo writes no settings file on this surface either, so the
-  # wiring stays in the reader's hands here exactly as it does in the terminal — the text is on screen
-  # to be read, and the button only takes a copy of it.
-  - type: action
-    domain: repo
-    op: ai-launch-consent
-    with:
-      answer: "yes"
-
-  # And the text arrives, in the panel the yes opened. This is the line the screen road is here for: a
-  # yes buys the text and nothing else — amenbo writes no settings file — so a yes that ended the
-  # exchange would leave a setup reading as finished with nothing wired. The file it names is the one
-  # the text is about.
+  # The report, standing on the project's own board with nothing asked and nothing over it. What raises
+  # it is the state — a bound folder that is not wired — and it names the provider the folder traces
+  # rather than leaving the reader to work out which of five it means, together with the file the text
+  # goes into. This is the line the screen road is here for: amenbo writes no settings file on this
+  # surface either, so the report is the whole of what a reader is given, and it stands until the paste
+  # lands rather than closing on anything they say.
   - type: assert
     domain: repo
     op: ai-launch-notice

@@ -4,30 +4,30 @@
 # question can carry that, because what is left is not a question but work.
 #
 # So the project's own screen keeps a report standing, and the report is the whole of this road. It names
-# the tool and the file the text goes into, exactly as the question's panel does, and under that one text
-# it lists the folders still waiting for it. The list is what a per-folder shape cannot give: the request
-# is the same text wherever it is pasted — only the path changes — so putting it up once per folder is
-# four screens of identical text and a reader who reads none of them.
+# the tool and the file the text goes into, and under that one text it lists the folders still waiting for
+# it. The list is what a per-folder shape cannot give: the request is the same text wherever it is pasted
+# — only the path changes — so putting it up once per folder is four screens of identical text and a
+# reader who reads none of them.
 #
 # The screen is the only witness. A terminal is asked in one folder at a time and answers about that one,
 # so there is nothing there for a list to be a list of.
 #
 # What this wants standing before the run: one project on this device bound to more than one folder, each
-# of them carrying the same tool's own directory and nothing about amenbo in it, and that project's board
-# open with nothing over it — the question answered or put off, so what is on screen is the report and not
-# the dialog. Nothing else on that screen may name a folder, since a reading finds a name wherever it
-# stands. The screen does not move under the run, so it needs no stepping.
+# of them carrying the same tool's own directory and nothing about amenbo in it, that project's answer a
+# yes rather than a refusal — put it in the store the build under test opens (`devtool devgui cli`), since
+# a refusal takes the report away — and that project's board open. Nothing else on that screen may name a
+# folder, since a reading finds a name wherever it stands. The screen does not move under the run, so it
+# needs no stepping.
 id: wire-the-folders-a-yes-left-behind
 title: A project says which of its folders still start their AI without amenbo, with the request standing once above the list
 description: >
   The reader said yes, and the folders they have not pasted into yet are the ones this road is about.
-  What the project's screen carries is a report rather than a question: the tool it
-  names, the file the text goes into, and the folders the text is still waiting on, listed under one copy
-  of it. A screen that named a single folder, or that repeated the request once per folder, is the promise
-  this road exists to keep.
+  What the project's screen carries is a report of work left rather than a question: the tool it names,
+  the file the text goes into, and the folders the text is still waiting on, listed under one copy of it.
+  A screen that named a single folder, or that repeated the request once per folder, is the promise this
+  road exists to keep.
 steps_gui:
-  # The text, and the file it goes into. This is the same reading the question's panel is judged by, and
-  # it is here for the same reason: the file is the one thing on screen only the hand-over names, so a
+  # The text, and the file it goes into. The file is the one thing on screen the report alone names, so a
   # board carrying the report is told apart from one carrying nothing by it.
   - type: assert
     domain: repo

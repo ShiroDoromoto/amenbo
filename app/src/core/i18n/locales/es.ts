@@ -70,7 +70,7 @@ export const es: Translation = {
     "projset.foldersHint": "Una IA lanzada en estas carpetas puede operar este proyecto.",
     "projset.plugins": "Complementos",
     "projset.pluginsHint": "Un complemento activado aquí actúa en este proyecto. Es el mismo interruptor que muestra la pantalla de complementos.",
-    "projset.pluginsNoneOn": "Ninguno está activado en este proyecto", "projset.pluginsAdd": "Activar un complemento…",
+    "projset.pluginsNone": "Ninguno está activado ni configurado aquí", "projset.pluginsAdd": "Añadir un complemento…",
     "projset.aiReady": "Lista para la IA", "projset.folderStale": "no encontrada",
     "projset.addFolder": "Añadir carpeta", "projset.noFolders": "Todavía no hay carpetas vinculadas.",
     "projset.unbind": "Desvincular",

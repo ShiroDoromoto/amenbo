@@ -67,7 +67,7 @@ export const ko: Translation = {
     "projset.foldersHint": "이 폴더들에서 실행한 AI가 이 프로젝트를 다룰 수 있습니다.",
     "projset.plugins": "플러그인",
     "projset.pluginsHint": "여기서 켠 플러그인은 이 프로젝트에서 동작합니다. 플러그인 화면과 같은 스위치입니다.",
-    "projset.pluginsNoneOn": "이 프로젝트에서는 켜 둔 것이 없습니다", "projset.pluginsAdd": "플러그인을 골라 켜기…",
+    "projset.pluginsNone": "여기에서 켜져 있거나 값이 채워진 것이 없습니다", "projset.pluginsAdd": "플러그인 추가…",
     "projset.aiReady": "AI 준비됨", "projset.folderStale": "없어짐",
     "projset.addFolder": "폴더 추가", "projset.noFolders": "아직 연결된 폴더가 없습니다.",
     "projset.unbind": "연결 해제",

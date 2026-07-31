@@ -71,7 +71,7 @@ export const ptBR: Translation = {
     "projset.foldersHint": "Uma IA iniciada nestas pastas pode operar este projeto.",
     "projset.plugins": "Plugins",
     "projset.pluginsHint": "Um plugin ativado aqui age neste projeto. É o mesmo interruptor que a tela de plugins mostra.",
-    "projset.pluginsNoneOn": "Nenhum está ativado neste projeto", "projset.pluginsAdd": "Ativar um plugin…",
+    "projset.pluginsNone": "Nenhum está ativado nem preenchido aqui", "projset.pluginsAdd": "Adicionar um plugin…",
     "projset.aiReady": "Pronta para IA", "projset.folderStale": "não encontrada",
     "projset.addFolder": "Adicionar pasta", "projset.noFolders": "Ainda não há pastas vinculadas.",
     "projset.unbind": "Desvincular",

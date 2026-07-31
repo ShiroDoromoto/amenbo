@@ -68,7 +68,7 @@ export const zhHans: Translation = {
     "projset.foldersHint": "在这些文件夹中启动的 AI 可以操作这个项目。",
     "projset.plugins": "插件",
     "projset.pluginsHint": "在这里启用的插件会为这个项目触发。这与插件页面上的开关是同一个。",
-    "projset.pluginsNoneOn": "这个项目还没有启用任何插件", "projset.pluginsAdd": "选择插件以启用…",
+    "projset.pluginsNone": "这里还没有启用或填写任何插件", "projset.pluginsAdd": "添加插件…",
     "projset.aiReady": "AI 就绪", "projset.folderStale": "已丢失",
     "projset.addFolder": "添加文件夹", "projset.noFolders": "还没有关联任何文件夹。",
     "projset.unbind": "解除关联",

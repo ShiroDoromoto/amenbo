@@ -7,7 +7,8 @@ import {
   bindFolder, deleteProject, fetchBoundFolders, fetchProjectSettings, openTerminal,
   pickFolder, revealFolder, setProjectArchived, unbindFolder, updateProject,
 } from "../core/mutations";
-import { enabledIn, setPluginEnabled, usePluginInstalls } from "../core/pluginInstalls";
+import { PluginCrossingRow } from "../components/PluginCrossingRow";
+import { usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf, viewLabel } from "../core/i18n";
@@ -312,37 +313,33 @@ function FoldersSection({ projectId }: { projectId: number }) {
 }
 
 /**
- * The plugins turned on for this project (`AMB-D-412`) — the other face of the plugin screen's row, and
- * the same switch (`AMB-D-434`), not a second one.
+ * This project's plugin crossings (`AMB-D-447`) — the same rows the plugin screen draws, listed from the
+ * other end: there, one plugin and the projects it crosses; here, one project and the plugins.
  *
- * A project-wide switch is looked for in the project. Someone who turned a plugin on and later wants it
- * off opens the project it was bothering them in, not a catalogue of plugins — so the answer is here as
- * well, saying the same thing from the other end: there, one plugin and the projects it fires in; here,
- * one project and the plugins that fire for it.
+ * The crossing is the unit on both faces, so a row here carries everything about it — the switch for this
+ * project, this project's settings, and the mark saying a `required` value is missing — and a person
+ * refused an enable fills the value in without leaving the row that refused them. That is what this face
+ * lacked: it reported the refusal and offered nowhere to answer it.
  *
- * What is installed is read once for the whole store — a row already carries the projects it is on in,
- * so this section is a filter over that, with no reading of its own.
+ * **What is listed is what there is something to say about**: the plugins on in this project
+ * (`AMB-D-412`) and the ones this project filled in without turning on (`AMB-D-434`). Another is
+ * **added** from the picker rather than enabled by it, for the reason the plugin face adds a project —
+ * the crossing has to exist before what would refuse it can be read or filled in.
+ *
+ * What is installed is read once for the whole store — an install already carries the projects it
+ * crosses — so this section is a filter over that, with no reading of its own.
  */
 function PluginsSection({ projectId }: { projectId: number }) {
   const { installs } = usePluginInstalls();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Plugins opened from the picker, which this project says nothing about yet. Kept until the screen is
+  // left, so turning one off does not make the row someone is working in vanish.
+  const [added, setAdded] = useState<string[]>([]);
 
-  const move = async (name: string, next: boolean) => {
-    setBusy(true); setError(null);
-    try {
-      await setPluginEnabled(name, projectId, next);
-    } catch (e) {
-      // A refusal is core's (an incompatible build, a `required` setting this project has no value
-      // for), and it is the sentence worth showing rather than a switch that appears not to work.
-      setError(errText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const on = installs.filter((i) => enabledIn(i, projectId));
-  const off = installs.filter((i) => !enabledIn(i, projectId));
+  // In the store's own order, so the same two plugins do not swap places between two visits.
+  const shown = installs.filter(
+    (i) => added.includes(i.name) || i.projects.some((row) => row.project === projectId),
+  );
+  const rest = installs.filter((i) => !shown.includes(i));
 
   return (
     <div className="settings__section">
@@ -351,34 +348,30 @@ function PluginsSection({ projectId }: { projectId: number }) {
         <span className="newproj__hint">{t("projset.pluginsHint")}</span>
 
         {installs.length === 0 && <span className="faint">{t("plugins.emptyInstalled")}</span>}
-        {installs.length > 0 && on.length === 0 && (
-          <span className="faint">{t("projset.pluginsNoneOn")}</span>
+        {installs.length > 0 && shown.length === 0 && (
+          <span className="faint">{t("projset.pluginsNone")}</span>
         )}
 
-        {on.map((i) => (
-          <div key={i.name} className="settings__row">
-            <span className="settings__k">{i.name}</span>
-            {!i.compatible && <span className="chip chip--warn">{t("plugins.notFiring")}</span>}
-            <button className="btn" onClick={() => void move(i.name, false)} disabled={busy}>
-              {t("plugins.disable")}
-            </button>
+        {shown.map((i) => (
+          <div key={i.name}>
+            <PluginCrossingRow install={i} project={projectId} name={i.name} />
+            {/* Said per row, unlike the plugin face where every row is the same plugin: here each row is
+                a different one, and only some of them are builds this amenbo cannot speak to. */}
+            {!i.compatible && (
+              <div className="pluggate__note">{i.incompatibleReason ?? t("plugins.incompatible")}</div>
+            )}
           </div>
         ))}
 
-        {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
-
-        {/* Picking one is the enable, the same as on the plugin screen. Only what is off here is
-            offered — a plugin already firing for this project has nothing to add. */}
-        {off.length > 0 && (
+        {rest.length > 0 && (
           <div className="newproj__nextrow">
             <select
               className="btn"
               value=""
-              disabled={busy}
-              onChange={(e) => void move(e.target.value, true)}
+              onChange={(e) => setAdded((a) => [...a, e.target.value])}
             >
               <option value="">{t("projset.pluginsAdd")}</option>
-              {off.map((i) => (
+              {rest.map((i) => (
                 <option key={i.name} value={i.name}>{i.name}</option>
               ))}
             </select>

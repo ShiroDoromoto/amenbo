@@ -67,7 +67,7 @@ export const de: Translation = {
     "projset.foldersHint": "Eine in diesen Ordnern gestartete KI kann dieses Projekt bedienen.",
     "projset.plugins": "Plug-ins",
     "projset.pluginsHint": "Ein hier eingeschaltetes Plug-in löst für dieses Projekt aus. Es ist derselbe Schalter wie im Plug-in-Bildschirm.",
-    "projset.pluginsNoneOn": "In diesem Projekt ist keines eingeschaltet", "projset.pluginsAdd": "Ein Plug-in einschalten …",
+    "projset.pluginsNone": "Hier ist keines eingeschaltet oder ausgefüllt", "projset.pluginsAdd": "Plug-in hinzufügen …",
     "projset.aiReady": "Bereit für die KI", "projset.folderStale": "nicht gefunden",
     "projset.addFolder": "Ordner hinzufügen", "projset.noFolders": "Noch keine verknüpften Ordner.",
     "projset.unbind": "Verknüpfung lösen",

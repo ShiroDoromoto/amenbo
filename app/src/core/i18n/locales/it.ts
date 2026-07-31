@@ -70,7 +70,7 @@ export const it: Translation = {
     "projset.foldersHint": "Un'IA avviata in queste cartelle può gestire questo progetto.",
     "projset.plugins": "Estensioni",
     "projset.pluginsHint": "Un'estensione attivata qui scatta per questo progetto. È lo stesso interruttore della schermata delle estensioni.",
-    "projset.pluginsNoneOn": "Nessuna è attiva in questo progetto", "projset.pluginsAdd": "Attiva un'estensione…",
+    "projset.pluginsNone": "Nessuna è attiva né compilata qui", "projset.pluginsAdd": "Aggiungi un'estensione…",
     "projset.aiReady": "Pronta per l'IA", "projset.folderStale": "non trovata",
     "projset.addFolder": "Aggiungi cartella", "projset.noFolders": "Nessuna cartella collegata per ora.",
     "projset.unbind": "Scollega",

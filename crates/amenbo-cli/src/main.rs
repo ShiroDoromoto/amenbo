@@ -3099,9 +3099,9 @@ fn agent_hook_answer_cmd(store: &Store, flags: &Flags, yes: bool) -> Result<i32,
     }
     if yes {
         human(flags, "Recorded: yes — this project may have its AI started on amenbo.");
-        human(flags, format!("amenbo writes no settings file, so the wiring is still to be done: `{cmd} agent-hook snippet <tool>` is the text that asks your AI for it."));
+        human(flags, format!("One step is left: `{cmd} agent-hook snippet <tool>` prints the text to give your AI."));
     } else {
-        human(flags, "Recorded: no — amenbo will not ask about this again.");
+        human(flags, "Recorded: no — we will not ask about this again.");
         human(flags, format!("Nothing is forbidden by it: `{cmd} agent-hook snippet <tool>` hands the text over whenever you want it."));
     }
     Ok(0)
@@ -3563,8 +3563,9 @@ fn agent_hook_setup(store: &Store, flags: &Flags, lint_asked: bool) {
 /// one re-ask, whose occasion is not a fresh reader but a wiring that has gone missing.
 ///
 /// A yes is answered with the text, or with the line that prints it: what a reader can do with a yes is
-/// paste, so an offer that recorded consent and said nothing else would have taken an answer and given
-/// nothing back. A no says how to come back, because it closes the question and not the door.
+/// hand that text to an AI of theirs, so an offer that recorded consent and said nothing else would have
+/// taken an answer and given nothing back. A no says how to come back, because it closes the question and
+/// not the door.
 fn offer_agent_hook(
     found: &[amenbo_core::harness::Wiring],
     cmd: &str,
@@ -3576,25 +3577,28 @@ fn offer_agent_hook(
         found.iter().filter(|one| one.traced && !one.wired()).collect();
     let mut prompt = String::new();
     if again {
-        // The occasion is a standing yes with nothing wired, and amenbo cannot tell a paste that never
-        // happened from one a clone did not carry — so the wording says the only thing it knows, which is
-        // that the text has not landed. Claiming either story would be wrong half the time.
+        // The occasion is a standing yes with nothing wired, and amenbo cannot tell an edit that was never
+        // asked for from one a clone did not carry — so the wording says the only thing it knows, which is
+        // that the setting is not there. Claiming either story would be wrong half the time. It leads, and
+        // what the text does still follows it: the first asking was a terminal the reader no longer has.
         prompt.push_str(
-            "You said yes to this before, and nothing here starts the AI on amenbo yet — the text may not have been pasted, or a clone did not carry it.\n",
-        );
-    } else {
-        prompt.push_str(
-            "amenbo can have this folder's AI read its instruction at the start of every session, through your tool's own session-start hook — so it arrives even when the managed block is not read.\n",
+            "You said yes to this before, and the setting is still not in place — a clone may not have carried it.\n",
         );
     }
-    prompt.push_str("amenbo writes no settings file: it hands you the text to give your AI, and your AI makes the edit.\n");
-    if let [one] = named.as_slice() {
-        prompt.push_str(&format!("This folder looks like {}'s. ", one.label));
-    }
+    // What a yes buys, in the reader's terms: the text, the hand that makes the edit — theirs, not
+    // amenbo's — and what their AI does differently afterwards. Named where the folder settles on one
+    // tool, and "your tool" where it does not, so the sentence is whole either way.
+    let tool = match named.as_slice() {
+        [one] => one.label,
+        _ => "your tool",
+    };
+    prompt.push_str(&format!(
+        "We hand you a text. Give it to your AI to edit {tool}'s settings, and your AI reads how to work with amenbo at the start of every session and records the work as tasks without being asked.\n",
+    ));
     prompt.push_str(if again {
-        "Want the text again? amenbo will not ask a third time."
+        "Want the text again? We will not ask a third time."
     } else {
-        "Asked once for this project. Want the text?"
+        "We ask this once. Want the text?"
     });
 
     let yes = ask_yes_no(&prompt)?;
@@ -3602,7 +3606,7 @@ fn offer_agent_hook(
         // One tool, and the answer is yes: the text itself, which is the whole of what was asked for.
         (true, [one]) => match amenbo_core::harness::find(one.id) {
             Some(harness) => eprintln!(
-                "\nGive this to the AI you work with here — it edits {}, and amenbo writes nothing:\n\n{}\n",
+                "\nGive this to your AI — it edits {}:\n\n{}\n",
                 harness.paste_into,
                 amenbo_core::harness::request(harness, cmd)
             ),
@@ -3611,7 +3615,7 @@ fn offer_agent_hook(
         // No tool named, or several: which one is the reader's to say, and the command lists them.
         (true, _) => eprintln!("Get the text for your tool: {cmd} agent-hook snippet <tool>"),
         (false, _) => eprintln!(
-            "amenbo will not ask again — `{cmd} agent-hook snippet <tool>` whenever you want it."
+            "We will not ask again — `{cmd} agent-hook snippet <tool>` prints the text whenever you want it."
         ),
     }
     Some(if again { Consent::answered_again(yes) } else { Consent::answered(yes) })
@@ -3668,12 +3672,12 @@ fn report_unwired_harnesses(
             // above still carries it for the reader that can name itself.
             [] => {}
             [one] => {
-                eprintln!("⚠ {} here does not run `{cmd} agent` at session start — the instruction reaches it only through the managed block.", one.label);
+                eprintln!("⚠ One step is left before your AI keeps this work in amenbo: {}'s settings here do not open a session with `{cmd} agent`.", one.label);
                 eprintln!("  The text to give your AI: {cmd} agent-hook snippet {}", one.id);
             }
             several => {
                 let labels = several.iter().map(|one| one.label).collect::<Vec<_>>().join(", ");
-                eprintln!("⚠ {labels} here do not run `{cmd} agent` at session start.");
+                eprintln!("⚠ One step is left before your AI keeps this work in amenbo: the settings of {labels} here do not open a session with `{cmd} agent`.");
                 eprintln!("  The text to give your AI, one tool at a time: {cmd} agent-hook snippet <tool>");
             }
         }

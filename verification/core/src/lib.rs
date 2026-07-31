@@ -390,6 +390,13 @@ const REGISTRY: &[OpSpec] = &[
     // be signed into existence to install first. So the driver writes the disagreement, and the real
     // catalog is the build that is moved to — the same idea as `folder legacy-pointer`.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "stale-manifest", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // An installed plugin declaring the plainest setting there is: a line the reader types, kept in the
+    // ordinary store and read back as it was written. The same reason the two below it exist reaches this
+    // one first — **no plugin in the official catalog declares any setting at all**, so a road that fills
+    // one in has nothing to fill in until the driver writes the declaration. It is the shape most of what
+    // `plugin config` does is about, and the only one the two below cannot stand in for: a secret is never
+    // read back, and a choice answers with candidates rather than with what was typed.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-setting", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
     // An installed plugin declaring a setting its author marked secret. Which settings a plugin takes
     // is the author's word and amenbo never invents one, so the only honest way to reach this state is
     // for a plugin that declares one to be published — and no plugin in the official catalog does. The
@@ -440,6 +447,15 @@ const REGISTRY: &[OpSpec] = &[
     // the driver leaves one answering slowly, the way `declare-secret` writes a declaration no
     // published plugin carries. `seconds` is the window the asserts after it have to read in.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "slow-program", required: &["name", "seconds"], refs: &[], strings: &["name"], binds: false },
+    // Whether amenbo can read what is installed at all — the one way to leave a write's delivery
+    // standing. Delivery rides along with the write that caused it, so anything a scenario writes is
+    // carried out before the next step: a push by hand has something to carry only where that drive
+    // never happened. amenbo skips it when the installed plugins will not read, since it will not walk
+    // its cursor past events a subscriber list it could not resolve was never offered — so the event
+    // stays where the write appended it, queued to nobody, with no runner started. `readable` is both
+    // halves: `false` leaves the next write undelivered, `true` gives the directory back, which
+    // whatever reads or delivers afterwards needs.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "installed-dir", required: &["readable"], refs: &[], strings: &[], binds: false },
     // What an installed plugin is told, for the project the run stands in. `key` is a setting its
     // author declared; an empty value is how one is taken back, which is why it is a value here and
     // not an op of its own.

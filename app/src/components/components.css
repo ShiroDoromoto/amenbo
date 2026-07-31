@@ -558,6 +558,36 @@ button.feed__target:hover { color: var(--c-accent); }
 .board__firstloop { padding: var(--s-5); max-width: 720px; }
 .firstloop__error { color: var(--c-danger, #c0392b); font-size: var(--fs-sm); }
 
+/* ---------- the standing row for folders whose AI is not started on amenbo ---------- */
+/* It sits on the project's surface rather than across the top of the app, so it wears the surface's own
+   colours — the warning band is for what a startup check found, and this is work left. There is no close
+   button: it goes when the last folder behind it is wired. */
+.agenthookrow {
+  display: flex; flex-direction: column; gap: var(--s-2);
+  margin: var(--s-4) var(--s-5) 0; padding: var(--s-4);
+  border: 1px solid var(--c-border); border-left: 3px solid var(--c-accent); border-radius: var(--r-md);
+  background: var(--c-surface); max-width: 720px;
+}
+.agenthookrow__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
+.agenthookrow__what { font-size: var(--fs-sm); }
+.agenthookrow__folders { font-size: var(--fs-sm); color: var(--c-text-muted); }
+/* The folders waiting for this one text. Monospaced because they are paths, and scrolled rather than
+   growing without bound — a project can be bound to many. */
+.agenthookrow__dirs {
+  margin: 0; padding-left: var(--s-5); max-height: 8em; overflow: auto;
+  font-family: var(--font-mono); font-size: var(--fs-xs); overflow-wrap: anywhere;
+}
+/* The text the copy button hands over, shown rather than hidden behind it: it asks an AI of the reader's
+   to edit a file of theirs, so it is read before it is handed on. Capped and scrolled in place. */
+.agenthookrow__request {
+  max-height: 11em; overflow: auto; margin: 0; padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm); background: var(--c-surface-sunken);
+  font-family: var(--font-mono); font-size: var(--fs-xs);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.agenthookrow__pick { align-self: flex-start; padding: var(--s-1) var(--s-2); font-size: var(--fs-sm); }
+.agenthookrow .btn { align-self: flex-start; }
+
 /* ---------- pager (list/smart-view windowing) ---------- */
 .pager { display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: var(--s-3); }
 .pager__info { font-size: var(--fs-sm); color: var(--c-text-muted); min-width: 12ch; text-align: center; }

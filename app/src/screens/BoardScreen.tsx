@@ -11,6 +11,7 @@ import { Pager, usePager } from "../components/Pager";
 import { useTaskPage } from "../core/reads";
 import { isEnterSubmit } from "../core/keys";
 import { ProjectFirstLoop } from "../components/FirstLoop";
+import { AgentHookWiringRow } from "./AgentHookWiringRow";
 import { inTauri } from "../core/snapshot";
 import { DecisionsScreen } from "./DecisionsScreen";
 import { CalendarView } from "./CalendarView";
@@ -214,6 +215,10 @@ export function BoardScreen({
   return (
     <>
       {headerSlot && createPortal(toolbar, headerSlot)}
+
+      {/* Above both tabs, because it is about the project and not about what is being looked at in it.
+          It draws nothing until this project has a folder left to wire (`AMB-D-459`). */}
+      <AgentHookWiringRow projectId={projectId} />
 
       {tab === "decisions" && (
         <DecisionsScreen

@@ -444,6 +444,15 @@ const ui = {
   "agentHookSetup.pick": "Which tool do you use in this folder?",
   "agentHookSetup.copy": "Copy the text",
   "agentHookSetup.copied": "Copied",
+  // The standing row on a project's own screen. Its own keys rather than the banner's: the banner speaks
+  // for the device and names a project per row, this speaks for one project and names its folders — and
+  // the banner is on its way out (`AMB-D-459`), which a shared key would take these with.
+  "agentHookWiring.title": "Folders here that still start their AI without amenbo",
+  "agentHookWiring.what": "{tool}: give the text below to your AI to edit {file}, and your AI reads how to work with amenbo at the start of every session and records the work as tasks.",
+  "agentHookWiring.folders": "Once in each of these folders:",
+  "agentHookWiring.pick": "Which tool do you use here?",
+  "agentHookWiring.copy": "Copy the text",
+  "agentHookWiring.copied": "Copied",
   "app.crashTitle": "Something went wrong",
   "app.crashHint": "The screen failed to render. Reload to recover — your data is safe.",
   "app.crashReload": "Reload",

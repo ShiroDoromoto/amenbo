@@ -265,6 +265,7 @@ pub fn run() {
       commands::hook_answer,
       commands::agent_hook_offer,
       commands::agent_hook_notices,
+      commands::agent_hook_project_wiring,
       commands::agent_hook_answer,
       commands::doctor_report,
       commands::doctor_fix,

@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { t, tf, type CmdError, type CmdErrorPart } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AgentHookNoticeDto, AgentHookOfferDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookNoticeDto, AgentHookOfferDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 
 /**
@@ -628,6 +628,21 @@ export async function fetchAgentHookOffer(canAsk: boolean): Promise<AgentHookOff
 export async function fetchAgentHookNotices(): Promise<AgentHookNoticeDto[]> {
   if (!inTauri()) return [];
   return await invoke<AgentHookNoticeDto[]>("agent_hook_notices");
+}
+
+/**
+ * What one project still has to wire, grouped by harness — the standing row on the project screen
+ * (`AMB-D-459`). Each entry carries the tool's request once and the folders of this project waiting for
+ * it, so the text goes up a single time however many folders are behind it.
+ *
+ * Empty once every folder is wired, which is how the row goes away; empty as well where the project
+ * answered no, since core keeps a refusal silent. Refetched when the project changes, not on every store
+ * tick: what it reads is settings files on disk, which a task moving on the board does not touch.
+ * Outside Tauri this is an empty array.
+ */
+export async function fetchAgentHookProjectWiring(projectId: number): Promise<AgentHookWiringDto[]> {
+  if (!inTauri()) return [];
+  return await invoke<AgentHookWiringDto[]>("agent_hook_project_wiring", { projectId });
 }
 
 /**

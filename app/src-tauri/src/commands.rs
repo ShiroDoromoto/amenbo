@@ -4320,6 +4320,72 @@ pub fn agent_hook_notices() -> Result<Vec<AgentHookNoticeDto>, CmdError> {
     Ok(notices)
 }
 
+/// One harness a project is still waiting to be wired to, and the folders waiting for it — what the
+/// project screen's standing row is drawn from (`AMB-D-459`).
+///
+/// **One text, many folders.** The request for a harness is the same wherever it is pasted; only the path
+/// it goes into changes. So the tool is carried once and the folders are a list beside it, rather than the
+/// text being repeated per folder — which is what kept the startup banner from being readable at four
+/// folders.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AgentHookWiringDto {
+    /// The harness, with the text that asks for its wiring.
+    tool: AgentHookToolDto,
+    /// This project's folders where that tool is not wired. Never empty — a tool nothing is waiting for
+    /// is left out rather than carried with an empty list.
+    dirs: Vec<String>,
+}
+
+/// What this project still has to wire, folder by folder — the standing row on the project screen, where
+/// [`agent_hook_notices`] is the device-wide sweep the startup banner reads (`AMB-D-459`).
+///
+/// **It answers for one project, because that is where it is read.** Consent is recorded per project and
+/// the wiring lands per folder, so a reader who pasted into one of four folders is answered as done and
+/// told nothing about the other three. This walks that project's folders and reports each one that is
+/// still waiting, which is what lets the row stand until the last of them is wired and then go by itself.
+///
+/// **Grouped by harness, in catalog order** ([`amenbo_core::harness::HARNESSES`]), so the surface can put
+/// the text up once and list its folders under it. A folder that traces no provider is offered the whole
+/// catalog, exactly as the banner's rows are — it appears under every tool, and whichever one the reader
+/// picks is the one they are handed.
+///
+/// A folder that is not there is skipped: nothing can be pasted into it, so a row naming it would be one
+/// the reader cannot end. What silences the report otherwise is core's
+/// ([`amenbo_core::harness::setup_notice`]) — a refusal, or the wiring landing. A standing yes is not
+/// among them: consent is not wiring.
+#[tauri::command]
+pub fn agent_hook_project_wiring(project_id: i64) -> Result<Vec<AgentHookWiringDto>, CmdError> {
+    use amenbo_core::harness;
+
+    let store = open_store_read()?;
+    let cmd = amenbo_core::config::Paths::command_name();
+    let consent = store.harness_consent(project_id).unwrap_or(None);
+    let mut waiting: Vec<Vec<String>> = vec![Vec::new(); harness::HARNESSES.len()];
+    let registry = store.bindings();
+    for dir in registry.dirs_for_project(project_id) {
+        let path = std::path::Path::new(dir);
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(notice) = harness::setup_notice(&harness::probe(path, cmd), consent) else {
+            continue;
+        };
+        for one in harness::offered(&notice) {
+            if let Some(at) = harness::HARNESSES.iter().position(|row| row.id == one.id) {
+                waiting[at].push(dir.to_string());
+            }
+        }
+    }
+    Ok(harness::HARNESSES
+        .iter()
+        .zip(waiting)
+        .filter(|(_, dirs)| !dirs.is_empty())
+        .map(|(one, dirs)| AgentHookWiringDto { tool: agent_hook_tool(one, cmd), dirs })
+        .collect())
+}
+
 /// What [`repair_pointers`] returns: how many folders were fixed, and how many were left waiting on
 /// a human's judgement.
 #[derive(Debug, Serialize, TS)]
@@ -8214,6 +8280,107 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&wired_dir);
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The project screen's standing row (`AMB-D-459`): it answers for **one project**, carries the text
+    /// **once** with its folders listed under it, and empties as the wiring lands — which is the only way
+    /// a row with no close button ever goes.
+    ///
+    /// The gap it closes is that consent is per project while wiring is per folder: a reader who pasted
+    /// into one of several folders is, on the record, answered — so nothing but this counts the rest.
+    #[test]
+    fn the_project_row_carries_one_text_for_its_own_folders_and_empties_as_they_are_wired() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-agenthookrow-home");
+        let base = amenbo_scratch::scratch("app-agenthookrow-dirs");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let new_project = |name: &str| -> i64 {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: name.into(),
+                    view: View::Board,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        let bound = |project: i64, leaf: &str, wired: bool| -> std::path::PathBuf {
+            let d = base.join(leaf);
+            std::fs::create_dir_all(&d).unwrap();
+            let d = std::fs::canonicalize(&d).unwrap();
+            claude_folder(&d, wired);
+            project_bind_folder(project, d.to_string_lossy().to_string()).unwrap();
+            d
+        };
+
+        let mine = new_project("4フォルダのPJ");
+        let one = bound(mine, "row-one", false);
+        let two = bound(mine, "row-two", false);
+        // Another project's folder, equally unwired: it belongs to that project's screen, not this one.
+        let theirs = new_project("隣のPJ");
+        let elsewhere = bound(theirs, "row-elsewhere", false);
+
+        let waiting = agent_hook_project_wiring(mine).unwrap();
+        assert_eq!(
+            waiting.iter().map(|w| w.tool.tool.as_str()).collect::<Vec<_>>(),
+            ["claude-code"],
+            "the folders point at one tool, so there is one text to hand over",
+        );
+        assert_eq!(
+            waiting[0].dirs,
+            [one.to_string_lossy(), two.to_string_lossy()],
+            "both of this project's folders wait on that one text — and only this project's",
+        );
+        assert!(
+            !waiting[0].dirs.contains(&elsewhere.to_string_lossy().to_string()),
+            "another project's folder is answered on its own screen",
+        );
+        assert!(waiting[0].tool.request.contains(".claude/settings.json"), "the text says where it goes");
+
+        // The reader pastes into one of the two. The record already said yes — this is the state where the
+        // question is spent and the remaining folder would otherwise go unmentioned.
+        claude_folder(&one, true);
+        agent_hook_answer(mine, true).unwrap();
+        let waiting = agent_hook_project_wiring(mine).unwrap();
+        assert_eq!(
+            waiting[0].dirs,
+            [two.to_string_lossy()],
+            "a standing yes does not end it: what is left is the folder still unwired",
+        );
+
+        // The last one lands, and the row has nothing to say — it goes by itself, having no other ending.
+        claude_folder(&two, true);
+        assert!(
+            agent_hook_project_wiring(mine).unwrap().is_empty(),
+            "wiring the last folder is what ends the row",
+        );
+
+        // A folder that is no longer there cannot be pasted into, so it is not reported: a row naming it
+        // would be one the reader has no way to end.
+        let gone = bound(mine, "row-gone", false);
+        assert!(!agent_hook_project_wiring(mine).unwrap().is_empty(), "while it is there, it is reported");
+        std::fs::remove_dir_all(&gone).unwrap();
+        assert!(
+            agent_hook_project_wiring(mine).unwrap().is_empty(),
+            "a folder that is gone is not work left",
+        );
+
+        // A refusal is silence here too, as it is for the banner — core decides that, and this reads it.
+        let refused = new_project("断ったPJ");
+        bound(refused, "row-refused", false);
+        agent_hook_answer(refused, false).unwrap();
+        assert!(
+            agent_hook_project_wiring(refused).unwrap().is_empty(),
+            "a no is silence, not a standing row",
+        );
+
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&base);
     }

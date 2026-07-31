@@ -126,6 +126,26 @@ pasteInto: string,
 request: string, };
 
 /**
+ * One harness a project is still waiting to be wired to, and the folders waiting for it — what the
+ * project screen's standing row is drawn from (`AMB-D-459`).
+ *
+ * **One text, many folders.** The request for a harness is the same wherever it is pasted; only the path
+ * it goes into changes. So the tool is carried once and the folders are a list beside it, rather than the
+ * text being repeated per folder — which is what kept the startup banner from being readable at four
+ * folders.
+ */
+export type AgentHookWiringDto = { 
+/**
+ * The harness, with the text that asks for its wiring.
+ */
+tool: AgentHookToolDto, 
+/**
+ * This project's folders where that tool is not wired. Never empty — a tool nothing is waiting for
+ * is left out rather than carried with an empty list.
+ */
+dirs: Array<string>, };
+
+/**
  * One row of the collapsible "Archived (N)" section at the foot of the sidebar. These never ride
  * in the snapshot's `ProjectDto` (which comes from `project_overview` — active projects only), so
  * they are fetched over a dedicated read path, `project_list_archived`. Restoring navigates to the

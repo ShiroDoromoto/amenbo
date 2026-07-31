@@ -51,9 +51,10 @@ fn dimension_lifecycle_axis_values_and_assignment() {
     assert_eq!(cli.json(&["dimension", "unset", &tid, "エリア", "実装", "--json"])["noop"], false);
     assert_eq!(cli.json(&["dimension", "unset", &tid, "エリア", "実装", "--json"])["noop"], true);
 
-    // Rename the axis.
-    let rn = cli.json(&["dimension", "rename", &did, "--name", "領域", "--json"]);
+    // Rename the axis: one verb updates it, and a name on its own is a rename.
+    let rn = cli.json(&["dimension", "update", &did, "--name", "領域", "--json"]);
     assert_eq!(rn["dimension"]["name"], "領域");
+    assert_eq!(rn["changed"], serde_json::json!(["name"]));
 
     // rm cascades over axis and values, and the listing returns to empty.
     cli.json(&["dimension", "rm", &did, "--yes", "--json"]);

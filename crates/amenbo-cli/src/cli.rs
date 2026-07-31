@@ -825,13 +825,6 @@ pub enum DimensionCmd {
         /// dimension ref (AMB-DIM-n) or name
         id: String,
     },
-    /// Rename a dimension
-    Rename {
-        /// dimension ref (AMB-DIM-n) or name
-        id: String,
-        #[arg(long)]
-        name: String,
-    },
     /// Update a dimension's name, notes, value ordering, and/or time-axis role (only the given fields change)
     Update {
         /// dimension ref (AMB-DIM-n) or name
@@ -878,15 +871,6 @@ pub enum DimensionCmd {
         /// last day of the value's period; omit to leave it ongoing (time-axis dimensions only)
         #[arg(long)]
         end: Option<String>,
-    },
-    /// Rename a dimension value
-    ValueRename {
-        /// dimension ref (AMB-DIM-n) or name
-        dimension: String,
-        /// value ref (AMB-DIMV-n) or name (within the dimension)
-        value: String,
-        #[arg(long)]
-        name: String,
     },
     /// Update a dimension value's name and/or period (only the given fields change)
     ValueUpdate {

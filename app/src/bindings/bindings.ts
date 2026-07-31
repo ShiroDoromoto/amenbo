@@ -51,10 +51,6 @@ projectName: string,
  */
 dir: string, 
 /**
- * What this build is called on the command line (the dev channel answers `amenbo-dev`).
- */
-cmd: string, 
-/**
  * The providers to put in front of the reader, each with the text that asks for the wiring: the
  * ones this folder points at, or the whole catalog where it points at none
  * ([`amenbo_core::harness::offered`]). Never empty — a banner with nothing to hand over is the one

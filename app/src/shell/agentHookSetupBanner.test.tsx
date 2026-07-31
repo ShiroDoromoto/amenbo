@@ -59,12 +59,11 @@ function tool(over: Partial<AgentHookToolDto> = {}): AgentHookToolDto {
   };
 }
 
-// core carries no prose — the tools, the files and the command's own name arrive, and the banner words it.
+// core carries no prose — the tools, the files and the text to hand over arrive, and the banner words it.
 function notice(over: Partial<AgentHookNoticeDto> = {}): AgentHookNoticeDto {
   return {
     projectName: "案件X",
     dir: "/w/案件X",
-    cmd: "amenbo",
     offered: [tool()],
     ...over,
   };
@@ -137,9 +136,11 @@ describe("the session-start hook setup banner", () => {
     expect(text).toContain(".claude/settings.json");
   });
 
-  // The dev channel is a different command, and the wording must follow it rather than spell `amenbo` in.
-  it("says the command core reported, not a hardcoded name", async () => {
-    hoisted.notices = [notice({ cmd: "amenbo-dev" })];
+  // The dev channel is a different command, and the only place its name is on screen is inside the text core
+  // worded — the banner's own sentence names no command at all, which is what keeps it from spelling in a
+  // name that is wrong on half the builds.
+  it("carries the command in core's text, and spells none of its own", async () => {
+    hoisted.notices = [notice({ offered: [tool({ request: "run `amenbo-dev agent --json`" })] })];
     await render(true);
 
     const text = container.textContent ?? "";

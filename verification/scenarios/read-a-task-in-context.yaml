@@ -69,7 +69,7 @@ steps_cli:
     op: field
     with:
       target: seed
-      field: recent_comments.0.text
+      field: comments.0.text
       equals: SCENARIO — the last thing anyone said here
 
   - type: action

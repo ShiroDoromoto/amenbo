@@ -755,8 +755,8 @@ fn reserving_a_not_ready_task_is_refused_with_a_way_out() {
 }
 
 /// `task show` bundles the four things an agent must read before starting — body, notes, the
-/// linked decisions (the "why"), and the latest comments — in one command, so none is missed by
-/// reading notes alone. The JSON carries `linked_decisions` and `recent_comments` additively.
+/// linked decisions (the "why"), and the timeline — in one command, so none is missed by
+/// reading notes alone. The JSON carries `linked_decisions` and `comments` additively.
 #[test]
 fn task_show_bundles_notes_comments_and_linked_decisions() {
     let cli = Cli::new();
@@ -781,7 +781,7 @@ fn task_show_bundles_notes_comments_and_linked_decisions() {
     assert_eq!(decisions[0]["id"], 1, "the id is the decision number");
     assert_eq!(decisions[0]["title"], "この形にした理由");
     // Of the four: the comment bodies come too, not just the count.
-    let comments = shown["recent_comments"].as_array().expect("recent_comments array");
+    let comments = shown["comments"].as_array().expect("comments array");
     assert_eq!(comments.len(), 2);
     let texts: Vec<&str> = comments.iter().map(|c| c["text"].as_str().unwrap()).collect();
     assert!(texts.contains(&"最新の但し書き") && texts.contains(&"古いコメント"));

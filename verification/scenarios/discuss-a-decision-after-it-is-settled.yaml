@@ -55,6 +55,16 @@ steps_cli:
       text: SCENARIO — what was learned after it was settled
       present: true
 
+  # The decision's own page carries the timeline's tail, which is what a reader opening the ruling
+  # actually reads — a timeline reachable only from a second command is one nobody knows to run.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: comments.1.text
+      equals: SCENARIO — what was learned after it was settled
+
   - type: action
     domain: decision
     op: comment-edit

@@ -40,7 +40,7 @@ export function PluginInstalledScreen() {
   // what this screen reads it for is the "nothing is waiting" the banner has no reason to say.
   const { updates, loading: checking } = usePluginUpdates();
   const [checked, setChecked] = useState(false);
-  useEffect(() => { refreshPluginUpdates(); }, []);
+  useEffect(() => { refreshPluginUpdates("incidental"); }, []);
   // What the last uninstall took, kept here because the row that did it is gone by the time it is drawn.
   const [removed, setRemoved] = useState<{ name: string; parts: string } | null>(null);
 
@@ -52,11 +52,12 @@ export function PluginInstalledScreen() {
         {checked && !checking && updates.length === 0 && (
           <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.updates.none")}</span>
         )}
-        {/* Asking in so many words also un-dismisses: a build waved away earlier is what the asker wants told. */}
+        {/* Asking in so many words goes to the catalog whatever the cache's age (`AMB-D-462`), and also
+            un-dismisses: a build waved away earlier is what the asker wants told. */}
         <button
           className="feed__action"
           disabled={checking}
-          onClick={() => { setChecked(true); clearDismissedPluginUpdates(); refreshPluginUpdates(); }}
+          onClick={() => { setChecked(true); clearDismissedPluginUpdates(); refreshPluginUpdates("now"); }}
         >
           {checking ? t("plugins.updates.checking") : t("plugins.updates.check")}
         </button>

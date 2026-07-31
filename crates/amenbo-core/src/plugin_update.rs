@@ -187,14 +187,6 @@ fn confirm(paths: &Paths, candidate: &Candidate) -> Result<Update> {
     })
 }
 
-/// Every installed plugin the catalog lists a different entry for, with the document that says what moved.
-///
-/// The list alone, for a caller that has nowhere to put what it was measured against — [`check`] is the
-/// same read with that carried out beside it, and is what a face reporting to a person should use.
-pub fn available(paths: &Paths) -> Result<Vec<Update>> {
-    Ok(check(paths, Reach::Incidental)?.updates)
-}
-
 /// How far a check goes for its catalog (`AMB-D-359`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reach {
@@ -232,7 +224,8 @@ pub struct Checked {
     pub against: Against,
 }
 
-/// [`available`], with what the answer was measured against carried out beside it (`AMB-D-359`).
+/// Every installed plugin the catalog lists a different entry for, with what the answer was measured
+/// against carried out beside it (`AMB-D-359`).
 ///
 /// The two travel together because they come off one read: asking the catalog a second time to find out
 /// how fresh the first answer was would be answering about a different read. That pairing is the whole
@@ -277,7 +270,7 @@ pub fn check(paths: &Paths, reach: Reach) -> Result<Checked> {
 /// The update **candidates** a cached catalog already knows of — the surface a listing shows without
 /// reaching for the network (`AMB-D-359`).
 ///
-/// Where [`available`] may spend one fetch past the freshness window and one per candidate, this never
+/// Where [`check`] may spend one fetch past the freshness window and one per candidate, this never
 /// does: `plugin list` answers the same offline (`no network, no catalog fetch`), so it reads only what
 /// the last catalog fetch left beside the installs and leaves the rest to the explicit `plugin update
 /// --check`. No cache, an unreadable one, or nothing installed is simply nothing to report — never an
@@ -1066,7 +1059,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let paths = Paths::at(dir);
 
-        assert!(available(&paths).unwrap().is_empty());
+        assert!(check(&paths, Reach::Incidental).unwrap().updates.is_empty());
     }
 
     // ---- applying one ----

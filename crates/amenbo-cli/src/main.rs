@@ -5231,7 +5231,12 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                 // identifier to print alongside it.
                 human(flags, format!("{}  {}", detail.r#ref, detail.title));
                 let due = detail.due_on.map(time::date_to_string).unwrap_or_else(|| "-".to_string());
-                human(flags, format!("completed: {} / due: {} / priority: {}", detail.completed, due, detail.priority.map(|p| p.as_str()).unwrap_or("-")));
+                // All five states, not the two-valued reading of them: whether a task is reserved
+                // (`in_progress`) or free to take (`todo`) is what a reader opening this page acts on,
+                // and both terminals (`AMB-D-397`) name themselves rather than collapsing into one
+                // "closed". Nothing is lost — closed is derivable from the status — and `--json`
+                // carries both fields for anything filtering on the flag.
+                human(flags, format!("status: {} / due: {} / priority: {}", detail.status.as_str(), due, detail.priority.map(|p| p.as_str()).unwrap_or("-")));
                 let assignee = match detail.assignee_kind {
                     Some(k) => query::facet_label(Some(k)),
                     None => "-".to_string(),

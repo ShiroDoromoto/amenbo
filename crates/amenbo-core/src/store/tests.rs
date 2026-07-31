@@ -505,6 +505,45 @@ fn the_harness_consent_is_recorded_per_project_and_survives_a_reopen() {
     fs::remove_dir_all(&dir).ok();
 }
 
+/// Clearing is the way back from a refusal, which is silent for good on its own. It lands on "never
+/// asked" — the state the question is put from — and not on a `no` that merely reads as one.
+#[test]
+fn clearing_the_harness_consent_returns_the_project_to_never_having_been_asked() {
+    use crate::harness::Consent;
+
+    let (mut s, dir) = fresh_store("harness-consent-clear");
+    let a = s.project_add(project("PJ A")).unwrap();
+    let b = s.project_add(project("PJ B")).unwrap();
+
+    // Clearing what was never answered is the state asked for, not an error.
+    s.clear_harness_consent(a.id).unwrap();
+    assert_eq!(s.harness_consent(a.id).unwrap(), None);
+
+    s.set_harness_consent(a.id, Consent::answered(false)).unwrap();
+    s.set_harness_consent(b.id, Consent::answered(false)).unwrap();
+    s.clear_harness_consent(a.id).unwrap();
+    assert_eq!(s.harness_consent(a.id).unwrap(), None);
+    assert_eq!(
+        s.harness_consent(b.id).unwrap(),
+        Some(Consent { allowed: false, asked_again: false }),
+        "and only that project's"
+    );
+
+    // The spent re-ask goes with the answer: what it was spent against is gone.
+    s.set_harness_consent(a.id, Consent::answered_again(true)).unwrap();
+    s.clear_harness_consent(a.id).unwrap();
+    assert_eq!(s.harness_consent(a.id).unwrap(), None);
+
+    drop(s);
+    let s = Store::open_at(Paths::at(dir.clone())).unwrap();
+    assert_eq!(
+        s.harness_consent(a.id).unwrap(),
+        None,
+        "and the record stays gone for the process that asks next"
+    );
+    fs::remove_dir_all(&dir).ok();
+}
+
 /// The lint-hook opt-out is per project and outlives the process that recorded it — `hooks uninstall`
 /// says "not this one", and it keeps saying it on this clone and the next. The *answer* is not here at
 /// all: it is one per device, in `config.hook_consent`.

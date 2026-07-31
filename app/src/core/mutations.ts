@@ -665,6 +665,30 @@ export async function answerAgentHookOffer(projectId: number, yes: boolean): Pro
 }
 
 /**
+ * What this project answered about starting its AI on amenbo — true, false, or null where it has never
+ * been asked. The third value is the one the project settings screen exists to show: a refusal reads
+ * the same as an unanswered project everywhere else, because both are silent.
+ *
+ * It says what was answered and nothing about the wiring, which is read from the folder every time
+ * (`fetchAgentHookNotices`). Outside Tauri there is no record to read.
+ */
+export async function fetchAgentHookConsent(projectId: number): Promise<boolean | null> {
+  if (!inTauri()) return null;
+  return await invoke<boolean | null>("agent_hook_consent", { projectId });
+}
+
+/**
+ * Forget this project's answer, putting it back to never having been asked, so the question is put again
+ * the next time the project is opened. This is the only way back from a no.
+ *
+ * Clearing a project that never answered is the state asked for, not an error.
+ */
+export async function clearAgentHookConsent(projectId: number): Promise<void> {
+  if (!inTauri()) return;
+  await invoke("agent_hook_consent_clear", { projectId });
+}
+
+/**
  * Repair broken `.amenbo` pointers — old format or missing (the same core path as CLI `doctor --fix`,
  * `binding::repair_pointers`). Only folders whose owner is unambiguous are rewritten; the ambiguous
  * ones come back under `unresolved`. It writes each folder's `.amenbo` and nothing in the store, so

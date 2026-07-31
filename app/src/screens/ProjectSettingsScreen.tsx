@@ -4,8 +4,9 @@
 // diff (only the fields that changed) to `updateProject`. Destructive operations go through a plugin-dialog confirmation.
 import { useEffect, useState } from "react";
 import {
-  bindFolder, deleteProject, fetchBoundFolders, fetchProjectSettings, openTerminal,
-  pickFolder, revealFolder, setProjectArchived, unbindFolder, updateProject,
+  bindFolder, clearAgentHookConsent, deleteProject, fetchAgentHookConsent, fetchBoundFolders,
+  fetchProjectSettings, openTerminal, pickFolder, revealFolder, setProjectArchived, unbindFolder,
+  updateProject,
 } from "../core/mutations";
 import { PluginCrossingRow } from "../components/PluginCrossingRow";
 import { usePluginInstalls } from "../core/pluginInstalls";
@@ -155,6 +156,8 @@ export function ProjectSettingsScreen({
         </div>
 
         {inTauri() && <FoldersSection projectId={projectId} />}
+
+        {inTauri() && <HarnessConsentSection projectId={projectId} />}
 
         {inTauri() && <PluginsSection projectId={projectId} />}
 
@@ -306,6 +309,77 @@ function FoldersSection({ projectId }: { projectId: number }) {
 
         <div className="newproj__nextrow">
           <button className="btn" onClick={() => void add()} disabled={busy}>📂 {t("projset.addFolder")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What this project answered when it was asked to have its AI start on amenbo, and the way back out of
+ * that answer (`AMB-D-459`).
+ *
+ * The answer is put once, when the project is opened, and never again — which leaves a refusal with no
+ * way back, since a no is silent from then on. This is that way back: clearing drops the record, and
+ * the project returns to never having been asked, so the next opening puts the question again.
+ *
+ * **Three states, not two.** Unanswered is not a no: it is what the question is put from, and a screen
+ * that showed only yes/no would report a refusal from a project that has simply never been opened since
+ * the feature arrived. Clearing is offered only where there is an answer to clear.
+ *
+ * What is shown is the record alone. Whether the wiring is actually in the folder is read from disk
+ * every time and reported by the standing row, not from here — a yes buys the text, never the wiring.
+ */
+function HarnessConsentSection({ projectId }: { projectId: number }) {
+  // undefined while the record is being read, null for a project that has never been asked.
+  const [answer, setAnswer] = useState<boolean | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetchAgentHookConsent(projectId)
+      .then((a) => { if (alive) setAnswer(a); })
+      .catch((e) => { if (alive) setError(errText(e)); });
+    return () => { alive = false; };
+  }, [projectId]);
+
+  const clear = async () => {
+    setBusy(true); setError(null);
+    try {
+      await clearAgentHookConsent(projectId);
+      setAnswer(null);
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="settings__section">
+      <div className="settings__h">{t("projset.harness")}</div>
+      <div className="settings__body newproj">
+        <span className="newproj__hint">{t("projset.harnessHint")}</span>
+
+        {answer !== undefined && (
+          <div className="settings__row">
+            <span className="settings__k">{t("projset.harnessAnswer")}</span>
+            <span className={answer === null ? "faint" : undefined}>
+              {answer === null
+                ? t("projset.harnessUnanswered")
+                : answer ? t("projset.harnessYes") : t("projset.harnessNo")}
+            </span>
+          </div>
+        )}
+
+        {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+
+        <div className="newproj__nextrow">
+          {/* Nothing to clear where nothing was answered, and the state row above says so. */}
+          <button className="btn" onClick={() => void clear()} disabled={busy || answer === undefined || answer === null}>
+            {t("projset.harnessClear")}
+          </button>
         </div>
       </div>
     </div>

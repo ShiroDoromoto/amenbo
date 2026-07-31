@@ -806,20 +806,18 @@ fn version_unbound(flags: &Flags) -> Result<i32, CliError> {
 
 /// The explicit update route: look up this OS's all-in-one installer URL in latest.json and open it. There
 /// is no self-update — opening is all it does. Because the user asked for it, the lookup runs regardless of
-/// the config toggle, and falls back to the latest-release page if the fetch fails or the OS is not listed.
-/// `upstream` is whatever startup already fetched (which does honour the config); reuse it when present,
-/// query otherwise (a warm cache means no traffic). Callable from outside a binding, so it never touches
-/// the store.
+/// the config toggle **and regardless of the detection cache's TTL** (`AMB-D-463`): it goes and asks, rather
+/// than answering from an entry up to an hour old, since what someone who typed this wants to know is the
+/// state now. Neither what startup fetched nor a warm cache is reused for the same reason. It still falls
+/// back to the latest-release page if the fetch fails or the OS is not listed, and offline behaviour is
+/// unchanged — the fresh query shares the fall-back-to-stale contract with the cached one. Callable from
+/// outside a binding, so it never touches the store.
 ///
 /// A development build answers differently, and before any of that: the installer this would open is
 /// production's, and the manifest it would name a version from is withheld from a dev build
 /// (`update_check::is_disabled`), which would leave it saying "no newer version detected" about a
 /// build that is normally behind. So it says what is true instead, opens nothing, and sends no traffic.
-fn update_cmd(
-    flags: &Flags,
-    upstream: Option<amenbo_core::update_check::LatestRelease>,
-    print: bool,
-) -> Result<i32, CliError> {
+fn update_cmd(flags: &Flags, print: bool) -> Result<i32, CliError> {
     if Paths::is_dev_channel() {
         if flags.json {
             print_json(&json!({
@@ -838,10 +836,7 @@ fn update_cmd(
         }
         return Ok(0);
     }
-    let latest = match upstream {
-        Some(rel) => Some(rel),
-        None => amenbo_core::update_check::check(true),
-    };
+    let latest = amenbo_core::update_check::check_fresh(true);
     let url = latest
         .as_ref()
         .map(|r| r.update_url())
@@ -876,20 +871,16 @@ fn update_cmd(
 
 /// `amenbo update --apply`: self-update the standalone CLI in place. Downloads this platform's CLI
 /// archive over TLS, checks version monotonicity, and swaps the running binary — no installer, no
-/// elevation. Reuses whatever startup already fetched (`upstream`), querying otherwise. Callable from
-/// outside a binding (a CLI-only user updates without a store), so it never touches the store. The
+/// elevation. Asks upstream afresh, past the detection cache's TTL, for the reason [`update_cmd`] gives
+/// (`AMB-D-463`): declining to apply an update is a refusal, and a refusal must not rest on an entry up
+/// to an hour old. Callable from outside a binding (a CLI-only user updates without a store), so it
+/// never touches the store. The
 /// three "correctly declined" outcomes (already current / GUI-managed / a development build) are
 /// reported as plain messages with a zero exit; genuine failures (download, extract, swap, no archive)
 /// are errors.
-fn self_update_cmd(
-    flags: &Flags,
-    upstream: Option<amenbo_core::update_check::LatestRelease>,
-) -> Result<i32, CliError> {
+fn self_update_cmd(flags: &Flags) -> Result<i32, CliError> {
     use amenbo_core::self_update::{self, SelfUpdateError};
-    let latest = match upstream {
-        Some(rel) => Some(rel),
-        None => amenbo_core::update_check::check(true),
-    };
+    let latest = amenbo_core::update_check::check_fresh(true);
     let Some(latest) = latest else {
         // A development build has no manifest to read by design — it is withheld from the channel
         // (`update_check::is_disabled`), not unreachable — so name the channel rather than the
@@ -2560,9 +2551,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             return if *rollback {
                 self_rollback_cmd(flags)
             } else if *apply {
-                self_update_cmd(flags, None)
+                self_update_cmd(flags)
             } else {
-                update_cmd(flags, None, *print)
+                update_cmd(flags, *print)
             };
         }
         _ => {}
@@ -2864,9 +2855,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             return if rollback {
                 self_rollback_cmd(flags)
             } else if apply {
-                self_update_cmd(flags, upstream)
+                self_update_cmd(flags)
             } else {
-                update_cmd(flags, upstream, print)
+                update_cmd(flags, print)
             };
         }
         Command::Whoami => return whoami(&store, flags),

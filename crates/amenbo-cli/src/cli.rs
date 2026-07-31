@@ -65,6 +65,8 @@ pub enum Command {
     /// over TLS and swap this binary, no installer, no elevation (CLI-only installs; a GUI-managed CLI
     /// is updated from the desktop app). Pass --rollback to undo the last --apply, restoring the binary
     /// it kept aside (offline, no download). Pass --print to only print the installer URL (no browser).
+    /// Typing this asks upstream rather than answering from the detection cache, so no route here
+    /// reports on an entry up to an hour old; offline it still falls back to the last one it had.
     Update {
         /// print the installer URL instead of opening a browser (headless / scripted use)
         #[arg(long)]

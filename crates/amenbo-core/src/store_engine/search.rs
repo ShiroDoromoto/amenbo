@@ -23,6 +23,10 @@
 //! lost data. It is not a [`Dataset`](super::schema::Dataset) for the same reason: `export` carries the
 //! records, and a derived copy travelling beside them could only ever disagree with them.
 //!
+//! **The excerpt is cut here too.** [`snippet`] belongs beside the folding rather than beside the face
+//! that shows it: it has to find the term in text the fold brought together, and hand back the characters
+//! the person actually wrote.
+//!
 //! **Staying in step is one seam, not a habit.** [`FACES`] is the whole list of what is indexed, and
 //! the engine's two write funnels ([`StoreEngine::set_field`](super::StoreEngine::set_field) and
 //! [`delete_record`](super::StoreEngine::delete_record)) consult it — so a face is added by naming it
@@ -154,6 +158,122 @@ fn fold_kana(c: char) -> char {
 /// constraint nothing meets: an empty search box is not a search for the empty string.
 pub fn terms(query: &str) -> Vec<String> {
     query.split_whitespace().map(normalize).filter(|t| !t.is_empty()).collect()
+}
+
+/// Where a hit landed, as the answer names it. The *kind* of face only — whose it is travels beside it,
+/// because a title is a task's or a decision's and nothing about the face itself says which.
+///
+/// The order of the variants **is** the order hits are read in (`AMB-D-449`): a word in a name is a
+/// stronger answer to "where is this written" than the same word in a paragraph, and that in turn than a
+/// word in a remark on it. The two after them are the faces that are not on the record at all — a label
+/// is reached through the placement, an attachment through what it hangs off — so they come after the
+/// record's own words, however recent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HitFace {
+    /// A task's `title` or a decision's `title`.
+    Title,
+    /// A task's `notes` or a decision's `body`.
+    Body,
+    /// The text of a comment on either.
+    Comment,
+    /// The name a person gave an axis, or a value on it.
+    Label,
+    /// What an attachment is called — its filename, or the address a link points at.
+    Attachment,
+}
+
+impl HitFace {
+    /// The rank this face sorts at, as the SQL that produces the rows carries it — 1-based, in variant
+    /// order. It is a column rather than something the reader applies afterwards, because the order is
+    /// what the page is cut from: the rows have to arrive already in it.
+    pub fn tier(self) -> i64 {
+        self as i64 + 1
+    }
+
+    /// The face a [`HitFace::tier`] names, for reading a row back. Total in both directions, so the rank
+    /// travelling through SQL never has to be paired with a second column naming the face.
+    pub fn from_tier(tier: i64) -> Option<Self> {
+        [Self::Title, Self::Body, Self::Comment, Self::Label, Self::Attachment]
+            .into_iter()
+            .find(|f| f.tier() == tier)
+    }
+}
+
+/// How many characters of the record's own text a snippet carries, and how many of them sit ahead of the
+/// match. A snippet points at where something is written, and the reading itself is `show` and
+/// `comment list`'s (`AMB-D-449`) — so this is a glance, deliberately narrow enough that a page of hits
+/// stays readable.
+pub const SNIPPET_CHARS: usize = 120;
+/// See [`SNIPPET_CHARS`]. Enough of a run-up to see what the match sits in, without pushing it off the
+/// end of a narrow terminal.
+pub const SNIPPET_LEAD: usize = 30;
+
+/// A short excerpt of `text` around the first place one of `terms` lands in it, in **the characters the
+/// person wrote** — the copy the index matched on is folded, and returning that would answer a search for
+/// `ＡＩ` with a snippet nobody typed.
+///
+/// The text is flattened to one line first (a run of whitespace becomes one space): notes and a decision
+/// body are paragraphs, and a hit list of paragraphs is not a list. A term never holds whitespace itself
+/// ([`terms`] splits on it), so flattening can neither break a match nor invent one — it only ever leaves
+/// one space where there were several.
+///
+/// Ellipses mark each end that was cut, so a snippet never reads as the whole of a field.
+pub fn snippet(text: &str, terms: &[String]) -> String {
+    let chars: Vec<char> = text.split_whitespace().collect::<Vec<_>>().join(" ").chars().collect();
+    let at = match_at(&chars, terms).unwrap_or(0);
+    let start = at.saturating_sub(SNIPPET_LEAD);
+    let end = (start + SNIPPET_CHARS).min(chars.len());
+    let mut out = String::new();
+    if start > 0 {
+        out.push('…');
+    }
+    out.extend(&chars[start..end]);
+    if end < chars.len() {
+        out.push('…');
+    }
+    out
+}
+
+/// The earliest character of `chars` a term lands on, or `None` when none of them does — which is not a
+/// fault: a record matches on all of its faces together, so a hit on one face is routinely shown for a
+/// search whose other word is written somewhere else entirely.
+///
+/// Two passes, because the folding is not a character-for-character map. The first folds each character on
+/// its own, which yields a position for every one of them and agrees with [`normalize`] everywhere the
+/// folding does not **compose across a boundary** — half-width kana meeting its voicing mark being the one
+/// place it does. Only when that finds nothing does the second pass run, normalising a window of the
+/// original at each position: exact, and paid for only where the cheap map could not answer.
+fn match_at(chars: &[char], terms: &[String]) -> Option<usize> {
+    let mut folded = String::with_capacity(chars.len());
+    // Which character of the original each character of the fold came from.
+    let mut source: Vec<usize> = Vec::with_capacity(chars.len());
+    for (i, c) in chars.iter().enumerate() {
+        for f in normalize(c.encode_utf8(&mut [0u8; 4])).chars() {
+            folded.push(f);
+            source.push(i);
+        }
+    }
+    let cheap = terms
+        .iter()
+        .filter_map(|term| folded.find(term.as_str()))
+        .map(|byte| source[folded[..byte].chars().count()])
+        .min();
+    cheap.or_else(|| terms.iter().filter_map(|term| scan(chars, term)).min())
+}
+
+/// The earliest character `term` lands on, found by normalising a window of the original at each position
+/// — the exact fallback of [`match_at`], and its slow half.
+///
+/// The window is wider than the term because the folding can shorten what it reads (two characters
+/// composing into one), never by more than a third of what went in — a Hangul syllable, at three jamo, is
+/// the deepest composition there is.
+fn scan(chars: &[char], term: &str) -> Option<usize> {
+    let width = term.chars().count() * 3 + 4;
+    (0..chars.len()).find(|&i| {
+        let end = (i + width).min(chars.len());
+        normalize(&chars[i..end].iter().collect::<String>()).starts_with(term)
+    })
 }
 
 /// How one term is matched, as a predicate over a [`DOC_TABLE`] row the caller has already correlated
@@ -441,6 +561,54 @@ mod tests {
     fn a_term_reaches_fts5_as_a_literal_phrase() {
         assert_eq!(fts_phrase("a OR b"), "\"a OR b\"");
         assert_eq!(fts_phrase("say \"hi\""), "\"say \"\"hi\"\"\"");
+    }
+
+    /// The snippet is cut around the match, and says at each end that it was cut — so it never reads as
+    /// the whole of a field.
+    #[test]
+    fn a_snippet_is_cut_around_the_match_and_marks_each_cut_end() {
+        let text = format!("{}索引{}", "あ".repeat(200), "い".repeat(200));
+        let s = snippet(&text, &[normalize("索引")]);
+        assert!(s.starts_with('…') && s.ends_with('…'), "both ends were cut: {s}");
+        assert!(s.contains("索引"));
+        assert_eq!(s.chars().count(), SNIPPET_CHARS + 2, "the window, plus one ellipsis at each end");
+        assert_eq!(
+            s.chars().skip(1).take_while(|c| *c == 'あ').count(),
+            SNIPPET_LEAD,
+            "the run-up ahead of the match, past the leading ellipsis"
+        );
+
+        let short = snippet("索引の話", &[normalize("索引")]);
+        assert_eq!(short, "索引の話", "a field that fits is not cut, and says so by having no ellipsis");
+    }
+
+    /// The excerpt is in the characters the person wrote: the fold is the index's copy, and answering a
+    /// search for `ai` with a snippet nobody typed would be answering about the copy.
+    #[test]
+    fn a_snippet_comes_back_in_the_characters_that_were_written() {
+        assert_eq!(snippet("ＡＩ が引く", &[normalize("ai")]), "ＡＩ が引く");
+        // The folding composes here (half-width kana with its voicing mark), which the cheap map cannot
+        // follow — the exact scan behind it still points at the word.
+        let text = format!("{}ｻｰﾊﾞの設定", "あ".repeat(100));
+        let s = snippet(&text, &[normalize("サーバ")]);
+        assert!(s.contains("ｻｰﾊﾞの設定"), "the scan found the composed spelling: {s}");
+    }
+
+    /// A snippet is one line: notes and a decision body are paragraphs, and a list of paragraphs is not a
+    /// list.
+    #[test]
+    fn a_snippet_is_flattened_to_one_line() {
+        assert_eq!(snippet("## 見出し\n\n索引を  引く\n", &[normalize("索引")]), "## 見出し 索引を 引く");
+    }
+
+    /// A face routinely carries only some of the words — every term has to land on the *record*, not on
+    /// one face — so a face carrying none of them is not a fault, and shows its opening.
+    #[test]
+    fn a_face_that_carries_no_term_shows_its_opening() {
+        let text = format!("{}索引", "あ".repeat(200));
+        let s = snippet(&text, &[normalize("走査")]);
+        assert!(!s.starts_with('…'), "cut from the front, not around a match that is not there: {s}");
+        assert!(s.ends_with('…'));
     }
 
     /// An attachment is the one record swept by the polymorphic delete rather than by `delete_record`

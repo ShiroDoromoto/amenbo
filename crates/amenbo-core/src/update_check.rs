@@ -281,11 +281,15 @@ pub fn check(enabled: bool) -> Option<LatestRelease> {
     check_inner(enabled, false)
 }
 
-/// [`check`], bypassing the cache: query upstream once **even if** a fresh entry exists. Meant to be
-/// called only on the **first** tick after process start, so that right after a release we do not
-/// sit behind a fresh cache entry for the old version and fail to mention the new one. The contract
-/// (honours the disable knob, times out, silent on failure, falls back to stale) is identical to
-/// [`check`], and **a successful fetch updates the cache too**, so the entry that later ticks read
+/// [`check`], bypassing the cache: query upstream once **even if** a fresh entry exists. For the two
+/// readings that must not answer from an entry up to a TTL old: the **first** tick after process
+/// start, so that right after a release we do not sit behind a fresh cache entry for the old version
+/// and fail to mention the new one, and a check somebody **typed or clicked** (`AMB-D-463`), where
+/// what is being asked for is the state now. Every other reading — the ones that ride along with work
+/// the user came to do — goes through [`check`], which is what keeps the traffic to the cache's terms.
+///
+/// The contract (honours the disable knob, times out, silent on failure, falls back to stale) is
+/// identical to [`check`], and **a successful fetch updates the cache too**, so the entry that later ticks read
 /// through [`check`] is swapped for the new version as well. A failed query falls back to the stale
 /// entry, which is what makes it tolerate being offline.
 pub fn check_fresh(enabled: bool) -> Option<LatestRelease> {

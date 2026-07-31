@@ -1,7 +1,12 @@
-//! The AI harnesses that can be wired to run `amenbo agent` when a session starts, and the snippet each
-//! one is wired with (`AMB-D-440`). **Read-only, and paste-only**: nothing here writes to a user's
-//! provider settings, and every snippet is a whole file's worth of configuration the user pastes for
-//! themselves. amenbo asks, detects, and hands over the text — the wiring stays in the user's hands.
+//! The AI harnesses that can be wired to run `amenbo agent` when a session starts, and the text each one
+//! is wired with (`AMB-D-440`). **Read-only**: nothing here writes to a user's provider settings. amenbo
+//! asks, detects, and hands over the text — the wiring stays in the user's hands.
+//!
+//! **What is handed over is a request, not a file.** [`request`] is addressed to the AI the reader
+//! already works with, and the [`configuration`] rides inside it: which file it goes in, and that
+//! whatever is already there is kept, are sentences in the request rather than something the reader has
+//! to work out. A whole settings document was the wrong thing to hand over — it reads as a file to
+//! replace, and the reader most in need of this feature is exactly the one whose file is not empty.
 //!
 //! **What a probe can claim, and what it cannot.** [`probe`] answers whether a folder's settings for a
 //! harness *say* to run the launch command when a session starts. Whether the hook then fires, and
@@ -11,12 +16,12 @@
 //! never a guarantee.
 //!
 //! **The catalog is a table, not a code path.** Every harness is one [`Harness`] row in [`HARNESSES`]:
-//! where its settings live, how its session-start event is spelled, and the file to paste. Listing one
-//! more paste-only provider is one more row — that a new entry costs no new branch is the condition the
-//! shape is holding to (`AMB-D-440`), which is also why a provider needing plugin code or an IDE setting
-//! does not belong here at all.
+//! where its settings live, how its session-start event is spelled, and the configuration it takes.
+//! Listing one more settings-only provider is one more row — that a new entry costs no new branch is the
+//! condition the shape is holding to (`AMB-D-440`), which is also why a provider needing plugin code or
+//! an IDE setting does not belong here at all.
 //!
-//! **What the snippet injects is the launch instruction, not the spec.** Each template carries
+//! **What the configuration injects is the launch instruction, not the spec.** Each template carries
 //! [`crate::agents::launch_instruction`] — the same one line the managed block holds — and never the
 //! output of `agent --json`, which is 40 KB an agent holding the instruction fetches for itself. The
 //! block stays where it is: a wired folder is not a reason to strip it, and the hook adds reach over the
@@ -29,9 +34,10 @@ use serde::Serialize;
 /// One AI harness amenbo knows how to be wired into — the catalog row (`AMB-D-440`).
 ///
 /// The fields split in two: [`places`](Harness::places) and [`event`](Harness::event) are what a probe
-/// reads, and [`paste_into`](Harness::paste_into) with [`template`](Harness::template) are what a user is
-/// handed. Nothing here is a schema — the config shapes have nothing in common (JSON depth, event casing,
-/// which key holds the command), which is why the whole of each one is carried as text.
+/// reads, and [`paste_into`](Harness::paste_into) with [`template`](Harness::template) are what a
+/// [`request`] is built from. Nothing here is a schema — the config shapes have nothing in common (JSON
+/// depth, event casing, which key holds the command), which is why the whole of each one is carried as
+/// text.
 pub struct Harness {
     /// The stable token a face names this harness by (`claude-code`), lowercase and hyphenated. It is a
     /// key, not a rendering: a user reads [`label`](Harness::label).
@@ -52,11 +58,11 @@ pub struct Harness {
     /// `.github` belongs to GitHub and is in nearly every repository, while `.github/hooks` is the one
     /// that says this provider's hooks are kept here. Every place is inside it.
     pub home: &'static str,
-    /// The file [`snippet`] is written for, so the offer can say where the text goes. One of
-    /// [`places`](Harness::places): a snippet pasted where a probe does not look would read as unwired
-    /// forever.
+    /// The file [`configuration`] is written for, and the one a [`request`] names. One of
+    /// [`places`](Harness::places): a configuration landing where a probe does not look would read as
+    /// unwired forever.
     pub paste_into: &'static str,
-    /// The configuration to paste, with `{instruction}` standing in for the launch instruction.
+    /// The configuration, with `{instruction}` standing in for the launch instruction.
     pub template: &'static str,
     /// How many JSON strings the `{instruction}` placeholder sits inside — 1 where the command is
     /// `echo '<instruction>'`, 2 where the command echoes a JSON document that carries it. The
@@ -65,7 +71,7 @@ pub struct Harness {
     pub json_layers: u8,
 }
 
-/// Every harness amenbo lists, in the order a face offers them. The five paste-only providers of the
+/// Every harness amenbo lists, in the order a face offers them. The five settings-only providers of the
 /// first catalog (`AMB-D-440`).
 pub static HARNESSES: &[Harness] = &[
     Harness {
@@ -188,17 +194,53 @@ pub fn find(id: &str) -> Option<&'static Harness> {
     HARNESSES.iter().find(|harness| harness.id == id)
 }
 
-/// The configuration to paste for one harness, with the launch instruction in place. `cmd` is the launch
-/// command name ([`crate::config::Paths::command_name`]), so a dev-channel build offers a snippet that
-/// calls the binary the user is actually running.
-pub fn snippet(harness: &Harness, cmd: &str) -> String {
+/// The configuration for one harness, with the launch instruction in place. `cmd` is the launch command
+/// name ([`crate::config::Paths::command_name`]), so a dev-channel build describes wiring for the binary
+/// the user is actually running.
+///
+/// This is the payload, not the hand-over: what a face gives a reader is [`request`], which carries this
+/// inside it. It is public because the two are separately true — a caller standing in for the AI that
+/// does the merge needs the settings alone, and reading them out of the request's prose would make that
+/// caller the judge of prose it does not own.
+pub fn configuration(harness: &Harness, cmd: &str) -> String {
     let instruction = json_escaped(&crate::agents::launch_instruction(cmd), harness.json_layers);
     harness.template.replace("{instruction}", &instruction)
 }
 
+/// What a face hands the reader for one harness: a request addressed to the AI they work with, carrying
+/// the [`configuration`] (`AMB-D-440`).
+///
+/// **The reader's AI is the hand that edits the file**, which is what the wording has to make true.
+/// amenbo still writes nothing — the request travels through the reader, who decides whether to give it
+/// to anyone — but the work it asks for is an edit to an existing file, so it says so: which file, that
+/// what is already in there stays, and that nothing else is to change. Handing over a whole settings
+/// document instead left that judgment with the reader, who then had to merge by hand exactly when their
+/// file was not empty.
+///
+/// English, like the launch instruction and the managed block: the recipient is a model, and one text is
+/// one text to keep in step with the wording those two carry.
+pub fn request(harness: &Harness, cmd: &str) -> String {
+    format!(
+        "Please start this folder's AI on amenbo, by wiring {label}'s session-start hook.\n\
+         \n\
+         Merge the configuration below into `{paste_into}` in this folder. Keep everything that file \
+         already holds — add to its hooks rather than replacing them — and create it if it is not \
+         there. Change nothing else, and tell me what you changed.\n\
+         \n\
+         ```json\n\
+         {configuration}\n\
+         ```\n\
+         \n\
+         Once it is in place, every session in this folder opens by running `{cmd} agent --json`.",
+        label = harness.label,
+        paste_into = harness.paste_into,
+        configuration = configuration(harness, cmd),
+    )
+}
+
 /// `text` as the body of a JSON string, `layers` deep. Nothing in the instruction needs escaping today —
 /// which is exactly why this is here: the escape is what keeps that from being a property of the
-/// sentence, so rewording it can never quietly emit a snippet that will not parse.
+/// sentence, so rewording it can never quietly emit a configuration that will not parse.
 fn json_escaped(text: &str, layers: u8) -> String {
     let mut out = text.to_string();
     for _ in 0..layers {
@@ -300,8 +342,8 @@ fn contains_ignoring_case(text: &str, needle: &str) -> bool {
 /// reason.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Consent {
-    /// Whether the offer was accepted. A `false` is "don't ask again", and forbids nothing: the snippets
-    /// stay there for the asking.
+    /// Whether the offer was accepted. A `false` is "don't ask again", and forbids nothing: the text
+    /// stays there for the asking.
     pub allowed: bool,
     /// Whether the standing yes has already been put again after its wiring went missing. It is the
     /// memory that makes "once more" once: without it a yes with nothing wired asks at every startup
@@ -366,7 +408,7 @@ pub enum ConsentAction {
 ///
 /// **Once ever, not once per absence.** The re-ask is spent when it is answered and never comes back:
 /// this question's failure mode is nagging about a file amenbo will not write, and the user who wants it
-/// again can ask for the snippet whenever they like.
+/// again can ask for the text whenever they like.
 ///
 /// A machine caller is never asked (`can_ask`), and nothing is recorded when it is not — the unanswered
 /// state carries intact to the next surface that can ask, and what the machine gets instead is the
@@ -412,12 +454,12 @@ pub struct Notice {
 /// Two things silence it, and neither is "the question was answered":
 ///
 /// - **A refusal** (`allowed: false`). The report exists to finish a setup, and a reader who said no has
-///   no setup pending. The snippets stay there for the asking.
+///   no setup pending. The text stays there for the asking.
 /// - **A folder that is wired, with no traced provider left out.** Something here starts the AI on
 ///   amenbo, which is the whole of what this was about.
 ///
 /// A standing yes does **not** silence it: consent is not wiring, and amenbo writes no settings file, so
-/// the only thing that ends this report is the paste actually landing.
+/// the only thing that ends this report is the configuration actually landing in the file.
 pub fn setup_notice(found: &[Wiring], consent: Option<Consent>) -> Option<Notice> {
     if consent.is_some_and(|answer| !answer.allowed) {
         return None;
@@ -447,7 +489,7 @@ mod tests {
 
     /// The catalog's own shape: what a new row has to hold for the table to stay a table.
     #[test]
-    fn every_row_is_addressable_pasteable_and_probed_where_it_is_pasted() {
+    fn every_row_is_addressable_configurable_and_probed_where_it_lands() {
         for harness in HARNESSES {
             assert_eq!(find(harness.id).map(|h| h.id), Some(harness.id), "{} is not findable", harness.id);
             assert!(
@@ -456,11 +498,11 @@ mod tests {
                 harness.id
             );
             assert!((1..=2).contains(&harness.json_layers), "{} nests the instruction oddly", harness.id);
-            // Pasting where the probe does not read would leave the user wired and told otherwise. A
-            // directory place answers for the file the snippet names inside it.
+            // Landing where the probe does not read would leave the user wired and told otherwise. A
+            // directory place answers for the file the request names inside it.
             assert!(
                 harness.places.iter().any(|place| harness.paste_into.starts_with(place)),
-                "{} is pasted somewhere it is not probed",
+                "{} lands somewhere it is not probed",
                 harness.id
             );
             // The trace has to be this provider's own directory, which is what makes its presence say
@@ -485,15 +527,15 @@ mod tests {
         }
     }
 
-    /// The whole paste, all the way down: the file parses, the command it holds runs a single-quoted
-    /// `echo`, and what that echo prints is the instruction — as text where the provider takes text, and
-    /// as a JSON document carrying it where the provider takes one. This is the one test that would
-    /// catch a template escaped one layer too few, which parses as a file and prints nonsense.
+    /// The whole configuration, all the way down: the file parses, the command it holds runs a
+    /// single-quoted `echo`, and what that echo prints is the instruction — as text where the provider
+    /// takes text, and as a JSON document carrying it where the provider takes one. This is the one test
+    /// that would catch a template escaped one layer too few, which parses as a file and prints nonsense.
     #[test]
-    fn every_snippet_is_json_whose_echo_prints_the_instruction() {
+    fn every_configuration_is_json_whose_echo_prints_the_instruction() {
         let instruction = crate::agents::launch_instruction("amenbo");
         for harness in HARNESSES {
-            let text = snippet(harness, "amenbo");
+            let text = configuration(harness, "amenbo");
             assert!(!text.contains("{instruction}"), "{} left the placeholder in", harness.id);
             let parsed: serde_json::Value =
                 serde_json::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}\n{text}", harness.id));
@@ -519,11 +561,44 @@ mod tests {
         }
     }
 
-    /// The snippet calls the binary the user is running, not the product's name.
+    /// The configuration calls the binary the user is running, not the product's name.
     #[test]
-    fn the_snippet_names_the_running_command() {
-        let text = snippet(find("claude-code").unwrap(), "amenbo-dev");
+    fn the_configuration_names_the_running_command() {
+        let text = configuration(find("claude-code").unwrap(), "amenbo-dev");
         assert!(text.contains("amenbo-dev agent --json"), "{text}");
+    }
+
+    /// What is handed over is a request an AI can carry out, and the two things it must not leave the
+    /// reader to work out are the file and the merge: a request that reads as a whole settings document
+    /// is exactly what this replaced, and it fails the reader whose file is not empty.
+    #[test]
+    fn every_request_carries_its_configuration_and_asks_for_a_merge_into_a_named_file() {
+        for harness in HARNESSES {
+            let text = request(harness, "amenbo");
+            assert!(
+                text.contains(&configuration(harness, "amenbo")),
+                "{} hands over no configuration: {text}",
+                harness.id
+            );
+            assert!(text.contains(harness.paste_into), "{} names no file: {text}", harness.id);
+            assert!(text.contains(harness.label), "{} names no tool: {text}", harness.id);
+            // The one sentence the old shape could not say. It is asserted on the words a reader would
+            // look for, because a request that carries the settings and not this is the failure being
+            // guarded against, not a wording preference.
+            assert!(text.contains("Merge"), "{} does not ask for a merge: {text}", harness.id);
+            assert!(
+                text.contains("Keep everything that file already holds"),
+                "{} does not say the existing settings stay: {text}",
+                harness.id
+            );
+            // A request is prose and not a settings file, which is the whole change: pasted into one it
+            // would not parse, and nothing here should read as though it could be.
+            assert!(
+                serde_json::from_str::<serde_json::Value>(&text).is_err(),
+                "{} hands over something that reads as a settings file",
+                harness.id
+            );
+        }
     }
 
     /// Both halves are the wiring: the call, and the event it is wired to.
@@ -532,7 +607,7 @@ mod tests {
         let dir = folder(
             "wired",
             ".claude/settings.json",
-            &snippet(find("claude-code").unwrap(), "amenbo"),
+            &configuration(find("claude-code").unwrap(), "amenbo"),
         );
         let found = probe(&dir, "amenbo");
         assert_eq!(
@@ -566,7 +641,8 @@ mod tests {
     /// A dev-channel wiring is not the production binary's, and the other way round.
     #[test]
     fn the_launch_command_has_to_match() {
-        let dir = folder("channel", ".claude/settings.json", &snippet(find("claude-code").unwrap(), "amenbo-dev"));
+        let dir =
+            folder("channel", ".claude/settings.json", &configuration(find("claude-code").unwrap(), "amenbo-dev"));
         assert!(wiring(&probe(&dir, "amenbo-dev"), "claude-code").wired());
         assert!(!wiring(&probe(&dir, "amenbo"), "claude-code").wired());
     }
@@ -577,7 +653,7 @@ mod tests {
         let dir = folder(
             "copilot",
             ".github/hooks/whatever-they-called-it.json",
-            &snippet(find("github-copilot").unwrap(), "amenbo"),
+            &configuration(find("github-copilot").unwrap(), "amenbo"),
         );
         assert_eq!(
             wiring(&probe(&dir, "amenbo"), "github-copilot").wired_at,
@@ -659,7 +735,7 @@ mod tests {
     /// What the standing report says, state by state. It is the wiring that ends it, never the answer:
     /// amenbo writes no settings file, so a yes leaves the setup exactly as unfinished as it found it.
     #[test]
-    fn the_report_ends_when_the_paste_lands_or_the_reader_says_no() {
+    fn the_report_ends_when_the_wiring_lands_or_the_reader_says_no() {
         let bare = |id: &'static str, traced| Wiring { id, label: id, wired_at: None, traced };
         let wired = |id: &'static str| Wiring {
             id,
@@ -689,7 +765,7 @@ mod tests {
         assert_eq!(notice.unwired.iter().map(|w| w.id).collect::<Vec<_>>(), ["cursor"]);
         assert!(notice.any_wired, "one wired provider is not none");
 
-        // A standing yes does not end it — only the paste does.
+        // A standing yes does not end it — only the wiring landing does.
         assert!(setup_notice(&traced, Some(Consent::answered(true))).is_some());
         assert!(setup_notice(&quiet_folder, Some(Consent::answered_again(true))).is_some());
 

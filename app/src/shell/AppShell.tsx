@@ -891,9 +891,14 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
 // (`AgentHookConsentModal`).
 //
 // **What it adds over the CLI's line is the copy button**, and that is the whole point of the surface: the
-// wiring is a paste the reader performs, amenbo never writes the file, so how easily the text reaches the
-// clipboard is how often the setup is finished. One button per unwired tool, since the text differs per
-// tool and pasting the wrong one wires nothing.
+// wiring is an edit the reader has their own AI make, amenbo never writes the file, so how easily the text
+// reaches the clipboard is how often the setup is finished. One button per unwired tool, since the text
+// differs per tool and handing over the wrong one wires nothing.
+//
+// **The text is on screen, not behind the button.** What it asks for is an edit to a file the reader owns,
+// by an AI of theirs — so the moment to read it is before it is handed over, and a copy button with the
+// text hidden behind it is a copy taken on trust. It scrolls in place rather than being folded away: a
+// disclosure would put it one click from being copied unread, which is the state this avoids.
 //
 // **It reports only what the folder points at** — a provider whose own directory is here, unwired — because
 // that is the CLI's person-facing rule and holds for the same reason: a standing warning about a tool there
@@ -927,9 +932,9 @@ export function AgentHookSetupBanner({ asked }: { asked: boolean }) {
 
   if (dismissed || notices.length === 0) return null;
 
-  const copy = async (key: string, snippet: string) => {
+  const copy = async (key: string, request: string) => {
     try {
-      await navigator.clipboard.writeText(snippet);
+      await navigator.clipboard.writeText(request);
       setCopied(key);
       setTimeout(() => setCopied(null), 1200);
     } catch { /* where the clipboard is unavailable, quietly skip */ }
@@ -948,9 +953,10 @@ export function AgentHookSetupBanner({ asked }: { asked: boolean }) {
               return (
                 <div key={tool.tool}>
                   {tf("agentHookSetup.unwired", { tool: tool.label, cmd: `${n.cmd} agent`, file: tool.pasteInto })}{" "}
-                  <button className="healthbanner__action" onClick={() => void copy(key, tool.snippet)}>
+                  <button className="healthbanner__action" onClick={() => void copy(key, tool.request)}>
                     {copied === key ? t("agentHookSetup.copied") : t("agentHookSetup.copy")}
                   </button>
+                  <pre className="agenthook__request">{tool.request}</pre>
                 </div>
               );
             })}

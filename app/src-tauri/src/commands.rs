@@ -4108,10 +4108,10 @@ pub fn hook_answer(yes: bool) -> Result<(), CmdError> {
 /// One AI harness a folder could start its session on `amenbo agent` with, and the text that would do it
 /// ([`amenbo_core::harness`]).
 ///
-/// The snippet travels with the row rather than being fetched on a click, because the click it is behind
-/// is a copy: a button that had to go and ask for the text first could hand over an empty clipboard, and
-/// there is no second chance to notice — the user pastes what they have. It is a few hundred bytes per
-/// unwired tool.
+/// The request travels with the row rather than being fetched on a click, because the surface it is on
+/// both shows it and copies it: text fetched on the click would be text nobody read, and a button that
+/// had to go and ask first could hand over an empty clipboard with no second chance to notice. It is a
+/// few hundred bytes per unwired tool.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -4120,10 +4120,11 @@ pub struct AgentHookToolDto {
     tool: String,
     /// The product's name for itself, for the sentence.
     label: String,
-    /// The file the snippet goes into, relative to the folder.
+    /// The file the configuration goes into, relative to the folder.
     paste_into: String,
-    /// The configuration to paste, with this build's launch command already in it.
-    snippet: String,
+    /// What the reader is handed: the request to give the AI they work with, carrying the configuration
+    /// and this build's launch command ([`amenbo_core::harness::request`]).
+    request: String,
 }
 
 /// The row for `one`, or `None` where the catalog no longer lists it.
@@ -4133,7 +4134,7 @@ fn agent_hook_tool(one: &amenbo_core::harness::Wiring, cmd: &str) -> Option<Agen
         tool: harness.id.to_string(),
         label: harness.label.to_string(),
         paste_into: harness.paste_into.to_string(),
-        snippet: amenbo_core::harness::snippet(harness, cmd),
+        request: amenbo_core::harness::request(harness, cmd),
     })
 }
 
@@ -4159,7 +4160,7 @@ pub struct AgentHookOfferDto {
     /// it — the dev channel answers `amenbo-dev`.
     cmd: String,
     /// Whether this is the one re-ask (a standing yes with nothing wired), which is worded differently:
-    /// the occasion is not a fresh reader but a paste that never landed.
+    /// the occasion is not a fresh reader but a wiring that never landed.
     again: bool,
     /// The providers this folder shows a trace of that are not wired — what lets the question say which
     /// tool it looks like. Empty where the folder traces none, and the question is still put: it is asked
@@ -4243,7 +4244,7 @@ pub fn agent_hook_offer(can_ask: bool) -> Result<Option<AgentHookOfferDto>, CmdE
 /// to one — a caller cannot get that wrong, because it never says.
 ///
 /// **Nothing is wired by answering.** amenbo writes no provider settings file, so a yes buys the text and
-/// not the wiring, and the banner keeps reporting until the paste lands.
+/// not the wiring, and the banner keeps reporting until the wiring lands.
 ///
 /// Call it **only when there is an answer**: a dismissed modal calls nothing, and the project stays
 /// unanswered for a later startup to ask again.
@@ -4271,14 +4272,14 @@ pub struct AgentHookNoticeDto {
     dir: String,
     /// What this build is called on the command line (the dev channel answers `amenbo-dev`).
     cmd: String,
-    /// The providers traced here and not wired, each with the text to paste.
+    /// The providers traced here and not wired, each with the text that asks for the wiring.
     unwired: Vec<AgentHookToolDto>,
 }
 
 /// Where this folder's AI is not started on amenbo — the GUI's third channel for it, alongside the CLI's
 /// `--json` field and stderr line. The standing report
 /// ([`amenbo_core::harness::setup_notice`]), not [`agent_hook_offer`]'s one-time question: it tells, and
-/// the only thing that ends it is the paste landing, since amenbo will not write the file itself.
+/// the only thing that ends it is the wiring landing, since amenbo will not write the file itself.
 ///
 /// **It reports only what it can point at**, which is what the CLI's person-facing line does and for the
 /// same reason: a standing warning about a tool the folder shows no sign of is one the reader cannot act
@@ -7934,7 +7935,7 @@ mod tests {
 
     /// A folder with Claude Code's settings directory in it, so the probe traces the provider. `wired`
     /// writes the two tokens `harness::probe` reads for — this build's `<cmd> agent` call and the
-    /// provider's session-start event — rather than the real snippet, which is core's to compose.
+    /// provider's session-start event — rather than the real configuration, which is core's to compose.
     fn claude_folder(dir: &std::path::Path, wired: bool) {
         let cmd = amenbo_core::config::Paths::command_name();
         std::fs::create_dir_all(dir.join(".claude")).unwrap();
@@ -7997,12 +7998,12 @@ mod tests {
             ["claude-code"],
             "the provider the folder points at, so the question can say which tool it looks like",
         );
-        assert!(first.named[0].snippet.contains("SessionStart"), "the text a yes is asking for");
+        assert!(first.named[0].request.contains("SessionStart"), "the text a yes is asking for");
 
         agent_hook_answer(project, true).unwrap();
 
         // A standing yes with nothing wired — amenbo writes no settings file, so answering changed no
-        // disk — is worth exactly one more question, worded as the paste that never landed.
+        // disk — is worth exactly one more question, worded as the wiring that never landed.
         let again = agent_hook_offer(true).unwrap().expect("a yes with nothing wired is asked once more");
         assert!(again.again, "and it says so, rather than reading as a first asking");
 
@@ -8020,11 +8021,11 @@ mod tests {
     ///
     /// A folder somebody wired by hand is the answer, so it is adopted rather than asked about — the
     /// question amenbo must never put is one whose answer is already on disk. And the report that follows
-    /// names **only what the folder points at**, with the text to paste attached: a warning about a tool
-    /// there is no sign of is one a person cannot act on, and a copy button with nothing behind it would
-    /// leave a setup that reads as finished and is not.
+    /// names **only what the folder points at**, with the request attached: a warning about a tool there
+    /// is no sign of is one a person cannot act on, and a copy button with nothing behind it would leave
+    /// a setup that reads as finished and is not.
     #[test]
-    fn a_hand_wired_folder_is_adopted_and_the_notice_carries_the_text_to_paste() {
+    fn a_hand_wired_folder_is_adopted_and_the_notice_carries_the_text_that_asks_for_the_wiring() {
         let _env = env_guard();
         let tmp = amenbo_scratch::scratch("app-agenthooknotice-home");
         let base = amenbo_scratch::scratch("app-agenthooknotice-dirs");
@@ -8092,12 +8093,19 @@ mod tests {
         assert_eq!(tool.tool, "claude-code");
         assert_eq!(tool.paste_into, ".claude/settings.json", "where the text goes");
         assert!(
-            tool.snippet.contains(amenbo_core::config::Paths::command_name()),
+            tool.request.contains(amenbo_core::config::Paths::command_name()),
             "the text carries the command this build answers to: {}",
-            tool.snippet,
+            tool.request,
+        );
+        // And it is a request rather than the settings on their own, which is what lets the AI it is
+        // given to merge into a file that already holds something.
+        assert!(
+            tool.request.contains(&tool.paste_into) && tool.request.contains("Merge"),
+            "the text does not ask for a merge into a named file: {}",
+            tool.request,
         );
 
-        // A refusal ends the report. Nothing is forbidden by it — the snippets stay there for the asking —
+        // A refusal ends the report. Nothing is forbidden by it — the text stays there for the asking —
         // but a reader with no setup pending is not warned about one.
         agent_hook_answer(traced, false).unwrap();
         assert!(agent_hook_notices().unwrap().is_empty(), "a no is silence, not a standing warning");

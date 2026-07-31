@@ -50,7 +50,7 @@ function tool(over: Partial<AgentHookToolDto> = {}): AgentHookToolDto {
     tool: "claude-code",
     label: "Claude Code",
     pasteInto: ".claude/settings.json",
-    snippet: '{ "hooks": {} }',
+    request: 'Merge this into .claude/settings.json: { "hooks": {} }',
     ...over,
   };
 }

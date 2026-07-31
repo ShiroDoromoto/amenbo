@@ -4,9 +4,10 @@
 #
 # amenbo's part in it is text, and nothing else. It does not write the provider's settings file, and
 # it never says a hook is working — what it can say is that this folder is not wired yet, and hand
-# over what wires it. So the road here is the whole of what a release can break: the folder is told,
-# the text is handed over with the file it goes in, the paste lands, and amenbo reads the folder as
-# wired and stops telling.
+# over the text that asks for the wiring. That text is a request for the AI the reader already works
+# with: it carries the settings, the file they belong in, and that whatever is in that file stays. So
+# the road here is the whole of what a release can break: the folder is told, the text is handed over
+# with the file it names, the wiring lands, and amenbo reads the folder as wired and stops telling.
 #
 # Nothing in it is visible from inside the workspace's own tests: the settings file is a real file in
 # a real folder, and the folder is what answers for it.
@@ -22,9 +23,9 @@ description: >
   The reader has a folder their AI works in and no wiring in it, which is where everyone starts. The
   road walks what amenbo does about that: it names the tool it can see in the folder and says the AI
   is not being started on amenbo; the text that fixes it comes with the file it goes in and carries
-  the launch instruction rather than the spec itself; pasting it is the reader's own act, so the run
-  stands in for the hand that does it; and afterwards the folder reads as wired, with nothing left to
-  finish and nothing more said about it.
+  the launch instruction rather than the spec itself; making the edit is the reader's own act — theirs
+  to ask an AI of theirs for — so the run stands in for the hand that does it; and afterwards the
+  folder reads as wired, with nothing left to finish and nothing more said about it.
 steps_cli:
   # A folder this reader's AI already works in: the provider's own directory is there, with settings
   # that do nothing about amenbo. That is the state everyone is in before they are told.
@@ -60,8 +61,8 @@ steps_cli:
       carries: agent --json
       paste_into: .claude/settings.json
 
-  # The paste. amenbo writes no settings file, so this is the reader's hand and not amenbo's — the
-  # run only stands in for it.
+  # The edit the text asks for. amenbo writes no settings file, so this is the reader's own AI and not
+  # amenbo — the run only stands in for it.
   - type: action
     domain: repo
     op: wire-ai
@@ -88,7 +89,8 @@ steps_gui:
       tool: claude-code
 
   # The yes. All it buys is the text: amenbo writes no settings file on this surface either, so the
-  # wiring stays in the reader's hands here exactly as it does in the terminal.
+  # wiring stays in the reader's hands here exactly as it does in the terminal — the text is on screen
+  # to be read, and the button only takes a copy of it.
   - type: action
     domain: repo
     op: ai-launch-consent
@@ -97,7 +99,7 @@ steps_gui:
 
   # And the folder is still reported. This is the line the screen road is here for: a yes that took
   # the report away with it would leave a setup reading as finished with nothing wired, and only the
-  # paste landing ends the telling. The file it names is the one the text goes into.
+  # wiring landing ends the telling. The file it names is the one the text is about.
   - type: assert
     domain: repo
     op: ai-launch-notice

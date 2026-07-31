@@ -655,11 +655,13 @@ pub enum PluginConfigCmd {
 
 #[derive(Subcommand, Debug)]
 pub enum AgentHookCmd {
-    /// Print the whole settings file to paste for one AI tool, with this build's launch instruction
-    /// already in it. **stdout is the paste and nothing else**, so it pipes to a clipboard
-    /// (`amenbo agent-hook snippet claude-code | pbcopy`) or a file; where it goes, and that amenbo
-    /// wrote nothing, is said on stderr. `--copy` hands it to this machine's clipboard instead. Opens
-    /// no store: it needs no bound folder, and reads nothing about this one.
+    /// Print the request that has one AI tool wired, for the reader to give the AI they work with —
+    /// it carries the settings this build's launch instruction goes in, the file they belong in, and
+    /// that whatever is already in that file stays. **stdout is that text and nothing else**, so it
+    /// pipes to a clipboard (`amenbo agent-hook snippet claude-code | pbcopy`); where it is going, and
+    /// that amenbo wired nothing, is said on stderr. `--copy` hands it to this machine's clipboard
+    /// instead, printing it on stderr as it goes so it is read before it is handed on. Opens no store:
+    /// it needs no bound folder, and reads nothing about this one.
     Snippet {
         /// the AI tool to be wired
         #[arg(value_parser = harness_ids())]
@@ -672,9 +674,10 @@ pub enum AgentHookCmd {
     /// Record what a person answered when asked whether this folder's AI may be started on amenbo —
     /// the way an AI writes back an answer it obtained on amenbo's behalf, since amenbo puts no
     /// question to a non-interactive face. **It records the answer and touches nothing else**: no
-    /// settings file is read or written here, so a `yes` still leaves the paste to be made
-    /// (`agent-hook snippet <tool>` is the text), and a `no` only means amenbo stops asking — the
-    /// snippet stays available. The answer is kept per project, so it covers every folder bound to it.
+    /// settings file is read or written here, so a `yes` still leaves the wiring to be done
+    /// (`agent-hook snippet <tool>` is the text that asks for it), and a `no` only means amenbo stops
+    /// asking — the text stays available. The answer is kept per project, so it covers every folder
+    /// bound to it.
     Answer {
         /// what the person answered
         #[arg(value_parser = ["yes", "no"])]

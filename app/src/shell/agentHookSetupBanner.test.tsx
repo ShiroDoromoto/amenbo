@@ -3,9 +3,11 @@
 // (core's `harness::setup_notice` scan) and the clipboard; the banner's own branching and wording run for real.
 //
 // What these guard above all is the **copy**: amenbo writes no provider settings file, so the wiring only ever
-// happens if the text reaches the reader's clipboard — a copy button that handed over the wrong tool's snippet,
-// or nothing at all, would leave a setup that reads as finished and is not. And the ordering: it waits for the
-// question to be done before it reads the disk or says a word.
+// happens if the text reaches the reader's clipboard — a copy button that handed over the wrong tool's text, or
+// nothing at all, would leave a setup that reads as finished and is not. Beside it, that the text is on screen
+// and not behind the button: what it asks for is an edit by an AI of the reader's, so a copy taken unread is
+// the thing this surface exists to avoid. And the ordering: it waits for the question to be done before it
+// reads the disk or says a word.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,7 +54,7 @@ function tool(over: Partial<AgentHookToolDto> = {}): AgentHookToolDto {
     tool: "claude-code",
     label: "Claude Code",
     pasteInto: ".claude/settings.json",
-    snippet: '{ "hooks": { "SessionStart": [] } }',
+    request: 'Merge this into .claude/settings.json: { "hooks": { "SessionStart": [] } }',
     ...over,
   };
 }
@@ -143,44 +145,55 @@ describe("the session-start hook setup banner", () => {
   });
 
   // The point of the surface. The text is what finishes the setup, since amenbo will not write the file.
-  it("copies that tool's own snippet, and says it did", async () => {
-    hoisted.notices = [notice({ unwired: [tool({ snippet: "SNIPPET-A" })] })];
+  it("copies that tool's own text, and says it did", async () => {
+    hoisted.notices = [notice({ unwired: [tool({ request: "REQUEST-A" })] })];
     await render(true);
 
     await act(async () => { copyButtons()[0].click(); });
 
-    expect(clipboard).toEqual(["SNIPPET-A"]);
+    expect(clipboard).toEqual(["REQUEST-A"]);
     expect(container.textContent).toContain(t("agentHookSetup.copied"));
   });
 
-  // Two tools traced in one folder is two texts, and pasting the wrong one wires nothing — so it is one
+  // Read before it is handed on. The text asks an AI of the reader's to edit a file of theirs, so it is on
+  // screen in full — not summarised, and not folded behind the button that copies it.
+  it("shows the whole text on screen, before anything is copied", async () => {
+    hoisted.notices = [notice({ unwired: [tool({ request: "REQUEST-A\nsecond line" })] })];
+    await render(true);
+
+    const shown = container.querySelector(".agenthook__request");
+    expect(shown?.textContent).toBe("REQUEST-A\nsecond line");
+    expect(clipboard, "nothing was copied to make it visible").toEqual([]);
+  });
+
+  // Two tools traced in one folder is two texts, and handing over the wrong one wires nothing — so it is one
   // button each, and the "copied" mark belongs to the one that was pressed.
   it("gives every unwired tool its own button, carrying its own text", async () => {
     hoisted.notices = [notice({
       unwired: [
-        tool({ tool: "claude-code", label: "Claude Code", snippet: "SNIPPET-A" }),
-        tool({ tool: "cursor", label: "Cursor", pasteInto: ".cursor/hooks.json", snippet: "SNIPPET-B" }),
+        tool({ tool: "claude-code", label: "Claude Code", request: "REQUEST-A" }),
+        tool({ tool: "cursor", label: "Cursor", pasteInto: ".cursor/hooks.json", request: "REQUEST-B" }),
       ],
     })];
     await render(true);
 
     expect(copyButtons()).toHaveLength(2);
     await act(async () => { copyButtons()[1].click(); });
-    expect(clipboard).toEqual(["SNIPPET-B"]);
+    expect(clipboard).toEqual(["REQUEST-B"]);
   });
 
   // The same tool appears under every folder that traces it, so a copy in one folder must not light up the
   // button in the other — the mark says which text is actually on the clipboard.
   it("marks only the button that was pressed, across folders sharing a tool", async () => {
     hoisted.notices = [
-      notice({ unwired: [tool({ snippet: "SNIPPET-X" })] }),
-      notice({ projectName: "案件Y", dir: "/w/案件Y", unwired: [tool({ snippet: "SNIPPET-Y" })] }),
+      notice({ unwired: [tool({ request: "REQUEST-X" })] }),
+      notice({ projectName: "案件Y", dir: "/w/案件Y", unwired: [tool({ request: "REQUEST-Y" })] }),
     ];
     await render(true);
 
     await act(async () => { copyButtons()[1].click(); });
 
-    expect(clipboard).toEqual(["SNIPPET-Y"]);
+    expect(clipboard).toEqual(["REQUEST-Y"]);
     expect(copyButtons()[0].textContent).toContain(t("agentHookSetup.copy"));
     expect(copyButtons()[1].textContent).toContain(t("agentHookSetup.copied"));
   });

@@ -55,7 +55,7 @@ dir: string,
  */
 cmd: string, 
 /**
- * The providers traced here and not wired, each with the text to paste.
+ * The providers traced here and not wired, each with the text that asks for the wiring.
  */
 unwired: Array<AgentHookToolDto>, };
 
@@ -88,7 +88,7 @@ dir: string,
 cmd: string, 
 /**
  * Whether this is the one re-ask (a standing yes with nothing wired), which is worded differently:
- * the occasion is not a fresh reader but a paste that never landed.
+ * the occasion is not a fresh reader but a wiring that never landed.
  */
 again: boolean, 
 /**
@@ -102,10 +102,10 @@ named: Array<AgentHookToolDto>, };
  * One AI harness a folder could start its session on `amenbo agent` with, and the text that would do it
  * ([`amenbo_core::harness`]).
  *
- * The snippet travels with the row rather than being fetched on a click, because the click it is behind
- * is a copy: a button that had to go and ask for the text first could hand over an empty clipboard, and
- * there is no second chance to notice — the user pastes what they have. It is a few hundred bytes per
- * unwired tool.
+ * The request travels with the row rather than being fetched on a click, because the surface it is on
+ * both shows it and copies it: text fetched on the click would be text nobody read, and a button that
+ * had to go and ask first could hand over an empty clipboard with no second chance to notice. It is a
+ * few hundred bytes per unwired tool.
  */
 export type AgentHookToolDto = { 
 /**
@@ -117,13 +117,14 @@ tool: string,
  */
 label: string, 
 /**
- * The file the snippet goes into, relative to the folder.
+ * The file the configuration goes into, relative to the folder.
  */
 pasteInto: string, 
 /**
- * The configuration to paste, with this build's launch command already in it.
+ * What the reader is handed: the request to give the AI they work with, carrying the configuration
+ * and this build's launch command ([`amenbo_core::harness::request`]).
  */
-snippet: string, };
+request: string, };
 
 /**
  * One row of the collapsible "Archived (N)" section at the foot of the sidebar. These never ride

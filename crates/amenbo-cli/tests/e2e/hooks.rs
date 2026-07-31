@@ -155,24 +155,30 @@ fn lint_outside_a_repository_says_so_plainly() {
     assert_eq!(code, 0, "lint needs no repository to read piped text");
 }
 
-/// `agent-hook snippet` hands over a paste, and stdout carries nothing but it: the text is meant to reach
-/// a settings file through a pipe or a redirect, and one courtesy line landing in there with it is a file
-/// the provider will not parse. amenbo's own voice — where it goes, and that amenbo did not put it there —
-/// is on stderr (`AMB-D-440`).
+/// `agent-hook snippet` hands over a request for the reader's own AI, and stdout carries nothing but it:
+/// the text is meant to reach that AI through a pipe or a clipboard, and one courtesy line landing in with
+/// it would read as part of what is being asked for. amenbo's own voice — where the text is going, and that
+/// amenbo wired nothing itself — is on stderr (`AMB-D-440`).
 #[test]
-fn agent_hook_snippet_gives_stdout_to_the_paste_and_says_where_it_goes_on_stderr() {
+fn agent_hook_snippet_gives_stdout_to_the_request_and_says_where_it_goes_on_stderr() {
     let cli = Cli::new();
 
     let (out, err, code) = cli.run_both(&["agent-hook", "snippet", "claude-code"]);
     assert_eq!(code, 0, "{err}");
-    let pasted: Value = serde_json::from_str(&out)
-        .unwrap_or_else(|e| panic!("stdout is not the settings file alone: {e}\n{out}"));
-    assert!(pasted["hooks"]["SessionStart"].is_array(), "the paste is not the wiring: {out}");
-    assert!(out.contains(" agent --json"), "the snippet does not launch the entry point: {out}");
-    assert!(err.contains(".claude/settings.json"), "stderr does not name the file to paste into: {err}");
+    // A request and not a settings file: what it asks for is a merge into one, which is the whole reason
+    // it is prose. Handed to a provider as-is it would not parse, and nothing should read as though it could.
     assert!(
-        err.contains("does not write it"),
-        "stderr does not say the writing is the human's: {err}"
+        serde_json::from_str::<Value>(&out).is_err(),
+        "stdout reads as a settings file rather than a request: {out}"
+    );
+    assert!(out.contains("Merge"), "the request does not ask for a merge: {out}");
+    assert!(out.contains(".claude/settings.json"), "the request names no file: {out}");
+    assert!(out.contains("\"SessionStart\""), "the request carries no configuration: {out}");
+    assert!(out.contains(" agent --json"), "the request does not launch the entry point: {out}");
+    assert!(err.contains(".claude/settings.json"), "stderr does not name the file it edits: {err}");
+    assert!(
+        err.contains("amenbo writes nothing"),
+        "stderr does not say the writing is not amenbo's: {err}"
     );
 
     // A tool nobody lists is refused where the argument is read, naming what it takes — so the answer to
@@ -184,9 +190,9 @@ fn agent_hook_snippet_gives_stdout_to_the_paste_and_says_where_it_goes_on_stderr
 
 /// A folder whose AI is not started on amenbo says so on every response until it is — and under `--json`
 /// it says so in a field, which is the one surface an AI is sure to read (`AMB-D-440`). The provider it
-/// names is the one the folder shows a trace of, and the fix is the command that prints the paste.
+/// names is the one the folder shows a trace of, and the fix is the command that prints the text.
 #[test]
-fn an_unwired_folder_reports_the_tool_it_traces_and_how_to_get_its_paste() {
+fn an_unwired_folder_reports_the_tool_it_traces_and_how_to_get_its_text() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "Alice"]);
     // A folder that uses Claude Code, with nothing wired in it.
@@ -198,7 +204,7 @@ fn an_unwired_folder_reports_the_tool_it_traces_and_how_to_get_its_paste() {
     assert_eq!(report["unwired"][0]["label"], "Claude Code");
     assert!(
         report["unwired"][0]["fix"].as_str().is_some_and(|fix| fix.contains("agent-hook snippet claude-code")),
-        "the report does not say how to get the paste: {report}"
+        "the report does not say how to get the text: {report}"
     );
     assert_eq!(report["any_wired"], false);
     // The catalog rides along, because a harness that left no trace still knows which one it is.
@@ -230,17 +236,21 @@ fn a_folder_that_traces_no_tool_says_it_only_where_the_reader_can_name_its_own()
     assert!(report["tools"].as_array().is_some_and(|all| all.len() >= 5), "{report}");
 }
 
-/// Once the paste has landed the report stops — and only then. It is the wiring that ends it, since amenbo
+/// Once the wiring has landed the report stops — and only then. It is the file that ends it, since amenbo
 /// never writes that file itself.
+///
+/// What lands here is the `configuration` the request carries, written by the hand the request is
+/// addressed to: the request itself is prose and would not parse as settings, which is exactly why the
+/// `--json` face carries the two apart.
 #[test]
 fn a_wired_folder_is_told_nothing() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "Alice"]);
     std::fs::create_dir_all(cli.home.join(".claude")).unwrap();
 
-    let (snippet, code) = cli.run(&["agent-hook", "snippet", "claude-code"]);
-    assert_eq!(code, 0);
-    std::fs::write(cli.home.join(".claude/settings.json"), snippet).unwrap();
+    let doc = cli.json(&["agent-hook", "snippet", "claude-code", "--json"]);
+    let configuration = doc["configuration"].as_str().expect("the document carries no configuration");
+    std::fs::write(cli.home.join(".claude/settings.json"), configuration).unwrap();
 
     let doc = cli.json(&["task", "list", "--json"]);
     assert!(
@@ -252,7 +262,7 @@ fn a_wired_folder_is_told_nothing() {
 /// The question amenbo cannot put on the `--json` face is closed from the outside: the report names the
 /// command that writes the answer back, an AI puts the question to the human, and recording their answer
 /// takes the question off the report (`AMB-D-440`). The wiring is a separate fact, so the report itself
-/// stands — nothing has been pasted.
+/// stands — nothing has been wired.
 #[test]
 fn an_ai_records_the_humans_answer_and_the_question_stops_being_carried() {
     let cli = Cli::new();
@@ -267,10 +277,10 @@ fn an_ai_records_the_humans_answer_and_the_question_stops_being_carried() {
 
     let done = cli.json(&["agent-hook", "answer", "yes", "--json", "--actor", "ai"]);
     assert_eq!(done["allowed"], true);
-    // A yes is an answer, not a wiring: what is still owed is the paste, and the document says so.
+    // A yes is an answer, not a wiring: what is still owed is the edit, and the document says so.
     assert!(
         done["next"].as_str().is_some_and(|next| next.contains("agent-hook snippet")),
-        "a yes leaves the paste owed, and the document does not say it: {done}"
+        "a yes leaves the wiring owed, and the document does not say it: {done}"
     );
 
     let doc = cli.json(&["task", "list", "--json", "--actor", "ai"]);
@@ -279,7 +289,7 @@ fn an_ai_records_the_humans_answer_and_the_question_stops_being_carried() {
     assert_eq!(report["any_wired"], false, "consent is not wiring: {report}");
 }
 
-/// A `no` is "stop asking", and it stops the report with it — but it forbids nothing: the snippet is still
+/// A `no` is "stop asking", and it stops the report with it — but it forbids nothing: the text is still
 /// handed over to whoever asks for it.
 #[test]
 fn a_recorded_no_ends_the_report_and_bars_nothing() {
@@ -296,15 +306,16 @@ fn a_recorded_no_ends_the_report_and_bars_nothing() {
     assert_eq!(code, 0);
     assert!(!err.contains("agent-hook"), "a reader who said no is still being warned: {err}");
 
-    let (snippet, code) = cli.run(&["agent-hook", "snippet", "claude-code"]);
+    let (request, code) = cli.run(&["agent-hook", "snippet", "claude-code"]);
     assert_eq!(code, 0, "a no closed the door, not just the question");
-    assert!(snippet.contains(" agent --json"), "the text is still handed over: {snippet}");
+    assert!(request.contains(" agent --json"), "the text is still handed over: {request}");
 }
 
-/// The `--json` face carries the same paste plus the file it goes in, which is what lets an AI hand both
-/// to the human in one message. `copied` says which route the text took.
+/// The `--json` face carries the request plus the file it names, which is what lets an AI hand both to the
+/// human in one message — and the configuration on its own beside it, for a caller that is doing the edit
+/// rather than passing the request on. `copied` says which route the text took.
 #[test]
-fn agent_hook_snippet_json_carries_the_paste_and_its_destination() {
+fn agent_hook_snippet_json_carries_the_request_the_configuration_and_its_destination() {
     let cli = Cli::new();
 
     let doc = cli.json(&["agent-hook", "snippet", "cursor", "--json"]);
@@ -312,10 +323,14 @@ fn agent_hook_snippet_json_carries_the_paste_and_its_destination() {
     assert_eq!(doc["label"], "Cursor");
     assert_eq!(doc["paste_into"], ".cursor/hooks.json");
     assert_eq!(doc["copied"], false);
-    assert!(
-        doc["snippet"].as_str().is_some_and(|s| s.contains(" agent --json")),
-        "the document carries no snippet: {doc}"
-    );
+    let request = doc["request"].as_str().expect("the document carries no request");
+    let configuration = doc["configuration"].as_str().expect("the document carries no configuration");
+    assert!(request.contains(configuration), "the request does not carry the configuration: {doc}");
+    assert!(request.contains(".cursor/hooks.json"), "the request names no file: {doc}");
+    // The configuration alone is a settings file; the request around it is not, and the two fields are
+    // apart precisely so a caller never has to guess which of those it is holding.
+    serde_json::from_str::<Value>(configuration).expect("the configuration is not a settings file");
+    assert!(configuration.contains(" agent --json"), "{doc}");
 }
 
 /// The lint-hook probe asks git where the hooks live, and that one spawn rides every amenbo command. What

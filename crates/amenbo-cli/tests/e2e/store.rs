@@ -444,3 +444,43 @@ fn update_rollback_declines_gracefully_without_a_retained_binary() {
     assert_eq!(v["rolled_back"], false);
     assert_eq!(v["reason"], "no_backup");
 }
+
+/// A version check somebody typed goes and asks, rather than answering from the detection cache
+/// (`AMB-D-463`). Two runs back to back, well inside the cache's hour: the second must report what the
+/// upstream says *now*, not what the first run put in the cache — which is the whole of the change, and
+/// is invisible to any test that only runs the command once.
+///
+/// The cache lives beside the OS's other caches rather than under `AMENBO_HOME`, so the whole
+/// environment that locates it is pointed into the throwaway home too — a test that writes the real one
+/// would leave this machine announcing a version nobody published.
+#[test]
+fn a_typed_update_check_asks_upstream_rather_than_the_cache() {
+    let cli = Cli::new();
+    let manifest = |version: &str| {
+        format!(r#"{{"version": "{version}", "assets": {{}}}}"#)
+    };
+    let host = amenbo_static_host::StaticHost::serve([("/latest.json", manifest("9.9.9"))]);
+    let home = cli.home.to_str().expect("a utf-8 home").to_string();
+    let url = host.url("/latest.json");
+    let env: Vec<(&str, &str)> = vec![
+        ("AMENBO_UPDATE_CHECK", "1"),
+        ("AMENBO_UPDATE_JSON_URL", url.as_str()),
+        // Where `directories` looks for a cache, on each of the three platforms.
+        ("HOME", home.as_str()),
+        ("XDG_CACHE_HOME", home.as_str()),
+        ("LOCALAPPDATA", home.as_str()),
+    ];
+    let reported = || -> String {
+        let (out, code) = cli.run_env(&env, &["update", "--print", "--json"]);
+        assert_eq!(code, 0, "update answers: {out}");
+        let v: Value = serde_json::from_str(out.trim()).unwrap_or_else(|_| panic!("update JSON: {out}"));
+        v["latest_version"].as_str().unwrap_or_default().to_string()
+    };
+
+    assert_eq!(reported(), "9.9.9", "the first run reads what is published");
+
+    // A second version published a moment later. Inside the hour, so a cached answer would still be the
+    // first one — and would be what a person is told when they ask again.
+    host.set("/latest.json", &manifest("9.9.10"));
+    assert_eq!(reported(), "9.9.10", "asked again, it says what is published now");
+}

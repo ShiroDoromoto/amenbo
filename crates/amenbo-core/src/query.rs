@@ -1953,6 +1953,41 @@ impl SearchSort {
     }
 }
 
+/// Which hits a search keeps — three narrowings, not a partition. Two of them name **whose** words they
+/// are and the third **which face**, because that is how the three are asked for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SearchKind {
+    /// The words on a task: its own faces, its comments, its labels, what is attached to it.
+    Task,
+    /// The words on a decision, the same way.
+    Decision,
+    /// The words in a comment, on either side.
+    Comment,
+}
+
+impl SearchKind {
+    /// Parse the `--kind` value.
+    pub fn parse(value: &str) -> Result<Self> {
+        match value.trim() {
+            "task" => Ok(Self::Task),
+            "decision" => Ok(Self::Decision),
+            "comment" => Ok(Self::Comment),
+            other => Err(Error::invalid(format!(
+                "unknown kind '{other}' (task/decision/comment — the words on a task, on a decision, or in a comment)"
+            ))),
+        }
+    }
+
+    /// The value this narrowing was written as — what the result echoes back.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Task => "task",
+            Self::Decision => "decision",
+            Self::Comment => "comment",
+        }
+    }
+}
+
 pub use crate::store_engine::search::HitFace;
 
 /// One place a word is written: the face it landed on, the record that face belongs to, and a short
@@ -1982,6 +2017,9 @@ pub struct SearchHit {
 pub struct SearchQueryEcho {
     /// The words as they were typed.
     pub text: String,
+    pub filter: Option<String>,
+    /// The `--kind` value, as it was written (`null` when the search was not narrowed to one).
+    pub kind: Option<String>,
     pub sort: String,
 }
 
@@ -1999,6 +2037,10 @@ pub struct SearchResult {
 pub struct SearchParams {
     /// The words, as typed. Split on whitespace and folded by the index ([`crate::store_engine::search`]).
     pub text: String,
+    /// The structural narrowing, in `task list`'s own grammar. Task vocabulary, so a search carrying one
+    /// is a search of tasks.
+    pub filter_expr: Option<String>,
+    pub kind: Option<SearchKind>,
     pub sort: SearchSort,
     /// Page size. `None` takes [`SEARCH_LIMIT_DEFAULT`] — this is the one read where "no limit named" is
     /// not "everything".
@@ -2014,6 +2056,11 @@ pub struct SearchParams {
 /// out of its stored spelling, and the snippet — which is cut here, on the page's rows alone, because
 /// cutting it is work per hit and only these hits are shown.
 ///
+/// **A word that is a ref names the record itself.** Nothing about a record carries the ref it is called
+/// by, so `AMB-T-12` reaches only the places that *mention* it — never the task. A word in that shape
+/// therefore pins the record it names to the top ([`pinned`]), and the words go on searching as words. That
+/// is what lets someone holding a number type the same command as someone holding a phrase.
+///
 /// `reach` is **always** taken as an argument: forcing the scope to be declared in the type means a read
 /// that forgets it does not compile.
 pub fn search(
@@ -2021,51 +2068,127 @@ pub fn search(
     reach: crate::reach::Reach,
     params: SearchParams,
 ) -> Result<SearchResult> {
+    let today = time::today();
+    let mut filter = match &params.filter_expr {
+        Some(e) => Some(Filter::parse(e, today)?),
+        None => None,
+    };
+    // The same entry-point discipline as `list`: `project:` is resolved exactly once, here where the
+    // `conn` is, and naming a project inside a closed reach is refused rather than quietly obeyed.
+    if let Some(f) = filter.as_mut() {
+        f.resolve(conn)?;
+        if f.project_id.is_some() {
+            reach.refuse_project_choice("the `project:` filter")?;
+        }
+        f.project_id = reach.narrow(f.project_id)?;
+    }
+
+    // The refs among the words, resolved to the records they name. A pin is a line of the **first** page,
+    // and it takes its share of that page — a `--limit 5` is five lines whatever they are. Paging past
+    // them walks the index alone, shifted by however many lines they took.
+    let pins = pinned(conn, reach, &params.text)?;
+    let offset = params.offset.unwrap_or(0);
+    let limit = params.limit.unwrap_or(SEARCH_LIMIT_DEFAULT);
+    let shown_pins = if offset == 0 { pins.clone() } else { Vec::new() };
+
     let terms = crate::store_engine::search::terms(&params.text);
     let page = crate::store_engine::read::search_hits(
         conn,
-        reach,
-        &terms,
-        params.sort,
-        Some(params.limit.unwrap_or(SEARCH_LIMIT_DEFAULT)),
-        params.offset.unwrap_or(0),
+        &crate::store_engine::read::SearchQuery {
+            reach,
+            terms: &terms,
+            filter: filter.as_ref(),
+            today,
+            kind: params.kind,
+            sort: params.sort,
+            limit: Some(limit.saturating_sub(shown_pins.len())),
+            offset: offset.saturating_sub(pins.len()),
+        },
     )
     .map_err(crate::error::engine_on(conn))?;
 
-    let hits = page
-        .hits
-        .into_iter()
-        .map(|h| {
-            let is_task = h.owner_kind == crate::store_engine::search::DATASET_TASK;
-            SearchHit {
-                face: h.face,
-                r#ref: if is_task {
-                    crate::idref::task(h.owner_id)
+    let mut hits = shown_pins;
+    hits.extend(page.hits.into_iter().map(|h| {
+        let is_task = h.owner_kind == crate::store_engine::search::DATASET_TASK;
+        SearchHit {
+            face: h.face,
+            r#ref: if is_task {
+                crate::idref::task(h.owner_id)
+            } else {
+                crate::idref::decision(h.owner_id)
+            },
+            comment: h.comment_id.map(|id| {
+                if is_task {
+                    crate::idref::task_comment(id)
                 } else {
-                    crate::idref::decision(h.owner_id)
-                },
-                comment: h.comment_id.map(|id| {
-                    if is_task {
-                        crate::idref::task_comment(id)
-                    } else {
-                        crate::idref::decision_comment(id)
-                    }
-                }),
-                kind: h.owner_kind,
-                title: h.owner_title,
-                at: Timestamp::parse_rfc3339(&h.at).unwrap_or_default(),
-                snippet: crate::store_engine::search::snippet(&h.text, &terms),
-            }
-        })
-        .collect::<Vec<_>>();
+                    crate::idref::decision_comment(id)
+                }
+            }),
+            kind: h.owner_kind,
+            title: h.owner_title,
+            at: Timestamp::parse_rfc3339(&h.at).unwrap_or_default(),
+            snippet: crate::store_engine::search::snippet(&h.text, &terms),
+        }
+    }));
 
     Ok(SearchResult {
-        query: SearchQueryEcho { text: params.text, sort: params.sort.as_str().to_string() },
+        query: SearchQueryEcho {
+            text: params.text,
+            filter: params.filter_expr,
+            kind: params.kind.map(|k| k.as_str().to_string()),
+            sort: params.sort.as_str().to_string(),
+        },
         count: hits.len(),
-        total_matched: page.total_matched,
+        // A pin is a line the index could not have produced, so it is counted beside the ones it did —
+        // and counted on every page, or the total would shrink as the reader walked forward.
+        total_matched: page.total_matched + pins.len(),
         hits,
     })
 }
+
+/// The records the words name outright — a word written as a ref (`AMB-T-<n>` / `AMB-D-<n>`, the bare
+/// `T-<n>` / `D-<n>` included), read as the record it points at rather than as a word.
+///
+/// The **raw** words are read, not the folded terms: a ref is a spelling, and the fold has already
+/// lower-cased it. A ref naming nothing live, or something outside the reach, pins nothing — a search must
+/// not become a way to ask whether a record exists somewhere it cannot be read.
+fn pinned(
+    conn: &rusqlite::Connection,
+    reach: crate::reach::Reach,
+    text: &str,
+) -> Result<Vec<SearchHit>> {
+    use crate::ops::task::{parse_typed_ref, TypedKind};
+    let mut out = Vec::new();
+    for word in text.split_whitespace() {
+        let Some((kind, number)) = parse_typed_ref(word) else { continue };
+        let is_task = kind == TypedKind::Task;
+        let dataset = if is_task {
+            crate::store_engine::search::DATASET_TASK
+        } else {
+            crate::store_engine::search::DATASET_DECISION
+        };
+        let id = i64::from(number);
+        let Some(head) = crate::store_engine::read::record_headline(conn, dataset, id)
+            .map_err(crate::error::engine_on(conn))?
+        else {
+            continue;
+        };
+        if !reach.allows(head.project_id) {
+            continue;
+        }
+        out.push(SearchHit {
+            face: HitFace::Title,
+            kind: dataset.to_string(),
+            r#ref: if is_task { crate::idref::task(id) } else { crate::idref::decision(id) },
+            title: head.title.clone(),
+            comment: None,
+            at: Timestamp::parse_rfc3339(&head.at).unwrap_or_default(),
+            snippet: head.title,
+        });
+    }
+    Ok(out)
+}
+
 
 /// `discover` (bare `amenbo`, with no arguments): today's tasks plus what to do next. The raw material
 /// is `status`, read from the engine with indexed SQL ([`status`]); [`discover_from`] assembles it.
@@ -2602,6 +2725,40 @@ mod filter_tests {
         assert_eq!(capped.count, SEARCH_LIMIT_DEFAULT);
         assert_eq!(capped.total_matched, SEARCH_LIMIT_DEFAULT + 5, "the total is of the hits, not the page");
         assert_eq!(run(Some(3)).count, 3, "a caller's own limit is taken as it is");
+    }
+
+    /// A word written as a ref names the record itself, which no word could reach: nothing about a task
+    /// carries the ref it is called by. So it is pinned to the top, counted like any other line, and the
+    /// words go on searching as words.
+    #[test]
+    fn a_word_written_as_a_ref_pins_the_record_it_names() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pj = proj(tx, "PJ");
+        let t = worded_task(tx, "全文検索の索引", "", pj);
+        let mentions = worded_task(tx, "後で読む", &format!("AMB-T-{t} を読むこと"), pj);
+
+        let run = |text: &str| {
+            search(
+                tx.conn(),
+                crate::reach::Reach::All,
+                SearchParams { text: text.to_string(), ..Default::default() },
+            )
+            .unwrap()
+        };
+
+        let r = run(&crate::idref::task(t));
+        assert_eq!(r.hits[0].r#ref, crate::idref::task(t), "the record it names comes first");
+        assert_eq!(r.hits[0].face, HitFace::Title);
+        assert_eq!(
+            r.hits[1].r#ref,
+            crate::idref::task(mentions),
+            "and the word goes on being a word: the task that mentions it is a hit too"
+        );
+        assert_eq!((r.count, r.total_matched), (2, 2), "the pin is counted beside the hits");
+
+        let r = run(&crate::idref::task(9999));
+        assert!(r.hits.is_empty(), "a ref naming nothing live pins nothing");
     }
 
     /// The `--sort` spec: the default weights the face, and the two timeline forms take that weight off.

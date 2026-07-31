@@ -146,6 +146,38 @@ pub enum Command {
         #[arg(long, default_value = "today")]
         scope: String,
     },
+    /// Find where words are written — one line per **place**, not per record. Reaches tasks, decisions,
+    /// the comments on both, the labels a task is filed under and the names of what is attached, and
+    /// answers with the face the words landed on, the record it belongs to, and a short excerpt.
+    ///
+    /// Words are ANDed and match as substrings (no word boundaries, so part of a compound word finds
+    /// it); full-width,
+    /// case and kana spellings are brought together. Every word has to land somewhere on the record — not
+    /// all on one face — and each face that carries one is a line, which is what makes the answer "here is
+    /// where each of your words is written". A word written as a ref (`AMB-T-<n>` / `AMB-D-<n>`) pins that
+    /// record to the top, so holding a number takes the same command as holding a phrase.
+    Search {
+        /// the words to look for (ANDed)
+        #[arg(value_name = "WORD", required = true)]
+        words: Vec<String>,
+        /// narrow structurally, in the grammar `task list` uses (e.g. `--filter "status:todo"`). That is
+        /// task vocabulary, so a search carrying one is a search of tasks
+        #[arg(long)]
+        filter: Option<String>,
+        /// keep one side or one face: task / decision / comment
+        #[arg(long)]
+        kind: Option<String>,
+        /// face (the face first, newest within it) / -time (newest first) / time (oldest first)
+        #[arg(long, default_value = "face")]
+        sort: String,
+        /// max hits. Defaults to 20 — a hit carries an excerpt, so this read has a ceiling of its own; the
+        /// reported total says what it left behind
+        #[arg(long)]
+        limit: Option<usize>,
+        /// number of hits to skip in sort order (paging)
+        #[arg(long)]
+        offset: Option<usize>,
+    },
     /// Show activity (system events + comments), newest first (humans and the AI read the same stream)
     Activity {
         /// only this task's activity

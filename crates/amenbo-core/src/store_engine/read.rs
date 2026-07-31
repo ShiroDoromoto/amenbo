@@ -1598,10 +1598,41 @@ fn face_hit(dataset: &str, id: Col<Int>, columns: &[&str], terms: &[String]) -> 
     sub.pred()
 }
 
-/// One arm's `WHERE`: this face carries a term, the record carries them all, and — inside a closed reach
-/// — the record is the one project's.
-fn hit_where(face: Pred, record: &Option<Pred>, scope: &Option<Pred>) -> Option<Pred> {
-    Pred::all([Some(face), record.clone(), scope.clone()].into_iter().flatten())
+/// One arm's `WHERE`: this face carries a term, the record it belongs to answers everything asked of
+/// that side (the terms, the reach, the structural filter), and the arm is one `--kind` left standing.
+fn hit_where(face: Pred, side: &Option<Pred>, gate: &Option<Pred>) -> Option<Pred> {
+    Pred::all([Some(face), side.clone(), gate.clone()].into_iter().flatten())
+}
+
+/// Is this arm one the caller's `--kind` keeps? Two of the three narrow by **whose** words they are and
+/// the third by **which face**, because that is how the three are asked for — "only decisions", "only what
+/// is on a timeline". They are three narrowings, not a partition, so they overlap: a comment on a task is
+/// both the task's and a comment.
+fn kept_by_kind(kind: Option<crate::query::SearchKind>, owner_kind: &str, face: HitFace) -> bool {
+    match kind {
+        None => true,
+        Some(crate::query::SearchKind::Task) => owner_kind == search::DATASET_TASK,
+        Some(crate::query::SearchKind::Decision) => owner_kind == search::DATASET_DECISION,
+        Some(crate::query::SearchKind::Comment) => face == HitFace::Comment,
+    }
+}
+
+/// What a word search is asked for. The shape [`TaskQuery`] has, for the same reason: everything the read
+/// needs is named in one place, and `reach` among them, so a caller cannot forget to declare its scope.
+pub struct SearchQuery<'a> {
+    pub reach: crate::reach::Reach,
+    /// The words, already folded ([`search::terms`]). No terms is no search — not "no constraint".
+    pub terms: &'a [String],
+    /// The structural narrowing, in the grammar `task list` speaks. It is a **task** vocabulary, so a
+    /// search carrying one is a search of tasks: the decision arms drop out rather than quietly ignoring
+    /// a `status:todo` no decision could answer.
+    pub filter: Option<&'a Filter>,
+    /// Today, for the filter's day-relative keys (`due:today` and friends).
+    pub today: NaiveDate,
+    pub kind: Option<crate::query::SearchKind>,
+    pub sort: crate::query::SearchSort,
+    pub limit: Option<usize>,
+    pub offset: usize,
 }
 
 /// Every place `terms` are written, as hits (`AMB-D-449`) — the read behind `search`.
@@ -1617,23 +1648,21 @@ fn hit_where(face: Pred, record: &Option<Pred>, scope: &Option<Pred>) -> Option<
 /// carries *any* of them: a search for two words returns the places each is written, rather than only the
 /// places both happen to sit together.
 ///
+/// **What narrows it.** The reach, first and always. Then the caller's own two: a structural `filter`,
+/// which is the very predicate `task list` narrows by and therefore speaks of tasks alone, and a `kind`,
+/// which keeps the arms whose side or whose face was asked for ([`kept_by_kind`]).
+///
 /// **The order arrives with the rows.** The page is cut in SQL, so the sort cannot be something the
 /// reader applies to what it was handed. The compound query names its order by position, which is the
 /// projection's to say ([`Slot::ordinal`]).
-pub fn search_hits(
-    conn: &Connection,
-    reach: crate::reach::Reach,
-    terms: &[String],
-    sort: crate::query::SearchSort,
-    limit: Option<usize>,
-    offset: usize,
-) -> Result<SearchPage> {
+pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     // No words is no search — and, unlike a filter, not "no constraint": every record's every face is not
     // an answer to "where is this written".
+    let terms = q.terms;
     if terms.is_empty() {
         return Ok(SearchPage { total_matched: 0, hits: Vec::new() });
     }
-    let project_id = reach.narrow(None).map_err(StoreEngineError::OutOfReach)?;
+    let project_id = q.reach.narrow(None).map_err(StoreEngineError::OutOfReach)?;
     let started = std::time::Instant::now();
 
     const TC: col::task_comment::Cols = col::task_comment::of("tc");
@@ -1644,11 +1673,47 @@ pub fn search_hits(
     const TASK: &str = search::DATASET_TASK;
     const DECISION: &str = search::DATASET_DECISION;
 
-    // The record-level AND, and the reach, computed once and cloned into every arm that owns that side.
-    let task_all = Pred::all(terms.iter().map(|t| task_text_term(t)));
-    let decision_all = Pred::all(terms.iter().map(|t| decision_text_term(t)));
-    let task_scope = project_id.map(|pid| Pred::eq(T.project_id, pid));
-    let decision_scope = project_id.map(|pid| Pred::eq(DEC.project_id, pid));
+    // Everything asked of one side, folded once and cloned into every arm that owns that side: the
+    // record-level AND, the reach, and — on the task side — the structural filter, which is the very
+    // predicate `task list` narrows by (`filter_preds`), so the two reads cannot come to read one
+    // expression differently.
+    let task_filter = q.filter.map(|f| {
+        filter_preds(&TaskQuery {
+            reach: q.reach,
+            project_id,
+            filter: f,
+            sort: "",
+            today: q.today,
+            limit: None,
+            offset: None,
+        })
+    });
+    let task_side = Pred::all(
+        [
+            Pred::all(terms.iter().map(|t| task_text_term(t))),
+            project_id.map(|pid| Pred::eq(T.project_id, pid)),
+            task_filter.and_then(Pred::all),
+        ]
+        .into_iter()
+        .flatten(),
+    );
+    // A filter is task vocabulary, so a search carrying one is a search of tasks. Said as a predicate no
+    // row meets rather than by dropping the arms, so the row shape stays the arms' to declare.
+    let decision_side = if q.filter.is_some() {
+        Some(Pred::never())
+    } else {
+        Pred::all(
+            [
+                Pred::all(terms.iter().map(|t| decision_text_term(t))),
+                project_id.map(|pid| Pred::eq(DEC.project_id, pid)),
+            ]
+            .into_iter()
+            .flatten(),
+        )
+    };
+    let gate = |face: HitFace, owner_kind: &str| {
+        (!kept_by_kind(q.kind, owner_kind, face)).then(Pred::never)
+    };
     // What an attachment hangs off, as the join that reaches it: polymorphic, so the target kind is half
     // of the condition.
     let hangs_off = |kind: &str, target: Col<Int>| same(A.target_id, target).and(Pred::eq(A.target_type, kind));
@@ -1659,7 +1724,7 @@ pub fn search_hits(
             hit_slots(sel, HitFace::Title, TASK, T.id, T.title, None, T.updated_at, T.title.to_sql());
         let mut tail = Sql::from_table(T.table);
         tail.push_where(
-            hit_where(face_hit(TASK, T.id, &["title"], terms), &task_all, &task_scope).as_ref(),
+            hit_where(face_hit(TASK, T.id, &["title"], terms), &task_side, &gate(HitFace::Title, TASK),).as_ref(),
         );
         (slots, tail)
     })
@@ -1669,7 +1734,7 @@ pub fn search_hits(
             hit_slots(sel, HitFace::Body, TASK, T.id, T.title, None, T.updated_at, T.notes.to_sql());
         let mut tail = Sql::from_table(T.table);
         tail.push_where(
-            hit_where(face_hit(TASK, T.id, &["notes"], terms), &task_all, &task_scope).as_ref(),
+            hit_where(face_hit(TASK, T.id, &["notes"], terms), &task_side, &gate(HitFace::Body, TASK),).as_ref(),
         );
         (slots, tail)
     })
@@ -1687,7 +1752,7 @@ pub fn search_hits(
         );
         let mut tail = Sql::from_table(DEC.table);
         tail.push_where(
-            hit_where(face_hit(DECISION, DEC.id, &["title"], terms), &decision_all, &decision_scope)
+            hit_where(face_hit(DECISION, DEC.id, &["title"], terms), &decision_side, &gate(HitFace::Title, DECISION),)
                 .as_ref(),
         );
         (slots, tail)
@@ -1706,7 +1771,7 @@ pub fn search_hits(
         );
         let mut tail = Sql::from_table(DEC.table);
         tail.push_where(
-            hit_where(face_hit(DECISION, DEC.id, &["body"], terms), &decision_all, &decision_scope)
+            hit_where(face_hit(DECISION, DEC.id, &["body"], terms), &decision_side, &gate(HitFace::Body, DECISION),)
                 .as_ref(),
         );
         (slots, tail)
@@ -1725,7 +1790,7 @@ pub fn search_hits(
         );
         let mut tail = Sql::from_table(TC.table);
         tail.join(T.table, same(T.id, TC.task_id)).push_where(
-            hit_where(face_hit(search::DATASET_TASK_COMMENT, TC.id, &["text"], terms), &task_all, &task_scope)
+            hit_where(face_hit(search::DATASET_TASK_COMMENT, TC.id, &["text"], terms), &task_side, &gate(HitFace::Comment, TASK),)
                 .as_ref(),
         );
         (slots, tail)
@@ -1746,8 +1811,8 @@ pub fn search_hits(
         tail.join(DEC.table, same(DEC.id, DC.decision_id)).push_where(
             hit_where(
                 face_hit(search::DATASET_DECISION_COMMENT, DC.id, &["text"], terms),
-                &decision_all,
-                &decision_scope,
+                &decision_side,
+                &gate(HitFace::Comment, DECISION),
             )
             .as_ref(),
         );
@@ -1763,8 +1828,8 @@ pub fn search_hits(
             .push_where(
                 hit_where(
                     face_hit(search::DATASET_DIMENSION_VALUE, DV.id, &["name"], terms),
-                    &task_all,
-                    &task_scope,
+                    &task_side,
+                    &gate(HitFace::Label, TASK),
                 )
                 .as_ref(),
             );
@@ -1780,8 +1845,8 @@ pub fn search_hits(
             .push_where(
                 hit_where(
                     face_hit(search::DATASET_DIMENSION, DIM.id, &["name"], terms),
-                    &task_all,
-                    &task_scope,
+                    &task_side,
+                    &gate(HitFace::Label, TASK),
                 )
                 .as_ref(),
             );
@@ -1803,8 +1868,8 @@ pub fn search_hits(
         tail.join(T.table, hangs_off(TASK, T.id)).push_where(
             hit_where(
                 face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
-                &task_all,
-                &task_scope,
+                &task_side,
+                &gate(HitFace::Attachment, TASK),
             )
             .as_ref(),
         );
@@ -1826,8 +1891,8 @@ pub fn search_hits(
         tail.join(DEC.table, hangs_off(DECISION, DEC.id)).push_where(
             hit_where(
                 face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
-                &decision_all,
-                &decision_scope,
+                &decision_side,
+                &gate(HitFace::Attachment, DECISION),
             )
             .as_ref(),
         );
@@ -1852,8 +1917,8 @@ pub fn search_hits(
             .push_where(
                 hit_where(
                     face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
-                    &task_all,
-                    &task_scope,
+                    &task_side,
+                    &gate(HitFace::Attachment, TASK),
                 )
                 .as_ref(),
             );
@@ -1877,8 +1942,8 @@ pub fn search_hits(
             .push_where(
                 hit_where(
                     face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
-                    &decision_all,
-                    &decision_scope,
+                    &decision_side,
+                    &gate(HitFace::Attachment, DECISION),
                 )
                 .as_ref(),
             );
@@ -1898,12 +1963,12 @@ pub fn search_hits(
     let (tier_n, at_n, id_n) = (tier.ordinal(), at.ordinal(), owner_id.ordinal());
     // Newest first within whatever leads: the current context is on the new side of a store that only
     // accumulates. The id breaks the remaining ties so a page boundary never wobbles between two reads.
-    let order = match sort {
+    let order = match q.sort {
         crate::query::SearchSort::Face => format!(" ORDER BY {tier_n}, {at_n} DESC, {id_n} DESC"),
         crate::query::SearchSort::Newest => format!(" ORDER BY {at_n} DESC, {tier_n}, {id_n} DESC"),
         crate::query::SearchSort::Oldest => format!(" ORDER BY {at_n}, {tier_n}, {id_n}"),
     };
-    sql.push(order).limit(limit.map(|n| n as i64).unwrap_or(-1)).offset(offset as i64);
+    sql.push(order).limit(q.limit.map(|n| n as i64).unwrap_or(-1)).offset(q.offset as i64);
 
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let hits = stmt
@@ -1925,6 +1990,46 @@ pub fn search_hits(
 
     crate::perf::record_query("engine.search_hits", total, hits.len(), started.elapsed());
     Ok(SearchPage { total_matched: total, hits })
+}
+
+/// The line a record is named by: its title, when it was last written, and where it sits. What a search
+/// pins to the top when one of the words was a ref rather than a word ([`crate::query::search`]) — the
+/// record itself, which is not something the word index can answer for, since nothing about a record
+/// carries the ref it is called by.
+pub struct Headline {
+    pub title: String,
+    pub at: String,
+    /// The project the record is in, for the reach to judge. A task may be unplaced; a decision never is.
+    pub project_id: Option<i64>,
+}
+
+/// The [`Headline`] of one live record — a task or a decision, by the dataset name the search speaks in
+/// ([`search::DATASET_TASK`] / [`search::DATASET_DECISION`]). `None` when no live row carries the id, which
+/// is how a ref for a record that is gone reads: a word that pins nothing.
+pub fn record_headline(conn: &Connection, dataset: &str, id: i64) -> Result<Option<Headline>> {
+    let is_task = dataset == search::DATASET_TASK;
+    let mut sel = Select::new();
+    let sql = if is_task {
+        let (title, at, project) = (sel.col(T.title), sel.col(T.updated_at), sel.col(T.project_id));
+        let mut sql = Sql::from(&sel, T.table);
+        sql.push_where(Some(&Pred::eq(T.id, id)));
+        (sql, title, at, project)
+    } else {
+        let (title, at) = (sel.col(DEC.title), sel.col(DEC.updated_at));
+        // A decision's project is `NOT NULL` in the registry; read as optional so both sides of this
+        // branch hand back the same row shape.
+        let project = sel.col(DEC.project_id.nullable());
+        let mut sql = Sql::from(&sel, DEC.table);
+        sql.push_where(Some(&Pred::eq(DEC.id, id)));
+        (sql, title, at, project)
+    };
+    let (sql, title, at, project) = sql;
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    stmt.query_row(rusqlite::params_from_iter(sql.params()), |r| {
+        Ok(Headline { title: title.get(r)?, at: at.get(r)?, project_id: project.get(r)? })
+    })
+    .optional()
+    .map_err(StoreEngineError::from)
 }
 
 /// What an attachment is called, as one expression: the filename it came in under, or the address the
@@ -5406,6 +5511,9 @@ mod tests {
         let e = StoreEngine::open_in_memory().unwrap();
         let tx = e.transaction().unwrap();
         let at = |t: &str| ("updated_at", text(t));
+        // The status is written out because the filter reads it: a record raised field by field holds the
+        // column's default until something fills it.
+        let todo = || ("status", text("todo"));
         e.put_record("project", 1, &[("name", text("PJ"))]).unwrap();
         e.put_record("project", 2, &[("name", text("別 PJ"))]).unwrap();
         e.put_record(
@@ -5414,6 +5522,7 @@ mod tests {
             &[
                 ("project_id", Value::Integer(1)),
                 ("title", text("全文検索の索引")),
+                todo(),
                 ("notes", text("索引は走査の経路も持つ")),
                 at("2026-07-01T00:00:00Z"),
             ],
@@ -5422,13 +5531,15 @@ mod tests {
         e.put_record(
             "task",
             2,
-            &[("project_id", Value::Integer(1)), ("title", text("名前で引く")), at("2026-07-02T00:00:00Z")],
+            &[("project_id", Value::Integer(1)), ("title", text("名前で引く")),
+                todo(), at("2026-07-02T00:00:00Z")],
         )
         .unwrap();
         e.put_record(
             "task",
             3,
-            &[("project_id", Value::Integer(2)), ("title", text("索引を別 PJ で")), at("2026-07-09T00:00:00Z")],
+            &[("project_id", Value::Integer(2)), ("title", text("索引を別 PJ で")),
+                todo(), at("2026-07-09T00:00:00Z")],
         )
         .unwrap();
         e.put_record(
@@ -5503,10 +5614,24 @@ mod tests {
         }
     }
 
-    /// The hits one query reaches inside the bound project, in the order they come back.
-    fn found(e: &StoreEngine, q: &str, sort: crate::query::SearchSort, limit: Option<usize>, offset: usize) -> (usize, Vec<String>) {
-        let page = search_hits(e.conn(), crate::reach::Reach::binding(1), &search::terms(q), sort, limit, offset)
-            .unwrap();
+    /// A search of the fixture, inside the bound project, with everything but the words left at its
+    /// default — the base every case below narrows from (`SearchQuery { .., ..ask(&terms) }`).
+    fn ask(terms: &[String]) -> SearchQuery<'_> {
+        SearchQuery {
+            reach: crate::reach::Reach::binding(1),
+            terms,
+            filter: None,
+            today: crate::time::today(),
+            kind: None,
+            sort: crate::query::SearchSort::Face,
+            limit: None,
+            offset: 0,
+        }
+    }
+
+    /// The total, and the hits in the order they come back.
+    fn found(e: &StoreEngine, q: &SearchQuery) -> (usize, Vec<String>) {
+        let page = search_hits(e.conn(), q).unwrap();
         (page.total_matched, page.hits.iter().map(line).collect())
     }
 
@@ -5516,7 +5641,8 @@ mod tests {
     #[test]
     fn a_hit_names_the_face_it_landed_on_and_whose_it_is() {
         let e = search_store();
-        let (total, hits) = found(&e, "索引", crate::query::SearchSort::Face, None, 0);
+        let t = search::terms("索引");
+        let (total, hits) = found(&e, &ask(&t));
         assert_eq!(
             hits,
             vec![
@@ -5537,26 +5663,14 @@ mod tests {
     #[test]
     fn a_hit_carries_the_text_the_person_wrote() {
         let e = search_store();
-        let page = search_hits(
-            e.conn(),
-            crate::reach::Reach::binding(1),
-            &search::terms("ＡＩ 索引"),
-            crate::query::SearchSort::Face,
-            None,
-            0,
-        )
-        .unwrap();
-        assert!(page.hits.is_empty(), "a word nobody wrote holds the record back");
+        let t = search::terms("ＡＩ 索引");
+        assert!(
+            search_hits(e.conn(), &ask(&t)).unwrap().hits.is_empty(),
+            "a word nobody wrote holds the record back"
+        );
 
-        let page = search_hits(
-            e.conn(),
-            crate::reach::Reach::binding(1),
-            &search::terms("索引ログ"),
-            crate::query::SearchSort::Face,
-            None,
-            0,
-        )
-        .unwrap();
+        let t = search::terms("索引ログ");
+        let page = search_hits(e.conn(), &ask(&t)).unwrap();
         assert_eq!(page.hits[0].text, "索引ログ.md", "the attachment's own name, whichever column holds it");
     }
 
@@ -5566,17 +5680,14 @@ mod tests {
     #[test]
     fn the_terms_are_anded_over_the_record_and_a_face_shows_any_of_them() {
         let e = search_store();
-        let (_, hits) = found(&e, "索引 走査", crate::query::SearchSort::Face, None, 0);
+        let t = search::terms("索引 走査");
         assert_eq!(
-            hits,
+            found(&e, &ask(&t)).1,
             vec!["Title AMB-T-1", "Body AMB-T-1", "Comment AMB-T-1 #5"],
             "the decision carries only one of the two words, so none of its faces is a place"
         );
-        assert_eq!(
-            found(&e, "索引 存在しない語", crate::query::SearchSort::Face, None, 0).1.len(),
-            0,
-            "a word nothing carries empties the answer"
-        );
+        let t = search::terms("索引 存在しない語");
+        assert!(found(&e, &ask(&t)).1.is_empty(), "a word nothing carries empties the answer");
     }
 
     /// `--sort` takes the face's weight off and reads the plain timeline, by the hit's **own** instant: a
@@ -5584,7 +5695,8 @@ mod tests {
     #[test]
     fn the_sort_can_drop_the_faces_weight_for_the_plain_timeline() {
         let e = search_store();
-        let (_, newest) = found(&e, "索引", crate::query::SearchSort::Newest, None, 0);
+        let t = search::terms("索引");
+        let (_, newest) = found(&e, &SearchQuery { sort: crate::query::SearchSort::Newest, ..ask(&t) });
         assert_eq!(
             newest,
             vec![
@@ -5596,7 +5708,7 @@ mod tests {
                 "Body AMB-T-1",
             ]
         );
-        let (_, oldest) = found(&e, "索引", crate::query::SearchSort::Oldest, None, 0);
+        let (_, oldest) = found(&e, &SearchQuery { sort: crate::query::SearchSort::Oldest, ..ask(&t) });
         assert_eq!(oldest.first().unwrap(), "Title AMB-T-1", "the other end of the same line");
         assert_eq!(oldest.len(), newest.len());
     }
@@ -5606,10 +5718,11 @@ mod tests {
     #[test]
     fn the_page_is_cut_from_the_hits_and_the_total_counts_them_all() {
         let e = search_store();
-        let (total, page) = found(&e, "索引", crate::query::SearchSort::Face, Some(2), 1);
+        let t = search::terms("索引");
+        let (total, page) = found(&e, &SearchQuery { limit: Some(2), offset: 1, ..ask(&t) });
         assert_eq!(total, 6, "the total is of the hits, not of the page");
         assert_eq!(page, vec!["Title AMB-T-1", "Body AMB-T-1"]);
-        assert!(found(&e, "索引", crate::query::SearchSort::Face, Some(2), 99).1.is_empty());
+        assert!(found(&e, &SearchQuery { limit: Some(2), offset: 99, ..ask(&t) }).1.is_empty());
     }
 
     /// The reach is the search's too: a bound project does not answer with another's records, and no
@@ -5617,20 +5730,49 @@ mod tests {
     #[test]
     fn the_reach_narrows_the_hits_to_the_project_it_is_bound_to() {
         let e = search_store();
+        let t = search::terms("索引");
         assert!(
-            !found(&e, "索引", crate::query::SearchSort::Face, None, 0).1.contains(&"Title AMB-T-3".to_string()),
+            !found(&e, &ask(&t)).1.contains(&"Title AMB-T-3".to_string()),
             "the other project's task is out of a bound reach"
         );
-        let all = search_hits(
-            e.conn(),
-            crate::reach::Reach::All,
-            &search::terms("索引"),
-            crate::query::SearchSort::Face,
-            None,
-            0,
-        )
-        .unwrap();
-        assert!(all.hits.iter().map(line).any(|l| l == "Title AMB-T-3"));
+        let all = found(&e, &SearchQuery { reach: crate::reach::Reach::All, ..ask(&t) });
+        assert!(all.1.contains(&"Title AMB-T-3".to_string()));
+    }
+
+    /// `--kind` narrows by whose words they are, or by the face they are on — three narrowings that
+    /// deliberately overlap, since a comment on a task is both.
+    #[test]
+    fn the_kind_keeps_one_side_or_one_face() {
+        let e = search_store();
+        let t = search::terms("索引");
+        let only = |k| found(&e, &SearchQuery { kind: Some(k), ..ask(&t) }).1;
+        assert_eq!(only(crate::query::SearchKind::Decision), vec!["Title AMB-D-1"]);
+        assert_eq!(only(crate::query::SearchKind::Comment), vec!["Comment AMB-T-1 #5"]);
+        assert_eq!(
+            only(crate::query::SearchKind::Task),
+            vec!["Title AMB-T-1", "Body AMB-T-1", "Comment AMB-T-1 #5", "Label AMB-T-2", "Attachment AMB-T-2"],
+            "a task's own faces, its timeline, its labels and what is attached to it"
+        );
+    }
+
+    /// A structural filter is task vocabulary, so it narrows the task side **and** takes the decisions out
+    /// — a decision has no `status:todo` to answer, and leaving its faces in would answer a question nobody
+    /// asked.
+    #[test]
+    fn a_filter_narrows_the_task_side_and_drops_the_decisions() {
+        let e = search_store();
+        let t = search::terms("索引");
+        let today = crate::time::today();
+        let filter = Filter::parse("status:in_progress", today).unwrap();
+        assert!(
+            found(&e, &SearchQuery { filter: Some(&filter), ..ask(&t) }).1.is_empty(),
+            "no task is in progress in the fixture, and the decision does not stand in for one"
+        );
+        let filter = Filter::parse("status:todo", today).unwrap();
+        assert_eq!(
+            found(&e, &SearchQuery { filter: Some(&filter), ..ask(&t) }).1,
+            vec!["Title AMB-T-1", "Body AMB-T-1", "Comment AMB-T-1 #5", "Label AMB-T-2", "Attachment AMB-T-2"],
+        );
     }
 
     /// No words is not "no constraint" here, the way it is in a filter: every face of every record is not
@@ -5638,7 +5780,8 @@ mod tests {
     #[test]
     fn a_search_with_no_words_is_no_search() {
         let e = search_store();
-        let (total, hits) = found(&e, "   ", crate::query::SearchSort::Face, None, 0);
+        let t = search::terms("   ");
+        let (total, hits) = found(&e, &ask(&t));
         assert_eq!((total, hits.len()), (0, 0));
     }
 }

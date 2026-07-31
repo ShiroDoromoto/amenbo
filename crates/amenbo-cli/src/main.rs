@@ -439,6 +439,7 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         | Command::Whoami
         | Command::Status { .. }
         | Command::Activity { .. }
+        | Command::Search { .. }
         | Command::Validate { .. }
         | Command::Backup { .. } // reads the truth source into a snapshot file; records no facet or activity
         | Command::Restore { .. } // replaces the truth source from a snapshot; maintenance op, records no facet or activity
@@ -2888,6 +2889,33 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     human(flags, loc);
                 }
                 render_status(&result);
+            }
+        }
+        Command::Search { words, filter, kind, sort, limit, offset } => {
+            let result = store
+                .search(query::SearchParams {
+                    // The words arrive as separate arguments (a shell has already split them), and the read
+                    // splits on whitespace — so they are handed over joined rather than re-quoted.
+                    text: words.join(" "),
+                    filter_expr: filter,
+                    kind: kind.as_deref().map(query::SearchKind::parse).transpose().map_err(CliError::from)?,
+                    sort: query::SearchSort::parse(&sort).map_err(CliError::from)?,
+                    limit,
+                    offset,
+                })
+                .map_err(CliError::from)?;
+            if flags.json {
+                print_json(&result);
+            } else {
+                human(flags, count_header(result.count, result.total_matched, "hit"));
+                for h in &result.hits {
+                    // Where it landed, then what it is: the ref reads first because it is what the reader
+                    // opens next. A comment says which one, since the ref alone names only the record.
+                    let face = format!("{:?}", h.face).to_lowercase();
+                    let at = h.comment.as_deref().map(|c| format!(" · {c}")).unwrap_or_default();
+                    human(flags, format!("  [{face}] {} {}{at}", h.r#ref, h.title));
+                    human(flags, format!("      {}", h.snippet));
+                }
             }
         }
         Command::Doctor { fix } => {

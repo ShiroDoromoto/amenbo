@@ -82,6 +82,13 @@ impl Store {
         crate::query::list(self.engine.conn(), self.reach, params)
     }
 
+    /// The read behind `search` — every place the words are written, hit by hit
+    /// ([`crate::query::search`]). The one read whose answer is not a list of records but a list of
+    /// places, so it is not a variant of [`Self::list_tasks`].
+    pub fn search(&self, params: crate::query::SearchParams) -> Result<crate::query::SearchResult> {
+        crate::query::search(self.engine.conn(), self.reach, params)
+    }
+
     /// The read behind `status` (the overdue / today / week / in_progress buckets plus the summary
     /// counts), served by indexed SQL ([`crate::query::status`]).
     pub fn status(&self, scope: &str) -> Result<crate::query::StatusResult> {

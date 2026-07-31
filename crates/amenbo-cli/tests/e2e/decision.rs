@@ -161,6 +161,64 @@ fn a_decision_comment_promotes_into_a_record_that_stands_alone() {
     assert_eq!(from_task["linked_tasks"][0]["id"].to_string(), tid, "a task comment's decision is that task's premise");
 }
 
+/// A decision's page carries its timeline (`AMB-D-448`), in the shape `task show` gives its own: the count
+/// is marked even at zero, the newest three are previewed on one line each, and the way to the full text is
+/// named. What `accept --reason` wrote is a comment, so a page without them would leave the ruling's own
+/// reasoning off the only page anyone opens to read the ruling.
+#[test]
+fn a_decision_page_says_how_much_was_said_on_it_and_previews_the_latest() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.a_project();
+    let did = id_str(
+        &cli.json(&["decision", "add", "--project", &pid, "--title", "交点を1行にする", "--json"])
+            ["decision"]["id"],
+    );
+
+    // Nothing said yet: the category is marked rather than left out (`AMB-D-75`).
+    let (empty, code) = cli.run(&["decision", "show", &did]);
+    assert_eq!(code, 0);
+    assert!(empty.contains("comments: (none)"), "an empty timeline says so: {empty}");
+    assert_eq!(
+        cli.json(&["decision", "show", &did, "--json"])["comments"].as_array().map(|c| c.len()),
+        Some(0),
+        "the JSON carries the key whether or not anything was said",
+    );
+
+    // The reason an acceptance was given lands on the timeline, and is what the page has to carry.
+    cli.json(&["decision", "accept", &did, "--reason", "この形で行く", "--json"]);
+    let long = "あ".repeat(80);
+    cli.json(&["decision", "comment", "add", &did, "--text", &long, "--json"]);
+
+    let (human, code) = cli.run(&["decision", "show", &did]);
+    assert_eq!(code, 0);
+    assert!(human.contains("comments (2, newest first):"), "the count is every comment: {human}");
+    assert!(human.contains("この形で行く"), "the acceptance's reason is on the page: {human}");
+    let previewed = human
+        .lines()
+        .find(|l| l.contains('あ'))
+        .unwrap_or_else(|| panic!("the long comment is previewed: {human}"));
+    assert!(previewed.ends_with('…'), "a long comment is cut, not printed whole: {previewed}");
+    // Named with this build's own command, not the production spelling — on the dev channel the
+    // hardcoded one points at something that is not installed.
+    assert!(
+        human.contains(&format!(
+            "full text: {} decision comment list AMB-D-{did}",
+            amenbo_core::config::Paths::command_name()
+        )),
+        "the way to what the preview cut is named: {human}",
+    );
+
+    // The JSON is where nothing is cut: the whole timeline, under the name `task show` gives its own.
+    let shown = cli.json(&["decision", "show", &did, "--json"]);
+    let comments = shown["comments"].as_array().expect("comments array");
+    assert_eq!(comments.len(), 2);
+    assert!(
+        comments.iter().any(|c| c["text"].as_str() == Some(long.as_str())),
+        "the JSON carries the text whole: {shown}",
+    );
+}
+
 /// A decision says whether the work it spawned is **still standing**: the linked tasks of `decision show`
 /// carry a status beside id and title (`linked_tasks[].status` in `--json`), a finished task sinks to `[x]`
 /// in the human output, and only what is moving or stuck names its status — `todo` is the default and stays quiet.

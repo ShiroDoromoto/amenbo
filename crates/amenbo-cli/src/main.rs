@@ -241,7 +241,6 @@ const FLAGS_BEFORE_THE_NAME: &[(&str, bool)] = &[
     ("--no-color", false),
     ("--yes", false),
     ("-y", false),
-    ("--workspace", true),
     ("--actor", true),
     ("--project", true),
 ];
@@ -4439,14 +4438,7 @@ fn config(store: &mut Store, flags: &Flags, sub: Option<ConfigCmd>) -> Result<i3
     if let Some(ConfigCmd::Set { key, value }) = sub {
         store.config.set(&key, &value).map_err(CliError::from)?;
         store.save_config().map_err(CliError::from)?;
-        // `default_workspace` is accepted for forward compatibility but ignored (a store owns a single
-        // workspace) — say so honestly instead of "Updated".
-        let deprecated = key == "default_workspace";
-        if deprecated {
-            human(flags, format!("Ignored deprecated setting: {key} (a store owns a single workspace)"));
-        } else {
-            human(flags, format!("Updated setting: {key} = {value}"));
-        }
+        human(flags, format!("Updated setting: {key} = {value}"));
         // When the language changes, resync the managed block in the CWD's AGENTS.md and CLAUDE.md so the
         // language directive follows — otherwise the GUI switches language while the AI keeps writing in the
         // old one.
@@ -4456,7 +4448,7 @@ fn config(store: &mut Store, flags: &Flags, sub: Option<ConfigCmd>) -> Result<i3
             }
         }
         if flags.json {
-            print_json(&json!({ "ok": true, "action": "config.set", "noop": deprecated, "key": key, "value": value }));
+            print_json(&json!({ "ok": true, "action": "config.set", "noop": false, "key": key, "value": value }));
         }
         return Ok(0);
     }

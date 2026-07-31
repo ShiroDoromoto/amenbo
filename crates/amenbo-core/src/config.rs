@@ -654,9 +654,6 @@ impl Config {
                     }
                 };
             }
-            // A store owns a single workspace, so there is no field behind this key; it is still accepted
-            // as a silent no-op so scripts calling `config set default_workspace` don't error.
-            "default_workspace" => {}
             "language" => {
                 self.language = Some(value.to_string());
             }

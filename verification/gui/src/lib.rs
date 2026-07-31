@@ -256,11 +256,13 @@ impl Instructor {
     /// are words of the interface; the third turns on a picker that is not there, and a reading answers
     /// which words are on a shot and never which are missing from the right part of it.
     ///
-    /// The two `ai-launch` readings are judged on what is not the interface's own words either. The
+    /// The three `ai-launch` readings are judged on what is not the interface's own words either. The
     /// question is judged on the provider it names, which is that provider's name in any language; the
     /// hand-over is judged on the file the text goes into, which is the one thing on the road only the
     /// hand-over says — the question names no file, so a shot of the question standing where the text
-    /// should be reads as the miss it is.
+    /// should be reads as the miss it is. `ai-launch-folder` is judged on the folder's own name, which
+    /// the reader gave it and the interface has no word of its own for; the board the report stands on
+    /// names no folder anywhere else, so finding one on that shot is finding it in the list.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -284,6 +286,9 @@ impl Instructor {
             }
             (Domain::Repo, "ai-launch-notice") => {
                 Some(Expectation { text: arg_str(with, "paste_into")?.to_string(), present: true })
+            }
+            (Domain::Repo, "ai-launch-folder") => {
+                Some(Expectation { text: arg_str(with, "dir")?.to_string(), present: true })
             }
             _ => None,
         }
@@ -532,6 +537,15 @@ impl Instructor {
                 "Confirm the app hands over the text that wires this folder rather than closing on the answer: \"{}\" is named, with \"{}\" as the file its text goes into.",
                 req(with, "tool")?,
                 req(with, "paste_into")?
+            ),
+            // Which folders that one text is still waiting on. The line says "under" on purpose: what is
+            // under test is a list standing beneath a single request, so a screen carrying the request
+            // once per folder is the miss it catches — and a road naming several folders writes a step
+            // apiece, each one read on the same standing screen.
+            (Domain::Repo, "ai-launch-folder") => format!(
+                "Confirm the folder \"{}\" is listed under \"{}\"'s text, among the folders that text is still waiting on — with the text itself standing once above the list.",
+                req(with, "dir")?,
+                req(with, "tool")?
             ),
             // Which of the three answers the form is holding. The state is the whole question here:
             // the value a screen shows is its ticks, and two of the three answers leave every box
@@ -1441,6 +1455,43 @@ steps_gui:
         let after = ins.expectation(&s.steps(Driver::Gui)[2]).expect("the file is the reading");
         assert_eq!(before, Expectation { text: ".claude/settings.json".to_string(), present: true });
         assert_eq!(after, Expectation { text: ".gemini/settings.json".to_string(), present: true });
+    }
+
+    /// The report a project keeps standing: one text, and the folders it is still waiting on listed under
+    /// it. The folder names are the readings — they are the reader's own words, and the board names no
+    /// folder anywhere else — so a report that had shrunk to one folder leaves the second shot red.
+    #[test]
+    fn the_standing_report_reads_each_folder_the_one_text_is_waiting_on() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with: { tool: claude-code, paste_into: .claude/settings.json }
+  - type: assert
+    domain: repo
+    op: ai-launch-folder
+    with: { tool: claude-code, dir: frontend }
+  - type: assert
+    domain: repo
+    op: ai-launch-folder
+    with: { tool: claude-code, dir: worker }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[1].contains("\"frontend\"") && lines[1].contains("standing once"), "got: {}", lines[1]);
+        assert!(lines[2].contains("\"worker\""), "got: {}", lines[2]);
+
+        let first = ins.expectation(&s.steps(Driver::Gui)[1]).expect("the folder's own name is the reading");
+        let second = ins.expectation(&s.steps(Driver::Gui)[2]).expect("the folder's own name is the reading");
+        assert_eq!(first, Expectation { text: "frontend".to_string(), present: true });
+        assert_eq!(second, Expectation { text: "worker".to_string(), present: true });
+        // The list carries whole paths and the scenario names the folder alone; the fold leaves the one
+        // inside the other.
+        assert!(fold("/Users/reader/work/frontend").contains(&fold("frontend")));
     }
 
     /// An answer the road does not have is refused where it is written, not carried to a screen as an

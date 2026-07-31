@@ -585,7 +585,8 @@ const REGISTRY: &[OpSpec] = &[
     // is the text: a snippet that named the wrong file, or that injected something other than the
     // launch instruction, would leave a reader pasting in good faith and no better off.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-text", required: &["tool", "carries"], refs: &[], strings: &["tool", "carries", "paste_into"], binds: false },
-    // What the screen says about the same folder, which it says in two places rather than one answer.
+    // What the screen says about the same wiring, which it says in more than one place rather than in one
+    // answer.
     // The question names the provider it traces (`tool`); the report that is still standing after a yes
     // names it again and the file the text goes into (`paste_into`). The file is what tells the two
     // apart on a shot, since the question never names one — and that the report outlives the yes is the
@@ -593,6 +594,14 @@ const REGISTRY: &[OpSpec] = &[
     // telling.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-question", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-notice", required: &["tool", "paste_into"], refs: &[], strings: &["tool", "paste_into"], binds: false },
+    // A folder named among the ones that one text is still waiting on. Consent is answered for a project
+    // and the paste lands in a folder, so what a reader who answered yes still owes is a list — and the
+    // report puts its text up once with that list under it rather than repeating the request per folder.
+    // The two halves need an op apiece: `ai-launch-notice` reads the text and the file it goes into,
+    // this reads a folder standing under it, and a road that names more than one folder writes one step
+    // each. `dir` is a plain name, the way `folder bind` takes one: where a folder sits is the run's to
+    // decide, and what the scenario writes down is what it called the one it placed.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-folder", required: &["tool", "dir"], refs: &[], strings: &["tool", "dir"], binds: false },
     // A project as it is read back: one row's fields, and whether it is in the listing at all (and
     // where). `archived: true` asks the listing that carries the archived ones.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },

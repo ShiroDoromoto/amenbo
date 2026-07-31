@@ -386,6 +386,13 @@ const ui = {
   "plugins.updates.open": "Open installed",
   "plugins.updates.check": "Check for updates", "plugins.updates.checking": "Checking…",
   "plugins.updates.none": "Everything is up to date",
+  // What the verdict beside them was measured against. The freshness window makes "nothing has changed"
+  // and "nothing had changed an hour ago" the same empty list, so the frame is said before the count is
+  // read rather than left for a reader to assume. `{ago}` is Intl's wording of the copy's age.
+  "plugins.updates.catalog.fetched": "Catalog: fetched just now",
+  "plugins.updates.catalog.cached": "Catalog: answered by a saved copy, with no request made ({ago})",
+  "plugins.updates.catalog.offline": "Catalog: could not be reached, so a saved copy answered ({ago})",
+  "plugins.updates.catalog.unavailable": "Catalog: none answered — nothing fetched and nothing cached, so nothing here is a verdict",
   "plugins.updates.waiting": "A newer build",
   "plugins.updates.rollback": "Go back a build",
   "plugins.updates.rollbackConfirm": "Put “{name}” back to the build before the update? Only the one build before it is kept, and going back uses it up (the gate, the settings and the secrets stay as they are).",

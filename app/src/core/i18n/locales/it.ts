@@ -435,7 +435,6 @@ export const it: Translation = {
     "agentHook.scopeAgain": "Non lo chiederemo una terza volta.",
     "agentHook.hint": "`{cmd} agent-hook snippet <tool>` lo stampa quando vuoi.",
     "agentHookSetup.title": "Manca un passo perché la tua IA tenga questo lavoro in amenbo",
-    "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: passa il testo qui sotto alla tua IA perché modifichi {file}; da lì in poi la tua IA legge come si lavora con amenbo all'inizio di ogni sessione e registra il lavoro come attività.",
     "agentHookSetup.pick": "Quale strumento usi in questa cartella?",
     "agentHookSetup.copy": "Copia il testo",

@@ -424,7 +424,6 @@ export const de: Translation = {
     "agentHook.scopeAgain": "Wir fragen kein drittes Mal.",
     "agentHook.hint": "`{cmd} agent-hook snippet <tool>` gibt ihn jederzeit aus.",
     "agentHookSetup.title": "Bis deine KI diese Arbeit in amenbo festhält, fehlt noch ein Schritt",
-    "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: Gib den Text unten deiner KI, damit sie {file} anpasst — danach liest deine KI zu Beginn jeder Sitzung, wie man mit amenbo arbeitet, und hält die Arbeit als Aufgaben fest.",
     "agentHookSetup.pick": "Welches Werkzeug nutzt du in diesem Ordner?",
     "agentHookSetup.copy": "Text kopieren",

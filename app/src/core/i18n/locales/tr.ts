@@ -414,7 +414,6 @@ export const tr: Translation = {
     "agentHook.scopeAgain": "Üçüncü kez sormayacağız.",
     "agentHook.hint": "`{cmd} agent-hook snippet <tool>` onu istediğiniz an yazdırır.",
     "agentHookSetup.title": "Yapay zekânız bu işi amenbo'da tutmadan önce bir adım kaldı",
-    "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: aşağıdaki metni yapay zekânıza verin, {file} dosyasını düzenlesin — bundan sonra yapay zekânız her oturumun başında amenbo ile nasıl çalışılacağını okur ve işi görev olarak kaydeder.",
     "agentHookSetup.pick": "Bu klasörde hangi aracı kullanıyorsunuz?",
     "agentHookSetup.copy": "Metni kopyala",

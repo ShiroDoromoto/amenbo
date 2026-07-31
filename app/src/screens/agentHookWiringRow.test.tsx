@@ -54,9 +54,9 @@ function waiting(over: Partial<AgentHookWiringDto> = {}): AgentHookWiringDto {
   return { tool: tool(), dirs: ["/w/案件X"], ...over };
 }
 
-async function render(projectId = 7) {
+async function render(projectId = 7, turn = true) {
   await act(async () => {
-    root.render(createElement(AgentHookWiringRow, { projectId }));
+    root.render(createElement(AgentHookWiringRow, { projectId, turn }));
   });
 }
 
@@ -93,6 +93,17 @@ describe("the project's standing wiring row", () => {
 
     expect(hoisted.asked).toEqual([7]);
     expect(container.querySelector(".agenthookrow")).not.toBeNull();
+  });
+
+  // The whole reason it takes a prop instead of reading on mount: it must not talk over the question about
+  // this same project, and the disk it reports on is the disk that question writes to — a refusal recorded
+  // there is what silences it.
+  it("reads nothing and shows nothing while the question about this project is still up", async () => {
+    hoisted.waiting = [waiting()];
+    await render(7, false);
+
+    expect(hoisted.asked, "the probe is not paid before the answer is in").toEqual([]);
+    expect(container.querySelector(".agenthookrow")).toBeNull();
   });
 
   // Everything wired is nothing left, which is the only way a row with no ✕ ever goes. A project that said

@@ -413,7 +413,6 @@ export const ko: Translation = {
     "agentHook.scopeAgain": "세 번째로는 묻지 않습니다.",
     "agentHook.hint": "`{cmd} agent-hook snippet <tool>` 으로 언제든 꺼낼 수 있습니다.",
     "agentHookSetup.title": "AI에게 작업 관리를 맡기기까지 한 걸음 남았습니다",
-    "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: 아래 텍스트를 AI에게 주어 {file} 을(를) 고치게 하면, AI는 세션마다 amenbo 사용법을 읽고 작업을 태스크로 남깁니다.",
     "agentHookSetup.pick": "이 폴더에서 쓰시는 도구는 어느 것입니까?",
     "agentHookSetup.copy": "텍스트 복사",

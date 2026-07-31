@@ -414,7 +414,6 @@ export const nl: Translation = {
     "agentHook.scopeAgain": "We vragen het geen derde keer.",
     "agentHook.hint": "`{cmd} agent-hook snippet <tool>` drukt hem af wanneer je maar wilt.",
     "agentHookSetup.title": "Er is nog één stap voordat je AI dit werk in amenbo bijhoudt",
-    "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: geef de tekst hieronder aan je AI om {file} aan te passen; daarna leest je AI bij het begin van elke sessie hoe je met amenbo werkt en legt het werk vast als taken.",
     "agentHookSetup.pick": "Welk gereedschap gebruik je in deze map?",
     "agentHookSetup.copy": "Tekst kopiëren",

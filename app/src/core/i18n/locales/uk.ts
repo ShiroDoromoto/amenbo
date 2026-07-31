@@ -440,7 +440,6 @@ export const uk: Translation = {
     "agentHook.scopeAgain": "Утретє не питатимемо.",
     "agentHook.hint": "`{cmd} agent-hook snippet <tool>` надрукує його будь-коли.",
     "agentHookSetup.title": "До того як ШІ вестиме цю роботу в amenbo, лишився один крок",
-    "agentHookSetup.where": "{project} — {dir}",
     "agentHookSetup.unwired": "{tool}: передайте текст нижче своєму ШІ, щоб він виправив {file}: після цього ваш ШІ на початку кожної сесії читає, як працювати з amenbo, і записує роботу задачами.",
     "agentHookSetup.pick": "Яким інструментом ви користуєтесь у цій теці?",
     "agentHookSetup.copy": "Скопіювати текст",

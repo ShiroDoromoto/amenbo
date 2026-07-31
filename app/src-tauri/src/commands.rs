@@ -4302,7 +4302,7 @@ pub fn agent_hook_answer(project_id: i64, yes: bool) -> Result<(), CmdError> {
 ///
 /// This is the settings screen reading the record, so it says only what was answered. Whether the
 /// wiring is actually in place is a different fact, read from the folder every time and reported by
-/// [`agent_hook_notices`].
+/// [`agent_hook_project_wiring`].
 #[tauri::command]
 pub fn agent_hook_consent(project_id: i64) -> Result<Option<bool>, CmdError> {
     let store = open_store_read()?;
@@ -4319,65 +4319,6 @@ pub fn agent_hook_consent_clear(project_id: i64) -> Result<(), CmdError> {
     let store = open_store()?;
     store.clear_harness_consent(project_id)?;
     Ok(())
-}
-
-/// One bound folder whose AI is not being started on amenbo — the raw material the banner words itself
-/// from, never the sentence, as with [`HookNoticeDto`].
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/bindings/bindings.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct AgentHookNoticeDto {
-    /// The project's name, so the banner can say which one it is about.
-    project_name: String,
-    /// The folder this is about, which is also what identifies the row.
-    dir: String,
-    /// The providers to put in front of the reader, each with the text that asks for the wiring: the
-    /// ones this folder points at, or the whole catalog where it points at none
-    /// ([`amenbo_core::harness::offered`]). Never empty — a banner with nothing to hand over is the one
-    /// thing this must not be.
-    offered: Vec<AgentHookToolDto>,
-}
-
-/// Where this folder's AI is not started on amenbo — the GUI's third channel for it, alongside the CLI's
-/// `--json` field and stderr line. The standing report
-/// ([`amenbo_core::harness::setup_notice`]), not [`agent_hook_offer`]'s one-time question: it tells, and
-/// the only thing that ends it is the wiring landing, since amenbo will not write the file itself.
-///
-/// **What it hands over is never empty**, which is where it parts from the CLI's person-facing line. That
-/// line is printed on every command, so it stays with providers it can name — a warning about a tool the
-/// folder shows no sign of is one the reader cannot act on. This surface is raised once and can let the
-/// reader choose, so a folder that names nothing is offered the catalog rather than dropped
-/// ([`amenbo_core::harness::offered`]): the reader who has just answered yes is exactly the one whose
-/// folder has no trace in it yet, and a yes that hands over nothing is the promise broken (`AMB-D-440`).
-///
-/// Called **once, after [`agent_hook_offer`] has had its turn**, so a folder just adopted or just answered
-/// is read in the state that left it.
-#[tauri::command]
-pub fn agent_hook_notices() -> Result<Vec<AgentHookNoticeDto>, CmdError> {
-    use amenbo_core::harness;
-
-    let store = open_store_read()?;
-    let cmd = amenbo_core::config::Paths::command_name();
-    let mut notices = Vec::new();
-    for dir in store.bindings().all_dirs() {
-        let path = std::path::Path::new(&dir);
-        let Some(project_id) = amenbo_core::binding::read_pointer(path).and_then(|b| b.project_id)
-        else {
-            continue;
-        };
-        let consent = store.harness_consent(project_id).unwrap_or(None);
-        let Some(notice) = harness::setup_notice(&harness::probe(path, cmd), consent) else {
-            continue;
-        };
-        let offered: Vec<AgentHookToolDto> =
-            harness::offered(&notice).into_iter().map(|one| agent_hook_tool(one, cmd)).collect();
-        if offered.is_empty() {
-            continue;
-        }
-        let Ok(Some(project)) = store.project(project_id) else { continue };
-        notices.push(AgentHookNoticeDto { project_name: project.name, dir: dir.clone(), offered });
-    }
-    Ok(notices)
 }
 
 /// One harness a project is still waiting to be wired to, and the folders waiting for it — what the
@@ -4398,8 +4339,8 @@ pub struct AgentHookWiringDto {
     dirs: Vec<String>,
 }
 
-/// What this project still has to wire, folder by folder — the standing row on the project screen, where
-/// [`agent_hook_notices`] is the device-wide sweep the startup banner reads (`AMB-D-459`).
+/// What this project still has to wire, folder by folder — the standing row on the project screen, and
+/// the only surface that reports it (`AMB-D-459`).
 ///
 /// **It answers for one project, because that is where it is read.** Consent is recorded per project and
 /// the wiring lands per folder, so a reader who pasted into one of four folders is answered as done and
@@ -8234,7 +8175,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
     }
 
-    /// What the walk does without asking anyone, and what the banner is left with.
+    /// What opening a project does without asking anyone, and what the standing row is left with.
     ///
     /// A folder somebody wired by hand is the answer, so it is adopted rather than asked about — the
     /// question amenbo must never put is one whose answer is already on disk. And the report that follows
@@ -8301,32 +8242,37 @@ mod tests {
         // One folder is wired and has nothing left to finish; the other points at no tool, and is the
         // case this surface exists for — it is offered the catalog to pick from rather than nothing,
         // since a reader who has just said yes there would otherwise be handed no text at all.
-        let notices = agent_hook_notices().unwrap();
+        assert!(
+            agent_hook_project_wiring(wired).unwrap().is_empty(),
+            "the wired folder is done, so its project's row has nothing to stand for",
+        );
+        let waiting = agent_hook_project_wiring(bare).unwrap();
         assert_eq!(
-            notices.iter().map(|n| n.dir.as_str()).collect::<Vec<_>>(),
-            [bare_dir.to_string_lossy()],
-            "the wired folder is done; the one pointing at nothing still has to be handed something",
+            waiting.len(),
+            amenbo_core::harness::HARNESSES.len(),
+            "a folder pointing at nothing waits on every tool, not none",
         );
         assert_eq!(
-            notices[0].offered.len(),
-            amenbo_core::harness::HARNESSES.len(),
-            "a folder pointing at nothing is offered every tool, not none",
+            waiting[0].dirs,
+            [bare_dir.to_string_lossy()],
+            "the one folder that still has to be handed something",
         );
 
         // Now a folder that says which tool it uses, and does not run it at session start.
         let traced = new_project("痕跡はあるが未配線のPJ");
         let traced_dir = bound(traced, "traced", false);
-        let notices = agent_hook_notices().unwrap();
-        let traced_notice = notices
-            .iter()
-            .find(|n| n.dir == traced_dir.to_string_lossy())
-            .expect("the folder that points at a tool is reported");
+        let waiting = agent_hook_project_wiring(traced).unwrap();
         assert_eq!(
-            traced_notice.offered.iter().map(|one| one.tool.as_str()).collect::<Vec<_>>(),
+            waiting.iter().map(|one| one.tool.tool.as_str()).collect::<Vec<_>>(),
             ["claude-code"],
-            "a folder that points somewhere is offered that, not the whole catalog",
+            "a folder that points somewhere waits on that, not the whole catalog",
         );
-        let tool = &traced_notice.offered[0];
+        assert_eq!(
+            waiting[0].dirs,
+            [traced_dir.to_string_lossy()],
+            "and the folder listed is the one that points there",
+        );
+        let tool = &waiting[0].tool;
         assert_eq!(tool.tool, "claude-code");
         assert_eq!(tool.paste_into, ".claude/settings.json", "where the text goes");
         assert!(
@@ -8346,7 +8292,7 @@ mod tests {
         // it, the text stays there for the asking, but a reader with no setup pending is not warned.
         agent_hook_answer(traced, false).unwrap();
         assert!(
-            !agent_hook_notices().unwrap().iter().any(|n| n.dir == traced_dir.to_string_lossy()),
+            agent_hook_project_wiring(traced).unwrap().is_empty(),
             "a no is silence, not a standing warning",
         );
 
@@ -8522,8 +8468,11 @@ mod tests {
             "and it is recorded, so opening the project again asks nothing",
         );
         assert!(
-            agent_hook_notices().unwrap().iter().any(|n| n.dir == unwired.to_string_lossy()),
-            "the folder still missing the wiring is the standing report's to carry",
+            agent_hook_project_wiring(half)
+                .unwrap()
+                .iter()
+                .any(|one| one.dirs.contains(&unwired.to_string_lossy().to_string())),
+            "the folder still missing the wiring is the standing row's to carry",
         );
 
         let _ = std::fs::remove_dir_all(&tmp);

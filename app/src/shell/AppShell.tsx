@@ -30,9 +30,9 @@ import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollaps
 import { dismissUpdate, isUpdateDismissed, sessionDismissCovers, type SessionDismiss } from "../core/updateDismissed";
 import { RefNavProvider } from "../core/refNav";
 import { currentLang, doctorText, t, tn, tf } from "../core/i18n";
-import { fetchStaleManagedBlocks, resyncManagedBlocks, fetchOrphanBindings, forgetOrphanBindings, fetchPointerIssues, repairPointers, fetchHookNotices, fetchAgentHookNotices, openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
+import { fetchStaleManagedBlocks, resyncManagedBlocks, fetchOrphanBindings, forgetOrphanBindings, fetchPointerIssues, repairPointers, fetchHookNotices, openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
 import type { UpdateProgress } from "../core/mutations";
-import type { AgentHookNoticeDto, DoctorIssueDto, HookNoticeDto, StaleBlockDto } from "../bindings/bindings";
+import type { DoctorIssueDto, HookNoticeDto, StaleBlockDto } from "../bindings/bindings";
 
 /** `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the ⚙ in the board toolbar. */
 export type Nav = { type: "view" | "project" | "projectSettings"; id: string };
@@ -89,10 +89,15 @@ export function AppShell() {
     setLintDidAsk(didAsk);
     setHooksAsked(true);
   }, []);
-  // The same latch one question further down the queue: the session-start hook's banner waits for its own
-  // modal, which in turn waits for the lint's.
-  const [agentHookAsked, setAgentHookAsked] = useState(false);
-  const onAgentHookAsked = useCallback(() => setAgentHookAsked(true), []);
+  // The same latch one question further down the queue: the standing row about a project's unwired folders
+  // waits for the question about that project, which in turn waits for the lint's modal (`AMB-D-459`).
+  //
+  // It holds **which project** the question is over for, not a yes/no, and the modal names that project
+  // rather than it being read off the screen. The question follows the reader from one project to the next,
+  // so a boolean latched at the first would let the row read the disk ahead of the question everywhere
+  // after — and a refusal recorded there is exactly what silences it.
+  const [agentHookAskedFor, setAgentHookAskedFor] = useState<number | null>(null);
+  const onAgentHookAsked = useCallback((project: number | null) => setAgentHookAskedFor(project), []);
 
   const lang = useSyncExternalStore(subscribe, currentLang);
 
@@ -331,7 +336,6 @@ export function AppShell() {
       <ManagedBlockBanner />
       <OrphanBindingBanner />
       <HookSetupBanner asked={hooksAsked} />
-      <AgentHookSetupBanner asked={agentHookAsked} />
       <div
         className={`shell__body ${showRight ? "" : "shell__body--no-right"}${sidebarCollapsed ? " shell__body--sidebar-collapsed" : ""}`}
         style={{ "--rightpane-w": `${rightWidth}px`, "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}
@@ -361,6 +365,7 @@ export function AppShell() {
               onSelectDecision={selectDecision}
               onComposeTask={openCompose}
               onOpenSettings={() => navTo({ type: "projectSettings", id: nav.id })}
+              hookQuestionDone={agentHookAskedFor === Number(nav.id)}
             />
           )}
           {nav.type === "projectSettings" && (
@@ -888,106 +893,6 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
         </div>
       )}
     </>
-  );
-}
-
-// The GUI's channel for what core's `harness::setup_notice` found — the same report the CLI puts in its
-// `--json` field and on stderr: this folder's AI is not started on `amenbo agent` when a session opens
-// (`AMB-D-440`). It tells and stops nothing, which keeps it apart from the modal that asks
-// (`AgentHookConsentModal`).
-//
-// **What it adds over the CLI's line is the copy button**, and that is the whole point of the surface: the
-// wiring is an edit the reader has their own AI make, amenbo never writes the file, so how easily the text
-// reaches the clipboard is how often the setup is finished. The text differs per tool and handing over the
-// wrong one wires nothing, so where there is more than one on offer the reader picks which, and the button
-// carries that one.
-//
-// **The text is on screen, not behind the button.** What it asks for is an edit to a file the reader owns,
-// by an AI of theirs — so the moment to read it is before it is handed over, and a copy button with the
-// text hidden behind it is a copy taken on trust. It scrolls in place rather than being folded away: a
-// disclosure would put it one click from being copied unread, which is the state this avoids.
-//
-// **A folder that points at no tool is offered the catalog**, rather than shown nothing (core decides which
-// — `harness::offered`). That folder is not a rare one: it is every folder nobody has run an AI in yet,
-// which is exactly where a reader has just been asked and said yes. This is where the surface parts from
-// the CLI's person-facing line, which is printed on every command and so stays with what it can name.
-//
-// It renders only once the modal is done asking (`asked`), because asking about the hook and warning about
-// the hook in the same breath says one thing twice — the same order `HookSetupBanner` keeps. A recorded "no"
-// is silent here (core decides). A recorded "yes" is **not**: consent is not wiring, so the only thing that
-// ends this report is the paste landing. Dismissible with the ✕ for the session; outside Tauri it is always
-// empty, hence hidden.
-export function AgentHookSetupBanner({ asked }: { asked: boolean }) {
-  const [notices, setNotices] = useState<AgentHookNoticeDto[]>([]);
-  const [dismissed, setDismissed] = useState(false);
-  // Which tool's text was last copied, so the button can say so. Keyed by folder and tool together: the
-  // same tool appears under every folder that traces it, and a copy in one must not light up the others.
-  // The two are joined on a byte no path and no tool id can carry, written as the escape it is — a file
-  // holding one for real reads as binary, and every grep over this tree walks past it without a word.
-  const [copied, setCopied] = useState<string | null>(null);
-  // Which tool the reader picked, per folder. Unset means the first on offer — which is the only one where
-  // the folder points at exactly one, and the head of the catalog where it points at none.
-  const [picked, setPicked] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    if (!inTauri() || !asked) return;
-    let alive = true;
-    fetchAgentHookNotices()
-      .then((n) => alive && setNotices(n))
-      .catch(() => {}); // A failure to detect is swallowed (we just do not show the banner).
-    return () => {
-      alive = false;
-    };
-  }, [asked]);
-
-  if (dismissed || notices.length === 0) return null;
-
-  const copy = async (key: string, request: string) => {
-    try {
-      await navigator.clipboard.writeText(request);
-      setCopied(key);
-      setTimeout(() => setCopied(null), 1200);
-    } catch { /* where the clipboard is unavailable, quietly skip */ }
-  };
-
-  return (
-    <div className="healthbanner managedblock-banner" role="alert">
-      <span className="healthbanner__icon" aria-hidden>⚠</span>
-      <div className="healthbanner__body">
-        <div className="healthbanner__title">{t("agentHookSetup.title")}</div>
-        {notices.map((n) => {
-          const tool = n.offered.find((one) => one.tool === picked[n.dir]) ?? n.offered[0];
-          const key = `${n.dir}\0${tool.tool}`;
-          return (
-            <div key={n.dir} className="healthbanner__line">
-              <div>{tf("agentHookSetup.where", { project: n.projectName, dir: n.dir })}</div>
-              {/* Only where there is a choice to make. With one on offer the folder has already said which
-                  tool it is, and a picker holding a single value asks a question that has no other answer. */}
-              {n.offered.length > 1 && (
-                <select
-                  className="agenthook__pick"
-                  aria-label={t("agentHookSetup.pick")}
-                  value={tool.tool}
-                  onChange={(e) => setPicked((was) => ({ ...was, [n.dir]: e.target.value }))}
-                >
-                  {n.offered.map((one) => (
-                    <option key={one.tool} value={one.tool}>{one.label}</option>
-                  ))}
-                </select>
-              )}
-              <div>
-                {tf("agentHookSetup.unwired", { tool: tool.label, file: tool.pasteInto })}{" "}
-                <button className="healthbanner__action" onClick={() => void copy(key, tool.request)}>
-                  {copied === key ? t("agentHookSetup.copied") : t("agentHookSetup.copy")}
-                </button>
-                <pre className="agenthook__request">{tool.request}</pre>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
-    </div>
   );
 }
 

@@ -38,27 +38,6 @@ export type ActorDto = { name: string, kind: "human" | "ai",
 avatar?: string, };
 
 /**
- * One bound folder whose AI is not being started on amenbo — the raw material the banner words itself
- * from, never the sentence, as with [`HookNoticeDto`].
- */
-export type AgentHookNoticeDto = { 
-/**
- * The project's name, so the banner can say which one it is about.
- */
-projectName: string, 
-/**
- * The folder this is about, which is also what identifies the row.
- */
-dir: string, 
-/**
- * The providers to put in front of the reader, each with the text that asks for the wiring: the
- * ones this folder points at, or the whole catalog where it points at none
- * ([`amenbo_core::harness::offered`]). Never empty — a banner with nothing to hand over is the one
- * thing this must not be.
- */
-offered: Array<AgentHookToolDto>, };
-
-/**
  * The question about the AI harness's session-start hook, waiting to be put about one project
  * (`AMB-D-440`, `AMB-D-459`) — the GUI's half of the CLI's `offer_agent_hook`.
  *

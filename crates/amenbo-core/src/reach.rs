@@ -8,7 +8,10 @@
 //! The type has exactly two values:
 //! - [`Reach::All`] — everything on this machine. **The default for a human** (the overview is the human's
 //!   place to stand), and what the GUI runs with.
-//! - [`Reach::Project`] — one bound project. This is where the **AI facet** (`--actor ai`) lands.
+//! - [`Reach::Project`] — one project and nothing else. This is where the **AI facet** (`--actor ai`) lands,
+//!   and also where a plugin calling amenbo back lands (`AMB-D-406`) — two ways in that reach exactly as
+//!   far as each other. What closed it is carried along ([`Closed`]) for one reason: a refusal has to name
+//!   something the reader can act on, and a plugin's author cannot act on a binding they never made.
 //!
 //! "An AI in an unbound folder" is not a third value but an **error** ([`Reach::for_ai`]). An empty reach
 //! lets no operation through at all, so refusing at the door is both more honest than carrying an empty
@@ -43,18 +46,44 @@
 
 use crate::error::{Error, Result};
 
-/// How far this operation reaches. The default is [`Reach::All`] (humans, the GUI, library use); only the
-/// AI facet is closed to the bound project.
+/// What closed a reach — which decides nothing about how far it reaches, and everything about what a
+/// reader turned away by it can do next.
+///
+/// The two are told apart because their way out is not the same. A binding is in the reader's hands: a
+/// human can run the command, or the work can move to the folder bound to that project. A window is not:
+/// it was fixed by the runner that launched this process, before the plugin's own code ran, and no
+/// argument the plugin passes widens it. Naming the binding at a plugin would send its author looking for
+/// an `.amenbo` that decided nothing here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Closed {
+    /// The folder's `.amenbo`, which is where the AI facet draws its reach from.
+    Binding,
+    /// The window a plugin was launched with (`AMB-D-406`) — the gate it fires through, read back.
+    Window,
+}
+
+/// How far this operation reaches. The default is [`Reach::All`] (humans, the GUI, library use); the AI
+/// facet and a plugin's window are what close it to one project.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Reach {
     /// Everything on this machine, across projects.
     #[default]
     All,
-    /// This one project and nothing else.
-    Project(i64),
+    /// This one project and nothing else, and what closed it to that.
+    Project { id: i64, closed_by: Closed },
 }
 
 impl Reach {
+    /// A reach closed by the folder's binding — the AI facet's.
+    pub fn binding(project: i64) -> Reach {
+        Reach::Project { id: project, closed_by: Closed::Binding }
+    }
+
+    /// A reach closed by the window a plugin was launched with (`AMB-D-406`).
+    pub fn window(project: i64) -> Reach {
+        Reach::Project { id: project, closed_by: Closed::Window }
+    }
+
     /// Derives an AI facet's reach **from the binding and nothing else**. With no binding the reach is
     /// **empty** — an AI does not get to pick a project, so there is nothing to contain it to. That is an
     /// error, not a fall back to `All`: quietly showing everything would turn the binding back into
@@ -65,7 +94,7 @@ impl Reach {
     /// arrive here.
     pub fn for_ai(binding: Option<i64>) -> Result<Reach> {
         match binding {
-            Some(pid) => Ok(Reach::Project(pid)),
+            Some(pid) => Ok(Reach::binding(pid)),
             None => Err(unbound()),
         }
     }
@@ -74,7 +103,7 @@ impl Reach {
     pub fn project(self) -> Option<i64> {
         match self {
             Reach::All => None,
-            Reach::Project(id) => Some(id),
+            Reach::Project { id, .. } => Some(id),
         }
     }
 
@@ -83,7 +112,7 @@ impl Reach {
     pub fn allows(self, project_id: Option<i64>) -> bool {
         match self {
             Reach::All => true,
-            Reach::Project(p) => project_id == Some(p),
+            Reach::Project { id, .. } => project_id == Some(id),
         }
     }
 
@@ -93,9 +122,11 @@ impl Reach {
     pub fn narrow(self, requested: Option<i64>) -> Result<Option<i64>> {
         match (self, requested) {
             (Reach::All, r) => Ok(r),
-            (Reach::Project(p), None) => Ok(Some(p)),
-            (Reach::Project(p), Some(r)) if r == p => Ok(Some(p)),
-            (Reach::Project(p), Some(r)) => Err(out_of_reach(&crate::idref::project(r), p)),
+            (Reach::Project { id, .. }, None) => Ok(Some(id)),
+            (Reach::Project { id, .. }, Some(r)) if r == id => Ok(Some(id)),
+            (Reach::Project { id, closed_by }, Some(r)) => {
+                Err(out_of_reach(&crate::idref::project(r), id, closed_by))
+            }
         }
     }
 
@@ -106,15 +137,20 @@ impl Reach {
     pub fn refuse_project_choice(self, what: &str) -> Result<()> {
         match self {
             Reach::All => Ok(()),
-            Reach::Project(p) => {
-                let bound = crate::idref::project(p);
-                Err(Error::out_of_reach(
-                    format!(
+            Reach::Project { id, closed_by } => {
+                let bound = crate::idref::project(id);
+                Err(Error::out_of_reach(match closed_by {
+                    Closed::Binding => format!(
                         "{what} is for humans — an AI does not pick a project: it works in the one its \
                          folder's .amenbo names ({bound}), and only there. Drop {what}; the binding \
                          already scopes this command."
                     ),
-                ))
+                    Closed::Window => format!(
+                        "{what} is for humans — a plugin does not pick a project: it reads through the \
+                         window it was launched with ({bound}), and naming one does not widen it. Drop \
+                         {what}; the window already scopes this command."
+                    ),
+                }))
             }
         }
     }
@@ -123,23 +159,29 @@ impl Reach {
     pub fn check(self, what: &str, project_id: Option<i64>) -> Result<()> {
         match self {
             Reach::All => Ok(()),
-            Reach::Project(p) if project_id == Some(p) => Ok(()),
-            Reach::Project(p) => Err(out_of_reach(what, p)),
+            Reach::Project { id, .. } if project_id == Some(id) => Ok(()),
+            Reach::Project { id, closed_by } => Err(out_of_reach(what, id, closed_by)),
         }
     }
 }
 
-/// The out-of-reach wording, in both languages. It says "you cannot reach that from here", not "it does not
-/// exist".
-fn out_of_reach(what: &str, bound: i64) -> Error {
+/// The out-of-reach wording. It says "you cannot reach that from here", not "it does not exist" — and it
+/// says it in the terms of whatever closed the reach, since the reader's way out is not the same on both
+/// (see [`Closed`]).
+fn out_of_reach(what: &str, bound: i64, closed_by: Closed) -> Error {
     let bound = crate::idref::project(bound);
-    Error::out_of_reach(
-        format!(
+    Error::out_of_reach(match closed_by {
+        Closed::Binding => format!(
             "{what} is outside project {bound}, the project this folder is bound to — an AI reaches \
              only the project its .amenbo names. Ask a human to run this, or work in the \
              folder bound to that project."
         ),
-    )
+        Closed::Window => format!(
+            "{what} is outside project {bound}, the project this plugin was launched to observe — a \
+             plugin reads only through the window it fires in, which no argument widens. The ids in \
+             the payload it was handed are inside that project."
+        ),
+    })
 }
 
 /// The wording for an AI running in an unbound folder, in both languages. It says "this folder is bound to
@@ -162,7 +204,7 @@ mod tests {
 
     #[test]
     fn an_ai_draws_its_reach_from_the_binding_and_an_unbound_folder_reaches_nothing() {
-        assert_eq!(Reach::for_ai(Some(3)).unwrap(), Reach::Project(3));
+        assert_eq!(Reach::for_ai(Some(3)).unwrap(), Reach::binding(3));
         // No binding does not fall back to All — we do not paper over a state where containment cannot hold
         // by quietly showing everything.
         assert_eq!(Reach::for_ai(None).unwrap_err().code(), "out_of_reach");
@@ -179,7 +221,7 @@ mod tests {
 
     #[test]
     fn a_bound_reach_fills_the_scope_slot_and_refuses_another_project() {
-        let r = Reach::Project(3);
+        let r = Reach::binding(3);
         // An unspecified slot is filled with the bound project — a listing never quietly returns everything.
         assert_eq!(r.narrow(None).unwrap(), Some(3));
         // Naming the same project is allowed through.
@@ -191,10 +233,37 @@ mod tests {
 
     #[test]
     fn a_bound_reach_refuses_an_entity_outside_it_including_an_unplaced_one() {
-        let r = Reach::Project(3);
+        let r = Reach::binding(3);
         assert!(r.check("#1", Some(3)).is_ok());
         assert_eq!(r.check("#2", Some(4)).unwrap_err().code(), "out_of_reach");
         // An unplaced task (belonging to no project) is out of a closed reach as well.
         assert_eq!(r.check("#3", None).unwrap_err().code(), "out_of_reach");
+    }
+
+    /// A window reaches exactly as far as a binding does — and says something else when it turns a reader
+    /// away, because what the reader can do about it is not the same. A plugin's author never made an
+    /// `.amenbo` here and cannot run this as a human: naming either would send them at something that
+    /// decided nothing.
+    #[test]
+    fn a_window_reaches_as_far_as_a_binding_and_is_refused_in_its_own_terms() {
+        let binding = Reach::binding(3);
+        let window = Reach::window(3);
+        assert_eq!(binding.project(), window.project());
+        assert!(window.check("#1", Some(3)).is_ok());
+        assert!(window.allows(Some(3)) && !window.allows(Some(4)) && !window.allows(None));
+        assert_eq!(window.narrow(None).unwrap(), Some(3));
+
+        let refused = window.check("AMB-T-2", Some(4)).unwrap_err();
+        assert_eq!(refused.code(), "out_of_reach");
+        let said = refused.to_string();
+        assert!(said.contains("plugin") && said.contains("AMB-P-3"), "got: {said}");
+        assert!(!said.contains(".amenbo") && !said.contains("human"), "got: {said}");
+
+        // The vocabulary that names a project is refused on both, and points at the one that closed it.
+        let named = window.refuse_project_choice("--project").unwrap_err().to_string();
+        assert!(named.contains("window") && !named.contains(".amenbo"), "got: {named}");
+        assert!(
+            binding.refuse_project_choice("--project").unwrap_err().to_string().contains(".amenbo")
+        );
     }
 }

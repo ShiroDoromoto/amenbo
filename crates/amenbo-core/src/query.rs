@@ -2353,7 +2353,7 @@ mod filter_tests {
         let page = crate::store_engine::list_task_ids(
             tx.conn(),
             &crate::store_engine::TaskQuery {
-                reach: crate::reach::Reach::Project(mine),
+                reach: crate::reach::Reach::binding(mine),
                 // Even with no scope given (i.e. asking for the whole machine), nothing outside the
                 // closed reach comes out.
                 project_id: None,

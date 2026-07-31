@@ -520,7 +520,7 @@ mod tests {
     fn a_closed_reach_sees_only_its_own_project() {
         let e = broken();
 
-        let r = doctor(e.conn(), Reach::Project(7)).unwrap();
+        let r = doctor(e.conn(), Reach::binding(7)).unwrap();
 
         let mut targets: Vec<&str> = r.issues.iter().map(|i| i.target.as_str()).collect();
         targets.sort_unstable();
@@ -715,7 +715,7 @@ mod tests {
     /// dead ref or not.
     #[test]
     fn a_closed_reach_reads_only_its_own_bodies() {
-        let issues = dead(&bodies(), Reach::Project(7));
+        let issues = dead(&bodies(), Reach::binding(7));
 
         assert_eq!(
             dead_targets(&issues),
@@ -743,7 +743,7 @@ mod tests {
         )
         .unwrap();
 
-        let issues = dead(&e, Reach::Project(7));
+        let issues = dead(&e, Reach::binding(7));
 
         assert!(
             !dead_targets(&issues).contains(&"task:3"),

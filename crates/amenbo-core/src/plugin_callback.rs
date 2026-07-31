@@ -51,7 +51,7 @@ pub const ALL_REACH: &str = "all";
 /// The window a plugin reads through, from the gate it fires through (`AMB-D-406`): one project's gate is
 /// that project's window.
 pub fn reach_of(project: i64) -> Reach {
-    Reach::Project(project)
+    Reach::window(project)
 }
 
 /// The variables to set on a plugin's process: the store at `base_dir`, and `reach` as its window. In the
@@ -70,7 +70,7 @@ pub fn env(base_dir: &Path, reach: Reach) -> Vec<(String, String)> {
 pub fn encode_reach(reach: Reach) -> std::borrow::Cow<'static, str> {
     match reach {
         Reach::All => std::borrow::Cow::Borrowed(ALL_REACH),
-        Reach::Project(id) => std::borrow::Cow::Owned(idref::project(id)),
+        Reach::Project { id, .. } => std::borrow::Cow::Owned(idref::project(id)),
     }
 }
 
@@ -87,7 +87,7 @@ pub fn decode_reach(value: &str) -> Result<Reach> {
     }
     idref::strip(RefKind::Project, value)
         .parse::<i64>()
-        .map(Reach::Project)
+        .map(Reach::window)
         .map_err(|_| unreadable(value))
 }
 
@@ -131,21 +131,21 @@ mod tests {
 
     #[test]
     fn a_gate_is_the_window_it_fires_through() {
-        assert_eq!(reach_of(7), Reach::Project(7));
+        assert_eq!(reach_of(7), Reach::window(7));
     }
 
     #[test]
     fn a_reach_survives_the_round_trip_through_the_environment() {
-        for reach in [Reach::All, Reach::Project(12)] {
+        for reach in [Reach::All, Reach::window(12)] {
             assert_eq!(decode_reach(&encode_reach(reach)).unwrap(), reach);
         }
         // The project side is written as the ref every other surface shows.
-        assert_eq!(encode_reach(Reach::Project(12)), "AMB-P-12");
+        assert_eq!(encode_reach(Reach::window(12)), "AMB-P-12");
     }
 
     #[test]
     fn a_bare_number_reads_as_a_project_and_another_spaces_ref_does_not() {
-        assert_eq!(decode_reach("12").unwrap(), Reach::Project(12));
+        assert_eq!(decode_reach("12").unwrap(), Reach::window(12));
         // A task's ref names another number space, so it is refused rather than resolving project 12.
         assert!(decode_reach("AMB-T-12").is_err());
         assert!(decode_reach("").is_err());
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn the_env_names_the_store_and_the_window() {
-        let vars = env(Path::new("/data/amenbo"), Reach::Project(3));
+        let vars = env(Path::new("/data/amenbo"), Reach::window(3));
         assert_eq!(
             vars,
             vec![

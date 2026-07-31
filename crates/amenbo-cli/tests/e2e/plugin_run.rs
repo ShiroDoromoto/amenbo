@@ -49,10 +49,15 @@ fn a_plugin_reads_back_with_no_facet_and_still_declares_one_to_write() {
     let shown: Value = serde_json::from_str(&stdout).expect("the read-back answers JSON");
     assert_eq!(shown["title"], "seen");
 
-    // The window, not the facet, is what bounds it: the project it fires for is all it may read.
+    // The window, not the facet, is what bounds it: the project it fires for is all it may read. The
+    // refusal is worded for whoever is reading it, and here that is a plugin's author: they made no
+    // binding and cannot run this as a human, so a refusal naming either would send them at something that
+    // decided nothing about this run.
     let (_out, stderr, code) = plugin(&["task", "show", &unseen, "--json"]);
     assert_ne!(code, 0, "a task outside the window must not be readable");
     assert!(stderr.contains("out_of_reach"), "should be out_of_reach: {stderr}");
+    assert!(stderr.contains("plugin"), "the refusal is put in the plugin's terms: {stderr}");
+    assert!(!stderr.contains(".amenbo"), "a plugin's window is not a binding: {stderr}");
 
     // A write names an author, and the window supplies none — so this is still facet_required.
     let (_out, stderr, code) = plugin(&["comment", "add", &tid, "--text", "from a plugin", "--json"]);

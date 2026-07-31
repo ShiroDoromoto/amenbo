@@ -4671,7 +4671,7 @@ mod tests {
         e.put_record("decision", 2, &[("project_id", text("2")), ("title", text("D2"))]).unwrap();
 
         let conn = e.conn();
-        let bound = crate::reach::Reach::Project(1);
+        let bound = crate::reach::Reach::binding(1);
 
         // Cards: hydration is the last step before content reaches a face, so an out-of-reach id yields
         // no card — it drops out exactly as a non-live id does.

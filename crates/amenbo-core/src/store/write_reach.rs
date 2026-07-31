@@ -28,7 +28,7 @@ use rusqlite::Connection;
 
 use crate::error::{Error, Result};
 use crate::model::AttachmentTarget;
-use crate::reach::Reach;
+use crate::reach::{Closed, Reach};
 
 use super::owner;
 
@@ -92,20 +92,26 @@ fn check(conn: &Connection, reach: Reach, bound: i64, target: WriteTarget) -> Re
         // A new entity has no id yet, so we check the place it would go. "No project" (the inbox) is
         // outside a narrowed reach — nobody should be able to create an entity they can no longer touch.
         WriteTarget::NewIn(Some(project)) => reach.check(&crate::idref::project(project), Some(project)),
-        WriteTarget::NewIn(None) => Err(cannot_create(bound, "outside any project")),
+        WriteTarget::NewIn(None) => Err(cannot_create(reach, bound, "outside any project")),
         // A new project is by definition outside the binding: it could be created but never touched
         // again. We do not leave that asymmetry standing.
-        WriteTarget::NewProject => Err(cannot_create(bound, "a new project")),
+        WriteTarget::NewProject => Err(cannot_create(reach, bound, "a new project")),
     }
 }
 
 /// The wording for a creation that is out of reach. It says "you cannot create it there", never "it does
-/// not exist" (the same discipline as [`crate::reach`]).
-fn cannot_create(bound: i64, en_what: &str) -> Error {
-    Error::out_of_reach(
-        format!(
-            "Creating {en_what} is outside project #{bound}, the project this folder is bound to — an AI \
+/// not exist" (the same discipline as [`crate::reach`]) — and, as on the read side, it names whatever
+/// closed the reach, since that is what the writer can do something about.
+fn cannot_create(reach: Reach, bound: i64, en_what: &str) -> Error {
+    let bound = crate::idref::project(bound);
+    Error::out_of_reach(match reach {
+        Reach::Project { closed_by: Closed::Window, .. } => format!(
+            "Creating {en_what} is outside project {bound}, the project this plugin was launched to \
+             observe — a plugin writes only inside the window it fires in, which no argument widens."
+        ),
+        _ => format!(
+            "Creating {en_what} is outside project {bound}, the project this folder is bound to — an AI \
              reaches only the project its .amenbo names. Ask a human to run this."
         ),
-    )
+    })
 }

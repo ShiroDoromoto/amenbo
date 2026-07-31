@@ -450,10 +450,16 @@ export function AppShell() {
           is not what someone still choosing a language came here for, and it keeps its turn until then. */}
       {!needsSetup && <HookConsentModal onDone={onHooksAsked} />}
       {/* Next in the one-question queue: it fetches nothing until the lint's modal is done (`turn`), and puts
-          no question at all on a startup where that one spoke (`canAsk`) — the sweep still runs, so a folder
-          somebody wired by hand is adopted without anyone being asked. */}
+          no question at all on a startup where that one spoke (`canAsk`) — the probe still runs, so a project
+          somebody wired by hand is adopted without anyone being asked. What raises it is the project on
+          screen (`AMB-D-459`), so it follows the reader from one project to the next and asks nowhere else. */}
       {!needsSetup && (
-        <AgentHookConsentModal turn={hooksAsked} canAsk={!lintDidAsk} onDone={onAgentHookAsked} />
+        <AgentHookConsentModal
+          projectId={nav.type === "project" ? Number(nav.id) : null}
+          turn={hooksAsked}
+          canAsk={!lintDidAsk}
+          onDone={onAgentHookAsked}
+        />
       )}
     </div>
     </RefNavProvider>

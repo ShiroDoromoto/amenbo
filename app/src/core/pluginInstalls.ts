@@ -16,6 +16,7 @@ import type {
   PluginConfigFieldDto,
   PluginGateMovedDto,
   PluginInstallDto,
+  PluginProjectRowDto,
   PluginRemovedDto,
 } from "../bindings/bindings";
 
@@ -177,6 +178,25 @@ export async function uninstallPlugin(name: string): Promise<PluginRemoved | nul
   // An offer to update what is no longer here would be an offer to install it again (`AMB-D-359`).
   invalidateQueries((key) => key[0] === "plugin-updates");
   return removed;
+}
+
+/**
+ * The state of one project × plugin crossing (`AMB-D-447`), for a face that is drawing that row.
+ *
+ * A project the install names nothing about is one that never held the plugin on and never filled it in
+ * — off, holding nothing, and short of whatever the author marked `required` without a default. That
+ * last part is read off the schema rather than left blank, so a row opened from the picker carries its
+ * warning before the switch is pressed rather than after core refuses it.
+ */
+export function crossingAt(install: PluginInstall, projectId: number): PluginProjectRowDto {
+  const row = install.projects.find((p) => p.project === projectId);
+  if (row) return row;
+  return {
+    project: projectId,
+    enabled: false,
+    hasValue: false,
+    requiredUnset: install.config.some((f) => f.required && f.defaultValue == null),
+  };
 }
 
 /**

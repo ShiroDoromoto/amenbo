@@ -285,6 +285,18 @@ pub const STEPS: &[Step] = &[
         // it is what `search::rebuild` reads back out of the columns it copies.
         apply: Apply::Custom(fill_the_word_index),
     },
+    Step {
+        to: 18,
+        name: "widen the word index past the bodies, onto the labels and what is attached",
+        // `AMB-D-450`'s remaining faces: the names a person gave an axis and its values, and what an
+        // attachment is called. They are text that was already in the store and simply had no copy, so
+        // the step is the same rebuild v17 ran — driven by the face list, which is what changed.
+        //
+        // A rebuild rather than a top-up: the list is the truth about what belongs in the index, so
+        // reading the store back through it leaves exactly what a store born today would hold, and
+        // cannot drift by however many faces were added at once.
+        apply: Apply::Custom(fill_the_word_index),
+    },
 ];
 
 /// v17: build the word index for a store whose records predate it. It is exactly the rebuild any repair
@@ -1803,26 +1815,37 @@ mod tests {
         assert!(is_well_formed(ADD_COLUMN));
     }
 
-    /// **v17 on every shape the chain starts from.** The word index is created by genesis, so an older
-    /// store gets the tables at open — and empty. A record written before the upgrade is only in the
-    /// index because the step put it there, and without that step it would be a task nobody can find by
-    /// its own title, on exactly the stores nobody's tests are run against (`AMB-D-450`).
+    /// **The index-filling steps on every shape the chain starts from.** The word index is created by
+    /// genesis, so an older store gets the tables at open — and empty. A record written before the
+    /// upgrade is only in the index because a step put it there, and without that step it would be a
+    /// task nobody can find by its own title, on exactly the stores nobody's tests are run against
+    /// (`AMB-D-450`).
     ///
     /// Both a long term and a short one, since they take different paths to the same copy: seeding one
-    /// and not the other would leave half the question unasked.
+    /// and not the other would leave half the question unasked. And both an old face and one a later
+    /// step widened the index onto — a face added without a step of its own is the same silent hole.
     #[test]
     fn the_word_index_is_filled_in_for_records_that_predate_it() {
-        // The version the index arrived at, named literally: this is a question about *that* step, and
-        // a store born at it or later already writes its copies through the field-write funnel.
-        const WORD_INDEX_VERSION: i64 = 17;
+        // The newest version whose step fills the index, named literally: this is a question about
+        // *those* steps, and a store born at or after the last of them already writes its copies
+        // through the field-write funnel.
+        const WORD_INDEX_VERSION: i64 = 18;
         for born in OLDEST_FROZEN_VERSION..WORD_INDEX_VERSION {
             let dir = scratch(&format!("word-index-v{born}"));
             let engine = store_at(&dir, born);
-            // Written straight into the table, as a build of that age wrote it: the index did not exist
-            // then, so nothing about this row can have reached it.
+            // Written straight into the tables, as a build of that age wrote them: the index did not
+            // exist then, so nothing about these rows can have reached it.
             engine
                 .conn()
                 .execute("INSERT INTO task (id, title, notes) VALUES (1, ?1, '')", ["全文検索の索引"])
+                .unwrap();
+            engine
+                .conn()
+                .execute(
+                    "INSERT INTO attachment (id, target_type, target_id, kind, filename) \
+                       VALUES (1, 'task', 1, 'blob', ?1)",
+                    ["計測ログ.md"],
+                )
                 .unwrap();
             let found = |term: &str| -> bool {
                 use crate::store_engine::{schema::col, search, sql::Expr};
@@ -1844,6 +1867,7 @@ mod tests {
 
             assert!(found("全文検索"), "v{born}: a long term reaches the record the step indexed");
             assert!(found("検索"), "v{born}: and so does a short one, by the scan path");
+            assert!(found("計測ログ"), "v{born}: and so does a face a later step widened the index onto");
             std::fs::remove_dir_all(&dir).ok();
         }
     }

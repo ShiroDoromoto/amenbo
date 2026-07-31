@@ -1075,6 +1075,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS project_by_slug ON project(slug);
 -- own faces (`owner_kind`, `owner_id`) — which is how a word filter stays O(result) instead of walking
 -- the whole index once per candidate row.
 CREATE UNIQUE INDEX IF NOT EXISTS search_doc_face ON search_doc(owner_kind, owner_id, field);
+-- What hangs off a record, seekable from the record. `attachment` is polymorphic, so the pair is what a
+-- lookup has (`read::attachment_term`, and the delete op's own sweep); without the index each such
+-- lookup scans every attachment in the store once per candidate row.
+CREATE INDEX IF NOT EXISTS attachment_by_target ON attachment(target_type, target_id);
 -- The trigram index over that copy, and the three triggers that keep it in step. External-content
 -- (`content='search_doc'`), so the text is stored once: the index holds only the trigrams, and the row
 -- it points at is the copy itself. The triggers are the seam — a doc row cannot be written without its

@@ -948,3 +948,64 @@ fn a_word_filter_reaches_every_face_and_folds_the_spellings() {
     assert!(ids_for("全文検索").is_empty(), "the old title is no longer a word the task holds");
     assert_eq!(ids_for("番号で引く"), vec![titled.clone()]);
 }
+
+/// The word face reaches past the bodies (`AMB-D-450`): a label a person put on the task, and the name
+/// of what is attached to it — including what is attached to a comment on it, which is the task's
+/// timeline as much as the comment's own words are.
+///
+/// Neither is text held on the task, so what is under test is the join that makes it the task's: a label
+/// nobody placed on this task, and an attachment hanging off another one, must stay out.
+#[test]
+fn a_word_filter_reaches_the_labels_and_what_is_attached() {
+    let cli = Cli::new();
+    let pid = cli.a_project();
+
+    let a_task = |title: &str| -> String {
+        id_str(&cli.json(&["task", "add", "--project", &pid, "--title", title, "--json"])["task"]["id"])
+    };
+    let labelled = a_task("SCENARIO — the one with a label");
+    let attached = a_task("SCENARIO — the one with a file");
+    let bystander = a_task("SCENARIO — the one with neither");
+
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "エリア", "--json"]);
+    cli.json(&["dimension", "value-add", "エリア", "--name", "配色", "--json"]);
+    cli.json(&["dimension", "value-add", "エリア", "--name", "実装", "--json"]);
+    cli.json(&["dimension", "set", &labelled, "エリア", "配色", "--json"]);
+
+    let file = cli.home.join("計測ログ.md");
+    std::fs::write(&file, "# body\n").unwrap();
+    cli.json(&["task", "attach", &attached, file.to_str().unwrap(), "--json"]);
+
+    let cid = id_str(&cli.json(&["comment", "add", &attached, "--text", "資料を付けた", "--json"])["comment"]["id"]);
+    cli.json(&["comment", "attach", &cid, "https://example.com/benchmark-run", "--url", "--json"]);
+
+    let ids_for = |term: &str| -> Vec<String> {
+        let mut ids: Vec<String> = cli.json(&[
+            "task", "list", "--project", &pid, "--filter", &format!("text:{term}"), "--json",
+        ])["tasks"]
+            .as_array()
+            .expect("tasks is an array")
+            .iter()
+            .map(|t| id_str(&t["id"]))
+            .collect();
+        ids.sort();
+        ids
+    };
+
+    // The value the task was placed on, and the axis that value belongs to.
+    assert_eq!(ids_for("配色"), vec![labelled.clone()], "the label itself");
+    assert_eq!(ids_for("エリア"), vec![labelled.clone()], "the axis it is a value of");
+    assert!(ids_for("実装").is_empty(), "a value on that axis nobody placed this task on");
+
+    // What is attached: the filename a blob came in under, and the address a link points at.
+    assert_eq!(ids_for("計測ログ"), vec![attached.clone()], "an attachment's filename");
+    assert_eq!(ids_for("benchmark-run"), vec![attached.clone()], "a link's address, through a comment");
+
+    // The task that carries neither is reached by none of them.
+    assert!(!ids_for("配色").contains(&bystander));
+    assert!(!ids_for("計測ログ").contains(&bystander));
+
+    // Taking the label off, and the file with it, takes the words away too.
+    cli.json(&["dimension", "unset", &labelled, "エリア", "配色", "--json"]);
+    assert!(ids_for("配色").is_empty(), "an unset label is no longer one of the task's words");
+}

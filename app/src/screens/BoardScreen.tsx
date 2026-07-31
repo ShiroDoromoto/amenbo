@@ -54,9 +54,10 @@ const DONE_COLUMN_CAP = 20;
  * header is transient and does not rewrite `project.view`. Tasks are fetched one project at a time via task_page
  * (the whole store is never held), and column grouping and the filter chips are layered on client-side (bounded
  * by the size of a project). When the search box recognises a task ref (`AMB-T-<n>`, or the bare `#<n>` / `T-<n>`) it narrows to that
- * number; a single free-word token is handed to the read-model's `text:` filter (which spans title, notes and raw
- * comment bodies), while a query with whitespace falls back to a title+notes match that does not reach comments
- * (comment bodies live only in the read-model — a card carries nothing but the 💬 count). The drag-end handler is
+ * number; a single free-word token is handed to the read-model's `text:` filter (which spans every face the word
+ * index carries — title, notes, raw comment bodies, the labels the task was placed on, and the names of what is
+ * attached to it), while a query with whitespace falls back to a title+notes match that reaches none of those
+ * (they live only in the read-model — a card carries nothing but the 💬 count). The drag-end handler is
  * a stable reference (a fresh one per render would defeat the cards' memo). A drop onto a column sets status, and
  * even when the write layer rejects a reservation (todo→in_progress) the card's column is drawn from the status
  * in the source of truth, so it does not move — no optimistic update, and nothing to roll back.
@@ -163,7 +164,7 @@ export function BoardScreen({
     .filter((t) => passesFilters(t, dims, sel))
     .filter((t) => {
       if (ref) return ref.space === "task" && Number(t.id) === ref.num;
-      // Under backendText the read-model's text: has already narrowed over title+notes+comments — don't re-filter.
+      // Under backendText the read-model's text: has already narrowed over every face it carries — don't re-filter.
       if (backendText) return true;
       return q === "" || t.title.toLowerCase().includes(q) || (t.notes ?? "").toLowerCase().includes(q);
     });

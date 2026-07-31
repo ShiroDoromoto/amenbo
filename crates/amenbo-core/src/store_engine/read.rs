@@ -394,12 +394,18 @@ const META: col::store_meta::Cols = col::store_meta::ALL;
 const SD: col::search_doc::Cols = col::search_doc::of("sd");
 
 /// One term of a task's word filter: it matches when the term lands on **any** face of the task — its
-/// own title or notes, or the body of one of its live comments.
+/// own title or notes, the body of one of its live comments, a label it was placed on, or the name of
+/// something attached to it or to one of those comments.
 ///
-/// Both arms seek the copy by its face key (`search_doc_face`), so the cost is the task's own handful of
-/// rows rather than a walk of the index per candidate task; the comment arm reaches the task's comments
-/// through `task_comment_by_task` first, for the same reason the substring scan it replaces did. Which
-/// path the term itself takes inside those rows — the trigram index or a scan of the copy — is
+/// Which faces those are is [`search::FACES`]'s to say; whose they are is this function's. Two of them
+/// are not held on the task at all and are reached by the edge that makes them the task's: a label
+/// through the assignment (and, from the value, the axis it is a value of), an attachment through what
+/// it hangs off.
+///
+/// Every arm seeks the copy by its face key (`search_doc_face`), so the cost is the task's own handful
+/// of rows rather than a walk of the index per candidate task; each arm reaches its own side first, by
+/// that side's index (`task_comment_by_task`, `task_dimension_value_by_task`, `attachment_by_target`).
+/// Which path the term itself takes inside those rows — the trigram index or a scan of the copy — is
 /// [`search::term_pred`]'s to decide, and does not change what matching means.
 fn task_text_term(term: &str) -> Pred {
     const TC: col::task_comment::Cols = col::task_comment::of("tc");
@@ -414,7 +420,44 @@ fn task_text_term(term: &str) -> Pred {
         .filter(same(TC.task_id, T.id))
         .filter(search::term_pred(SD, term))
         .pred();
-    own.or(in_comment)
+    // The label the task was placed on, and the axis that label is a value of. The axis is reached
+    // through the assignment as well, not on its own: an axis nobody placed this task on is not one of
+    // the task's own words.
+    let on_value = Exists::over(SD.table)
+        .join(TDV.table, same(TDV.value_id, SD.owner_id))
+        .filter(Pred::eq(SD.owner_kind, search::DATASET_DIMENSION_VALUE))
+        .filter(same(TDV.task_id, T.id))
+        .filter(search::term_pred(SD, term))
+        .pred();
+    let on_axis = Exists::over(SD.table)
+        .join(TDV.table, same(TDV.dimension_id, SD.owner_id))
+        .filter(Pred::eq(SD.owner_kind, search::DATASET_DIMENSION))
+        .filter(same(TDV.task_id, T.id))
+        .filter(search::term_pred(SD, term))
+        .pred();
+    let attached = attachment_term(search::DATASET_TASK, T.id, term);
+    // What hangs off a comment hangs off the task, by the same reading that puts the comment's own body
+    // here: the timeline is the task's, and so is what was pinned to it.
+    let attached_to_comment = Exists::over(TC.table)
+        .filter(same(TC.task_id, T.id))
+        .filter(attachment_term(search::DATASET_TASK_COMMENT, TC.id, term))
+        .pred();
+    own.or(in_comment).or(on_value).or(on_axis).or(attached).or(attached_to_comment)
+}
+
+/// One term against the names of whatever is attached to `(target_type, target)` — the filename a blob
+/// came in under, or the address a link points at.
+///
+/// The subquery drives from `attachment`, seeking `attachment_by_target`, and reaches the copy from
+/// there: driving from the copy instead would walk every attachment's words once per candidate record.
+fn attachment_term(target_type: &str, target: Col<Int>, term: &str) -> Pred {
+    const A: col::attachment::Cols = col::attachment::of("a");
+    Exists::over(A.table)
+        .join(SD.table, Pred::eq(SD.owner_kind, search::DATASET_ATTACHMENT).and(same(SD.owner_id, A.id)))
+        .filter(Pred::eq(A.target_type, target_type))
+        .filter(same(A.target_id, target))
+        .filter(search::term_pred(SD, term))
+        .pred()
 }
 
 /// The predicates an already-parsed [`Filter`] stands for — one per filter term, each carrying its own
@@ -1427,7 +1470,8 @@ pub fn decision_comment_list(conn: &Connection, decision_id: i64) -> Result<Vec<
 /// The decisions every one of `terms` lands on — the whole of `decision list`'s `text:` filter, read
 /// **once** and folded into the in-memory match as a set membership, so the listing costs one extra
 /// query rather than a per-decision scan. A term may land on any of the decision's faces: its title, its
-/// body, or the body of one of its live comments (the same reach the task side has).
+/// body, the body of one of its live comments, or the name of something attached to it or to one of
+/// those comments — the same reach the task side has, bar the labels, which only a task carries.
 ///
 /// No terms is no constraint — an all-whitespace text asks nothing, so every decision comes back rather
 /// than none. Ids come back in id order.
@@ -1449,7 +1493,12 @@ pub fn decisions_matching_text(conn: &Connection, terms: &[String]) -> Result<Ve
             .filter(same(DC.decision_id, D.id))
             .filter(search::term_pred(SD, term))
             .pred();
-        own.or(in_comment)
+        let attached = attachment_term(search::DATASET_DECISION, D.id, term);
+        let attached_to_comment = Exists::over(DC.table)
+            .filter(same(DC.decision_id, D.id))
+            .filter(attachment_term(search::DATASET_DECISION_COMMENT, DC.id, term))
+            .pred();
+        own.or(in_comment).or(attached).or(attached_to_comment)
     });
     sql.push_where(Pred::all(preds).as_ref()).order_by([Sort::by(D.id)]);
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;

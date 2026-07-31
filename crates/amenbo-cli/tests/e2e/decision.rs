@@ -410,3 +410,43 @@ fn a_decision_word_filter_reaches_every_face_and_folds_the_spellings() {
     assert_eq!(ids_for("ai"), vec![bodied.clone()], "a two-character term takes the scan path");
     assert!(ids_for("全文一致").is_empty());
 }
+
+/// A decision's word face reaches what is attached to it, and to its comments (`AMB-D-450`) — the same
+/// join the task side makes, bar the labels, which only a task carries.
+#[test]
+fn a_decision_word_filter_reaches_what_is_attached() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "添付検索PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    let a_decision = |title: &str| -> String {
+        id_str(&cli.json(&["decision", "add", "--project", &pid, "--title", title, "--json"])["decision"]["id"])
+    };
+    let carrying = a_decision("SCENARIO — the one with the evidence");
+    let bystander = a_decision("SCENARIO — the one with none");
+
+    cli.json(&["decision", "attach", &carrying, "https://example.com/latency-profile", "--url", "--json"]);
+    let cid = id_str(
+        &cli.json(&["decision", "comment", "add", &carrying, "--text", "測ったものを付ける", "--json"])["comment"]["id"],
+    );
+    let file = cli.home.join("実測メモ.md");
+    std::fs::write(&file, "# numbers\n").unwrap();
+    cli.json(&["decision", "comment", "attach", &cid, file.to_str().unwrap(), "--json"]);
+
+    let ids_for = |term: &str| -> Vec<String> {
+        let mut ids: Vec<String> = cli.json(&[
+            "decision", "list", "--project", &pid, "--filter", &format!("text:{term}"), "--json",
+        ])["decisions"]
+            .as_array()
+            .expect("decisions is an array")
+            .iter()
+            .map(|d| id_str(&d["id"]))
+            .collect();
+        ids.sort();
+        ids
+    };
+
+    assert_eq!(ids_for("latency-profile"), vec![carrying.clone()], "a link hanging off the decision");
+    assert_eq!(ids_for("実測メモ"), vec![carrying.clone()], "a file hanging off one of its comments");
+    assert!(!ids_for("latency-profile").contains(&bystander));
+}

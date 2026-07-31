@@ -407,10 +407,24 @@ impl StoreEngine {
     /// typed identifiers, and a registry rename lands on this sweep at compile time.
     pub fn delete_records_for_target(&self, target_type: &str, target_id: i64) -> Result<usize> {
         let att = col::attachment::ALL;
-        Ok(Delete::from(att.table)
-            .filter(Pred::eq(att.target_type, target_type).and(Pred::eq(att.target_id, target_id)))
-            .sql()
-            .execute(&self.conn)?)
+        let of_target =
+            || Pred::eq(att.target_type, target_type).and(Pred::eq(att.target_id, target_id));
+        // An attachment names itself in the word index, and this is the one delete that does not go
+        // through `delete_record` — so the rows are read out first and their copies dropped by hand.
+        // Without it the sweep would leave a word pointing at an attachment that no longer exists.
+        let mut sel = Select::new();
+        let id = sel.col(att.id);
+        let mut sql = Sql::from(&sel, att.table);
+        sql.push_where(Some(&of_target()));
+        let doomed: Vec<i64> = self
+            .conn
+            .prepare(sql.text())?
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| id.get(r))?
+            .collect::<rusqlite::Result<Vec<i64>>>()?;
+        for row in doomed {
+            search::drop_record(&self.conn, search::DATASET_ATTACHMENT, row)?;
+        }
+        Ok(Delete::from(att.table).filter(of_target()).sql().execute(&self.conn)?)
     }
 }
 

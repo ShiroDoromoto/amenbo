@@ -58,11 +58,19 @@ pub const DATASET_DECISION: &str = "decision";
 pub const DATASET_TASK_COMMENT: &str = "task_comment";
 /// See [`DATASET_TASK`].
 pub const DATASET_DECISION_COMMENT: &str = "decision_comment";
+/// See [`DATASET_TASK`]. The label half: an axis and the values on it are named by a person, and are
+/// reached from a record rather than held on it.
+pub const DATASET_DIMENSION: &str = "dimension";
+/// See [`DATASET_DIMENSION`].
+pub const DATASET_DIMENSION_VALUE: &str = "dimension_value";
+/// See [`DATASET_TASK`]. An attachment names itself — by the file it came from, or by the address it
+/// points at — and hangs off a record or off a comment on one.
+pub const DATASET_ATTACHMENT: &str = "attachment";
 
 /// One text face the index carries: the dataset it belongs to, and the column that holds the text.
 /// The pair is the doc row's key, alongside the record's id.
 pub struct Face {
-    /// The dataset (`task`, `decision`, `task_comment`, `decision_comment`) — the name
+    /// The dataset (`task`, `decision`, `attachment`, …) — the name
     /// [`StoreEngine::set_field`](super::StoreEngine::set_field) is called with.
     pub dataset: &'static str,
     /// The column on that dataset whose text is indexed.
@@ -70,9 +78,14 @@ pub struct Face {
 }
 
 /// Every face the index carries (`AMB-D-450`'s "what a word lands on"): a task's title and notes, a
-/// decision's title and body, and the body of a comment on either. What is deliberately absent is
-/// everything `--filter` already narrows exactly — `status`, `priority`, `due`, `assignee`, a commit
-/// SHA — which would only blur the word face if a word could reach it.
+/// decision's title and body, the body of a comment on either, the names a person gave an axis and its
+/// values, and what an attachment is called — its filename, or the address a link points at. What is
+/// deliberately absent is everything `--filter` already narrows exactly — `status`, `priority`, `due`,
+/// `assignee`, a commit SHA — which would only blur the word face if a word could reach it.
+///
+/// The last three datasets are not *on* the record a search is about: a label is reached through the
+/// task's assignment of it, and an attachment through what it hangs off. That join is the read layer's
+/// ([`super::read`]) — this list says only what text exists, never whose it is.
 ///
 /// This list is the seam: the write funnels ask it what to reindex, [`rebuild`] reads the store back
 /// through it, and the read layer asks it for nothing at all (a doc row names its own face).
@@ -83,6 +96,10 @@ pub const FACES: &[Face] = &[
     Face { dataset: DATASET_DECISION, column: "body" },
     Face { dataset: DATASET_TASK_COMMENT, column: "text" },
     Face { dataset: DATASET_DECISION_COMMENT, column: "text" },
+    Face { dataset: DATASET_DIMENSION, column: "name" },
+    Face { dataset: DATASET_DIMENSION_VALUE, column: "name" },
+    Face { dataset: DATASET_ATTACHMENT, column: "filename" },
+    Face { dataset: DATASET_ATTACHMENT, column: "url" },
 ];
 
 /// Is this `(dataset, column)` a face the index carries — the question
@@ -256,12 +273,14 @@ pub fn rebuild(conn: &Connection) -> rusqlite::Result<()> {
         let table = super::schema::dataset(face.dataset)
             .expect("every indexed face names a registry dataset")
             .table;
+        // Read as optional: a face may sit on a nullable column (an attachment carries a filename or a
+        // url, never both), and a NULL is the same absence as empty text — no row.
         let mut stmt = conn.prepare(&format!("SELECT id, {} FROM {table}", face.column))?;
         let rows = stmt
-            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Option<String>>(1)?)))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         for (id, text) in rows {
-            put_doc(conn, face.dataset, id, face.column, &text)?;
+            put_doc(conn, face.dataset, id, face.column, text.as_deref().unwrap_or(""))?;
         }
     }
     Ok(())
@@ -422,5 +441,74 @@ mod tests {
     fn a_term_reaches_fts5_as_a_literal_phrase() {
         assert_eq!(fts_phrase("a OR b"), "\"a OR b\"");
         assert_eq!(fts_phrase("say \"hi\""), "\"say \"\"hi\"\"\"");
+    }
+
+    /// An attachment is the one record swept by the polymorphic delete rather than by `delete_record`
+    /// ([`StoreEngine::delete_records_for_target`](super::StoreEngine::delete_records_for_target)), so
+    /// that path owes the index the same sweep — otherwise a word would go on pointing at a file the
+    /// store no longer holds.
+    #[test]
+    fn the_polymorphic_sweep_takes_the_attachments_copies_with_it() {
+        let e = StoreEngine::open_in_memory().expect("in-memory engine");
+        let tx = e.transaction().expect("transaction");
+        e.put_record("project", 1, &[("name", Value::Text("PJ".into()))]).unwrap();
+        e.put_record("task", 1, &[("project_id", Value::Integer(1)), ("title", Value::Text("T".into()))])
+            .unwrap();
+        let attach = |id: i64, target: i64, filename: &str| {
+            e.put_record(
+                DATASET_ATTACHMENT,
+                id,
+                &[
+                    ("target_type", Value::Text(DATASET_TASK.into())),
+                    ("target_id", Value::Integer(target)),
+                    ("kind", Value::Text("blob".into())),
+                    ("filename", Value::Text(filename.into())),
+                ],
+            )
+            .unwrap();
+        };
+        e.put_record("task", 2, &[("project_id", Value::Integer(1)), ("title", Value::Text("U".into()))])
+            .unwrap();
+        attach(1, 1, "計測ログ.md");
+        attach(2, 2, "別のログ.md");
+        tx.commit().unwrap();
+        assert_eq!(hits(&e, "計測ログ"), vec![1]);
+
+        assert_eq!(e.delete_records_for_target(DATASET_TASK, 1).unwrap(), 1);
+        assert!(hits(&e, "計測ログ").is_empty(), "the swept attachment left no words behind");
+        assert_eq!(hits(&e, "別のログ"), vec![2], "the one hanging off another task is untouched");
+    }
+
+    /// A face on a nullable column is written and cleared like any other: an attachment carries a
+    /// filename or a url, never both, so the absent one must simply hold no row.
+    #[test]
+    fn a_face_on_a_nullable_column_holds_no_row_when_it_is_null() {
+        let e = StoreEngine::open_in_memory().expect("in-memory engine");
+        let tx = e.transaction().expect("transaction");
+        e.put_record("project", 1, &[("name", Value::Text("PJ".into()))]).unwrap();
+        e.put_record(
+            DATASET_ATTACHMENT,
+            1,
+            &[
+                ("target_type", Value::Text(DATASET_TASK.into())),
+                ("target_id", Value::Integer(1)),
+                ("kind", Value::Text("url".into())),
+                ("url", Value::Text("https://example.com/profile-run".into())),
+                ("filename", Value::Null),
+            ],
+        )
+        .unwrap();
+        tx.commit().unwrap();
+
+        let rows: i64 = e
+            .conn()
+            .query_row(&format!("SELECT COUNT(*) FROM {DOC_TABLE}"), [], |r| r.get(0))
+            .expect("count");
+        assert_eq!(rows, 1, "the url is a face with text in it; the null filename is not");
+        assert_eq!(hits(&e, "profile-run"), vec![1]);
+
+        // Rebuilding from the columns reads the same nullable column back, and reaches the same place.
+        rebuild(e.conn()).expect("rebuild");
+        assert_eq!(hits(&e, "profile-run"), vec![1]);
     }
 }

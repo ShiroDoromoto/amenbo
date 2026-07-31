@@ -102,6 +102,85 @@ steps_cli:
       target: alpha
       present: true
 
+  # A word reaches past the bodies, onto what a person named rather than wrote: the label a task was
+  # filed under, the axis that label belongs to, and what is attached to the task. None of that text is
+  # held on the task, so each is the join under test — and the task filed under neither stays out.
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: surface
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: surface
+      value: typography
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: alpha
+      dimension: surface
+      value: typography
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: measurements.log
+      content: "one\n"
+
+  - type: action
+    domain: task
+    op: attach
+    with:
+      target: beta
+      file: measurements.log
+      name: the latency measurements
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "text:typography"
+      target: alpha
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "text:typography"
+      target: beta
+      present: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "text:surface"
+      target: alpha
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "text:measurements"
+      target: beta
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "text:measurements"
+      target: alpha
+      present: false
+
   - type: action
     domain: task
     op: status

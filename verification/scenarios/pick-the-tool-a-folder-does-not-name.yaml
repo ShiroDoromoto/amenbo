@@ -1,0 +1,73 @@
+# The folder everyone starts in: a new one, with nothing in it yet — no AI tool's own directory, and so
+# nothing amenbo can read a provider's name off. It is the most common folder there is, and it is exactly
+# where the question about starting this folder's AI on amenbo is worth putting, because nobody has
+# started anything here.
+#
+# What a yes buys is text, and text for one tool is not text for another: the settings differ, and so
+# does the file they go in. So a folder that names no tool cannot be handed one line — it is handed the
+# catalog, and the reader says which of those five they use. That is the whole of this road, and the
+# reason it is walked apart from the traced folder's: there, the folder has already answered which tool
+# it is and the picker never appears.
+#
+# The screen is the only witness. The choice is held while the window is open and written nowhere, the
+# clipboard is what the button fills, and neither leaves a row to read back — so what says the catalog is
+# really behind the picker is a tool being picked that the folder shows no trace of, and the text on
+# screen turning into that tool's.
+#
+# What this wants standing before the run: one folder bound to a project this device holds, with nothing
+# in it — no provider's directory, nothing about amenbo — and the question about that project never
+# answered here. It should be the only folder bound, so that every file named on screen is named about
+# this one. The app puts the question on the sweep it does at startup, so the run opens with it up —
+# drive it stepped (`--step`), since answering it is what the shot after it is of.
+id: pick-the-tool-a-folder-does-not-name
+title: A folder that shows no sign of any AI tool is handed the catalog, and the tool the reader picks is the tool the text is for
+description: >
+  The reader says yes in a folder nobody has run an AI in yet. What comes back is not nothing and not a
+  guess: the report stands with the first of the tools amenbo knows, and a picker beside it holding the
+  rest. Picking one the folder shows no trace of turns the text into that tool's — its settings, and the
+  file they go in — and the button hands that one over. A yes answered with an empty report, or with a
+  picker whose choice the text does not follow, is the promise this road exists to keep.
+steps_gui:
+  # The yes, given where amenbo has no provider's name to put in the question. Nothing is wired by it —
+  # amenbo writes no settings file on this surface either — so all it buys is the text, which is the
+  # thing under test: a folder with no trace in it must not be the one where a yes comes back empty.
+  - type: action
+    domain: repo
+    op: ai-launch-consent
+    with:
+      answer: "yes"
+
+  # And something is standing there. With nothing to go on, the report leads with the first tool in the
+  # catalog rather than an empty line — the file it names is that tool's, which is how a shot tells this
+  # apart from the tool picked below.
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with:
+      tool: claude-code
+      paste_into: .claude/settings.json
+
+  # The pick. This folder traces nothing, so nothing about it points here — reaching this tool at all is
+  # only possible if the whole catalog is on offer, which is what the assert after it reads.
+  - type: action
+    domain: repo
+    op: ai-launch-pick
+    with:
+      tool: gemini-cli
+
+  # The text followed the pick. The file is the reading: it is this tool's own and appears nowhere else
+  # on the screen, so a picker that changed nothing but its own label reads as the miss it is.
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with:
+      tool: gemini-cli
+      paste_into: .gemini/settings.json
+
+  # And the way on: the button takes the text of the tool now picked. Where it goes is the clipboard,
+  # which no shot reads back, so the road ends at the press.
+  - type: action
+    domain: repo
+    op: ai-launch-copy
+    with:
+      tool: gemini-cli

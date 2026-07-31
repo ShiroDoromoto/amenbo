@@ -373,6 +373,12 @@ impl Store {
     ) -> Result<()> {
         crate::overview::set_harness_consent(&self.engine, project_id, consent)
     }
+
+    /// Forget this project's answer, back to never having been asked — the way a refusal is taken back,
+    /// since a `no` is otherwise silent for good. The next surface that reads it puts the question again.
+    pub fn clear_harness_consent(&self, project_id: i64) -> Result<()> {
+        crate::overview::clear_harness_consent(&self.engine, project_id)
+    }
 }
 
 /// The read-only check that makes cleaning up phantom empty stores (`doctor --fix`) safe. It reads the

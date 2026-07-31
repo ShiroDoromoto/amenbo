@@ -432,6 +432,15 @@ const REGISTRY: &[OpSpec] = &[
     // the driver leaves one answering slowly, the way `declare-secret` writes a declaration no
     // published plugin carries. `seconds` is the window the asserts after it have to read in.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "slow-program", required: &["name", "seconds"], refs: &[], strings: &["name"], binds: false },
+    // Whether amenbo can read what is installed at all — the one way to leave a write's delivery
+    // standing. Delivery rides along with the write that caused it, so anything a scenario writes is
+    // carried out before the next step: a push by hand has something to carry only where that drive
+    // never happened. amenbo skips it when the installed plugins will not read, since it will not walk
+    // its cursor past events a subscriber list it could not resolve was never offered — so the event
+    // stays where the write appended it, queued to nobody, with no runner started. `readable` is both
+    // halves: `false` leaves the next write undelivered, `true` gives the directory back, which
+    // whatever reads or delivers afterwards needs.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "installed-dir", required: &["readable"], refs: &[], strings: &[], binds: false },
     // What an installed plugin is told, for the project the run stands in. `key` is a setting its
     // author declared; an empty value is how one is taken back, which is why it is a value here and
     // not an op of its own.

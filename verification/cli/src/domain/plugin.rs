@@ -370,6 +370,28 @@ impl Driver {
                     "left `{name}` taking {seconds}s to answer, so what is queued for it stays queued"
                 )))
             }
+            // Closing amenbo's view of what is installed, and opening it again — the only way to leave a
+            // write's delivery standing (see the registry). Delivery rides along with the write that
+            // caused it, so every event a scenario writes is already carried out by the time the next
+            // step runs; with the directory shut, the drive behind the write resolves nobody, hands
+            // nothing on, and leaves the event where it was appended. The permissions are the whole of
+            // it — nothing inside is moved or rewritten, so what the flush afterwards resolves is the
+            // same installed plugin that was there before.
+            "installed-dir" => {
+                let readable = req_bool(with, "readable")?;
+                let path = self.session.home.join("plugins");
+                if !path.exists() {
+                    return Err(format!(
+                        "there is no {} to shut: nothing is installed on this machine",
+                        path.display()
+                    ));
+                }
+                set_readable(&path, readable)?;
+                Ok(Outcome::action(match readable {
+                    true => "gave back what is installed, so delivery resolves it again".to_string(),
+                    false => "shut what is installed away, so the next write is delivered to nobody".to_string(),
+                }))
+            }
             // Filling in a setting the plugin's author declared. An empty value is the way one is
             // taken back, so it is passed through as written rather than being turned into an op of
             // its own — the command reads it the same way a person typing `""` does.
@@ -946,6 +968,28 @@ fn make_runnable(path: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
         .map_err(|e| format!("could not make {} runnable: {e}", path.display()))
+}
+
+/// Open or shut `path` to its owner — the directory holding the installed plugins, which amenbo either
+/// reads or does not.
+///
+/// Unix-only for the same reason standing a program in is: the permission bit that decides a read is a unix
+/// shape, and elsewhere a directory is kept from being read by another mechanism entirely. Refused rather
+/// than left to pass silently, which would run the scenario's step and change nothing.
+#[cfg(unix)]
+fn set_readable(path: &Path, readable: bool) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = if readable { 0o700 } else { 0o000 };
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+        .map_err(|e| format!("could not set the permissions on {}: {e}", path.display()))
+}
+
+#[cfg(not(unix))]
+fn set_readable(path: &Path, _readable: bool) -> Result<(), String> {
+    Err(format!(
+        "{} cannot be shut here: what a directory may be read by is not a permission bit on this platform",
+        path.display()
+    ))
 }
 
 #[cfg(not(unix))]

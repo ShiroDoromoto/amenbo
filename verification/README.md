@@ -223,7 +223,9 @@ and it earns the two things a note never can: the screen it arrives at is shot, 
 road is evidence rather than something taken on trust, and the assert after it cannot be reached by a
 hand tidying the screen while the run is held. The screen roads are written that way: `link-a-folder`
 walks the arrival screen, the card, the picker and the board it lands on,
-`say-where-a-plugin-fires` walks one plugin's row through the four states one switch leaves it in, and
+`say-where-a-plugin-fires` walks one plugin's row through the four states one switch leaves it in,
+`put-a-plugin-to-work-from-the-project` walks the same crossing from the other face — the arrival, the
+picker that draws the row, and the switch inside it — and
 `choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
 the button back to the author's default.
 

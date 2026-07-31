@@ -235,6 +235,14 @@ const REGISTRY: &[OpSpec] = &[
     // bound to a deleted project are released with it, so a scenario naming this op is asking about the
     // teardown as much as about the row.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "delete", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // Standing on the screen a project keeps for itself, which is one of the two faces a project ×
+    // plugin crossing is read from. The project is named rather than bound, for the reason `enable-in`'s
+    // is: the world a plugin road wants is stood up outside the run, so there is no earlier step to have
+    // made this project.
+    //
+    // A screen road alone. A terminal is already standing in a project — the folder it is run from says
+    // which — so there is nowhere to move to and nothing this would do.
+    OpSpec { kind: Kind::Action, domain: Domain::Project, op: "open-settings", required: &["project"], refs: &[], strings: &["project"], binds: false },
     // A classification axis, its values, and the assignment that files a task under one. The axis and
     // the value travel as names — that is how the CLI takes them, and how a person says them.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: false },
@@ -486,6 +494,14 @@ const REGISTRY: &[OpSpec] = &[
     // the step is the screen's.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "enable-in", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "disable-in", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
+    // Drawing the crossing and nothing else: the picker beside the rows puts one there, and leaves the
+    // switch in it where it was. It is a step of its own rather than the first half of `enable-in`
+    // because what it leaves behind is a state worth reading — a row standing with the plugin still off
+    // — and a road that only ever draws a row on its way to turning one on has nowhere to read it.
+    //
+    // A screen road alone, like the switch it stands next to: a terminal has no picker, and nothing to
+    // draw a row on.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "draw-crossing", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
     // A setting offering candidates, as the form answers it: a box per candidate, and a button under
     // the field. `config-choose` leaves the named ones ticked and every other one clear;
     // `config-choose-none` clears them all, which is the answer that is not the same as never having
@@ -567,6 +583,20 @@ const REGISTRY: &[OpSpec] = &[
     // where). `archived: true` asks the listing that carries the archived ones.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "listed", required: &["target"], refs: &["target"], strings: &["position"], binds: false },
+    // The same crossing `plugin fires-in` reads, read from the other face: there a plugin's rows are
+    // its projects, here a project's rows are its plugins.
+    //
+    // `state` and not a yes/no, for the reason `plugin config`'s is: this face has three states and a
+    // truth value has two. A row that is not there at all and a row standing with the plugin off are
+    // different screens — and telling them apart is the whole point, since the picker here draws the
+    // row rather than turning anything on, so a person who pressed it and reads "not on" has to be able
+    // to see that something did happen. `absent` is no row, `drawn` a row with the plugin off in it,
+    // `firing` a row saying the plugin is on.
+    //
+    // A screen road alone, and a `Review` like `fires-in`: whether the plugin is on here is drawn as a
+    // button, and a button's label is a word of the interface — so what separates `drawn` from `firing`
+    // is not something the presence of text on a shot can settle.
+    OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "plugin-row", required: &["project", "plugin", "state"], refs: &[], strings: &["project", "plugin", "state"], binds: false },
     // An axis as it is read back, by name: is it defined, and does it carry the value named?
     OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "listed", required: &["dimension"], refs: &[], strings: &["dimension", "value"], binds: false },
     // Which bucket of the "what to do now" view a task lands in (`overdue` / `due_today` /

@@ -39,10 +39,16 @@ import {
  * The author's schema comes from the install (it is the same wherever you stand) and what is *held* is
  * read for the named project, which is why the two arrive separately.
  */
-export function PluginConfigForm({ install, projectId }: {
+export function PluginConfigForm({ install, projectId, onWrote }: {
   install: PluginInstall;
   /** The project whose values are being written — the crossing this form was opened inside. */
   projectId: number;
+  /**
+   * Called once a write to this crossing lands, so the row around the form can retire what a value
+   * standing here made out of date — the refusal an enable met over a `required` setting this form has
+   * just filled in.
+   */
+  onWrote?: () => void;
 }) {
   // Only what the user actually typed, keyed by field. Kept apart from the stored values so a refetch
   // never argues with a half-typed box, and so a cleared box reads as "clear this", not as "unchanged".
@@ -78,6 +84,9 @@ export function PluginConfigForm({ install, projectId }: {
     try {
       await op();
       setDone(said);
+      // Both doors are a write — a value saved, and one taken back — and either leaves whatever was said
+      // about this crossing's settings out of date.
+      onWrote?.();
     } catch (e) {
       setError(errText(e));
     } finally {

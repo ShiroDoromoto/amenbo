@@ -716,7 +716,8 @@ const REGISTRY: &[OpSpec] = &[
     // is the mark, worn before anything is pressed, since a warning that arrives only after the refusal
     // arrives too late; `open` is the settings standing open in that same row, asking for no project,
     // which is the whole of what reaching them from the row means; `filled` is the row saying the value
-    // is in.
+    // is in, and saying nothing about it that a value standing there has made untrue — the refusal an
+    // enable met names what was missing when the switch was pressed, and it does not outlive the filling.
     //
     // A screen road alone, and a `Review` on every state. The marks are words of the interface, and what
     // `open` turns on is a picker that is *not* there — a reading answers which words are on a shot, so

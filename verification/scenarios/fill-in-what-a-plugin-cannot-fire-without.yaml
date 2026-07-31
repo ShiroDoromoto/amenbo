@@ -184,8 +184,9 @@ steps_gui:
       key: base
       value: main
 
-  # The mark gives way. The row now says what it has rather than what it lacks, which is the same row
-  # answering the same question with the value in it.
+  # The mark gives way, and so does the refusal beside it. The row now says what it has rather than what
+  # it lacks — a reason that named the missing value does not outlive it, or the same row would be saying
+  # its settings are filled in and that they are keeping the plugin off.
   - type: assert
     domain: plugin
     op: settings-in

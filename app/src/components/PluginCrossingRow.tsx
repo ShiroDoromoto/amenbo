@@ -15,6 +15,11 @@ import { PluginConfigForm } from "./PluginConfigForm";
  * anyone has pressed anything, because that is what an enable there would be refused over
  * (`AMB-D-351`) — a warning that only appears after the refusal is a warning that arrived too late.
  *
+ * **And a refusal lasts as long as it is true of the row.** It says which values were missing when the
+ * switch was pressed, so a write to the settings in this row retires it: a row cannot say its settings
+ * are filled in and that they are keeping it off. Whether it may be enabled now is answered by pressing
+ * again — nothing else here can answer it.
+ *
  * What differs between the two faces is the name on the row and nothing else: the plugin screen lists
  * projects, a project's settings list plugins, and the same crossing is the same row either way.
  */
@@ -81,7 +86,13 @@ export function PluginCrossingRow({ install, project, name }: {
         {dropped > 0 && <div className="pluggate__note">{tn("plugins.droppedQueued", dropped)}</div>}
         {error && <div className="pluggate__note">{error}</div>}
       </div>
-      {open && <PluginConfigForm install={install} projectId={project} />}
+      {/* A refusal is a fact about one attempt, so a write to this crossing's settings retires it: the
+          sentence names the values that were missing when the switch was pressed, and after a save it
+          would be a row saying its settings are filled in and unfillable in the same breath. What may be
+          enabled now is answered by pressing again, which is the one thing that can answer it. */}
+      {open && (
+        <PluginConfigForm install={install} projectId={project} onWrote={() => setError(null)} />
+      )}
     </div>
   );
 }

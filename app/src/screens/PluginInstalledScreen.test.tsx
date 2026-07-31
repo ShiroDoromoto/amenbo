@@ -23,6 +23,8 @@ const hoisted = vi.hoisted(() => ({
   gated: [] as { name: string; projectId: number | null; enabled: boolean }[],
   /** What a disable answers it threw away — zero unless a test is about the discard. */
   droppedQueued: 0,
+  /** What the switch is turned away with, for a test about a refusal rather than a move. */
+  refuse: undefined as string | undefined,
   projects: [] as { id: number; name: string }[],
   /** What each project holds for a plugin's settings, keyed by plugin then project. */
   held: {} as Record<string, Record<number, PluginConfigField[]>>,
@@ -53,6 +55,7 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
     }),
     setPluginEnabled: (name: string, projectId: number, enabled: boolean) => {
       hoisted.gated.push({ name, projectId, enabled });
+      if (hoisted.refuse != null) return Promise.reject(new Error(hoisted.refuse));
       return Promise.resolve({ enabled, droppedQueued: hoisted.droppedQueued });
     },
     uninstallPlugin: (name: string) => {
@@ -177,6 +180,7 @@ beforeEach(() => {
   hoisted.error = undefined;
   hoisted.gated = [];
   hoisted.droppedQueued = 0;
+  hoisted.refuse = undefined;
   hoisted.projects = [];
   hoisted.held = {};
   hoisted.removed = [];
@@ -366,6 +370,38 @@ describe("the settings form", () => {
     expect(button(t("plugins.cfg.open"))).toBeTruthy();
     // The plugin that declares nothing has nothing to open, at any crossing.
     expect(rows()[1].textContent).not.toContain(t("plugins.cfg.open"));
+  });
+
+  // The refusal is a fact about one press, and the row it stands in is where the answer to it goes
+  // (`AMB-D-447`). So a value saved here retires it: the sentence names what was missing at the time,
+  // and a row saying both that its settings are filled in and that they are keeping it off is a row
+  // telling a reader two different things.
+  it("retires the refusal in a row once the settings there are written", async () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
+    hoisted.installs = [
+      row({
+        name: "notify",
+        config: [field({ key: "webhook", required: true })],
+        projects: [at(1, { requiredUnset: true })],
+      }),
+    ];
+    hoisted.held = { notify: { 1: [field({ key: "webhook", required: true })] } };
+    hoisted.refuse = "notify cannot be enabled: required setting(s) not provided: webhook";
+    render();
+
+    await act(async () => { button(t("plugins.enable"))!.click(); });
+    expect(container.textContent).toContain("required setting(s) not provided");
+
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+    act(() => { type(boxes()[0], "https://example.test/hook"); });
+    await act(async () => { button(t("plugins.cfg.save"))!.click(); });
+
+    expect(hoisted.wrote).toEqual([
+      { name: "notify", key: "webhook", value: "https://example.test/hook", projectId: 1 },
+    ]);
+    expect(container.textContent, "the reason is gone once its premise is").not.toContain(
+      "required setting(s) not provided",
+    );
   });
 
   it("writes a text setting for the project whose row it is in, and only what changed", async () => {

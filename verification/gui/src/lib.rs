@@ -572,7 +572,7 @@ impl Instructor {
                         "Confirm the settings for \"{name}\" are standing open inside that same row — the one crossing \"{project}\" — and that nothing in them asks which project they are for."
                     ),
                     "filled" => format!(
-                        "Confirm the row where \"{name}\" crosses \"{project}\" says the settings there are filled in, and no longer that a required one is empty."
+                        "Confirm the row where \"{name}\" crosses \"{project}\" says the settings there are filled in, and that nothing in it still says a required one is empty or is keeping the plugin off."
                     ),
                     other => {
                         return Err(format!("assert `settings-in` does not know the state `{other}`"))

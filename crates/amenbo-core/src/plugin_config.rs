@@ -151,6 +151,50 @@ pub fn set(
     Ok(())
 }
 
+/// What a [`purge_undeclared`] took, counted per road (`AMB-D-456`) — the two are different kinds of
+/// residue, so a receipt that added them up would hide which one a reader cares about.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Purged {
+    /// How many `plugin_config` rows went, across every project.
+    pub settings: usize,
+    /// How many `plugin_secret` rows went, across every project.
+    pub secrets: usize,
+}
+
+impl Purged {
+    /// Whether anything was found to purge — `false` is the ordinary update, where the new build declares
+    /// everything the old one did and no stored value is left without a declaration.
+    pub fn anything(&self) -> bool {
+        self.settings > 0 || self.secrets > 0
+    }
+}
+
+/// Erase what this plugin's declaration no longer asks for (`AMB-D-456`): every project's stored value
+/// under a key `fields` does not name — the step an update runs once the new build and its manifest are in
+/// place.
+///
+/// **A value does not outlive the declaration that asked for it.** Nothing reads one that is no longer
+/// declared — injection ([`crate::plugin_inject`]) is handed the schema, and both faces draw their forms
+/// from it — so a row left behind lives on only in `backup` and `export`, which is where its owner is
+/// least likely to find it.
+///
+/// Routed by the same flag [`set`] writes with, which is what decides the key sets: the text road keeps
+/// the keys declared **not** secret, the secret road the keys declared secret. So a key that stayed but
+/// stopped being a secret leaves the secret table — the new declaration is not asking for a secret under
+/// that name, and its old row would otherwise sit unread in the table an `export` must leave.
+///
+/// Keyed on the declaration in hand rather than on a diff against the old one, so it is idempotent and
+/// says the same thing whatever left the manifest, or was never in it.
+pub fn purge_undeclared(store: &mut Store, plugin: &str, fields: &[ConfigField]) -> Result<Purged> {
+    let text: Vec<&str> =
+        fields.iter().filter(|f| !f.secret).map(|f| f.key.as_str()).collect();
+    let secret: Vec<&str> = fields.iter().filter(|f| f.secret).map(|f| f.key.as_str()).collect();
+    Ok(Purged {
+        settings: store.purge_undeclared_plugin_config(plugin, &text)?,
+        secrets: store.purge_undeclared_plugin_secrets(plugin, &secret)?,
+    })
+}
+
 /// Which of the three answers a field holds right now (`AMB-D-415`) — the reading a face shows, named once
 /// here so the CLI and the GUI cannot each invent their own words for the same state.
 ///
@@ -719,6 +763,71 @@ mod tests {
         set(&mut store, &text_field("dropped"), "slack", p, "x").unwrap();
 
         assert!(intersections(&store, "slack", &[text_field("channel")]).unwrap().is_empty());
+    }
+
+    /// The purge an update ends with (`AMB-D-456`): a key the new schema no longer names loses its value
+    /// in every project, and the keys it still names keep theirs.
+    #[test]
+    fn a_key_the_new_schema_dropped_loses_its_value_everywhere() {
+        let (mut store, _dir) = store_at("purge-dropped");
+        let a = mk_project(&mut store, "a");
+        let b = mk_project(&mut store, "b");
+        set(&mut store, &text_field("channel"), "slack", a, "#a").unwrap();
+        set(&mut store, &text_field("webhook"), "slack", a, "https://a.invalid").unwrap();
+        set(&mut store, &text_field("webhook"), "slack", b, "https://b.invalid").unwrap();
+        set(&mut store, &secret_field("token"), "slack", a, "s3cret").unwrap();
+        // Another plugin, holding a key of the same name — the purge is one plugin's.
+        set(&mut store, &text_field("webhook"), "worktree", a, "kept").unwrap();
+
+        let now = [text_field("channel"), secret_field("token")];
+        assert_eq!(
+            purge_undeclared(&mut store, "slack", &now).unwrap(),
+            Purged { settings: 2, secrets: 0 },
+        );
+
+        assert_eq!(get(&store, &text_field("webhook"), "slack", a).unwrap(), None);
+        assert_eq!(get(&store, &text_field("webhook"), "slack", b).unwrap(), None, "every project");
+        assert_eq!(get(&store, &text_field("channel"), "slack", a).unwrap().as_deref(), Some("#a"));
+        assert_eq!(get(&store, &secret_field("token"), "slack", a).unwrap().as_deref(), Some("s3cret"));
+        assert_eq!(
+            get(&store, &text_field("webhook"), "worktree", a).unwrap().as_deref(),
+            Some("kept"),
+            "another plugin's key of the same name is not this plugin's residue",
+        );
+    }
+
+    /// A schema that declares everything it did before — or more — takes nothing, and running it twice
+    /// takes nothing the second time either: the purge is keyed on what is declared, not on a diff.
+    #[test]
+    fn a_schema_that_still_declares_everything_purges_nothing() {
+        let (mut store, _dir) = store_at("purge-nothing");
+        let p = mk_project(&mut store, "p");
+        set(&mut store, &text_field("channel"), "slack", p, "#a").unwrap();
+        set(&mut store, &secret_field("token"), "slack", p, "s3cret").unwrap();
+
+        let grown = [text_field("channel"), secret_field("token"), text_field("added")];
+        assert_eq!(purge_undeclared(&mut store, "slack", &grown).unwrap(), Purged::default());
+        assert!(!purge_undeclared(&mut store, "slack", &grown).unwrap().anything());
+        assert_eq!(get(&store, &text_field("channel"), "slack", p).unwrap().as_deref(), Some("#a"));
+        assert_eq!(get(&store, &secret_field("token"), "slack", p).unwrap().as_deref(), Some("s3cret"));
+    }
+
+    /// A key that stayed but stopped being a secret leaves the secret table: the new declaration is not
+    /// asking for a secret under that name, and the bytes in the table an `export` must leave are the
+    /// ones with least reason to stay (`AMB-D-456`).
+    #[test]
+    fn a_key_that_stopped_being_a_secret_leaves_the_secret_table() {
+        let (mut store, _dir) = store_at("purge-flip");
+        let p = mk_project(&mut store, "p");
+        set(&mut store, &secret_field("token"), "slack", p, "s3cret").unwrap();
+
+        let now = [text_field("token")];
+        assert_eq!(
+            purge_undeclared(&mut store, "slack", &now).unwrap(),
+            Purged { settings: 0, secrets: 1 },
+        );
+        assert_eq!(get(&store, &secret_field("token"), "slack", p).unwrap(), None);
+        assert_eq!(get(&store, &text_field("token"), "slack", p).unwrap(), None, "and nothing moved");
     }
 
     #[test]

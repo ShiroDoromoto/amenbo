@@ -628,6 +628,31 @@ impl Store {
         self.write_one(&[], |tx| crate::ops::plugin_secret::forget_plugin(tx, plugin))
     }
 
+    /// Erase every project's settings for one plugin under a key its manifest no longer declares (one
+    /// operation = one transaction) — the store half of `plugin update` (`AMB-D-456`). Returns how many
+    /// rows went.
+    ///
+    /// **Unguarded by project reach** for the reason [`Self::forget_plugin_config`] is: what it deletes is
+    /// one plugin's residue in every project, not any project's content, and the blast radius is fixed by
+    /// the plugin name and its own declaration — a caller cannot aim it at anything else.
+    pub fn purge_undeclared_plugin_config(
+        &mut self,
+        plugin: &str,
+        declared: &[&str],
+    ) -> Result<usize> {
+        self.write_one(&[], |tx| crate::ops::plugin_config::forget_undeclared(tx, plugin, declared))
+    }
+
+    /// The secret twin of [`Self::purge_undeclared_plugin_config`], unguarded for the same reason
+    /// (`AMB-D-456`). `declared` is what the manifest declares as secrets.
+    pub fn purge_undeclared_plugin_secrets(
+        &mut self,
+        plugin: &str,
+        declared: &[&str],
+    ) -> Result<usize> {
+        self.write_one(&[], |tx| crate::ops::plugin_secret::forget_undeclared(tx, plugin, declared))
+    }
+
     /// Put a plugin's gate in this project into `on` (one operation = one transaction): `true` writes the
     /// row that says "enabled here", `false` deletes it (`AMB-D-434` — the row *is* the answer). Returns
     /// whether anything changed. Written through the trust boundary ([`crate::plugin_trust`]), which is

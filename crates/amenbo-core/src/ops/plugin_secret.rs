@@ -81,6 +81,23 @@ pub fn forget_plugin(tx: &WriteTx<'_>, plugin: &str) -> Result<usize> {
     Ok(ids.len())
 }
 
+/// The secret twin of [`plugin_config::forget_undeclared`](crate::ops::plugin_config::forget_undeclared)
+/// (`AMB-D-456`), and `declared` is the keys the new manifest declares **as secrets**: a key that stayed
+/// but stopped being one is not asking for this table's row any more, and the bytes here are the ones
+/// there is least reason to keep on that footing. Returns how many rows went.
+pub fn forget_undeclared(tx: &WriteTx<'_>, plugin: &str, declared: &[&str]) -> Result<usize> {
+    let mut gone = 0;
+    for id in read::plugin_secret_row_ids(tx.conn(), plugin)? {
+        let row = read::plugin_secret_row_by_id(tx.conn(), id)?
+            .expect("the row id was just read from the same transaction");
+        if !declared.contains(&row.field_key.as_str()) {
+            tx.delete_record("plugin_secret", id)?;
+            gone += 1;
+        }
+    }
+    Ok(gone)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,6 +183,45 @@ mod tests {
                 Some("kept"),
                 "another plugin's secret is untouched",
             );
+        });
+    }
+
+    /// The purge an update runs (`AMB-D-456`): a key the new manifest does not declare as a secret loses
+    /// its row in every project, and a key it still declares keeps it.
+    #[test]
+    fn forgetting_the_undeclared_keeps_what_the_declaration_still_names() {
+        with_tx(|tx| {
+            let a = mk_project(tx, "a");
+            let b = mk_project(tx, "b");
+            set(tx, a, "slack", "token", Some("for-a")).unwrap();
+            set(tx, a, "slack", "legacy", Some("dropped")).unwrap();
+            set(tx, b, "slack", "legacy", Some("dropped-too")).unwrap();
+            set(tx, b, "worktree", "legacy", Some("kept")).unwrap();
+
+            assert_eq!(forget_undeclared(tx, "slack", &["token"]).unwrap(), 2);
+            assert_eq!(
+                read::plugin_secret_value(tx.conn(), a, "slack", "token").unwrap().as_deref(),
+                Some("for-a"),
+            );
+            assert_eq!(read::plugin_secret_value(tx.conn(), a, "slack", "legacy").unwrap(), None);
+            assert_eq!(read::plugin_secret_value(tx.conn(), b, "slack", "legacy").unwrap(), None);
+            assert_eq!(
+                read::plugin_secret_value(tx.conn(), b, "worktree", "legacy").unwrap().as_deref(),
+                Some("kept"),
+                "another plugin's key of the same name is not this plugin's residue",
+            );
+        });
+    }
+
+    /// A declaration that names nothing takes everything the plugin holds — the same reach `forget_plugin`
+    /// has, arrived at from the other side.
+    #[test]
+    fn a_declaration_that_names_nothing_leaves_nothing() {
+        with_tx(|tx| {
+            let p = mk_project(tx, "p");
+            set(tx, p, "slack", "token", Some("x")).unwrap();
+            assert_eq!(forget_undeclared(tx, "slack", &[]).unwrap(), 1);
+            assert_eq!(read::plugin_secret_value(tx.conn(), p, "slack", "token").unwrap(), None);
         });
     }
 

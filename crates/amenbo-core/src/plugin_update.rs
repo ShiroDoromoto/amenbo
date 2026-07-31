@@ -26,11 +26,18 @@
 //! served this build has nothing newer on it. What is written goes through [`plugin_install::place`], so
 //! the install order holds — the executable first, `manifest.json` last.
 //!
-//! **What an update leaves alone is as much the contract as what it moves.** The enable gate, the config
-//! values and the secrets are all keyed by the plugin's name, in stores this module never opens: it
-//! replaces one binary and one manifest inside the plugin's home and touches nothing else, so an updated
-//! plugin comes back enabled, configured, and consented. Wiping those is `uninstall`'s job and only
-//! `uninstall`'s (`AMB-D-357`).
+//! **What an update leaves alone is as much the contract as what it moves.** The enable gate and the
+//! values the new build still declares are keyed by the plugin's name and are not touched, so an updated
+//! plugin comes back enabled, configured, and consented. Wiping a plugin's settings wholesale is
+//! `uninstall`'s job and only `uninstall`'s (`AMB-D-357`).
+//!
+//! **The one exception is a value nothing declares any more** (`AMB-D-456`): once the new build and its
+//! manifest are in place, every project's stored value under a key the new schema has stopped naming is
+//! purged ([`plugin_config::purge_undeclared`]). Nothing would ever read it again — injection is handed
+//! the schema, and both faces draw their forms from it — so what it would outlive its declaration inside
+//! is `backup` and `export`. A rollback does not bring it back: what is retained is the build and its
+//! manifest, one generation deep, and stretching that to the settings would make "one generation" mean
+//! something different for each half.
 //!
 //! **It fails safe at every step.** The compatibility gate, the caller's `approve` gate, the download, the
 //! verification and the backup all run before a single byte of the install is overwritten, so a failure in
@@ -87,10 +94,12 @@ use crate::config::Paths;
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::plugin_catalog::{self, DiscoveredEntry, Discovery};
 use crate::plugin_installed::Origin;
+use crate::plugin_config::Purged;
 use crate::plugin_manifest::{Manifest, Platform};
 use crate::plugin_subscribe::InstalledPlugin;
 use crate::plugin_wire::ListEntry;
-use crate::{plugin_compat, plugin_install, plugin_installed};
+use crate::store::Store;
+use crate::{plugin_compat, plugin_config, plugin_install, plugin_installed};
 
 /// One installed plugin the catalog holds a different build of.
 ///
@@ -301,6 +310,9 @@ pub struct Replaced {
     pub backup: PathBuf,
     /// How large the new executable is, in bytes.
     pub program_bytes: usize,
+    /// What went with the declaration that stopped naming it (`AMB-D-456`) — zero on the ordinary update,
+    /// where the new schema names everything the old one did.
+    pub purged: Purged,
 }
 
 /// How one plugin fared in an [`apply_all`] — a failure is a value, not the end of the run, because one
@@ -361,14 +373,18 @@ pub fn backup_manifest_path(paths: &Paths, name: &str) -> PathBuf {
 /// back (a new `required` setting an enabled plugin has no value for — `AMB-D-359`), or when its asset does
 /// not verify.
 ///
-/// `approve` is handed the new manifest after this confirms it is a different build and before anything is
-/// fetched or written; returning `Err` keeps the working build in place. A caller with no gate to add
-/// passes `|_| Ok(())`.
+/// `approve` is handed the store and the new manifest after this confirms it is a different build and
+/// before anything is fetched or written; returning `Err` keeps the working build in place. A caller with
+/// no gate to add passes `|_, _| Ok(())`.
+///
+/// The store is taken because an apply ends inside it: the values of keys the new schema no longer
+/// declares are purged once the build is in place (`AMB-D-456`, see the module docs).
 pub fn apply(
-    paths: &Paths,
+    store: &mut Store,
     name: &str,
-    approve: impl FnOnce(&Manifest) -> Result<()>,
+    approve: impl FnOnce(&Store, &Manifest) -> Result<()>,
 ) -> Result<Option<Replaced>> {
+    let paths = &store.paths.clone();
     let installed = plugin_installed::read(paths, name)?;
     // Unreachable on a platform amenbo ships for, and a refusal rather than "nothing to do" if it ever is
     // reached: a caller who named a plugin is owed the reason, not a silent no-op. Asked here rather than
@@ -402,8 +418,30 @@ pub fn apply(
     let update = confirm(paths, &candidate)?;
     // The caller's gate on the new schema, before the download (see the module docs): a refusal keeps the
     // working build exactly as it was.
-    approve(&update.available)?;
-    replace(paths, &update, &candidate.found.trust_root()?, &candidate.found.origin()).map(Some)
+    approve(store, &update.available)?;
+    let mut replaced =
+        replace(paths, &update, &candidate.found.trust_root()?, &candidate.found.origin())?;
+    replaced.purged = purge_dropped(store, &replaced.to);
+    Ok(Some(replaced))
+}
+
+/// The store half of an apply (`AMB-D-456`): the stored values of keys the build now in place does not
+/// declare, taken once it is in place.
+///
+/// **Best-effort, and deliberately not a failure of the update.** The bytes are already replaced by the
+/// time this runs, so an error here would have a caller report "not updated — it is as it was" about an
+/// update that was carried out, which is the one thing a receipt must not say. What a failure leaves is
+/// rows nothing reads, and the next update over the same plugin purges them: the purge is keyed on what is
+/// declared now, so it is the same work whenever it happens.
+fn purge_dropped(store: &mut Store, to: &Manifest) -> Purged {
+    plugin_config::purge_undeclared(store, &to.name, &to.config).unwrap_or_else(|e| {
+        tracing::warn!(
+            plugin = %to.name,
+            error = %e,
+            "plugin update: settings the new build no longer declares were left in place"
+        );
+        Purged::default()
+    })
 }
 
 /// Why there is nothing to update to, said in terms of the shelf that was actually looked on.
@@ -471,11 +509,12 @@ fn no_build_for(view: &Discovery, name: &str, origin: Option<&Origin>) -> Error 
 ///
 /// `approve` gates each plugin's new manifest the same way [`apply`] does, per plugin: one held back for an
 /// unsatisfied `required` (`AMB-D-359`) is a [`Outcome::Failed`] carrying that reason, and the rest are
-/// still applied. A caller with no gate passes `|_| Ok(())`.
+/// still applied. A caller with no gate passes `|_, _| Ok(())`.
 pub fn apply_all(
-    paths: &Paths,
-    approve: impl Fn(&Manifest) -> Result<()>,
+    store: &mut Store,
+    approve: impl Fn(&Store, &Manifest) -> Result<()>,
 ) -> Result<Vec<Outcome>> {
+    let paths = &store.paths.clone();
     let installed = plugin_installed::installed(paths)?;
     if installed.is_empty() {
         return Ok(Vec::new());
@@ -484,25 +523,28 @@ pub fn apply_all(
     // asks the network the way `plugin_catalog::load` does and falls back to the cache only when there is no
     // answer. Replacing a binary on what a cache said an hour ago would be acting on stale evidence.
     let view = plugin_catalog::for_install(paths)?;
-    Ok(compare(&installed, &view)
-        .iter()
-        .map(|candidate| match confirm(paths, candidate) {
-            Ok(update) => match candidate
-                .found
-                .trust_root()
-                .and_then(|root| {
-                    approve(&update.available)
+    let mut outcomes = Vec::new();
+    for candidate in compare(&installed, &view) {
+        match confirm(paths, &candidate) {
+            Ok(update) => {
+                let done = candidate.found.trust_root().and_then(|root| {
+                    approve(store, &update.available)
                         .and_then(|()| replace(paths, &update, &root, &candidate.found.origin()))
-                })
-            {
-                Ok(replaced) => Outcome::Replaced(Box::new(replaced)),
-                Err(error) => Outcome::Failed { name: update.name, error },
-            },
+                });
+                outcomes.push(match done {
+                    Ok(mut replaced) => {
+                        replaced.purged = purge_dropped(store, &replaced.to);
+                        Outcome::Replaced(Box::new(replaced))
+                    }
+                    Err(error) => Outcome::Failed { name: update.name, error },
+                });
+            }
             // Unlike a check, this run was asked to act, so a detail that could not be read is reported
             // rather than passed over — and the plugins beside it are still applied.
-            Err(error) => Outcome::Failed { name: candidate.name.clone(), error },
-        })
-        .collect())
+            Err(error) => outcomes.push(Outcome::Failed { name: candidate.name, error }),
+        }
+    }
+    Ok(outcomes)
 }
 
 /// Put one resolved update in place — the whole write path, and the only one.
@@ -556,6 +598,9 @@ fn retain_and_place(
         program: placed.program,
         backup: backup_path(paths, name),
         program_bytes: placed.program_bytes,
+        // The disk half knows nothing of the store: what the new declaration dropped is filled in by
+        // purge_dropped, which runs after this has put the manifest in place.
+        purged: Purged::default(),
     })
 }
 
@@ -587,8 +632,10 @@ pub struct RolledBack {
 ///
 /// Refuses, changing nothing, when the plugin is not installed (there is nothing to roll back), or when
 /// no retained build exists — either it was never updated, or a prior rollback already consumed the one
-/// `.bak` there is. The enable gate, the settings and the secrets are keyed elsewhere and left untouched,
-/// exactly as an update leaves them.
+/// `.bak` there is. The enable gate, the settings and the secrets are keyed elsewhere and left untouched:
+/// what the restored manifest declares is answered by whatever is stored for it, and a value the update
+/// purged for want of a declaration does not come back (`AMB-D-456`) — a rollback restores the pair, and
+/// the pair is the build and its manifest.
 pub fn rollback(paths: &Paths, name: &str) -> Result<RolledBack> {
     // Anchor on a real install: a rollback restores an executable *beside* a live plugin, so a name that
     // is not installed is `not_found`, not a bare "no backup".
@@ -1030,6 +1077,41 @@ mod tests {
         Paths::at(dir)
     }
 
+    /// A store on a scratch base — what the apply path takes, since it ends by purging the settings the
+    /// new declaration dropped (`AMB-D-456`).
+    fn store_at(tag: &str) -> Store {
+        Store::open_at(paths_at(tag)).unwrap()
+    }
+
+    fn field(key: &str, secret: bool) -> crate::plugin_manifest::ConfigField {
+        crate::plugin_manifest::ConfigField {
+            secret,
+            ..crate::plugin_manifest::ConfigField::new(key, key)
+        }
+    }
+
+    fn mk_project(store: &mut Store, name: &str) -> i64 {
+        store
+            .project_add(crate::ops::project::NewProject {
+                name: name.into(),
+                view: crate::model::View::List,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap()
+            .id
+    }
+
+    /// A plugin installed on disk with a schema, and a value stored for every field of it — the state an
+    /// update's purge acts on.
+    fn install_and_configure(store: &mut Store, manifest: &Manifest, project: i64) {
+        install_on_disk(&store.paths.clone(), manifest, b"old");
+        for f in &manifest.config {
+            let value = if f.secret { "s3cret" } else { "main" };
+            plugin_config::set(store, f, &manifest.name, project, value).unwrap();
+        }
+    }
+
     /// An installed plugin on disk: the executable holding `program`, and the manifest beside it.
     fn install_on_disk(paths: &Paths, manifest: &Manifest, program: &[u8]) {
         let home = paths.plugin_dir(&manifest.name);
@@ -1141,9 +1223,8 @@ mod tests {
         assert_eq!(retained, second, "the retained manifest moved with the retained binary");
     }
 
-    /// What an update leaves alone: the enable gate, the settings and the secrets are keyed by name in
-    /// stores this module never opens, so an updated plugin comes back exactly as consented. The
-    /// stand-in here is the home itself — nothing beside the two replaced files is touched.
+    /// What an update leaves alone on disk: nothing in the plugin's home beside the two files it
+    /// replaces, so whatever the plugin keeps for itself survives the round trip.
     #[test]
     fn applying_touches_nothing_but_the_binary_and_its_manifest() {
         let paths = paths_at("preserve");
@@ -1156,6 +1237,62 @@ mod tests {
             .unwrap();
 
         assert_eq!(std::fs::read(&stray).unwrap(), b"whatever the plugin keeps");
+    }
+
+    /// The store half of an apply (`AMB-D-456`): once the new build is in place, the value of a key it
+    /// stopped declaring is gone, the values of the keys it still declares are untouched, and the receipt
+    /// says which road each one went down.
+    #[test]
+    fn applying_takes_the_value_of_a_key_the_new_build_stopped_declaring() {
+        let mut store = store_at("purge");
+        let project = mk_project(&mut store, "proj");
+        let mut before = manifest("worktree", "aa");
+        before.config = vec![field("base", false), field("token", true)];
+        install_and_configure(&mut store, &before, project);
+
+        let mut after = manifest("worktree", "bb");
+        after.config = vec![field("base", false)];
+        let paths = store.paths.clone();
+        let mut replaced =
+            retain_and_place(&paths, &update_of(before, after), b"new", &Origin::Official).unwrap();
+        replaced.purged = purge_dropped(&mut store, &replaced.to);
+
+        assert_eq!(replaced.purged, Purged { settings: 0, secrets: 1 });
+        assert_eq!(
+            plugin_config::get(&store, &field("base", false), "worktree", project)
+                .unwrap()
+                .as_deref(),
+            Some("main"),
+            "what the new build still declares keeps its value",
+        );
+        assert_eq!(
+            plugin_config::get(&store, &field("token", true), "worktree", project).unwrap(),
+            None,
+        );
+    }
+
+    /// An update that declares everything the old one did leaves the store alone — the ordinary case, and
+    /// the one a user must be able to trust.
+    #[test]
+    fn applying_a_build_that_declares_the_same_keys_takes_nothing() {
+        let mut store = store_at("purge-none");
+        let project = mk_project(&mut store, "proj");
+        let mut before = manifest("worktree", "aa");
+        before.config = vec![field("base", false), field("token", true)];
+        install_and_configure(&mut store, &before, project);
+
+        let mut after = manifest("worktree", "bb");
+        after.config = before.config.clone();
+        let paths = store.paths.clone();
+        let replaced =
+            retain_and_place(&paths, &update_of(before, after), b"new", &Origin::Official).unwrap();
+        assert_eq!(purge_dropped(&mut store, &replaced.to), Purged::default());
+        assert_eq!(
+            plugin_config::get(&store, &field("token", true), "worktree", project)
+                .unwrap()
+                .as_deref(),
+            Some("s3cret"),
+        );
     }
 
     /// A build this amenbo cannot speak to is refused before the network is reached, and the working
@@ -1187,8 +1324,11 @@ mod tests {
     /// before a catalog is ever fetched.
     #[test]
     fn updating_something_not_installed_is_not_found() {
-        let paths = paths_at("absent");
-        assert_eq!(apply(&paths, "worktree", |_| Ok(())).unwrap_err().code(), "not_found_plugin_installed");
+        let mut store = store_at("absent");
+        assert_eq!(
+            apply(&mut store, "worktree", |_, _| Ok(())).unwrap_err().code(),
+            "not_found_plugin_installed"
+        );
     }
 
     // ---- rolling one back ----
@@ -1241,6 +1381,40 @@ mod tests {
     fn rolling_back_something_not_installed_is_not_found() {
         let paths = paths_at("rollback-absent");
         assert_eq!(rollback(&paths, "worktree").unwrap_err().code(), "not_found_plugin_installed");
+    }
+
+    /// A rollback restores the pair, not the values: a setting the update purged for want of a
+    /// declaration stays gone even though the restored manifest declares it again (`AMB-D-456` — what is
+    /// retained is one generation of the build and its manifest, and nothing else).
+    #[test]
+    fn rolling_back_does_not_bring_a_purged_value_back() {
+        let mut store = store_at("rollback-purged");
+        let project = mk_project(&mut store, "proj");
+        let mut before = manifest("worktree", "aa");
+        before.config = vec![field("base", false)];
+        install_and_configure(&mut store, &before, project);
+
+        let paths = store.paths.clone();
+        let replaced = retain_and_place(
+            &paths,
+            &update_of(before.clone(), manifest("worktree", "bb")),
+            b"new",
+            &Origin::Official,
+        )
+        .unwrap();
+        assert_eq!(purge_dropped(&mut store, &replaced.to).settings, 1);
+
+        rollback(&paths, "worktree").unwrap();
+        assert_eq!(
+            plugin_installed::read(&paths, "worktree").unwrap().manifest,
+            before,
+            "the build that declared it is running again",
+        );
+        assert_eq!(
+            plugin_config::get(&store, &field("base", false), "worktree", project).unwrap(),
+            None,
+            "and the value it asked for does not come back with it",
+        );
     }
 
     /// The gate, the settings and the secrets are keyed elsewhere: a rollback restores the two files it

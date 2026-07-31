@@ -24,8 +24,9 @@ description: >
   and **not** enabled, which is the normal state and the one people misread. Open its gate, read it
   open, shut it again. Then age what the machine records so the catalog's build is a different one,
   update onto it, and roll back — reading after each that the catalog does, then does not, then does
-  again hold a build this machine is not on. Finally remove the plugin and confirm the machine is back
-  where it started.
+  again hold a build this machine is not on. A value stored under a key the published build does not
+  declare rides along: the update takes it, and the rollback that brings its declaration back does not
+  bring it back. Finally remove the plugin and confirm the machine is back where it started.
 steps_cli:
   - type: action
     domain: plugin
@@ -86,6 +87,33 @@ steps_cli:
       name: worktree
       present: false
 
+  # A value stored under a key the build being moved onto does not declare. No plugin in the catalog
+  # declares a setting at all, so the declaration is written onto the installed manifest first — the same
+  # op the settings road uses — and the value goes in through the ordinary door.
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: legacy
+      label: A setting the published build does not declare
+
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: legacy
+      value: answered-before-the-update
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: legacy
+      equals: answered-before-the-update
+
   # Age what the machine records — the entry it was installed from, which is what an update is compared
   # by. Everything after this is the real thing: the catalog is fetched, the asset's signature is checked
   # against the key in the binary, and this platform's digest is checked against the bytes that arrived.
@@ -130,6 +158,19 @@ steps_cli:
     with:
       name: worktree
       present: true
+
+  # The update took the value stored under a key the build it moved onto had stopped declaring, and this
+  # is where that is readable: a rollback restores the pair — the build and its manifest — and not the
+  # answers a manifest asks for, so the declaration is back and the value it was given is not. While the
+  # published build was in place there was nothing to ask: a read is refused a key no manifest declares,
+  # which is the same door that refuses to write one.
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: legacy
+      set: false
 
   # One build back, and only one: the retained pair was consumed by the rollback that used it, so a
   # second one has nothing to return to and says so rather than half-restoring anything.

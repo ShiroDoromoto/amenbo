@@ -5370,8 +5370,10 @@ pub async fn plugin_updates() -> Result<Vec<PluginUpdateDto>, CmdError> {
 /// button the update banner offers so no screen has to be visited to take an update.
 ///
 /// Every gate is core's ([`amenbo_core::plugin_update::apply`]): the asset is re-verified against amenbo's
-/// catalog key and its checksum, the previous build is retained as a `.bak`, and the gate, settings and
-/// secrets are carried over untouched. The one gate this side adds is the config re-check
+/// catalog key and its checksum, the previous build is retained as a `.bak`, and the gate and every setting
+/// the new build still declares are carried over untouched — the values of keys it has stopped declaring
+/// are purged there, once the build is in place (`AMB-D-456`). The one gate this side adds is the config
+/// re-check
 /// ([`amenbo_core::plugin_config::required_unset_for_update`], the same one the CLI runs) — a new schema
 /// that would leave a plugin missing a `required` value at any gate it is enabled at keeps the working build
 /// and says so.
@@ -5381,12 +5383,12 @@ pub async fn plugin_updates() -> Result<Vec<PluginUpdateDto>, CmdError> {
 #[tauri::command]
 pub async fn plugin_update_apply(name: String) -> Result<bool, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<bool, CmdError> {
-        let paths = amenbo_core::config::Paths::resolve()?;
-        let store = open_store_read()?;
-        let applied = amenbo_core::plugin_update::apply(&paths, &name, |available| {
-            refuse_update_leaving_required_unset(&store, available)
-        })?;
-        Ok(applied.is_some())
+        with_store_mut(|store| {
+            let applied = amenbo_core::plugin_update::apply(store, &name, |store, available| {
+                refuse_update_leaving_required_unset(store, available)
+            })?;
+            Ok(applied.is_some())
+        })
     })
     .await
     .map_err(|e| -> CmdError { format!("updating the plugin did not finish: {e}").into() })?
@@ -5401,24 +5403,25 @@ pub async fn plugin_update_apply(name: String) -> Result<bool, CmdError> {
 pub async fn plugin_update_apply_all() -> Result<Vec<PluginUpdateOutcomeDto>, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<PluginUpdateOutcomeDto>, CmdError> {
         use amenbo_core::plugin_update::Outcome;
-        let paths = amenbo_core::config::Paths::resolve()?;
-        let store = open_store_read()?;
-        let outcomes = amenbo_core::plugin_update::apply_all(&paths, |available| {
-            refuse_update_leaving_required_unset(&store, available)
-        })?;
-        Ok(outcomes
-            .into_iter()
-            .map(|o| match o {
-                Outcome::Replaced(r) => {
-                    PluginUpdateOutcomeDto { name: r.name, applied: true, error: None }
-                }
-                Outcome::Failed { name, error } => PluginUpdateOutcomeDto {
-                    name,
-                    applied: false,
-                    error: Some(error.to_string()),
-                },
-            })
-            .collect())
+        with_store_mut(|store| {
+            let outcomes =
+                amenbo_core::plugin_update::apply_all(store, |store, available| {
+                    refuse_update_leaving_required_unset(store, available)
+                })?;
+            Ok(outcomes
+                .into_iter()
+                .map(|o| match o {
+                    Outcome::Replaced(r) => {
+                        PluginUpdateOutcomeDto { name: r.name, applied: true, error: None }
+                    }
+                    Outcome::Failed { name, error } => PluginUpdateOutcomeDto {
+                        name,
+                        applied: false,
+                        error: Some(error.to_string()),
+                    },
+                })
+                .collect())
+        })
     })
     .await
     .map_err(|e| -> CmdError { format!("updating the plugin did not finish: {e}").into() })?

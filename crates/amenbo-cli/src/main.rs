@@ -1967,7 +1967,7 @@ fn dispatch_cursor_line(cursor: i64, face: Option<amenbo_core::plugin_drive::Fac
 /// it is refused rather than guessed at — defaulting a bare `plugin update` to either side would make the
 /// safe reading and the replacing one a typo apart.
 fn plugin_update_cmd(
-    store: &Store,
+    store: &mut Store,
     flags: &Flags,
     name: Option<&str>,
     check: bool,
@@ -2146,9 +2146,10 @@ fn how_long_ago(age: std::time::Duration) -> String {
 /// A plugin already on that build is reported as such and is not a failure: the command's promise is
 /// "this plugin is now what the catalog publishes", and there is a way of meeting it that fetches
 /// nothing. What is said afterwards is what a reader most needs to know they did *not* just lose — the
-/// gate and the settings are still there — and where the build that was replaced went.
-fn plugin_update_apply_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
-    let applied = amenbo_core::plugin_update::apply(&store.paths, name, |available| {
+/// gate and the settings are still there — and where the build that was replaced went. When the new build
+/// stopped declaring a setting, that sentence says so instead of claiming nothing moved (`AMB-D-456`).
+fn plugin_update_apply_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
+    let applied = amenbo_core::plugin_update::apply(store, name, |store, available| {
         refuse_update_leaving_required_unset(store, available)
     })
     .map_err(CliError::from)?;
@@ -2164,7 +2165,7 @@ fn plugin_update_apply_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i
         }
         Some(r) => {
             human(flags, format!("Updated plugin: {name} — {}", r.to.desc));
-            human(flags, "Its gate, settings and secrets are unchanged.");
+            human(flags, purge_line(&r.purged));
             human(flags, format!("The build it replaced is kept at {}.", r.backup.display()));
             if flags.json {
                 print_json(&json!({
@@ -2173,6 +2174,8 @@ fn plugin_update_apply_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i
                     "program": r.program.display().to_string(),
                     "program_bytes": r.program_bytes,
                     "backup": r.backup.display().to_string(),
+                    "purged_settings": r.purged.settings,
+                    "purged_secrets": r.purged.secrets,
                 }));
             }
         }
@@ -2180,15 +2183,46 @@ fn plugin_update_apply_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i
     Ok(0)
 }
 
+/// What an update took because the new build stopped declaring it, worded for a line (`AMB-D-456`) —
+/// `None` on the ordinary update, where the new schema names everything the old one did.
+///
+/// The two roads are counted apart, and said apart: a secret that went is the half a reader will want to
+/// be sure of, and folding both into one number would hide it.
+fn purged_phrase(purged: &amenbo_core::plugin_config::Purged) -> Option<String> {
+    let mut gone = Vec::new();
+    if purged.settings > 0 {
+        gone.push(format!("{} setting(s)", purged.settings));
+    }
+    if purged.secrets > 0 {
+        gone.push(format!("{} secret(s)", purged.secrets));
+    }
+    (!gone.is_empty()).then(|| gone.join(" and "))
+}
+
+/// What to say about a plugin's settings after an update: the reassurance a reader needs most, and the one
+/// thing that can qualify it (`AMB-D-456`).
+///
+/// Everything the new build declares still holds the value that was stored for it — that is the sentence.
+/// What an update can take is a value under a key the new build no longer declares, and "unchanged" would
+/// be the wrong word over that, so the line says which it is rather than one wording covering both.
+fn purge_line(purged: &amenbo_core::plugin_config::Purged) -> String {
+    match purged_phrase(purged) {
+        None => "Its gate, settings and secrets are unchanged.".to_string(),
+        Some(gone) => format!(
+            "Its gate is unchanged, and so is every setting this build declares — {gone} stored for keys it no longer declares went with the old build."
+        ),
+    }
+}
+
 /// `plugin update --all` — every update the catalog holds, applied one plugin at a time (`AMB-D-359`).
 ///
 /// Best-effort across plugins: one whose asset will not verify is reported and the rest are still
 /// applied, because a single bad entry holding back every other update is the worse failure. It still
 /// exits non-zero when anything failed — the run is not a success just because most of it worked.
-fn plugin_update_all_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
+fn plugin_update_all_cmd(store: &mut Store, flags: &Flags) -> Result<i32, CliError> {
     use amenbo_core::plugin_update::Outcome;
 
-    let outcomes = amenbo_core::plugin_update::apply_all(&store.paths, |available| {
+    let outcomes = amenbo_core::plugin_update::apply_all(store, |store, available| {
         refuse_update_leaving_required_unset(store, available)
     })
     .map_err(CliError::from)?;
@@ -2200,7 +2234,10 @@ fn plugin_update_all_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> 
     for outcome in &outcomes {
         match outcome {
             Outcome::Replaced(r) => {
-                human(flags, format!("{}  updated  {}", r.name, r.to.desc));
+                let gone = purged_phrase(&r.purged)
+                    .map(|p| format!("  ({p} it no longer declares were removed)"))
+                    .unwrap_or_default();
+                human(flags, format!("{}  updated  {}{gone}", r.name, r.to.desc));
             }
             Outcome::Failed { name, error } => {
                 human(flags, format!("{name}  not updated  {} (it is as it was)", error.message_en()));
@@ -2215,6 +2252,8 @@ fn plugin_update_all_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> 
                     "name": r.name, "applied": true, "desc": r.to.desc,
                     "program_bytes": r.program_bytes,
                     "backup": r.backup.display().to_string(),
+                    "purged_settings": r.purged.settings,
+                    "purged_secrets": r.purged.secrets,
                 }),
                 Outcome::Failed { name, error } => json!({
                     "name": name, "applied": false,

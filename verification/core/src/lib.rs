@@ -243,6 +243,11 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A terminal is already standing in a project — the folder it is run from says
     // which — so there is nowhere to move to and nothing this would do.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "open-settings", required: &["project"], refs: &[], strings: &["project"], binds: false },
+    // And back onto the board that project keeps. It is the move a road needs where what is under test
+    // is drawn when a project is opened rather than held from before: walking out and back in is the
+    // only way to ask a screen what it does on arrival, and a road that assumed the arrival would be
+    // reading the screen it never left.
+    OpSpec { kind: Kind::Action, domain: Domain::Project, op: "open", required: &["project"], refs: &[], strings: &["project"], binds: false },
     // A classification axis, its values, and the assignment that files a task under one. The axis and
     // the value travel as names — that is how the CLI takes them, and how a person says them.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: false },
@@ -372,7 +377,14 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone: a terminal asks inline and prints the text where it stands, so there is
     // nothing there to answer, to choose between, or to press — and the answer it writes it never reads
     // back, so it has no face to clear it from either.
+    //
+    // And putting the report aside, which is the move that answers nothing: it takes the report off the
+    // screen in front of the reader and writes no record, so what proves it apart from the refusal is
+    // the report standing again when the project is next opened. It is a road of its own for that
+    // reason — two buttons side by side, one of which is for good and one of which is not, is exactly
+    // where a build can swap them and nothing else notice.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-consent", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-close", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-pick", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-copy", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-consent-clear", required: &[], refs: &[], strings: &[], binds: false },
@@ -600,6 +612,11 @@ const REGISTRY: &[OpSpec] = &[
     // the half that carries the reading, since it is the one thing on the road that appears nowhere else
     // on that screen — and that the report outlives an answer is the line the screen road exists for:
     // consent is not wiring, and only the paste landing ends the telling.
+    //
+    // `present: false` asks for the board without it, which is how a road says the report went: the file
+    // is the one word that would be there, so its absence from the shot is the report's. It reads a
+    // board and never a blank — a road that shot some other screen would pass it — so it is written
+    // between a step that put the report there and one that brings it back.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-notice", required: &["tool", "paste_into"], refs: &[], strings: &["tool", "paste_into"], binds: false },
     // The record, read where the project keeps its own face. `answer` is `yes`, `no` or `unanswered` —
     // three states and not a truth value, because unanswered is what a project starts in: a screen that

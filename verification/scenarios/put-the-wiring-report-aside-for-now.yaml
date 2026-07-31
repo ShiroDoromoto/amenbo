@@ -1,0 +1,84 @@
+# Two buttons sit side by side on the report about a project's unwired folders, and only one of them
+# writes anything. The refusal is for good — it takes the report away and leaves a record only the
+# project's own settings can undo. The other one is for now: it takes the report off the screen in front
+# of the reader, writes nothing, and is spent the moment the project is opened again.
+#
+# That difference is the whole of this road, and it exists because a reader who has not decided yet needs
+# somewhere to go. Without it the only way past the report is to decline, which asks for an answer at the
+# one moment nobody has one; with it, the reader gets on with what they opened the project for and is
+# told again next time, since the work behind the report has not moved.
+#
+# Nothing else can catch a build that swaps them. Both take the report off the same screen, so the shot
+# straight after the press is the same either way — what tells them apart is what the *next* opening of
+# the project draws, which is why the walk out and back in is a step of this road and not a note beside
+# it. The instruction for the press names what the button does rather than what it says, so a reader
+# cannot satisfy it with the wrong one.
+#
+# The screen is the only witness. A terminal prints its report and is done; there is nothing standing
+# there to put aside, and nothing to come back to.
+#
+# What this wants standing before the run: a device holding the project named below, bound to a folder
+# carrying the provider's own directory with nothing about amenbo in it, and that project's answer never
+# refused — so the report is on its board when the run opens on it. The screen moves at every press, so
+# drive it stepped (`--step`) and carry out each move at the hand-back before it.
+id: put-the-wiring-report-aside-for-now
+title: The report about a project's unwired folders can be put aside without answering, and is standing again the next time that project is opened
+description: >
+  The reader is not ready to say yes or no about starting their folders' AI on amenbo, and wants the
+  report out of the way for now. Press the button that only clears the screen, and it goes. Walk out of
+  the project and back in, and it is there again — nothing was recorded, so nothing was decided, and the
+  folders behind it are still waiting. A build that let this press count as a refusal would take the
+  report away for good and leave the reader nothing on the board to get it back with.
+steps_gui:
+  # The report, standing where the reader met it. It is read first so the press below lands on a screen
+  # the run has seen, and so the reading that follows the press has something to have been read against.
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with:
+      tool: claude-code
+      paste_into: .claude/settings.json
+
+  # The press that answers nothing. Named by what it does rather than by its label: the button that
+  # declines is beside it, and this road is written for exactly the build that has them the wrong way
+  # round.
+  - type: action
+    domain: repo
+    op: ai-launch-close
+
+  # And it is off the screen. The file the report names is the one word on this board that only the
+  # report puts there, so the board without it is the board without the report — read on the board
+  # itself, with the project still open, rather than on whatever screen a hand might have moved to.
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with:
+      tool: claude-code
+      paste_into: .claude/settings.json
+      present: false
+
+  # Off the board, and back onto it. This is what the road turns on: what a screen draws on arrival is
+  # not what it was holding before, and only an arrival can ask it. The project's own settings are the
+  # way out because they are the nearest screen that is not this board — where the reader actually goes
+  # is their own business, and any of it is an arrival.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: project
+    op: open
+    with:
+      project: Greenhouse
+
+  # Standing again — which is the claim. Nothing was recorded by the press, so the project is still one
+  # nobody has answered for, and the folders behind the report are still waiting on the text. A press
+  # that had been taken for a refusal leaves this shot empty, and that is the red this road is for.
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with:
+      tool: claude-code
+      paste_into: .claude/settings.json

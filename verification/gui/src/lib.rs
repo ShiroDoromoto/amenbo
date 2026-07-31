@@ -259,7 +259,8 @@ impl Instructor {
     /// The two `ai-launch` readings are judged on what is not the interface's own words either. The
     /// hand-over is judged on the file the text goes into, which is the one thing on the road that
     /// appears nowhere else on that board, so a shot taken where the report is not standing reads as the
-    /// miss it is. `ai-launch-folder` is judged on the folder's own name, which the reader gave it and
+    /// miss it is — and the same word read the other way (`present: false`) is what says the report
+    /// went. `ai-launch-folder` is judged on the folder's own name, which the reader gave it and
     /// the interface has no word of its own for; the board the report stands on names no folder anywhere
     /// else, so finding one on that shot is finding it in the list.
     ///
@@ -285,7 +286,7 @@ impl Instructor {
                 Some(Expectation { text: arg_str(with, "absent")?.to_string(), present: false })
             }
             (Domain::Repo, "ai-launch-notice") => {
-                Some(Expectation { text: arg_str(with, "paste_into")?.to_string(), present: true })
+                Some(Expectation { text: arg_str(with, "paste_into")?.to_string(), present: present(with) })
             }
             (Domain::Repo, "ai-launch-folder") => {
                 Some(Expectation { text: arg_str(with, "dir")?.to_string(), present: true })
@@ -337,6 +338,12 @@ impl Instructor {
             // evidence rather than as something taken on trust.
             (Domain::Project, "open-settings") => format!(
                 "Open the settings the project \"{}\" keeps for itself.",
+                req(with, "project")?
+            ),
+            // Back onto the board, and it says "again" because that is what is under test: what a screen
+            // draws on arrival is not what it was holding before the road walked away from it.
+            (Domain::Project, "open") => format!(
+                "Open the project \"{}\" again, from the list of projects.",
                 req(with, "project")?
             ),
             // `dir` is a name and not a path here as it is everywhere else: which folder is linked is
@@ -430,6 +437,14 @@ impl Instructor {
                     return Err(format!("action `ai-launch-consent` does not know the answer `{other}`"))
                 }
             },
+            // The button beside it that answers nothing. The instruction names it by what it does rather
+            // than by its label, since the label is a word of the interface and the two buttons sit side
+            // by side — pressing the wrong one is the mistake this road is written to catch, so the line
+            // must not be one a reader can satisfy either way.
+            (Domain::Repo, "ai-launch-close") => {
+                "On the report about this project's folders, press the button that only takes it off the screen — the one that answers nothing."
+                    .to_string()
+            }
             // Which of the tools on offer the text is for. Only a folder that points at none is offered
             // more than one, so this is where that road parts from the traced one — and picking a tool
             // the folder shows no trace of is what proves the catalog is standing behind the picker,
@@ -535,11 +550,18 @@ impl Instructor {
                 "Confirm the open card asks which project to link the folder to — with \"{}\", one of the projects on this device, chosen in it.",
                 req(with, "project")?
             ),
-            (Domain::Repo, "ai-launch-notice") => format!(
-                "Confirm the project's board carries the report about starting its folders' AI on amenbo, with nothing asked and nothing over it: \"{}\" is named, with \"{}\" as the file its text goes into.",
-                req(with, "tool")?,
-                req(with, "paste_into")?
-            ),
+            (Domain::Repo, "ai-launch-notice") => match present(with) {
+                true => format!(
+                    "Confirm the project's board carries the report about starting its folders' AI on amenbo, with nothing asked and nothing over it: \"{}\" is named, with \"{}\" as the file its text goes into.",
+                    req(with, "tool")?,
+                    req(with, "paste_into")?
+                ),
+                false => format!(
+                    "Confirm this project's board is standing with no such report on it: nothing here names \"{}\", and \"{}\" is nowhere on the screen.",
+                    req(with, "tool")?,
+                    req(with, "paste_into")?
+                ),
+            },
             // The record, read on the project's own face. Each state is read together with what the way
             // back out of it is doing, since that is the half a reader acts on: an answer is there to be
             // taken back, and where there is none the button that would take it back must be shut.
@@ -1492,6 +1514,53 @@ steps_gui:
         // The list carries whole paths and the scenario names the folder alone; the fold leaves the one
         // inside the other.
         assert!(fold("/Users/reader/work/frontend").contains(&fold("frontend")));
+    }
+
+    /// Putting the report aside and finding it again: the two readings are the same file, read one way
+    /// and then the other, with the walk off the board and back onto it between them. What they have to tell apart is
+    /// the button that answers nothing from the one beside it that answers for good — so the instruction
+    /// for the press names what it does rather than what it says, and the last read is the whole claim.
+    #[test]
+    fn closing_the_report_reads_the_board_without_it_then_the_board_with_it_again() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with: { tool: claude-code, paste_into: .claude/settings.json }
+  - type: action
+    domain: repo
+    op: ai-launch-close
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with: { tool: claude-code, paste_into: .claude/settings.json, present: false }
+  - type: action
+    domain: project
+    op: open-settings
+    with: { project: Greenhouse }
+  - type: action
+    domain: project
+    op: open
+    with: { project: Greenhouse }
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with: { tool: claude-code, paste_into: .claude/settings.json }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[1].contains("answers nothing"), "got: {}", lines[1]);
+        assert!(lines[2].contains("nowhere on the screen"), "got: {}", lines[2]);
+        assert!(lines[4].contains("\"Greenhouse\"") && lines[4].contains("again"), "got: {}", lines[4]);
+
+        let gone = ins.expectation(&s.steps(Driver::Gui)[2]).expect("the file is the reading either way");
+        assert_eq!(gone, Expectation { text: ".claude/settings.json".to_string(), present: false });
+        let back = ins.expectation(&s.steps(Driver::Gui)[5]).expect("and it is the reading on the way back");
+        assert_eq!(back, Expectation { text: ".claude/settings.json".to_string(), present: true });
     }
 
     /// The way back out of a refusal, read where the record is kept: the no standing, the press, and the

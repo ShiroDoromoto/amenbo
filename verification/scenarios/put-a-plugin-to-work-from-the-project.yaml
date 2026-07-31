@@ -1,0 +1,83 @@
+# The crossing is the unit on both faces, so the project's own settings have to reach the same row the
+# plugin screen does. This is that road, walked from the project end.
+#
+# The picker here puts the row there and leaves the switch alone, because a crossing has to exist before
+# what would refuse an enable can be read or filled in. To anyone reading the row for whether the plugin
+# is on, that move looks like nothing happening — so the state it leaves behind is read in its own right,
+# between the screen that has no row and the one whose row is on.
+#
+# Hence three states rather than a yes/no. No row, a row with the plugin off in it, and a row saying the
+# plugin is on are three different screens, and the middle one is the one a truth value cannot name: a
+# line that could only say "not on" would read the same over a screen the picker was never touched on.
+#
+# Hence a road written for the screen alone. A terminal is already standing in one project — the folder
+# it is run from says which — so it has no second face to arrive at, no picker, and nothing to draw.
+#
+# What the road wants in front of it is a device holding the project named below, with the official
+# `worktree` plugin installed and its gate shut everywhere — stand the project and install the plugin in
+# the store the build under test opens (`devtool devgui cli`). Where the run starts does not matter: the
+# first step is the arrival. Every step after it moves the screen, so drive it stepped (`--step`) and
+# carry out each move at the hand-back before it.
+#
+# Every line is closed by an eye rather than by a reading. What separates a row just drawn from one
+# turned on is the button standing in it, and a button's label is a word of the interface — both states
+# put the plugin's name on the shot, so finding it settles neither.
+id: put-a-plugin-to-work-from-the-project
+title: A plugin is put to work from the project's own settings — the picker draws the crossing's row, and the switch in that row turns it on
+description: >
+  Arrive on the settings a project keeps for itself, with a plugin installed on the machine and firing
+  nowhere: it has no row here, because there is nothing yet to say about it. Draw the row from the
+  picker and read what that left — the row standing, the plugin still off in it, which is the whole of
+  what a picker that no longer enables does. Then move the switch inside that row and read the same row
+  saying the plugin is on, without having left the project's own face at any point.
+steps_gui:
+  # Nothing to say about this plugin here, and the screen says exactly that: what the list carries is
+  # what is on in this project or filled in for it, and this is neither.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  - type: assert
+    domain: project
+    op: plugin-row
+    with:
+      project: Greenhouse
+      plugin: worktree
+      state: absent
+
+  # The picker, and only the picker. The reading after it is the one this road exists for: something did
+  # happen, and what happened is a row — not an enable that silently failed, and not nothing at all.
+  - type: action
+    domain: plugin
+    op: draw-crossing
+    with:
+      name: worktree
+      project: Greenhouse
+
+  - type: assert
+    domain: project
+    op: plugin-row
+    with:
+      project: Greenhouse
+      plugin: worktree
+      state: drawn
+
+  # The switch, in the row that was just drawn. Nowhere in the road is the plugin screen opened or a
+  # project answered for a second time, which is what "the crossing is reached from either face" has to
+  # mean if it means anything.
+  - type: action
+    domain: plugin
+    op: enable-in
+    with:
+      name: worktree
+      project: Greenhouse
+
+  - type: assert
+    domain: project
+    op: plugin-row
+    with:
+      project: Greenhouse
+      plugin: worktree
+      state: firing

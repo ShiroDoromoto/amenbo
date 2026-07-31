@@ -232,6 +232,11 @@ impl Instructor {
     /// reading that finds the name cannot say it came from the row, and one that fails to find it
     /// would be reading a screen the plugin's row is not even on.
     ///
+    /// `project plugin-row` reads the same crossing from the other face and is a `Review` for a reason
+    /// of its own: what separates a row just drawn from one turned on is the button standing in it, and
+    /// a button's label is a word of the interface. Both states put the plugin's name on the shot, so
+    /// finding it settles neither.
+    ///
     /// `config` is a `Review` for a reason of its own: what a form says about a choice is which of
     /// its boxes are ticked and which chip the field wears. The candidates are drawn whichever answer
     /// is held, so their words are on every shot of the road, and the chip is a word of the interface
@@ -307,6 +312,14 @@ impl Instructor {
                 "Take the way in that raises a project, name it \"{}\", choose a folder for it, and create it.",
                 req(with, "name")?
             ),
+            // Moving onto the face a project keeps for itself. It is written as a step rather than left
+            // to a note in front of the road, for the reason every other move here is: the screen it
+            // arrives at is shot, so a road that reads a row on this face has the arrival on it as
+            // evidence rather than as something taken on trust.
+            (Domain::Project, "open-settings") => format!(
+                "Open the settings the project \"{}\" keeps for itself.",
+                req(with, "project")?
+            ),
             // `dir` is a name and not a path here as it is everywhere else: which folder is linked is
             // the run's to decide, and what the scenario writes down is what to call the one it picked.
             (Domain::Folder, "bind") => format!(
@@ -318,17 +331,29 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "source")?
             ),
-            // The switch, moved one project at a time — and it lives in that project's row, so the
-            // picker only draws the row. A project already crossing the plugin has its row standing,
-            // and picking it again is not offered; the instruction covers both by naming where the
-            // switch is rather than how the row got there.
+            // The switch, moved one project at a time — and it lives in that crossing's row, so the
+            // picker only draws the row. A crossing that already has a row standing is not offered by
+            // the picker again; the instruction covers both by naming where the switch is rather than
+            // how the row got there.
+            //
+            // Neither line names a face. The crossing is the row on both of them and the step is the
+            // same move either way — which face the road is standing on is said by the step that
+            // carried it there, and repeating it here would be the one place the two could disagree.
             (Domain::Plugin, "enable-in") => format!(
-                "Under \"{}\", find the row for \"{}\" — adding that project from the picker if it has none yet — and turn the plugin on there.",
+                "Find the row where \"{}\" crosses \"{}\" — drawing it from the picker if the screen has none yet — and turn the plugin on there.",
                 req(with, "name")?,
                 req(with, "project")?
             ),
             (Domain::Plugin, "disable-in") => format!(
-                "Under \"{}\", turn the plugin off in the row for \"{}\".",
+                "Turn \"{}\" off in the row where it crosses \"{}\".",
+                req(with, "name")?,
+                req(with, "project")?
+            ),
+            // The picker on its own. What it leaves behind is the row and nothing more, so the
+            // instruction stops where the picker does — pressing anything in the row is the next step's,
+            // and the shot between them is the evidence that drawing a row is not turning one on.
+            (Domain::Plugin, "draw-crossing") => format!(
+                "Draw the row where \"{}\" crosses \"{}\" from the picker beside the rows, and press nothing in it.",
                 req(with, "name")?,
                 req(with, "project")?
             ),
@@ -421,6 +446,28 @@ impl Instructor {
                     false => format!(
                         "Confirm \"{name}\" is not on in \"{project}\": either it has no row for that project, or the row it has offers to turn the plugin on rather than off."
                     ),
+                }
+            }
+            // The same crossing as `fires-in`, read where a project's own settings draw it. Three
+            // states and not two: what the picker leaves behind is a row with the plugin off in it, and
+            // a line that could only say "not on" would read the same over a screen where nothing was
+            // added at all.
+            (Domain::Project, "plugin-row") => {
+                let project = req(with, "project")?;
+                let plugin = req(with, "plugin")?;
+                match req(with, "state")? {
+                    "absent" => format!(
+                        "Confirm \"{project}\"'s own settings draw no row for \"{plugin}\": the plugin is only among what the picker there offers to add."
+                    ),
+                    "drawn" => format!(
+                        "Confirm \"{project}\"'s own settings draw a row for \"{plugin}\", and that row offers to turn the plugin on — drawing it turned nothing on."
+                    ),
+                    "firing" => format!(
+                        "Confirm \"{project}\"'s own settings draw a row for \"{plugin}\", and that row says the plugin is on in this project."
+                    ),
+                    other => {
+                        return Err(format!("assert `plugin-row` does not know the state `{other}`"))
+                    }
                 }
             }
             (Domain::Folder, "first-loop") => format!(
@@ -903,14 +950,83 @@ steps_gui:
         let s = load(yaml);
         let mut ins = Instructor::new();
         let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
-        assert!(lines[0].contains("the row for \"Greenhouse\""), "got: {}", lines[0]);
+        assert!(lines[0].contains("crosses \"Greenhouse\""), "got: {}", lines[0]);
         assert!(lines[1].contains("a row for \"Greenhouse\""), "got: {}", lines[1]);
-        assert!(lines[2].contains("off in the row for \"Greenhouse\""), "got: {}", lines[2]);
+        assert!(lines[2].contains("off in the row where it crosses \"Greenhouse\""), "got: {}", lines[2]);
         assert!(lines[3].contains("not on in \"Greenhouse\""), "got: {}", lines[3]);
 
         for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
             assert!(ins.expectation(st).is_none(), "step {i} names a project, which no reading settles");
         }
+    }
+
+    /// The same crossing from the project's own face: the road moves onto that screen, draws the row
+    /// from the picker there, and reads the three states apart. The middle one is why the state is a
+    /// word and not a yes/no — a row standing with the plugin off is what the picker leaves behind, and
+    /// a line that could only say "not on" would pass over a screen where nothing had been added.
+    #[test]
+    fn a_projects_own_face_draws_the_crossing_and_reads_its_three_states() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: project
+    op: open-settings
+    with: { project: Greenhouse }
+  - type: assert
+    domain: project
+    op: plugin-row
+    with: { project: Greenhouse, plugin: worktree, state: absent }
+  - type: action
+    domain: plugin
+    op: draw-crossing
+    with: { name: worktree, project: Greenhouse }
+  - type: assert
+    domain: project
+    op: plugin-row
+    with: { project: Greenhouse, plugin: worktree, state: drawn }
+  - type: action
+    domain: plugin
+    op: enable-in
+    with: { name: worktree, project: Greenhouse }
+  - type: assert
+    domain: project
+    op: plugin-row
+    with: { project: Greenhouse, plugin: worktree, state: firing }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("settings the project \"Greenhouse\" keeps"), "got: {}", lines[0]);
+        assert!(lines[1].contains("no row for \"worktree\""), "got: {}", lines[1]);
+        assert!(lines[2].contains("from the picker") && lines[2].contains("press nothing"), "got: {}", lines[2]);
+        assert!(lines[3].contains("offers to turn the plugin on"), "got: {}", lines[3]);
+        // The switch is the same op on either face, so its line names the crossing and no screen.
+        assert!(lines[4].contains("crosses \"Greenhouse\"") && !lines[4].contains("Under"), "got: {}", lines[4]);
+        assert!(lines[5].contains("is on in this project"), "got: {}", lines[5]);
+
+        for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
+            assert!(ins.expectation(st).is_none(), "step {i} turns on a button's label, which no reading settles");
+        }
+    }
+
+    /// A state the face does not have is refused by name rather than rendered as an empty line.
+    #[test]
+    fn an_unknown_plugin_row_state_is_refused() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: project
+    op: plugin-row
+    with: { project: Greenhouse, plugin: worktree, state: half-on }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let err = ins.render(&s.steps(Driver::Gui)[0]).expect_err("an unknown state has no instruction");
+        assert!(err.contains("half-on"), "got: {err}");
     }
 
     /// The settings form: a choice is answered by ticking and saving, declined by clearing every box,

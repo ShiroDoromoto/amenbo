@@ -79,7 +79,7 @@ const ui = {
   "projset.foldersHint": "An AI launched in these folders can operate this project.",
   "projset.plugins": "Plugins",
   "projset.pluginsHint": "A plugin turned on here fires for this project. It is the same switch the plugin screen draws.",
-  "projset.pluginsNoneOn": "None is on in this project", "projset.pluginsAdd": "Turn on a plugin…",
+  "projset.pluginsNone": "None is on or filled in here", "projset.pluginsAdd": "Add a plugin…",
   "projset.aiReady": "AI-ready", "projset.folderStale": "missing",
   "projset.addFolder": "Add folder", "projset.noFolders": "No linked folders yet.",
   "projset.unbind": "Unbind",

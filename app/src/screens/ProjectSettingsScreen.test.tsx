@@ -34,6 +34,9 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
   return {
     ...orig,
     usePluginInstalls: () => ({ installs: hoisted.installs, loading: false, error: undefined }),
+    // What a project *holds* is core's read, and nothing here is about a value already stored — the
+    // crossings under test are the empty ones, so this seam answers with nothing rather than reaching out.
+    usePluginConfig: () => ({ fields: [], loading: false }),
     setPluginEnabled: (name: string, projectId: number, enabled: boolean) => {
       hoisted.gated.push({ name, projectId, enabled });
       return Promise.resolve({ enabled, droppedQueued: 0 });
@@ -175,11 +178,20 @@ describe("invariants held by the rows of the linked-folder list", () => {
   });
 });
 
-/** One installed plugin, on in no project until a test names one in `on`. */
-function install({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?: number[] }): PluginInstall {
+/**
+ * One installed plugin, crossing no project until a test names one: `on` is a project it fires in,
+ * `filledIn` one that holds a value without the switch being on (`AMB-D-434`).
+ */
+function install(
+  { on = [], filledIn = [], ...over }:
+  Partial<PluginInstall> & { name: string; on?: number[]; filledIn?: number[] },
+): PluginInstall {
   return {
     compatible: true,
-    projects: on.map((project) => ({ project, enabled: true, hasValue: false, requiredUnset: false })),
+    projects: [
+      ...on.map((project) => ({ project, enabled: true, hasValue: false, requiredUnset: false })),
+      ...filledIn.map((project) => ({ project, enabled: false, hasValue: true, requiredUnset: false })),
+    ],
     config: [],
     rollback: false,
     ...over,
@@ -196,10 +208,30 @@ function pluginsSection(): HTMLElement {
 const picker = () => pluginsSection().querySelector("select") as HTMLSelectElement;
 const offered = (el: HTMLSelectElement) => Array.from(el.options).map((o) => o.textContent);
 
-// The project's own face of the one switch (`AMB-D-412`): a plugin turned on per project is looked for
-// in the project, and this says the same thing the plugin screen says, from the other end.
-describe("the plugins turned on for this project", () => {
-  it("lists the ones on here, and offers the rest", async () => {
+/** Pick `value` in the plugins section's picker and let the row it draws settle. */
+async function pick(value: string) {
+  await act(async () => {
+    picker().value = value;
+    picker().dispatchEvent(new Event("change", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+/** Press the button in the plugins section whose label is `label`, and let the write settle. */
+async function press(label: string) {
+  const button = Array.from(pluginsSection().querySelectorAll("button")).find(
+    (b) => b.textContent === label,
+  );
+  await act(async () => {
+    button!.click();
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+// The project's own face of the crossings (`AMB-D-447`): the same rows the plugin screen draws, read
+// from this end — one project, and the plugins it crosses.
+describe("this project's plugin crossings", () => {
+  it("lists the ones it crosses, and offers the rest", async () => {
     hoisted.installs = [
       install({ name: "worktree", on: [1, 2] }),
       install({ name: "notify", on: [2] }),
@@ -211,10 +243,22 @@ describe("the plugins turned on for this project", () => {
     expect(offered(picker())).toEqual([t("projset.pluginsAdd"), "notify"]);
   });
 
-  it("says so when this project has none on, without hiding what is installed", async () => {
+  // Off is not the same as nothing to say: a value this project holds is a crossing, and hiding it
+  // would leave the one place it can be read from the project's side blank.
+  it("lists a plugin this project filled in without turning on", async () => {
+    hoisted.installs = [install({ name: "notify", filledIn: [1] })];
+    await render([]);
+
+    const section = pluginsSection();
+    expect(section.textContent).toContain("notify");
+    expect(section.textContent).toContain(t("plugins.cfg.filled"));
+    expect(section.querySelector("select")).toBeNull();
+  });
+
+  it("says so when this project crosses none, without hiding what is installed", async () => {
     hoisted.installs = [install({ name: "notify", on: [2] })];
     await render([]);
-    expect(pluginsSection().textContent).toContain(t("projset.pluginsNoneOn"));
+    expect(pluginsSection().textContent).toContain(t("projset.pluginsNone"));
     expect(offered(picker())).toEqual([t("projset.pluginsAdd"), "notify"]);
   });
 
@@ -224,28 +268,39 @@ describe("the plugins turned on for this project", () => {
     expect(pluginsSection().querySelector("select")).toBeNull();
   });
 
-  // The switch this moves is the plugin screen's, aimed at this project and no other.
-  it("turns one on for this project by picking it", async () => {
+  // Picking draws the crossing; the row's own switch is what runs somebody else's code (`AMB-D-351`).
+  it("draws the crossing for the plugin picked, and enables from that row", async () => {
     hoisted.installs = [install({ name: "notify" })];
     await render([]);
-    await act(async () => {
-      picker().value = "notify";
-      picker().dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((r) => setTimeout(r, 0));
-    });
+
+    await pick("notify");
+    expect(hoisted.gated).toEqual([]);
+    expect(pluginsSection().textContent).toContain("notify");
+
+    await press(t("plugins.enable"));
     expect(hoisted.gated).toEqual([{ name: "notify", projectId: 1, enabled: true }]);
+  });
+
+  // The mark is readable before anything is pressed, and the settings that answer it open in the row.
+  it("marks a crossing short of a required value, and opens its settings in the row", async () => {
+    hoisted.installs = [install({
+      name: "notify",
+      config: [{ key: "webhook_url", label: "Webhook", required: true, secret: false, fieldType: "text", options: [] }],
+    })];
+    await render([]);
+
+    await pick("notify");
+    expect(pluginsSection().textContent).toContain(t("plugins.cfg.requiredEmpty"));
+    expect(hoisted.gated).toEqual([]);
+
+    await press(t("plugins.cfg.open"));
+    expect(pluginsSection().textContent).toContain("Webhook");
   });
 
   it("turns one off from the row it is listed on", async () => {
     hoisted.installs = [install({ name: "worktree", on: [1] })];
     await render([]);
-    const off = Array.from(pluginsSection().querySelectorAll("button")).find(
-      (b) => b.textContent === t("plugins.disable"),
-    );
-    await act(async () => {
-      off!.click();
-      await new Promise((r) => setTimeout(r, 0));
-    });
+    await press(t("plugins.disable"));
     expect(hoisted.gated).toEqual([{ name: "worktree", projectId: 1, enabled: false }]);
   });
 });

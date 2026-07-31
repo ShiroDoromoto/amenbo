@@ -67,7 +67,7 @@ export const nl: Translation = {
     "projset.foldersHint": "Een AI die in deze mappen start, kan dit project bedienen.",
     "projset.plugins": "Plug-ins",
     "projset.pluginsHint": "Een plug-in die hier aan staat, gaat af voor dit project. Het is dezelfde schakelaar als op het plug-inscherm.",
-    "projset.pluginsNoneOn": "In dit project staat er geen aan", "projset.pluginsAdd": "Een plug-in aanzetten…",
+    "projset.pluginsNone": "Hier staat er geen aan en is er geen ingevuld", "projset.pluginsAdd": "Plug-in toevoegen…",
     "projset.aiReady": "Klaar voor AI", "projset.folderStale": "niet gevonden",
     "projset.addFolder": "Map toevoegen", "projset.noFolders": "Nog geen gekoppelde mappen.",
     "projset.unbind": "Ontkoppelen",

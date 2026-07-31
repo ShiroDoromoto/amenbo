@@ -67,7 +67,7 @@ export const ja: Translation = {
     "projset.foldersHint": "これらのフォルダで起動した AI が、このプロジェクトを操作できます。",
     "projset.plugins": "プラグイン",
     "projset.pluginsHint": "ここでオンにしたプラグインは、このプロジェクトで動きます。プラグイン画面と同じスイッチです。",
-    "projset.pluginsNoneOn": "このプロジェクトではどれもオンになっていません", "projset.pluginsAdd": "プラグインを選んで有効にする",
+    "projset.pluginsNone": "オンのものも、設定を持つものもありません", "projset.pluginsAdd": "プラグインを足す",
     "projset.aiReady": "AI操作可", "projset.folderStale": "見つかりません",
     "projset.addFolder": "フォルダを追加", "projset.noFolders": "紐付けフォルダはまだありません。",
     "projset.unbind": "解除",

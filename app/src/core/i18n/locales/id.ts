@@ -70,7 +70,7 @@ export const id: Translation = {
     "projset.foldersHint": "AI yang dijalankan di folder-folder ini bisa mengoperasikan proyek ini.",
     "projset.plugins": "Plugin",
     "projset.pluginsHint": "Plugin yang dinyalakan di sini berjalan untuk proyek ini. Sakelarnya sama dengan yang di layar plugin.",
-    "projset.pluginsNoneOn": "Tidak ada yang menyala di proyek ini", "projset.pluginsAdd": "Nyalakan sebuah plugin…",
+    "projset.pluginsNone": "Tidak ada yang menyala atau terisi di sini", "projset.pluginsAdd": "Tambahkan plugin…",
     "projset.aiReady": "Siap untuk AI", "projset.folderStale": "tidak ditemukan",
     "projset.addFolder": "Tambah folder", "projset.noFolders": "Belum ada folder yang tertaut.",
     "projset.unbind": "Lepaskan",

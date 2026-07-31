@@ -70,7 +70,7 @@ export const th: Translation = {
     "projset.foldersHint": "AI ที่เปิดในโฟลเดอร์เหล่านี้ใช้งานโปรเจกต์นี้ได้",
     "projset.plugins": "ปลั๊กอิน",
     "projset.pluginsHint": "ปลั๊กอินที่เปิดใช้ที่นี่จะทำงานกับโปรเจกต์นี้ เป็นสวิตช์เดียวกับในหน้าปลั๊กอิน",
-    "projset.pluginsNoneOn": "โปรเจกต์นี้ยังไม่ได้เปิดใช้อันใดเลย", "projset.pluginsAdd": "เลือกปลั๊กอินเพื่อเปิดใช้…",
+    "projset.pluginsNone": "ที่นี่ยังไม่มีอันใดเปิดใช้หรือกรอกค่าไว้", "projset.pluginsAdd": "เพิ่มปลั๊กอิน…",
     "projset.aiReady": "พร้อมสำหรับ AI", "projset.folderStale": "ไม่พบ",
     "projset.addFolder": "เพิ่มโฟลเดอร์", "projset.noFolders": "ยังไม่มีโฟลเดอร์ที่ผูกไว้",
     "projset.unbind": "ปลดการผูก",

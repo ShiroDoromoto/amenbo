@@ -70,7 +70,7 @@ export const uk: Translation = {
     "projset.foldersHint": "Запущений у цих папках ШІ може працювати з цим проєктом.",
     "projset.plugins": "Плагіни",
     "projset.pluginsHint": "Увімкнений тут плагін спрацьовує для цього проєкту. Це той самий перемикач, що й на екрані плагінів.",
-    "projset.pluginsNoneOn": "У цьому проєкті не ввімкнено жодного", "projset.pluginsAdd": "Увімкнути плагін…",
+    "projset.pluginsNone": "Тут не ввімкнено й не заповнено жодного", "projset.pluginsAdd": "Додати плагін…",
     "projset.aiReady": "Готово для ШІ", "projset.folderStale": "не знайдено",
     "projset.addFolder": "Додати папку", "projset.noFolders": "Прив'язаних папок поки немає.",
     "projset.unbind": "Відв'язати",

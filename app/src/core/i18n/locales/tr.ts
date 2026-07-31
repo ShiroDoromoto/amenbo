@@ -67,7 +67,7 @@ export const tr: Translation = {
     "projset.foldersHint": "Bu klasörlerde başlatılan yapay zekâ bu projeyi işletebilir.",
     "projset.plugins": "Eklentiler",
     "projset.pluginsHint": "Burada açılan bir eklenti bu projede çalışır. Eklenti ekranındaki anahtarın aynısıdır.",
-    "projset.pluginsNoneOn": "Bu projede hiçbiri açık değil", "projset.pluginsAdd": "Bir eklenti aç…",
+    "projset.pluginsNone": "Burada hiçbiri açık veya doldurulmuş değil", "projset.pluginsAdd": "Eklenti ekle…",
     "projset.aiReady": "Yapay zekâya hazır", "projset.folderStale": "bulunamadı",
     "projset.addFolder": "Klasör ekle", "projset.noFolders": "Henüz bağlı klasör yok.",
     "projset.unbind": "Bağı çöz",

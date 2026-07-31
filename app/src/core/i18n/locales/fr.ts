@@ -70,7 +70,7 @@ export const fr: Translation = {
     "projset.foldersHint": "Une IA lancée dans ces dossiers peut piloter ce projet.",
     "projset.plugins": "Extensions",
     "projset.pluginsHint": "Une extension activée ici agit dans ce projet. C'est le même interrupteur que celui de l'écran des extensions.",
-    "projset.pluginsNoneOn": "Aucune n'est activée dans ce projet", "projset.pluginsAdd": "Activer une extension…",
+    "projset.pluginsNone": "Aucune n'est activée ni renseignée ici", "projset.pluginsAdd": "Ajouter une extension…",
     "projset.aiReady": "Prêt pour l'IA", "projset.folderStale": "introuvable",
     "projset.addFolder": "Ajouter un dossier", "projset.noFolders": "Aucun dossier lié pour l'instant.",
     "projset.unbind": "Délier",

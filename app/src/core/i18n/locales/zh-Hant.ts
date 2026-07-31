@@ -68,7 +68,7 @@ export const zhHant: Translation = {
     "projset.foldersHint": "在這些資料夾中啟動的 AI 可以操作這個專案。",
     "projset.plugins": "外掛",
     "projset.pluginsHint": "在這裡啟用的外掛會為這個專案觸發。這與外掛頁面上的開關是同一個。",
-    "projset.pluginsNoneOn": "這個專案還沒有啟用任何外掛", "projset.pluginsAdd": "選擇外掛以啟用…",
+    "projset.pluginsNone": "這裡還沒有啟用或填寫任何外掛", "projset.pluginsAdd": "新增外掛…",
     "projset.aiReady": "AI 就緒", "projset.folderStale": "已遺失",
     "projset.addFolder": "新增資料夾", "projset.noFolders": "還沒有連結任何資料夾。",
     "projset.unbind": "解除連結",

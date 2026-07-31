@@ -67,7 +67,7 @@ export const hi: Translation = {
     "projset.foldersHint": "इन फ़ोल्डरों में चलाया गया AI इस प्रोजेक्ट को संचालित कर सकता है।",
     "projset.plugins": "प्लगिन",
     "projset.pluginsHint": "यहाँ चालू किया प्लगिन इस प्रोजेक्ट के लिए चलता है। यह वही स्विच है जो प्लगिन स्क्रीन दिखाती है।",
-    "projset.pluginsNoneOn": "इस प्रोजेक्ट में कोई चालू नहीं है", "projset.pluginsAdd": "कोई प्लगिन चालू करें…",
+    "projset.pluginsNone": "यहाँ कोई चालू या भरा हुआ नहीं है", "projset.pluginsAdd": "प्लगिन जोड़ें…",
     "projset.aiReady": "AI के लिए तैयार", "projset.folderStale": "मौजूद नहीं",
     "projset.addFolder": "फ़ोल्डर जोड़ें", "projset.noFolders": "अभी कोई फ़ोल्डर नहीं जुड़ा है।",
     "projset.unbind": "अलग करें",

@@ -70,7 +70,7 @@ export const vi: Translation = {
     "projset.foldersHint": "AI chạy trong những thư mục này có thể vận hành dự án này.",
     "projset.plugins": "Plugin",
     "projset.pluginsHint": "Plugin bật ở đây sẽ chạy cho dự án này. Vẫn là công tắc mà màn hình plugin hiển thị.",
-    "projset.pluginsNoneOn": "Dự án này chưa bật cái nào", "projset.pluginsAdd": "Bật một plugin…",
+    "projset.pluginsNone": "Ở đây chưa bật hay điền cái nào", "projset.pluginsAdd": "Thêm plugin…",
     "projset.aiReady": "Sẵn cho AI", "projset.folderStale": "không thấy",
     "projset.addFolder": "Thêm thư mục", "projset.noFolders": "Chưa gắn thư mục nào.",
     "projset.unbind": "Gỡ gắn",

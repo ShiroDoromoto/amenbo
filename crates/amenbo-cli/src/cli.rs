@@ -23,9 +23,6 @@ pub struct Cli {
     /// skip confirmation for destructive operations (non-interactive)
     #[arg(long, short = 'y', global = true)]
     pub yes: bool,
-    /// deprecated: accepted but ignored — a store owns a single workspace
-    #[arg(long, global = true, hide = true)]
-    pub workspace: Option<String>,
     /// suppress the human-facing success message
     #[arg(long, global = true)]
     pub quiet: bool,

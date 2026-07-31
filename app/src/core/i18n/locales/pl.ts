@@ -70,7 +70,7 @@ export const pl: Translation = {
     "projset.foldersHint": "SI uruchomiona w tych folderach może obsługiwać ten projekt.",
     "projset.plugins": "Wtyczki",
     "projset.pluginsHint": "Wtyczka włączona tutaj działa w tym projekcie. To ten sam przełącznik, co na ekranie wtyczek.",
-    "projset.pluginsNoneOn": "W tym projekcie żadna nie jest włączona", "projset.pluginsAdd": "Włącz wtyczkę…",
+    "projset.pluginsNone": "Żadna nie jest tu włączona ani wypełniona", "projset.pluginsAdd": "Dodaj wtyczkę…",
     "projset.aiReady": "Gotowe dla SI", "projset.folderStale": "nie znaleziono",
     "projset.addFolder": "Dodaj folder", "projset.noFolders": "Nie ma jeszcze podpiętych folderów.",
     "projset.unbind": "Odepnij",

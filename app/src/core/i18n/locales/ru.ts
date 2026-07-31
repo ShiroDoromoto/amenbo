@@ -70,7 +70,7 @@ export const ru: Translation = {
     "projset.foldersHint": "Запущенный в этих папках ИИ может работать с этим проектом.",
     "projset.plugins": "Плагины",
     "projset.pluginsHint": "Включённый здесь плагин срабатывает для этого проекта. Это тот же переключатель, что и на экране плагинов.",
-    "projset.pluginsNoneOn": "В этом проекте не включён ни один", "projset.pluginsAdd": "Включить плагин…",
+    "projset.pluginsNone": "Здесь ни один не включён и не заполнен", "projset.pluginsAdd": "Добавить плагин…",
     "projset.aiReady": "Готова для ИИ", "projset.folderStale": "не найдена",
     "projset.addFolder": "Добавить папку", "projset.noFolders": "Связанных папок пока нет.",
     "projset.unbind": "Отвязать",

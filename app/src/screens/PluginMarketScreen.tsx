@@ -61,7 +61,7 @@ export function PluginMarketScreen({ onOpenInstalled }: {
   const { installs } = usePluginInstalls();
   // Opening a plugin screen is one of the update triggers (`AMB-D-359`). The offer is the shell's banner, so
   // nothing is drawn here for it — this only asks. Free inside the catalog's freshness window.
-  useEffect(() => { refreshPluginUpdates(); }, []);
+  useEffect(() => { refreshPluginUpdates("incidental"); }, []);
 
   const categories = useMemo(() => pluginCategories(catalog.entries), [catalog.entries]);
   // The catalogs the filter can name one by one: the registered ones, in registration order. The

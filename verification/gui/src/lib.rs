@@ -363,6 +363,14 @@ impl Instructor {
                     return Err(format!("action `ai-launch-consent` does not know the answer `{other}`"))
                 }
             },
+            // Which of the tools on offer the text is for. Only a folder that points at none is offered
+            // more than one, so this is where that road parts from the traced one — and picking a tool
+            // the folder shows no trace of is what proves the catalog is standing behind the picker,
+            // since the text that follows is that tool's and no other's.
+            (Domain::Repo, "ai-launch-pick") => format!(
+                "In the report standing about this folder, choose \"{}\" among the tools it offers text for.",
+                req(with, "tool")?
+            ),
             (Domain::Repo, "ai-launch-copy") => format!(
                 "In the report standing about this folder, press the button beside \"{}\" that takes its text.",
                 req(with, "tool")?
@@ -1137,6 +1145,40 @@ steps_gui:
         assert!(fold("This folder looks like Claude Code's.").contains(&fold("claude-code")));
         let notice = ins.expectation(&s.steps(Driver::Gui)[2]).expect("the file is what only the report names");
         assert_eq!(notice, Expectation { text: ".claude/settings.json".to_string(), present: true });
+    }
+
+    /// The same road in a folder that names no tool: the pick is what carries the screen from one
+    /// tool's text to another's, and the two readings on either side of it are the two files. A picker
+    /// that moved its own label and left the text alone leaves both shots reading the first file, which
+    /// is the red this pair is written to catch.
+    #[test]
+    fn picking_a_tool_moves_the_reading_to_that_tools_own_file() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with: { tool: claude-code, paste_into: .claude/settings.json }
+  - type: action
+    domain: repo
+    op: ai-launch-pick
+    with: { tool: gemini-cli }
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with: { tool: gemini-cli, paste_into: .gemini/settings.json }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[1].contains("\"gemini-cli\"") && lines[1].contains("choose"), "got: {}", lines[1]);
+
+        let before = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the file is the reading");
+        let after = ins.expectation(&s.steps(Driver::Gui)[2]).expect("the file is the reading");
+        assert_eq!(before, Expectation { text: ".claude/settings.json".to_string(), present: true });
+        assert_eq!(after, Expectation { text: ".gemini/settings.json".to_string(), present: true });
     }
 
     /// An answer the road does not have is refused where it is written, not carried to a screen as an

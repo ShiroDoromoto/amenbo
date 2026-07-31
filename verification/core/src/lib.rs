@@ -348,9 +348,15 @@ const REGISTRY: &[OpSpec] = &[
     // on the clipboard, which no screenshot reads, so the road ends at the press and what the text says
     // is held from the other end (`ai-launch-text`).
     //
+    // Choosing which tool the text is for, where more than one is on offer. It is the move that says the
+    // offer is a catalog and not a single line: a folder that points at no provider is handed every one
+    // amenbo knows, and the only way to show they are all reachable is to reach one the folder shows no
+    // trace of and read the text change to it (`ai-launch-notice` on that tool's own file).
+    //
     // A screen road alone: a terminal asks inline and prints the text where it stands, so the CLI
-    // driver never meets either of these.
+    // driver never meets any of these three.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-consent", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-pick", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-copy", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     // A plugin's life on this machine. `install` fetches it from the catalog and `enable` opens its
     // gate — two separate acts on purpose, since an installed plugin that never fires is the normal

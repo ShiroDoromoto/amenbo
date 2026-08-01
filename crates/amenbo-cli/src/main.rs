@@ -5222,6 +5222,9 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             let result = store.list_tasks(query::ListParams {
                 project_id, filter_expr: filter, sort,
                 limit, offset,
+                // The structural term is for a caller with a phrase in hand and no expression to put it in
+                // (a search box). Here the expression *is* what was typed, so it carries the words too.
+                text: None,
                 // Reach belongs to the store — the surface does not declare it here; `Store`'s read supply
                 // applies it.
             }).map_err(CliError::from)?;

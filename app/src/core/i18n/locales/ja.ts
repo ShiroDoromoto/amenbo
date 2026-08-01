@@ -120,7 +120,8 @@ export const ja: Translation = {
     "filter.opt.assignee.none": "未割り当て", "filter.opt.assignee.me": "自分", "filter.opt.assignee.meAi": "自分の AI",
     // The compound status option: both terminals, whichever way the task ended.
     "filter.opt.status.closed": "閉じた（完了・却下）",
-    "board.searchPh": "タイトル・概要・コメント・AMB-T-<n> を検索",
+    "board.searchPh": "タスク・AMB-T-<n> を検索",
+    "board.searchFailed": "検索できなかった",
     "board.addDimension": "分類", "board.dimensionNamePh": "分類名（Enter で追加）",
     "board.addDimensionValue": "値", "board.dimensionValuePh": "値名（Enter で追加）",
     "board.noDimensionValue": "(値なし)",

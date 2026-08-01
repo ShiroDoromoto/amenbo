@@ -161,6 +161,7 @@ pub fn run() {
       commands::change_cursor,
       commands::task_activity,
       commands::task_page,
+      commands::task_search,
       commands::tasks_by_ids,
       commands::decision_page,
       commands::decision_search,

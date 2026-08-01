@@ -141,18 +141,65 @@ export function useDecisionSearchIds(
   projectId: number,
   text: string,
 ): { hits: Set<number> | null; error: unknown } {
+  return useSearchIds("decisionSearch", projectId, text, fetchDecisionSearchIds);
+}
+
+/**
+ * The ids of a project's tasks matching `text` — the board's search, and the task twin of
+ * {@link useDecisionSearchIds}.
+ *
+ * The board holds a page of the project's tasks, but a card carries no comment body (only the 💬 count),
+ * no label and no attachment name, so a client-side substring match reaches two of the five faces the word
+ * index carries. The typed text therefore goes to `task_search` — the same match the read-model runs — and
+ * comes back as the ids to narrow what the screen already holds by. It goes as a term rather than as a
+ * `text:` written into the page's filter expression because the grammar splits on whitespace: a phrase
+ * spelled back into an expression loses everything after the first word (`AMB-D-449`).
+ *
+ * The three states, and the error, are exactly {@link useDecisionSearchIds}'s — see there.
+ */
+export function useTaskSearchIds(
+  projectId: number,
+  text: string,
+): { hits: Set<number> | null; error: unknown } {
+  return useSearchIds("taskSearch", projectId, text, fetchTaskSearchIds);
+}
+
+/** The one implementation behind both id-narrowing searches. `keyPrefix` keeps the two query caches apart. */
+function useSearchIds(
+  keyPrefix: string,
+  projectId: number,
+  text: string,
+  fetchIds: (projectId: number, text: string) => Promise<number[] | null>,
+): { hits: Set<number> | null; error: unknown } {
   const q = text.trim();
   const { data, error } = useQuery<number[] | null>(
-    ["decisionSearch", projectId, q],
-    () => fetchDecisionSearchIds(projectId, q),
+    [keyPrefix, projectId, q],
+    () => fetchIds(projectId, q),
   );
   // Hold the last answer while the next one is in flight. Every keystroke is a new query key, so `data` is
-  // undefined for a render — and reading that as "no search" makes the list flash back to every decision
+  // undefined for a render — and reading that as "no search" makes the list flash back to every row
   // between characters. An empty result is an answer and is kept as one; only "not back yet" falls through.
   const held = useRef<Set<number> | null>(null);
   if (q === "") held.current = null;
   else if (data) held.current = new Set(data);
   return { hits: held.current, error: q === "" ? undefined : error };
+}
+
+/** The fetch behind {@link useTaskSearchIds}. `null` for an empty query — nothing to ask. */
+async function fetchTaskSearchIds(projectId: number, text: string): Promise<number[] | null> {
+  if (text === "") return null;
+  if (inTauri()) return invoke<number[]>("task_search", { projectId, text });
+  // Browser fallback. The fixtures carry no comment bodies, no labels and no attachments, so title and
+  // notes *are* the whole of what could match here — the mock's shape, not a second definition of the
+  // search. Several words AND, as they do in core.
+  const terms = text.toLowerCase().split(/\s+/).filter(Boolean);
+  return getSnapshot()
+    .tasks.filter((t) => t.projectId === projectId)
+    .filter((t) => {
+      const hay = `${t.title}\n${t.notes ?? ""}`.toLowerCase();
+      return terms.every((term) => hay.includes(term));
+    })
+    .map((t) => t.id);
 }
 
 /** The fetch behind {@link useDecisionSearchIds}. `null` for an empty query — nothing to ask. */
@@ -556,8 +603,8 @@ function dedupById(tasks: TaskCard[]): TaskCard[] {
 /**
  * The browser-mock fallback (outside Tauri, i.e. iterating on the frontend alone). Filters the fixtures with a
  * subset of `task_page`'s grammar, evaluating only the tokens the views actually emit (status/done/assignee/due).
- * In the read-model, `text:` searches title + notes + comment bodies (query.rs); the mock has no comment bodies,
- * so it settles for title + notes. An assignee token resolves to a facet: `me`/`me-ai` by kind, a bare `human`/`ai`
+ * Words are not among them: the search is its own door now ({@link useTaskSearchIds}), not a `text:` written
+ * into this expression. An assignee token resolves to a facet: `me`/`me-ai` by kind, a bare `human`/`ai`
  * by kind too, and anything else against the display name.
  */
 function mockMatches(t: TaskCard, q: TaskPageQuery): boolean {
@@ -570,11 +617,6 @@ function mockMatches(t: TaskCard, q: TaskPageQuery): boolean {
       // `done:` asks whether the task is **closed**, not whether it was carried out (`AMB-D-397`).
       case "done": if (isClosed(t.status) !== (value === "true")) return false; break;
       case "due": if (value === "today" && t.due !== TODAY) return false; break;
-      case "text": {
-        const v = value.toLowerCase();
-        if (!t.title.toLowerCase().includes(v) && !(t.notes ?? "").toLowerCase().includes(v)) return false;
-        break;
-      }
       case "assignee":
         if (value === "none" && t.assignee) return false;
         else if (value === "me" && t.assignee?.kind !== "human") return false;

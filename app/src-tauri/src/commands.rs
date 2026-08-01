@@ -1600,6 +1600,117 @@ pub fn decision_search(project_id: i64, text: String) -> Result<Vec<i64>, CmdErr
     Ok(result.decisions.into_iter().map(|d| d.id).collect())
 }
 
+/// Which face of a record the words landed on — the wire form of
+/// [`amenbo_core::query::HitFace`]. Crossing as a name rather than a rank keeps the face something the
+/// screen can label and icon; the rank is the engine's business.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum SearchFaceDto {
+    Title,
+    Body,
+    Comment,
+    Label,
+    Attachment,
+}
+
+impl From<amenbo_core::query::HitFace> for SearchFaceDto {
+    fn from(face: amenbo_core::query::HitFace) -> Self {
+        use amenbo_core::query::HitFace;
+        match face {
+            HitFace::Title => Self::Title,
+            HitFace::Body => Self::Body,
+            HitFace::Comment => Self::Comment,
+            HitFace::Label => Self::Label,
+            HitFace::Attachment => Self::Attachment,
+        }
+    }
+}
+
+/// One place the words are written: the face, the record that face belongs to, and the excerpt that
+/// points at it. The wire form of [`amenbo_core::query::SearchHit`].
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SearchHitDto {
+    face: SearchFaceDto,
+    /// Which side the record is on — `task` or `decision`. The face alone does not say: a title is either.
+    kind: String,
+    /// The record's ref (`AMB-T-<n>` / `AMB-D-<n>`) — what the row opens, and where the number in it
+    /// comes from.
+    r#ref: String,
+    title: String,
+    /// The comment the words are in (`AMB-TC-<n>` / `AMB-DC-<n>`), when the hit is not on the record's
+    /// own faces.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    comment: Option<String>,
+    /// The hit's own instant, RFC3339 — a comment's posting time, or when the text it sits in was last
+    /// written.
+    at: String,
+    snippet: String,
+}
+
+/// One page of hits, and how many there are in all.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResultDto {
+    hits: Vec<SearchHitDto>,
+    /// How many there are in all — what tells the screen its page left something behind.
+    total_matched: usize,
+}
+
+/// The GUI's side of `search` (`AMB-D-449`): every place the words are written, hit by hit, across
+/// tasks, decisions and the comments on either.
+///
+/// It is not the board's narrowing under another name. Narrowing answers "which of the rows in front of
+/// me match" and returns ids ([`decision_search`], and the task twin the board uses); this answers "where
+/// is this written" and returns places, which is why it is a screen of its own rather than a filter on one.
+///
+/// **The reach is the store's, and the store's reach on this face is every project.** That is not a
+/// property of being the GUI: [`amenbo_core::query::search`] takes the reach as an argument, so an AI
+/// facet running the same read is held to its bound project by the same call. The window here is wide
+/// because the human's is.
+///
+/// `filter` is `task list`'s grammar, so a search carrying one is a search of tasks — an expression that
+/// does not parse comes back as the error it is, rather than as a silently unfiltered page.
+#[tauri::command]
+pub fn search(
+    text: String,
+    kind: Option<String>,
+    filter: Option<String>,
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> Result<SearchResultDto, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("search");
+    let store = open_store_read()?;
+    let result = store.search(amenbo_core::query::SearchParams {
+        text,
+        filter_expr: filter.filter(|f| !f.trim().is_empty()),
+        kind: kind.as_deref().map(amenbo_core::query::SearchKind::parse).transpose()?,
+        sort: amenbo_core::query::SearchSort::default(),
+        limit,
+        offset,
+    })?;
+    Ok(SearchResultDto {
+        total_matched: result.total_matched,
+        hits: result
+            .hits
+            .into_iter()
+            .map(|h| SearchHitDto {
+                face: h.face.into(),
+                kind: h.kind,
+                r#ref: h.r#ref,
+                title: h.title,
+                comment: h.comment,
+                at: h.at.to_rfc3339_z(),
+                snippet: h.snippet,
+            })
+            .collect(),
+    })
+}
+
 /// Hydrate the given ids into `DecisionDto` (input order preserved). The decision twin of
 /// `tasks_by_ids`; the decision detail pane uses it to fetch a single decision. Ids that do not
 /// exist are dropped silently.

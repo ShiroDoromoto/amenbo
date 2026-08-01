@@ -437,6 +437,26 @@ button.feed__target:hover { color: var(--c-accent); }
 .cmdcat__examples { margin-top: var(--s-2); display: flex; flex-direction: column; gap: 2px; }
 .cmdcat__example { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-faint); }
 
+/* ---------- search (where a word is written) ---------- */
+/* This toolbar has to survive the detail pane opening beside it, which takes a third of the width away.
+   It wraps to a second row rather than squeezing: every control keeps its size, and the note — the one
+   thing on the row nobody presses — is what gives way first. */
+.board__toolbar--search { flex-wrap: wrap; row-gap: var(--s-2); }
+.board__toolbar--search .filterchip, .board__toolbar--search .btn { flex: none; }
+.srch__input { flex: 1 1 220px; min-width: 140px; max-width: 320px; margin: 0; font-size: var(--fs-md); }
+.srch__filter { flex: 1 1 140px; min-width: 100px; max-width: 200px; margin: 0; font-size: var(--fs-sm); font-family: var(--font-mono); }
+.srch__label { flex: none; font-size: var(--fs-xs); }
+.srch__note { flex: 0 1 auto; min-width: 0; font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srch__face { flex: none; width: 20px; text-align: center; }
+.srch__ref { font-family: var(--font-mono); }
+/* The excerpt is a glance at where something is written, not the reading — it keeps the writer's own
+   line breaks but never grows the row past two lines. */
+.srch__snippet {
+  font-size: var(--fs-sm); color: var(--c-text-muted); margin-top: 2px;
+  white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+.srch__error { color: var(--c-danger, #c0392b); font-size: var(--fs-sm); }
+
 /* ---------- empty / placeholder ---------- */
 .placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-3); color: var(--c-text-faint); }
 .placeholder__big { font-size: var(--fs-display-md); }

@@ -164,6 +164,7 @@ pub fn run() {
       commands::tasks_by_ids,
       commands::decision_page,
       commands::decision_search,
+      commands::search,
       commands::decisions_by_ids,
       commands::resolve_ref,
       commands::task_add,

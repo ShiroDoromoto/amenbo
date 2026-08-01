@@ -11,6 +11,7 @@ import { PluginInstalledScreen } from "../screens/PluginInstalledScreen";
 import { PluginMarketScreen } from "../screens/PluginMarketScreen";
 import { PluginUpdateBanner } from "../components/PluginUpdateBanner";
 import { ListScreen } from "../screens/ListScreen";
+import { SearchScreen } from "../screens/SearchScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { OnboardingSetup } from "../screens/OnboardingSetup";
@@ -284,7 +285,11 @@ export function AppShell() {
 
   const isTaskScreen = nav.type === "project" || (nav.type === "view" && LIST_VIEWS.includes(nav.id));
   const isActivityScreen = nav.type === "view" && nav.id === "activity";
-  const showRight = (isTaskScreen || isActivityScreen) && (selectedTaskId !== null || compose !== null || selectedDecisionId !== null);
+  // Search shows the pane for the same reason activity does: its rows name tasks and decisions both, and
+  // the excerpt is a pointer — pressing it has to land somewhere that holds the whole of what it points at.
+  const isSearchScreen = nav.type === "view" && nav.id === "search";
+  const showRight = (isTaskScreen || isActivityScreen || isSearchScreen)
+    && (selectedTaskId !== null || compose !== null || selectedDecisionId !== null);
 
   const refNav = useMemo(() => ({ selectTask, selectDecision }), [selectTask, selectDecision]);
 
@@ -368,6 +373,9 @@ export function AppShell() {
               onEditComment={editCommentInTask}
               onEditDecisionComment={editDecisionCommentIn}
             />
+          )}
+          {nav.type === "view" && nav.id === "search" && (
+            <SearchScreen onOpenTask={selectTask} onOpenDecision={selectDecision} />
           )}
           {nav.type === "view" && nav.id === "commands" && <CommandCatalogScreen />}
           {nav.type === "view" && nav.id === "plugins" && (

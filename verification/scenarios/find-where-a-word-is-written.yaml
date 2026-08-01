@@ -245,3 +245,111 @@ steps_cli:
       target: outbox
       filter: "status:todo"
       present: false
+
+# The same goal reached on the screen that answers it. The road is shorter than the terminal's, and cut
+# on what a reading can settle rather than on what matters less: a hit row leads with the record it
+# belongs to whichever face the words were on, so the screen says which records the words reach, and the
+# face is named in each step for the eye that closes it. That is also why every step that asks for
+# something to be missing asks it of the whole record — a word narrowed off one face still draws the
+# other faces' rows, and the title with them.
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO TASK — the retention window
+    as: window
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: window
+      notes: the window is measured in days, never in rows
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: window
+      text: the sweep runs nightly
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — retention of the outbox
+    as: outbox
+
+  # One word per face. Each was written in exactly one of the three, so the record coming back for all
+  # three is the screen reaching every face a card of its own would never show.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: window
+      face: title
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: measured
+      target: window
+      face: body
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: sweep
+      target: window
+      face: comment
+
+  # The crossing to the other side, which is what makes this a screen of its own rather than a board's
+  # search box: a decision has no card on any board.
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      face: title
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention unwritten
+      target: window
+      present: false
+
+  # The two narrowings the screen draws its own controls for — the chips that keep one side, and the box
+  # that takes the task list's grammar. Each takes the decision out of an answer it was in a step ago.
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      kind: task
+      present: false
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: window
+      filter: "status:todo"
+      face: title
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      filter: "status:todo"
+      present: false

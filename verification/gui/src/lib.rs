@@ -221,9 +221,18 @@ impl Instructor {
     /// expectation is the whole title rather than any word of it: a card that went carries none of its
     /// title, and the half of the query still on screen cannot read as the card that left.
     ///
-    /// `opened` is judged on the phrase the step names instead of on the record's title, and that is
-    /// the whole of the reading: the title is on the hit row the press was made from, so a shot where
-    /// nothing opened at all would carry it — and so would one where the wrong record did.
+    /// `found` is judged on the same text again — every hit row leads with the ref and the title of the
+    /// record it belongs to, whichever face the words were written on. What that settles is that the
+    /// record is among the hits, which is the half a screen can be read for. The face itself is a word of
+    /// the interface, and the row carrying it is drawn under a title that is on the shot either way, so
+    /// the face named in a step is for the eye and the instruction says it out loud. The other side of
+    /// that: a `present: false` step here has to be one where the whole *record* leaves the answer, since
+    /// a hit on any of its faces puts its title back on the shot.
+    ///
+    /// `opened` is the step after that press, and it is judged on the phrase it names instead of on the
+    /// record's title, for the reason `found` cannot be: the title is on the hit row the press was made
+    /// from, so a shot where nothing opened at all would carry it — and so would one where the wrong
+    /// record did.
     ///
     /// `browsed` is judged the same way when it says an entry is **not** official: the badge such a
     /// row wears is the serving catalog's name, which is a name the user gave and not a word of the
@@ -279,7 +288,10 @@ impl Instructor {
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
-            (Domain::Task, "listed") | (Domain::Task, "narrowed") => {
+            (Domain::Task, "listed")
+            | (Domain::Task, "narrowed")
+            | (Domain::Task, "found")
+            | (Domain::Decision, "found") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
             (Domain::Task, "opened") => {
@@ -322,6 +334,19 @@ impl Instructor {
                 self.target_label(with),
                 req(with, "text")?
             ),
+            // The op names whichever of a task's own fields the step is setting, so the instruction names
+            // those and no others: a line that recited the whole form would have the operator wondering
+            // what to put in the fields the road never mentioned.
+            (Domain::Task, "update") => {
+                let set: Vec<String> = ["title", "notes", "due", "start", "priority"]
+                    .iter()
+                    .filter_map(|k| arg_str(with, k).map(|v| format!("its {k} to \"{v}\"")))
+                    .collect();
+                if set.is_empty() {
+                    return Err("action `update` names no field to set".to_string());
+                }
+                format!("Open the task \"{}\" and set {}.", self.target_label(with), set.join(", "))
+            }
             (Domain::Decision, "create") => {
                 format!("Create a decision titled \"{}\".", req(with, "title")?)
             }
@@ -524,6 +549,28 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
+            // The asking is inside the confirming, the way `listed`'s filter is: the cross-cutting search
+            // answers one question per question put to it, so there is no standing screen for a separate
+            // move to arrive at — the words, the narrowing and the reading are one thing a reader does.
+            (Domain::Task, "found") | (Domain::Decision, "found") => {
+                let side = if domain == Domain::Task { "task" } else { "decision" };
+                let mut line = format!("Ask the cross-cutting search for \"{}\"", req(with, "words")?);
+                if let Some(kind) = arg_str(with, "kind") {
+                    line.push_str(&format!(", narrowed to {kind}"));
+                }
+                if let Some(filter) = arg_str(with, "filter") {
+                    line.push_str(&format!(", narrowed by `{filter}`"));
+                }
+                line.push_str(&format!(
+                    ", and confirm the {side} \"{}\" is {} the hits",
+                    self.target_label(with),
+                    if present(with) { "among" } else { "not among" }
+                ));
+                match arg_str(with, "face") {
+                    Some(face) => format!("{line}, on its {face}."),
+                    None => format!("{line}."),
+                }
+            }
             (Domain::Task, "field") => format!(
                 "Confirm the task \"{}\" shows {} = {}.",
                 self.target_label(with),

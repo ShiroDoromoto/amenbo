@@ -919,10 +919,10 @@ mod tests {
         assert_eq!(r.count, 1);
         assert_eq!(r.decisions[0].id, d1.id);
 
-        // `text:` searches the body as well as the title (this term appears only in d2's body).
+        // The word narrowing searches the body as well as the title (this term appears only in d2's body).
         let r = decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
             project_id: Some(pid),
-            filter_expr: Some("text:英語".to_string()),
+            text: Some("英語".to_string()),
             sort: "-created".to_string(),
             ..Default::default()
         }).unwrap();
@@ -946,7 +946,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         // The term appears in neither title nor body — only in a comment. Before the comment arm this
-        // matched nothing; now it hits, mirroring the task side's `text:` over comment bodies.
+        // matched nothing; now it hits, mirroring the task side's word narrowing over comment bodies.
         let d = add(tx, NewDecision {
             title: "RDB を真実源にする".to_string(),
             body: "engine+HLC で同期".to_string(),
@@ -962,7 +962,7 @@ mod tests {
 
         let r = decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
             project_id: Some(pid),
-            filter_expr: Some("text:計測".to_string()),
+            text: Some("計測".to_string()),
             sort: "-created".to_string(),
             ..Default::default()
         }).unwrap();
@@ -972,7 +972,7 @@ mod tests {
         // Case-insensitive, same as the title/body arms.
         let r = decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
             project_id: Some(pid),
-            filter_expr: Some("text:合意".to_string()),
+            text: Some("合意".to_string()),
             sort: "-created".to_string(),
             ..Default::default()
         }).unwrap();
@@ -1009,12 +1009,14 @@ mod tests {
         );
     }
 
-    /// The structural `text` term (`DecisionListParams::text`) is the same search as the grammar's `text:`,
-    /// for the callers that cannot spell one — a search box hands over a phrase, and the grammar splits on
-    /// whitespace, so an expression would silently drop everything after the first word. Given both, the
-    /// structural one is the term.
+    /// The structural `text` term (`DecisionListParams::text`) is the only way words reach a listing, and it
+    /// is shaped for the caller that holds a phrase: a search box hands over whatever was typed, spaces and
+    /// all, whereas the grammar splits on whitespace and would silently drop everything after the first word.
+    ///
+    /// The grammar itself no longer carries words at all (`AMB-D-449`) — so a `text:` written into a
+    /// `--filter` is refused, and the refusal says where words went rather than reading as a typo.
     #[test]
-    fn the_structural_text_term_carries_a_phrase_the_grammar_cannot() {
+    fn the_structural_text_term_carries_a_phrase_the_grammar_never_could() {
         use crate::query::{decision_list, DecisionListParams};
         let e = new_engine();
         let tx = &e.write().unwrap();
@@ -1045,25 +1047,16 @@ mod tests {
         assert_eq!(r.count, 1, "the phrase reaches the comment arm whole");
         assert_eq!(r.decisions[0].id, d.id);
 
-        // The same phrase through the grammar cannot be said at all: whitespace ends the value.
+        // The same words through the grammar are refused, and the refusal names the command that reads
+        // them — the one key that was taken away must not read as a misspelling.
         let via_grammar = decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
             project_id: Some(pid),
-            filter_expr: Some("text:measured first".to_string()),
+            filter_expr: Some("text:measured".to_string()),
             sort: "-created".to_string(),
             ..Default::default()
         });
-        assert!(via_grammar.is_err(), "the grammar refuses the bare word rather than searching for it");
-
-        // Given both, the structural one is the term.
-        let r = list(DecisionListParams {
-            project_id: Some(pid),
-            filter_expr: Some("text:English".to_string()),
-            text: Some("measured".to_string()),
-            sort: "-created".to_string(),
-            ..Default::default()
-        });
-        assert_eq!(r.count, 1);
-        assert_eq!(r.decisions[0].id, d.id, "the structural term won, not the expression's");
+        let message = via_grammar.expect_err("the grammar has no word key").to_string();
+        assert!(message.contains("search"), "the refusal says where words went: {message}");
     }
 
     #[test]

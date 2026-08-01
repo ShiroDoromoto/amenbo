@@ -1,13 +1,15 @@
 # Finding a decision again. A store's decisions are read by narrowing, never by dumping the corpus,
-# so the filter is not a convenience on top of the listing — it is how anyone reaches a decision they
-# did not just write. This line holds both arms a reader actually types: the keyword, and the status.
+# so this is not a convenience on top of the listing — it is how anyone reaches a decision they did
+# not just write. This line holds both arms a reader actually types: the keyword, which is `search`'s
+# alone, and the status, which is the listing's.
 id: find-a-decision-again
 title: A decision is found by keyword and by status, and the ones that do not match stay out
 description: >
   Record two decisions on different subjects and settle one of them, then ask for each by keyword and
-  by status. What is under test is the narrowing itself: a filter that returned everything, or that
-  quietly returned nothing, reads as a green listing either way, so every arm is asserted from both
-  sides — the decision that matches is present, the one that does not is absent.
+  by status. What is under test is the narrowing itself: an answer that returned everything, or that
+  quietly returned nothing, reads as green either way, so every arm is asserted from both sides — the
+  decision that matches is present, the one that does not is absent. The two arms are two commands:
+  words go to `search`, and the listing's filter narrows by status.
 steps_cli:
   - type: action
     domain: decision
@@ -29,20 +31,20 @@ steps_cli:
     with:
       target: retention
 
-  # By keyword: the filter reads over title and body, and the subject that was not asked for stays out.
+  # By keyword: `search` reads over title and body, and the subject that was not asked for stays out.
   - type: assert
     domain: decision
-    op: listed
+    op: found
     with:
-      filter: "text:retention"
+      words: retention
       target: retention
-      present: true
+      face: title
 
   - type: assert
     domain: decision
-    op: listed
+    op: found
     with:
-      filter: "text:retention"
+      words: retention
       target: installer
       present: false
 

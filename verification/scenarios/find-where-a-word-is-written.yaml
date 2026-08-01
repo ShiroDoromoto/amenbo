@@ -1,9 +1,10 @@
 # Finding where a word is written. A listing answers which records match; this answers which places
-# carry the word, which is the question anyone holding half a memory of something actually asks. The
-# line holds the three faces a reader lands on (a title, a body, a remark on it), the two narrowings,
-# and the rule that decides what counts as a match at all.
+# carry the word, which is the question anyone holding half a memory of something actually asks — and
+# since words left the filter grammar, this is the only place they go. The line holds the five faces a
+# reader lands on (a title, a body, a remark on it, a label it was filed under, the name of what is
+# attached), the folding that decides what counts as a match at all, and the two narrowings.
 id: find-where-a-word-is-written
-title: A word leads to the places it is written — a title, a body, a comment — and the narrowings leave the rest out
+title: A word leads to the places it is written — a title, a body, a comment, a label, an attachment — and the narrowings leave the rest out
 description: >
   Write one word into a task's title, another into its notes and a third into a comment on it, and
   write the first word into a decision as well. Then ask for each word and check the face it comes
@@ -73,6 +74,117 @@ steps_cli:
     with:
       words: retention
       target: outbox
+      face: title
+
+  # Past the bodies, onto what a person named rather than wrote: the label a task was filed under, the
+  # axis that label belongs to, and the name of what is attached to it. None of that text is held on the
+  # task, so each is the join under test — and the task filed under neither stays out.
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: surface
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: surface
+      value: typography
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: window
+      dimension: surface
+      value: typography
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO TASK — the one filed under nothing
+    as: bystander
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: measurements.log
+      content: "one\n"
+
+  - type: action
+    domain: task
+    op: attach
+    with:
+      target: bystander
+      file: measurements.log
+      name: the latency measurements
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: typography
+      target: window
+      face: label
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: surface
+      target: window
+      face: label
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: typography
+      target: bystander
+      present: false
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: measurements
+      target: bystander
+      face: attachment
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: measurements
+      target: window
+      present: false
+
+  # The words are matched on a folded copy, so one reaches the place it is written however it was
+  # typed — width and case are not differences anyone means by them.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO TASK — ＧＡＭＭＡ, the one spelled the wide way
+    as: gamma
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: gamma
+      target: gamma
+      face: title
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: RETENTION
+      target: window
       face: title
 
   # Words are ANDed over the RECORD, not over one face: the title carries the first word and the

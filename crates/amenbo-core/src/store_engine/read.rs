@@ -6,7 +6,7 @@
 //! The filter grammar is parsed by [`crate::query::Filter`]; this module only maps an already-parsed
 //! [`Filter`] to a `WHERE` clause.
 //!
-//! Note on `text:` — the words go to the **word index** ([`super::search`]), never to the record's own
+//! Note on the word narrowing — the words go to the **word index** ([`super::search`]), never to the record's own
 //! columns: a term matches a normalised copy of the title, the notes, or any live comment body, and the
 //! record it belongs to is reached from there. So this module states *which faces belong to which
 //! record*, and leaves what a term means — the trigram index above three characters, a scan of the copy
@@ -547,7 +547,7 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         preds.push(Pred::eq(T.project_id, project_id));
     }
     if let Some(t) = &f.text {
-        // `text:` matches over the word index's normalised copy: the task's own faces (title, notes) and
+        // The words match over the word index's normalised copy: the task's own faces (title, notes) and
         // the faces of its live comments. Every term must land somewhere on the task — the terms are
         // ANDed, each on any one face — so a two-word text is two predicates, not one.
         for term in search::terms(t) {
@@ -1496,7 +1496,7 @@ pub fn decision_comment_list(conn: &Connection, decision_id: i64) -> Result<Vec<
     Ok(rows)
 }
 
-/// The decisions every one of `terms` lands on — the whole of `decision list`'s `text:` filter, read
+/// The decisions every one of `terms` lands on — the whole of `decision list`'s word narrowing, read
 /// **once** and folded into the in-memory match as a set membership, so the listing costs one extra
 /// query rather than a per-decision scan. A term may land on any of the decision's faces: its title, its
 /// body, the body of one of its live comments, or the name of something attached to it or to one of
@@ -2210,7 +2210,7 @@ pub fn decision_page(
 /// partial `Decision` from these fields to reuse the query layer's own filter and sort, then maps to
 /// a `DecisionCompact` via [`crate::view::decision_compact_with`]. `number`/`decided_at` are nullable;
 /// `decided_at`/`created_at` are the stored `to_rfc3339_z` form, parsed back to a `Timestamp` by the
-/// caller. `body` is carried only because the `text:` filter reads it (title OR body).
+/// caller. `body` is carried only because the word narrowing reads it (title OR body).
 pub struct DecisionRow {
     pub id: i64,
     pub project_id: i64,

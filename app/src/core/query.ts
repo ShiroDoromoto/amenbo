@@ -106,6 +106,9 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       case "decision": return touchesScope("decisions");
       case "decisionComments": return touchesScope("decisions");
       case "attachments": return touchesScope("attachments");
+      // A page of hits is drawn from every face at once — a task's words, a decision's, a comment on
+      // either, an axis label, an attachment's name — so it goes stale on any of the scopes those sit in.
+      case "search": return touchesScope("tasks") || touchesScope("decisions") || touchesScope("attachments");
       // The installed rows carry the gate the change feed just moved; the plugins themselves are files on
       // disk, so nothing else on that screen goes stale with them.
       case "plugin-installs": return touchesScope("plugins");

@@ -143,6 +143,9 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
       <div className="sidebar__group">
         <div className="sidebar__label">{t("side.other")}</div>
         {([
+          // Search sits here rather than among the smart views: a smart view is a standing selection of
+          // tasks, and this asks where a word is written across tasks and decisions both (`AMB-D-449`).
+          { id: "search", icon: "🔍", label: t("nav.search") },
           { id: "commands", icon: "📖", label: t("nav.commands") },
           { id: "settings", icon: "⚙", label: t("nav.settings") },
           { id: "onboarding", icon: "🪿", label: t("nav.onboarding") },

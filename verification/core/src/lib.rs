@@ -225,6 +225,14 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "update", required: &["target"], refs: &["target"], strings: &["title", "notes", "due", "start", "priority"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "clear", required: &["target", "field"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "move", required: &["target"], refs: &["target", "project"], strings: &["position"], binds: false },
+    // Narrowing a listing that is already drawn, by the words a reader types over it. The words travel
+    // as words and not as a line of filter grammar — that grammar splits on whitespace, so a phrase
+    // would arrive as its first word alone — and they are ANDed over the record, across every face the
+    // word index covers rather than the two a card shows.
+    //
+    // A screen road alone. A terminal has no listing standing in front of it to narrow: the words and
+    // the reading are one command there, which is what `found` walks.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "narrow", required: &["words"], refs: &[], strings: &["words"], binds: false },
     // A project's own life: its fields, where it sits in the list, and whether it is still in play.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "update", required: &["target"], refs: &["target"], strings: &["name", "notes", "view"], binds: false },
@@ -558,6 +566,11 @@ const REGISTRY: &[OpSpec] = &[
     // the domain's, since a hit says whose it is and a bound id alone does not.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "found", required: &["words", "target"], refs: &["target"], strings: &["words", "face", "kind", "filter"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "found", required: &["words", "target"], refs: &["target"], strings: &["words", "face", "kind", "filter"], binds: false },
+    // What the typed words left standing. Separate from `listed` because there is no filter to write it
+    // as: the narrowing is the screen's own, and the question it answers is which of the cards drawn a
+    // moment ago are drawn still. The words belong to the `narrow` that put them in — repeating them
+    // here would be the one place the two could disagree.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "narrowed", required: &["target"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },

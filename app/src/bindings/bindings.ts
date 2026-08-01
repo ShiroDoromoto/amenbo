@@ -1127,6 +1127,47 @@ export type ResyncReportDto = { scanned: number, updated: Array<ResyncedDto>, };
 export type ResyncedDto = { dir: string, file: string, };
 
 /**
+ * Which face of a record the words landed on — the wire form of
+ * [`amenbo_core::query::HitFace`]. Crossing as a name rather than a rank keeps the face something the
+ * screen can label and icon; the rank is the engine's business.
+ */
+export type SearchFaceDto = "title" | "body" | "comment" | "label" | "attachment";
+
+/**
+ * One place the words are written: the face, the record that face belongs to, and the excerpt that
+ * points at it. The wire form of [`amenbo_core::query::SearchHit`].
+ */
+export type SearchHitDto = { face: SearchFaceDto, 
+/**
+ * Which side the record is on — `task` or `decision`. The face alone does not say: a title is either.
+ */
+kind: string, 
+/**
+ * The record's ref (`AMB-T-<n>` / `AMB-D-<n>`) — what the row opens, and where the number in it
+ * comes from.
+ */
+ref: string, title: string, 
+/**
+ * The comment the words are in (`AMB-TC-<n>` / `AMB-DC-<n>`), when the hit is not on the record's
+ * own faces.
+ */
+comment?: string, 
+/**
+ * The hit's own instant, RFC3339 — a comment's posting time, or when the text it sits in was last
+ * written.
+ */
+at: string, snippet: string, };
+
+/**
+ * One page of hits, and how many there are in all.
+ */
+export type SearchResultDto = { hits: Array<SearchHitDto>, 
+/**
+ * How many there are in all — what tells the screen its page left something behind.
+ */
+totalMatched: number, };
+
+/**
  * The slug in `.amenbo` disagrees with what the store actually holds
  * ([`amenbo_core::binding::SlugMismatch`]). The CLI prints an English warning in its location
  * header; the GUI hands over the raw material only and lets i18n compose the wording (same verdict,

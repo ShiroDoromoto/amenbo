@@ -17,11 +17,11 @@ import { useQuery } from "./query";
 import { loadCommentTasks, loadTriggeredAt, loadReadReceipts } from "./readReceipts";
 import { loadInboxArchived } from "./inboxArchive";
 import { invoke } from "./ipc";
-import { parseRef } from "./idref";
+import { decisionRef, parseRef, taskRef } from "./idref";
 import { currentLang, type Lang } from "./i18n";
 import { isClosed } from "./status";
 import type { TaskCard } from "../mock/types";
-import type { ArchivedProjectDto, AttachmentDto, DecisionCommentDto, TaskCommitDto, TaskPageDto, DecisionPageDto, RefTargetDto } from "../bindings/bindings";
+import type { ArchivedProjectDto, AttachmentDto, DecisionCommentDto, SearchHitDto, SearchResultDto, TaskCommitDto, TaskPageDto, DecisionPageDto, RefTargetDto } from "../bindings/bindings";
 
 // "Today" for the browser mock only. On the Tauri path core's today() resolves due:today, so this is unused.
 const TODAY = "2026-06-21";
@@ -255,6 +255,98 @@ export function useDecisionComments(decisionId: number | null): DecisionComment[
     () => (decisionId ? fetchDecisionComments(decisionId) : Promise.resolve([])),
   );
   return data ?? [];
+}
+
+/** One place the words are written (generated DTO). */
+export type SearchHit = SearchHitDto;
+/** Which face a hit landed on — a title, a body, a comment, an axis label, an attachment's name. */
+export type SearchFace = SearchHitDto["face"];
+/** Narrowing to one side of the store. `null` searches every face. */
+export type SearchKind = "task" | "decision" | "comment";
+
+/** How many hits one page of the search screen holds. Core's own default is the same number. */
+export const SEARCH_PAGE = 20;
+
+export interface SearchQuery {
+  /** The words as typed. Empty means nothing was asked. */
+  text: string;
+  kind: SearchKind | null;
+  /** `task list`'s grammar, so a search carrying one is a search of tasks. Empty means no narrowing. */
+  filter: string;
+  offset: number;
+}
+
+export interface SearchAnswer {
+  hits: SearchHit[];
+  totalMatched: number;
+}
+
+/**
+ * Run the cross-cutting search (`AMB-D-449`) — every place the words are written, hit by hit, across
+ * tasks, decisions and the comments on either.
+ *
+ * `null` for an empty box: an unasked question is not an empty answer, and the screen says so differently.
+ */
+export async function fetchSearch(q: SearchQuery): Promise<SearchAnswer | null> {
+  const text = q.text.trim();
+  if (text === "") return null;
+  if (inTauri()) {
+    const r = await invoke<SearchResultDto>("search", {
+      text,
+      kind: q.kind,
+      filter: q.filter.trim() || null,
+      limit: SEARCH_PAGE,
+      offset: q.offset,
+    });
+    return { hits: r.hits, totalMatched: r.totalMatched };
+  }
+  return mockSearch(text, q);
+}
+
+/**
+ * Subscribing read of one page of hits. The error is handed back rather than swallowed: a search that
+ * could not run — an unparsable `filter`, above all — must not read as a word that matched nothing.
+ */
+export function useSearch(q: SearchQuery): { answer: SearchAnswer | null; loading: boolean; error: unknown } {
+  const { data, loading, error } = useQuery<SearchAnswer | null>(
+    ["search", q.text.trim(), q.kind, q.filter.trim(), q.offset],
+    () => fetchSearch(q),
+  );
+  return { answer: data ?? null, loading, error };
+}
+
+/**
+ * The browser fallback (`npm run dev`). The fixtures carry no comments, no dimension labels and no
+ * attachments, so title and body *are* the whole of what could match here — the mock's shape, not a
+ * second definition of the search. Nothing in a fixture carries the instant a hit would report, so the
+ * row shows no time rather than an invented one.
+ */
+function mockSearch(text: string, q: SearchQuery): SearchAnswer {
+  const needles = text.toLowerCase().split(/\s+/).filter(Boolean);
+  const has = (s: string) => needles.every((n) => s.toLowerCase().includes(n));
+  const hits: SearchHit[] = [];
+  const push = (kind: "task" | "decision", face: SearchFace, ref: string, title: string, body: string) => {
+    const source = face === "title" ? title : body;
+    if (!has(source)) return;
+    const at = source.toLowerCase().indexOf(needles[0] ?? "");
+    hits.push({ face, kind, ref, title, at: "", snippet: source.slice(Math.max(0, at - 30), at + 90) });
+  };
+  if (q.kind !== "decision" && q.kind !== "comment") {
+    for (const t of getSnapshot().tasks) {
+      push("task", "title", taskRef(t.id), t.title, t.notes);
+      push("task", "body", taskRef(t.id), t.title, t.notes);
+    }
+  }
+  if (q.kind !== "task" && q.kind !== "comment") {
+    for (const d of getSnapshot().decisions) {
+      push("decision", "title", decisionRef(d.id), d.title, d.body);
+      push("decision", "body", decisionRef(d.id), d.title, d.body);
+    }
+  }
+  // Face first, as core orders it; within a face the fixtures carry no instant to break ties by.
+  const tier: SearchFace[] = ["title", "body", "comment", "label", "attachment"];
+  hits.sort((a, b) => tier.indexOf(a.face) - tier.indexOf(b.face));
+  return { hits: hits.slice(q.offset, q.offset + SEARCH_PAGE), totalMatched: hits.length };
 }
 
 /** One option (flag). `help` is its description; `required` marks a mandatory flag. */

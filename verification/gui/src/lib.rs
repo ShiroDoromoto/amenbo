@@ -216,6 +216,11 @@ impl Instructor {
     /// bound title present (or absent); a `field` value is not something OCR reads off a card
     /// reliably, so it returns `None` and the step is left for a visual `Review`.
     ///
+    /// `narrowed` is judged the same way and on the same text, since the card is what the reading is
+    /// about either way. The words the reader typed stand in the box on that very shot, so the
+    /// expectation is the whole title rather than any word of it: a card that went carries none of its
+    /// title, and the half of the query still on screen cannot read as the card that left.
+    ///
     /// `browsed` is judged the same way when it says an entry is **not** official: the badge such a
     /// row wears is the serving catalog's name, which is a name the user gave and not a word of the
     /// interface, so it reads the same whatever language the app is in. The official badge is a word
@@ -270,7 +275,7 @@ impl Instructor {
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
-            (Domain::Task, "listed") => {
+            (Domain::Task, "listed") | (Domain::Task, "narrowed") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
             (Domain::Plugin, "browsed") if !official(with) => {
@@ -313,6 +318,14 @@ impl Instructor {
             (Domain::Decision, "create") => {
                 format!("Create a decision titled \"{}\".", req(with, "title")?)
             }
+            // The words go into the box, and what they do to the board is the shot after this one. It is
+            // written as a move rather than folded into the assert for the reason the other moves here
+            // are: the screen it arrives at is the whole of the road, so it is photographed rather than
+            // taken on trust.
+            (Domain::Task, "narrow") => format!(
+                "On the board, type \"{}\" into the search box over the columns.",
+                req(with, "words")?
+            ),
             // The moves that carry the screen from one shot to the next. They read as what to do and
             // not as what to confirm, because that is what they are — the shot they leave behind is
             // the screen after the move, which is how a road across screens is proven walked rather
@@ -475,6 +488,11 @@ impl Instructor {
                 self.target_label(with),
                 if present(with) { "present in" } else { "absent from" },
                 req(with, "filter")?
+            ),
+            (Domain::Task, "narrowed") => format!(
+                "Confirm the card \"{}\" is {} the board the search left.",
+                self.target_label(with),
+                if present(with) { "still on" } else { "gone from" }
             ),
             (Domain::Task, "field") => format!(
                 "Confirm the task \"{}\" shows {} = {}.",

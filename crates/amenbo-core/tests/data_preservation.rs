@@ -568,6 +568,7 @@ fn read_open_reads_through_an_uncheckpointed_wal_held_by_a_writer() {
         .list_tasks(amenbo_core::query::ListParams {
             project_id: None,
             filter_expr: None,
+            text: None,
             sort: "created".to_string(),
             limit: None,
             offset: None,

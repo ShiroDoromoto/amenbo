@@ -1498,6 +1498,33 @@ pub fn task_page(
     Ok(TaskPageDto { tasks, total_matched: page.total_matched, offset: offset.unwrap_or(0), limit })
 }
 
+/// The ids of a project's tasks matching a free-text search — the task twin of [`decision_search`],
+/// and the board's own door to the match. The term is passed **structurally**, not spelled into a
+/// filter expression: the grammar splits on whitespace, so a search box that hands over two words
+/// would silently lose everything after the first (`AMB-D-449` takes `text:` out of the grammar for
+/// exactly that kind of reason; the match itself stays).
+///
+/// It returns ids and not cards because the screen already holds the project's tasks: the search
+/// narrows what it has rather than being a second listing to reconcile with the first. Both faces run
+/// the same `text:` the read-model carries, so they cannot come to disagree about what a word matches.
+#[tauri::command]
+pub fn task_search(project_id: i64, text: String) -> Result<Vec<i64>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("task_search");
+    let store = open_store_read()?;
+    let result = query::list(
+        store.read_model().conn(),
+        store.reach(),
+        query::ListParams {
+            project_id: Some(project_id),
+            text: Some(text),
+            // The board re-sorts what it holds, so the order here is only a stable one to page by.
+            sort: "order".to_string(),
+            ..Default::default()
+        },
+    )?;
+    Ok(result.tasks.into_iter().map(|t| t.id).collect())
+}
+
 /// Hydrate the given ids into `TaskCardDto` (input order preserved). `task_page` returns "the ids on
 /// this page" and `tasks_by_ids` returns "any set of ids" — a pair of reads that lets the front end
 /// get by without ever holding an array of every task. It is used (1) to fetch a single task for the
@@ -6192,6 +6219,63 @@ mod tests {
 
         // A term nowhere is an empty answer, not an error — the screen shows nothing rather than everything.
         assert!(decision_search(project_id, "どこにも無い語".to_string()).unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// `task_search` against a real store, for the reason its decision twin above is: the board's search
+    /// is one call, and a call that only ever runs against a mock is a call nobody has run.
+    ///
+    /// The two things the mocks cannot say: that a **phrase** reaches core intact — the door the board
+    /// gained by handing the term over structurally instead of writing `text:<word>` into an expression
+    /// the grammar splits on whitespace — and that the words may land on different faces of the same task.
+    #[test]
+    fn task_search_runs_against_a_real_store_and_takes_a_phrase() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("task-search");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let mut store = Store::open().unwrap();
+        let project_id = store
+            .project_add(amenbo_core::ops::project::NewProject {
+                name: "テストPJ".into(),
+                view: View::List,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap()
+            .id;
+        let mut add = |title: &str, notes: &str| {
+            store
+                .add_task(amenbo_core::ops::task::NewTask {
+                    title: title.into(),
+                    project_id: Some(project_id),
+                    due_on: None,
+                    start_on: None,
+                    priority: None,
+                    notes: notes.into(),
+                    created_by_kind: Some(ActorKind::Ai),
+                })
+                .unwrap()
+                .id
+        };
+        let both = add("配送の見直し", "計測してから決める");
+        let title_only = add("配送の値付け", "");
+        let commented = add("無関係な題", "");
+        store.add_task_comment(commented, ActorKind::Ai, "ここには出るはず").unwrap();
+        drop(store);
+
+        // Two words, each landing on a different face of the same task — the query that had no way of
+        // being written in the filter grammar at all.
+        let hits = task_search(project_id, "配送 計測".to_string()).expect("the command runs");
+        assert_eq!(hits, vec![both], "both terms must land, though not on the same face");
+        assert!(!hits.contains(&title_only), "one of the two words is not enough");
+
+        // The comment arm, as on the decision side: the board's cards carry a comment count, not bodies.
+        assert_eq!(task_search(project_id, "出るはず".to_string()).unwrap(), vec![commented]);
+
+        // A term nowhere is an empty answer, not an error.
+        assert!(task_search(project_id, "どこにも無い語".to_string()).unwrap().is_empty());
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

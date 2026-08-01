@@ -491,6 +491,15 @@ pub struct WaitingOnStart {
 pub struct ListParams {
     pub project_id: Option<i64>,
     pub filter_expr: Option<String>,
+    /// The free-text term, given **structurally** instead of through `filter_expr`'s `text:` key — the
+    /// same words, reaching the same faces of a task (its title and notes, the bodies of its live
+    /// comments, the labels it is placed on, the names of what is attached to it). It exists because the
+    /// filter grammar splits on whitespace and so cannot carry more than one word: a search box hands
+    /// over whatever was typed, spaces and all, and spelling that back into an expression would silently
+    /// drop everything after the first. Several words are ANDed, each free to land on a different face.
+    /// The twin of [`DecisionListParams::text`]; when both are given this one wins, on the grounds that a
+    /// caller reaching for it is one that could not say what it means in the grammar.
+    pub text: Option<String>,
     pub sort: String,
     /// Page size (the first `limit` items in sort order). `None` = unlimited.
     pub limit: Option<usize>,
@@ -535,6 +544,9 @@ pub fn list(
         Some(e) => Filter::parse(e, today)?,
         None => Filter::default(),
     };
+    if let Some(text) = &params.text {
+        filter.text = Some(text.clone());
+    }
     // `project:` may be written as a name or an id. This is the entry point of the read — the layer
     // that holds the `conn` — so resolve it exactly once, before building any SQL. A name that does
     // not resolve errors here instead of degenerating into an empty result.
@@ -2243,6 +2255,7 @@ mod filter_tests {
             ListParams {
                 project_id: None,
                 filter_expr: filter.map(|s| s.to_string()),
+                text: None,
                 sort: "title".to_string(),
                 limit: None,
                 offset: None,
@@ -2266,6 +2279,7 @@ mod filter_tests {
             ListParams {
                 project_id: None,
                 filter_expr: Some(filter.to_string()),
+                text: None,
                 sort: "title".to_string(),
                 limit: None,
                 offset: None,
@@ -2296,6 +2310,7 @@ mod filter_tests {
             ListParams {
                 project_id: None,
                 filter_expr: Some("project:存在しないPJ".to_string()),
+                text: None,
                 sort: "title".to_string(),
                 limit: None,
                 offset: None,

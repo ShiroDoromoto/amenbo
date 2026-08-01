@@ -8,7 +8,7 @@ import {
 } from "../components/atoms";
 import { isClosed, STATUS_COLUMNS } from "../core/status";
 import { Pager, usePager } from "../components/Pager";
-import { useTaskPage } from "../core/reads";
+import { useTaskPage, useTaskSearchIds } from "../core/reads";
 import { isEnterSubmit } from "../core/keys";
 import { ProjectFirstLoop } from "../components/FirstLoop";
 import { AgentHookWiringRow } from "./AgentHookWiringRow";
@@ -16,7 +16,7 @@ import { inTauri } from "../core/snapshot";
 import { DecisionsScreen } from "./DecisionsScreen";
 import { CalendarView } from "./CalendarView";
 import { TimelineView } from "./TimelineView";
-import { statusLabel, t, tf, viewLabel } from "../core/i18n";
+import { errText, statusLabel, t, tf, viewLabel } from "../core/i18n";
 import type { ComposeTarget } from "../shell/AppShell";
 import { CLOSED_FILTER_VALUE, filterDimensions, parseRefQuery, passesFilters, selectionKey, type FilterSelection } from "../core/filters";
 import { fetchProjectDimensionAssignments } from "../core/mutations";
@@ -53,11 +53,17 @@ const DONE_COLUMN_CAP = 20;
  * view is the project's default (`project.view`, persisted from the settings screen); switching views from the
  * header is transient and does not rewrite `project.view`. Tasks are fetched one project at a time via task_page
  * (the whole store is never held), and column grouping and the filter chips are layered on client-side (bounded
- * by the size of a project). When the search box recognises a task ref (`AMB-T-<n>`, or the bare `#<n>` / `T-<n>`) it narrows to that
- * number; a single free-word token is handed to the read-model's `text:` filter (which spans every face the word
- * index carries — title, notes, raw comment bodies, the labels the task was placed on, and the names of what is
- * attached to it), while a query with whitespace falls back to a title+notes match that reaches none of those
- * (they live only in the read-model — a card carries nothing but the 💬 count). The drag-end handler is
+ * by the size of a project).
+ *
+ * **The search is core's, not the client's.** When the box recognises a task ref (`AMB-T-<n>`, or the bare
+ * `#<n>` / `T-<n>`) it narrows to that number without asking core at all; anything else goes to `task_search`
+ * ({@link useTaskSearchIds}) and comes back as the ids to narrow the page by. It has to: the word index spans
+ * five faces — title, notes, raw comment bodies, the labels the task was placed on, and the names of what is
+ * attached to it — and a card carries only the first two (a comment is a 💬 count here, not a body). The term
+ * goes over structurally rather than as a `text:` written into this page's filter, so a phrase survives the
+ * trip: the filter grammar splits on whitespace and would drop everything after the first word.
+ *
+ * The drag-end handler is
  * a stable reference (a fresh one per render would defeat the cards' memo). A drop onto a column sets status, and
  * even when the write layer rejects a reservation (todo→in_progress) the card's column is drawn from the status
  * in the source of truth, so it does not move — no optimistic update, and nothing to roll back.
@@ -87,7 +93,8 @@ export function BoardScreen({
   // For filtering: task assignments across every user-defined dimension (taskId→dimId→valueId). `dimAssign`
   // above holds only the one axis being grouped by, but filters must reach every dimension — hence all of them.
   const [filterDimAssign, setFilterDimAssign] = useState<Record<string, Record<number, number>>>({});
-  // Free-word search (substring over title and notes, case-insensitive, incremental). ANDs with the filter chips.
+  // Free-word search, run by core over every face the word index carries (see the doc comment above).
+  // Incremental, and ANDs with the filter chips.
   const [search, setSearch] = useState("");
   // Id of the card currently being dragged (drives the column highlight and dims the card that was grabbed).
   const [draggingId, setDraggingId] = useState<number | null>(null);
@@ -104,11 +111,11 @@ export function BoardScreen({
   }, [armMove, store]);
   const project = dataAdapter.getProject(projectId);
   const rawQ = search.trim();
-  const q = rawQ.toLowerCase();
   const ref = parseRefQuery(search);
-  const backendText = !ref && rawQ !== "" && !/\s/.test(rawQ);
-  const fetchFilter = backendText ? `text:${rawQ}` : "";
-  const { tasks: all } = useTaskPage({ projectId, sort: "order", filter: fetchFilter });
+  // A ref query is answered here, so it never becomes a text search: `T-12` is a number, not a word to look
+  // for. `null` back from the hook is "nothing was asked", which is not the same as "nothing matched".
+  const { hits, error: searchError } = useTaskSearchIds(projectId, ref ? "" : rawQ);
+  const { tasks: all } = useTaskPage({ projectId, sort: "order" });
   const projectDims = project?.dimensions ?? [];
   // If the grouping axis names a dimension id, that is what splits the columns ("status", or a deleted id, → null).
   const groupingDimId =
@@ -162,24 +169,21 @@ export function BoardScreen({
   const dims = filterDimensions(projectDims, filterDimAssign);
   const tasks = all
     .filter((t) => passesFilters(t, dims, sel))
-    .filter((t) => {
-      if (ref) return ref.space === "task" && Number(t.id) === ref.num;
-      // Under backendText the read-model's text: has already narrowed over every face it carries — don't re-filter.
-      if (backendText) return true;
-      return q === "" || t.title.toLowerCase().includes(q) || (t.notes ?? "").toLowerCase().includes(q);
-    });
+    .filter((t) =>
+      ref ? ref.space === "task" && Number(t.id) === ref.num : hits === null || hits.has(Number(t.id)),
+    );
   // view=list (the flat list) is windowed by the pager, which resets to the first page when the view or filters
   // change. usePager is a Hook, so it has to sit above the early-return guard below: if the open project is
   // deleted and `project` flips defined→undefined, the number of Hooks must stay the same (Rules of Hooks — a
   // violation throws during render and blacks out the screen). groupingDim/dims/tasks above are null-safe through
   // `project?.dimensions ?? []`, so they come out empty and reach no JSX before the guard returns the placeholder.
-  const listPager = usePager(tasks, `${view}|${selectionKey(sel)}|${q}`);
+  const listPager = usePager(tasks, `${view}|${selectionKey(sel)}|${rawQ}`);
   // A project with nothing in it yet gets the first loop instead of empty columns (`AMB-D-414`) — the
-  // one push that puts something on it. The question is about the project, not about the view: what
-  // `all` holds is narrowed by nothing but `fetchFilter`, so an empty `all` under no search is the
-  // project itself being empty, where an empty `tasks` may only be the filter chips biting. Outside
+  // one push that puts something on it. The question is about the project, not about the view: `all`
+  // is the project's whole page, narrowed by nothing at all, so an empty `all` is the project itself
+  // being empty, where an empty `tasks` may only be the search or the filter chips biting. Outside
   // Tauri there is no folder to open a terminal in, so the browser iteration keeps its bare columns.
-  const untouched = all.length === 0 && fetchFilter === "" && inTauri();
+  const untouched = all.length === 0 && inTauri();
   if (!project) return <div className="placeholder">{t("board.notFound")}</div>;
   const setDim = (id: string, value: string) => setSel((prev) => ({ ...prev, [id]: value }));
 
@@ -246,6 +250,13 @@ export function BoardScreen({
           onChange={(e) => setSearch(e.target.value)}
           style={{ fontSize: "var(--fs-xs)", width: 180 }}
         />
+        {/* A search that could not run narrows nothing, and narrowing nothing looks exactly like a word
+            that matched everything. Say which it was, next to the box that asked. */}
+        {searchError != null && (
+          <span className="faint" role="alert" style={{ fontSize: "var(--fs-xs)" }}>
+            ⚠ {t("board.searchFailed")} — {errText(searchError)}
+          </span>
+        )}
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>🔍 {t("board.filter")}</span>
         {dims.map((d) => (
           <label key={d.id} className="filtersel">

@@ -7,6 +7,9 @@
 //   nothing was asked        → null      → show everything
 //   asked, nothing matched   → empty set → show nothing
 //   asked, answer in flight  → the last answer, so the list does not flash back to everything mid-word
+//
+// The board's search (`useTaskSearchIds`) is the same hook with a different fetch behind it, so what is
+// pinned here holds for both faces; only the command each one calls differs.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

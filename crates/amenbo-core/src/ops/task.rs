@@ -676,6 +676,7 @@ mod tests {
                     crate::query::ListParams {
                         project_id: None,
                         filter_expr: Some("ready:yes".to_string()),
+                        text: None,
                         sort: "created".to_string(),
                         limit: None,
                         offset: None,
@@ -995,6 +996,7 @@ mod tests {
         crate::query::ListParams {
             project_id: None,
             filter_expr: filter.map(str::to_string),
+            text: None,
             sort: "created".to_string(),
             limit: None,
             offset: None,

@@ -233,6 +233,14 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A terminal has no listing standing in front of it to narrow: the words and
     // the reading are one command there, which is what `found` walks.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "narrow", required: &["words"], refs: &[], strings: &["words"], binds: false },
+    // Pressing a hit through to the record it points at. The excerpt beside a hit is cut to say where
+    // the words are written and never to be read in place of the record, so the press is what the hit
+    // is for. The words are named here because a hit has to be standing before there is one to press,
+    // and asking for them is the move that draws it.
+    //
+    // A screen road alone. A terminal prints its hits as text and the reader types the ref it read
+    // into `show`, so there is nothing there to press.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-hit", required: &["words", "target"], refs: &["target"], strings: &["words"], binds: false },
     // A project's own life: its fields, where it sits in the list, and whether it is still in play.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "update", required: &["target"], refs: &["target"], strings: &["name", "notes", "view"], binds: false },
@@ -571,6 +579,10 @@ const REGISTRY: &[OpSpec] = &[
     // moment ago are drawn still. The words belong to the `narrow` that put them in — repeating them
     // here would be the one place the two could disagree.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "narrowed", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // Whose record the press opened. The title is no witness — the hit row carries it too — so the step
+    // names a phrase only the record's own face holds, and `present: false` puts the same question to a
+    // record that was not the one pressed.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "opened", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },

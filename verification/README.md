@@ -424,7 +424,10 @@ same kind: a terminal asks inline and prints the text where it stands, so there 
 answer, to choose between, or to press — and the answer it writes it never reads back, so it has no
 face to clear it from either. Typing words over a listing already drawn and reading which cards they
 left (`task narrow` / `task narrowed`) is the same kind: a terminal has no listing standing in front of
-it, so asking a word where it is written is one command there and there is nothing to narrow.
+it, so asking a word where it is written is one command there and there is nothing to narrow. Pressing a
+hit through to the record it points at, and reading which record that opened (`task open-hit` /
+`task opened`), is the same kind again: a terminal prints its hits as text, and the ref is typed into
+`show` rather than pressed.
 
 Bindings belong to the road they are made on. A `target:` in `steps_gui` resolves against
 `steps_gui` alone, because the two lists are never walked in one run.

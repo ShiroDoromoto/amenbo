@@ -221,6 +221,10 @@ impl Instructor {
     /// expectation is the whole title rather than any word of it: a card that went carries none of its
     /// title, and the half of the query still on screen cannot read as the card that left.
     ///
+    /// `opened` is judged on the phrase the step names instead of on the record's title, and that is
+    /// the whole of the reading: the title is on the hit row the press was made from, so a shot where
+    /// nothing opened at all would carry it — and so would one where the wrong record did.
+    ///
     /// `browsed` is judged the same way when it says an entry is **not** official: the badge such a
     /// row wears is the serving catalog's name, which is a name the user gave and not a word of the
     /// interface, so it reads the same whatever language the app is in. The official badge is a word
@@ -278,6 +282,9 @@ impl Instructor {
             (Domain::Task, "listed") | (Domain::Task, "narrowed") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
+            (Domain::Task, "opened") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
             (Domain::Plugin, "browsed") if !official(with) => {
                 Some(Expectation { text: arg_str(with, "source")?.to_string(), present: true })
             }
@@ -325,6 +332,14 @@ impl Instructor {
             (Domain::Task, "narrow") => format!(
                 "On the board, type \"{}\" into the search box over the columns.",
                 req(with, "words")?
+            ),
+            // Onto the face that searches across the records, and through the hit standing on it. The
+            // asking is part of the move rather than a step of its own: a hit cannot be pressed before
+            // it is drawn, and what the shot after this catches is where the press landed.
+            (Domain::Task, "open-hit") => format!(
+                "Take the face that searches across every record, search it for \"{}\", and press the ref on the hit for \"{}\".",
+                req(with, "words")?,
+                self.target_label(with)
             ),
             // The moves that carry the screen from one shot to the next. They read as what to do and
             // not as what to confirm, because that is what they are — the shot they leave behind is
@@ -494,6 +509,21 @@ impl Instructor {
                 self.target_label(with),
                 if present(with) { "still on" } else { "gone from" }
             ),
+            // Which record the press opened. Both halves name the phrase rather than the record's title:
+            // the title is standing on the hit row as well, so a line read on it would pass over a press
+            // that opened nothing, and over one that opened the wrong record just as quietly.
+            (Domain::Task, "opened") => match present(with) {
+                true => format!(
+                    "Confirm the record \"{}\" is standing open beside the hits, showing \"{}\" — words the hits themselves do not carry.",
+                    self.target_label(with),
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "Confirm the record standing open is not \"{}\": \"{}\", which only that record's own face carries, is nowhere on the screen.",
+                    self.target_label(with),
+                    req(with, "shows")?
+                ),
+            },
             (Domain::Task, "field") => format!(
                 "Confirm the task \"{}\" shows {} = {}.",
                 self.target_label(with),
@@ -985,6 +1015,57 @@ steps_gui:
         let mut ins = Instructor::new();
         ins.render(&s.steps(Driver::Gui)[0]).unwrap();
         assert!(ins.expectation(&s.steps(Driver::Gui)[1]).is_none(), "a field assert is not OCR-judged");
+    }
+
+    /// The press through a hit: the move names the word asked for and the record pressed, and what the
+    /// reading after it is sent looking for is the phrase, never the title. The title stands on the hit
+    /// row too, so an expectation derived from it would be satisfied by the screen the press was made
+    /// from — which is the failure this road exists to catch.
+    #[test]
+    fn an_opened_assert_expects_the_phrase_and_not_the_title() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: Retire the nightly reconciliation job }
+    as: nightly
+  - type: action
+    domain: task
+    op: open-hit
+    with: { words: reconciliation, target: nightly }
+  - type: assert
+    domain: task
+    op: opened
+    with: { target: nightly, shows: Closed by hand every Sunday }
+  - type: assert
+    domain: task
+    op: opened
+    with: { target: nightly, shows: Untouched since the migration, present: false }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(
+            lines[1].contains("\"reconciliation\"")
+                && lines[1].contains("\"Retire the nightly reconciliation job\""),
+            "got: {}",
+            lines[1]
+        );
+        assert!(lines[2].contains("standing open"), "got: {}", lines[2]);
+        assert!(lines[3].contains("is not"), "got: {}", lines[3]);
+
+        assert_eq!(
+            ins.expectation(&steps[2]).expect("an opened assert is OCR-judged"),
+            Expectation { text: "Closed by hand every Sunday".to_string(), present: true }
+        );
+        assert_eq!(
+            ins.expectation(&steps[3]).expect("and so is its absent half"),
+            Expectation { text: "Untouched since the migration".to_string(), present: false }
+        );
     }
 
     /// The badge line: an entry off a registered catalog reads as that catalog, and the name is what

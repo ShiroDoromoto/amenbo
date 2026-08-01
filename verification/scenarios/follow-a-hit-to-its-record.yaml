@@ -1,0 +1,71 @@
+# Getting from a hit to the record it points at. Finding where a word is written is one goal and this
+# is the next one: the excerpt beside a hit is cut to say where the words are, never to be read in place
+# of the record, so the press is what the whole thing is for.
+#
+# The reading is on a remark and not on the title. A hit row already carries the record's title beside
+# its ref, so a line read on that would pass over a press that opened nothing — and over one that opened
+# the other record just as quietly. Two records answer the word, and each keeps a remark of its own that
+# the search was never asked for, so neither is on any hit.
+#
+# A screen road alone: a terminal prints its hits as text and the ref is typed into `show`, so there is
+# nothing there to press. Drive it stepped (`--step`).
+id: follow-a-hit-to-its-record
+title: A hit is a pointer — pressing its ref opens the record it names, and not the one beside it
+description: >
+  Put one word in the titles of two tasks, and leave a remark on each that no other record carries. Ask
+  the cross-record search for that word and press the ref on one hit. What is under test is where the
+  press lands: the pressed record's own face is standing open with its remark on it, and the remark
+  belonging to the record that answered the same word is nowhere on the screen.
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Retire the nightly reconciliation job
+    as: nightly
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: nightly
+      text: Closed by hand every Sunday
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Reconciliation of the archived ledgers
+    as: archived
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: archived
+      text: Untouched since the migration
+
+  - type: action
+    domain: task
+    op: open-hit
+    with:
+      words: reconciliation
+      target: nightly
+
+  - type: assert
+    domain: task
+    op: opened
+    with:
+      target: nightly
+      shows: Closed by hand every Sunday
+
+  # The other record answered the same word and has a hit of its own on the screen. Its remark is the
+  # one thing that separates its face from the face standing open, so this is where a press that landed
+  # on the wrong ref is caught.
+  - type: assert
+    domain: task
+    op: opened
+    with:
+      target: archived
+      shows: Untouched since the migration
+      present: false

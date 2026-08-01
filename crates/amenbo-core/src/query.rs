@@ -65,6 +65,9 @@ pub struct Filter {
     /// The resolved project id. This is the only field the filtering looks at ([`Filter::resolve`]
     /// fills it in).
     pub project_id: Option<i64>,
+    /// The words to narrow by. No longer reachable from the filter grammar — it is set structurally,
+    /// from [`ListParams::text`] or from `search`'s own words — so nothing a caller *types* into a
+    /// `--filter` fills it in (`AMB-D-449`).
     pub text: Option<String>,
     /// `number:` / `ref:` — filter by conversational ref (`AMB-T-<n>` / `AMB-D-<n>` / a bare number).
     pub number: Option<NumberFilter>,
@@ -378,7 +381,6 @@ impl Filter {
                     })
                 }
                 "project" => f.project_ref = Some(value.to_string()),
-                "text" => f.text = Some(value.to_string()),
                 // `number:` and its alias `ref:` (synonyms — filter by conversational number).
                 "number" | "ref" => f.number = Some(NumberFilter::parse(value)?),
                 "assignee" => {
@@ -440,9 +442,17 @@ impl Filter {
                     })?;
                     f.dimensions.push(DimensionFilter { axis: None, value, resolved: None })
                 }
+                // Words are no longer a filter key: they are `search`'s, which answers with the places
+                // they are written rather than with a list of rows (`AMB-D-449`). Named on its own so
+                // the one key that was taken away says where it went, instead of reading as a typo.
+                "text" => {
+                    return Err(Error::invalid(
+                        "words are not a filter key — `search <word> …` finds where they are written (add --filter for the structural narrowing)",
+                    ))
+                }
                 other => {
                     return Err(Error::invalid(
-                        format!("unknown filter key '{other}' (done/status/due/start/priority/project/text/number/ref/assignee/ai/ready/decision/commit/dim/time_axis)"),
+                        format!("unknown filter key '{other}' (done/status/due/start/priority/project/number/ref/assignee/ai/ready/decision/commit/dim/time_axis)"),
                     ))
                 }
             }
@@ -491,14 +501,14 @@ pub struct WaitingOnStart {
 pub struct ListParams {
     pub project_id: Option<i64>,
     pub filter_expr: Option<String>,
-    /// The free-text term, given **structurally** instead of through `filter_expr`'s `text:` key — the
-    /// same words, reaching the same faces of a task (its title and notes, the bodies of its live
-    /// comments, the labels it is placed on, the names of what is attached to it). It exists because the
-    /// filter grammar splits on whitespace and so cannot carry more than one word: a search box hands
-    /// over whatever was typed, spaces and all, and spelling that back into an expression would silently
-    /// drop everything after the first. Several words are ANDed, each free to land on a different face.
-    /// The twin of [`DecisionListParams::text`]; when both are given this one wins, on the grounds that a
-    /// caller reaching for it is one that could not say what it means in the grammar.
+    /// The free-text term, given **structurally** — the words reach every face of a task (its title and
+    /// notes, the bodies of its live comments, the labels it is placed on, the names of what is attached
+    /// to it). It is not in the filter grammar, and never was in a form that would do: the grammar splits
+    /// on whitespace and so cannot carry more than one word, whereas a search box hands over whatever was
+    /// typed, spaces and all. Several words are ANDed, each free to land on a different face. This is the
+    /// list's own narrowing — a screen that already holds a list asking which of its rows the words
+    /// touch; asking *where* words are written is `search`'s ([`search`], `AMB-D-449`). The twin of
+    /// [`DecisionListParams::text`].
     pub text: Option<String>,
     pub sort: String,
     /// Page size (the first `limit` items in sort order). `None` = unlimited.
@@ -1373,9 +1383,10 @@ fn activity_item(it: crate::activity::Item) -> ActivityItem {
 
 // ───────────────────────── decision list / search ─────────────────────────
 
-/// Search filter for decision records (`status:` / `superseded:` / `text:` / `project:`). Decisions have
-/// no mailbox state the way tasks do, so there are few keys: storing them and searching them by
-/// text, status and time is enough.
+/// Search filter for decision records (`status:` / `superseded:` / `project:` / `number:` / `task:` /
+/// `decided_before:` / `decided_after:`). Decisions have no mailbox state the way tasks do, so there are
+/// few keys: status, time and the edges are enough. Words are not among them — they are `search`'s
+/// ([`search`], `AMB-D-449`) — though [`DecisionFilter::text`] is still how the read carries them.
 #[derive(Clone, Debug, Default)]
 pub struct DecisionFilter {
     pub status: Option<DecisionStatus>,
@@ -1383,7 +1394,9 @@ pub struct DecisionFilter {
     /// the edge itself, which is a fact the author declared, rather than on a word for "still in force"
     /// that nothing here can know (`AMB-D-410`).
     pub superseded: Option<bool>,
-    /// Substring match against title or body (case-insensitive).
+    /// The words to narrow by, over the word index (title, body, comment bodies, attachment names).
+    /// Set structurally — from [`DecisionListParams::text`] or from `search` — never from a `--filter`
+    /// anyone types.
     pub text: Option<String>,
     /// The reference written in `project:` (same meaning as [`Filter::project_ref`] on the task side —
     /// an unresolved raw string).
@@ -1438,7 +1451,6 @@ impl DecisionFilter {
                         }
                     })
                 }
-                "text" => f.text = Some(value.to_string()),
                 "project" => f.project_ref = Some(value.to_string()),
                 // `number:` and its alias `ref:` (synonyms — filter by conversational number).
                 "number" | "ref" => f.number = Some(NumberFilter::parse(value)?),
@@ -1447,9 +1459,15 @@ impl DecisionFilter {
                 // Filter by acceptance time. Day granularity, and the named day is included.
                 "decided_before" => f.decided_before = Some(time::parse_date(value, today)?),
                 "decided_after" => f.decided_after = Some(time::parse_date(value, today)?),
+                // Same as the task side: the key that was taken away names its successor.
+                "text" => {
+                    return Err(Error::invalid(
+                        "words are not a filter key — `search <word> … --kind decision` finds where they are written",
+                    ))
+                }
                 other => {
                     return Err(Error::invalid(
-                        format!("unknown filter key '{other}' (status/superseded/text/project/number/ref/task/decided_before/decided_after)"),
+                        format!("unknown filter key '{other}' (status/superseded/project/number/ref/task/decided_before/decided_after)"),
                     ))
                 }
             }
@@ -1461,8 +1479,8 @@ impl DecisionFilter {
     /// Whether a decision was superseded lives in the edges, not in a column on the decision, so the
     /// caller looks it up and passes it in. Likewise the two id sets read once and passed in so nothing
     /// is re-queried per decision: `linked_to_task` = the live decisions linked to the task named by
-    /// `task:` (or `None` when `task:` was not given), and `text_hits` = the decisions `text:` landed on
-    /// (or `None` when `text:` was not given), read whole off the word index — title, body and comment
+    /// `task:` (or `None` when `task:` was not given), and `text_hits` = the decisions the words landed on
+    /// (or `None` when no words were given), read whole off the word index — title, body and comment
     /// bodies alike — so the words are folded there and not a second time here.
     fn matches(
         &self,
@@ -1485,7 +1503,7 @@ impl DecisionFilter {
             }
         }
         if self.text.is_some() && !text_hits.is_some_and(|ids| ids.contains(&d.id)) {
-            // The whole of `text:` is the caller's one read off the word index (a set membership, not a
+            // The whole of the word narrowing is the caller's one read off the word index (a set membership, not a
             // per-decision re-query): every face a word may land on is in there, so there is nothing
             // left to re-check against the record's own columns.
             return false;
@@ -1536,13 +1554,12 @@ pub const DECISION_SORT_DEFAULT: &str = "-created";
 pub struct DecisionListParams {
     pub project_id: Option<i64>,
     pub filter_expr: Option<String>,
-    /// The free-text term, given **structurally** instead of through `filter_expr`'s `text:` key — the
-    /// same words, reaching the same three places (title, body, any live comment body). It exists because
-    /// the filter grammar splits on whitespace and so cannot carry more than one word: a search box hands
-    /// over whatever was typed, spaces and all, and spelling that back into an expression would silently
-    /// drop everything after the first. Several words are ANDed, each free to land on a different face
-    /// (`AMB-D-450`). When both are given this one wins, on the grounds that a caller reaching for it is
-    /// one that could not say what it means in the grammar.
+    /// The free-text term, given **structurally** — the words reach the same three places (title, body,
+    /// any live comment body). It is not in the filter grammar, and never was in a form that would do: the
+    /// grammar splits on whitespace and so cannot carry more than one word, whereas a search box hands over
+    /// whatever was typed, spaces and all. Several words are ANDed, each free to land on a different face
+    /// (`AMB-D-450`). The twin of [`ListParams::text`]: this is the listing's own narrowing, and asking
+    /// where words are written is `search`'s ([`search`], `AMB-D-449`).
     pub text: Option<String>,
     /// `decided` / `created` / `number` / `title` / `status` (leading `-` for descending). Empty is the
     /// default ([`DECISION_SORT_DEFAULT`]), so a caller that builds these params in code and leaves the
@@ -1607,9 +1624,9 @@ pub fn decision_list(
         None => None,
     };
 
-    // `text:` in full — the decisions every term lands on, over the word index, read once. The
+    // The words in full — the decisions every term lands on, over the word index, read once. The
     // in-memory match below then asks only whether a decision is in this set, so the words are folded
-    // the one way the index folds them rather than a second way here. None when no `text:` was given.
+    // the one way the index folds them rather than a second way here. None when no words were given.
     let text_hits = match &filter.text {
         Some(t) => {
             let terms = crate::store_engine::search::terms(t);

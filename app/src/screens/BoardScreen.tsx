@@ -60,8 +60,8 @@ const DONE_COLUMN_CAP = 20;
  * ({@link useTaskSearchIds}) and comes back as the ids to narrow the page by. It has to: the word index spans
  * five faces — title, notes, raw comment bodies, the labels the task was placed on, and the names of what is
  * attached to it — and a card carries only the first two (a comment is a 💬 count here, not a body). The term
- * goes over structurally rather than as a `text:` written into this page's filter, so a phrase survives the
- * trip: the filter grammar splits on whitespace and would drop everything after the first word.
+ * goes over structurally rather than through this page's filter, so a phrase survives the trip: the filter
+ * grammar carries no words, and splits on whitespace besides.
  *
  * The drag-end handler is
  * a stable reference (a fresh one per render would defeat the cards' memo). A drop onto a column sets status, and

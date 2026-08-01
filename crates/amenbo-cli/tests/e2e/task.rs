@@ -892,15 +892,19 @@ fn commit_filter_walks_git_back_to_the_task() {
     assert_ne!(code, 0, "an empty commit value is refused, not treated as match-nothing");
 }
 
-/// `text:` over the word index (`AMB-D-450`), end to end: it reaches every face of a task — its title,
+/// `search` over the word index (`AMB-D-450`), end to end: it reaches every face of a task — its title,
 /// its notes, the body of a comment on it — and it folds width, case and kana on both sides, so a word
 /// typed one way finds the same word written another.
+///
+/// Words are `search`'s alone (`AMB-D-449`): the filter grammar carries none, and `--filter` here is the
+/// structural narrowing beside them. What is read back is which tasks the words reached, so the subject
+/// stays the index rather than the shape of a hit.
 ///
 /// Both paths are exercised on purpose: a term of three characters or more is answered by the trigram
 /// index, a shorter one by a scan of the same normalised copy, and neither is allowed to mean something
 /// the other does not.
 #[test]
-fn a_word_filter_reaches_every_face_and_folds_the_spellings() {
+fn search_reaches_every_face_of_a_task_and_folds_the_spellings() {
     let cli = Cli::new();
     let pid = cli.a_project();
 
@@ -914,16 +918,19 @@ fn a_word_filter_reaches_every_face_and_folds_the_spellings() {
     let commented = a_task("三件目", "");
     cli.json(&["comment", "add", &commented, "--text", "さーばの設定を直す", "--json"]);
 
+    // The tasks the word reached, read off `search`'s hits: a word may land on several faces of the same
+    // task, so the refs are folded back to one id apiece.
     let ids_for = |term: &str| -> Vec<String> {
         let mut ids: Vec<String> = cli.json(&[
-            "task", "list", "--project", &pid, "--filter", &format!("text:{term}"), "--json",
-        ])["tasks"]
+            "search", term, "--filter", &format!("project:{pid}"), "--limit", "100", "--json",
+        ])["hits"]
             .as_array()
-            .expect("tasks is an array")
+            .expect("hits is an array")
             .iter()
-            .map(|t| id_str(&t["id"]))
+            .map(|h| h["ref"].as_str().expect("a hit names its record").trim_start_matches("AMB-T-").to_string())
             .collect();
         ids.sort();
+        ids.dedup();
         ids
     };
 
@@ -956,7 +963,7 @@ fn a_word_filter_reaches_every_face_and_folds_the_spellings() {
 /// Neither is text held on the task, so what is under test is the join that makes it the task's: a label
 /// nobody placed on this task, and an attachment hanging off another one, must stay out.
 #[test]
-fn a_word_filter_reaches_the_labels_and_what_is_attached() {
+fn search_reaches_the_labels_and_what_is_attached() {
     let cli = Cli::new();
     let pid = cli.a_project();
 
@@ -979,16 +986,19 @@ fn a_word_filter_reaches_the_labels_and_what_is_attached() {
     let cid = id_str(&cli.json(&["comment", "add", &attached, "--text", "資料を付けた", "--json"])["comment"]["id"]);
     cli.json(&["comment", "attach", &cid, "https://example.com/benchmark-run", "--url", "--json"]);
 
+    // The tasks the word reached, read off `search`'s hits: a word may land on several faces of the same
+    // task, so the refs are folded back to one id apiece.
     let ids_for = |term: &str| -> Vec<String> {
         let mut ids: Vec<String> = cli.json(&[
-            "task", "list", "--project", &pid, "--filter", &format!("text:{term}"), "--json",
-        ])["tasks"]
+            "search", term, "--filter", &format!("project:{pid}"), "--limit", "100", "--json",
+        ])["hits"]
             .as_array()
-            .expect("tasks is an array")
+            .expect("hits is an array")
             .iter()
-            .map(|t| id_str(&t["id"]))
+            .map(|h| h["ref"].as_str().expect("a hit names its record").trim_start_matches("AMB-T-").to_string())
             .collect();
         ids.sort();
+        ids.dedup();
         ids
     };
 

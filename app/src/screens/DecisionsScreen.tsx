@@ -42,7 +42,7 @@ function compareDecisions(a: Decision, b: Decision, sort: DecisionSort): number 
  * **The search is core's, not the client's.** It reaches title, body and any live comment body — the third
  * of those being why it cannot be a substring match over the page: comments are not on the page payload,
  * and fetching every thread to look through them is what the bounded page exists to avoid. So the typed
- * text goes to `decision_search`, the same `text:` the CLI's filter runs, and comes back as the ids to
+ * text goes to `decision_search`, the same match the CLI's `search` runs, and comes back as the ids to
  * narrow to. Recognise a decision ref (`AMB-D-n`, or the bare `D-n`) and it narrows to that number instead,
  * without asking core at all (a task number lives in another space, so on this plane it matches nothing).
  */

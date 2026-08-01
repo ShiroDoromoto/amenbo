@@ -975,7 +975,7 @@ mod tests {
             );
 
             // Only a query that asked for ready work explains itself; a plain listing is not a mailbox.
-            assert_eq!(waiting(tx, "status:done text:nothing-matches-this"), None, "not a ready query");
+            assert_eq!(waiting(tx, "status:rejected"), None, "not a ready query");
         });
     }
 

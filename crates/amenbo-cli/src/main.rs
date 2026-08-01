@@ -5223,7 +5223,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                 project_id, filter_expr: filter, sort,
                 limit, offset,
                 // The structural term is for a caller with a phrase in hand and no expression to put it in
-                // (a search box). Here the expression *is* what was typed, so it carries the words too.
+                // (a search box). The CLI never has one here: words are `search`'s door (`AMB-D-449`).
                 text: None,
                 // Reach belongs to the store — the surface does not declare it here; `Store`'s read supply
                 // applies it.
@@ -5675,8 +5675,9 @@ fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, C
         DecisionCmd::List { project, filter, sort, limit, offset, with_body } => {
             let project_id = project.map(|p| store.resolve_project_ref(&p)).transpose().map_err(CliError::from)?;
             let result = store.decision_list(query::DecisionListParams {
-                // `text` is the structural term, for a caller with no grammar to spell it in. The CLI has
-                // one — `--filter "text:…"` — so it goes on saying it there.
+                // `text` is the structural term, and the CLI never fills it in: words are `search`'s door,
+                // not a listing's (`AMB-D-449`). The GUI, which has a search box and no grammar to spell it
+                // in, is the caller that passes one.
                 project_id, filter_expr: filter, text: None, sort, limit, offset, with_body,
             }).map_err(CliError::from)?;
             if flags.json {

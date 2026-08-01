@@ -196,6 +196,21 @@ pixels. Anything wide swallows both, which is why aiming works until it is aimed
 the board's `＋` and the view tabs read as unreachable elements until the arithmetic was suspected
 instead.
 
+### `--print` — read the road without a screen
+
+The screen road is written in YAML, but the sentences it turns into are written in Rust, so what a
+step will actually say to an operator cannot be read off the file it was written in. `--print`
+answers that: it renders the road and prints the instructions, one to a line, and stops there — no
+window is looked for, nothing is shot, no OCR runs, and no GUI has to be built and fronted first.
+The lines are the very text a run hands the operator, not a second rendering that could drift from
+it, and a road carrying an op the harness has not mapped fails here exactly as it would mid-run.
+A scenario with no `steps_gui` is refused by name, the same as it is for a real run.
+
+```sh
+cd verification
+cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml --print
+```
+
 ### `--step` — a scenario whose screen moves
 
 By default the run shoots its steps back to back, which photographs one prepared screen as many

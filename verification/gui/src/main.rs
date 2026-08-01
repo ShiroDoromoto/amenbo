@@ -9,6 +9,7 @@
 //!
 //! Usage: `verify-gui <scenario.yaml> (--pid <pid> | --winid <id>) [--app <name>]
 //!                    [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--step] [--json]`
+//!        `verify-gui <scenario.yaml> --print`
 //!   `--pid`      pid of the running GUI app; its window is resolved via uiauto (gives bounds too)
 //!   `--winid`    a window id to shoot directly, skipping uiauto (bounds unknown)
 //!   `--app`      bring this app to the front before shooting (e.g. `amenbo (dev)`)
@@ -17,6 +18,7 @@
 //!   `--ocr`      path to ocr.swift (default: the ocr.swift beside this crate)
 //!   `--step`     stop after each step's shot and wait for a line on stdin before the next
 //!   `--json`     emit the manifest path, verdict and step count as JSON instead of the summary
+//!   `--print`    print the road's instructions and stop — no window, no shot, no OCR
 //!
 //! Without `--step` the run shoots every step back to back, which is one screen photographed as
 //! many times as the scenario is long. `--step` is what lets a scenario carry a screen that moves:
@@ -26,6 +28,13 @@
 //! for a fixed number of seconds shoots whatever is on screen when the clock runs out, so a step
 //! that took a moment longer is filed as evidence of a screen nobody stood on. Everything the wait
 //! says goes to stderr, so a `--json` run is still one line of JSON on stdout.
+//!
+//! `--print` is the other half of that: the road rendered into the instructions an operator would
+//! read, and nothing else done with them. The sentences are written here in Rust while the road is
+//! written in YAML, so what a step will say cannot be read off the file it was written in — and
+//! asking a full run is asking for a GUI to be built, launched and fronted first. It prints what
+//! [`amenbo_verify_gui::instructions`] returns, one to a line, which is the very text a run hands the
+//! operator; a road carrying an op this harness has not mapped fails here exactly as it would there.
 //!
 //! Exit code is the machine signal: 0 when every OCR-judged assert passed and every step was
 //! captured, non-zero on a failed assert, a load failure, or a capture/OCR failure. A `Review`
@@ -46,6 +55,7 @@ fn main() -> ExitCode {
         Err(msg) => {
             eprintln!("verify-gui: {msg}");
             eprintln!("usage: verify-gui <scenario.yaml> (--pid <pid> | --winid <id>) [--app <name>] [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--step] [--json]");
+            eprintln!("       verify-gui <scenario.yaml> --print");
             return ExitCode::from(2);
         }
     };
@@ -74,6 +84,16 @@ fn run(opts: &Opts) -> Result<bool, String> {
             scenario.id,
             scenario.driver_tokens().join(", ")
         ));
+    }
+
+    // Reading the road back comes before anything that needs a screen: `--print` answers with no app
+    // running, no window to find and nothing to shoot, which is what makes it usable while the road is
+    // still being written.
+    if opts.print {
+        for line in amenbo_verify_gui::instructions(&scenario)? {
+            println!("{line}");
+        }
+        return Ok(true);
     }
 
     // Front the app first so its window counts as on-screen (uiauto skips one behind a Space).
@@ -210,6 +230,7 @@ struct Opts {
     ocr: PathBuf,
     step: bool,
     json: bool,
+    print: bool,
 }
 
 impl Opts {
@@ -223,11 +244,13 @@ impl Opts {
         let mut ocr = None;
         let mut step = false;
         let mut json = false;
+        let mut print = false;
         let mut it = args.peekable();
         while let Some(a) = it.next() {
             match a.as_str() {
                 "--json" => json = true,
                 "--step" => step = true,
+                "--print" => print = true,
                 "--pid" => {
                     let v = it.next().ok_or("--pid needs a number")?;
                     pid = Some(v.parse::<i64>().map_err(|_| format!("--pid `{v}` is not a number"))?);
@@ -255,6 +278,7 @@ impl Opts {
             ocr: ocr.unwrap_or_else(default_ocr),
             step,
             json,
+            print,
         })
     }
 }

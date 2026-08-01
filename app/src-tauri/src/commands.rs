@@ -1506,7 +1506,7 @@ pub fn task_page(
 ///
 /// It returns ids and not cards because the screen already holds the project's tasks: the search
 /// narrows what it has rather than being a second listing to reconcile with the first. Both faces run
-/// the same `text:` the read-model carries, so they cannot come to disagree about what a word matches.
+/// the same match the read-model carries, so they cannot come to disagree about what a word matches.
 #[tauri::command]
 pub fn task_search(project_id: i64, text: String) -> Result<Vec<i64>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("task_search");
@@ -6338,8 +6338,8 @@ mod tests {
     /// is one call, and a call that only ever runs against a mock is a call nobody has run.
     ///
     /// The two things the mocks cannot say: that a **phrase** reaches core intact — the door the board
-    /// gained by handing the term over structurally instead of writing `text:<word>` into an expression
-    /// the grammar splits on whitespace — and that the words may land on different faces of the same task.
+    /// gained by handing the term over structurally instead of through a filter expression the grammar
+    /// splits on whitespace — and that the words may land on different faces of the same task.
     #[test]
     fn task_search_runs_against_a_real_store_and_takes_a_phrase() {
         let _env = env_guard();

@@ -126,7 +126,7 @@ export function useDecisionPage(projectId: number): Decision[] {
  * The ids of a project's decisions matching `text` — the search, run by core rather than over the page.
  *
  * The page payload carries a decision's title and body but not its comment thread, so a client-side
- * substring match can only ever reach two of the three places `text:` reaches, and the CLI answers a search
+ * substring match can only ever reach two of the three places the words reach, and the CLI answers a search
  * the GUI cannot. Loading every thread to close that gap is the opposite of what a bounded page is for, so
  * the query goes to core instead and comes back as ids the screen narrows what it already holds by.
  *

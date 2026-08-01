@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The decision search's client half. The match itself is core's (`decision_list`'s `text:`, comment bodies
+// The decision search's client half. The match itself is core's (`decision_list`'s word narrowing, comment bodies
 // included) and is tested there; what is at stake here is the shape of the answer the screen filters by —
 // three states that a plain "list of ids" flattens into one, and each of them shows a different set of
 // decisions on screen:

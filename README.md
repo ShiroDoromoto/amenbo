@@ -327,6 +327,14 @@ amenbo dimension list --project "Website refresh" --json   # axes + their values
 amenbo task list --filter "dim:Area=Design dim:Kind=none" --json
 amenbo task list --filter "time_axis:v2 done:false" --json
 
+# Words are not one of the filter keys: `search` is the one place they go. It answers
+# with the places a word is written — tasks, decisions, the comments on both, the labels
+# a task is filed under, the names of what is attached — one line per place, with an
+# excerpt. Words are ANDed; --filter takes the same grammar as `task list`.
+amenbo search plugin distribution --json
+amenbo search rollout --kind decision --limit 5 --json
+amenbo search backup --filter "status:todo" --json
+
 # Comments, assignees. There are exactly two: you (`me`) and your AI (`me-ai`).
 amenbo config set human_name "Alice"        # change your own display name (ai_name renames your AI)
 amenbo task assign 12 --to me
@@ -394,7 +402,7 @@ amenbo decision link AMB-D-<n> AMB-T-<n>       # cross-link a decision and its t
 amenbo task list --filter "decision:AMB-D-<n> status:todo" --json # walk the link: the open work a decision produced
 amenbo decision list --filter "task:AMB-T-<n>" --json          # ...and the other way: the decisions a task rests on
 amenbo decision list --filter "status:accepted" --json
-amenbo decision list --filter "status:accepted text:backup" --with-body --limit 20 --json # bodies too (projection; composes with filter/paging) — read a bounded, keyword-narrowed slice to scan for semantic contradictions (propose only; a human confirms as supersede/amend)
+amenbo decision list --filter "status:accepted superseded:no" --with-body --limit 20 --json # bodies too (projection; composes with filter/paging) — read a bounded slice to scan for semantic contradictions (propose only; a human confirms as supersede/amend). To narrow by keyword, `amenbo search <word> --kind decision` says which ones to read
 
 # Status and data ownership
 amenbo status                               # overdue / today / in-progress summary

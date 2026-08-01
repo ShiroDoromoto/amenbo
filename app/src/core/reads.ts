@@ -151,9 +151,9 @@ export function useDecisionSearchIds(
  * The board holds a page of the project's tasks, but a card carries no comment body (only the 💬 count),
  * no label and no attachment name, so a client-side substring match reaches two of the five faces the word
  * index carries. The typed text therefore goes to `task_search` — the same match the read-model runs — and
- * comes back as the ids to narrow what the screen already holds by. It goes as a term rather than as a
- * `text:` written into the page's filter expression because the grammar splits on whitespace: a phrase
- * spelled back into an expression loses everything after the first word (`AMB-D-449`).
+ * comes back as the ids to narrow what the screen already holds by. It goes as a term rather than through
+ * the page's filter expression: the grammar carries no words at all, and could not carry a phrase if it did
+ * — it splits on whitespace, so everything after the first word would be dropped (`AMB-D-449`).
  *
  * The three states, and the error, are exactly {@link useDecisionSearchIds}'s — see there.
  */

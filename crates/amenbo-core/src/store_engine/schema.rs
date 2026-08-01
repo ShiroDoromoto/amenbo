@@ -648,8 +648,8 @@ datasets! {
     // The unified dimension model: three datasets that put every classification axis on one mechanism.
     // Every axis is a plain user-editable one — there are no built-in fixed axes (no `kind`), no locked
     // values, no stable keys (no `builtin_key`). There are no tags either (multi-select, unordered): a
-    // dimension is single-select, so it is not a tag, and a free-form topic name is found through the read
-    // layer's `text:` substring match instead. `ordered` says whether the axis's values have an order;
+    // dimension is single-select, so it is not a tag, and a free-form topic name is found through the word
+    // index instead (`search`). `ordered` says whether the axis's values have an order;
     // `role` is what nominates one axis as the project's time axis.
     dimension => dimension {
         project_id: fk("project", "RESTRICT"),

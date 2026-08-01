@@ -1,12 +1,13 @@
-# The listing is how anyone finds anything, so the filter is the surface everything else is reached
+# The listing is how anyone narrows a backlog, so the filter is the surface everything else is reached
 # through: a filter that quietly matches nothing does not look broken, it looks like an empty
 # backlog. Each key here is checked twice over — the task it should match, and one it should not.
+# Words are not one of the keys; where a word is written is `find-where-a-word-is-written`'s line.
 id: find-work-in-the-backlog
 title: The filter finds the task it names and leaves the other one out
 description: >
-  Two tasks, told apart by priority, wording, state and assignee, are then looked for through each
-  of those keys in turn. Both halves are asserted every time: a filter that returns everything
-  passes a present-check as easily as a correct one does.
+  Two tasks, told apart by priority, state and assignee, are then looked for through each of those
+  keys in turn. Both halves are asserted every time: a filter that returns everything passes a
+  present-check as easily as a correct one does.
 steps_cli:
   - type: action
     domain: task
@@ -50,135 +51,6 @@ steps_cli:
     with:
       filter: "priority:high"
       target: beta
-      present: false
-
-  # `text:` reads the wording, over title and notes and comment bodies alike.
-  - type: assert
-    domain: task
-    op: listed
-    with:
-      filter: "text:alpha"
-      target: alpha
-      present: true
-
-  - type: assert
-    domain: task
-    op: listed
-    with:
-      filter: "text:alpha"
-      target: beta
-      present: false
-
-  # The wording is matched on a folded copy, so a word reaches the task however it was typed — width
-  # and case are not differences anyone means by them. Asserted from both sides, like every arm here.
-  - type: action
-    domain: task
-    op: create
-    with:
-      title: SCENARIO SEED — ＧＡＭＭＡ, the one spelled the wide way
-    as: gamma
-
-  - type: assert
-    domain: task
-    op: listed
-    with:
-      filter: "text:gamma"
-      target: gamma
-      present: true
-
-  - type: assert
-    domain: task
-    op: listed
-    with:
-      filter: "text:gamma"
-      target: beta
-      present: false
-
-  - type: assert
-    domain: task
-    op: listed
-    with:
-      filter: "text:ALPHA"
-      target: alpha
-      present: true
-
-  # A word reaches past the bodies, onto what a person named rather than wrote: the label a task was
-  # filed under, the axis that label belongs to, and what is attached to the task. None of that text is
-  # held on the task, so each is the join under test — and the task filed under neither stays out.
-  - type: action
-    domain: dimension
-    op: create
-    with:
-      name: surface
-
-  - type: action
-    domain: dimension
-    op: value-add
-    with:
-      dimension: surface
-      value: typography
-
-  - type: action
-    domain: dimension
-    op: set
-    with:
-      target: alpha
-      dimension: surface
-      value: typography
-
-  - type: action
-    domain: repo
-    op: write-file
-    with:
-      path: measurements.log
-      content: "one\n"
-
-  - type: action
-    domain: task
-    op: attach
-    with:
-      target: beta
-      file: measurements.log
-      name: the latency measurements
-
-  - type: assert
-    domain: task
-    op: listed
-    with:
-      filter: "text:typography"
-      target: alpha
-      present: true
-
-  - type: assert
-    domain: task
-    op: listed
-    with:
-      filter: "text:typography"
-      target: beta
-      present: false
-
-  - type: assert
-    domain: task
-    op: listed
-    with:
-      filter: "text:surface"
-      target: alpha
-      present: true
-
-  - type: assert
-    domain: task
-    op: listed
-    with:
-      filter: "text:measurements"
-      target: beta
-      present: true
-
-  - type: assert
-    domain: task
-    op: listed
-    with:
-      filter: "text:measurements"
-      target: alpha
       present: false
 
   - type: action

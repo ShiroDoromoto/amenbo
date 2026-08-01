@@ -1607,10 +1607,10 @@ pub fn decision_page(
 /// loading every decision's thread to look through them is exactly what the bounded page exists to avoid).
 ///
 /// It returns ids and not cards on purpose: the screen already holds the project's decisions, so the search
-/// is a narrowing of what it has rather than a second listing to reconcile. And it goes through the same
-/// `decision_list` the CLI's `--filter text:` does, so the two faces cannot come to disagree about what a
-/// word matches — the term is passed structurally because the filter grammar splits on whitespace and a
-/// search box hands over phrases.
+/// is a narrowing of what it has rather than a second listing to reconcile. And it reads the same word
+/// index the CLI's `search` does, so the two faces cannot come to disagree about what a word matches — the
+/// term is passed structurally because the filter grammar carries no words, and splits on whitespace
+/// besides, whereas a search box hands over phrases.
 #[tauri::command]
 pub fn decision_search(project_id: i64, text: String) -> Result<Vec<i64>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("decision_search");

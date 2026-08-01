@@ -371,10 +371,12 @@ fn a_decision_listing_row_names_what_superseded_it() {
     }
 }
 
-/// `decision list --filter text:` runs over the same word index the task side does (`AMB-D-450`): it
-/// reaches a decision's title, its body and the body of a comment on it, folded the same way.
+/// `search --kind decision` runs over the same word index the task side does (`AMB-D-450`): it reaches a
+/// decision's title, its body and the body of a comment on it, folded the same way. Words are the one
+/// command's, on this side as on the other (`AMB-D-449`) — `decision list` narrows by status and edges,
+/// never by a word.
 #[test]
-fn a_decision_word_filter_reaches_every_face_and_folds_the_spellings() {
+fn search_reaches_every_face_of_a_decision_and_folds_the_spellings() {
     let cli = Cli::new();
     let p = cli.json(&["project", "add", "--name", "検索PJ", "--json"]);
     let pid = id_str(&p["project"]["id"]);
@@ -389,16 +391,19 @@ fn a_decision_word_filter_reaches_every_face_and_folds_the_spellings() {
     let commented = a_decision("三件目", "本文には無い");
     cli.json(&["decision", "comment", "add", &commented, "--text", "さーばの側で寄せる", "--json"]);
 
+    // The decisions the word reached, read off `search`'s hits: a word may land on several faces of the
+    // same decision, so the refs are folded back to one id apiece.
     let ids_for = |term: &str| -> Vec<String> {
         let mut ids: Vec<String> = cli.json(&[
-            "decision", "list", "--project", &pid, "--filter", &format!("text:{term}"), "--json",
-        ])["decisions"]
+            "search", term, "--kind", "decision", "--limit", "100", "--json",
+        ])["hits"]
             .as_array()
-            .expect("decisions is an array")
+            .expect("hits is an array")
             .iter()
-            .map(|d| id_str(&d["id"]))
+            .map(|h| h["ref"].as_str().expect("a hit names its record").trim_start_matches("AMB-D-").to_string())
             .collect();
         ids.sort();
+        ids.dedup();
         ids
     };
 
@@ -411,10 +416,10 @@ fn a_decision_word_filter_reaches_every_face_and_folds_the_spellings() {
     assert!(ids_for("全文一致").is_empty());
 }
 
-/// A decision's word face reaches what is attached to it, and to its comments (`AMB-D-450`) — the same
+/// A decision's word faces reach what is attached to it, and to its comments (`AMB-D-450`) — the same
 /// join the task side makes, bar the labels, which only a task carries.
 #[test]
-fn a_decision_word_filter_reaches_what_is_attached() {
+fn search_reaches_what_is_attached_to_a_decision() {
     let cli = Cli::new();
     let p = cli.json(&["project", "add", "--name", "添付検索PJ", "--json"]);
     let pid = id_str(&p["project"]["id"]);
@@ -433,16 +438,19 @@ fn a_decision_word_filter_reaches_what_is_attached() {
     std::fs::write(&file, "# numbers\n").unwrap();
     cli.json(&["decision", "comment", "attach", &cid, file.to_str().unwrap(), "--json"]);
 
+    // The decisions the word reached, read off `search`'s hits: a word may land on several faces of the
+    // same decision, so the refs are folded back to one id apiece.
     let ids_for = |term: &str| -> Vec<String> {
         let mut ids: Vec<String> = cli.json(&[
-            "decision", "list", "--project", &pid, "--filter", &format!("text:{term}"), "--json",
-        ])["decisions"]
+            "search", term, "--kind", "decision", "--limit", "100", "--json",
+        ])["hits"]
             .as_array()
-            .expect("decisions is an array")
+            .expect("hits is an array")
             .iter()
-            .map(|d| id_str(&d["id"]))
+            .map(|h| h["ref"].as_str().expect("a hit names its record").trim_start_matches("AMB-D-").to_string())
             .collect();
         ids.sort();
+        ids.dedup();
         ids
     };
 

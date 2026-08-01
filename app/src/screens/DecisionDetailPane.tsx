@@ -13,7 +13,7 @@ import {
 } from "../core/decisionEdges";
 import { confirmDialog } from "../core/dialog";
 import { isClosed } from "../core/status";
-import { isEnterSubmit } from "../core/keys";
+import { asTyped, isEnterSubmit } from "../core/keys";
 import { errText, formatNumber, statusLabel, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
 
@@ -152,6 +152,7 @@ export function DecisionDetailPane({
         {d.ref && <span style={{ color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
         {editing ? (
           <input
+            {...asTyped}
             className="compose__input"
             style={{ minHeight: "unset", fontSize: "inherit", fontWeight: "inherit", flex: 1 }}
             autoFocus
@@ -175,6 +176,7 @@ export function DecisionDetailPane({
       {editing ? (
         <div className="compose" style={{ marginTop: 8, maxWidth: "var(--measure-prose)" }}>
           <textarea
+            {...asTyped}
             className="compose__input"
             rows={8}
             value={bodyDraft}
@@ -246,6 +248,7 @@ export function DecisionDetailPane({
               </div>
             )}
             <textarea
+              {...asTyped}
               className="compose__input"
               rows={3}
               autoFocus
@@ -318,6 +321,7 @@ export function DecisionDetailPane({
             )}
             <div className="compose">
               <textarea
+                {...asTyped}
                 ref={commentRef}
                 className="compose__input"
                 rows={3}
@@ -454,6 +458,7 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
           ))}
         </select>
         <input
+          {...asTyped}
           className="compose__input"
           style={{ flex: 1 }}
           autoFocus

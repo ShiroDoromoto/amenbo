@@ -9,7 +9,7 @@ import {
 import { isClosed, STATUS_COLUMNS } from "../core/status";
 import { Pager, usePager } from "../components/Pager";
 import { useTaskPage, useTaskSearchIds } from "../core/reads";
-import { isEnterSubmit } from "../core/keys";
+import { asTyped, isEnterSubmit } from "../core/keys";
 import { ProjectFirstLoop } from "../components/FirstLoop";
 import { AgentHookWiringRow } from "./AgentHookWiringRow";
 import { inTauri } from "../core/snapshot";
@@ -243,6 +243,7 @@ export function BoardScreen({
       <>
       <div className="filterbar">
         <input
+          {...asTyped}
           className="board__search"
           type="search"
           placeholder={t("board.searchPh")}
@@ -444,6 +445,7 @@ function AddDimension({ onAdd }: { onAdd: (name: string) => void }) {
   const commit = () => { if (text.trim()) { onAdd(text.trim()); setText(""); } };
   return adding ? (
     <input
+      {...asTyped}
       className="column__addinput"
       autoFocus
       value={text}
@@ -465,6 +467,7 @@ function AddDimensionValue({ onAdd }: { onAdd: (name: string) => void }) {
   const commit = () => { if (text.trim()) { onAdd(text.trim()); setText(""); } };
   return adding ? (
     <input
+      {...asTyped}
       className="column__addinput board__addcolinput"
       autoFocus
       value={text}

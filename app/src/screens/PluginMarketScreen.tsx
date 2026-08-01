@@ -9,6 +9,7 @@ import {
 import { firesAnywhere, installOf, usePluginInstalls, type PluginInstall } from "../core/pluginInstalls";
 import { refreshPluginUpdates } from "../core/pluginUpdates";
 import { PluginDetail } from "./PluginDetail";
+import { asTyped } from "../core/keys";
 
 // The plugin market — the "find one" half of the plugin section (`AMB-D-356`); managing what is
 // installed is its own surface. The catalog arrives once as a merged list (`AMB-D-347`) and
@@ -93,6 +94,7 @@ export function PluginMarketScreen({ onOpenInstalled }: {
       <div className="filterbar">
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>🧩 {t("plugins.market")}</span>
         <input
+          {...asTyped}
           className="board__search"
           type="search"
           placeholder={t("plugins.searchPh")}
@@ -302,6 +304,7 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
       ) : (
         <div className="catsrc__row">
           <input
+            {...asTyped}
             className="board__search"
             type="url"
             placeholder={t("plugins.sourcePh")}
@@ -360,6 +363,7 @@ function SourceConsent({ probe, name, onName, busy, onConfirm, onCancel }: {
         <label style={{ fontSize: "var(--fs-xs)", flex: 1, minWidth: 0, display: "flex", gap: "var(--s-2)", alignItems: "center" }}>
           {t("plugins.sourceName")}
           <input
+            {...asTyped}
             className="board__search"
             type="text"
             value={name}

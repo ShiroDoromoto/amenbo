@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/store";
 import { t } from "../core/i18n";
-import { isEnterSubmit } from "../core/keys";
+import { asTyped, isEnterSubmit } from "../core/keys";
 
 // Creating a new task in the right pane: enter a title plus notes (Markdown) and create it. Where it is created is
 // chosen by the caller (the ＋ in a column header). A task only gets placed in a project; classification (assigning
@@ -40,6 +40,7 @@ export function TaskComposePane({
         <div className="detail__section-h">{t("compose.new")} · {label}</div>
 
         <input
+          {...asTyped}
           className="compose__input"
           style={{ minHeight: "unset", fontSize: "var(--fs-md)", fontWeight: "var(--fw-bold)" }}
           autoFocus
@@ -55,6 +56,7 @@ export function TaskComposePane({
         <div style={{ marginTop: "var(--s-3)" }}>
           <div className="detail__section-h">{t("compose.notes")}</div>
           <textarea
+            {...asTyped}
             className="compose__input"
             rows={6}
             value={notes}

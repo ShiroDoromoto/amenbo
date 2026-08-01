@@ -4,7 +4,7 @@ import type { Actor, Priority, Status, TaskCard } from "../mock/types";
 import type { PremiseChangeDto } from "../bindings/bindings";
 import { dueKind, todayStr } from "../core/calendar";
 import { dueLabel, formatDayTime, formatNumber, priorityLabel, statusLabel, t, tf } from "../core/i18n";
-import { isEnterSubmit } from "../core/keys";
+import { asTyped, isEnterSubmit } from "../core/keys";
 import { getSnapshot } from "../core/snapshot";
 import { pushNotice } from "../core/notice";
 import { STATUS_ALL } from "../core/status";
@@ -170,6 +170,7 @@ function RejectReasonModal({ id, onCancel, onReject }: {
         <div className="rejectask__title" id="rejectask-title">{tf("reject.title", { ref: taskRef(id) })}</div>
         <div className="rejectask__why">{t("reject.why")}</div>
         <textarea
+          {...asTyped}
           className="rejectask__input"
           autoFocus
           rows={4}

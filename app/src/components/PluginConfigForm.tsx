@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { PluginWantedSettingDto } from "../bindings/bindings";
 import { errText, t } from "../core/i18n";
+import { asTyped } from "../core/keys";
 import {
   NONE_SELECTED,
   setPluginConfig,
@@ -152,6 +153,7 @@ export function PluginConfigForm({ install, projectId, onWrote }: {
           {f.secret ? (
             <>
               <input
+                {...asTyped}
                 id={`cfg-${install.name}-${f.key}`}
                 type="password"
                 autoComplete="new-password"
@@ -166,6 +168,7 @@ export function PluginConfigForm({ install, projectId, onWrote }: {
                 }
               />
               <input
+                {...asTyped}
                 type="password"
                 autoComplete="new-password"
                 disabled={busy}
@@ -207,6 +210,7 @@ export function PluginConfigForm({ install, projectId, onWrote }: {
             </div>
           ) : (
             <input
+              {...asTyped}
               id={`cfg-${install.name}-${f.key}`}
               type="text"
               disabled={busy}

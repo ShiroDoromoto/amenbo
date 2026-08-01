@@ -9,6 +9,7 @@ import { useTaskCommits, type TaskCommit } from "../core/reads";
 import { addTaskCommit, removeTaskCommit } from "../core/mutations";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
+import { asTyped } from "../core/keys";
 
 /** Copy a SHA to the clipboard, flipping a "copied" hint for a moment. Best-effort — a clipboard failure is silent. */
 function CopyButton({ sha }: { sha: string }) {
@@ -74,12 +75,10 @@ export function Commits({ taskId }: { taskId: number }) {
       )}
       <div className="compose" style={{ marginTop: 8 }}>
         <input
+          {...asTyped}
           className="compose__input"
           value={draft}
           placeholder={t("commit.placeholder")}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submit(); } }}
         />

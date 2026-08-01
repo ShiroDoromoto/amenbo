@@ -6,6 +6,7 @@ import { Pager, usePager } from "../components/Pager";
 import { errText, formatDay, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
 import { parseRefQuery } from "../core/filters";
+import { asTyped } from "../core/keys";
 
 // The list of decision records. A decision is a first-class entity that keeps "why we went with X"
 // (edited in place to refine, superseded to overturn), and it lives on a plane of its own, apart from
@@ -76,6 +77,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
       <div className="filterbar">
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>⚖ {t("dec.title")}</span>
         <input
+          {...asTyped}
           className="board__search"
           type="search"
           placeholder={t("dec.searchPh")}
@@ -216,12 +218,14 @@ function DecisionCompose({ projectId, onDone }: { projectId: number; onDone: () 
   return (
     <div style={{ border: "1px solid var(--c-border)", borderRadius: 8, padding: 12, marginBottom: 12 }}>
       <input
+        {...asTyped}
         style={{ width: "100%", marginBottom: 8 }}
         placeholder={t("dec.newTitlePh")}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
       />
       <textarea
+        {...asTyped}
         style={{ width: "100%", minHeight: 80, marginBottom: 8 }}
         placeholder={t("dec.newBodyPh")}
         value={body}

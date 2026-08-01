@@ -7,7 +7,7 @@ import { getSnapshot } from "../core/snapshot";
 import { saveOnboarding } from "../core/mutations";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { guessLang, langEndonym, LANGS, normalizeLang, t, type Lang } from "../core/i18n";
-import { isEnterSubmit } from "../core/keys";
+import { asTyped, isEnterSubmit } from "../core/keys";
 
 // During setup the UI language has to switch as it is picked, so labels are looked up in the language
 // currently selected (snapshot.language is only settled on completion; the preview runs off the local
@@ -90,6 +90,7 @@ export function OnboardingSetup() {
       <div className="setup__nameRow">
         <span className="setup__identicon" style={{ background: identiconColor(seed) }}>{initial}</span>
         <input
+          {...asTyped}
           className="setup__input"
           value={humanName}
           placeholder={t("setup.humanNamePh", lang)}
@@ -102,6 +103,7 @@ export function OnboardingSetup() {
       <div className="setup__nameRow">
         <span className="setup__identicon" style={{ background: identiconColor(`${seed}-ai`) }}>🤖</span>
         <input
+          {...asTyped}
           className="setup__input"
           value={aiName}
           placeholder={t("setup.aiNamePh", lang)}

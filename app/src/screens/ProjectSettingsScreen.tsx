@@ -14,6 +14,7 @@ import { inTauri } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf, viewLabel } from "../core/i18n";
 import type { BoundFolderDto, ProjectSettingsDto } from "../bindings/bindings";
+import { asTyped } from "../core/keys";
 
 type View = ProjectSettingsDto["view"];
 const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
@@ -122,11 +123,12 @@ export function ProjectSettingsScreen({
           <div className="settings__body newproj">
             <label className="newproj__field">
               <span className="newproj__label">{t("projset.nameLabel")}</span>
-              <input className="newproj__input" value={name} onChange={(e) => setName(e.target.value)} />
+              <input {...asTyped} className="newproj__input" value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label className="newproj__field">
               <span className="newproj__label">{t("projset.notesLabel")}</span>
               <textarea
+                {...asTyped}
                 className="newproj__input"
                 rows={4}
                 value={notes}

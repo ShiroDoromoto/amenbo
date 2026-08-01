@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useCliCommandName } from "../core/cliCommand";
 import { t } from "../core/i18n";
 import { useAgentSpec, type CommandSpec } from "../core/reads";
+import { asTyped } from "../core/keys";
 
 // The command catalogue: a reference screen for browsing the spec from `amenbo agent --json` (whose
 // source of truth is core::agent). Commands are grouped by capability, and each one expands to its
@@ -54,6 +55,7 @@ export function CommandCatalogScreen() {
     <>
       <div className="board__toolbar">
         <input
+          {...asTyped}
           className="palette__input cmdcat__search"
           placeholder={t("commands.search")}
           value={q}

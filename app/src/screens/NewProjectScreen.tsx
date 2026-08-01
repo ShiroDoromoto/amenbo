@@ -13,7 +13,7 @@ import { useCliCommandName } from "../core/cliCommand";
 import { createProject, pickFolder, revealFolder } from "../core/mutations";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
-import { isEnterSubmit } from "../core/keys";
+import { asTyped, isEnterSubmit } from "../core/keys";
 import type { Nav } from "../shell/AppShell";
 
 // The project that was created, handed to the done step: id = where the board opens, name = the heading, dir = the linked folder or null.
@@ -64,6 +64,7 @@ export function NewProjectScreen({ onCreated, onCancel }: { onCreated: (nav: Nav
         <label className="newproj__field">
           <span className="newproj__label">{t("newproj.nameLabel")}</span>
           <input
+            {...asTyped}
             className="newproj__input"
             autoFocus
             value={name}

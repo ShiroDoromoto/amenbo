@@ -15,7 +15,7 @@ import { Identicon } from "../components/identicon";
 import { DataProgressModal } from "../components/DataProgressModal";
 import { facetColor, FacetAvatar, identiconSeed } from "../components/atoms";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
-import { isEnterSubmit } from "../core/keys";
+import { asTyped, isEnterSubmit } from "../core/keys";
 
 // Settings: profile, appearance, AI policy, developer, and data (export and backup). The store is a
 // single local one, so there is no section for sharing, syncing, keys or members.
@@ -134,6 +134,7 @@ function NameSetting() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ minWidth: 24 }}>👤</span>
           <input
+            {...asTyped}
             className="btn"
             value={human}
             disabled={busy}
@@ -146,6 +147,7 @@ function NameSetting() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ minWidth: 24 }}>🤖</span>
           <input
+            {...asTyped}
             className="btn"
             value={ai}
             disabled={busy}

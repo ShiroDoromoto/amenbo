@@ -2,6 +2,7 @@ import { useState } from "react";
 import { agoLabel, errText, t, tf } from "../core/i18n";
 import { parseRef } from "../core/idref";
 import { SEARCH_PAGE, useSearch, type SearchFace, type SearchHit, type SearchKind } from "../core/reads";
+import { asTyped } from "../core/keys";
 
 /**
  * The cross-cutting search (`AMB-D-449`): where a word is written, across tasks, decisions and the
@@ -53,6 +54,7 @@ export function SearchScreen({
     <>
       <div className="board__toolbar board__toolbar--search">
         <input
+          {...asTyped}
           className="palette__input srch__input"
           placeholder={t("search.placeholder")}
           value={draft}
@@ -62,6 +64,7 @@ export function SearchScreen({
           }}
         />
         <input
+          {...asTyped}
           className="palette__input srch__filter"
           placeholder={t("search.filterPh")}
           value={filterDraft}

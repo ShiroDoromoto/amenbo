@@ -14,7 +14,7 @@ import {
   DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip,
 } from "../components/atoms";
 import { agoLabel, errText, eventText, priorityLabel, t, tf } from "../core/i18n";
-import { isEnterSubmit } from "../core/keys";
+import { asTyped, isEnterSubmit } from "../core/keys";
 import { useRefNav } from "../core/refNav";
 import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
 
@@ -201,6 +201,7 @@ export function TaskDetailPane({
           <div className="detail__title">
             {editingTitle ? (
               <input
+                {...asTyped}
                 className="compose__input"
                 style={{ minHeight: "unset", fontSize: "inherit", fontWeight: "inherit", flex: 1 }}
                 autoFocus
@@ -366,6 +367,7 @@ export function TaskDetailPane({
             {editingNotes ? (
               <div className="compose">
                 <textarea
+                  {...asTyped}
                   className="compose__input"
                   rows={6}
                   autoFocus
@@ -433,6 +435,7 @@ export function TaskDetailPane({
             )}
             <div className="compose">
               <textarea
+                {...asTyped}
                 ref={commentRef}
                 className="compose__input"
                 rows={3}

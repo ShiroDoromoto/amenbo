@@ -4,7 +4,7 @@ import { Markdown } from "./Markdown";
 import { FacetAvatar } from "./atoms";
 import { Attachments } from "./Attachments";
 import { inTauri } from "../core/snapshot";
-import { isEnterSubmit } from "../core/keys";
+import { asTyped, isEnterSubmit } from "../core/keys";
 import { confirmDialog } from "../core/dialog";
 import { agoLabel, t, errText } from "../core/i18n";
 
@@ -86,6 +86,7 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
       {editing ? (
         <div className="compose">
           <textarea
+            {...asTyped}
             className="compose__input"
             rows={4}
             autoFocus

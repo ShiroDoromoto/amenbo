@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { getSnapshot, subscribe } from "../core/snapshot";
 import { t, tf } from "../core/i18n";
-import { isEnterSubmit } from "../core/keys";
+import { asTyped, isEnterSubmit } from "../core/keys";
 import { confirmDialog } from "../core/dialog";
 import { useStore } from "../store/store";
 import { todayStr } from "../core/calendar";
@@ -232,6 +232,7 @@ function InlineText({ value, placeholder, onCommit, className, allowEmpty = fals
   };
   return (
     <input
+      {...asTyped}
       key={value}
       className={className}
       defaultValue={value}
@@ -257,6 +258,7 @@ function AddInline({ buttonLabel, placeholder, onAdd, className }: {
   const commit = () => { if (text.trim()) { onAdd(text.trim()); setText(""); } };
   return adding ? (
     <input
+      {...asTyped}
       className={className}
       autoFocus
       value={text}

@@ -373,7 +373,10 @@ itself — `chosen`, `none` or `unanswered` — since a choice answered with non
 nobody has answered both hold no chosen value, and only the second follows the author's default.
 A `listed` assert asks whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
-keeps, which is the only place a reorder is visible.
+keeps, which is the only place a reorder is visible. Its neighbour `narrowed` asks the question a
+screen puts instead: which of the cards drawn a moment ago the words typed over them left standing.
+It names no filter because there is none to name — the words travel as words, and they are matched
+over the whole record, including faces a card does not show.
 
 ### `refused:` — the step that is right to fail
 
@@ -419,7 +422,9 @@ which tool the text is for, pressing the button that hands it over, and dropping
 (`repo ai-launch-consent` / `ai-launch-pick` / `ai-launch-copy` / `ai-launch-consent-clear`), are the
 same kind: a terminal asks inline and prints the text where it stands, so there is nothing there to
 answer, to choose between, or to press — and the answer it writes it never reads back, so it has no
-face to clear it from either.
+face to clear it from either. Typing words over a listing already drawn and reading which cards they
+left (`task narrow` / `task narrowed`) is the same kind: a terminal has no listing standing in front of
+it, so asking a word where it is written is one command there and there is nothing to narrow.
 
 Bindings belong to the road they are made on. A `target:` in `steps_gui` resolves against
 `steps_gui` alone, because the two lists are never walked in one run.

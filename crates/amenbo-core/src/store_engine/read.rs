@@ -23,8 +23,8 @@ use super::schema::col;
 use super::search;
 use super::search::HitFace;
 use super::sql::{
-    same, Col, Count, Exists, Expr, Int, NotNull, Nullability, Nullable, Pred, Select, Slot, Sort, Sql,
-    Text as SqlText, Union,
+    same, Col, Count, Exists, Expr, IdSet, Int, NotNull, Nullability, Nullable, Pred, Select, Slot, Sort,
+    Sql, Text as SqlText, Union,
 };
 use super::{StoreEngineError, Result};
 use crate::model::{ActorKind, Priority, TaskStatus};
@@ -391,7 +391,7 @@ const TDV: col::task_dimension_value::Cols = col::task_dimension_value::of("tdv"
 const FEED: col::change_feed::Cols = col::change_feed::ALL;
 const META: col::store_meta::Cols = col::store_meta::ALL;
 
-/// The word index's copy, as the two subqueries below alias it.
+/// The word index's copy, as the subqueries below alias it.
 const SD: col::search_doc::Cols = col::search_doc::of("sd");
 
 /// One term of a task's word filter: it matches when the term lands on **any** face of the task — its
@@ -403,55 +403,46 @@ const SD: col::search_doc::Cols = col::search_doc::of("sd");
 /// through the assignment (and, from the value, the axis it is a value of), an attachment through what
 /// it hangs off.
 ///
-/// Every arm reaches its own side first, by that side's index (`task_comment_by_task`,
-/// `task_dimension_value_by_task`, `attachment_by_target`), and seeks the copy by its face key
-/// (`search_doc_face`). What the term itself costs is not theirs to bound, though: an arm that drives
-/// from the copy has only the face key's leading column to seek by, and a term tested against the row
-/// it lands on would then be tested once per candidate task. It is not written that way —
-/// [`search::term_pred`] looks the term up in a subquery correlated to nothing and hands back
-/// membership of what that found (`AMB-D-507`), so the lookup happens once for the term however many
-/// tasks are considered. Which path it took inside — the trigram index or a scan of the copy — is
+/// Every arm reaches the task's id **from its own side** — through that side's index
+/// (`task_comment_by_task`, `task_dimension_value_by_task`, `attachment_by_target`) and the copy's face
+/// key (`search_doc_face`) — and the term is one predicate over the whole set rather than a question put
+/// to each candidate task ([`Pred::is_in_any`]). Written the other way, as an `EXISTS` correlated to the
+/// task, an arm costs the walk it does times every task considered, whatever order the tables are named
+/// in: the arms of a face are not the outer row's to re-derive (`AMB-D-511`).
+///
+/// What the term itself costs is not the arms' to bound: [`search::term_pred`] looks it up in a subquery
+/// correlated to nothing and hands back membership of what that found (`AMB-D-507`), so the lookup
+/// happens once for the term. Which path it took inside — the trigram index or a scan of the copy — is
 /// [`search::term_pred`]'s to decide, and does not change what matching means.
 fn task_text_term(term: &str) -> Pred {
     const TC: col::task_comment::Cols = col::task_comment::of("tc");
-    let own = Exists::over(SD.table)
+    let own = IdSet::of(SD.table, SD.owner_id)
         .filter(Pred::eq(SD.owner_kind, search::DATASET_TASK))
-        .filter(same(SD.owner_id, T.id))
-        .filter(search::term_pred(SD, term))
-        .pred();
-    let in_comment = Exists::over(SD.table)
-        .join(TC.table, same(TC.id, SD.owner_id))
-        .filter(Pred::eq(SD.owner_kind, search::DATASET_TASK_COMMENT))
-        .filter(same(TC.task_id, T.id))
-        .filter(search::term_pred(SD, term))
-        .pred();
+        .filter(search::term_pred(SD, term));
+    let in_comment = IdSet::of(TC.table, TC.task_id)
+        .join(SD.table, on_face(search::DATASET_TASK_COMMENT, TC.id))
+        .filter(search::term_pred(SD, term));
     // The label the task was placed on, and the axis that label is a value of. The axis is reached
     // through the assignment as well, not on its own: an axis nobody placed this task on is not one of
     // the task's own words.
-    let on_value = Exists::over(SD.table)
-        .join(TDV.table, same(TDV.value_id, SD.owner_id))
-        .filter(Pred::eq(SD.owner_kind, search::DATASET_DIMENSION_VALUE))
-        .filter(same(TDV.task_id, T.id))
-        .filter(search::term_pred(SD, term))
-        .pred();
-    let on_axis = Exists::over(SD.table)
-        .join(TDV.table, same(TDV.dimension_id, SD.owner_id))
-        .filter(Pred::eq(SD.owner_kind, search::DATASET_DIMENSION))
-        .filter(same(TDV.task_id, T.id))
-        .filter(search::term_pred(SD, term))
-        .pred();
-    let attached = attachment_term(search::DATASET_TASK, T.id, term);
+    let on_value = IdSet::of(TDV.table, TDV.task_id)
+        .join(SD.table, on_face(search::DATASET_DIMENSION_VALUE, TDV.value_id))
+        .filter(search::term_pred(SD, term));
+    let on_axis = IdSet::of(TDV.table, TDV.task_id)
+        .join(SD.table, on_face(search::DATASET_DIMENSION, TDV.dimension_id))
+        .filter(search::term_pred(SD, term));
+    let attached = attachment_ids(search::DATASET_TASK, term);
     // What hangs off a comment hangs off the task, by the same reading that puts the comment's own body
     // here: the timeline is the task's, and so is what was pinned to it.
-    let attached_to_comment = Exists::over(TC.table)
-        .filter(same(TC.task_id, T.id))
-        .filter(attachment_term(search::DATASET_TASK_COMMENT, TC.id, term))
-        .pred();
-    own.or(in_comment).or(on_value).or(on_axis).or(attached).or(attached_to_comment)
+    let attached_to_comment = IdSet::of(TC.table, TC.task_id)
+        .join(A.table, hangs_off(search::DATASET_TASK_COMMENT, TC.id))
+        .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
+        .filter(search::term_pred(SD, term));
+    Pred::is_in_any(T.id, [own, in_comment, on_value, on_axis, attached, attached_to_comment])
 }
 
 /// The decision's columns as the decision-side word queries name them: `FROM decision d`. The mirror of
-/// [`T`], and the alias [`decision_text_term`] correlates its subqueries to.
+/// [`T`], and the alias [`decision_text_term`] asks its membership of.
 const DEC: col::decision::Cols = col::decision::of("d");
 
 /// One term of a decision's word filter — the mirror of [`task_text_term`], reaching the decision's own
@@ -459,38 +450,46 @@ const DEC: col::decision::Cols = col::decision::of("d");
 /// one of those comments. The labels are the one difference: only a task is placed on an axis.
 fn decision_text_term(term: &str) -> Pred {
     const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
-    let own = Exists::over(SD.table)
+    let own = IdSet::of(SD.table, SD.owner_id)
         .filter(Pred::eq(SD.owner_kind, search::DATASET_DECISION))
-        .filter(same(SD.owner_id, DEC.id))
-        .filter(search::term_pred(SD, term))
-        .pred();
-    let in_comment = Exists::over(SD.table)
-        .join(DC.table, same(DC.id, SD.owner_id))
-        .filter(Pred::eq(SD.owner_kind, search::DATASET_DECISION_COMMENT))
-        .filter(same(DC.decision_id, DEC.id))
-        .filter(search::term_pred(SD, term))
-        .pred();
-    let attached = attachment_term(search::DATASET_DECISION, DEC.id, term);
-    let attached_to_comment = Exists::over(DC.table)
-        .filter(same(DC.decision_id, DEC.id))
-        .filter(attachment_term(search::DATASET_DECISION_COMMENT, DC.id, term))
-        .pred();
-    own.or(in_comment).or(attached).or(attached_to_comment)
+        .filter(search::term_pred(SD, term));
+    let in_comment = IdSet::of(DC.table, DC.decision_id)
+        .join(SD.table, on_face(search::DATASET_DECISION_COMMENT, DC.id))
+        .filter(search::term_pred(SD, term));
+    let attached = attachment_ids(search::DATASET_DECISION, term);
+    let attached_to_comment = IdSet::of(DC.table, DC.decision_id)
+        .join(A.table, hangs_off(search::DATASET_DECISION_COMMENT, DC.id))
+        .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
+        .filter(search::term_pred(SD, term));
+    Pred::is_in_any(DEC.id, [own, in_comment, attached, attached_to_comment])
 }
 
-/// One term against the names of whatever is attached to `(target_type, target)` — the filename a blob
+/// What is attached, as the arms above alias it.
+const A: col::attachment::Cols = col::attachment::of("a");
+
+/// The join that reaches the word index's copy of one record's face: `search_doc_face` is keyed on the
+/// kind first and the owner second, so both halves belong in the `ON` — a kind alone leaves the seek with
+/// every record of that kind to walk.
+fn on_face<N: Nullability>(owner_kind: &str, owner: Col<Int, N>) -> Pred {
+    Pred::eq(SD.owner_kind, owner_kind).and(same(SD.owner_id, owner))
+}
+
+/// The join that reaches what hangs off one record — `attachment_by_target`'s two columns, the same way.
+/// Polymorphic, so the kind of the thing hung off is half of the condition.
+fn hangs_off<N: Nullability>(target_type: &str, target: Col<Int, N>) -> Pred {
+    Pred::eq(A.target_type, target_type).and(same(A.target_id, target))
+}
+
+/// The ids of the records of `target_type` something attached to them is named by — the filename a blob
 /// came in under, or the address a link points at.
 ///
-/// The subquery drives from `attachment`, seeking `attachment_by_target`, and reaches the copy from
-/// there: driving from the copy instead would walk every attachment's words once per candidate record.
-fn attachment_term(target_type: &str, target: Col<Int>, term: &str) -> Pred {
-    const A: col::attachment::Cols = col::attachment::of("a");
-    Exists::over(A.table)
-        .join(SD.table, Pred::eq(SD.owner_kind, search::DATASET_ATTACHMENT).and(same(SD.owner_id, A.id)))
+/// It drives from `attachment`, seeking `attachment_by_target`, and reaches the copy from there: driving
+/// from the copy instead would leave the seek with only the face key's leading column.
+fn attachment_ids(target_type: &str, term: &str) -> IdSet {
+    IdSet::of(A.table, A.target_id)
+        .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
         .filter(Pred::eq(A.target_type, target_type))
-        .filter(same(A.target_id, target))
         .filter(search::term_pred(SD, term))
-        .pred()
 }
 
 /// The predicates an already-parsed [`Filter`] stands for — one per filter term, each carrying its own
@@ -1589,17 +1588,20 @@ fn hit_slots(
 /// Does this record's own copy of `columns` carry any of the terms — the question that makes one arm's
 /// row a hit. Any term, not every one: what has to carry them all is the **record**, and that is the
 /// caller's other predicate ([`task_text_term`] / [`decision_text_term`]).
+///
+/// Membership of a set, not an `EXISTS` correlated to the arm's row, for the reason the record-level
+/// predicate is one too (`AMB-D-511`): the term lookup inside a correlated subquery is a lookup the
+/// statement can be made to repeat once per candidate row.
 fn face_hit(dataset: &str, id: Col<Int>, columns: &[&str], terms: &[String]) -> Pred {
     let any_column = Pred::any(columns.iter().map(|c| Pred::eq(SD.field, *c)));
     let any_term = Pred::any(terms.iter().map(|t| search::term_pred(SD, t)));
-    let mut sub = Exists::over(SD.table)
+    let mut carriers = IdSet::of(SD.table, SD.owner_id)
         .filter(Pred::eq(SD.owner_kind, dataset))
-        .filter(same(SD.owner_id, id))
         .filter(any_term.unwrap_or_else(Pred::never));
     if let Some(p) = any_column {
-        sub = sub.filter(p);
+        carriers = carriers.filter(p);
     }
-    sub.pred()
+    Pred::is_in_any(id, [carriers])
 }
 
 /// One arm's `WHERE`: this face carries a term, the record it belongs to answers everything asked of
@@ -1671,7 +1673,6 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
 
     const TC: col::task_comment::Cols = col::task_comment::of("tc");
     const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
-    const A: col::attachment::Cols = col::attachment::of("a");
     const DIM: col::dimension::Cols = col::dimension::of("dim");
     const DV: col::dimension_value::Cols = col::dimension_value::of("dv");
     const TASK: &str = search::DATASET_TASK;
@@ -1718,10 +1719,6 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     let gate = |face: HitFace, owner_kind: &str| {
         (!kept_by_kind(q.kind, owner_kind, face)).then(Pred::never)
     };
-    // What an attachment hangs off, as the join that reaches it: polymorphic, so the target kind is half
-    // of the condition.
-    let hangs_off = |kind: &str, target: Col<Int>| same(A.target_id, target).and(Pred::eq(A.target_type, kind));
-
     let (slots, mut sql) = Union::all(|sel| {
         // A task's title.
         let slots =

@@ -273,6 +273,60 @@ impl Exists {
     }
 }
 
+/// The set of ids a subquery reaches — `SELECT <col> FROM <table> [JOIN <table> ON <pred>]… WHERE
+/// <pred>` — built to stand **on its own**, and handed to [`Pred::is_in_any`] as what an outer column
+/// must be one of.
+///
+/// It is the same body as [`Exists`], asked the other way round, and the difference is what it costs.
+/// An `EXISTS` correlated to the outer row is a question re-asked once per candidate; a set that names
+/// no outer alias is one SQLite builds once and then probes. So nothing here takes a correlation: the
+/// tie to the outer row is the membership itself, and a set reaches the record's id from its own side
+/// rather than being handed it.
+///
+/// ```
+/// use amenbo_core::store_engine::{schema::col, sql::{IdSet, Pred, same}};
+///
+/// const T: col::task::Cols = col::task::of("t");
+/// const TC: col::task_comment::Cols = col::task_comment::of("tc");
+/// const SD: col::search_doc::Cols = col::search_doc::of("sd");
+///
+/// let p = Pred::is_in_any(
+///     T.id,
+///     [IdSet::of(TC.table, TC.task_id)
+///         .join(SD.table, Pred::eq(SD.owner_kind, "task_comment").and(same(SD.owner_id, TC.id)))
+///         .filter(Pred::like(SD.norm, "%x%"))],
+/// );
+///
+/// assert_eq!(
+///     p.sql(),
+///     "t.id IN (SELECT tc.task_id FROM task_comment tc \
+///      JOIN search_doc sd ON (sd.owner_kind = ? AND sd.owner_id = tc.id) \
+///      WHERE sd.norm LIKE ? ESCAPE '\\')"
+/// );
+/// assert_eq!(p.params().len(), 2);
+/// ```
+#[derive(Debug, Clone)]
+pub struct IdSet(Correlated);
+
+impl IdSet {
+    /// The set's driving table, and the column of it the set is of — the id an outer row is matched by.
+    pub fn of<N: Nullability>(table: Table, ids: Col<Int, N>) -> Self {
+        Self(Correlated::over(&ids.to_sql(), table))
+    }
+
+    /// ` JOIN <table> ON <pred>` — another table the set reaches, and the condition it is reached by.
+    pub fn join(mut self, table: Table, on: Pred) -> Self {
+        self.0.join(table, on);
+        self
+    }
+
+    /// A condition on the rows the set is built from — `AND`-ed with whatever was asked for before it.
+    pub fn filter(mut self, p: Pred) -> Self {
+        self.0.filter(p);
+        self
+    }
+}
+
 /// The other shape of the same subquery: `(SELECT COUNT(*) FROM <table> [JOIN <table> ON <pred>]… WHERE
 /// <pred>)` — **how many** rows the correlation reaches, where [`Exists`] asks only whether there is one.
 ///
@@ -325,9 +379,11 @@ impl Count {
     }
 }
 
-/// The body a correlated subquery is: a driving table, the tables it joins, and the conditions on its
-/// rows. Shared by the two shapes the readers ask for — [`Exists`] projects `1`, [`Count`] projects
-/// `COUNT(*)` — which differ only in that projection and in what they hand back.
+/// The body a subquery is: a driving table, the tables it joins, and the conditions on its rows. Shared
+/// by the three shapes the readers ask for — [`Exists`] projects `1`, [`Count`] projects `COUNT(*)`,
+/// [`IdSet`] projects a column — which differ only in that projection and in what they hand back.
+/// Whether the conditions tie it to an outer row is the caller's to say, and the first two are named for
+/// callers that do.
 #[derive(Debug, Clone)]
 struct Correlated {
     from: Sql,
@@ -356,11 +412,17 @@ impl Correlated {
     /// The subquery, parenthesised — the form both a predicate and a select item take it in — with its
     /// binds in placeholder order: the joins' before the filter's, which is the order their fragments sit
     /// in.
-    fn finish(mut self) -> Sql {
-        self.from.push_where(self.filter.as_ref());
+    fn finish(self) -> Sql {
         let mut sql = Sql::new("(");
-        sql.push_sql(&self.from).push(")");
+        sql.push_sql(&self.open()).push(")");
         sql
+    }
+
+    /// The subquery without the parentheses — what a union's arms are written into, where the brackets
+    /// belong to the `IN (…)` around the whole list rather than to each arm.
+    fn open(mut self) -> Sql {
+        self.from.push_where(self.filter.as_ref());
+        self.from
     }
 }
 
@@ -544,6 +606,24 @@ impl Pred {
         }
         let marks = vec!["?"; params.len()].join(", ");
         Self::raw(format!("{} IN ({marks})", col.to_sql()), params)
+    }
+
+    /// `<col> IN (<set> UNION <set>…)` — the outer row's id is one of the ids these [`IdSet`]s reach.
+    /// `UNION`, not `UNION ALL`: the arms are alternative ways to the same record and a row two of them
+    /// find is still one row, so folding the duplicates away here is cheaper than probing them twice.
+    /// An empty list matches nothing, as [`Pred::is_in`]'s does.
+    pub fn is_in_any<N: Nullability>(col: Col<Int, N>, sets: impl IntoIterator<Item = IdSet>) -> Self {
+        let mut arms = sets.into_iter().map(|s| s.0.open());
+        let Some(first) = arms.next() else {
+            return Self::never();
+        };
+        let mut sql = Sql::new(format!("{} IN (", col.to_sql()));
+        sql.push_sql(&first);
+        for arm in arms {
+            sql.push(" UNION ").push_sql(&arm);
+        }
+        sql.push(")");
+        Self::raw(sql.text(), sql.params().to_vec())
     }
 
     /// `(<col> IS NULL OR <col> = '')` — the store's "not written" reading of a **text** column, where

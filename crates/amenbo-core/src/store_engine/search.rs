@@ -276,8 +276,8 @@ fn scan(chars: &[char], term: &str) -> Option<usize> {
     })
 }
 
-/// How one term is matched, as a predicate over a [`DOC_TABLE`] row the caller has already correlated
-/// to the record it is asking about. The split is [`TRIGRAM_MIN_CHARS`], counted in **characters** —
+/// How one term is matched, as a predicate over a [`DOC_TABLE`] row the caller has reached. The split
+/// is [`TRIGRAM_MIN_CHARS`], counted in **characters** —
 /// a trigram is three characters, not three bytes, and a term of two kanji is short by that measure
 /// however many bytes it takes.
 ///
@@ -286,13 +286,15 @@ fn scan(chars: &[char], term: &str) -> Option<usize> {
 /// all appear out of order does not match. The short path is the plain scan the store did before there
 /// was an index, run against the same normalised copy.
 ///
-/// **Both paths are the row's membership of a set the term is looked up once for** (`AMB-D-507`). The
-/// caller's subquery is correlated to the record it is asking about, and a scan written inside it as
-/// `sd.norm LIKE …` depends on nothing outside — so SQLite is free to, and does, re-run it for every
-/// candidate record, walking the whole copy each time. Written as its own uncorrelated `IN` the scan
-/// happens once for the term and the outer loop only tests membership; the long path already had this
-/// shape, which is the reason it was never the slow one. What a term matches is untouched: the same
-/// scan, over the same copy, of the same normalised substring.
+/// **Both paths are the row's membership of a set the term is looked up once for** (`AMB-D-507`). A
+/// scan written in place as `sd.norm LIKE …` depends on nothing around it, and SQLite is free to — and
+/// does — re-run it for every row the enclosing subquery walks, going over the whole copy each time.
+/// As its own uncorrelated `IN` the scan happens once for the term and the walk only tests membership;
+/// the long path has that shape by construction, since `MATCH` is already a subquery of its own. What a
+/// term matches is untouched: the same scan, over the same copy, of the same normalised substring.
+///
+/// That is the term's own cost, and it bounds nothing above it: what the callers do with this predicate
+/// is theirs to keep off the candidate rows (`AMB-D-511`).
 pub(crate) fn term_pred(sd: col::search_doc::Cols, term: &str) -> Pred {
     if term.chars().count() >= TRIGRAM_MIN_CHARS {
         Pred::raw(
@@ -581,12 +583,12 @@ mod tests {
     /// (`AMB-D-507`). Written as a shape assertion because the cost is the plan's, and a correlated
     /// predicate would still return exactly the right rows.
     #[test]
-    fn neither_path_is_evaluated_against_the_correlated_row() {
+    fn neither_path_is_evaluated_against_the_row_it_is_asked_of() {
         const SD: col::search_doc::Cols = col::search_doc::of("sd");
         for term in ["検索", "全文検索"] {
             let sql = term_pred(SD, term).sql().to_owned();
             assert!(sql.starts_with(&format!("{} IN (SELECT ", SD.id.to_sql())), "{term}: {sql}");
-            assert!(!sql.contains(SD.norm.to_sql().as_str()), "{term} reads the correlated row: {sql}");
+            assert!(!sql.contains(SD.norm.to_sql().as_str()), "{term} reads the row it is asked of: {sql}");
         }
     }
 

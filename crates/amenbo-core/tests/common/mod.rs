@@ -12,7 +12,9 @@
 //! production (a borrowed engine read-model). Store shape (the invariant the guard relies on): a
 //! **fixed-size** hot carve-out independent of N, plus N "bulk" background tasks that the selective
 //! hot queries must *not* touch. So the O(result) reads stay flat as N grows, and a regression that
-//! starts scanning the bulk shows up.
+//! starts scanning the bulk shows up. The carve-out is what the word search's terms
+//! ([`HOT_TERM_SCAN`] / [`HOT_TERM_INDEX`]) are written into, for the same reason: a fixed answer, over
+//! a copy that grows.
 
 #![allow(dead_code)] // each consumer (bench / guard) uses a different subset of these helpers.
 
@@ -34,6 +36,18 @@ pub const HOT_TASKS: usize = 50;
 /// In-progress tasks assigned to the AI facet. Small and fixed: these are reserved (in_progress), so
 /// status alone keeps them out of the `status:todo` mailbox.
 pub const IN_PROGRESS_TASKS: usize = 5;
+
+/// A word the word-search reads for, written **only** into the fixed hot carve-out's titles — so the
+/// answer is the same fixed set at every N, exactly as the selective list reads' is, and a search whose
+/// cost grows with the store is growing on the store rather than on its answer (`AMB-D-509`).
+///
+/// Two of them, because which path a term takes is decided by its length
+/// ([`store_engine::search::TRIGRAM_MIN_CHARS`]) and the two paths are physically different reads: this
+/// one is under it, so it takes the **scan** of the normalised copy.
+pub const HOT_TERM_SCAN: &str = "qz";
+/// The **index** half of [`HOT_TERM_SCAN`]: long enough for the trigram index to answer it. Sharing no
+/// characters with the short one, so a search for either reaches the hot titles by its own path alone.
+pub const HOT_TERM_INDEX: &str = "wombat";
 
 /// A seeded read-model plus the ids a read needs to address its hot slice.
 pub struct Seeded {
@@ -115,9 +129,16 @@ pub fn seed(bulk: usize) -> Seeded {
     let mut idx = 0;
 
     // Hot mailbox slice: todo + assigned to my AI + ready. Matches the mailbox filter; a fixed count
-    // regardless of N.
+    // regardless of N. The two search terms ride on the title, so the word search has a fixed answer
+    // here too — nothing outside this loop writes either of them.
     for i in 0..HOT_TASKS {
-        push_task(db, pid, idx, format!("hot mailbox #{i}"), Priority::High);
+        push_task(
+            db,
+            pid,
+            idx,
+            format!("hot mailbox #{i} {HOT_TERM_SCAN} {HOT_TERM_INDEX}"),
+            Priority::High,
+        );
         idx += 1;
         let t = db.tasks.last_mut().unwrap();
         t.assignee_kind = Some(ActorKind::Ai);
@@ -250,6 +271,32 @@ pub fn run_count_only_list(s: &Seeded) -> (usize, usize) {
     };
     let page = store_engine::list_task_ids(s.engine.conn(), &q).unwrap();
     (page.total_matched, page.ids.len())
+}
+
+/// Run the **word search** (`search_hits`) once for one term, returning its (matched, page) pair. The
+/// term is the whole query, unnarrowed by kind or filter — the shape `amenbo search <word>` runs, which
+/// is the widest one: every face of both sides is asked.
+///
+/// The seeded terms ([`HOT_TERM_SCAN`] / [`HOT_TERM_INDEX`]) are written only into the hot carve-out, so
+/// the answer is a fixed set at any N while the *copy* the search reads grows with the store — which is
+/// what makes this read's cost worth timing (`AMB-D-509`).
+pub fn run_search(s: &Seeded, term: &str) -> (usize, usize) {
+    let terms = store_engine::search::terms(term);
+    let page = store_engine::read::search_hits(
+        s.engine.conn(),
+        &store_engine::read::SearchQuery {
+            reach: amenbo_core::reach::Reach::All,
+            terms: &terms,
+            filter: None,
+            today: time::today(),
+            kind: None,
+            sort: amenbo_core::query::SearchSort::default(),
+            limit: Some(HOT_TASKS),
+            offset: 0,
+        },
+    )
+    .unwrap();
+    (page.total_matched, page.hits.len())
 }
 
 /// Run the project `decision_page` read once, returning its (scanned, returned) pair.

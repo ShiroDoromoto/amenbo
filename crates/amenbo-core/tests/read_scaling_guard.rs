@@ -9,8 +9,9 @@
 //! fixed hot carve-out, not grow with N — a regression that dropped the workspace/selectivity from the
 //! count would push `scanned` toward N and blow past the budget, caught without any timing. Second,
 //! **per-call time is sublinear in store size** (coarse, catches the index/scan regressions the ratio
-//! cannot — e.g. a dropped index that makes a selective query physically scan the table): only the
-//! genuinely-O(result) reads are checked, with a noise floor so a sub-millisecond healthy read never
+//! cannot — e.g. a dropped index that makes a selective query physically scan the table, or a word the
+//! cross-cutting search looks up once per candidate record): the reads checked are the ones whose
+//! *answer* is fixed as N grows, with a noise floor so a sub-millisecond healthy read never
 //! trips, so the guard bites only when a read both gets slow *and* scales with N. The
 //! inherently-O(store) aggregates (`store_activity`, `project_overview`) are deliberately **not** in
 //! the time guard — they aggregate the whole workspace by design — but the bench still observes them.
@@ -47,7 +48,8 @@ type TimedRead = fn(&Seeded);
 /// bounded and N-independent** (deterministic, machine-independent — for the instrumented paged reads
 /// the recorded `scanned` is the total matched count, which on a *selective* hot query must equal the
 /// fixed hot carve-out rather than grow with N; these are seed-size-independent, so they run on every
-/// PR at the medium seed), and **per-call time is sublinear in store size** (coarse, catching the
+/// PR at the medium seed — as is the word search's fixed answer, which the timed guard stands on), and
+/// **per-call time is sublinear in store size** (coarse, catching the
 /// index/scan regressions the ratio cannot, with a noise floor so a healthy indexed read that stays
 /// sub-millisecond at N=BIG is skipped; the thresholds are tuned for N=10k, so they run only under
 /// `scale-heavy`, where BIG=10k).
@@ -59,6 +61,7 @@ fn hot_reads_stay_o_result_as_the_store_grows() {
     // Deterministic, machine-independent, seed-size-independent — every PR, medium seed.
     assert_complexity_ratio_n_independent(&small, &big);
     assert_count_only_read_not_flagged(&big);
+    assert_search_terms_reach_only_the_hot_carve_out(&small, &big);
 
     // Wall-clock guards: only meaningful at the full 10k, so reserved for the heavy tier.
     #[cfg(feature = "scale-heavy")]
@@ -92,6 +95,33 @@ fn assert_count_only_read_not_flagged(big: &Seeded) {
         !perf::count_query_busts_budget(scanned, 0),
         "count-only read busts the budget at N={BIG} (scanned {scanned}) — ratio must not apply to limit-0 counts"
     );
+}
+
+/// Guard 5 — the word search's **answer** is the fixed hot carve-out at every N, on both term paths.
+///
+/// Not a claim about the search's cost: the timed guard below makes that one. This is what the timed
+/// guard stands on — a term the seed also wrote into the bulk would grow its own answer with N, and a
+/// search that then takes longer at N=BIG would be doing more work because it was *asked* for more, not
+/// because it regressed. It also pins the seeding itself: rename or drop the terms from the hot titles
+/// and this fails here, rather than leaving the timed guard silently measuring a search of nothing.
+fn assert_search_terms_reach_only_the_hot_carve_out(small: &Seeded, big: &Seeded) {
+    for term in [common::HOT_TERM_SCAN, common::HOT_TERM_INDEX] {
+        let (matched_s, _returned_s) = common::run_search(small, term);
+        let (matched_b, returned_b) = common::run_search(big, term);
+        assert_eq!(
+            matched_s, HOT_TASKS,
+            "search({term}): should reach only the hot carve-out at N={SMALL}, matched {matched_s} — seeding drift"
+        );
+        assert_eq!(
+            matched_b, HOT_TASKS,
+            "search({term}): the answer grew with the store (N={BIG}), matched {matched_b} — the term \
+             leaked into the bulk, so the timed guard below would be measuring a bigger answer, not a regression"
+        );
+        assert_eq!(
+            returned_b, HOT_TASKS,
+            "search({term}): the page should carry the whole answer at N={BIG}, returned {returned_b}"
+        );
+    }
 }
 
 /// Guard 3 — the **unfiltered board page**. It legitimately matches every task in the project, so
@@ -157,6 +187,16 @@ fn assert_complexity_ratio_n_independent(small: &Seeded, big: &Seeded) {
 /// Guard 2 — coarse by design: it only fires when a read is both above a sub-millisecond noise floor
 /// *and* scaled with N, the signature of an O(total) regression. Timing-based, and its ×20 growth
 /// threshold is tuned for the SMALL→10k (×50 data) span, so it runs only in the `scale-heavy` tier.
+///
+/// The **word search** is here rather than in guard 1 because the ratio is not a claim it can make
+/// (`AMB-D-509`): a search's `scanned` is how many places the word is written, which grows with the
+/// store and is the right answer, not a regression. What stays fixed is its *answer* — the seeded terms
+/// reach the hot carve-out alone (guard 5) — so the time per call is the honest measure. Both term paths
+/// run, since which one a term takes is decided by its length and they are physically different reads:
+/// the long term is served by the trigram index, the short one scans the normalised copy. Neither is
+/// strictly O(result) — the scan reads the whole copy once per term, and the copy grows with N — but the
+/// regression this catches is the *multiplication*, a term looked up once per candidate record
+/// (`AMB-D-507` / `AMB-D-511`): at ×50 data that ran ×1414, against the ×6 a healthy scan costs here.
 #[cfg(feature = "scale-heavy")]
 fn assert_time_sublinear(small: &Seeded, big: &Seeded) {
     // Below this, a read is "instant" and cannot be doing O(N) work at N=BIG (a table scan of 10k
@@ -167,12 +207,18 @@ fn assert_time_sublinear(small: &Seeded, big: &Seeded) {
     const MAX_GROWTH: f64 = 20.0;
     const ITERS: usize = 25;
 
-    let reads: [(&str, TimedRead); 2] = [
+    let reads: [(&str, TimedRead); 4] = [
         ("list_task_ids(mailbox)", |s| {
             std::hint::black_box(common::run_mailbox_list(s));
         }),
         ("decision_page", |s| {
             std::hint::black_box(common::run_decision_page(s));
+        }),
+        ("search_hits(scan path)", |s| {
+            std::hint::black_box(common::run_search(s, common::HOT_TERM_SCAN));
+        }),
+        ("search_hits(index path)", |s| {
+            std::hint::black_box(common::run_search(s, common::HOT_TERM_INDEX));
         }),
     ];
 

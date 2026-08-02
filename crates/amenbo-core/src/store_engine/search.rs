@@ -37,7 +37,7 @@ use rusqlite::Connection;
 use unicode_normalization::UnicodeNormalization;
 
 use super::schema::col;
-use super::sql::{Expr, Pred};
+use super::sql::{Expr, Pred, Sql};
 
 /// The shortest term the trigram index can answer for. Below it there is no trigram to look up, so the
 /// term takes the scan path instead ([`term_pred`]).
@@ -294,29 +294,88 @@ fn scan(chars: &[char], term: &str) -> Option<usize> {
 /// term matches is untouched: the same scan, over the same copy, of the same normalised substring.
 ///
 /// That is the term's own cost, and it bounds nothing above it: what the callers do with this predicate
-/// is theirs to keep off the candidate rows (`AMB-D-511`).
+/// is theirs to keep off the candidate rows (`AMB-D-511`). How many times a statement *asks* the lookup
+/// is theirs as well — [`Term`] is where that is said.
 pub(crate) fn term_pred(sd: col::search_doc::Cols, term: &str) -> Pred {
+    let lookup = term_lookup(term);
+    Pred::raw(format!("{} IN ({})", sd.id.to_sql(), lookup.text()), lookup.params().to_vec())
+}
+
+/// The lookup itself, as a statement of its own: the ids of the copy's rows carrying `term`, by whichever
+/// path its length calls for. Written once here and reached two ways — in place ([`term_pred`]) or under
+/// a name the statement made at its head ([`terms_head`]) — so the two forms cannot come to match
+/// different rows: they are the same statement, one of them named.
+fn term_lookup(term: &str) -> Sql {
     if term.chars().count() >= TRIGRAM_MIN_CHARS {
-        Pred::raw(
-            format!("{} IN (SELECT rowid FROM {FTS_TABLE} WHERE {FTS_TABLE} MATCH ?)", sd.id.to_sql()),
-            vec![Value::Text(fts_phrase(term))],
-        )
+        let mut sql = Sql::new(format!("SELECT rowid FROM {FTS_TABLE} WHERE {FTS_TABLE} MATCH "));
+        sql.bind(Value::Text(fts_phrase(term)));
+        sql
     } else {
         // The copy under its own name, so the scan inside the subquery is of the whole table rather
         // than of the row the caller correlated.
         const DOC: col::search_doc::Cols = col::search_doc::ALL;
         let scan = Pred::like(DOC.norm, format!("%{}%", escape_like(term)));
-        Pred::raw(
-            format!(
-                "{} IN (SELECT {} FROM {} WHERE {})",
-                sd.id.to_sql(),
-                DOC.id.to_sql(),
-                DOC.table.to_sql(),
-                scan.sql(),
-            ),
-            scan.params().to_vec(),
-        )
+        let mut sql = Sql::new(format!("SELECT {} FROM {} WHERE ", DOC.id.to_sql(), DOC.table.to_sql()));
+        sql.push_pred(&scan);
+        sql
     }
+}
+
+/// How a statement asks for one term's lookup — the two are the same question, and differ only in how
+/// many times the statement can end up running it.
+///
+/// A read that names a term **once** writes the lookup where it asks it. A read that names the same term
+/// in many places — the word search puts every term to twelve arms, twice over (the count and the page)
+/// — makes the lookup once at its head instead and asks the arms for membership of that: written into
+/// each arm, the copy is walked once per arm, and no order the tables are named in changes that
+/// (`AMB-D-511`). The wording is the caller's because only the caller knows how many arms it has.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Term<'a> {
+    /// The lookup written where it is asked.
+    Inline(&'a str),
+    /// Membership of the lookup this statement already made at its head, named by the term's position in
+    /// what [`terms_head`] was given — so the two sides agree by construction, not by spelling.
+    Named(usize),
+}
+
+impl Term<'_> {
+    /// This term as a predicate over a [`DOC_TABLE`] row the caller has reached — [`term_pred`], or the
+    /// same membership asked of the head's name.
+    pub(crate) fn pred(self, sd: col::search_doc::Cols) -> Pred {
+        match self {
+            Term::Inline(term) => term_pred(sd, term),
+            Term::Named(i) => {
+                Pred::plain(format!("{} IN (SELECT id FROM {})", sd.id.to_sql(), term_cte(i)))
+            }
+        }
+    }
+}
+
+/// The name one term's hoisted lookup goes under, by its position. Namespaced so it cannot collide with a
+/// table: a `WITH` name shadows a real table of the same name, silently and for the whole statement.
+fn term_cte(i: usize) -> String {
+    format!("search_term_{i}")
+}
+
+/// The `WITH …` clause a statement puts at its head to look each term up once ([`Sql::with_head`]),
+/// against which [`Term::Named`] then asks membership. `None` when there are no terms — no words is no
+/// search, and an empty clause is not valid SQL.
+///
+/// `MATERIALIZED` is the point of the clause, not decoration: left to itself SQLite may inline a CTE into
+/// each place that names it, which is the very repetition being taken out.
+pub(crate) fn terms_head(terms: &[String]) -> Option<Sql> {
+    if terms.is_empty() {
+        return None;
+    }
+    let mut sql = Sql::default();
+    for (i, term) in terms.iter().enumerate() {
+        sql.push(if i == 0 { "WITH " } else { ", " })
+            .push(format!("{}(id) AS MATERIALIZED (", term_cte(i)))
+            .push_sql(&term_lookup(term))
+            .push(")");
+    }
+    sql.push(" ");
+    Some(sql)
 }
 
 /// A term as an FTS5 query: one quoted phrase, so every character in it is taken literally rather than
@@ -589,6 +648,29 @@ mod tests {
             let sql = term_pred(SD, term).sql().to_owned();
             assert!(sql.starts_with(&format!("{} IN (SELECT ", SD.id.to_sql())), "{term}: {sql}");
             assert!(!sql.contains(SD.norm.to_sql().as_str()), "{term} reads the row it is asked of: {sql}");
+        }
+    }
+
+    /// The two wordings of one term ask the **same** lookup: what a statement hoists to its head is
+    /// character for character what the inline form puts where it asks, values and all. The point of the
+    /// split is how many times a statement runs the lookup, never what it finds — so this pins the one
+    /// way the split could go wrong, on both paths.
+    #[test]
+    fn hoisting_a_term_does_not_change_what_it_looks_up() {
+        const SD: col::search_doc::Cols = col::search_doc::of("sd");
+        for term in ["検索", "全文検索"] {
+            let inline = term_pred(SD, term);
+            let head = terms_head(std::slice::from_ref(&term.to_string())).expect("one term, one head");
+            let lookup = term_lookup(term);
+            assert!(inline.sql().contains(lookup.text()), "{term} inline: {}", inline.sql());
+            assert!(head.text().contains(lookup.text()), "{term} hoisted: {}", head.text());
+            assert_eq!(inline.params(), lookup.params(), "{term}: the inline form binds the lookup's values");
+            assert_eq!(head.params(), lookup.params(), "{term}: and so does the head");
+            assert!(head.text().contains("MATERIALIZED"), "{term}: the head is computed once, not inlined per use");
+            // And the arms reach it by the name the head made, rather than by looking anything up again.
+            let named = Term::Named(0).pred(SD);
+            assert_eq!(named.sql(), format!("{} IN (SELECT id FROM {})", SD.id.to_sql(), term_cte(0)));
+            assert!(named.params().is_empty(), "a name binds nothing");
         }
     }
 

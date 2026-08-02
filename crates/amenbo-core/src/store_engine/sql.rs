@@ -900,6 +900,21 @@ impl Sql {
         self
     }
 
+    /// Put a `WITH …` clause at the **head** of this statement — the subqueries its body then refers to
+    /// by name, computed once for the statement however many places name them.
+    ///
+    /// The one seam that goes in front rather than at the end, and the values lead with it: a `WITH`'s
+    /// placeholders are read before the body's, so a clause appended to the params would bind the body's
+    /// values to its own question. Text and values still travel together, which is the whole point of
+    /// this type — they just travel to the front.
+    pub fn with_head(&mut self, head: &Sql) -> &mut Self {
+        self.text.insert_str(0, head.text());
+        let mut params = head.params().to_vec();
+        params.append(&mut self.params);
+        self.params = params;
+        self
+    }
+
     /// Append ` WHERE <pred>` — or nothing at all when there is no predicate.
     pub fn push_where(&mut self, p: Option<&Pred>) -> &mut Self {
         if let Some(p) = p {

@@ -410,34 +410,36 @@ const SD: col::search_doc::Cols = col::search_doc::of("sd");
 /// task, an arm costs the walk it does times every task considered, whatever order the tables are named
 /// in: the arms of a face are not the outer row's to re-derive (`AMB-D-511`).
 ///
-/// What the term itself costs is not the arms' to bound: [`search::term_pred`] looks it up in a subquery
-/// correlated to nothing and hands back membership of what that found (`AMB-D-507`), so the lookup
-/// happens once for the term. Which path it took inside — the trigram index or a scan of the copy — is
-/// [`search::term_pred`]'s to decide, and does not change what matching means.
-fn task_text_term(term: &str) -> Pred {
+/// What the term itself costs is not the arms' to bound: a [`search::Term`] is a lookup correlated to
+/// nothing and hands back membership of what it found (`AMB-D-507`), so the lookup happens once wherever
+/// it is written. Which path it took inside — the trigram index or a scan of the copy — is
+/// [`search::Term`]'s to decide, and does not change what matching means; so is whether the statement
+/// writes the lookup into each of these six arms or made it once at its head and named it, which is the
+/// caller's call because only the caller knows how many places ask.
+fn task_text_term(term: search::Term<'_>) -> Pred {
     const TC: col::task_comment::Cols = col::task_comment::of("tc");
     let own = IdSet::of(SD.table, SD.owner_id)
         .filter(Pred::eq(SD.owner_kind, search::DATASET_TASK))
-        .filter(search::term_pred(SD, term));
+        .filter(term.pred(SD));
     let in_comment = IdSet::of(TC.table, TC.task_id)
         .join(SD.table, on_face(search::DATASET_TASK_COMMENT, TC.id))
-        .filter(search::term_pred(SD, term));
+        .filter(term.pred(SD));
     // The label the task was placed on, and the axis that label is a value of. The axis is reached
     // through the assignment as well, not on its own: an axis nobody placed this task on is not one of
     // the task's own words.
     let on_value = IdSet::of(TDV.table, TDV.task_id)
         .join(SD.table, on_face(search::DATASET_DIMENSION_VALUE, TDV.value_id))
-        .filter(search::term_pred(SD, term));
+        .filter(term.pred(SD));
     let on_axis = IdSet::of(TDV.table, TDV.task_id)
         .join(SD.table, on_face(search::DATASET_DIMENSION, TDV.dimension_id))
-        .filter(search::term_pred(SD, term));
+        .filter(term.pred(SD));
     let attached = attachment_ids(search::DATASET_TASK, term);
     // What hangs off a comment hangs off the task, by the same reading that puts the comment's own body
     // here: the timeline is the task's, and so is what was pinned to it.
     let attached_to_comment = IdSet::of(TC.table, TC.task_id)
         .join(A.table, hangs_off(search::DATASET_TASK_COMMENT, TC.id))
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
-        .filter(search::term_pred(SD, term));
+        .filter(term.pred(SD));
     Pred::is_in_any(T.id, [own, in_comment, on_value, on_axis, attached, attached_to_comment])
 }
 
@@ -448,19 +450,19 @@ const DEC: col::decision::Cols = col::decision::of("d");
 /// One term of a decision's word filter — the mirror of [`task_text_term`], reaching the decision's own
 /// title and body, the body of one of its live comments, and the name of something attached to it or to
 /// one of those comments. The labels are the one difference: only a task is placed on an axis.
-fn decision_text_term(term: &str) -> Pred {
+fn decision_text_term(term: search::Term<'_>) -> Pred {
     const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
     let own = IdSet::of(SD.table, SD.owner_id)
         .filter(Pred::eq(SD.owner_kind, search::DATASET_DECISION))
-        .filter(search::term_pred(SD, term));
+        .filter(term.pred(SD));
     let in_comment = IdSet::of(DC.table, DC.decision_id)
         .join(SD.table, on_face(search::DATASET_DECISION_COMMENT, DC.id))
-        .filter(search::term_pred(SD, term));
+        .filter(term.pred(SD));
     let attached = attachment_ids(search::DATASET_DECISION, term);
     let attached_to_comment = IdSet::of(DC.table, DC.decision_id)
         .join(A.table, hangs_off(search::DATASET_DECISION_COMMENT, DC.id))
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
-        .filter(search::term_pred(SD, term));
+        .filter(term.pred(SD));
     Pred::is_in_any(DEC.id, [own, in_comment, attached, attached_to_comment])
 }
 
@@ -485,11 +487,11 @@ fn hangs_off<N: Nullability>(target_type: &str, target: Col<Int, N>) -> Pred {
 ///
 /// It drives from `attachment`, seeking `attachment_by_target`, and reaches the copy from there: driving
 /// from the copy instead would leave the seek with only the face key's leading column.
-fn attachment_ids(target_type: &str, term: &str) -> IdSet {
+fn attachment_ids(target_type: &str, term: search::Term<'_>) -> IdSet {
     IdSet::of(A.table, A.target_id)
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
         .filter(Pred::eq(A.target_type, target_type))
-        .filter(search::term_pred(SD, term))
+        .filter(term.pred(SD))
 }
 
 /// The predicates an already-parsed [`Filter`] stands for — one per filter term, each carrying its own
@@ -554,7 +556,7 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         // the faces of its live comments. Every term must land somewhere on the task — the terms are
         // ANDed, each on any one face — so a two-word text is two predicates, not one.
         for term in search::terms(t) {
-            preds.push(task_text_term(&term));
+            preds.push(task_text_term(search::Term::Inline(&term)));
         }
     }
     if let Some(nf) = &f.number {
@@ -1511,7 +1513,7 @@ pub fn decisions_matching_text(conn: &Connection, terms: &[String]) -> Result<Ve
     let mut sel = Select::new();
     let id = sel.col(DEC.id);
     let mut sql = Sql::from(&sel, DEC.table);
-    sql.push_where(Pred::all(terms.iter().map(|term| decision_text_term(term))).as_ref())
+    sql.push_where(Pred::all(terms.iter().map(|t| decision_text_term(search::Term::Inline(t)))).as_ref())
         .order_by([Sort::by(DEC.id)]);
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let ids = stmt
@@ -1592,9 +1594,9 @@ fn hit_slots(
 /// Membership of a set, not an `EXISTS` correlated to the arm's row, for the reason the record-level
 /// predicate is one too (`AMB-D-511`): the term lookup inside a correlated subquery is a lookup the
 /// statement can be made to repeat once per candidate row.
-fn face_hit(dataset: &str, id: Col<Int>, columns: &[&str], terms: &[String]) -> Pred {
+fn face_hit(dataset: &str, id: Col<Int>, columns: &[&str], terms: &[search::Term<'_>]) -> Pred {
     let any_column = Pred::any(columns.iter().map(|c| Pred::eq(SD.field, *c)));
-    let any_term = Pred::any(terms.iter().map(|t| search::term_pred(SD, t)));
+    let any_term = Pred::any(terms.iter().map(|t| t.pred(SD)));
     let mut carriers = IdSet::of(SD.table, SD.owner_id)
         .filter(Pred::eq(SD.owner_kind, dataset))
         .filter(any_term.unwrap_or_else(Pred::never));
@@ -1678,6 +1680,14 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     const TASK: &str = search::DATASET_TASK;
     const DECISION: &str = search::DATASET_DECISION;
 
+    // The words are looked up **once for the statement**, at its head, and every arm asks membership of
+    // that (`AMB-D-511`). Twelve arms put the same words to the same copy, and the statement is built
+    // twice over — the count and the page — so a lookup written where it is asked is a walk of the copy
+    // per arm, whichever path the term's length takes it down. What each arm means is untouched.
+    let head = search::terms_head(terms);
+    let asked: Vec<search::Term<'_>> = (0..terms.len()).map(search::Term::Named).collect();
+    let asked = asked.as_slice();
+
     // Everything asked of one side, folded once and cloned into every arm that owns that side: the
     // record-level AND, the reach, and — on the task side — the structural filter, which is the very
     // predicate `task list` narrows by (`filter_preds`), so the two reads cannot come to read one
@@ -1695,7 +1705,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     });
     let task_side = Pred::all(
         [
-            Pred::all(terms.iter().map(|t| task_text_term(t))),
+            Pred::all(asked.iter().map(|t| task_text_term(*t))),
             project_id.map(|pid| Pred::eq(T.project_id, pid)),
             task_filter.and_then(Pred::all),
         ]
@@ -1709,7 +1719,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     } else {
         Pred::all(
             [
-                Pred::all(terms.iter().map(|t| decision_text_term(t))),
+                Pred::all(asked.iter().map(|t| decision_text_term(*t))),
                 project_id.map(|pid| Pred::eq(DEC.project_id, pid)),
             ]
             .into_iter()
@@ -1725,7 +1735,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
             hit_slots(sel, HitFace::Title, TASK, T.id, T.title, None, T.updated_at, T.title.to_sql());
         let mut tail = Sql::from_table(T.table);
         tail.push_where(
-            hit_where(face_hit(TASK, T.id, &["title"], terms), &task_side, &gate(HitFace::Title, TASK),).as_ref(),
+            hit_where(face_hit(TASK, T.id, &["title"], asked), &task_side, &gate(HitFace::Title, TASK),).as_ref(),
         );
         (slots, tail)
     })
@@ -1735,7 +1745,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
             hit_slots(sel, HitFace::Body, TASK, T.id, T.title, None, T.updated_at, T.notes.to_sql());
         let mut tail = Sql::from_table(T.table);
         tail.push_where(
-            hit_where(face_hit(TASK, T.id, &["notes"], terms), &task_side, &gate(HitFace::Body, TASK),).as_ref(),
+            hit_where(face_hit(TASK, T.id, &["notes"], asked), &task_side, &gate(HitFace::Body, TASK),).as_ref(),
         );
         (slots, tail)
     })
@@ -1753,7 +1763,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         );
         let mut tail = Sql::from_table(DEC.table);
         tail.push_where(
-            hit_where(face_hit(DECISION, DEC.id, &["title"], terms), &decision_side, &gate(HitFace::Title, DECISION),)
+            hit_where(face_hit(DECISION, DEC.id, &["title"], asked), &decision_side, &gate(HitFace::Title, DECISION),)
                 .as_ref(),
         );
         (slots, tail)
@@ -1772,7 +1782,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         );
         let mut tail = Sql::from_table(DEC.table);
         tail.push_where(
-            hit_where(face_hit(DECISION, DEC.id, &["body"], terms), &decision_side, &gate(HitFace::Body, DECISION),)
+            hit_where(face_hit(DECISION, DEC.id, &["body"], asked), &decision_side, &gate(HitFace::Body, DECISION),)
                 .as_ref(),
         );
         (slots, tail)
@@ -1791,7 +1801,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         );
         let mut tail = Sql::from_table(TC.table);
         tail.join(T.table, same(T.id, TC.task_id)).push_where(
-            hit_where(face_hit(search::DATASET_TASK_COMMENT, TC.id, &["text"], terms), &task_side, &gate(HitFace::Comment, TASK),)
+            hit_where(face_hit(search::DATASET_TASK_COMMENT, TC.id, &["text"], asked), &task_side, &gate(HitFace::Comment, TASK),)
                 .as_ref(),
         );
         (slots, tail)
@@ -1811,7 +1821,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         let mut tail = Sql::from_table(DC.table);
         tail.join(DEC.table, same(DEC.id, DC.decision_id)).push_where(
             hit_where(
-                face_hit(search::DATASET_DECISION_COMMENT, DC.id, &["text"], terms),
+                face_hit(search::DATASET_DECISION_COMMENT, DC.id, &["text"], asked),
                 &decision_side,
                 &gate(HitFace::Comment, DECISION),
             )
@@ -1828,7 +1838,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
             .join(DV.table, same(DV.id, TDV.value_id))
             .push_where(
                 hit_where(
-                    face_hit(search::DATASET_DIMENSION_VALUE, DV.id, &["name"], terms),
+                    face_hit(search::DATASET_DIMENSION_VALUE, DV.id, &["name"], asked),
                     &task_side,
                     &gate(HitFace::Label, TASK),
                 )
@@ -1845,7 +1855,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
             .join(DIM.table, same(DIM.id, TDV.dimension_id))
             .push_where(
                 hit_where(
-                    face_hit(search::DATASET_DIMENSION, DIM.id, &["name"], terms),
+                    face_hit(search::DATASET_DIMENSION, DIM.id, &["name"], asked),
                     &task_side,
                     &gate(HitFace::Label, TASK),
                 )
@@ -1868,7 +1878,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         let mut tail = Sql::from_table(A.table);
         tail.join(T.table, hangs_off(TASK, T.id)).push_where(
             hit_where(
-                face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
+                face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], asked),
                 &task_side,
                 &gate(HitFace::Attachment, TASK),
             )
@@ -1891,7 +1901,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         let mut tail = Sql::from_table(A.table);
         tail.join(DEC.table, hangs_off(DECISION, DEC.id)).push_where(
             hit_where(
-                face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
+                face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], asked),
                 &decision_side,
                 &gate(HitFace::Attachment, DECISION),
             )
@@ -1917,7 +1927,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
             .join(T.table, same(T.id, TC.task_id))
             .push_where(
                 hit_where(
-                    face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
+                    face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], asked),
                     &task_side,
                     &gate(HitFace::Attachment, TASK),
                 )
@@ -1942,7 +1952,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
             .join(DEC.table, same(DEC.id, DC.decision_id))
             .push_where(
                 hit_where(
-                    face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], terms),
+                    face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], asked),
                     &decision_side,
                     &gate(HitFace::Attachment, DECISION),
                 )
@@ -1952,10 +1962,15 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     })
     .into_parts();
 
-    // The total is counted over the arms as they stand, before the page is cut from them.
+    // The total is counted over the arms as they stand, before the page is cut from them. The head goes
+    // on each statement rather than inside the arms: the lookups are the whole statement's, and the count
+    // reads the arms through a derived table, which the head reaches into just the same.
     let mut counted = Select::new();
     let matched = counted.count_all();
-    let count = Sql::from_sub(&counted, &sql, "hit");
+    let mut count = Sql::from_sub(&counted, &sql, "hit");
+    if let Some(head) = &head {
+        count.with_head(head);
+    }
     let total = conn
         .query_row(count.text(), rusqlite::params_from_iter(count.params()), |r| matched.get(r))
         .map_err(StoreEngineError::from)? as usize;
@@ -1970,6 +1985,9 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         crate::query::SearchSort::Oldest => format!(" ORDER BY {at_n}, {tier_n}, {id_n}"),
     };
     sql.push(order).limit(q.limit.map(|n| n as i64).unwrap_or(-1)).offset(q.offset as i64);
+    if let Some(head) = &head {
+        sql.with_head(head);
+    }
 
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let hits = stmt

@@ -4368,6 +4368,10 @@ pub struct AgentHookWiringDto {
 /// the reader cannot end. What silences the report otherwise is core's
 /// ([`amenbo_core::harness::setup_notice`]) — a refusal, or the wiring landing. A standing yes is not
 /// among them: consent is not wiring.
+///
+/// Which folders are waiting is the whole of what this answers; when the row is drawn is the surface's
+/// own (`AMB-D-516`). A project with no task in it holds the first loop, and the board keeps this row
+/// back until a task lands — so an answer with folders in it is not on its own a row on screen.
 #[tauri::command]
 pub fn agent_hook_project_wiring(project_id: i64) -> Result<Vec<AgentHookWiringDto>, CmdError> {
     use amenbo_core::harness;

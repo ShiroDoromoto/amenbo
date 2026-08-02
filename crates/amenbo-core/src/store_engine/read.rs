@@ -403,10 +403,14 @@ const SD: col::search_doc::Cols = col::search_doc::of("sd");
 /// through the assignment (and, from the value, the axis it is a value of), an attachment through what
 /// it hangs off.
 ///
-/// Every arm seeks the copy by its face key (`search_doc_face`), so the cost is the task's own handful
-/// of rows rather than a walk of the index per candidate task; each arm reaches its own side first, by
-/// that side's index (`task_comment_by_task`, `task_dimension_value_by_task`, `attachment_by_target`).
-/// Which path the term itself takes inside those rows — the trigram index or a scan of the copy — is
+/// Every arm reaches its own side first, by that side's index (`task_comment_by_task`,
+/// `task_dimension_value_by_task`, `attachment_by_target`), and seeks the copy by its face key
+/// (`search_doc_face`). What the term itself costs is not theirs to bound, though: an arm that drives
+/// from the copy has only the face key's leading column to seek by, and a term tested against the row
+/// it lands on would then be tested once per candidate task. It is not written that way —
+/// [`search::term_pred`] looks the term up in a subquery correlated to nothing and hands back
+/// membership of what that found (`AMB-D-507`), so the lookup happens once for the term however many
+/// tasks are considered. Which path it took inside — the trigram index or a scan of the copy — is
 /// [`search::term_pred`]'s to decide, and does not change what matching means.
 fn task_text_term(term: &str) -> Pred {
     const TC: col::task_comment::Cols = col::task_comment::of("tc");

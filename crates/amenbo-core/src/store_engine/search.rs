@@ -285,6 +285,14 @@ fn scan(chars: &[char], term: &str) -> Option<usize> {
 /// where the trigrams sit at consecutive positions, which is an exact substring — a term whose triples
 /// all appear out of order does not match. The short path is the plain scan the store did before there
 /// was an index, run against the same normalised copy.
+///
+/// **Both paths are the row's membership of a set the term is looked up once for** (`AMB-D-507`). The
+/// caller's subquery is correlated to the record it is asking about, and a scan written inside it as
+/// `sd.norm LIKE …` depends on nothing outside — so SQLite is free to, and does, re-run it for every
+/// candidate record, walking the whole copy each time. Written as its own uncorrelated `IN` the scan
+/// happens once for the term and the outer loop only tests membership; the long path already had this
+/// shape, which is the reason it was never the slow one. What a term matches is untouched: the same
+/// scan, over the same copy, of the same normalised substring.
 pub(crate) fn term_pred(sd: col::search_doc::Cols, term: &str) -> Pred {
     if term.chars().count() >= TRIGRAM_MIN_CHARS {
         Pred::raw(
@@ -292,7 +300,20 @@ pub(crate) fn term_pred(sd: col::search_doc::Cols, term: &str) -> Pred {
             vec![Value::Text(fts_phrase(term))],
         )
     } else {
-        Pred::like(sd.norm, format!("%{}%", escape_like(term)))
+        // The copy under its own name, so the scan inside the subquery is of the whole table rather
+        // than of the row the caller correlated.
+        const DOC: col::search_doc::Cols = col::search_doc::ALL;
+        let scan = Pred::like(DOC.norm, format!("%{}%", escape_like(term)));
+        Pred::raw(
+            format!(
+                "{} IN (SELECT {} FROM {} WHERE {})",
+                sd.id.to_sql(),
+                DOC.id.to_sql(),
+                DOC.table.to_sql(),
+                scan.sql(),
+            ),
+            scan.params().to_vec(),
+        )
     }
 }
 
@@ -553,6 +574,20 @@ mod tests {
         assert!(term_pred(SD, "検索").sql().contains("LIKE"), "two characters take the scan");
         assert!(term_pred(SD, "全文検索").sql().contains("MATCH"), "four take the index");
         assert!(term_pred(SD, "ai").sql().contains("LIKE"), "so do two ASCII characters");
+    }
+
+    /// Neither path tests the row the caller correlated: both look the term up in a subquery that names
+    /// the copy itself, so what a candidate record costs is one membership test rather than a walk
+    /// (`AMB-D-507`). Written as a shape assertion because the cost is the plan's, and a correlated
+    /// predicate would still return exactly the right rows.
+    #[test]
+    fn neither_path_is_evaluated_against_the_correlated_row() {
+        const SD: col::search_doc::Cols = col::search_doc::of("sd");
+        for term in ["検索", "全文検索"] {
+            let sql = term_pred(SD, term).sql().to_owned();
+            assert!(sql.starts_with(&format!("{} IN (SELECT ", SD.id.to_sql())), "{term}: {sql}");
+            assert!(!sql.contains(SD.norm.to_sql().as_str()), "{term} reads the correlated row: {sql}");
+        }
     }
 
     /// A term is one quoted phrase, so the FTS5 query language cannot read a user's punctuation as its

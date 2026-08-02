@@ -4,7 +4,8 @@
 // (`project_bind_folder`, what CLI `bind --project` does). The reference below describes that walk,
 // so the screen holds one way of getting started rather than a button and a longer typed alternative.
 import { useState } from "react";
-import { errText, t } from "../core/i18n";
+import { useCliCommandName } from "../core/cliCommand";
+import { errText, t, tf } from "../core/i18n";
 import { bindFolder, pickFolder } from "../core/mutations";
 import { inTauri } from "../core/snapshot";
 import { dataAdapter } from "../mock/adapter";
@@ -16,6 +17,8 @@ export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
   // there is one of each: in the browser there is no picker, and with no project there is nothing
   // to open — creating is then the only real move, and a dead second card would only ask to be tried.
   const projects = dataAdapter.listProjects();
+  // The asking step hands over a request that names a command, so it has to be this build's own.
+  const cli = useCliCommandName();
   return (
     <div className="onboard">
       <div className="onboard__hero">
@@ -41,7 +44,7 @@ export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
           <h3 className="onboard__stepstitle">{t("onboard.stepsTitle")}</h3>
           <p className="muted">{t("onboard.stepsIntro")}</p>
         </div>
-        {steps().map((s, i) => (
+        {steps(cli).map((s, i) => (
           <Step key={s.title} n={i + 1} title={s.title} cmd={s.cmd}>
             {s.body}
           </Step>
@@ -51,8 +54,11 @@ export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
   );
 }
 
-/** The reference steps: the walk the two cards above start, from linking a folder to work on the board. */
-function steps(): { title: string; cmd?: string; body: React.ReactNode }[] {
+/**
+ * The reference steps: the walk the two cards above start, from linking a folder to work on the board.
+ * `cli` is the command name this build installs, which the asking step's request has to carry.
+ */
+function steps(cli: string): { title: string; cmd?: string; body: React.ReactNode }[] {
   return [
     {
       title: t("onboard.s1title"),
@@ -60,7 +66,7 @@ function steps(): { title: string; cmd?: string; body: React.ReactNode }[] {
     },
     // The asking step hands over the very request the first loop copies (`FirstLoop`), so a reader
     // who meets both is taught one wording and not two.
-    { title: t("onboard.s2title"), cmd: t("firstloop.prompt"), body: t("onboard.s2body") },
+    { title: t("onboard.s2title"), cmd: tf("firstloop.prompt", { cmd: cli }), body: t("onboard.s2body") },
     { title: t("onboard.s3title"), body: t("onboard.s3body") },
   ];
 }

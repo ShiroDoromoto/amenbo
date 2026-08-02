@@ -16,6 +16,8 @@ const hoisted = vi.hoisted(() => ({
   /** What the folder picker answers; null is the reader dismissing it. */
   picked: "/w/one" as string | null,
   bound: [] as Array<[number, string]>,
+  /** The CLI name this build installs — what the asking step's request has to name. */
+  cli: "amenbo" as string,
 }));
 
 vi.mock("../core/mutations", () => ({
@@ -24,6 +26,7 @@ vi.mock("../core/mutations", () => ({
     hoisted.bound.push([projectId, dir]);
     return Promise.resolve();
   },
+  fetchCliCommandName: () => Promise.resolve(hoisted.cli),
 }));
 
 // Only the desktop/browser answer is varied; the rest of the module stays itself, since the
@@ -38,7 +41,7 @@ vi.mock("../mock/adapter", () => ({
 }));
 
 import { OnboardingScreen } from "./OnboardingScreen";
-import { t } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -66,6 +69,7 @@ beforeEach(() => {
   hoisted.tauri = true;
   hoisted.projects = [{ id: 7, name: "one" }, { id: 9, name: "two" }];
   hoisted.picked = "/w/one";
+  hoisted.cli = "amenbo";
   hoisted.bound = [];
   navs = [];
   container = document.createElement("div");
@@ -128,10 +132,12 @@ describe("where linking is not a move that can be made", () => {
 
 describe("what the asking step hands over", () => {
   // Two wordings for the same move leave the reader checking which one is right, so the step shows
-  // the request the first loop copies rather than an example of its own.
+  // the request the first loop copies rather than an example of its own — down to the command name,
+  // which the request tells the reader's AI to run and so has to be the one this build installs.
   it("is the request the first loop copies, word for word", async () => {
+    hoisted.cli = "amenbo-dev";
     await render();
     const shown = Array.from(container.querySelectorAll("code")).map((c) => c.textContent ?? "");
-    expect(shown).toContain(t("firstloop.prompt"));
+    expect(shown).toContain(tf("firstloop.prompt", { cmd: "amenbo-dev" }));
   });
 });

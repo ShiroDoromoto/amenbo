@@ -16,9 +16,11 @@
 #
 # What this wants standing before the run: one folder bound to a project this device holds, with nothing
 # in it — no provider's directory, nothing about amenbo — and that project's answer never refused here.
-# It should be the only folder bound, so that every file named on screen is named about this one. The app
-# draws the report when that project is opened, and it opens on a project — so the run opens with it
-# standing. Drive it stepped (`--step`), since the pick is what the shot after it is of.
+# It should be the only folder bound, so that every file named on screen is named about this one. The
+# folder is empty but the project is not: one task on its board, since a project that has never held one
+# is drawing the first loop, which the report stands aside for. The app draws the report when that
+# project is opened, and it opens on a project — so the run opens with it standing. Drive it stepped
+# (`--step`), since the pick is what the shot after it is of.
 id: pick-the-tool-a-folder-does-not-name
 title: A folder that shows no sign of any AI tool is handed the catalog, and the tool the reader picks is the tool the text is for
 description: >

@@ -223,8 +223,13 @@ export function BoardScreen({
 
       {/* Above both tabs, because it is about the project and not about what is being looked at in it.
           It draws nothing where every folder of this project is wired, or where the project said no
-          (`AMB-D-459`, `AMB-D-460`). */}
-      <AgentHookWiringRow projectId={projectId} />
+          (`AMB-D-459`, `AMB-D-460`).
+          Nor on a project with nothing in it yet, where the first loop is standing: both are text to
+          hand an AI of the reader's, they look alike, and neither says which comes first — so the
+          board that has never held a task carries the loop alone (`AMB-D-516`). The wiring keeps: it
+          stands until the folders are wired, while the first loop is spent by the first task to land,
+          and that same task is what puts this row on the board. */}
+      {!untouched && <AgentHookWiringRow projectId={projectId} />}
 
       {tab === "decisions" && (
         <DecisionsScreen

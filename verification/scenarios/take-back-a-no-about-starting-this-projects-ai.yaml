@@ -22,9 +22,10 @@
 # shot settles; the file the report names is the one line here a reading can close.
 #
 # What this wants standing before the run: a device holding the project named below, bound to a folder
-# carrying the provider's own directory with nothing about amenbo in it, and that project's answer never
-# refused — so the report is on its board when the run opens on it. The screen moves at the press, so
-# drive it stepped (`--step`) and carry out each move at the hand-back before it.
+# carrying the provider's own directory with nothing about amenbo in it, that project's answer never
+# refused, and one task on its board — a project that has never held one is drawing the first loop,
+# which the report stands aside for — so the report is on its board when the run opens on it. The screen
+# moves at the press, so drive it stepped (`--step`) and carry out each move at the hand-back before it.
 id: take-back-a-no-about-starting-this-projects-ai
 title: A project can decline having its AI started on amenbo where it reads the report, and take the refusal back where it is kept
 description: >

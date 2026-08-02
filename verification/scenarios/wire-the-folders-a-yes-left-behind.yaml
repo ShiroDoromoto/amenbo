@@ -15,9 +15,10 @@
 # What this wants standing before the run: one project on this device bound to more than one folder, each
 # of them carrying the same tool's own directory and nothing about amenbo in it, that project's answer a
 # yes rather than a refusal — put it in the store the build under test opens (`devtool devgui cli`), since
-# a refusal takes the report away — and that project's board open. Nothing else on that screen may name a
-# folder, since a reading finds a name wherever it stands. The screen does not move under the run, so it
-# needs no stepping.
+# a refusal takes the report away — and that project's board open, with one task on it: a project that
+# has never held one is drawing the first loop, which the report stands aside for. Nothing else on that
+# screen may name a folder, the task included, since a reading finds a name wherever it stands. The
+# screen does not move under the run, so it needs no stepping.
 id: wire-the-folders-a-yes-left-behind
 title: A project says which of its folders still start their AI without amenbo, with the request standing once above the list
 description: >

@@ -243,8 +243,8 @@ impl Instructor {
     /// `detail` follows that same line: what it expects is the declaration the step named, which the
     /// catalog's document carries in the author's own words — an event id, or a setting's label.
     ///
-    /// `first-loop` too: what it expects is the file name the handed-over request tells the reader's
-    /// AI to read, which is a file name in any language the app is in. Its sibling `first-loop-order`
+    /// `first-loop` too: what it expects is the command the handed-over request tells the reader's
+    /// AI to run, which is the same words in any language the app is in. Its sibling `first-loop-order`
     /// names an order instead, and an order is not something a reading settles — which words are on a
     /// shot is all OCR answers — so that one is left for a `Review`.
     ///
@@ -1465,12 +1465,12 @@ steps_gui:
         assert!(lines[1].contains("\"greenhouse\"") && lines[1].contains("folder picker"), "got: {}", lines[1]);
     }
 
-    /// The first loop: what OCR is sent looking for is the file name the handed-over request tells
-    /// the reader's AI to read — a file name, so the reading does not turn on the app's language.
+    /// The first loop: what OCR is sent looking for is the command the handed-over request tells
+    /// the reader's AI to run — a command, so the reading does not turn on the app's language.
     /// The order the same screen puts its moves in is not something a reading settles, so that step
     /// is a `Review` and its instruction is what an eye closes it by.
     #[test]
-    fn a_first_loop_assert_expects_the_file_its_request_names() {
+    fn a_first_loop_assert_expects_the_command_its_request_names() {
         let yaml = r#"
 id: x
 title: y
@@ -1478,7 +1478,7 @@ steps_gui:
   - type: assert
     domain: folder
     op: first-loop
-    with: { hands_over: AGENTS.md }
+    with: { hands_over: agent --json }
   - type: assert
     domain: folder
     op: first-loop-order
@@ -1487,11 +1487,11 @@ steps_gui:
         let s = load(yaml);
         let mut ins = Instructor::new();
         let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
-        assert!(lines[0].contains("\"AGENTS.md\"") && lines[0].contains("linked folder"), "got: {}", lines[0]);
+        assert!(lines[0].contains("\"agent --json\"") && lines[0].contains("linked folder"), "got: {}", lines[0]);
         assert!(lines[1].contains("then the way on to the board"), "got: {}", lines[1]);
 
-        let exp = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the request's file name is OCR-judged");
-        assert_eq!(exp, Expectation { text: "AGENTS.md".to_string(), present: true });
+        let exp = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the request's command is OCR-judged");
+        assert_eq!(exp, Expectation { text: "agent --json".to_string(), present: true });
         assert!(ins.expectation(&s.steps(Driver::Gui)[1]).is_none(), "an order is not something a reading settles");
     }
 

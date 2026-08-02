@@ -49,7 +49,7 @@ export const id: Translation = {
     "firstloop.copied": "✓ Tersalin",
     "firstloop.s3title": "Tugas yang dicatatnya muncul di sini",
     "firstloop.s3hint": "Begitu AI Anda menulis ke amenbo, papan yang sedang Anda lihat menampilkannya.",
-    "firstloop.prompt": "Folder ini dikelola dengan amenbo. Mulailah dengan membaca AGENTS.md untuk memahami cara kerjanya. Lalu lihat apa saja yang ada di folder ini, putuskan bersama saya mana yang layak menjadi tugas, dan catat semuanya di amenbo.",
+    "firstloop.prompt": "Folder ini dikelola dengan amenbo. Jalankan {cmd} agent --json lalu ikuti isinya, sambil mengelola pekerjaan di amenbo.",
     "firstloop.noFolderTitle": "Mulailah dengan menautkan sebuah folder",
     "firstloop.noFolderHint": "AI yang dijalankan di folder yang tertaut bisa mengoperasikan proyek ini. Folder itulah yang dibuka terminal, dan ke sana pula permintaannya pergi.",
     "firstloop.noFolderBtn": "Tautkan folder",

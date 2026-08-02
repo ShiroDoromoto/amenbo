@@ -46,7 +46,7 @@ export const ko: Translation = {
     "firstloop.copied": "✓ 복사했습니다",
     "firstloop.s3title": "AI가 등록한 작업이 여기에 나타납니다",
     "firstloop.s3hint": "AI가 amenbo에 쓰는 순간, 지금 보고 있는 보드에 나타납니다.",
-    "firstloop.prompt": "이 폴더는 amenbo로 관리합니다. 먼저 AGENTS.md를 읽고 사용법을 익히세요. 그다음 폴더 안에 무엇이 있는지 살펴보고, 무엇을 작업으로 삼을지 저와 정한 뒤 amenbo에 등록하세요.",
+    "firstloop.prompt": "이 폴더는 amenbo로 관리합니다. {cmd} agent --json 을 실행하고, 거기에 적힌 대로 일을 amenbo에서 관리하면서 진행하세요.",
     "firstloop.noFolderTitle": "먼저 폴더를 연결하세요",
     "firstloop.noFolderHint": "연결한 폴더에서 실행한 AI가 이 프로젝트를 다룰 수 있습니다. 터미널도 그 폴더에서 열리고, 요청도 그곳으로 갑니다.",
     "firstloop.noFolderBtn": "폴더 연결",

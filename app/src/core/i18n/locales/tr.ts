@@ -46,7 +46,7 @@ export const tr: Translation = {
     "firstloop.copied": "✓ Kopyalandı",
     "firstloop.s3title": "Kaydettiği işler burada belirir",
     "firstloop.s3hint": "Yapay zekânız amenbo'ya yazar yazmaz, baktığınız pano bunu gösterir.",
-    "firstloop.prompt": "Bu klasör amenbo ile yönetiliyor. Önce AGENTS.md dosyasını okuyup nasıl çalıştığını öğren. Sonra bu klasörde ne olduğuna bak, benimle birlikte neyin iş olması gerektiğine karar ver ve hepsini amenbo'ya kaydet.",
+    "firstloop.prompt": "Bu klasör amenbo ile yönetiliyor. {cmd} agent --json komutunu çalıştır ve söylediklerine uy; işi amenbo'da yöneterek ilerle.",
     "firstloop.noFolderTitle": "Önce bir klasör bağlayın",
     "firstloop.noFolderHint": "Bağlı klasörde başlatılan yapay zekâ bu projeyi işletebilir. Terminal de o klasörde açılır, istek de oraya gider.",
     "firstloop.noFolderBtn": "Klasör bağla",

@@ -49,7 +49,7 @@ export const vi: Translation = {
     "firstloop.copied": "✓ Đã chép",
     "firstloop.s3title": "Những việc nó ghi sẽ hiện ở đây",
     "firstloop.s3hint": "Ngay khi AI của bạn ghi vào amenbo, chính cái bảng bạn đang nhìn sẽ hiện ra.",
-    "firstloop.prompt": "Thư mục này được quản lý bằng amenbo. Hãy bắt đầu bằng việc đọc AGENTS.md để hiểu nó hoạt động ra sao. Rồi xem trong thư mục này có gì, cùng tôi quyết xem cái gì nên thành việc, và ghi chúng vào amenbo.",
+    "firstloop.prompt": "Thư mục này được quản lý bằng amenbo. Hãy chạy {cmd} agent --json và làm theo những gì nó nói, vừa làm vừa quản lý công việc trong amenbo.",
     "firstloop.noFolderTitle": "Hãy bắt đầu bằng việc gắn một thư mục",
     "firstloop.noFolderHint": "AI chạy trong thư mục đã gắn có thể vận hành dự án này. Terminal mở ra ở chính thư mục đó, và yêu cầu cũng gửi tới đó.",
     "firstloop.noFolderBtn": "Gắn thư mục",

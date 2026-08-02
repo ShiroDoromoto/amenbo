@@ -46,7 +46,7 @@ export const de: Translation = {
     "firstloop.copied": "✓ Kopiert",
     "firstloop.s3title": "Die eingetragenen Aufgaben erscheinen hier",
     "firstloop.s3hint": "Sobald deine KI in amenbo schreibt, zeigt es das Board, das du gerade ansiehst.",
-    "firstloop.prompt": "Dieser Ordner wird mit amenbo verwaltet. Lies zuerst AGENTS.md, um zu verstehen, wie es funktioniert. Sieh dann nach, was in diesem Ordner liegt, entscheide mit mir, was zu Aufgaben werden soll, und trage sie in amenbo ein.",
+    "firstloop.prompt": "Dieser Ordner wird mit amenbo verwaltet. Führe {cmd} agent --json aus und richte dich danach, während du die Arbeit in amenbo verwaltest.",
     "firstloop.noFolderTitle": "Verknüpfe zuerst einen Ordner",
     "firstloop.noFolderHint": "Eine im verknüpften Ordner gestartete KI kann dieses Projekt bedienen. In diesem Ordner öffnet sich das Terminal, und dorthin geht die Anfrage.",
     "firstloop.noFolderBtn": "Ordner verknüpfen",

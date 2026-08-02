@@ -47,7 +47,7 @@ export const zhHant: Translation = {
     "firstloop.copied": "✓ 已複製",
     "firstloop.s3title": "它登錄的任務會出現在這裡",
     "firstloop.s3hint": "你的 AI 一寫進 amenbo，眼前這塊看板就會顯示出來。",
-    "firstloop.prompt": "這個資料夾由 amenbo 管理。請先閱讀 AGENTS.md 了解它的用法。接著看看資料夾裡有什麼，和我一起決定哪些該成為任務，並登錄到 amenbo。",
+    "firstloop.prompt": "這個資料夾由 amenbo 管理。請執行 {cmd} agent --json，並依照它說的，一邊用 amenbo 管理任務一邊推進。",
     "firstloop.noFolderTitle": "請先連結一個資料夾",
     "firstloop.noFolderHint": "在連結的資料夾中啟動的 AI 可以操作這個專案。終端機會在這個資料夾中開啟，請求也送到這裡。",
     "firstloop.noFolderBtn": "連結資料夾",

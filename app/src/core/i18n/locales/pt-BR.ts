@@ -50,7 +50,7 @@ export const ptBR: Translation = {
     "firstloop.copied": "✓ Copiado",
     "firstloop.s3title": "As tarefas que ela registrar aparecem aqui",
     "firstloop.s3hint": "No instante em que sua IA escrever no amenbo, o quadro que você está vendo mostra.",
-    "firstloop.prompt": "Esta pasta é gerenciada com o amenbo. Comece lendo o AGENTS.md para entender como funciona. Depois veja o que há nesta pasta, decida comigo o que deve virar tarefa e registre no amenbo.",
+    "firstloop.prompt": "Esta pasta é gerenciada com o amenbo. Execute {cmd} agent --json e siga o que ele diz, gerenciando o trabalho no amenbo conforme avança.",
     "firstloop.noFolderTitle": "Comece vinculando uma pasta",
     "firstloop.noFolderHint": "Uma IA iniciada na pasta vinculada pode operar este projeto. A pasta é onde o terminal abre e para onde o pedido vai.",
     "firstloop.noFolderBtn": "Vincular uma pasta",

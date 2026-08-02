@@ -46,7 +46,7 @@ export const ja: Translation = {
     "firstloop.copied": "✓ コピーしました",
     "firstloop.s3title": "登録されたタスクは、ここに現れます",
     "firstloop.s3hint": "AI が書き込むと、開いているボードにそのまま現れます。",
-    "firstloop.prompt": "このフォルダは amenbo で管理します。まず AGENTS.md を読んで使い方を覚えてください。そのうえで、このフォルダの状況を見て、何をタスクにするかを私と決めてから、amenbo に登録してください。",
+    "firstloop.prompt": "このフォルダは amenbo で管理します。{cmd} agent --json を実行して、それに従ってタスク管理しながら進めてください。",
     "firstloop.noFolderTitle": "まずフォルダを紐付ける",
     "firstloop.noFolderHint": "紐付けたフォルダで起動した AI が、このプロジェクトを操作できます。開くターミナルも、依頼文を貼る先も、そのフォルダで決まります。",
     "firstloop.noFolderBtn": "フォルダを紐付ける",

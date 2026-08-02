@@ -51,7 +51,7 @@ steps_gui:
     domain: folder
     op: first-loop
     with:
-      hands_over: AGENTS.md
+      hands_over: agent --json
 
   - type: assert
     domain: folder

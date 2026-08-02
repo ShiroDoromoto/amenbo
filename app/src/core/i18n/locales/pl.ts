@@ -49,7 +49,7 @@ export const pl: Translation = {
     "firstloop.copied": "✓ Skopiowano",
     "firstloop.s3title": "Zapisane przez nią zadania pojawią się tutaj",
     "firstloop.s3hint": "Gdy tylko Twoja SI zapisze coś w amenbo, tablica, na którą patrzysz, to pokaże.",
-    "firstloop.prompt": "Ten folder jest prowadzony w amenbo. Zacznij od przeczytania AGENTS.md, żeby zrozumieć, jak to działa. Potem zobacz, co jest w tym folderze, ustal ze mną, co powinno stać się zadaniem, i zapisz to w amenbo.",
+    "firstloop.prompt": "Ten folder jest prowadzony w amenbo. Uruchom {cmd} agent --json i trzymaj się tego, co mówi, prowadząc pracę w amenbo na bieżąco.",
     "firstloop.noFolderTitle": "Zacznij od podpięcia folderu",
     "firstloop.noFolderHint": "SI uruchomiona w podpiętym folderze może obsługiwać ten projekt. To w nim otwiera się terminal i to tam trafia prośba.",
     "firstloop.noFolderBtn": "Podepnij folder",

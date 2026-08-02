@@ -47,7 +47,7 @@ export const zhHans: Translation = {
     "firstloop.copied": "✓ 已复制",
     "firstloop.s3title": "它登记的任务会出现在这里",
     "firstloop.s3hint": "你的 AI 一写入 amenbo，眼前这块看板就会显示出来。",
-    "firstloop.prompt": "这个文件夹由 amenbo 管理。请先阅读 AGENTS.md 了解它的用法。然后看看文件夹里有什么，与我一起决定哪些该成为任务，并登记到 amenbo。",
+    "firstloop.prompt": "这个文件夹由 amenbo 管理。请执行 {cmd} agent --json，并按照它说的，一边用 amenbo 管理任务一边推进。",
     "firstloop.noFolderTitle": "先关联一个文件夹",
     "firstloop.noFolderHint": "在关联的文件夹中启动的 AI 可以操作这个项目。终端会在这个文件夹中打开，请求也发往这里。",
     "firstloop.noFolderBtn": "关联文件夹",

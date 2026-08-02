@@ -13,7 +13,8 @@
 // One button per move, and each does only what its label says, so nothing the reader did not press
 // happens behind their back.
 import { useEffect, useState } from "react";
-import { errText, t } from "../core/i18n";
+import { useCliCommandName } from "../core/cliCommand";
+import { errText, t, tf } from "../core/i18n";
 import { fetchBoundFolders, openTerminal } from "../core/mutations";
 
 /**
@@ -61,6 +62,8 @@ export function FirstLoop({ dir }: { dir: string }) {
   const [copied, setCopied] = useState<"prompt" | "path" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [noTerminal, setNoTerminal] = useState(false);
+  // The request tells the AI to run a command, so it has to name the one this build installs.
+  const prompt = tf("firstloop.prompt", { cmd: useCliCommandName() });
 
   const terminal = async () => {
     try {
@@ -105,8 +108,8 @@ export function FirstLoop({ dir }: { dir: string }) {
       </Step>
 
       <Step n={2} title={t("firstloop.s2title")} hint={t("firstloop.s2hint")}>
-        <p className="firstloop__prompt">{t("firstloop.prompt")}</p>
-        <button className="btn" onClick={() => void copy(t("firstloop.prompt"), "prompt")}>
+        <p className="firstloop__prompt">{prompt}</p>
+        <button className="btn" onClick={() => void copy(prompt, "prompt")}>
           {copied === "prompt" ? t("firstloop.copied") : `📋 ${t("firstloop.s2btn")}`}
         </button>
       </Step>

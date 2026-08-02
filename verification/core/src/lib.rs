@@ -702,13 +702,13 @@ const REGISTRY: &[OpSpec] = &[
     // the interface can make on their behalf it makes, so what the screen carries is a terminal
     // already inside the linked folder and a request finished enough to paste.
     //
-    // `hands_over` is the words that request has to carry, and what they name is the file the AI is
-    // sent to read before it writes anything. It is the one part of the card that is the same in
+    // `hands_over` is the words that request has to carry, and what they name is the command the AI is
+    // sent to run before it does anything else. It is the one part of the card that is the same in
     // whatever language the app is in, so it is the part a reading can be held to.
     //
-    // GUI only, and not by omission: none of this reaches the store. A request that lost the file
-    // name, and a terminal opened somewhere other than the linked folder, leave exactly the rows
-    // behind that a working one does — so there is no read to ask, and the screen is the only witness.
+    // GUI only, and not by omission: none of this reaches the store. A request that lost the command,
+    // and a terminal opened somewhere other than the linked folder, leave exactly the rows behind
+    // that a working one does — so there is no read to ask, and the screen is the only witness.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "first-loop", required: &["hands_over"], refs: &[], strings: &["hands_over"], binds: false },
     // Where that loop sits among everything else the same screen offers, written as one line naming
     // the order. A reading says which words are on a shot, never which of them came first, so this is

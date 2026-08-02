@@ -46,7 +46,7 @@ export const nl: Translation = {
     "firstloop.copied": "✓ Gekopieerd",
     "firstloop.s3title": "De taken die hij vastlegt verschijnen hier",
     "firstloop.s3hint": "Zodra je AI naar amenbo schrijft, laat het bord waar je naar kijkt het zien.",
-    "firstloop.prompt": "Deze map wordt beheerd met amenbo. Lees eerst AGENTS.md om te leren hoe het werkt. Kijk daarna wat er in deze map staat, bepaal samen met mij wat taken moeten worden, en leg ze vast in amenbo.",
+    "firstloop.prompt": "Deze map wordt beheerd met amenbo. Voer {cmd} agent --json uit en volg wat daar staat, terwijl je het werk in amenbo bijhoudt.",
     "firstloop.noFolderTitle": "Koppel eerst een map",
     "firstloop.noFolderHint": "Een AI die in de gekoppelde map start, kan dit project bedienen. In die map opent ook de terminal, en daar gaat het verzoek naartoe.",
     "firstloop.noFolderBtn": "Map koppelen",

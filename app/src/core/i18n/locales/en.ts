@@ -58,7 +58,7 @@ const ui = {
   "firstloop.copied": "✓ Copied",
   "firstloop.s3title": "The tasks it registers appear here",
   "firstloop.s3hint": "The moment your AI writes to amenbo, the board you are looking at shows it.",
-  "firstloop.prompt": "This folder is managed with amenbo. Start by reading AGENTS.md to learn how it works. Then look at what is in this folder, decide with me what should become tasks, and register them in amenbo.",
+  "firstloop.prompt": "This folder is managed with amenbo. Run {cmd} agent --json and follow it, managing the work in amenbo as you go.",
   "firstloop.noFolderTitle": "Start by linking a folder",
   "firstloop.noFolderHint": "An AI launched in the linked folder can operate this project. The folder is what a terminal opens in, and where the request goes.",
   "firstloop.noFolderBtn": "Link a folder",

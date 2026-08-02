@@ -49,7 +49,7 @@ export const fr: Translation = {
     "firstloop.copied": "✓ Copié",
     "firstloop.s3title": "Les tâches qu'elle enregistre apparaissent ici",
     "firstloop.s3hint": "Dès que votre IA écrit dans amenbo, le tableau que vous regardez l'affiche.",
-    "firstloop.prompt": "Ce dossier est géré avec amenbo. Commencez par lire AGENTS.md pour comprendre son fonctionnement. Regardez ensuite ce que contient ce dossier, décidez avec moi ce qui doit devenir des tâches, et enregistrez-les dans amenbo.",
+    "firstloop.prompt": "Ce dossier est géré avec amenbo. Exécutez {cmd} agent --json et suivez ce qu'il indique, en gérant le travail dans amenbo au fur et à mesure.",
     "firstloop.noFolderTitle": "Commencez par lier un dossier",
     "firstloop.noFolderHint": "Une IA lancée dans le dossier lié peut piloter ce projet. C'est dans ce dossier que le terminal s'ouvre, et c'est là que part la demande.",
     "firstloop.noFolderBtn": "Lier un dossier",

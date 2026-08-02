@@ -49,7 +49,7 @@ export const es: Translation = {
     "firstloop.copied": "✓ Copiado",
     "firstloop.s3title": "Las tareas que registre aparecerán aquí",
     "firstloop.s3hint": "En cuanto tu IA escriba en amenbo, el tablero que estás mirando lo mostrará.",
-    "firstloop.prompt": "Esta carpeta se gestiona con amenbo. Empieza leyendo AGENTS.md para saber cómo funciona. Después mira qué hay en esta carpeta, decide conmigo qué debería convertirse en tareas y regístralas en amenbo.",
+    "firstloop.prompt": "Esta carpeta se gestiona con amenbo. Ejecuta {cmd} agent --json y sigue lo que dice, gestionando el trabajo en amenbo a medida que avanzas.",
     "firstloop.noFolderTitle": "Empieza vinculando una carpeta",
     "firstloop.noFolderHint": "Una IA lanzada en la carpeta vinculada puede operar este proyecto. La carpeta es donde se abre la terminal y adonde va la petición.",
     "firstloop.noFolderBtn": "Vincular una carpeta",

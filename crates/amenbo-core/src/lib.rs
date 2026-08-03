@@ -28,6 +28,7 @@ pub mod idref;
 pub mod lint;
 pub mod migrate;
 pub mod model;
+pub mod nudge;
 pub mod store_engine;
 pub mod sys;
 pub mod ops;

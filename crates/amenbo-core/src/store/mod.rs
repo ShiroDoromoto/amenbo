@@ -343,6 +343,26 @@ impl Store {
         crate::overview::retain_live_mailbox_notified(&self.engine, keep)
     }
 
+    /// The nudges to put to the person now ([`crate::nudge`]). `stage_open` answers whether a nudge's
+    /// declared stage is one this caller is in — the caller holds the settings a stage is about.
+    pub fn pending_nudges(
+        &self,
+        stage_open: impl Fn(&str) -> bool,
+    ) -> Result<Vec<&'static crate::nudge::Nudge>> {
+        crate::nudge::pending(&self.engine, stage_open)
+    }
+
+    /// Record that a nudge has been put — called once it has actually been shown, not when it was
+    /// judged due.
+    pub fn mark_nudge_put(&self, nudge_id: &str) -> Result<()> {
+        crate::nudge::mark_put(&self.engine, nudge_id)
+    }
+
+    /// Count one launch of the app on this device (the tally two of the metrics are read from).
+    pub fn record_launch(&self) -> Result<()> {
+        crate::nudge::record_launch(&self.engine)
+    }
+
     /// Has this project been opted out of the lint hooks — did `hooks uninstall` run in it
     /// ([`crate::hooks`])? It says what was explicitly asked for here, never what `.git/hooks` currently
     /// holds. The *answer* to the hook question is not per project and does not live here: it is

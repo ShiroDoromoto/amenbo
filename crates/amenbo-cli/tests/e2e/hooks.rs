@@ -372,7 +372,7 @@ fn the_hook_probe_spawns_git_once_per_command_and_never_for_hooks_itself() {
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("PATH", &shim_dir)
             .current_dir(&cli.home)
-            .args(with_actor(args, "human"))
+            .args(with_defaults(args, "human"))
             .output()
             .expect("failed to run the binary");
         assert_eq!(exit_code(&out), 0, "{args:?}: {}", String::from_utf8_lossy(&out.stderr));

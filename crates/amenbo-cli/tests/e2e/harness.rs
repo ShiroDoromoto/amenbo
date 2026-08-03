@@ -65,16 +65,37 @@ pub(crate) fn signal_name(_status: &std::process::ExitStatus) -> String {
     "no exit code".to_string()
 }
 
-/// `args` with the facet declared on the command line — `--actor <facet>` appended, which is the one
-/// input amenbo is to take it by (`AMB-D-408`). A test that declares its own facet in `args` is left
-/// alone, so `--actor ai` in a call still means what it says. The flag beats anything the environment
-/// carries, so a run is the same whatever the shell the tests were started from had set.
-pub(crate) fn with_actor<'a>(args: &[&'a str], facet: &'a str) -> Vec<&'a str> {
-    let mut with = args.to_vec();
+/// `args` with the inputs every call needs but almost no test is *about*, filled in.
+///
+/// The facet, declared on the command line — `--actor <facet>` appended, which is the one input amenbo
+/// is to take it by (`AMB-D-408`). A test that declares its own facet in `args` is left alone, so
+/// `--actor ai` in a call still means what it says. The flag beats anything the environment carries, so
+/// a run is the same whatever the shell the tests were started from had set.
+///
+/// And the folder `project add` links (`AMB-D-529`): a fresh one per call, so a suite whose subject is
+/// tasks or decisions still creates the project it files them under without naming a folder. A call that
+/// names its own `--dir` — the tests that *are* about the linking — is left alone.
+pub(crate) fn with_defaults(args: &[&str], facet: &str) -> Vec<String> {
+    let mut with: Vec<String> = args.iter().map(|a| (*a).to_string()).collect();
     if !args.contains(&"--actor") {
-        with.extend_from_slice(&["--actor", facet]);
+        with.push("--actor".to_string());
+        with.push(facet.to_string());
+    }
+    if args.first() == Some(&"project") && args.get(1) == Some(&"add") && !args.contains(&"--dir") {
+        with.push("--dir".to_string());
+        with.push(a_project_folder());
     }
     with
+}
+
+/// A folder for a project a test creates: a fresh one each call, cut **beside** the home rather than
+/// inside it — a folder under one that `init` has bound reads as already managed, which is the refusal
+/// `project add` owes and not the state a test about something else wants to be in.
+fn a_project_folder() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    let n = N.fetch_add(1, Ordering::SeqCst);
+    amenbo_scratch::scratch(&format!("project-dir-{n}")).to_string_lossy().into_owned()
 }
 
 pub(crate) struct Cli {
@@ -98,7 +119,7 @@ impl Cli {
             .current_dir(&self.home)
             // A write with no facet from a non-interactive caller (the test runner has no TTY) is refused
             // with facet_required, so every call declares one; a test that names its own is left alone.
-            .args(with_actor(args, "human"))
+            .args(with_defaults(args, "human"))
             .output()
             .expect("failed to run the binary");
         (
@@ -114,7 +135,7 @@ impl Cli {
             .env("AMENBO_HOME", &self.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(cwd)
-            .args(with_actor(args, "human"))
+            .args(with_defaults(args, "human"))
             .output()
             .expect("failed to run the binary");
         let stdout = String::from_utf8_lossy(&out.stdout).to_string();
@@ -137,7 +158,7 @@ impl Cli {
             .env("AMENBO_HOME", &self.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&self.home)
-            .args(with_actor(args, "human"))
+            .args(with_defaults(args, "human"))
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -158,7 +179,7 @@ impl Cli {
             .env("AMENBO_HOME", &self.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&self.home)
-            .args(with_actor(args, "human"))
+            .args(with_defaults(args, "human"))
             .output()
             .expect("failed to run the binary");
         (
@@ -176,7 +197,7 @@ impl Cli {
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&self.home)
             // The facet, declared the same way `run` declares it.
-            .args(with_actor(args, "human"))
+            .args(with_defaults(args, "human"))
             .output()
             .expect("failed to run the binary");
         (
@@ -196,7 +217,7 @@ impl Cli {
             .env("AMENBO_HOME", &self.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&self.home)
-            .args(with_actor(args, "human"));
+            .args(with_defaults(args, "human"));
         for (key, value) in env {
             command.env(key, value);
         }

@@ -595,9 +595,10 @@ fn requires_pointer(cmd: &Option<Command>) -> bool {
 }
 
 /// Which folder would this invocation use amenbo in — the one [`refuse_a_nested_worktree`] judges — or
-/// `None` when the command is outside the guard's reach. Usually the CWD, but `bind --dir <path>` places its
-/// pointer elsewhere, and the hazard belongs to the folder that receives the pointer rather than to the one
-/// the command was typed in. A `--dir` that names no directory is left to `bind` to report.
+/// `None` when the command is outside the guard's reach. Usually the CWD, but `bind --dir <path>` and
+/// `project add --dir <path>` place their pointer elsewhere, and the hazard belongs to the folder that
+/// receives the pointer rather than to the one the command was typed in. A `--dir` that names no directory
+/// is left to the command itself to report.
 ///
 /// Out of reach are the commands that place no pointer and read no store (`version` / `update` / `lint` /
 /// `agent-hook`),
@@ -617,7 +618,8 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         | Some(Command::PluginRunner { .. })
         | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
         | Some(Command::Unbind { .. }) => None,
-        Some(Command::Bind { dir: Some(d), .. }) => {
+        Some(Command::Bind { dir: Some(d), .. })
+        | Some(Command::Project { sub: ProjectCmd::Add { dir: d, .. } }) => {
             let p = std::path::PathBuf::from(d);
             p.is_dir().then(|| std::fs::canonicalize(&p).unwrap_or(p))
         }
@@ -630,12 +632,13 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
 /// a worktree inherits the project's `.amenbo` through the upward walk while the store it writes to sits in
 /// app-data and outlives the checkout, so a throwaway environment would drive the real backlog.
 ///
-/// `bind` and `init` are held to it too, though they carry no pointer to inherit — they *write* one, and the
-/// asymmetry is theirs all the same: `init --force` raises a project in the real store, which no
-/// `git worktree remove` takes back, and `bind --force` upserts a managed block into CLAUDE.md/AGENTS.md,
-/// which in most repositories are tracked. `--force` on either means "overwrite the pointer already there"
-/// and says nothing about this hazard, so it buys no passage here. What is refused is only a worktree nested
-/// inside a managed tree; parking one beside the project is the way to have a bound one.
+/// `bind`, `init` and `project add` are held to it too, though they carry no pointer to inherit — they
+/// *write* one, and the asymmetry is theirs all the same: `init --force` and `project add` raise a project
+/// in the real store, which no `git worktree remove` takes back, and `bind --force` upserts a managed block
+/// into CLAUDE.md/AGENTS.md, which in most repositories are tracked. `--force` on either of the first two
+/// means "overwrite the pointer already there" and says nothing about this hazard, so it buys no passage
+/// here. What is refused is only a worktree nested inside a managed tree; parking one beside the project is
+/// the way to have a bound one.
 ///
 /// It answers before any dispatch, so a refused invocation neither forward-migrates a store nor raises a
 /// project — being ahead of the pointer guard costs that one nothing, since a nested worktree has a bound
@@ -4352,11 +4355,27 @@ fn resolve_bind_target(dir: Option<String>) -> Result<std::path::PathBuf, CliErr
     }
 }
 
+/// Put a project's binding in `dir`: the `.amenbo` pointer, the registry's project→folder record (the
+/// many-to-one reverse lookup the settings screen lists), and the managed guidance block in that folder's
+/// AGENTS.md / CLAUDE.md (whatever is outside the markers is kept). This is the whole of what linking a
+/// folder means, which is why `bind --project` and `project add --dir` both go through it rather than each
+/// remembering the three steps.
+///
+/// Every step is required to succeed. A caller that raised the project for this folder has to undo that on
+/// failure — a project nothing is linked to is what `AMB-D-528` refuses to create.
+fn place_binding(store: &Store, project_id: i64, dir: &std::path::Path) -> Result<(), CliError> {
+    amenbo_core::binding::pointer_for(store, project_id).write(dir).map_err(CliError::from)?;
+    let mut registry = store.bindings();
+    registry.record_project_ref(project_id, dir.to_string_lossy());
+    store.save_bindings(&registry).map_err(CliError::from)?;
+    upsert_agent_guidance(dir, store.config.language.as_deref());
+    Ok(())
+}
+
 fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<String>, force: bool) -> Result<i32, CliError> {
     use amenbo_core::binding::find_upward_ancestor;
     // With `--dir <path>`, the `.amenbo` goes in that folder rather than the CWD — binding from outside it.
     let cwd = resolve_bind_target(dir)?;
-    let mut registry = store.bindings();
 
     if let Some(p) = project {
         // Nested-binding guard: binding inside a subdirectory of an already-managed tree (an ancestor holds a
@@ -4365,18 +4384,13 @@ fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<S
         // clobber guard. A deliberate subdir bind gets through with `--force`.
         if !force {
             if let Some((dir, _)) = find_upward_ancestor(&cwd) {
-                return Err(CliError::binding_nested_tree(&dir.to_string_lossy()));
+                return Err(CliError::binding_nested_tree(&dir.to_string_lossy(), true));
             }
         }
         // Bind: resolve the project in the store and place the `.amenbo` pointer (its project_id). Several
         // directories may point at the same project_id, which makes the relation many-to-one.
         let pid = store.resolve_project_ref(&p).map_err(CliError::from)?;
-        amenbo_core::binding::pointer_for(store, pid).write(&cwd).map_err(CliError::from)?;
-        // Record it in the project→folders reverse lookup (many-to-one; what the settings screen lists).
-        registry.record_project_ref(pid, cwd.to_string_lossy());
-        store.save_bindings(&registry).map_err(CliError::from)?;
-        // Upsert the guidance's managed block into both files as well (existing content is kept).
-        upsert_agent_guidance(&cwd, store.config.language.as_deref());
+        place_binding(store, pid, &cwd)?;
         let name = project_name(store, Some(pid))?.unwrap_or_default();
         // For a human: what you can now do, and what to do next.
         if flags.json {
@@ -4397,6 +4411,7 @@ fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<S
             // A project→dir registration whose path has vanished is binding_stale. The folders bound to a
             // project stand alongside each other, so the question is put to each of them and the first
             // vanished one is what the error names.
+            let registry = store.bindings();
             if let Some(pid) = b.project_id {
                 if let Some(gone) = registry.stale_dirs(pid).first() {
                     return Err(CliError::from(amenbo_core::Error::BindingStale((*gone).to_string())));
@@ -4567,7 +4582,24 @@ fn config(store: &mut Store, flags: &Flags, sub: Option<ConfigCmd>) -> Result<i3
 
 fn project(store: &mut Store, flags: &Flags, sub: ProjectCmd) -> Result<i32, CliError> {
     match sub {
-        ProjectCmd::Add { name, view, notes, color } => {
+        ProjectCmd::Add { name, dir, view, notes, color } => {
+            // The folder comes first, and everything that could refuse it is asked before the project
+            // exists (`AMB-D-529`): a folder that is not there, one already linked, one inside a managed
+            // tree. The nested-worktree guard has already answered for this same folder, ahead of any
+            // dispatch.
+            let dir = resolve_bind_target(Some(dir))?;
+            if let Some(pointer) = amenbo_core::binding::read_pointer(&dir) {
+                let pid = pointer
+                    .project_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "(no project)".to_string());
+                return Err(CliError::project_dir_bound(&dir.to_string_lossy(), &pid));
+            }
+            // The same "respect the tree that is already there" rule `bind` follows — and with no
+            // `--force` here, since creating a project is not the moment to overrule it.
+            if let Some((ancestor, _)) = amenbo_core::binding::find_upward_ancestor(&dir) {
+                return Err(CliError::binding_nested_tree(&ancestor.to_string_lossy(), false));
+            }
             // No `--view` is not "board": it is "whatever this store was configured to open a new
             // project on". The setting exists to be the answer here, so reading it anywhere else —
             // or defaulting past it — is what would leave it a value nothing acts on.
@@ -4576,8 +4608,19 @@ fn project(store: &mut Store, flags: &Flags, sub: ProjectCmd) -> Result<i32, Cli
                 None => store.config.default_view,
             };
             let p = store.project_add(ops::project::NewProject { name, view, notes, color }).map_err(CliError::from)?;
+            // Linking is what the project was raised for, so a failure here takes the project with it:
+            // leaving one behind that nothing points at is the state `--dir` was made required to prevent.
+            if let Err(e) = place_binding(store, p.id, &dir) {
+                let _ = store.project_delete(p.id, flags.facet()?);
+                return Err(e);
+            }
             let detail = store.project_detail(p.id).map_err(CliError::from)?;
-            write_envelope(flags, "project.add", "project", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Created project: {} ({})", p.name, p.id));
+            let mut value = serde_json::to_value(&detail).unwrap();
+            if let Some(obj) = value.as_object_mut() {
+                obj.insert("dir".to_string(), json!(dir.to_string_lossy()));
+            }
+            write_envelope(flags, "project.add", "project", value, None, false,
+                format!("✓ Created project: {} ({}) — linked to {}", p.name, p.id, dir.to_string_lossy()));
         }
         ProjectCmd::List { archived } => {
             let result = store.project_list(archived).map_err(CliError::from)?;
@@ -7637,6 +7680,35 @@ mod tests {
             let child = format!("{path} {}", s.get_name());
             collect_leaves(s, child.trim(), out);
         }
+    }
+
+    /// The nested-worktree guard judges the folder that will **receive** the pointer, and `project add`
+    /// places one just as `bind --dir` does — so it is asked about `--dir`, not about where the command
+    /// was typed. A `--dir` naming nothing is left to the command itself to report, which is the shape
+    /// that keeps this guard from answering "no hazard" for a path it never looked at.
+    #[test]
+    fn the_nested_guard_judges_the_folder_project_add_would_link() {
+        use clap::Parser;
+        let dir = amenbo_scratch::scratch("guard-target-project-add");
+        let parse = |args: &[&str]| Cli::try_parse_from(args).expect("parses").command;
+
+        let target = nested_guard_target(&parse(&[
+            "amenbo", "project", "add", "--name", "P", "--dir", &dir.to_string_lossy(),
+        ]));
+        assert_eq!(
+            target.map(|p| std::fs::canonicalize(&p).unwrap_or(p)),
+            Some(std::fs::canonicalize(&dir).unwrap_or(dir.clone())),
+            "the folder the pointer lands in is what the guard judges",
+        );
+
+        let missing = dir.join("never-made");
+        assert_eq!(
+            nested_guard_target(&parse(&[
+                "amenbo", "project", "add", "--name", "P", "--dir", &missing.to_string_lossy(),
+            ])),
+            None,
+            "a --dir that names no directory is `project add`'s to report, not this guard's",
+        );
     }
 
     /// Every sub-command must be registered in `agent --json`, or an AI never learns it exists. amenbo is a

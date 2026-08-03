@@ -11,12 +11,25 @@ impl Driver {
         match op {
             "create" => {
                 let name = req_str(with, "name")?;
-                let v = self.run_json(&["project", "add", "--name", name, "--json"])?;
+                // Creating a project links a folder to it, so there is always one. A step that is
+                // about the linking names it (`dir:`, the same scratch folder every folder step
+                // takes); one that is only after somewhere to file work leaves it unnamed and gets a
+                // folder named after the project, which keeps two projects of one session out of each
+                // other's way.
+                let dir = match with.get("dir") {
+                    Some(_) => self.folder(with)?,
+                    None => self
+                        .session
+                        .folder(&folder_name(name))
+                        .map_err(|e| format!("could not make a folder for `{name}`: {e}"))?,
+                };
+                let path = dir.to_string_lossy().into_owned();
+                let v = self.run_json(&["project", "add", "--name", name, "--dir", &path, "--json"])?;
                 let id = v["project"]["id"].as_i64().ok_or("project add did not report an id")?;
                 if let Some(b) = bind {
                     self.bindings.insert(b.to_string(), id);
                 }
-                Ok(Outcome::action(format!("created project {id} `{name}`")))
+                Ok(Outcome::action(format!("created project {id} `{name}`, linked to {path}")))
             }
             "update" => {
                 let target = self.resolve(with)?;
@@ -87,4 +100,22 @@ impl Driver {
             _ => Err(unmapped(Domain::Project, op)),
         }
     }
+}
+
+/// A folder name to hold `name`'s project: the letters, digits, `.`, `_` and `-` of the project's
+/// name, with every run of anything else collapsed to a single `-`. Project names are written for
+/// people — spaces, dashes of several widths, Japanese — and this is only the scratch folder the run
+/// links, so what it owes is a path that is legible in a failure message and distinct between two
+/// projects of one session.
+fn folder_name(name: &str) -> String {
+    let mut out = String::new();
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-') {
+            out.push(ch);
+        } else if !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    let trimmed = out.trim_matches('-');
+    if trimmed.is_empty() { "project".to_string() } else { trimmed.to_string() }
 }

@@ -53,7 +53,7 @@ pub(crate) fn judge_listing(
     ))
 }
 
-impl Driver {
+impl Driver<'_> {
     /// The one read a `found` assert stands on: the words a step names, and the narrowings it may name
     /// beside them. Shared by both sides because a search crosses them — the same invocation answers for
     /// a task and for a decision, and only the ref it is judged against differs.

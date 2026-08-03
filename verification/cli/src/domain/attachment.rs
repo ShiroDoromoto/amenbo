@@ -7,7 +7,7 @@ use amenbo_scenario::{Args, Domain};
 use crate::{req_str, unmapped, Driver, Outcome};
 use crate::judge::{judge_field, judge_listing};
 
-impl Driver {
+impl Driver<'_> {
     pub(crate) fn attachment_action(&mut self, domain: Domain, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
         match op {
             // Hanging bytes or a link on a record. The three owners differ only in the command that

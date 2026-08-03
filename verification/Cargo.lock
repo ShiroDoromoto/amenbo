@@ -30,6 +30,7 @@ name = "amenbo-verify-gui"
 version = "0.1.0"
 dependencies = [
  "amenbo-scenario",
+ "amenbo-verify-cli",
  "serde_json",
  "serde_yaml",
 ]

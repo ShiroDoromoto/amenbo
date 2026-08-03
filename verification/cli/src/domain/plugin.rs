@@ -43,7 +43,7 @@ impl StoodCatalog {
     }
 }
 
-impl Driver {
+impl Driver<'_> {
     pub(crate) fn plugin_action(&mut self, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
         match op {
             "install" => {

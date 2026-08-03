@@ -29,6 +29,7 @@ fn root() -> PathBuf {
 /// A fresh, isolated store for one run: an `AMENBO_HOME`, a `.amenbo`-free CWD and a scratch
 /// space for what the run writes out, all under one throwaway parent. The parent is created; the
 /// caller runs the binary with them.
+#[derive(Debug)]
 pub struct Session {
     pub home: PathBuf,
     pub cwd: PathBuf,

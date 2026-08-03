@@ -10,13 +10,22 @@
 //! The executable inside the bundle is run directly rather than the bundle being `open`ed, because
 //! the environment is what points the app at a throwaway store, and `open` hands the launch to
 //! launchd with an environment of its own.
+//!
+//! A bundle carries two programs, and this module answers for both: the app it launches, and the
+//! CLI shipped beside it that a run stands its world up with ([`shipped_cli`]).
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use crate::scratch::Store;
+use crate::scratch::Session;
 use crate::{front, shoot};
+
+/// The CLI a mac bundle ships beside the app, as a Tauri sidecar. The name is fixed rather than
+/// asked for the way the app's is: `CFBundleExecutable` names the app alone, and this one is put
+/// there under a name the packaging and its guard both write out (`scripts/build-pkg-mac.sh`,
+/// `guards/check-cli-shim.sh` — the shim on `PATH` is a symlink to this very path).
+const SIDECAR: &str = "Contents/MacOS/amenbo";
 
 /// How long a launched app is given to put a window on screen. Generous on purpose: a first launch
 /// of a signed bundle is checked by the system before a line of the app runs, and a wait that ends
@@ -28,15 +37,17 @@ const WINDOW_TIMEOUT: Duration = Duration::from_secs(60);
 const POLL: Duration = Duration::from_millis(500);
 
 /// The app this run launched: the process it holds, and the store that process was pointed at.
-/// Dropping it takes the app down and the store with it, so a run that gives up anywhere leaves
-/// neither behind.
+/// Dropping it takes the app down, so a run that gives up anywhere leaves nothing running.
+///
+/// The store is borrowed, and the borrow is the guarantee: a store the app is writing into cannot
+/// be swept while this is alive. Owning it belongs to the run rather than to the launch, since the
+/// premise is stood up in that same store before there is an app to launch at all.
 #[derive(Debug)]
-pub struct Gui {
+pub struct Gui<'a> {
     /// The process id the launch answered with — the app the screen tool is named.
     pub pid: i64,
     child: Child,
-    /// Held so the store outlives the process writing into it, and goes when that process goes.
-    store: Store,
+    store: &'a Session,
 }
 
 /// Launch the app in `bundle` against `store`, and hand back the running process.
@@ -44,7 +55,7 @@ pub struct Gui {
 /// The app's stdout is dropped rather than inherited: a `--json` run answers with one machine
 /// readable line, and an app writing to the same stream would be read as part of it. Its stderr is
 /// left alone, which is where a build that dies on launch says why.
-pub fn launch(bundle: &Path, store: Store) -> Result<Gui, String> {
+pub fn launch<'a>(bundle: &Path, store: &'a Session) -> Result<Gui<'a>, String> {
     let exe = executable(bundle)?;
     let child = Command::new(&exe)
         .env("AMENBO_HOME", &store.home)
@@ -55,7 +66,24 @@ pub fn launch(bundle: &Path, store: Store) -> Result<Gui, String> {
     Ok(Gui { pid: i64::from(child.id()), child, store })
 }
 
-impl Gui {
+/// The shipped CLI inside `bundle` — the one a run stands its world up with.
+///
+/// It is taken from the bundle under test rather than from `PATH`, and that is the whole of why it
+/// is here: the CLI on `PATH` is whatever build the operator has installed, and a world stood up by
+/// one build and read by another is not a premise but a coincidence. Refused by name when the
+/// bundle carries none, since a premise nothing can stand up has to stop the run before it starts.
+pub fn shipped_cli(bundle: &Path) -> Result<PathBuf, String> {
+    let cli = bundle.join(SIDECAR);
+    if !cli.is_file() {
+        return Err(format!(
+            "`{}` ships no CLI at {SIDECAR}, and a world is stood up with the build under test",
+            bundle.display()
+        ));
+    }
+    Ok(cli)
+}
+
+impl Gui<'_> {
     /// Hold the run until the app is up, in front, and can actually be shot.
     ///
     /// The proof asked for is a shot, because that is what every step of the walk asks for: an app
@@ -92,7 +120,7 @@ impl Gui {
     }
 }
 
-impl Drop for Gui {
+impl Drop for Gui<'_> {
     /// Take the app down with the run. It is killed rather than asked to quit: asking goes through
     /// the app's name, which is the one thing that cannot name a single instance, and the store it
     /// was writing into is thrown away in the same breath — so there is nothing a graceful close
@@ -166,10 +194,11 @@ mod tests {
     }
 
     /// The app is started against the store it was given — its `AMENBO_HOME` and the directory it
-    /// runs in are both the run's own — and it goes down, with the store, when the run lets go.
+    /// runs in are both the run's own — and it goes down when the run lets go, the store following
+    /// it out when the run lets go of that.
     #[test]
     fn the_app_runs_in_the_throwaway_store_and_goes_down_with_the_run() {
-        let store = crate::scratch::store("selftest-launch").unwrap();
+        let store = crate::scratch::session("selftest-launch", false).unwrap();
         let (home, cwd) = (store.home.clone(), store.cwd.clone());
         // Report the world it was handed, then stay up: `exec` puts the wait in this process, so the
         // pid the launcher holds is the one that has to be taken down.
@@ -179,7 +208,7 @@ mod tests {
             "#!/bin/sh\nprintf '%s\\n%s\\n' \"$AMENBO_HOME\" \"$PWD\" > \"$AMENBO_HOME/launched\"\nexec sleep 300\n",
         );
 
-        let gui = launch(&app, store).unwrap();
+        let gui = launch(&app, &store).unwrap();
         let said = home.join("launched");
         let deadline = Instant::now() + Duration::from_secs(10);
         while !said.is_file() && Instant::now() < deadline {
@@ -197,17 +226,34 @@ mod tests {
         assert!(alive(pid), "the app is up while the run holds it");
         drop(gui);
         assert!(!alive(pid), "and down when the run lets go");
+        drop(store);
         assert!(!home.exists(), "the store goes with it");
+    }
+
+    /// The CLI a world is stood up with is the one the bundle under test ships, and a bundle
+    /// carrying none is refused rather than quietly falling back to whatever is on `PATH` — a world
+    /// stood up by another build is not the premise the road was written against.
+    #[test]
+    fn the_cli_a_world_is_stood_up_with_comes_out_of_the_bundle() {
+        let store = crate::scratch::session("selftest-sidecar", false).unwrap();
+        let app = bundle(&store.cwd, "stand-in-app", "#!/bin/sh\nexit 0\n");
+
+        let err = shipped_cli(&app).unwrap_err();
+        assert!(err.contains(SIDECAR), "the refusal names where it looked: {err}");
+
+        let cli = app.join(SIDECAR);
+        std::fs::write(&cli, "#!/bin/sh\nexit 0\n").unwrap();
+        assert_eq!(shipped_cli(&app).unwrap(), cli, "found beside the app it ships with");
     }
 
     /// A path that is not a bundle is refused at the door, naming what was looked for — a launcher
     /// that shrugged would leave the run waiting a minute for a window nothing was going to draw.
     #[test]
     fn a_path_that_is_no_bundle_is_refused_by_name() {
-        let store = crate::scratch::store("selftest-nobundle").unwrap();
+        let store = crate::scratch::session("selftest-nobundle", false).unwrap();
         let empty = store.cwd.join("not-an.app");
         std::fs::create_dir_all(&empty).unwrap();
-        let err = launch(&empty, store).unwrap_err();
+        let err = launch(&empty, &store).unwrap_err();
         assert!(err.contains("not-an.app"), "the refusal names the path it was handed: {err}");
     }
 

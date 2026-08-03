@@ -5,7 +5,7 @@ use amenbo_scenario::{Args, Domain};
 
 use crate::{req_str, unmapped, Driver, Outcome};
 
-impl Driver {
+impl Driver<'_> {
     pub(crate) fn comment_action(&mut self, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
         match op {
             "edit" => {

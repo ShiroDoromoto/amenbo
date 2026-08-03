@@ -33,7 +33,7 @@ use crate::domain::plugin::StoodCatalog;
 pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Report, String> {
     let session = scratch::session(&scenario.id, keep)
         .map_err(|e| format!("could not create a throwaway store: {e}"))?;
-    let mut driver = Driver::new(bin, session)?;
+    let mut driver = Driver::new(bin, &session)?;
 
     let mut report = Report::new(scenario);
     for (i, step) in scenario.steps(amenbo_scenario::Driver::Cli).iter().enumerate() {
@@ -41,6 +41,50 @@ pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Repor
         report.push(i, step, outcome);
     }
     Ok(report)
+}
+
+/// Stand up the world a scenario declared (`given`) in the store `session` names, using the shipped
+/// binary at `bin`. The premise is walked as the plain actions it is, and an `Err` from any of them
+/// stops there: a road is walked from the world it declared or not at all, since a run that started
+/// on half of one would report on a screen nobody meant to stand in front of.
+///
+/// This is the other driver's way in. The GUI harness stands its world up here rather than through a
+/// vocabulary of its own, because what a premise names are the same ops the CLI road names, and two
+/// spellings of `plugin install` would drift the moment one of them learned something.
+///
+/// What comes back is held rather than dropped, and that is not a formality: part of a world can be
+/// a thing that only stands while something holds it — a catalog the premise put on the loopback
+/// answers for exactly as long as this does.
+pub fn stand_world<'a>(
+    bin: &Path,
+    session: &'a scratch::Session,
+    given: &[Step],
+) -> Result<World<'a>, String> {
+    let mut driver = Driver::new(bin, session)?;
+    let mut stood = Vec::new();
+    for (i, step) in given.iter().enumerate() {
+        // The premise's own numbering, the way the loader's errors read it: a world's step is not a
+        // road's, and a message that said "step 2" would send a reader to the wrong list.
+        let outcome = driver.exec(step).map_err(|e| format!("given step {}: {e}", i + 1))?;
+        stood.push(outcome.note);
+    }
+    Ok(World { stood, _driver: driver })
+}
+
+/// A world that has been stood up, and is standing for as long as this is held.
+pub struct World<'a> {
+    stood: Vec<String>,
+    /// Held, never read: the driver owns what a premise put on the loopback, and dropping it would
+    /// close the port a registration is pinned to while the run is still pointed at it.
+    _driver: Driver<'a>,
+}
+
+impl World<'_> {
+    /// What the premise did, a line per step, in the same words an action reports itself with on a
+    /// road — so what a run stood on is readable beside what it then walked.
+    pub fn stood(&self) -> &[String] {
+        &self.stood
+    }
 }
 
 /// Pin the binary under test to where the caller named it, while we are still standing there.
@@ -62,9 +106,13 @@ pub fn anchor_bin(bin: PathBuf) -> PathBuf {
 }
 
 /// Drives the shipped binary against one isolated store, remembering the ids that steps bind.
-pub(crate) struct Driver {
+///
+/// The store is borrowed rather than owned, because a driver is not always the only one working in
+/// it: the GUI harness stands a world up through one and then launches the app under test at the
+/// same store, and the borrow is what says the store outlives both.
+pub(crate) struct Driver<'a> {
     bin: std::path::PathBuf,
-    session: scratch::Session,
+    session: &'a scratch::Session,
     project_id: i64,
     bindings: HashMap<String, i64>,
     /// What the last `plugin run` came back with. A command face's return value is its own stdout
@@ -99,9 +147,9 @@ pub(crate) struct Driver {
 /// it apart from a real failure. The code that came back is spliced on after it.
 const REFUSED: &str = "\u{1}refused:";
 
-impl Driver {
+impl<'a> Driver<'a> {
     /// Boot a fresh store: `init` creates it and hands back the project every `task add` needs.
-    fn new(bin: &Path, session: scratch::Session) -> Result<Driver, String> {
+    fn new(bin: &Path, session: &'a scratch::Session) -> Result<Driver<'a>, String> {
         let mut d = Driver {
             bin: bin.to_path_buf(),
             session,

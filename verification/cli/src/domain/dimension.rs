@@ -5,7 +5,7 @@ use amenbo_scenario::{Args, Domain};
 
 use crate::{opt_bool, req_str, unmapped, Driver, Outcome};
 
-impl Driver {
+impl Driver<'_> {
     pub(crate) fn dimension_action(&mut self, op: &str, with: &Args) -> Result<Outcome, String> {
         match op {
             "create" => {

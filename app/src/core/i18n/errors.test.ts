@@ -2,8 +2,8 @@
 // per-language template, falling back to the sentence core wrote — English, whoever is reading — for codes that
 // have no template (`AMB-D-413`).
 import { describe, it, expect } from "vitest";
-import { CORE_SENTENCE_ERROR_CODES, TAURI_ERROR_CODES } from "../errorCodes";
-import { errLabel, errText, type CmdError } from "./index";
+import { CORE_CLI_ONLY_ERROR_CODES, CORE_SENTENCE_ERROR_CODES, TAURI_ERROR_CODES } from "../errorCodes";
+import { DICTIONARIES, errLabel, errText, type CmdError } from "./index";
 import { en } from "./locales/en";
 
 const bindingStale: CmdError = {
@@ -149,5 +149,18 @@ describe("the codes core splits down to one sentence", () => {
   it("all have an English template", () => {
     const missing = CORE_SENTENCE_ERROR_CODES.filter((code) => !en.err[code]);
     expect(missing).toEqual([]);
+  });
+});
+
+// The other side of the same rule. A code no screen can reach owes no sentence, and writing one anyway
+// costs every language a string nobody will ever be shown — a cost paid again at each pass over the
+// dictionaries. A code that starts reaching a screen moves to the sentence list, and its prose arrives
+// with the move; this fails first if the template arrives without it.
+describe("the codes only the CLI refuses with", () => {
+  it("have no template, in English or anywhere else", () => {
+    const written = Object.entries(DICTIONARIES).flatMap(([lang, dict]) =>
+      CORE_CLI_ONLY_ERROR_CODES.filter((code) => dict.err[code]).map((code) => `${lang}: ${code}`),
+    );
+    expect(written).toEqual([]);
   });
 });

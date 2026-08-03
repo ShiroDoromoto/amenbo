@@ -468,6 +468,12 @@ would leave the road proving something already done. For the same reason a premi
 A premise is not a road: a file carrying a world and no steps is refused like any other file nothing
 walks.
 
+**A premise that does not stand ends that scenario, red, on the line that failed, and the road is not
+walked at all.** Judging a road against a world half built says nothing about the road — every line it
+then wrote, passing or failing, would be about the wrong thing. It is that scenario's failure and not
+the run's, so a set keeps going and the report names the premise as what broke (its lines are numbered
+in their own sequence, so a premise and a step never both call themselves the first).
+
 ### `refused:` — the step that is right to fail
 
 Some of what amenbo promises is a **refusal**: a reserve of a task another session holds comes back

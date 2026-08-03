@@ -43,6 +43,25 @@ pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Repor
     let mut driver = Driver::new(bin, session)?;
 
     let mut report = Report::new(scenario);
+    // The world the road takes for granted, stood up before the road is walked. It is the same driver
+    // and the same throwaway store, so a premise is written in the one vocabulary a road is, and the
+    // `as:` names it binds are the names the road calls them by.
+    //
+    // **A premise that does not stand ends this scenario, red, right here.** Walking on would judge
+    // the road against a world half built, and every line it then wrote — pass or fail — would be
+    // about the wrong thing. It is this scenario's failure and not the run's, so it comes back as a
+    // report rather than an error: a set keeps going, and the line says the premise was what broke.
+    for (i, step) in scenario.given.iter().enumerate() {
+        let outcome = match driver.exec(step) {
+            Ok(outcome) => outcome,
+            Err(error) => Outcome::assert(false, error),
+        };
+        let stood = outcome.pass;
+        report.push_premise(i, outcome);
+        if !stood {
+            return Ok(report);
+        }
+    }
     for (i, step) in scenario.steps(amenbo_scenario::Driver::Cli).iter().enumerate() {
         let outcome = driver.exec(step)?; // an execution error aborts this scenario's run
         report.push(i, step, outcome);
@@ -474,6 +493,17 @@ impl Report {
         Report { scenario_id: s.id.clone(), title: s.title.clone(), steps: Vec::new(), passed: true }
     }
 
+    /// A line for a step of the premise, numbered in its own sequence. It is named apart from the
+    /// road because it answers a different question: a red one says the world could not be stood up,
+    /// which is not the road failing — and a reader who cannot tell the two apart goes looking for a
+    /// regression in what was never walked.
+    fn push_premise(&mut self, index: usize, outcome: Outcome) {
+        if !outcome.pass {
+            self.passed = false;
+        }
+        self.steps.push(Line { index, kind: "premise", pass: outcome.pass, note: outcome.note });
+    }
+
     fn push(&mut self, index: usize, step: &Step, outcome: Outcome) {
         let kind = match step {
             // A step that declared `refused:` is an action in the schema, but it comes back with a
@@ -511,12 +541,15 @@ impl Report {
             // whichever kind it came from — an action can fail too, now that one can be judged.
             let mark = if !l.pass {
                 "✗"
-            } else if l.kind == "action" {
+            } else if l.kind == "action" || l.kind == "premise" {
                 "·"
             } else {
                 "✓"
             };
-            println!("  {mark} step {} [{}] {}", l.index + 1, l.kind, l.note);
+            // The premise is numbered in its own sequence, so it is named in its own words too —
+            // "step 1" appearing twice in one report is a reader counting the road wrong.
+            let what = if l.kind == "premise" { "premise" } else { "step" };
+            println!("  {mark} {what} {} [{}] {}", l.index + 1, l.kind, l.note);
         }
         println!("VERDICT: {}", if self.passed { "green" } else { "red" });
     }
@@ -571,5 +604,48 @@ mod tests {
         assert_eq!(anchor_bin(PathBuf::from("amenbo")), PathBuf::from("amenbo"));
         let abs = std::env::current_dir().expect("a cwd").join("amenbo");
         assert_eq!(anchor_bin(abs.clone()), abs);
+    }
+
+    fn scenario(id: &str) -> Scenario {
+        Scenario {
+            id: id.to_string(),
+            title: "a road and the world it stands on".to_string(),
+            description: None,
+            given: Vec::new(),
+            steps_cli: Vec::new(),
+            steps_gui: Vec::new(),
+        }
+    }
+
+    /// A premise that did not stand takes the scenario down with it. The road is what the reader came
+    /// for, so the line that failed has to say it was the world and not the road — otherwise a report
+    /// sends them looking for a regression in something that was never walked.
+    #[test]
+    fn a_premise_that_did_not_stand_makes_the_scenario_red_and_says_it_was_the_premise() {
+        let mut report = Report::new(&scenario("premise-red"));
+        report.push_premise(0, Outcome::action("a project is already there".to_string()));
+        assert!(report.passed(), "a premise that stood is not a failure");
+
+        report.push_premise(1, Outcome::assert(false, "the catalog would not register".to_string()));
+        assert!(!report.passed(), "one that did not stand is");
+        assert!(
+            report.to_json().contains("\"kind\":\"premise\""),
+            "and it is named apart from the road: {}",
+            report.to_json(),
+        );
+    }
+
+    /// The two sequences are numbered on their own, so a report never carries two lines both calling
+    /// themselves the first step.
+    #[test]
+    fn the_premise_and_the_road_are_numbered_apart() {
+        let mut report = Report::new(&scenario("premise-numbering"));
+        report.push_premise(0, Outcome::action("a project is already there".to_string()));
+        report.push(0, &Step::Assert { domain: Domain::Task, op: "field".into(), with: Args::new() },
+            Outcome::assert(true, "the board holds it".to_string()));
+
+        let lines = report.to_json();
+        assert_eq!(lines.matches("\"step\":1").count(), 2, "both are their sequence's first: {lines}");
+        assert_eq!(lines.matches("\"kind\":\"premise\"").count(), 1, "only one of them is the world: {lines}");
     }
 }

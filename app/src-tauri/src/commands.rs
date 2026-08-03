@@ -600,6 +600,11 @@ pub struct Snapshot {
     /// screen's toggle can reflect the current value. When off, upstream latest.json is never
     /// queried, so `update_available` can never be raised.
     update_check: bool,
+    /// Start at login on or off (`config.autostart`, default false). Exposed so the settings screen's
+    /// switch can reflect the current value. It carries what the user asked for, not a reading of the
+    /// OS — the registration itself lives outside the app, and only a shipped build ever draws the
+    /// switch (a development build registers nothing, `AMB-D-547`).
+    autostart: bool,
 }
 
 /// The startup integrity check, shaped for the GUI: it feeds a read-only warning banner. Empty means
@@ -1021,6 +1026,7 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
         version_status,
         perf_log: config.perf_log.map(|p| p.as_config_str().to_string()),
         update_check: config.update_check,
+        autostart: config.autostart,
     })
 }
 
@@ -3532,6 +3538,27 @@ pub fn config_set_update_check(enabled: bool) -> Result<WriteAck, CmdError> {
     let paths = amenbo_core::config::Paths::resolve()?;
     let mut config = amenbo_core::config::Config::load(&paths.config_file);
     config.set("update_check", if enabled { "true" } else { "false" })?;
+    config.save(&paths.config_file)?;
+    Ok(WriteAck::new(&[]))
+}
+
+/// Turn "start when I log in" on or off from the settings screen (`AMB-D-541`).
+///
+/// Two things move, and the order between them is the whole of the error handling: the OS
+/// registration is written first ([`crate::autostart::set`]) and `config.autostart` only after it
+/// came back. A registration that could not be written therefore leaves the config saying what is
+/// true — off — rather than a switch that reads on over a login that starts nothing. There is no
+/// `config set` key for the field for the same reason: the CLI cannot write the OS half, so it has
+/// no honest way to move this one.
+///
+/// A development build never reaches here (the section holding the switch is not built on that
+/// channel); if something calls it anyway, `autostart::set` refuses and nothing is saved.
+#[tauri::command]
+pub fn config_set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<WriteAck, CmdError> {
+    crate::autostart::set(&app, enabled)?;
+    let paths = amenbo_core::config::Paths::resolve()?;
+    let mut config = amenbo_core::config::Config::load(&paths.config_file);
+    config.autostart = enabled;
     config.save(&paths.config_file)?;
     Ok(WriteAck::new(&[]))
 }

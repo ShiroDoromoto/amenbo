@@ -67,6 +67,7 @@ vi.mock("../core/mutations", () => {
     runRestore: () => Promise.resolve(hoisted.restoreReport),
     cancelDataOp: noop,
     setFacetNames: noop, setFacetAvatar: noop, setLanguage: noop, setPerfLog: noop, setUpdateCheck: noop,
+    setAutostart: noop,
     fetchDevBadge: () => Promise.resolve(hoisted.devBadge),
   };
 });
@@ -311,6 +312,25 @@ describe("Settings > Data (whole-store restore; the completion view says exactly
     await act(async () => buttonByLabel(t("settings.restoreBtn"))!.click());
     // A prefix of the sentence, so this catches it whichever arm the count would have picked.
     expect(container.textContent).not.toContain(tn("settings.restoreSwept", 0).slice(0, 30));
+  });
+});
+
+describe("Settings > Startup (a control only a shipped build can honour)", () => {
+  it("a shipped build is offered the switch, under its own section", async () => {
+    await render();
+    expect(sectionTitles()).toContain(t("settings.startup"));
+    expect(rowLabels()).toContain(t("settings.autostart"));
+  });
+
+  it("a development build gets neither the switch nor an empty section over it", async () => {
+    hoisted.devBadge = "DEV";
+    await render();
+    // Such a build registers nothing at login, so the switch would be an offer it cannot keep.
+    expect(rowLabels()).not.toContain(t("settings.autostart"));
+    expect(sectionTitles()).not.toContain(t("settings.startup"));
+    // The sections around it stay, so this is one section leaving and not the screen giving up.
+    expect(rowLabels()).toContain(t("settings.perfLog"));
+    expect(rowLabels()).toContain(t("settings.dataPath"));
   });
 });
 

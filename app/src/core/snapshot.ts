@@ -64,6 +64,7 @@ const EMPTY: Snapshot = {
   versionStatus: { appVersion: "", updateAvailable: false, newerVersion: null },
   perfLog: null,
   updateCheck: true,
+  autostart: false, // off until asked for — nothing is registered at login by default
 };
 
 let cache: Snapshot = EMPTY;
@@ -451,6 +452,7 @@ export async function loadSnapshot(opts: LoadOptions = {}): Promise<void> {
       versionStatus: { appVersion: "", updateAvailable: false, newerVersion: null }, // and no update check either (the browser fallback asks nothing upstream)
       perfLog: null, // in the browser this is on by default in dev (ipc decides via import.meta.env.DEV)
       updateCheck: true,
+      autostart: false, // the browser has no login to register with
     };
   }
   // Real data came back from the source of truth, so the mailbox owes itself a re-derive — unless the caller said this re-read cannot touch membership.

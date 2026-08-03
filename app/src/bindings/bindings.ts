@@ -1232,7 +1232,14 @@ perfLog: string | null,
  * screen's toggle can reflect the current value. When off, upstream latest.json is never
  * queried, so `update_available` can never be raised.
  */
-updateCheck: boolean, };
+updateCheck: boolean, 
+/**
+ * Start at login on or off (`config.autostart`, default false). Exposed so the settings screen's
+ * switch can reflect the current value. It carries what the user asked for, not a reading of the
+ * OS — the registration itself lives outside the app, and only a shipped build ever draws the
+ * switch (a development build registers nothing, `AMB-D-547`).
+ */
+autostart: boolean, };
 
 /**
  * One bound folder whose managed block is out of date. `version` is the version of that folder's

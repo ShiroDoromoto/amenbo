@@ -54,6 +54,11 @@ notify = "8"
 # `#[cfg(desktop)]` registration in lib.rs).
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
+# Start at login: writes and removes the per-user registration each OS reads at login — a plist under
+# `~/Library/LaunchAgents`, the `HKCU` Run key, a `~/.config/autostart` desktop entry — so no
+# administrator right is asked for. Desktop-only crate, and the login of a desktop session is the whole
+# subject, so it is pulled in off mobile targets alone (matches `#[cfg(desktop)]` in `autostart.rs`).
+tauri-plugin-autostart = "2"
 
 # The store-watch tests (`tests/store_watch.rs`) dig real directories on a real filesystem.
 [dev-dependencies]

@@ -53,6 +53,7 @@ const SNAPSHOT = {
   versionStatus: { appVersion: "", updateAvailable: false, newerVersion: null },
   perfLog: null,
   updateCheck: true,
+  autostart: false,
 };
 
 /** What core is made to answer. Each test rewrites these. */

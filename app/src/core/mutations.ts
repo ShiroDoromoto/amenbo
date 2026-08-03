@@ -606,6 +606,31 @@ export async function answerHookOffer(yes: boolean): Promise<void> {
 }
 
 /**
+ * The nudges core says are due now, as the ids they are declared under (`AMB-D-542`, `AMB-D-544`). The
+ * judgement is core's — which thresholds are met, and what has already gone out — so what comes back is
+ * only which of them to put; the wording and the look are this surface's.
+ *
+ * `openStages` is this surface's half of it: the stages it is currently in, since the settings a stage
+ * asks about are held here. A stage left off the list holds its nudge back, so what cannot be vouched
+ * for stays unput.
+ *
+ * Outside Tauri there is never a nudge.
+ */
+export async function fetchPendingNudges(openStages: string[]): Promise<string[]> {
+  if (!inTauri()) return [];
+  return await invoke<string[]>("pending_nudges", { openStages });
+}
+
+/**
+ * Tell core a nudge has been put. **Call it once the nudge is on screen**, not when it came back due: a
+ * once-only nudge recorded and never shown is one the person never saw, and nothing will raise it again.
+ */
+export async function markNudgePut(nudgeId: string): Promise<void> {
+  if (!inTauri()) return;
+  await invoke("mark_nudge_put", { nudgeId });
+}
+
+/**
  * What one project still has to wire, grouped by harness — the standing row on the project screen, which
  * is the GUI's only face for this (`AMB-D-459`, `AMB-D-460`). Each entry carries the tool's request once
  * and the folders of this project waiting for it, so the text goes up a single time however many folders

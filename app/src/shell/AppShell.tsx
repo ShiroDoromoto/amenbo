@@ -16,6 +16,7 @@ import { SettingsScreen } from "../screens/SettingsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { OnboardingSetup } from "../screens/OnboardingSetup";
 import { HookConsentModal } from "../screens/HookConsentModal";
+import { NudgeHost } from "../screens/NudgeHost";
 import { NewProjectScreen } from "../screens/NewProjectScreen";
 import { ProjectSettingsScreen } from "../screens/ProjectSettingsScreen";
 import { TaskDetailPane } from "../screens/TaskDetailPane";
@@ -78,7 +79,8 @@ export function AppShell() {
 
   // Has the hooks question had its turn? The setup banner reports on the same repositories the modal asks about, so it
   // waits for this rather than talking over it — and reads the disk only once the answers have been written to it.
-  // The modal may report done more than once; latching a boolean is what makes that harmless.
+  // The modal may report done more than once; latching a boolean is what makes that harmless. A nudge waits on it too,
+  // for the other reason: not the same subject, but the same screen (see the question order at the end of the render).
   const [hooksAsked, setHooksAsked] = useState(false);
   const onHooksAsked = useCallback(() => setHooksAsked(true), []);
 
@@ -439,10 +441,19 @@ export function AppShell() {
         )}
       </div>
 
+      {/* One question at a time, in this order: first-run setup, then the hooks question, then a nudge. Each
+          waits on the one before it by name rather than through a queue of questions — three of them, and no
+          two alike (a screen, a modal, and whatever a nudge's own view draws), so a queue would be a machine
+          holding one member of each kind and deciding nothing. What it would centralise is the order, and the
+          order is right here. */}
       {needsSetup && <OnboardingSetup />}
       {/* First-run setup owns the screen while it is up: the hooks question is asked about repositories, which
           is not what someone still choosing a language came here for, and it keeps its turn until then. */}
       {!needsSetup && <HookConsentModal onDone={onHooksAsked} />}
+      {/* A nudge is the least urgent of the three and goes last — it is raised on the strength of how much
+          amenbo has been used, which is exactly what someone still being asked the first two questions has not
+          done yet. `hooksAsked` is that turn being over, the same latch the setup banner waits on. */}
+      {!needsSetup && hooksAsked && <NudgeHost />}
     </div>
     </RefNavProvider>
   );

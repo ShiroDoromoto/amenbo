@@ -1975,6 +1975,55 @@ pub fn gc_device_state() -> Result<(), CmdError> {
     Ok(())
 }
 
+/// The nudges to put to the person now, as the ids they are declared under (`AMB-D-542`). Judging them
+/// is core's (`AMB-D-544`); what crosses back is only which ones are due, because the wording and the
+/// look belong to the surface that shows them.
+///
+/// `open_stages` is the caller's half of that judgement: the stages it is currently in — "the setting
+/// this nudge is about is still unanswered", say. A nudge that declares a stage not on the list is held
+/// back, so a stage the caller cannot vouch for is one it leaves off and the nudge stays unput.
+///
+/// A machine with no store yet has no nudge: nothing is counted, and no store is genesised to count it.
+#[tauri::command]
+pub fn pending_nudges(open_stages: Vec<String>) -> Result<Vec<String>, CmdError> {
+    Ok(find_in_store(|store| {
+        let due = store.pending_nudges(|stage| open_stages.iter().any(|s| s == stage))?;
+        Ok(Some(due.iter().map(|n| n.id.to_string()).collect::<Vec<_>>()))
+    })?
+    .unwrap_or_default())
+}
+
+/// Record that a nudge has been put to the person here.
+///
+/// The caller calls it **once the nudge is actually on screen**, never when it was judged due: a
+/// once-only nudge marked put and never shown is one the person never saw, and the log would have closed
+/// it for good.
+#[tauri::command]
+pub fn mark_nudge_put(nudge_id: String) -> Result<(), CmdError> {
+    open_store()?.mark_nudge_put(&nudge_id)?;
+    Ok(())
+}
+
+/// Count this launch of the app on this device — the tally the launch-shaped metrics are read from
+/// (`amenbo_core::nudge::Metric::LaunchCount`, and the day of the first launch).
+///
+/// Counted here rather than by the front end because a launch is a launch of the *process*: the webview
+/// runs its startup effects twice under React StrictMode, and a launch counted twice would carry every
+/// threshold to its mark at half the use it was declared to stand for.
+///
+/// A machine with no store yet counts nothing. There is nowhere to put the tally, and genesising a store
+/// to hold one would create the very thing its owner has not asked for; what that costs is the launches
+/// before the first store, which is the stretch in which no nudge could be due anyway.
+pub fn record_launch() -> Result<(), CmdError> {
+    let paths = amenbo_core::config::Paths::resolve()?;
+    // The same "is there a store to speak of" test the read entry point makes (`with_store_read`).
+    if amenbo_core::env::home().is_none() && !paths.store_file.exists() {
+        return Ok(());
+    }
+    open_store()?.record_launch()?;
+    Ok(())
+}
+
 /// The comment slot of the inbox, independent of read state: of the open tasks assigned to **my human
 /// facet**, return every one that has at least one **comment addressed to me** (something my AI facet
 /// said), as `(task_id, unread)`. A task the AI is carrying stays out — its comments are the AI
@@ -8203,6 +8252,34 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The nudge port over a live store, in the state a shipping build is in today: core declares no
+    /// nudge, so nothing is due whatever stages this surface reports open, and the two writes behind it
+    /// (the launch tally, and recording one as put) go through rather than erroring on a store the GUI
+    /// opened this way. It is the passthrough that is under test — which nudge is due, and when, is
+    /// pinned in core (`amenbo_core::nudge`).
+    #[test]
+    fn the_nudge_port_answers_over_a_store_with_none_declared() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-nudgeport-home");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::env::set_var("AMENBO_HOME", &tmp);
+        Store::open().unwrap(); // The store this launch is tallied against.
+
+        record_launch().unwrap();
+        assert!(pending_nudges(Vec::new()).unwrap().is_empty(), "nothing is declared, so nothing is due");
+        assert!(
+            pending_nudges(vec!["some_stage_this_surface_is_in".into()]).unwrap().is_empty(),
+            "a stage the caller is in raises no nudge on its own",
+        );
+
+        // Recording one is the caller's report that it drew it, and the log takes the same id twice
+        // (a repeating nudge writes it on each showing).
+        mark_nudge_put("test.put".into()).unwrap();
+        mark_nudge_put("test.put".into()).unwrap();
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     /// What the walk carries out without asking, once the device has answered: a folder bound **after**

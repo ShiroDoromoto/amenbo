@@ -701,12 +701,12 @@ fn cycles() -> Value {
             "when": "You are registering or decomposing work.",
             "backbone": [
                 backbone_step("There are no subtasks: decompose larger work into separate tasks, each belonging to exactly one project.", &["task add"]),
-                backbone_step("Link ordering with dependency edges: the edge is what holds the order once the session that knew it is gone, so whoever arrives later takes the work in the order it has rather than inferring it from titles. Declare the order you actually mean.", &["task depend", "task undepend"]),
+                backbone_step("Before you leave the split, draw a dependency edge wherever one task has to be done first: the edge is what holds the order once the session that knew it is gone, so whoever arrives later takes the work in the order it has rather than inferring it from titles. Looking is the step, not the linking — parts with no order between them are an answer. Declare the order you actually mean.", &["task depend", "task undepend"]),
             ],
             "optional": [
                 optional_step("the work spans ordered time-direction stages", "Add a --time-axis dimension and place tasks on its ordered values, gating later stages behind earlier ones with a dependency.", &["dimension add", "dimension set"]),
                 optional_step("you are handing work to a person, that person's AI, or yourself (`--to me-ai`) to continue", "Delegate at creation (--to/--ai) or afterward.", &["task add", "task assign"]),
-                optional_step("the work rests on a choice worth recording", "Offer to record the rationale as a decision, and link it to the tasks that implement it — the link is what lets a later session read why these tasks exist at all. Surface it for the human to accept or reject; don't author it as already settled (see the `decision` cycle).", &["decision add", "decision link"]),
+                optional_step("the work rests on a choice worth recording", "Offer to record the rationale as a decision — the `decision` cycle carries it from there, linking it to the tasks that implement it. Surface it for the human to accept or reject; don't author it as already settled.", &["decision add", "decision link"]),
                 optional_step("a task's shape looks off (missing project/priority, malformed)", "Check its shape before relying on it.", &["validate"]),
             ]
         },
@@ -714,6 +714,7 @@ fn cycles() -> Value {
             "when": "You are putting a 'why' on the record — offering a new one, or fitting it to the decisions already there (step 0 is where you judge that it is worth offering).",
             "backbone": [
                 backbone_step("Freeze the rationale as an append-only decision — it starts proposed (your proposal; the human accepts or rejects it), so offer the record, don't impose it.", &["decision add", "decision promote"]),
+                backbone_step("Before you leave it, look for the work this decision governs and link it: the task then names the decision it rests on, and the decision names the work it produced, so whoever picks the work up reads why. Looking is the step, not the linking — finding nothing to link is an answer. Link implementation tasks only: never the task of ruling on the decision itself, and never a rejected decision, or one that has been superseded, that you merely want to cite (that belongs in the body).", &["decision link"]),
             ],
             "optional": [
                 optional_step("a new decision wholly replaces an existing one", "Chain it as a supersession — the old one stops being current (the edge says so; no status changes).", &["decision supersede"]),
@@ -721,7 +722,6 @@ fn cycles() -> Value {
                 optional_step("a proposed decision is agreed and ready to settle", "Accept it (stamps decided_at/decided_by).", &["decision accept"]),
                 optional_step("an accepted decision needs a minor fix (typo / stale line)", "Edit it in place — accepting no longer freezes the body, so there is no reopen/re-accept round-trip. Supersede stays for a change of mind; reopen for un-settling a too-hasty acceptance.", &["decision edit"]),
                 optional_step("you just added or accepted a decision", "Check whether it semantically contradicts an existing one. Pull a bounded, relevant neighbourhood — search the new decision's key terms (search <term> --kind decision --limit N), not the whole corpus — and read the bodies it points at (decision show). If one contradicts, propose it to the human as a candidate supersede/amend with your reasoning; do not author the edge yourself (detection proposes, the human disposes).", &["search", "decision show", "decision supersede", "decision amend"]),
-                optional_step("the decision drove concrete implementation tasks", "Link it to those tasks: the link is how the reasoning reaches whoever picks the work up — the task names the decision it rests on, and the decision names the work it produced. Draw it while you are the one who knows why. Link implementation tasks only: never the task of ruling on the decision itself, and never a rejected decision, or one that has been superseded, that you merely want to cite (that belongs in the body).", &["decision link"]),
             ]
         },
         "decisionAudit": {

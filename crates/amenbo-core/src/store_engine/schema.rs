@@ -994,6 +994,22 @@ plain_tables! {
         allowed: integer,
         asked_again: integer,
     }
+
+    /// The device-local **nudge log** — which nudges have already been put to the person here, and when
+    /// (`AMB-D-542`). One row per nudge id: presence is what keeps a once-only nudge from being put a
+    /// second time, and `at` is when it went out.
+    ///
+    /// Device-local for the same reason the mailbox's notified set is: the same nudge may be put once on
+    /// each separate install, and the tally it was judged on ([`crate::nudge`]) is this machine's.
+    ///
+    /// Keyed by the nudge's **declared id** ([`crate::nudge::Nudge::id`]) rather than by a row the store
+    /// holds, so no `REFERENCES` can hold it — the id names a line of a table compiled into the binary.
+    /// A row whose id no build declares any more is inert (nothing asks for it), which is what lets a
+    /// nudge be retired without a sweep.
+    nudge_fired {
+        nudge_id: text("PRIMARY KEY"),
+        at: text,
+    }
 }
 
 /// Extra DDL not derived from any declaration: the journal mode and the read-model indexes the query

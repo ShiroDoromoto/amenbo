@@ -321,6 +321,24 @@ pub const STEPS: &[Step] = &[
              DROP TABLE binding_path;",
         ),
     },
+    Step {
+        to: 20,
+        name: "add nudge_fired, the log of which nudges have already been put to the person here",
+        // `AMB-D-542`. The genesis batch creates a table an older store is missing at open, so this DDL
+        // has usually run before the chain reaches here — writing it down anyway is what makes the chain
+        // say when the table arrived, as v16's does.
+        //
+        // **Unseeded, and there is nothing it could be seeded from.** An empty log is exactly the truth
+        // about a store upgrading into this: no nudge has ever been put on it, because there was nothing
+        // to put one with. Nor would a seed be harmless — a row here is a veto, so inventing one would
+        // silence a nudge before it was ever shown.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS nudge_fired (\
+               nudge_id TEXT PRIMARY KEY NOT NULL, \
+               at TEXT NOT NULL\
+             );",
+        ),
+    },
 ];
 
 /// v17: build the word index for a store whose records predate it. It is exactly the rebuild any repair

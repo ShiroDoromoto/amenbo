@@ -1,16 +1,17 @@
 //! The **overview tables** of the unified database.
 //!
-//! Folder bindings, read receipts, the inbox archive, the lint-hook consent and the AI-harness consent
-//! are device-local overview state: per-machine, never synced, and — unlike a task or a decision — not a
-//! record of any one project. They are ordinary tables of the one database, declared by
-//! [`crate::store_engine::schema::schema_sql`].
+//! Folder bindings, read receipts, the inbox archive, the lint-hook consent, the AI-harness consent, the
+//! nudge log and the usage tallies are device-local overview state: per-machine, never synced, and —
+//! unlike a task or a decision — not a record of any one project. They are ordinary tables of the one
+//! database, declared by [`crate::store_engine::schema::schema_sql`].
 //!
 //! This module is the read/write path onto them, written against a bare [`StoreEngine`] rather than a
 //! particular store type.
 //!
 //! Nothing here carries the engine's LWW record shape: every table is keyed by the id it names (the
-//! project's or the task's `INTEGER` key) and every write is a direct UPSERT/DELETE, wrapped in a
-//! transaction only where a caller needs several rows to land together.
+//! project's or the task's `INTEGER` key, or — for the nudge log — the id a declaration in the binary
+//! goes by) and every write is a direct UPSERT/DELETE, wrapped in a transaction only where a caller
+//! needs several rows to land together.
 
 use rusqlite::{Connection, OptionalExtension, Transaction};
 
@@ -30,10 +31,17 @@ const IA: col::inbox_archive::Cols = col::inbox_archive::ALL;
 const MN: col::mailbox_notified::Cols = col::mailbox_notified::ALL;
 const HO: col::hook_optout::Cols = col::hook_optout::ALL;
 const HC: col::harness_consent::Cols = col::harness_consent::ALL;
+const NF: col::nudge_fired::Cols = col::nudge_fired::ALL;
 
 /// `store_meta` key for the mailbox's single last-seen instant. A scalar, so it lives in the KV
 /// singleton table rather than the per-task `read_receipt` table.
 pub const MAILBOX_LAST_SEEN_META: &str = "read_receipt.mailbox_last_seen";
+
+/// `store_meta` key for how many times the app has been launched on this device.
+pub const LAUNCH_COUNT_META: &str = "usage.launch_count";
+
+/// `store_meta` key for the day the app was first launched on this device (`%Y-%m-%d`).
+pub const FIRST_LAUNCH_DAY_META: &str = "usage.first_launch_day";
 
 // ───────────────────────── folder bindings ─────────────────────────
 
@@ -211,6 +219,69 @@ pub fn mailbox_notified_add(engine: &StoreEngine, task_ids: &[i64]) -> Result<()
 /// anything was pruned. Without it the set would keep the ids of tasks long gone.
 pub fn retain_live_mailbox_notified(engine: &StoreEngine, keep: impl Fn(i64) -> bool) -> Result<bool> {
     retain_live(engine, MN.table, MN.task_id, keep)
+}
+
+// ───────────────────────── nudge log ─────────────────────────
+
+/// The nudges already put to the person on this device, each with the instant it went out. Ascending by
+/// id (the table's PK order); the empty default means none has been put yet — the state a fresh store is
+/// in, and the state every store is in until a nudge is declared ([`crate::nudge`]).
+pub fn nudges_fired(engine: &StoreEngine) -> Result<Vec<(String, String)>> {
+    let conn = engine.conn();
+    let mut sel = Select::new();
+    let (id, at) = (sel.col(NF.nudge_id), sel.col(NF.at));
+    let mut sql = Sql::from(&sel, NF.table);
+    sql.order_by([Sort::by(NF.nudge_id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows =
+        stmt.query_map([], |r| Ok((id.get(r)?, at.get(r)?))).map_err(StoreEngineError::from)?;
+    let mut fired = Vec::new();
+    for row in rows {
+        fired.push(row.map_err(StoreEngineError::from)?);
+    }
+    Ok(fired)
+}
+
+/// Record that `nudge_id` has now been put, at `at` (RFC3339 UTC `z`). The latest write wins: a
+/// once-only nudge writes this row once and never asks again, and a repeating one leaves the instant of
+/// the most recent time it went out.
+pub fn mark_nudge_fired(engine: &StoreEngine, nudge_id: &str, at: &str) -> Result<()> {
+    Insert::into(NF.table)
+        .set(NF.nudge_id, nudge_id)
+        .set(NF.at, at)
+        .on_conflict_update(NF.nudge_id)
+        .sql()
+        .execute(engine.conn())
+        .map_err(StoreEngineError::from)?;
+    Ok(())
+}
+
+// ───────────────────────── usage tallies ─────────────────────────
+
+/// What this device has counted about being used: how many launches, and the day of the first one
+/// (`None` until a launch has been recorded). Scalars, so they live in `store_meta` beside the mailbox's
+/// last-seen instant rather than in a table of their own — and they are the only tallies kept at all,
+/// because everything else a nudge asks about is countable from the store itself (`AMB-D-543`).
+pub fn usage_tallies(engine: &StoreEngine) -> Result<(i64, Option<String>)> {
+    let launches =
+        engine.get_meta(LAUNCH_COUNT_META)?.and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
+    Ok((launches, engine.get_meta(FIRST_LAUNCH_DAY_META)?))
+}
+
+/// Count one launch on `day` (`%Y-%m-%d`): raise the tally by one, and record the day if this is the
+/// first launch this device has seen. The first day is written once and never moved — it is *when this
+/// device started*, and a later launch says nothing about that.
+///
+/// A read-modify-write, and deliberately not held under a lock: two launches racing lose a tick between
+/// them, and a nudge is judged on an order of magnitude of use, not on an exact count. Serialising the
+/// app's startup on this would be paying far more than the answer is worth.
+pub fn record_launch(engine: &StoreEngine, day: &str) -> Result<()> {
+    let (launches, first_day) = usage_tallies(engine)?;
+    engine.set_meta(LAUNCH_COUNT_META, Some(&launches.saturating_add(1).to_string()))?;
+    if first_day.is_none() {
+        engine.set_meta(FIRST_LAUNCH_DAY_META, Some(day))?;
+    }
+    Ok(())
 }
 
 // ───────────────────────── lint-hook opt-out ─────────────────────────
@@ -413,5 +484,22 @@ mod tests {
         assert!(retain_live_mailbox_notified(&engine, |id| id == 11).unwrap());
         assert_eq!(mailbox_notified_ids(&engine).unwrap(), [11]);
         assert!(!retain_live_mailbox_notified(&engine, |id| id == 11).unwrap(), "nothing left to prune");
+
+        // Nudge log: keyed by the nudge's declared id, and the instant is replaced rather than appended
+        // beside — a nudge put twice is still one row, saying when it last went out.
+        assert!(nudges_fired(&engine).unwrap().is_empty(), "a fresh store has put nothing");
+        mark_nudge_fired(&engine, "autostart", "2026-08-04T00:00:00Z").unwrap();
+        mark_nudge_fired(&engine, "autostart", "2026-08-11T00:00:00Z").unwrap();
+        assert_eq!(
+            nudges_fired(&engine).unwrap(),
+            [("autostart".to_owned(), "2026-08-11T00:00:00Z".to_owned())]
+        );
+
+        // Usage tallies: nothing until a launch is counted, then the count climbs and the first day
+        // stays where the first launch put it.
+        assert_eq!(usage_tallies(&engine).unwrap(), (0, None));
+        record_launch(&engine, "2026-08-04").unwrap();
+        record_launch(&engine, "2026-08-09").unwrap();
+        assert_eq!(usage_tallies(&engine).unwrap(), (2, Some("2026-08-04".to_owned())));
     }
 }

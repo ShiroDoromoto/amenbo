@@ -66,7 +66,7 @@ pub enum Command {
     /// is updated from the desktop app). Pass --rollback to undo the last --apply, restoring the binary
     /// it kept aside (offline, no download). Pass --print to only print the installer URL (no browser).
     /// Typing this asks upstream rather than answering from the detection cache, so no route here
-    /// reports on an entry up to an hour old; offline it still falls back to the last one it had.
+    /// reports on an entry up to 24 hours old; offline it still falls back to the last one it had.
     Update {
         /// print the installer URL instead of opening a browser (headless / scripted use)
         #[arg(long)]

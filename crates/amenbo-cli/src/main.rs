@@ -808,7 +808,7 @@ fn version_unbound(flags: &Flags) -> Result<i32, CliError> {
 /// The explicit update route: look up this OS's all-in-one installer URL in latest.json and open it. There
 /// is no self-update — opening is all it does. Because the user asked for it, the lookup runs regardless of
 /// the config toggle **and regardless of the detection cache's TTL** (`AMB-D-463`): it goes and asks, rather
-/// than answering from an entry up to an hour old, since what someone who typed this wants to know is the
+/// than answering from an entry up to 24 hours old, since what someone who typed this wants to know is the
 /// state now. Neither what startup fetched nor a warm cache is reused for the same reason. It still falls
 /// back to the latest-release page if the fetch fails or the OS is not listed, and offline behaviour is
 /// unchanged — the fresh query shares the fall-back-to-stale contract with the cached one. Callable from
@@ -874,7 +874,7 @@ fn update_cmd(flags: &Flags, print: bool) -> Result<i32, CliError> {
 /// archive over TLS, checks version monotonicity, and swaps the running binary — no installer, no
 /// elevation. Asks upstream afresh, past the detection cache's TTL, for the reason [`update_cmd`] gives
 /// (`AMB-D-463`): declining to apply an update is a refusal, and a refusal must not rest on an entry up
-/// to an hour old. Callable from outside a binding (a CLI-only user updates without a store), so it
+/// to 24 hours old. Callable from outside a binding (a CLI-only user updates without a store), so it
 /// never touches the store. The
 /// three "correctly declined" outcomes (already current / GUI-managed / a development build) are
 /// reported as plain messages with a zero exit; genuine failures (download, extract, swap, no archive)

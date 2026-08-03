@@ -51,6 +51,11 @@ pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Repor
     // the road against a world half built, and every line it then wrote — pass or fail — would be
     // about the wrong thing. It is this scenario's failure and not the run's, so it comes back as a
     // report rather than an error: a set keeps going, and the line says the premise was what broke.
+    //
+    // Walked here rather than through `stand_world`, and the two are not the same job. That one hands
+    // a screen run a world and then gets out of the way, so it takes a driver of its own; here the
+    // road that follows is driven from this one, and a premise's `as:` names have to be in its hands
+    // for the road to call them by name at all.
     for (i, step) in scenario.given.iter().enumerate() {
         let outcome = match driver.exec(step) {
             Ok(outcome) => outcome,
@@ -77,6 +82,11 @@ pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Repor
 /// This is the other driver's way in. The GUI harness stands its world up here rather than through a
 /// vocabulary of its own, because what a premise names are the same ops the CLI road names, and two
 /// spellings of `plugin install` would drift the moment one of them learned something.
+///
+/// The CLI road does not come through here, and that is not an oversight: it stands its premise up in
+/// the very driver that then walks it ([`run_scenario`]), which is the only way the names a premise
+/// binds are still in hand when the road calls them. A screen run has no such need — the hands that
+/// walk it are a person's.
 ///
 /// What comes back is held rather than dropped, and that is not a formality: part of a world can be
 /// a thing that only stands while something holds it — a catalog the premise put on the loopback

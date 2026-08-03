@@ -5,7 +5,8 @@
 id: make-a-place-for-work
 title: A project is registered, corrected, placed in the listing, and counts the work filed into it
 description: >
-  Register a project and read it back under the name it was given, then correct that name and its
+  Register a project — which links the folder it is given, since a project no folder points at is one
+  no AI can reach — and read it back under the name it was given, then correct that name and its
   notes on the same row. A second project says where a newly added one lands in the listing, and
   sending the first to the top and back says the order is the store's to keep — the key it keeps it
   by is opaque, so the listing is the only place a reorder is visible. Tasks are then filed in and
@@ -17,7 +18,18 @@ steps_cli:
     op: create
     with:
       name: SCENARIO PROJECT — the place work is kept
+      dir: workplace
     as: pj
+
+  # A place for work is a folder as much as a row: registering one links the folder it was given, so
+  # anything launched there reaches this project from the moment it exists. There is no way to
+  # register a project that no folder points at.
+  - type: assert
+    domain: folder
+    op: bound
+    with:
+      dir: workplace
+      project: pj
 
   # Readable back under the name it was given, and in the listing a person picks from.
   - type: assert

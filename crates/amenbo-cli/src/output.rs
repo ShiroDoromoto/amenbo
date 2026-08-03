@@ -42,6 +42,7 @@ pub enum CliErrorCode {
     NoPointer,
     InitPointerExists,
     InitAmbiguousOwners,
+    ProjectDirBound,
     BindingNestedTree,
     NestedWorktree,
     UnbindNoBinding,
@@ -58,6 +59,7 @@ impl CliErrorCode {
             CliErrorCode::NoPointer => "no_pointer",
             CliErrorCode::InitPointerExists => "init_pointer_exists",
             CliErrorCode::InitAmbiguousOwners => "init_ambiguous_owners",
+            CliErrorCode::ProjectDirBound => "project_dir_bound",
             CliErrorCode::BindingNestedTree => "binding_nested_tree",
             CliErrorCode::NestedWorktree => "nested_worktree",
             CliErrorCode::UnbindNoBinding => "unbind_no_binding",
@@ -75,6 +77,7 @@ impl CliErrorCode {
         CliErrorCode::NoPointer,
         CliErrorCode::InitPointerExists,
         CliErrorCode::InitAmbiguousOwners,
+        CliErrorCode::ProjectDirBound,
         CliErrorCode::BindingNestedTree,
         CliErrorCode::NestedWorktree,
         CliErrorCode::UnbindNoBinding,
@@ -176,21 +179,44 @@ impl CliError {
         }
     }
 
+    /// `project add --dir` guard: the folder given is already linked to a project. Linking it to a
+    /// brand-new one would overwrite that pointer unasked, and the folder's real project would drop out
+    /// of view there — the same clobber `init` refuses. `project add` has no `--force`: the two things
+    /// someone could mean are already commands of their own, so the hint names them.
+    pub fn project_dir_bound(dir: &str, project_id: &str) -> CliError {
+        let cmd = Paths::command_name();
+        CliError {
+            code: CliErrorCode::ProjectDirBound.as_str(),
+            message: format!(
+                "This folder ({dir}) is already linked to amenbo (project {project_id}), so no new project was created."
+            ),
+            hint: Some(format!(
+                "Pass a folder nothing is linked to, or re-point this one at another existing project with `{cmd} bind --project <name or id> --dir {dir}`."
+            )),
+            exit: 1,
+        }
+    }
+
     /// Nested-binding guard: a new binding was requested in a **subdirectory** of a tree an ancestor's
     /// `.amenbo` already manages. A pointer there shadows the ancestor's binding (amenbo run in that
     /// subdirectory would resolve to the subdirectory's store, not the parent's) and scatters
     /// `.amenbo`/AGENTS.md/CLAUDE.md through the source tree. Same "respect the existing tree" rule as
     /// `init`'s clobber guard. `--force` is the way through when binding a subdirectory separately is
-    /// what you actually meant.
-    pub fn binding_nested_tree(ancestor_dir: &str) -> CliError {
+    /// what you actually meant — which is `bind`'s alone, so `forceable` says whether the caller has one
+    /// to offer: `project add` does not, and a hint naming a flag that command has never had would send
+    /// the reader to look for it.
+    pub fn binding_nested_tree(ancestor_dir: &str, forceable: bool) -> CliError {
+        let cmd = Paths::command_name();
         CliError {
             code: CliErrorCode::BindingNestedTree.as_str(),
             message: format!(
                 "This folder is already inside an amenbo-managed tree (bound at {ancestor_dir}). Binding a subdirectory would shadow that pointer."
             ),
-            hint: Some(
-                "Run bind from the managed root instead, or pass --force to intentionally bind this subdirectory.".to_string(),
-            ),
+            hint: Some(if forceable {
+                "Run bind from the managed root instead, or pass --force to intentionally bind this subdirectory.".to_string()
+            } else {
+                format!("Pass a folder outside that tree, or bind this subdirectory on purpose with `{cmd} bind --project <name or id> --dir <path> --force`.")
+            }),
             exit: 1,
         }
     }
@@ -499,6 +525,7 @@ mod tests {
             "no_pointer",
             "init_pointer_exists",
             "init_ambiguous_owners",
+            "project_dir_bound",
             "binding_nested_tree",
             "nested_worktree",
             "unbind_no_binding",

@@ -176,7 +176,7 @@ fn nested_worktree_is_refused_but_a_subdirectory_and_a_submodule_are_not() {
             .env("AMENBO_HOME", &cli.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(dir)
-            .args(with_actor(args, "human"))
+            .args(with_defaults(args, "human"))
             .output()
             .expect("failed to run the binary");
         (out.status.code(), String::from_utf8_lossy(&out.stderr).to_string())
@@ -553,15 +553,22 @@ fn bind_dir_places_pointer_in_external_folder() {
     let _ = std::fs::remove_dir_all(&ext);
 }
 
-/// `project show` reverses the binding: every folder linked to the project — CWD-bound and `--dir`-bound
-/// alike, many-to-one — is listed under bound_folders, each with an existence check.
+/// `project show` reverses the binding: every folder linked to the project — the one it was created
+/// with, the CWD, and a `--dir` target, many-to-one — is listed under bound_folders, each with an
+/// existence check.
 #[test]
 fn project_show_lists_bound_folders_with_existence() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
-    let pid = id_str(&cli.json(&["project", "add", "--name", "逆引きPJ", "--json"])["project"]["id"]);
+    // The folder a project is created with is already one of its folders (`AMB-D-529`), so this one is
+    // named rather than left to the harness: the count below is about which folders are listed.
+    let born = amenbo_scratch::scratch("bf-born");
+    let born_str = born.to_string_lossy().to_string();
+    let pid = id_str(
+        &cli.json(&["project", "add", "--name", "逆引きPJ", "--dir", &born_str, "--json"])["project"]["id"],
+    );
 
-    // Bind the CWD (home) as the main folder, plus an external folder via `--dir` (many-to-one).
+    // Bind the CWD (home) too, plus an external folder via `--dir` (many-to-one).
     cli.run(&["bind", "--project", &pid]);
     let ext = amenbo_scratch::scratch("bf");
     let ext_str = ext.to_string_lossy().to_string();
@@ -571,7 +578,7 @@ fn project_show_lists_bound_folders_with_existence() {
 
     let shown = cli.json(&["project", "show", &pid, "--json"]);
     let folders = shown["bound_folders"].as_array().expect("bound_folders array");
-    assert_eq!(folders.len(), 2, "both bound folders are listed: {folders:?}");
+    assert_eq!(folders.len(), 3, "all three bound folders are listed: {folders:?}");
     // Both live folders report exists=true.
     assert!(folders.iter().all(|f| f["exists"] == true), "live folders exist: {folders:?}");
 
@@ -687,7 +694,7 @@ fn bind_refuses_nested_subdirectory_without_force() {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .current_dir(cwd)
-            .args(with_actor(&args, "human"))
+            .args(with_defaults(&args, "human"))
             .output()
             .expect("run amenbo bind");
         (

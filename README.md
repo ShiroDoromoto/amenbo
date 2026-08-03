@@ -301,7 +301,7 @@ amenbo agent --command "task add"   # one command's full spec — flags, args, e
 amenbo agent --full          # every command's full spec inline
 
 # Projects, tasks
-amenbo project add --name "Website refresh" --view board
+amenbo project add --name "Website refresh" --dir ~/work/website-refresh --view board
 amenbo task add --title "Wireframes" --project "Website refresh" --due tomorrow --priority high
 amenbo task add --title "Pick colors" --project "Website refresh"
 # Every id is the number amenbo shows you: task AMB-T-<n> is `<n>`, decision AMB-D-<n> is `<n>`

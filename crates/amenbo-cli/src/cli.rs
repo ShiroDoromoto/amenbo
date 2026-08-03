@@ -788,6 +788,11 @@ pub enum ProjectCmd {
     Add {
         #[arg(long)]
         name: String,
+        /// The folder this project is linked to — an existing directory, which receives the
+        /// `.amenbo` pointer and the managed guidance block, exactly as `bind` places them. Required:
+        /// a project nothing is linked to is a project no AI can reach.
+        #[arg(long)]
+        dir: String,
         /// The view this project opens on: list | board | calendar | timeline. Omitted, the
         /// configured `default_view` answers (`config set default_view <view>`).
         #[arg(long)]

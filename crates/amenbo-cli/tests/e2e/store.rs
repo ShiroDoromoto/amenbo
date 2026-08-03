@@ -256,7 +256,7 @@ fn r6_clone_to_new_machine_rebinds_hardware() {
             // source tree and the real app-data.
             .current_dir(home)
             // Writes such as init declare a facet.
-            .args(with_actor(args, "human"))
+            .args(with_defaults(args, "human"))
             .output()
             .expect("run amenbo");
         (serde_json::from_slice(&out.stdout).unwrap_or(Value::Null), String::from_utf8_lossy(&out.stderr).into_owned())
@@ -352,7 +352,7 @@ fn version_and_update_answer_without_a_pointer() {
             .env_remove("AMENBO_PROJECT_DIR")
             .env("AMENBO_UPDATE_CHECK", "0") // no upstream lookup (hermetic)
             .current_dir(&dir)
-            .args(with_actor(args, "ai"))
+            .args(with_defaults(args, "ai"))
             .output()
             .expect("failed to run the binary");
         let stdout = String::from_utf8_lossy(&out.stdout).to_string();
@@ -389,7 +389,7 @@ fn update_apply_declines_gracefully_without_manifest() {
         cmd.env_remove("AMENBO_HOME")
             .env_remove("AMENBO_PROJECT_DIR")
             .current_dir(&dir)
-            .args(with_actor(args, "ai"));
+            .args(with_defaults(args, "ai"));
         if check_off {
             cmd.env("AMENBO_UPDATE_CHECK", "0"); // no upstream lookup — the manifest is unreachable
         }
@@ -424,7 +424,7 @@ fn update_rollback_declines_gracefully_without_a_retained_binary() {
             .env_remove("AMENBO_PROJECT_DIR")
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&dir)
-            .args(with_actor(args, "ai"))
+            .args(with_defaults(args, "ai"))
             .output()
             .expect("failed to run the binary");
         (out.status.code(), String::from_utf8_lossy(&out.stdout).to_string(), String::from_utf8_lossy(&out.stderr).to_string())

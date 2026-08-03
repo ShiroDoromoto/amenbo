@@ -14,7 +14,6 @@ import {
   catalogReadLine,
   clearDismissedPluginUpdates,
   refreshPluginUpdates,
-  rollbackPlugin,
   usePluginUpdates,
   type PluginUpdate,
 } from "../core/pluginUpdates";
@@ -146,7 +145,7 @@ function removedParts(r: PluginRemoved): string {
  * **The build moves from here too** (`AMB-D-359`). The banner takes updates in bulk for whoever just wants
  * them; this row is the other half of the same offer, for choosing one plugin at a time — and it is where
  * an offer that needs a decision is actually resolvable, since the settings the new schema wants are one
- * button away. The way back is here for the same reason: this face applies updates, so it owes the undo.
+ * button away. It only moves builds forward: the way back is the CLI's alone (`AMB-D-522`).
  */
 function InstalledRow({ install, update, projects, onRemoved }: {
   install: PluginInstall;
@@ -177,20 +176,11 @@ function InstalledRow({ install, update, projects, onRemoved }: {
   };
 
   // Taking an update needs no question: core re-verifies the asset, keeps the gate, the settings and the
-  // secrets, and retains the build being replaced — which is what the roll-back beside it goes to.
+  // secrets, and retains the build being replaced — which is what the CLI's `plugin rollback` goes to.
   const onUpdate = () =>
     run(async () =>
       (await applyPluginUpdate(install.name)) ? tf("plugins.updates.applied", { count: 1 }) : null,
     );
-
-  // Going back does need one: the retained build is the only one there is, and this consumes it.
-  const onRollback = async () => {
-    if (!(await confirmDialog(tf("plugins.updates.rollbackConfirm", { name: install.name })))) return;
-    await run(async () => {
-      const restored = await rollbackPlugin(install.name);
-      return restored == null ? null : tf("plugins.updates.rolledBack", { desc: restored });
-    });
-  };
 
   // The question names what goes beyond the binary (`AMB-D-357`): the settings in every project, the
   // secrets are the part nobody pictures, and they do not come back with a re-install.
@@ -228,7 +218,7 @@ function InstalledRow({ install, update, projects, onRemoved }: {
           ) : null}
         </div>
         <PluginCrossings install={install} projects={projects} />
-        {(update || install.rollback || moved) && (
+        {(update || moved) && (
           <div className="pluggate">
             {/* An offer that needs a decision is named instead of offered as a button that would only be
                 refused — and the settings it is short of are opened from this same row. */}
@@ -251,11 +241,6 @@ function InstalledRow({ install, update, projects, onRemoved }: {
                   </button>
                 </>
               )
-            )}
-            {install.rollback && (
-              <button className="feed__action" disabled={busy} onClick={() => void onRollback()}>
-                {t("plugins.updates.rollback")}
-              </button>
             )}
             {moved && !busy && (
               <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{moved}</span>

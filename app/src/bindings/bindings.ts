@@ -784,13 +784,7 @@ incompatibleReason?: string,
  * declares none, which is the form's own answer to whether there is anything to configure. What is
  * held for a key is one project's (`AMB-D-434`) and comes from [`plugin_config_read`].
  */
-config: Array<PluginWantedSettingDto>, 
-/**
- * Whether the build the last update replaced is still retained beside this one, so a rollback
- * has somewhere to go (`AMB-D-359`). An update retains exactly one build and a rollback consumes
- * it, so this is false for a plugin that was never updated and false again once it is used.
- */
-rollback: boolean, };
+config: Array<PluginWantedSettingDto>, };
 
 /**
  * One "project × plugin" intersection, as both plugin faces draw a row for it (`AMB-D-447`) — the state

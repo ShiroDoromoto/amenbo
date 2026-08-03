@@ -17,9 +17,8 @@ const hoisted = vi.hoisted(() => ({
   updates: [] as PluginUpdate[],
   /** What that offer was measured against — the frame the count is to be read inside. */
   catalog: { read: "fetched" } as PluginCatalogRead,
-  /** Which plugins had an update applied, and which were put back a build. */
+  /** Which plugins had an update applied. */
   applied: [] as string[],
-  rolledBack: [] as string[],
   loading: false,
   error: undefined as unknown,
   gated: [] as { name: string; projectId: number | null; enabled: boolean }[],
@@ -84,10 +83,6 @@ vi.mock("../core/pluginUpdates", async (importOriginal) => {
       hoisted.applied.push(name);
       return Promise.resolve(true);
     },
-    rollbackPlugin: (name: string) => {
-      hoisted.rolledBack.push(name);
-      return Promise.resolve("the build before the update");
-    },
   };
 });
 
@@ -129,7 +124,6 @@ const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?:
   compatible: true,
   projects: on.map((project) => at(project, { enabled: true })),
   config: [],
-  rollback: false,
   ...over,
 });
 
@@ -192,7 +186,6 @@ beforeEach(() => {
   hoisted.updates = [];
   hoisted.catalog = { read: "fetched" };
   hoisted.applied = [];
-  hoisted.rolledBack = [];
   hoisted.asked = [];
   hoisted.confirm = true;
   hoisted.receipt = {
@@ -652,32 +645,6 @@ describe("moving one plugin's build from its row", () => {
     expect(button(t("plugins.updates.apply"))).toBeUndefined();
   });
 
-  // Going back is offered only where there is a build to go back to, and it asks first: the retained build
-  // is the only one there is, and going back uses it up.
-  it("offers the way back only when a build is retained, and asks before taking it", async () => {
-    hoisted.installs = [row({ name: "notify" })];
-    render();
-    expect(button(t("plugins.updates.rollback"))).toBeUndefined();
-
-    hoisted.installs = [row({ name: "notify", rollback: true })];
-    render();
-    await act(async () => { button(t("plugins.updates.rollback"))!.click(); });
-
-    expect(hoisted.asked).toEqual([tf("plugins.updates.rollbackConfirm", { name: "notify" })]);
-    expect(hoisted.rolledBack).toEqual(["notify"]);
-    expect(container.textContent).toContain(
-      tf("plugins.updates.rolledBack", { desc: "the build before the update" }),
-    );
-  });
-
-  it("goes back nowhere when the question is declined", async () => {
-    hoisted.confirm = false;
-    hoisted.installs = [row({ name: "notify", rollback: true })];
-    render();
-
-    await act(async () => { button(t("plugins.updates.rollback"))!.click(); });
-    expect(hoisted.rolledBack).toEqual([]);
-  });
 });
 
 // Uninstall is not disable (`AMB-D-357`): it takes the settings in every project and the secrets with it,

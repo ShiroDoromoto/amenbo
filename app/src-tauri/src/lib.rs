@@ -141,6 +141,10 @@ pub fn run() {
       #[cfg(desktop)]
       if !amenbo_core::config::Paths::is_dev_channel() {
         app.handle().plugin(autostart::init())?;
+        // The two states drift between runs — the registration is a file the user can delete, and it
+        // holds a path that stops naming this executable once the app is moved — so they are settled
+        // here, before the window can draw a switch out of a setting the login no longer honours.
+        autostart::reconcile(app.handle());
       }
       #[cfg(target_os = "macos")]
       macos_notify::init(app.handle().clone());

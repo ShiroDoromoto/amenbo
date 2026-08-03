@@ -1,24 +1,27 @@
 //! `verify-gui` — drive one verification scenario as a mac GUI checklist.
 //!
 //! It reads the same scenario the CLI driver black-box-drives, renders each step into a screen
-//! instruction (no command line, no pixel), locates the running GUI's window through
-//! `app/scripts/uiauto/uiauto.swift`, and captures one `screencapture -l <winid>` per step into an
-//! evidence directory. Each assert OCR can judge is decided from its shot with macOS Vision
-//! (`ocr.swift`); an assert it cannot judge is left as a `Review` for a human eye, and its shot is
-//! kept.
+//! instruction (no command line, no pixel), launches the app bundle it was pointed at against a
+//! throwaway store, locates that process's window through `app/scripts/uiauto/uiauto.swift`, and
+//! captures one `screencapture -l <winid>` per step into an evidence directory. Each assert OCR can
+//! judge is decided from its shot with macOS Vision (`ocr.swift`); an assert it cannot judge is left
+//! as a `Review` for a human eye, and its shot is kept.
 //!
-//! Usage: `verify-gui <scenario.yaml> (--pid <pid> | --winid <id>) [--app <name>]
+//! Usage: `verify-gui <scenario.yaml> --app <bundle.app>
 //!                    [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--step] [--json]`
 //!        `verify-gui <scenario.yaml> --print`
-//!   `--pid`      pid of the running GUI app; its window is resolved via uiauto (gives bounds too)
-//!   `--winid`    a window id to shoot directly, skipping uiauto (bounds unknown)
-//!   `--app`      bring this app to the front before shooting (e.g. `amenbo (dev)`)
+//!   `--app`      the `.app` bundle to launch and shoot (e.g. `/Applications/amenbo.app`)
 //!   `--evidence` where the shots + manifest land (default: a fresh dir under the temp tree)
 //!   `--uiauto`   path to uiauto.swift (default: app/scripts/uiauto/uiauto.swift in the repo)
 //!   `--ocr`      path to ocr.swift (default: the ocr.swift beside this crate)
 //!   `--step`     stop after each step's shot and wait for a line on stdin before the next
 //!   `--json`     emit the manifest path, verdict and step count as JSON instead of the summary
-//!   `--print`    print the road's instructions and stop — no window, no shot, no OCR
+//!   `--print`    print the road's instructions and stop — nothing launched, no shot, no OCR
+//!
+//! The run owns the app it shoots. It starts the bundle with `AMENBO_HOME` pointed at a store of
+//! its own, so a screen road that creates projects and tasks writes them nowhere near the user's
+//! backlog, and it holds the pid that launch answered with, so what is captured is that app and not
+//! whichever copy of the same build happened to be open. Both go when the run ends.
 //!
 //! Without `--step` the run shoots every step back to back, which is one screen photographed as
 //! many times as the scenario is long. `--step` is what lets a scenario carry a screen that moves:
@@ -45,16 +48,14 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use amenbo_verify_gui::{
-    activate, ocr, resolve_window, walk, write_manifest, StepRecord, Verdict, Window,
-};
+use amenbo_verify_gui::{launch, ocr, scratch, walk, write_manifest, StepRecord, Verdict};
 
 fn main() -> ExitCode {
     let opts = match Opts::parse(std::env::args().skip(1)) {
         Ok(o) => o,
         Err(msg) => {
             eprintln!("verify-gui: {msg}");
-            eprintln!("usage: verify-gui <scenario.yaml> (--pid <pid> | --winid <id>) [--app <name>] [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--step] [--json]");
+            eprintln!("usage: verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--step] [--json]");
             eprintln!("       verify-gui <scenario.yaml> --print");
             return ExitCode::from(2);
         }
@@ -96,16 +97,17 @@ fn run(opts: &Opts) -> Result<bool, String> {
         return Ok(true);
     }
 
-    // Front the app first so its window counts as on-screen (uiauto skips one behind a Space).
-    if let Some(app) = &opts.app {
-        activate(app)?;
-    }
+    let bundle = opts
+        .app
+        .as_ref()
+        .ok_or("need --app <bundle.app> to know which build to launch and shoot")?;
 
-    let window = match (&opts.winid, opts.pid) {
-        (Some(id), _) => Window { id: id.clone(), x: 0.0, y: 0.0, w: 0.0, h: 0.0 },
-        (None, Some(pid)) => resolve_window(pid, &opts.uiauto)?,
-        (None, None) => return Err("need one of --pid or --winid to know which window to shoot".into()),
-    };
+    // The store is made first and handed to the launch, which owns both from here: the app is up
+    // for exactly as long as this binding lives, and the store goes down with it.
+    let store = scratch::store(&scenario.id)
+        .map_err(|e| format!("could not create a throwaway store: {e}"))?;
+    let mut gui = launch::launch(bundle, store)?;
+    let window = gui.window(&opts.uiauto)?;
 
     let evidence = opts
         .evidence
@@ -222,9 +224,9 @@ fn default_evidence_dir(id: &str) -> PathBuf {
 /// Parsed command line.
 struct Opts {
     scenario: PathBuf,
-    pid: Option<i64>,
-    winid: Option<String>,
-    app: Option<String>,
+    /// The `.app` bundle to launch. Optional here and required in [`run`], since `--print` reads a
+    /// road back without anything running.
+    app: Option<PathBuf>,
     evidence: Option<PathBuf>,
     uiauto: PathBuf,
     ocr: PathBuf,
@@ -236,8 +238,6 @@ struct Opts {
 impl Opts {
     fn parse(args: impl Iterator<Item = String>) -> Result<Opts, String> {
         let mut scenario = None;
-        let mut pid = None;
-        let mut winid = None;
         let mut app = None;
         let mut evidence = None;
         let mut uiauto = None;
@@ -251,12 +251,7 @@ impl Opts {
                 "--json" => json = true,
                 "--step" => step = true,
                 "--print" => print = true,
-                "--pid" => {
-                    let v = it.next().ok_or("--pid needs a number")?;
-                    pid = Some(v.parse::<i64>().map_err(|_| format!("--pid `{v}` is not a number"))?);
-                }
-                "--winid" => winid = Some(it.next().ok_or("--winid needs an id")?),
-                "--app" => app = Some(it.next().ok_or("--app needs a name")?),
+                "--app" => app = Some(PathBuf::from(it.next().ok_or("--app needs a bundle path")?)),
                 "--evidence" => evidence = Some(PathBuf::from(it.next().ok_or("--evidence needs a path")?)),
                 "--uiauto" => uiauto = Some(PathBuf::from(it.next().ok_or("--uiauto needs a path")?)),
                 "--ocr" => ocr = Some(PathBuf::from(it.next().ok_or("--ocr needs a path")?)),
@@ -270,8 +265,6 @@ impl Opts {
         }
         Ok(Opts {
             scenario: scenario.ok_or("no scenario file given")?,
-            pid,
-            winid,
             app,
             evidence,
             uiauto: uiauto.unwrap_or_else(default_uiauto),

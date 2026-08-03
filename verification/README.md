@@ -128,9 +128,33 @@ whose roads it carries).
 `verify-gui` walks a scenario's `steps_gui` road as a **screen checklist**, and only a scenario
 that has one — it refuses the rest by name instead of shooting a road written for the binary. It
 bakes in no command line and no pixel: each step becomes a plain-language instruction of what to do
-or confirm on screen, the running GUI's window is located through `app/scripts/uiauto/uiauto.swift`, and every
+or confirm on screen, the window of the app it launched is located through
+`app/scripts/uiauto/uiauto.swift`, and every
 step is captured with `screencapture -l <winid>` into an evidence directory (plus a
 `manifest.json` pairing each instruction, verdict and shot).
+
+**The run owns the app it shoots.** It launches the `.app` bundle named by `--app`, with
+`AMENBO_HOME` pointed at a throwaway store of its own, holds the pid that launch answered with, and
+takes both down when it ends. Two things follow, and both are the point of doing it this way.
+Nothing separates a shipped build started for a run from the same shipped build the user keeps
+open — one executable name, one bundle, no badge on screen, and nothing stopping both from running
+at once — so a run that went looking for a process could shoot either, and the evidence it filed
+would read the same. And a screen road creates projects, tasks and bindings, none of which belong
+in the store the operator actually works in; a store the run makes and drops leaves nothing for
+anyone to remember to tidy.
+
+The executable inside the bundle is started directly rather than the bundle being `open`ed, since
+the environment is what carries the store and `open` hands the launch to launchd with an
+environment of its own. `AMENBO_HOME` is the product's own override, so the build under test is not
+a different build for having been asked. The store follows this workspace's throwaway rules — one
+parent under the temp tree, a name that does not lean on the pid, a sweep of what is over a day old
+on the way in — and the app is started from a directory of its own, since a child inherits the
+harness's, and the harness is run from this repository.
+
+An app launched that way opens on an empty store, which is where a screen road stands today: what a
+road needs standing before its first step is not declared anywhere yet, so the roads that assume a
+world — a registered catalog, an installed plugin, a folder card waiting to be linked — are the ones
+that still have to be prepared by hand.
 
 An assert is judged from its shot with macOS's own **Vision** OCR (`gui/ocr.swift`):
 the harness derives the text the step expects on screen — for a `listed` assert, the bound task's
@@ -158,29 +182,31 @@ cargo run -p amenbo-scenario --bin emit -- scenarios/delegate-to-ai.yaml
 
 ```sh
 cd verification
-ID=2147   # the task whose own dev GUI you built and opened
-# front the dev GUI, resolve its window via uiauto (by pid), and shoot one shot per step:
+ID=2147   # the task whose own dev GUI you built
+# launch that bundle against a throwaway store, resolve its window via uiauto, and shoot one shot
+# per step:
 cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/delegate-to-ai.yaml \
-  --app "amenbo (dev $ID)" --pid "$(devtool devgui pid "$ID")"
+  --app "/Applications/amenbo (dev $ID).app"
 ```
 
-`--pid` comes from `devtool devgui pid` and not from `pgrep`: devtool matches on the bundle a
-process was executed out of, which names one instance exactly — a dev build's own executable name
-(`amenbo-app-dev`, `amenbo-app-dev-<id>`, against prod's `amenbo-app`) reaches the right app too,
-but a pid is what uiauto takes (`devtool/README.md`). Inside a task worktree the id can be dropped entirely:
-with no argument the command answers for the dev GUI that checkout launches.
+`--app` is the bundle itself, not a name: what is verified before a release is the `.app` the
+installer put in place, and what is verified while a change is being written is the dev bundle that
+task's own build produced. The executable inside is asked of the bundle (`CFBundleExecutable`) rather
+than assumed, since a dev build carries a name of its own (`amenbo-app-dev-<id>`, against prod's
+`amenbo-app`).
 
-A screen line sometimes needs a world the app cannot be talked into from its own interface. The
-browsing view is one: `plugin-from-a-catalog.yaml` reads the badge on a row a **registered** catalog
-served, and no such catalog exists to register. `devtool fixtures gui` stands one and registers it in the
-store the app opens (`devtool/README.md`), and `--app` points that at the build under test — the
-overrides it uses are the product's own, so the build is not a different one for having been asked.
+A screen line sometimes needs a world the app cannot be talked into from its own interface — the
+browsing view reads the badge on a row a **registered** catalog served, and a plugin's row is only
+there once one is installed. On a store the run makes fresh, none of that is standing, and putting
+it there is the seeding step this harness does not have yet.
 
 uiauto is the input primitive, called here, never moved: `window <pid>` yields the id
 `screencapture -l` needs and the window bounds (in the manifest) that put a shot in the frame the
 screen stands in, and its `find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the
-action steps the checklist names. Bring the app to the front first (`--app`, or by hand) — uiauto skips
-a window behind another Space. `--winid <id>` shoots a window directly, skipping uiauto; `--evidence <dir>`
+action steps the checklist names. The run fronts the app it launched by pid while it waits for the
+window, since uiauto skips a window behind another Space; an app that never draws one inside a
+minute is reported as that, and an app that exits on the way up is reported the moment it does.
+`--evidence <dir>`
 chooses where the shots and manifest land (default: a fresh dir under the temp tree); `--ocr
 <path>` overrides `ocr.swift`. Exit is 0 when every OCR-judged assert passed and every step was
 captured, non-zero on a failed assert or a load/capture/OCR failure — a `Review` step is closed by
@@ -201,7 +227,8 @@ instead.
 The screen road is written in YAML, but the sentences it turns into are written in Rust, so what a
 step will actually say to an operator cannot be read off the file it was written in. `--print`
 answers that: it renders the road and prints the instructions, one to a line, and stops there — no
-window is looked for, nothing is shot, no OCR runs, and no GUI has to be built and fronted first.
+app is launched, nothing is shot, no OCR runs, and no GUI has to be built first (`--app` is not
+even asked for).
 The lines are the very text a run hands the operator, not a second rendering that could drift from
 it, and a road carrying an op the harness has not mapped fails here exactly as it would mid-run.
 A scenario with no `steps_gui` is refused by name, the same as it is for a real run.
@@ -254,7 +281,7 @@ through a pipe:
 cd verification
 mkfifo /tmp/go
 cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml \
-  --app "amenbo (dev $ID)" --pid "$(devtool devgui pid "$ID")" --step --json < /tmp/go &
+  --app "/Applications/amenbo (dev $ID).app" --step --json < /tmp/go &
 exec 3>/tmp/go   # hold the writing side open — otherwise the first echo closes it, which is the end
                  # of input, and the run stops rather than carrying on to the next step
 # … drive the screen to the next step (uiauto), then release the next shot:

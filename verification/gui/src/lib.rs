@@ -2,9 +2,10 @@
 //!
 //! The same scenario the CLI driver black-box-drives, this harness reads as a **screen
 //! checklist**. It bakes in no command line and no pixel: each step becomes a plain-language
-//! instruction of what to do or confirm on screen, the running GUI's window is located through
-//! `app/scripts/uiauto/uiauto.swift`, and every step is captured with `screencapture -l <winid>`
-//! into an evidence directory.
+//! instruction of what to do or confirm on screen, and every step is captured with
+//! `screencapture -l <winid>` into an evidence directory. The app under test is started by the
+//! harness itself, against a throwaway store ([`launch`], [`scratch`]), and its window is located
+//! through `app/scripts/uiauto/uiauto.swift` by the pid that launch answered with.
 //!
 //! An assert step is judged from that shot with macOS's own **Vision** OCR (`ocr.swift`): the
 //! harness derives the text the step expects on screen and reads the shot back, passing when that
@@ -28,6 +29,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use amenbo_scenario::{Args, Domain, Driver, Scenario, Step};
+
+/// Starting the app under test and holding it — the pid every shot is aimed at comes from here.
+pub mod launch;
+/// The throwaway store that app is launched against.
+pub mod scratch;
 
 // ---------------------------------------------------------------------------
 // Locating and fronting the app (the side effects: swift / osascript)
@@ -82,22 +88,6 @@ fn parse_window(line: &str) -> Result<Window, String> {
         w: num(f[3], "width")?,
         h: num(f[4], "height")?,
     })
-}
-
-/// Bring the named app to the front, so its window counts as on-screen before a shot is taken
-/// (uiauto's `window` skips a window behind another Space). A no-op the caller may skip when the
-/// operator has already fronted the app.
-pub fn activate(app: &str) -> Result<(), String> {
-    let status = Command::new("osascript")
-        .arg("-e")
-        .arg(format!("tell application \"{app}\" to activate"))
-        .status()
-        .map_err(|e| format!("could not run osascript to activate `{app}`: {e}"))?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("osascript could not activate `{app}`"))
-    }
 }
 
 /// The dashes Unicode files under letters. A long vowel mark is what Vision most often returns for an

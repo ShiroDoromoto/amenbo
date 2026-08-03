@@ -5,14 +5,14 @@
 // shown. What belongs here is the other half: the wording, the look, and which stages this surface is
 // currently in.
 //
-// **Nothing is declared yet, and that is a working state.** Both tables below are empty, so nothing is
-// ever asked for and nothing is ever drawn; the first nudge is a line in core's table and a line in each
-// of these. It is also why this file carries no dictionary key: the wording arrives with the nudge.
+// **Adding a nudge is a line in core's table and a line in each of the two below.** Neither table
+// carries wording of its own — a nudge's view holds that, along with the dictionary keys it needs.
 //
 // It takes its turn behind the other two questions rather than beside them — see `AppShell` for the
 // order and why it is spelled out there.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { fetchPendingNudges, markNudgePut } from "../core/mutations";
+import { AutostartNudge, autostartOfferable } from "./AutostartNudge";
 
 /**
  * How a nudge looks and reads on this surface. `onClose` takes it off the screen — a nudge is put once
@@ -22,14 +22,18 @@ import { fetchPendingNudges, markNudgePut } from "../core/mutations";
 export type NudgeView = (props: { onClose: () => void }) => ReactNode;
 
 /** The nudges this build knows how to put, keyed by the id core declares them under. */
-export const NUDGE_VIEWS: Record<string, NudgeView> = {};
+export const NUDGE_VIEWS: Record<string, NudgeView> = {
+  autostart: ({ onClose }) => <AutostartNudge onClose={onClose} />,
+};
 
 /**
  * The stages this surface can answer for, keyed by the name a nudge declares — each says whether we are
- * in it now ("the setting this is about is still unanswered"). A stage with no entry here is never
- * reported open, so a nudge behind it stays unput rather than going out unjudged.
+ * in it now ("this build has the setting to offer, and it is not already on"). A stage with no entry
+ * here is never reported open, so a nudge behind it stays unput rather than going out unjudged.
  */
-export const NUDGE_STAGES: Record<string, () => Promise<boolean>> = {};
+export const NUDGE_STAGES: Record<string, () => Promise<boolean>> = {
+  autostart_offerable: autostartOfferable,
+};
 
 /**
  * How long after an evaluation a focus return earns the next one. The trigger is startup and then focus

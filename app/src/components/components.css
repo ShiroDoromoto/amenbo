@@ -728,6 +728,20 @@ button.feed__target:hover { color: var(--c-accent); }
 .hookconsent__action:disabled { opacity: 0.5; cursor: default; }
 .hookconsent__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-3); }
 
+/* ---------- a usage nudge (NudgeHost and the views it puts) ---------- */
+/* An offer, not a gate: the same modal shape as the consent question, one size down, and its decline is
+   the plain button rather than a muted one — nothing here is being asked permission for. */
+.nudge__overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: var(--s-5); }
+.nudge__modal { width: min(460px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
+.nudge__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-3); }
+.nudge__why { margin-bottom: var(--s-4); }
+.nudge__error { color: var(--c-danger); font-size: var(--fs-xs); margin-bottom: var(--s-3); }
+.nudge__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.nudge__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); color: var(--c-text); cursor: pointer; }
+.nudge__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
+.nudge__action:disabled { opacity: 0.5; cursor: default; }
+.nudge__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-3); }
+
 /* ---------- the classification management panel (DimensionManager) ---------- */
 .dimmgr { width: min(560px, 100%); max-height: 82vh; display: flex; flex-direction: column; gap: var(--s-4); }
 .dimmgr__head { display: flex; align-items: center; justify-content: space-between; }

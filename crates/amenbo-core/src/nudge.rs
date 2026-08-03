@@ -19,8 +19,9 @@
 //! that has its metrics counted. Someone who has answered every nudge counts nothing at all, however
 //! often the caller asks.
 //!
-//! **Nothing is declared yet, and that is a working state.** [`NUDGES`] is empty, so [`pending`] hands
-//! back nothing and no metric is ever counted; the first nudge is a line added to it.
+//! **A store nobody has used much is a store with nothing due.** Every declaration in [`NUDGES`] stands
+//! behind thresholds, so a fresh install is asked nothing at all — what it takes to reach one is coming
+//! back.
 //!
 //! **What is counted stays here.** The numbers are read to answer one question on this machine and are
 //! never written anywhere else, never sent, and never synced (`AMB-D-542`).
@@ -132,10 +133,27 @@ pub struct Threshold {
 
 /// **The declaration table.** Every nudge amenbo can put, and the whole of what decides it — adding one
 /// is adding a line here, and nothing else.
-///
-/// Empty, and a shipping build with it empty is a working build: [`pending`] hands back nothing and
-/// nothing is ever counted (`AMB-D-542`).
-pub const NUDGES: &[Nudge] = &[];
+pub const NUDGES: &[Nudge] = &[Nudge {
+    // Start at login, offered once the use is there to justify it (`AMB-D-545`). Asked at the first
+    // launch it would be premature: someone who has not decided to keep amenbo yet is being asked to
+    // let it into their login, and the no that lands then is kept forever.
+    id: "autostart",
+    // What "used it a while" is worth saying in numbers, and both of these can only be reached by
+    // coming back: five launches of the app, across at least three separate days something was written
+    // on. Launches alone would count a single afternoon of restarts; days written on alone would count
+    // someone driving the CLI who has barely opened the window this is about.
+    when: &[
+        Threshold { metric: Metric::LaunchCount, at_least: 5 },
+        Threshold { metric: Metric::ActiveDays, at_least: 3 },
+    ],
+    // Answered by the surface, because both halves of it are the surface's: whether this build has a
+    // login registration to offer at all (a development one has none, `AMB-D-547`), and whether the
+    // setting is already on.
+    stage: Some("autostart_offerable"),
+    // Once ever. The answer is kept in the setting, which stays reachable in Settings › Startup, so
+    // there is nothing a second asking could add (`AMB-D-545`).
+    once: true,
+}];
 
 /// The nudges to put now: those the caller's stage admits, whose thresholds are met, and which the log
 /// does not already close. `stage_open` answers a nudge's [`Nudge::stage`] — the caller holds the
@@ -294,11 +312,64 @@ mod tests {
         );
     }
 
-    /// The empty table is a working state: nothing is due, and nothing is counted to find that out.
+    /// A fresh store is under every declared threshold, so an install nobody has used yet is asked
+    /// nothing — however open the caller says its stages are.
     #[test]
-    fn a_store_with_no_nudge_declared_has_none_to_put() {
+    fn a_store_nobody_has_used_has_no_nudge_to_put() {
         let engine = StoreEngine::open_in_memory().unwrap();
         assert!(pending(&engine, |_| true).unwrap().is_empty());
+    }
+
+    /// The declared table, against the two things the machinery needs of it: an id is the key of the
+    /// log row that records the nudge as put, so no two may share one, and a nudge held by a stage is
+    /// held by a name some surface actually answers — a stage nobody knows is a nudge nobody sees.
+    #[test]
+    fn every_declared_nudge_has_an_id_of_its_own_and_a_stage_a_surface_answers() {
+        let ids: BTreeSet<&str> = NUDGES.iter().map(|n| n.id).collect();
+        assert_eq!(ids.len(), NUDGES.len(), "two nudges are declared under the same id");
+        // The names the GUI answers (`app/src/screens/NudgeHost.tsx`). It is a seam across two
+        // languages, so what holds it is this list and the comment on each side.
+        let answered = ["autostart_offerable"];
+        for nudge in NUDGES {
+            if let Some(stage) = nudge.stage {
+                assert!(answered.contains(&stage), "no surface answers the stage {stage:?}");
+            }
+        }
+    }
+
+    /// The declared autostart nudge, at the boundary it was declared with: five launches, across three
+    /// days written on. A fourth launch on two days is somebody trying it out; this is somebody who
+    /// keeps coming back, which is the whole of what `AMB-D-545` waits for.
+    #[test]
+    fn the_autostart_nudge_comes_due_once_the_use_is_regular() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let day = NaiveDate::from_ymd_opt(2026, 8, 4).unwrap();
+        let due = |engine: &StoreEngine| !pending_from(NUDGES, engine, day, |_| true).unwrap().is_empty();
+
+        // Written on two days, launched five times: opened often, over too little of the calendar.
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO task (id, updated_at) VALUES (1, '2026-08-03T01:00:00Z');
+                 INSERT INTO task (id, updated_at) VALUES (2, '2026-08-04T01:00:00Z');",
+            )
+            .unwrap();
+        for _ in 0..5 {
+            crate::overview::record_launch(&engine, "2026-08-04").unwrap();
+        }
+        assert!(!due(&engine), "two days of writing is not yet a habit");
+
+        // A third day carries it over.
+        engine
+            .conn()
+            .execute_batch("INSERT INTO task (id, updated_at) VALUES (3, '2026-08-02T01:00:00Z');")
+            .unwrap();
+        let now_due = pending_from(NUDGES, &engine, day, |_| true).unwrap();
+        assert_eq!(now_due.iter().map(|n| n.id).collect::<Vec<_>>(), ["autostart"]);
+
+        // And the stage still holds it back on its own — a build with no login to register, or a
+        // setting already on, says so by answering no.
+        assert!(pending_from(NUDGES, &engine, day, |_| false).unwrap().is_empty());
     }
 
     const STAGED: &[Nudge] = &[Nudge {

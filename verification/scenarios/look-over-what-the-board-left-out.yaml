@@ -1,0 +1,65 @@
+# A board carries one standing notice and no more, and which one it is follows from what is missing:
+# the notice whose premise is not met stands ahead of the rest. That is what keeps a screen from
+# putting two jobs up without saying which to do first — and it is bought by leaving the others off.
+#
+# The bill comes due here. Folders that still start their AI without amenbo go on waiting whether or
+# not the report about them is the notice that won, so a reader who took the board at its word would
+# be reading a list quietly cut short. What makes the single notice a choice of where to act, rather
+# than work disappearing, is the project's own settings holding the whole inventory.
+#
+# The road stands the board on the case that hides it: a project with its folder linked and nothing on
+# its board yet is drawing the first loop, which sits ahead of the wiring report. So the report is not
+# up, the folder under it is waiting all the same, and the settings screen is where that is visible.
+#
+# The last step is an eye's and not a reading. The same folder is listed twice on that screen — once
+# among the ones bound to the project, once among the ones still waiting — and a reading answers which
+# words are on a shot, never which part of it they came from. A build that dropped the inventory and
+# kept the binding would read green, which is exactly the build this road is written for, so the shot
+# is what closes it.
+#
+# The screen is the only witness for the same reason the rest of this family has none: a terminal is
+# asked in one folder and answers about that one, and there is no board there for a notice to lose a
+# place on.
+#
+# What this wants standing before the run: one project on this device bound to the folder named below,
+# that folder carrying the tool's own directory with nothing about amenbo in it, the project's answer a
+# yes rather than a refusal, and its board open with no task on it (`devtool devgui cli`). The screen
+# moves once, so drive it stepped (`--step`) and open the settings at the hand-back before that step.
+id: look-over-what-the-board-left-out
+title: The folders still starting their AI without amenbo are listed in the project's own settings, including when the board is carrying another notice entirely
+description: >
+  Stand on a board that is drawing the first loop, which the wiring report waits behind, and read that
+  the report is not up. Then open the project's own settings and find the folder still waiting there.
+  What is under test is the inventory: one notice on the board is a decision about where the reader
+  acts, and it holds only while everything left off the board is still counted somewhere.
+steps_gui:
+  # The notice that won, read on the words its request carries — the command it sends the reader's AI to
+  # run, which is the same in whatever language the app is in.
+  - type: assert
+    domain: folder
+    op: first-loop
+    with:
+      hands_over: agent --json
+
+  # And the one that did not. The file the report names is the one word on this board only the report
+  # puts there, so the board without it is the board the report lost its place on.
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with:
+      tool: claude-code
+      paste_into: .claude/settings.json
+      present: false
+
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  # Still counted, on the screen that counts everything. This is the step the road exists for.
+  - type: assert
+    domain: repo
+    op: ai-launch-waiting
+    with:
+      dir: frontend

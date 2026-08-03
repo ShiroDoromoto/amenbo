@@ -287,7 +287,6 @@ pub fn run() {
       commands::plugin_updates,
       commands::plugin_update_apply,
       commands::plugin_update_apply_all,
-      commands::plugin_rollback,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

@@ -401,9 +401,6 @@ export const ja: Translation = {
     "plugins.updates.catalog.offline": "カタログ: 接続できず、保存済みの控えが答えました（{ago}）",
     "plugins.updates.catalog.unavailable": "カタログ: どれも答えませんでした — 取得も控えもないので、ここに出ているものは判定ではありません",
     "plugins.updates.waiting": "新しいバージョンがあります",
-    "plugins.updates.rollback": "前のバージョンに戻す",
-    "plugins.updates.rollbackConfirm": "「{name}」を更新前のバージョンに戻しますか？ 戻せるのは直前の1つだけで、戻すとその控えは無くなります（有効/無効・設定・秘密はそのままです）。",
-    "plugins.updates.rolledBack": "前のバージョンに戻しました（{desc}）",
     // uninstall (what goes with it is the part worth saying out loud)
     "plugins.remove": "削除", "plugins.removing": "削除中…",
     "plugins.removeConfirm": "「{name}」を削除しますか？ 本体だけでなく、全プロジェクトの設定・秘密・許可の記録も削除されます。入れ直しても戻りません。",

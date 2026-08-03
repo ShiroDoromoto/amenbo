@@ -202,7 +202,6 @@ function install(
       ...filledIn.map((project) => ({ project, enabled: false, hasValue: true, requiredUnset: false })),
     ],
     config: [],
-    rollback: false,
     ...over,
   };
 }

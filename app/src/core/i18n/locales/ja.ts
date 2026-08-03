@@ -562,6 +562,7 @@ export const ja: Translation = {
     not_ready_premise_unsettled: "{ref} が未確定です。裁定を待つか link を外してください",
     not_ready_not_started: "着手日 {start} より前です。日付が違うなら着手日を変えてください",
     store_busy: "ストアの復元／更新の最中です。少し待ってからやり直してください。",
+    storage_error: "ストアの読み書きに失敗しました。変更は保存されていません。amenbo を再起動してやり直してください。それでも起きるときは、設定 > ログ の中身を送ってください。",
     not_found_task: "タスク {ref} が見つかりません。",
     not_found_decision: "決定 {ref} が見つかりません。",
     not_found_project: "プロジェクト {ref} が見つかりません。",

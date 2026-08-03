@@ -11,9 +11,12 @@
 // The generic fallback `"error"` — an ad-hoc error with no stable code — is not part of the contract and is excluded.
 
 /** The family codes — one per `amenbo_core::Error` variant, and what a failure carries when it says
- * nothing finer about itself. They cover dozens of different sentences apiece, which is why they hold
- * no template: nothing could be written that would be true of all of them. A reader gets the English
- * sentence the command returned, which is the settled answer for a surface no one is translating. */
+ * nothing finer about itself. Most cover dozens of different sentences apiece and so hold no template:
+ * nothing could be written that would be true of all of them, and the reader gets the English sentence
+ * the command returned. A few hold one anyway, and the test of which is whether every sentence under the
+ * family says the same thing to a reader — the store is busy, or the store itself gave way. There the
+ * template is what says it in their language, and the prose underneath is a detail for the log rather
+ * than for the screen. */
 export const CORE_FAMILY_ERROR_CODES = [
   "not_found",
   "ambiguous_id",

@@ -537,6 +537,7 @@ export const ko: Translation = {
     not_ready_premise_unsettled: "{ref}이(가) 아직 정해지지 않았습니다 — 판단을 기다리거나 연결을 푸세요",
     not_ready_not_started: "{start}부터 시작합니다 — 날짜가 잘못되었다면 시작일을 바꾸세요",
     store_busy: "저장소를 복원하거나 갱신하는 중입니다. 잠시 후 다시 시도하세요.",
+    storage_error: "저장소를 읽거나 쓰지 못했고, 바뀐 것은 없습니다. amenbo를 다시 시작한 뒤 다시 시도하세요. 계속 일어나면 설정 > 로그에 있는 것을 보내 주세요.",
     not_found_task: "작업 {ref}을(를) 찾을 수 없습니다.",
     not_found_decision: "결정 {ref}을(를) 찾을 수 없습니다.",
     not_found_project: "프로젝트 {ref}을(를) 찾을 수 없습니다.",

@@ -89,9 +89,13 @@ fn find_in_store<T>(
 /// is always human. Call it **after** the mutation wrapper has committed. Activity is not a system
 /// of record, so a failed row write must not fail the operation — warn, carry on, and err on the
 /// side of a missing line.
+///
+/// The warning goes to the diagnostic log (`AMB-D-382`), which is the one a person can be asked for.
+/// `tracing` is the perf subscriber's, and it takes `target="perf"` only and is off by default — a
+/// missing line reported there is a missing line reported nowhere.
 fn emit(store: &mut Store, target_id: i64, event: serde_json::Value) {
     if let Err(e) = store.add_system_event(ActorKind::Human, target_id, event) {
-        tracing::warn!("could not record the activity event: {e}");
+        log::warn!("could not record the activity event: {e}");
     }
 }
 

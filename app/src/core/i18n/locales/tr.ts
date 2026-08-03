@@ -539,6 +539,7 @@ export const tr: Translation = {
     not_ready_premise_unsettled: "{ref} karara bağlanmadı — kararı bekleyin ya da bağı kaldırın",
     not_ready_not_started: "{start} tarihinden önce başlamıyor — tarih yanlışsa başlangıç gününü değiştirin",
     store_busy: "Depo geri yükleniyor ya da güncelleniyor. Birazdan yeniden deneyin.",
+    storage_error: "Depo okunamadı ya da yazılamadı ve hiçbir şey değişmedi. amenbo'yu yeniden başlatıp tekrar deneyin — olmaya devam ederse Ayarlar > Günlükler içindekileri gönderin.",
     not_found_task: "{ref} işi bulunamadı.",
     not_found_decision: "{ref} kararı bulunamadı.",
     not_found_project: "{ref} projesi bulunamadı.",

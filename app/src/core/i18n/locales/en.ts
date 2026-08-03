@@ -587,6 +587,11 @@ const err: Partial<Record<ErrorCode, string>> = {
   // Core's English names the command that moves the day; a reader in the window has the field instead.
   not_ready_not_started: "it does not start until {start} — change the start date if that is wrong",
   store_busy: "The store is being restored or updated. Try again in a moment.",
+  // The store itself giving way — a disk that would not answer, a database that could not be read.
+  // What the engine said is a line in the diagnostic log, not a sentence for a reader: it names none
+  // of what they were doing and nothing they could act on. This says the two things they can act on.
+  storage_error:
+    "The store could not be read or written, and nothing was changed. Restart amenbo and try again — if it keeps happening, send what Settings > Logs holds.",
   not_found_task: "Task {ref} was not found.",
   not_found_decision: "Decision {ref} was not found.",
   not_found_project: "Project {ref} was not found.",

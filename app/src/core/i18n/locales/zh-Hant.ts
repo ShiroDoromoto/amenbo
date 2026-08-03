@@ -538,6 +538,7 @@ export const zhHant: Translation = {
     not_ready_premise_unsettled: "{ref} 尚未定案——等待裁定或解除連結",
     not_ready_not_started: "它要到 {start} 才開始——日期不對就改開始日",
     store_busy: "正在還原或更新儲存，請稍後再試。",
+    storage_error: "無法讀取或寫入儲存，沒有任何變更。請重新啟動 amenbo 後再試一次；如果仍然發生，請把 設定 > 記錄檔 裡的內容寄來。",
     not_found_task: "找不到任務 {ref}。",
     not_found_decision: "找不到決策 {ref}。",
     not_found_project: "找不到專案 {ref}。",

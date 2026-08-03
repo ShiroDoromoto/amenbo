@@ -539,6 +539,7 @@ export const nl: Translation = {
     not_ready_premise_unsettled: "{ref} is nog niet beslecht — wacht de uitspraak af of ontkoppel hem",
     not_ready_not_started: "hij begint pas op {start} — pas de startdatum aan als die niet klopt",
     store_busy: "De opslag wordt hersteld of bijgewerkt. Probeer het zo meteen opnieuw.",
+    storage_error: "De opslag kon niet worden gelezen of geschreven, en er is niets gewijzigd. Start amenbo opnieuw en probeer het nog eens — als het blijft gebeuren, stuur dan wat er onder Instellingen > Logboeken staat.",
     not_found_task: "Taak {ref} is niet gevonden.",
     not_found_decision: "Besluit {ref} is niet gevonden.",
     not_found_project: "Project {ref} is niet gevonden.",

@@ -119,84 +119,10 @@ jobs:
         id: filter
         if: ${{ !inputs.full }}
         with:
-          filters: |
-            rust:
-              - 'crates/**'
-              - 'Cargo.toml'
-              - 'Cargo.lock'
-              - 'rust-toolchain.toml'
-              - 'clippy.toml'
-              - '.config/nextest.toml'
-              - '.cargo/**'
-              - 'app/src-tauri/**'
-              - '.github/workflows/ci.yml'
-              # The harness the app-rust job's network-FS step runs (it stands up the real NFS/SMB/9P
-              # mounts): change it and nothing else, and the step that uses it would not re-run.
-              - 'scripts/verify-network-watch.sh'
-              # The README demo's script and the transcript it is held to (crates/amenbo-cli's
-              # demo_tape suite reads both). CLI drift already opens this gate through crates/**;
-              # these entries cover the other direction — a tape edited on its own.
-              - 'assets/cli-demo.tape'
-              - 'assets/cli-demo.transcript.txt'
-            # The pre-distribution verification harness is a third out-of-workspace cargo workspace,
-            # so the `rust` job (default manifest = main workspace) never builds or tests it. This
-            # gates its own clippy+test job below — the ONLY thing that compiles core/cli/gui in CI.
-            verification:
-              - 'verification/**'
-              - '.github/workflows/ci.yml'
-            gui:
-              - 'app/**'
-              - '.nvmrc'
-              - '.github/workflows/ci.yml'
-            # devtool is one self-contained Go module with no dependency on the rest of the tree,
-            # so nothing outside it can move its verdict — except the gate itself, which holds the
-            # three checks this job runs.
-            go:
-              - 'devtool/**'
-              - 'scripts/go-gate.sh'
-              - '.github/workflows/ci.yml'
-            shell:
-              - '**/*.sh'
-              - '.githooks/**'
-              - 'Makefile'
-              - '.github/workflows/**'
-            # The three below gate jobs whose steps live in rot-gates.yml, so that file is a build
-            # input for them just as this one is. (`shell` needs no such entry: its
-            # '.github/workflows/**' rule already covers every workflow, rot-gates.yml included.)
-            cargo_deps:
-              - 'Cargo.toml'
-              - 'Cargo.lock'
-              # The Tauri host crate is out of the workspace, with a lockfile of its own — and the
-              # audit job reads it too, so a bump there has to open this gate.
-              - 'app/src-tauri/Cargo.toml'
-              - 'app/src-tauri/Cargo.lock'
-              # The verification harness is a third out-of-workspace cargo workspace with its own
-              # lockfile; the cargo-license job reads it too, so a bump there has to open this gate.
-              - 'verification/Cargo.toml'
-              - 'verification/Cargo.lock'
-              - '.cargo/audit.toml'
-              # The license allow-list the cargo-license job below reads.
-              - 'deny.toml'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/rot-gates.yml'
-            # The key comparison is a function of the file the key is compiled into and the guard
-            # that reads it. The far side of the comparison lives in another repository, which no
-            # filter here can see — that half is what the weekly leg is for.
-            catalog_key:
-              - 'crates/amenbo-core/src/plugin_provenance.rs'
-              - 'guards/check-catalog-key.sh'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/rot-gates.yml'
-            npm_deps:
-              - 'app/package.json'
-              - 'app/package-lock.json'
-              # The license half of this gate: the allow-list it reads (shared with the Rust side),
-              # the gate itself, and the tests that hold its judgment down. All three decide the
-              # verdict — a test edited alone still has to re-open this.
-              - 'deny.toml'
-              - 'guards/*.mjs'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/rot-gates.yml'
+          # The layer definitions themselves live in .github/paths-filters.yml, because the
+          # local gate (`make gate`) reads the same file to pick the stages it runs. A layer
+          # declared in one place cannot drift from the other.
+          filters: .github/paths-filters.yml
 
   rust:
     name: cargo clippy + test

@@ -26,8 +26,9 @@ how to report a vulnerability privately.
 ## Building
 
 Build, test, and toolchain steps live in the [README](README.md) — see the
-**Toolchain** and **Build and run** sections. The one local gate that mirrors CI is
-`make test`; run it before proposing a change.
+**Toolchain** and **Build and run** sections. The local gate that mirrors CI is
+`make test`; run it before proposing a change. `make gate` is the same gate narrowed to
+the layers your change touched, from the declaration CI reads.
 
 Comments are audited too, against the rules declared in `esorp.yaml`: where a comment
 may sit, what shape it takes, and that it is written in English. Every comment in the

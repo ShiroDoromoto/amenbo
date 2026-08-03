@@ -18,8 +18,8 @@
 # drawing the first loop, which the report stands aside for, so a board with nothing on it is a board
 # with no report on it either. The answer is left where a fresh store leaves it, never given: a no is
 # what takes the report away, and a yes is not wiring. What is left to the operator is to open that
-# project — the report is drawn on arrival — and to drive the run stepped (`--step`), since the copy is
-# a move the shot follows.
+# project — the report is drawn on arrival. The copy is a move the shot follows, so make it when the
+# run hands that step over.
 id: start-this-folders-ai-on-amenbo
 title: A folder that does not start its AI on amenbo says so, hands over what wires it, and stops saying it once that lands
 description: >

@@ -25,8 +25,8 @@
 # tool's own directory with nothing about amenbo in it, and no task on its board — which is what puts
 # the first loop ahead of the report. The answer is left where a fresh store leaves it, never given,
 # since only a refusal would take the report out of the inventory as well. What is left to the operator
-# is to open that project's board. The screen moves once, so drive it stepped (`--step`) and open the
-# settings at the hand-back before that step.
+# is to open that project's board. The screen moves once: open the settings when the run hands that
+# step over.
 id: look-over-what-the-board-left-out
 title: The folders still starting their AI without amenbo are listed in the project's own settings, including when the board is carrying another notice entirely
 description: >

@@ -19,7 +19,7 @@
 # the loopback, serving two entries that both claim to be official, registered under a name a row can
 # be read back by. Two entries and not one because a badge is about telling shelves apart — a merge
 # that stopped folding takes this shelf's name off both rows, which is a screen anyone looking can
-# tell from one row being odd. Start the run on the market screen, and drive it stepped (`--step`) —
+# tell from one row being odd. Stand on the market screen when the run hands its first step over —
 # the panel opens between the two readings.
 id: plugin-from-a-catalog
 title: A plugin a registered catalog serves is badged with that catalog, and opens its detail from that catalog

@@ -375,6 +375,19 @@ pub struct Config {
     /// its result ([`crate::update_check`]). **A local setting; never synced.**
     #[serde(default = "default_true")]
     pub update_check: bool,
+    /// Whether the GUI is registered to start when the user logs in to the OS (`AMB-D-541`).
+    /// **Off by default**: a program that appears uninvited is one the user did not ask for, so the
+    /// switch is theirs to throw. On means the registration was written to the per-user place the OS
+    /// reads (a LaunchAgent plist, the `HKCU` Run key, a desktop entry); off means it was removed.
+    /// **A local setting; never synced** — it names an executable path on this machine.
+    ///
+    /// There is no `config set` key for it, and the reason is that this field alone is not the state:
+    /// the OS registration is. Only the GUI can write that (the registration goes through a Tauri
+    /// plugin), so a value set from the CLI would claim a registration nothing wrote. The one face
+    /// that moves it is the GUI's switch, which writes both halves — and a development build has
+    /// neither the switch nor a registration (`AMB-D-547`).
+    #[serde(default)]
+    pub autostart: bool,
     /// Logging level for the perf instrumentation (`off` / `budget-only` / `verbose`). **Defaults to
     /// `None` (unset)**, deferring to the channel/build default: on (`budget-only`) for
     /// amenbo-dev/debug, off for amenbo/release. The `AMENBO_PERF` env var overrides everything.
@@ -464,6 +477,7 @@ impl Default for Config {
             onboarded: false,
             startup_integrity_check: true,
             update_check: true,
+            autostart: false,
             perf_log: None,
             attachment_limits: crate::blob::CapacityPolicy::default(),
             human_name: None,

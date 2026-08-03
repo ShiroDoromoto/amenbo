@@ -22,7 +22,7 @@
 # one is drawing the first loop, which the report stands aside for. The answer is left where a fresh
 # store leaves it, never given, which is the state the report is drawn from. What is left to the
 # operator is to open that project and read the report standing on its board. The screen moves at every
-# press, so drive it stepped (`--step`) and carry out each move at the hand-back before it.
+# press, so carry each move out when the run hands that step over.
 id: put-the-wiring-report-aside-for-now
 title: The report about a project's unwired folders can be put aside without answering, and is standing again the next time that project is opened
 description: >

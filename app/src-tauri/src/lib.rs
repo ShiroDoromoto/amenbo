@@ -3,6 +3,9 @@
 // correct here; only a broken link should warn.
 #![allow(rustdoc::private_intra_doc_links)]
 
+/// Start at login: the per-user registration each OS reads when the user signs in, and the one door
+/// that writes or removes it (`AMB-D-541`).
+mod autostart;
 mod blobproto;
 mod commands;
 mod diag;
@@ -137,6 +140,15 @@ pub fn run() {
       if !amenbo_core::config::Paths::is_dev_channel() {
         app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
       }
+      // Start at login (`AMB-D-541`). A development build does not get it either, and for a reason of
+      // its own: the executable it would register sits in a working tree that gets rebuilt and thrown
+      // away, so the registration outlives what it points at and tries to start a file that is gone
+      // (`AMB-D-547`). Not registering the plugin is again the half that fails closed — the settings
+      // screen withholds the switch, `autostart::set` refuses, and neither leans on the other.
+      #[cfg(desktop)]
+      if !amenbo_core::config::Paths::is_dev_channel() {
+        app.handle().plugin(autostart::init())?;
+      }
       #[cfg(target_os = "macos")]
       macos_notify::init(app.handle().clone());
       let handle = app.handle().clone();
@@ -226,6 +238,7 @@ pub fn run() {
       commands::config_set_language,
       commands::config_set_perf_log,
       commands::config_set_update_check,
+      commands::config_set_autostart,
       commands::set_facet_avatars,
       commands::set_facet_names,
       commands::agent_spec,

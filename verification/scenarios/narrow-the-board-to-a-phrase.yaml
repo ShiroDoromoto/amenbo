@@ -7,7 +7,7 @@
 # comment, which the board draws as a count and never as a body.
 #
 # What this wants in front of it is a project's own board, with the three cards the road makes and
-# nothing else standing on it. Drive it stepped (`--step`).
+# nothing else standing on it.
 id: narrow-the-board-to-a-phrase
 title: A phrase typed over the board leaves the cards it touches, and reaches them through a face no card shows
 description: >

@@ -1009,6 +1009,18 @@ export async function setUpdateCheck(enabled: boolean): Promise<void> {
   mockMutate((s) => ({ ...s, updateCheck: enabled }));
 }
 
+/**
+ * Turn "start when I log in" (`config.autostart`) on or off. Core writes the OS registration first and
+ * saves the setting only if that came back, so the `autostart` the ack's `loadSnapshot` re-reads is
+ * always the one the login actually does — a rejection leaves the switch where it was rather than
+ * moving it onto a registration that was never written. Outside Tauri (browser) there is no login to
+ * register with, so it just swaps the cached value.
+ */
+export async function setAutostart(enabled: boolean): Promise<void> {
+  if (inTauri()) return invokeAck("config_set_autostart", { enabled });
+  mockMutate((s) => ({ ...s, autostart: enabled }));
+}
+
 /** The timestamp in the default backup filename — colon-free, so it is legal in a filename. */
 function backupStamp(): string {
   return new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");

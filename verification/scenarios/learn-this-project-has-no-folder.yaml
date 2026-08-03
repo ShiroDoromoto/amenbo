@@ -20,8 +20,8 @@
 # do. There is no read to ask and no exit code to fail — the screen is the only witness.
 #
 # The project with no folder linked is declared below and stood up before the app is launched. What is
-# left to the operator is to stand on that project's own board, and to drive the run stepped
-# (`--step`): the card is made on the screen the warning is then read over.
+# left to the operator is to stand on that project's own board: the card is made on the screen the
+# warning is then read over.
 id: learn-this-project-has-no-folder
 title: A project with no folder linked says so on its own board, over the work it is already holding, and is the only notice standing there
 description: >

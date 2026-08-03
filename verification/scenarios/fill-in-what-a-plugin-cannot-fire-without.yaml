@@ -18,8 +18,8 @@
 # plugin that is really there.
 #
 # The screen road wants the project named below standing as well, since the crossing it is walked on is
-# that project's. The world is declared below; the moves on the row are the operator's, driven stepped
-# (`--step`).
+# that project's. The world is declared below; the moves on the row are the operator's, made as the run
+# hands each step over.
 id: fill-in-what-a-plugin-cannot-fire-without
 title: A plugin short of a setting its author calls required is refused rather than half-enabled, and the value goes in where the refusal was read
 description: >
@@ -118,7 +118,7 @@ steps_cli:
 # manifest declaring `base` as a setting the plugin cannot work without, nothing filled in for it, and its
 # gate shut everywhere. Stand that with `devtool devgui cli` and the same declaration the road above
 # makes. Where the run starts does not matter: the first step is the arrival. Every step after it moves
-# the screen, so drive it stepped (`--step`) and carry out each move at the hand-back before it.
+# the screen, so carry each move out when the run hands that step over.
 #
 # Every line is closed by an eye rather than by a reading. What the row says about its settings it says in
 # chips, and a chip is a word of the interface; the one reading that is not a chip turns on a picker being

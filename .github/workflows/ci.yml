@@ -208,9 +208,9 @@ jobs:
   # the main one, so the `rust` job above — which drives the default (main) manifest — never
   # compiles or tests it. Without this job its three crates (scenario schema + loader, the CLI
   # driver, the mac GUI harness) would ride into the tree clippy- and test-free. It is cheap: pure
-  # Rust on ubuntu, gated to changes under verification/. The mac-only run (Vision OCR +
-  # screencapture) is NOT gated here — that is the release-time real-artifact check, not a
-  # build-time gate.
+  # Rust on ubuntu, gated to changes under verification/. The mac-only run (the screen tool: its
+  # shots and its Vision readings) is NOT gated here — that is the release-time real-artifact
+  # check, not a build-time gate.
   verification:
     name: verification harness (clippy + test)
     runs-on: ubuntu-latest
@@ -229,10 +229,10 @@ jobs:
 
       # -D warnings holds the harness to the same bar as the rest of the tree, but
       # -A clippy::disallowed_methods is deliberate: this workspace black-box-drives the
-      # shipped/installed binary, so it reads process env raw (AMENBO_BIN, AMENBO_GUI_CAPTURE_BIN)
-      # — it is outside the facet env funnel amenbo_core::env enforces, and has no dep on it. The
-      # gui crate builds here too: its swift/screencapture/osascript calls are runtime shell-outs,
-      # so the code compiles and its unit tests (capture + OCR injected) pass with no macOS.
+      # shipped/installed binary, so it reads process env raw (AMENBO_BIN) — it is outside the
+      # facet env funnel amenbo_core::env enforces, and has no dep on it. The gui crate builds here
+      # too: its calls to the mac screen tool are runtime shell-outs, so the code compiles and its
+      # unit tests (shooting + reading injected) pass with no macOS.
       - name: Clippy (all targets)
         run: cargo clippy --manifest-path verification/Cargo.toml --all-targets -- -D warnings -A clippy::disallowed_methods
 

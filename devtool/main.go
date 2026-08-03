@@ -89,24 +89,24 @@ devgui cli   run an amenbo command against the store the task's own dev GUI
              that store with AMENBO_HOME, not a second CLI built for the task:
              what the app-data name fixes at build time is a directory, and
              that names the same one at run time. Arguments go after '--'.
-devgui pid   print the pid of a running dev GUI, for 'uiauto window <pid>' to
-             resolve its window from. The front window is whichever app is in
-             front, which is rarely the one being verified; devtool matches on
-             the bundle a process was executed out of, which names one instance
-             exactly (each dev build also carries its own executable name --
-             'amenbo-app-dev', 'amenbo-app-dev-<id>' -- against prod's
+devgui pid   print the pid of a running dev GUI, for the screen tool
+             ('scripts/screen.swift') to aim at. The front window is whichever
+             app is in front, which is rarely the one being verified; devtool
+             matches on the bundle a process was executed out of, which names one
+             instance exactly (each dev build also carries its own executable
+             name -- 'amenbo-app-dev', 'amenbo-app-dev-<id>' -- against prod's
              'amenbo-app').
              Without an <id> it answers for the dev GUI this checkout launches
              (a task worktree's own instance ahead of the shared app); --front
-             activates it first, since uiauto skips a window behind a Space.
-devgui shot  capture that instance's own window and print the png's path, with
-             the window's origin and size on the line after it. It names the
-             window to screencapture (-l, from 'uiauto window <pid>') instead of
-             shooting a display, so a window on a second monitor is not somebody
-             else's screen; and it drops the shadow (-o), so the png's top-left
-             is the window origin and a pixel read off the shot converts to a
-             click point. It fronts the instance first, since a window behind a
-             Space cannot be located at all; --no-front leaves the front alone.
+             brings it forward first, since a window behind a Space cannot be
+             found at all.
+devgui shot  capture that instance's own window and print the png's path. The
+             screen tool is handed the pid and hands back the file: which window
+             it shot, and the id it shot by, stay in there, so nothing here can
+             aim a click by a rectangle -- press what a thing is called
+             ('swift scripts/screen.swift click-named <pid> <name>') instead. It
+             fronts the instance first, since a window behind a Space cannot be
+             found at all; --no-front leaves the front alone.
 devgui rm    delete one task's instance — the installed bundle and its app-data
              both. They live outside the worktree, so removing the checkout
              leaves them behind; run this when the task is finished.

@@ -89,7 +89,10 @@ func shot(pid: Int, path: String) {
     let id = windowID(pid: pid)
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-    p.arguments = ["-x", "-l", String(id), path] // -x is silent, -l shoots one window, path last
+    // -x is silent, -l shoots the one window rather than a display (a window on a second monitor is
+    // otherwise somebody else's screen), -o leaves the shadow out — a shadow is asymmetric, so with
+    // it the png's pixels stop corresponding to screen points by any fixed offset.
+    p.arguments = ["-x", "-o", "-l", String(id), path]
     do {
         try p.run()
     } catch {

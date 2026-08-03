@@ -163,8 +163,8 @@ Prints on **stdout** the pid of a running dev GUI, so it can be handed straight
 to the tools that take one:
 
 ```sh
-# the dev GUI this checkout launches, fronted, and its window id for screencapture -l
-swift app/scripts/uiauto/uiauto.swift window "$(devtool devgui pid --front)"
+# every named element on the screen of the dev GUI this checkout launches, fronted
+swift scripts/screen.swift find "$(devtool devgui pid --front)"
 ```
 
 The bundle a process was executed out of is what the lookup matches, and only the
@@ -177,46 +177,36 @@ is in front, in practice the **production** one.
 - With no `<id>` it answers for the dev GUI **this checkout** launches — a task
   worktree's own instance ahead of the shared app, the same order a launch takes.
   An `<id>` names one instance directly, from anywhere.
-- `--front` activates it first. uiauto skips a window behind another Space, and
-  a shot of a window nobody fronted is a shot of whatever is over it.
+- `--front` brings it forward first. A window behind another Space cannot be
+  found at all, and a shot of a window nobody fronted is a shot of whatever is
+  over it.
 - Nothing running is a **non-zero exit** with the build command named, not an
   empty answer that reads as a pid of zero.
 
 ### `devtool devgui shot [<id>] [--no-front]`
 
-Captures the instance's **own window** and prints, on stdout, the png's path and
-the window's origin and size:
+Captures the instance's **own window** and prints its png's path on stdout:
 
 ```sh
 devtool devgui shot 696
 # /var/folders/…/amenbo-devgui-696-2751829313.png
-# 0 38 1512 944
 ```
 
-It is the three steps above, assembled: resolve the pid, ask
-`uiauto window <pid>` for the window id and bounds, and hand that id to
-`screencapture -l`. Each step has a way to go wrong that costs a shot to notice.
+It resolves the pid and hands it to the screen tool
+(`swift scripts/screen.swift shot <pid> <out.png>`), which finds the window and
+shoots it. Finding the instance is devtool's half; operating a screen is the
+tool's.
 
-- **It names the window, not a display.** `screencapture -x` takes the *main*
-  one, so a window on a second monitor comes back as somebody else's screen.
-- **It drops the shadow** (`-o`). The shadow is asymmetric, so with it there the
-  png's pixels stop corresponding to screen points by any fixed offset. Without
-  it the png's top-left **is** the window origin, and uiauto's arithmetic —
-  divide the pixel by the shot's scale, add the origin — lands on the thing you
-  clicked. Take that scale from the png's own width over the width printed here,
-  never from what the machine's main display happens to be: an external panel
-  shoots at 1 where the built-in one shoots at 2. Better still, name the thing
-  instead of aiming at it (`uiauto find` / `click-named`), and neither the scale
-  nor a screen that has moved since the shot is yours to get right.
-- **The origin comes back with the path**, so a point read off the shot converts
-  to a click point without asking `uiauto window` again about a window that may
-  since have moved.
+- **Which window it shot, and the id it shot by, stay in the tool.** Nothing here
+  can aim a click by a rectangle, which is the point: name the thing to press
+  (`swift scripts/screen.swift click-named <pid> <name>`) and neither the shot's
+  scale — an external panel shoots at 1 where the built-in one shoots at 2 — nor
+  a screen that has moved since the shot is yours to get right.
 - **It fronts the instance first**, the opposite default from `pid`: a window
-  behind another Space is not on-screen at all, so it cannot even be located.
+  behind another Space is not on-screen at all, so it cannot even be found.
   `--no-front` is for capturing a state that fronting would disturb.
-- Screen recording has to be granted to the terminal running this, or
-  `screencapture` writes nothing — which comes back as a non-zero exit saying
-  so, not as an empty png.
+- Screen recording has to be granted to the terminal running this, or nothing is
+  written — which comes back as a non-zero exit saying so, not as an empty png.
 
 ### `devtool devgui rm <id>`
 

@@ -160,12 +160,16 @@ spot — `make test` wraps it (and runs the doctests nextest skips). It also gat
 out-of-workspace Tauri host crate (`app/src-tauri`), the GUI front-end, and the shell
 scripts that drive the release and the on-hardware checks, mirroring CI's `app-rust` +
 `gui-web` + `shell` jobs, so a core change that only breaks the GUI — or a quoting slip
-in a release script — is caught locally:
+in a release script — is caught locally. `make gate` runs the same stages, minus the ones
+your change cannot have moved: which layer a path belongs to is declared in
+`.github/paths-filters.yml`, the file CI gates its own jobs on, and a path on no layer falls
+back to the whole of `make test`:
 
 ```bash
 cargo install cargo-nextest            # one-time (or https://get.nexte.st)
 brew install shellcheck actionlint     # one-time (the shell gate; any package manager will do)
 make test                              # shell gate + core/cli (scale,e2e + doctests) + app crate clippy/test + GUI typecheck/build/test
+make gate                              # the same, narrowed to the layers your change touched (a path on no layer falls back to the whole of make test)
 make shell-gate                        # the shell leg on its own (every tracked *.sh and git hook, plus the shell embedded in each workflow's run:)
 cargo nextest run --features scale,e2e # core/cli only, without the doctest + GUI legs
 ```

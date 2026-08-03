@@ -141,11 +141,12 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac test doc-gate shell-gate comment-gate go-gate scopes-gate cli-name-gate selfupdate-gate ts-derive-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate selfupdate-gate ts-derive-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
 	@echo "make install-dev  - install the dev CLI to ~/.cargo/bin/amenbo-dev (app-data: work.amenbo.amenbo-dev)"
+	@echo "make gate         - the same gate, narrowed to the layers this change touched (.github/paths-filters.yml, the file CI reads); a path on no layer falls back to the whole of make test"
 	@echo "make test         - full gate (core/cli scale,e2e + app crate clippy/test + GUI typecheck/build/test)"
 	@echo "make verify ARGS=\"...\" - run the CLI in a throwaway isolated store (leaves prod/dev app-data untouched; INIT=1 binds it first, which is what --actor ai needs; SCRIPT=<file> runs a sequence through one isolation)"
 	@echo "make lint-linux   - clippy the Linux branch (cfg(target_os=\"linux\")) in a container = the same 2 jobs as CI's rust/app-rust (make test does not see them; needs Docker)"
@@ -435,6 +436,32 @@ release:
 	@echo "  (attestation + a migration rehearsal on a prod clone), the promote workflow (a manual Actions dispatch)"
 	@echo "  promotes prerelease→latest and publishes/verifies. There is no command here that distributes."
 
+## The same gate, narrowed to the layers this change touched — the stage a change cannot have moved
+## is not run. The stages are the ones `test` runs and the layers are CI's own
+## (.github/paths-filters.yml, read by scripts/changed-facets.sh), so what runs here is a subset of
+## what runs there, chosen by the same declaration — never a laxer one. A change to prose alone is
+## the cheap stage and nothing more.
+## The narrowing is only ever as good as the layer file: a path on no layer and not declared exempt
+## makes the script answer `full`, which is the whole of `test`. And the pre-tag gate (`make
+## release`) calls `test`, so nothing is distributed on a narrowed run.
+## The layers are worked out only when `gate` is the goal — every other target would pay for a git
+## walk it has no use for.
+ifneq (,$(filter gate,$(MAKECMDGOALS)))
+GATE_FACETS := $(shell scripts/changed-facets.sh || echo full)
+ifneq (,$(filter full,$(GATE_FACETS)))
+GATE_STAGES := test
+else
+GATE_STAGES := gate-cheap \
+  $(if $(filter rust gui,$(GATE_FACETS)),gate-tools) \
+  $(if $(filter rust,$(GATE_FACETS)),gate-rust gate-app-rust) \
+  $(if $(filter gui,$(GATE_FACETS)),gate-gui)
+endif
+endif
+
+gate:
+	@echo "→ gate: layers [$(strip $(GATE_FACETS))] → $(strip $(GATE_STAGES))"
+	@$(MAKE) --no-print-directory $(GATE_STAGES)
+
 ## Full test: run cargo-nextest with the heavy gates (scale,e2e) included. Process isolation +
 ## parallelism make it fast, and each test's duration is listed. doctests are outside nextest, so
 ## `cargo test --doc` picks them up separately — the typed SQL layer's guarantee can only be proven by
@@ -455,13 +482,30 @@ release:
 ## ci.yml's jobs are all ubuntu, and Windows is compiled only at a public-CI release (the windows job
 ## in release.yml).
 test:
+	$(MAKE) --no-print-directory gate-tools
+	$(MAKE) --no-print-directory gate-cheap
+	$(MAKE) --no-print-directory gate-rust
+	$(MAKE) --no-print-directory gate-app-rust
+	$(MAKE) --no-print-directory gate-gui
+	## Sweep last. By the time we get here the build has touched core/cli, the app crate and the GUI, so
+	## the live artifacts' atime is fresh. Sweeping before the build would drop assets not yet read (the
+	## bench criterion data etc.) and cold them. Under the threshold it is a no-op that exits after one
+	## `du`.
+	@$(MAKE) --no-print-directory sweep-stale
+
+## The tools the heavy stages need, asked for before any of them starts. A missing one otherwise
+## surfaces minutes in — the GUI stage runs from app/node_modules (tsc, vite), which a fresh clone
+## does not have (gitignored), and the run would walk all of Rust before dying at
+## `tsc: command not found`. Fail here instead, with the one command that fixes it.
+gate-tools:
 	@command -v cargo-nextest >/dev/null 2>&1 || { echo "cargo-nextest is required: cargo install cargo-nextest (or https://get.nexte.st)"; exit 1; }
-	## The GUI gate below runs from app/node_modules (tsc, vite). A fresh clone has none — gitignored —
-	## so without this the run walks minutes of Rust and dies at `tsc: command not found`. Fail here
-	## with the one command that fixes it, the same way the toolchain checks above do.
 	@[ -d app/node_modules ] || { echo "app/node_modules is missing: cd app && npm ci"; exit 1; }
-	## Look at shell and comments first (a few seconds). No reason to wait 8 minutes of Rust for a
-	## broken script, or for a comment CI is going to refuse.
+
+## The stage no change escapes: shell, comments and the tree guards, a few seconds all together.
+## What they look for can appear in any file, so narrowing them by layer would buy nothing and
+## excuse everything. Running them first also means no reason to wait 8 minutes of Rust for a broken
+## script, or for a comment CI is going to refuse.
+gate-cheap:
 	$(MAKE) --no-print-directory shell-gate
 	$(MAKE) --no-print-directory comment-gate
 	$(MAKE) --no-print-directory go-gate
@@ -470,6 +514,14 @@ test:
 	$(MAKE) --no-print-directory cli-name-gate
 	$(MAKE) --no-print-directory selfupdate-gate
 	$(MAKE) --no-print-directory ts-derive-gate
+
+## The workspace stage: the same two commands CI's `rust` job runs, plus the doctests and the doc
+## link check. `--all-features` lints the feature-gated targets too (scale/e2e tests, the gated
+## `sharing` surface) so they cannot rot — required-features targets are invisible to a plain
+## `--all-targets` build — and -D clippy::disallowed_methods enforces the facet env funnel
+## (clippy.toml).
+gate-rust:
+	cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
 	## Two runs, not one: the same split CI makes (ci.yml), so the heavy e2e suites never share the
 	## box with the scale seeds. The build is shared, so the second run only schedules tests.
 	## `cli_e2e_*` is every slice of the e2e suite (crates/amenbo-cli/tests/e2e), named by prefix so a
@@ -477,7 +529,10 @@ test:
 	cargo nextest run --features scale,e2e -E 'not binary(/^cli_e2e/)'
 	cargo nextest run --features scale,e2e -E 'binary(/^cli_e2e/)'
 	cargo test --doc --features scale,e2e
-	$(MAKE) --no-print-directory doc-gate
+	$(MAKE) --no-print-directory doc-gate-rust
+
+## The app crate stage (the Tauri host, out of the root workspace): CI's `app-rust` job.
+gate-app-rust:
 	## The app crate's build.rs (tauri_build) checks that tauri.conf.json's externalBin=binaries/amenbo
 	## exists. The sidecar CLI is generated by tauri's beforeBuildCommand, but that does not run under a
 	## direct cargo invocation, and binaries/ is gitignored, so a fresh worktree fails every time with
@@ -485,12 +540,12 @@ test:
 	node app/scripts/prepare-cli-sidecar.mjs
 	cargo clippy --manifest-path app/src-tauri/Cargo.toml --all-targets -- -D warnings -D clippy::disallowed_methods
 	cargo test --manifest-path app/src-tauri/Cargo.toml
+	$(MAKE) --no-print-directory doc-gate-app
+
+## The front end stage: CI's `gui-web` job. The GUI tests are only the host-independent lightweight
+## ones (do not add heavy features).
+gate-gui:
 	cd app && npm run typecheck && npm run build && npm test
-	## Sweep last. By the time we get here the build has touched core/cli, the app crate and the GUI, so
-	## the live artifacts' atime is fresh. Sweeping before the build would drop assets not yet read (the
-	## bench criterion data etc.) and cold them. Under the threshold it is a no-op that exits after one
-	## `du`.
-	@$(MAKE) --no-print-directory sweep-stale
 
 ## Run the Linux-target clippy from mac. The code under `#[cfg(target_os = "linux")]` that `make test`
 ## does not see — store_watch's inotify/statfs paths are the real thing — is only checked once it is
@@ -521,8 +576,12 @@ lint-linux:
 ## see private items too — a link to a private item is correct (the crate allows
 ## `private_intra_doc_links`) and only a **broken link** fails. The app crate is a separate workspace,
 ## so run it separately (build.rs checks the sidecar exists, so pre-generate it).
-doc-gate:
+doc-gate: doc-gate-rust doc-gate-app
+
+doc-gate-rust:
 	RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+
+doc-gate-app:
 	node app/scripts/prepare-cli-sidecar.mjs
 	RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path app/src-tauri/Cargo.toml --no-deps --document-private-items
 

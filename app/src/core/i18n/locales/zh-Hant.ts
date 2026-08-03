@@ -669,5 +669,13 @@ export const zhHant: Translation = {
       message: "專案 {name}（#{project}）沒有任何資料夾——沒有地方可以操作它，AI 也完全看不到它。",
       fix: "請在專案設定 > 資料夾中新增一個資料夾。",
     },
+    unwired_folder: {
+      message: "{dir} 裡的 AI 啟動時不讀 amenbo：這裡裝了 {tools}，但沒有接上工作階段開始時執行 amenbo 的那一步。",
+      fix: "在專案設定 > 資料夾裡複製給出的文字，交給你在那個資料夾裡用的 AI。amenbo 不會替你寫設定檔。",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir} 裡的 AI 啟動時不讀 amenbo，而且看不出那裡用的是哪個工具。",
+      fix: "在專案設定 > 資料夾裡選出你在那裡用的工具，把它的文字交給那個 AI。",
+    },
   },
 };

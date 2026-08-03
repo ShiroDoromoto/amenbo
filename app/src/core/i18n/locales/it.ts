@@ -699,5 +699,13 @@ export const it: Translation = {
       message: "Il progetto {name} (#{project}) non ha nessuna cartella: non c'è da dove operarlo, e un'IA non lo vede affatto.",
       fix: "Aggiungi una cartella in Impostazioni del progetto > Cartelle.",
     },
+    unwired_folder: {
+      message: "{dir} avvia la sua IA senza amenbo: {tools} è configurato qui e non è collegato per partire all'avvio della sessione.",
+      fix: "In Impostazioni del progetto > Cartelle, copia il testo offerto e dallo all'IA che usi in quella cartella: amenbo non scrive nessun file di impostazioni al posto tuo.",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir} avvia la sua IA senza amenbo, e non mostra segno di quale strumento venga usato lì.",
+      fix: "In Impostazioni del progetto > Cartelle, scegli lo strumento che usi lì e dai il suo testo a quell'IA.",
+    },
   },
 };

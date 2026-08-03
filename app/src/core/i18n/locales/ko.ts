@@ -668,5 +668,13 @@ export const ko: Translation = {
       message: "프로젝트 {name}(#{project})에 연결된 폴더가 없습니다 — 조작할 곳이 없고, AI에게는 아예 보이지 않습니다.",
       fix: "프로젝트 설정 > 폴더에서 폴더를 추가하세요.",
     },
+    unwired_folder: {
+      message: "{dir}에서는 AI가 amenbo를 읽지 않고 시작합니다: 여기에 {tools}이(가) 있지만, 세션 시작 때 amenbo를 읽도록 연결되어 있지 않습니다.",
+      fix: "프로젝트 설정 > 폴더에서 안내 텍스트를 복사해, 그 폴더에서 쓰는 AI에게 건네세요. amenbo가 설정 파일을 대신 쓰지는 않습니다.",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir}에서는 AI가 amenbo를 읽지 않고 시작하며, 거기서 어떤 도구를 쓰는지 흔적이 없습니다.",
+      fix: "프로젝트 설정 > 폴더에서 그곳에서 쓰는 도구를 고르고, 그 텍스트를 AI에게 건네세요.",
+    },
   },
 };

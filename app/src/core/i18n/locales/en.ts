@@ -763,6 +763,14 @@ const doctor = {
     message: "Project {name} (#{project}) has no folder — nothing can operate it, and an AI cannot see it at all.",
     fix: "Add a folder in Project settings > Folders.",
   },
+  unwired_folder: {
+    message: "{dir} does not start its AI on amenbo: {tools} is set up here and is not wired to run it at session start.",
+    fix: "In Project settings > Folders, copy the text amenbo offers and give it to the AI you run in that folder — amenbo writes no settings file for you.",
+  },
+  unwired_folder_ambiguous: {
+    message: "{dir} does not start its AI on amenbo, and shows no sign of which tool is used there.",
+    fix: "In Project settings > Folders, pick the tool you use there and give its text to that AI.",
+  },
 } satisfies Record<DoctorIssueKind, DoctorTemplate>;
 
 export const en = { status, priority, view, ui, err, doctor };

@@ -706,5 +706,13 @@ export const pl: Translation = {
       message: "Projekt {name} (#{project}) nie ma żadnego folderu — nie ma skąd nim operować, a AI w ogóle go nie widzi.",
       fix: "Dodaj folder w Ustawieniach projektu > Foldery.",
     },
+    unwired_folder: {
+      message: "{dir} uruchamia swoje AI bez amenbo: {tools} jest tu skonfigurowane i nie ma podpięcia, które uruchomi je na starcie sesji.",
+      fix: "W Ustawieniach projektu > Foldery skopiuj podany tekst i przekaż go AI, którego używasz w tym folderze — amenbo nie zapisze pliku ustawień za Ciebie.",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir} uruchamia swoje AI bez amenbo i nie widać śladu, jakiego narzędzia się tam używa.",
+      fix: "W Ustawieniach projektu > Foldery wybierz narzędzie, którego tam używasz, i przekaż jego tekst temu AI.",
+    },
   },
 };

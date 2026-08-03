@@ -699,5 +699,13 @@ export const fr: Translation = {
       message: "Le projet {name} (#{project}) n'a aucun dossier : rien ne peut l'utiliser, et une IA ne le voit pas du tout.",
       fix: "Ajoutez un dossier dans Réglages du projet > Dossiers.",
     },
+    unwired_folder: {
+      message: "{dir} démarre son IA sans amenbo : {tools} est installé ici et n'est pas câblé pour s'exécuter au démarrage de session.",
+      fix: "Dans Réglages du projet > Dossiers, copiez le texte proposé et donnez-le à l'IA que vous utilisez dans ce dossier : amenbo n'écrit aucun fichier de réglages à votre place.",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir} démarre son IA sans amenbo, et ne montre aucun signe de l'outil utilisé là.",
+      fix: "Dans Réglages du projet > Dossiers, choisissez l'outil que vous utilisez là et donnez son texte à cette IA.",
+    },
   },
 };

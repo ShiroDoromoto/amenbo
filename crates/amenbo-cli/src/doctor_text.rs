@@ -69,6 +69,15 @@ pub fn message(issue: &DoctorIssue) -> String {
              operate it from, and an AI cannot reach it at all.",
             p(issue, "name"),
         ),
+        DoctorIssueKind::UnwiredFolder => format!(
+            "{dir} does not start its AI on amenbo: {} is set up here and is not wired to run it at \
+             session start, so an AI reads the guidance only if it goes looking.",
+            p(issue, "tools"),
+        ),
+        DoctorIssueKind::UnwiredFolderAmbiguous => format!(
+            "{dir} does not start its AI on amenbo, and shows no sign of which tool is used there, so \
+             nothing can say which wiring is missing."
+        ),
     }
 }
 
@@ -117,6 +126,11 @@ pub fn fix_hint(issue: &DoctorIssue) -> String {
             "Link a folder to it: `{cmd} bind --project <name or id>` in the folder you work in. \
              Archive it instead (`{cmd} project archive`) if you have stopped working on it - an \
              archived project is not asked for a folder."
+        ),
+        DoctorIssueKind::UnwiredFolder | DoctorIssueKind::UnwiredFolderAmbiguous => format!(
+            "`{cmd} agent-hook snippet <tool>` prints the text that asks an AI to wire it; give that \
+             text to the AI you run in the folder. amenbo writes no settings file on your behalf, so \
+             nothing here ends until the wiring lands in theirs."
         ),
     }
 }

@@ -7525,8 +7525,10 @@ mod tests {
                 .unwrap()
                 .id
         };
-        // A folder leads to that project, the way one does after `init`. A project no folder leads to is
-        // itself an issue, so without this the "plain store" below would start one warning down.
+        // A folder leads to that project, the way one does after `init`, and the question about starting
+        // its AI on amenbo is answered with a no. Both are issues of their own — a project no folder leads
+        // to, and a folder whose AI does not start on amenbo — so without them the "plain store" below
+        // would start two warnings down.
         let home_dir = amenbo_scratch::scratch("app-doctor-dir");
         {
             let store = Store::open().unwrap();
@@ -7534,6 +7536,9 @@ mod tests {
             let mut reg = store.bindings();
             reg.record_project_ref(project_id, home_dir.to_string_lossy());
             store.save_bindings(&reg).unwrap();
+            store
+                .set_harness_consent(project_id, amenbo_core::harness::Consent::answered(false))
+                .unwrap();
         }
         let clean = doctor_report().unwrap();
         assert!(clean.ok && clean.issues.is_empty(), "a plain store has no issues");

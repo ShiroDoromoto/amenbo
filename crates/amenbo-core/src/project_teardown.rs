@@ -94,7 +94,7 @@ mod tests {
     use crate::binding::DirBinding;
 
     /// Releasing folder bindings is the work the teardown is left with; this is one folder's worth of it —
-    /// `.amenbo` removed, and the folder forgotten in the bindings indexes.
+    /// `.amenbo` removed, and the folder forgotten in the bindings index.
     #[test]
     fn release_folder_removes_pointer_marker_and_forgets_binding() {
         let tmp = amenbo_scratch::scratch("teardown");
@@ -104,14 +104,13 @@ mod tests {
         DirBinding::new(Some(7), Some("proj-x".into())).write(&tmp).unwrap();
         let mut reg = Registry::default();
         reg.record_project_ref(7, dir.as_str());
-        reg.set(7, dir.as_str());
         assert!(!reg.projects_for_dir(&dir).is_empty());
 
         release_folder(&dir, &mut reg);
 
         assert!(!tmp.join(".amenbo").is_file(), "the `.amenbo` marker is gone");
         assert!(reg.projects_for_dir(&dir).is_empty(), "the folder drops out of the project reverse index");
-        assert_eq!(reg.get(7), None, "and out of the primary directory registration too");
+        assert!(reg.dirs_for_project(7).is_empty(), "and the project is left with no folder");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

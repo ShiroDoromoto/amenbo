@@ -2891,9 +2891,8 @@ pub fn project_add(name: String) -> Result<WriteAck, CmdError> {
 /// deleted project's rows are physically gone, while the teardown that forgets its bindings entry is
 /// best-effort, so an entry can outlive the project it names. Recover onto one of those and the folder
 /// is bound to an id that names nothing, leaving nothing at all in the sidebar. Once the pointer is
-/// written, always call `set` (the primary directory) and `record_project_ref` (the project → folders
-/// reverse index) as a pair; forget one and the folder you just bound goes missing from the list on
-/// the settings screen.
+/// written, always call `record_project_ref` (the project → folders index); forget it and the folder
+/// you just bound goes missing from the list on the settings screen.
 #[tauri::command]
 pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck, CmdError> {
     let path = std::path::Path::new(&dir);
@@ -2946,7 +2945,6 @@ pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck,
     let (store, project_id) = provision_project(&name)?;
     amenbo_core::binding::pointer_for(&store, project_id).write(path)?;
     let mut registry = store.bindings();
-    registry.set(project_id, path.to_string_lossy());
     registry.record_project_ref(project_id, path.to_string_lossy());
     let _ = store.save_bindings(&registry);
     amenbo_core::agents::upsert_into_dir(
@@ -2967,7 +2965,6 @@ fn recover_lost_pointer(path: &std::path::Path, project_id: i64) -> Result<Write
     amenbo_core::binding::pointer_for(&store, project_id).write(path)?;
     {
         let mut reg = store.bindings();
-        reg.set(project_id, path.to_string_lossy().to_string());
         reg.record_project_ref(project_id, path.to_string_lossy());
         let _ = store.save_bindings(&reg);
     }
@@ -3152,7 +3149,7 @@ pub fn project_bound_folders(project_id: i64) -> Result<Vec<BoundFolderDto>, Cmd
 
 /// Folder management on the project settings screen: bind an existing folder to this **existing
 /// project** (the Tauri path for `bind --project`). Places `.amenbo` in the folder, records it in
-/// the store's binding tables (project_dirs / paths), and upserts the managed block in the
+/// the store's binding table (project_dirs), and upserts the managed block in the
 /// AI guidance files (AGENTS.md / CLAUDE.md). **The folder's own contents (the source) are never
 /// touched.** The nested-binding guard — refuse when an ancestor is already a managed tree — is the
 /// CLI `bind`'s same "respect the tree that is already there". Unlike `project_add_folder`, which
@@ -3178,7 +3175,6 @@ pub fn project_bind_folder(project_id: i64, dir: String) -> Result<WriteAck, Cmd
     let store = open_store()?;
     amenbo_core::binding::pointer_for(&store, project_id).write(&cwd)?;
     let mut registry = store.bindings();
-    registry.set(project_id, cwd.to_string_lossy().to_string());
     registry.record_project_ref(project_id, cwd.to_string_lossy());
     store.save_bindings(&registry)?;
     amenbo_core::agents::upsert_into_dir(
@@ -3513,15 +3509,12 @@ pub fn config_set_language(language: String) -> Result<WriteAck, CmdError> {
     config.save(&paths.config_file)?;
     let lang_code = config.language.as_deref();
     let registry = open_store_read().map(|s| s.bindings()).unwrap_or_default();
-    let mut seen = std::collections::HashSet::new();
-    for dir in registry.paths.values() {
-        if seen.insert(dir.clone()) {
-            amenbo_core::agents::upsert_into_dir(
-                std::path::Path::new(dir),
-                lang_code,
-                amenbo_core::config::Paths::command_name(),
-            );
-        }
+    for dir in registry.all_dirs() {
+        amenbo_core::agents::upsert_into_dir(
+            std::path::Path::new(&dir),
+            lang_code,
+            amenbo_core::config::Paths::command_name(),
+        );
     }
     Ok(WriteAck::new(&[]))
 }

@@ -663,7 +663,7 @@ mod tests {
         // Register the folder so `all_dirs` picks it up. We hand the two functions an in-memory
         // `Registry` to keep the check independent of the persistence backend.
         let mut registry = crate::binding::Registry::default();
-        registry.set(1, bound.to_string_lossy().to_string());
+        registry.record_project_ref(1, bound.to_string_lossy().to_string());
 
         // Detection: version 1 counts as stale (only below the current one does), and nothing is
         // rewritten.

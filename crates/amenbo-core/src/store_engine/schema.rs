@@ -919,18 +919,13 @@ plain_tables! {
         norm: text,
     }
 
-    /// The device-local **folder bindings** — the project's main dir, one row per project
-    /// ([`crate::binding::Registry`] resolves by it). The key is the project's `INTEGER` id, as a
-    /// *natural* key: the record shape would force a surrogate `id`. No `REFERENCES project(id)`: a
-    /// folder pointer outlives the project it names, which is what makes the stale-binding warning and
-    /// pointer recovery possible.
-    binding_path {
-        project_id: integer("PRIMARY KEY"),
-        dir: text,
-    }
-
-    /// The other half of the bindings: every dir pointing at a project — a set of `(project, dir)`
-    /// pairs, the pair itself being the key.
+    /// The device-local **folder bindings** ([`crate::binding::Registry`]) — every dir pointing at a
+    /// project, as a set of `(project, dir)` pairs, the pair itself being the key. The folders bound to
+    /// one project stand alongside each other with no order between them (`AMB-D-531`), so the set is
+    /// the whole shape.
+    ///
+    /// No `REFERENCES project(id)`: a folder pointer outlives the project it names, which is what makes
+    /// the stale-binding warning and pointer recovery possible.
     binding_project_dir {
         project_id: bigint,
         dir: text,
@@ -971,7 +966,7 @@ plain_tables! {
     /// because a `yes` is the absence of a veto plus the device's own answer ([`crate::hooks`]). It is
     /// never read as a mirror of what the hook directory actually holds.
     ///
-    /// Keyed by the project's `INTEGER` id, and unlike `binding_path` it declares the reference: the
+    /// Keyed by the project's `INTEGER` id, and unlike `binding_project_dir` it declares the reference: the
     /// veto is *about* the project, so it has nothing left to say once the project is gone, and the
     /// cascade retires the row without a GC pass.
     hook_optout {

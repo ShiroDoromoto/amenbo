@@ -5,17 +5,17 @@
 //!   pointer plays no part in selecting one. **Store contents and secrets never live here** — it is a
 //!   small static JSON file, safe even inside an iCloud-synced tree. Several directories may point at
 //!   the same `project_id` (many-to-one).
-//! - The binding registry ([`Registry`]: project→dir and back): the local record behind "work on this
-//!   project in this folder". It lives in the consolidated store's `binding_path` /
-//!   `binding_project_dir` tables ([`crate::overview`]). If the recorded path has vanished we return
-//!   `binding_stale` rather than **silently operating somewhere else**.
+//! - The binding registry ([`Registry`]: project→dirs and back): the local record behind "work on this
+//!   project in this folder". It lives in the consolidated store's `binding_project_dir` table
+//!   ([`crate::overview`]). If a recorded path has vanished we return `binding_stale` rather than
+//!   **silently operating somewhere else**.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::store::Store;
 
 /// The contents of a `.amenbo` pointer.
@@ -330,71 +330,43 @@ pub fn legacy_pointers(store: &Store) -> Vec<LegacyPointer> {
 }
 
 /// The machine-local binding registry (an in-memory value type). Its durable home is the consolidated
-/// store's binding tables ([`crate::overview`]). `paths` is project→dir, the main directory behind "work
-/// on this project in this folder"; `project_dirs` is project→set of dirs, the many-to-one reverse
-/// lookup over every folder that points at the project. Keys are project primary keys (`INTEGER`).
+/// store's binding table ([`crate::overview`]). It is one index — project→set of dirs — and the folders
+/// bound to a project stand alongside each other with **no order between them** (`AMB-D-531`): nothing
+/// here answers "the project's folder", because a project does not have one. A surface that needs a
+/// single folder is the one that picks it. Keys are project primary keys (`INTEGER`).
 #[derive(Clone, Debug, Default)]
 pub struct Registry {
-    /// project_id → absolute path (as a string).
-    pub paths: BTreeMap<i64, String>,
     /// project_id → the set of `.amenbo` directories (absolute path strings) that point at that
-    /// project. Separately from `paths` (the single main directory behind "work on this project in this
-    /// folder"), this collects **every** folder pointing at the project — the many-to-one reverse
-    /// lookup the settings screen's folder list is built on. `.amenbo` files are scattered across the
-    /// filesystem and cannot be enumerated from app-data, so we gather them here at bind time. It is a
-    /// best-effort index: paths that have vanished are judged stale by readers, via an existence check.
+    /// project — the many-to-one reverse lookup the settings screen's folder list is built on.
+    /// `.amenbo` files are scattered across the filesystem and cannot be enumerated from app-data, so
+    /// we gather them here at bind time. It is a best-effort index: paths that have vanished are judged
+    /// stale by readers, via an existence check.
     pub project_dirs: BTreeMap<i64, BTreeSet<String>>,
 }
 
 impl Registry {
-    /// Repoint the main directory (the single `paths` slot). **Before overwriting, stash the previous
-    /// main directory into `project_dirs`** (the many-to-one reverse-lookup set) — otherwise binding an
-    /// extra folder to an existing project would have `set` silently discard the old main directory,
-    /// and if that folder lived only in `paths` (never recorded in `project_dirs`) it would disappear
-    /// from the union `dirs_for_project` returns. Stashing keeps the old folder in the listing even on
-    /// the first extra bind (`record_project_ref` is idempotent, so a duplicate collapses).
-    pub fn set(&mut self, project_id: i64, dir: impl Into<String>) {
-        if let Some(prev) = self.paths.insert(project_id, dir.into()) {
-            self.project_dirs.entry(project_id).or_default().insert(prev);
-        }
-    }
-
-    pub fn get(&self, project_id: i64) -> Option<&str> {
-        self.paths.get(&project_id).map(|s| s.as_str())
-    }
-
     /// Record that `dir` holds a `.amenbo` pointing at `project_id` (many-to-one: several folders may
     /// point at one project). Idempotent — it is a set. Every bind path calls this alongside writing the
-    /// pointer and `set`ting the main directory.
+    /// pointer.
     pub fn record_project_ref(&mut self, project_id: i64, dir: impl Into<String>) {
         self.project_dirs.entry(project_id).or_default().insert(dir.into());
     }
 
     /// The directories recorded as pointing at `project_id` (ascending, deduped, empty if none) — the
-    /// project→folders reverse lookup. It returns the **union** of `project_dirs` (the many-to-one set)
-    /// and `paths` (the single main directory). The two are a redundant pair that ought to be updated
-    /// together, but a write path can drift and fill only `paths` (a forgotten `record_project_ref`),
-    /// and looking at `project_dirs` alone would then miss a folder whose `.amenbo` really exists.
-    /// Taking the union enumerates every bound folder no matter which index recorded it. `forget_dir`
-    /// removes a folder from both indexes, so an unbound folder never reappears here.
+    /// project→folders reverse lookup. Ascending is the set's own order, not a ranking: the first entry
+    /// is not a main folder.
     pub fn dirs_for_project(&self, project_id: i64) -> Vec<&str> {
-        let mut dirs: BTreeSet<&str> = self
-            .project_dirs
+        self.project_dirs
             .get(&project_id)
             .map(|s| s.iter().map(String::as_str).collect())
-            .unwrap_or_default();
-        if let Some(main) = self.paths.get(&project_id) {
-            dirs.insert(main.as_str());
-        }
-        dirs.into_iter().collect()
+            .unwrap_or_default()
     }
 
-    /// **Every folder** this machine records as amenbo-managed (ascending, deduped): the union of both
-    /// indexes, `paths` (main directories) and `project_dirs` (project→folders). `doctor`'s stale
-    /// managed-block detection walks this set; paths that have vanished are skipped quietly by the
-    /// walker's existence check.
+    /// **Every folder** this machine records as amenbo-managed (ascending, deduped, across projects).
+    /// `doctor`'s stale managed-block detection walks this set; paths that have vanished are skipped
+    /// quietly by the walker's existence check.
     pub fn all_dirs(&self) -> Vec<String> {
-        let mut dirs: BTreeSet<String> = self.paths.values().cloned().collect();
+        let mut dirs: BTreeSet<String> = BTreeSet::new();
         for set in self.project_dirs.values() {
             dirs.extend(set.iter().cloned());
         }
@@ -402,10 +374,9 @@ impl Registry {
     }
 
     /// Forget every binding record for `dir` (this is what `unbind` uses). The folder is removed from
-    /// each `project_dirs` set (project keys left empty are cleaned up) and from every `paths` entry
-    /// pointing at it. Returns the number of records removed — zero means the folder was not recorded
-    /// anywhere, so the call is idempotent. Bindings are many-to-one, so records for **other folders**
-    /// of the same project are never touched.
+    /// each project's set (project keys left empty are cleaned up). Returns the number of records
+    /// removed — zero means the folder was not recorded anywhere, so the call is idempotent. Bindings
+    /// are many-to-one, so records for **other folders** of the same project are never touched.
     pub fn forget_dir(&mut self, dir: &str) -> usize {
         let mut removed = 0usize;
         for set in self.project_dirs.values_mut() {
@@ -414,48 +385,31 @@ impl Registry {
             }
         }
         self.project_dirs.retain(|_, set| !set.is_empty());
-        let before = self.paths.len();
-        self.paths.retain(|_, p| p != dir);
-        removed += before - self.paths.len();
         removed
     }
 
     /// **The path→project reverse lookup.** Returns the project ids recorded as pointing at the given
-    /// folder (ascending, deduped, empty if none). It scans **both indexes** — `project_dirs` (the
-    /// many-to-one set) and `paths` (the single main directory) — normalizing each through
-    /// [`normalize_dir_for_match`], symmetrically with the union `dirs_for_project` takes. Pointer
-    /// recovery uses it to work out, best-effort, which project a vanished `.amenbo` used to name; if
-    /// the answer is not unique the caller collapses it to `None`.
+    /// folder (ascending, deduped, empty if none), normalizing each recorded path through
+    /// [`normalize_dir_for_match`]. Pointer recovery uses it to work out, best-effort, which project a
+    /// vanished `.amenbo` used to name; if the answer is not unique the caller collapses it to `None`.
     pub fn projects_for_dir(&self, dir: &str) -> Vec<i64> {
         let want = normalize_dir_for_match(dir);
-        let mut ids: BTreeSet<i64> = self
-            .project_dirs
+        self.project_dirs
             .iter()
             .filter(|(_, dirs)| dirs.iter().any(|d| normalize_dir_for_match(d) == want))
             .map(|(id, _)| *id)
-            .collect();
-        for (pid, p) in &self.paths {
-            if normalize_dir_for_match(p) == want {
-                ids.insert(*pid);
-            }
-        }
-        ids.into_iter().collect()
+            .collect()
     }
 
-    /// Resolve a project's working directory. If a record exists but the path has vanished, this is
-    /// `binding_stale`.
-    pub fn resolve_dir(&self, project_id: i64) -> Result<Option<PathBuf>> {
-        match self.get(project_id) {
-            None => Ok(None),
-            Some(p) => {
-                let path = PathBuf::from(p);
-                if path.is_dir() {
-                    Ok(Some(path))
-                } else {
-                    Err(Error::BindingStale(p.to_string()))
-                }
-            }
-        }
+    /// The folders recorded for `project_id` whose path has **vanished** — the material for
+    /// `binding_stale`. Ascending, and empty when every recorded folder is still there (or when none is
+    /// recorded at all). Reporting a folder that is gone is what keeps amenbo from **silently operating
+    /// somewhere else**; with no main folder to single out, the question is asked of each of them.
+    pub fn stale_dirs(&self, project_id: i64) -> Vec<&str> {
+        self.dirs_for_project(project_id)
+            .into_iter()
+            .filter(|dir| !Path::new(dir).is_dir())
+            .collect()
     }
 }
 
@@ -909,62 +863,17 @@ mod tests {
     }
 
     #[test]
-    fn dirs_for_project_unions_paths_and_project_dirs() {
-        // Even when a write path drifts and fills only `paths` (the main directory), forgetting to call
-        // `record_project_ref`, the reverse lookup returns the union of both indexes and so does not
-        // miss a folder whose `.amenbo` really exists.
+    fn all_dirs_gathers_every_project_s_folders_deduped() {
         let mut reg = Registry::default();
-        reg.set(1, "/work/main"); // paths only — as if record_project_ref had been forgotten
-        assert_eq!(reg.dirs_for_project(1), vec!["/work/main"]);
-
-        // Another folder in `project_dirs` joins the union (deduped, ascending); a duplicate of the
-        // main directory collapses.
-        reg.record_project_ref(1, "/work/extra");
         reg.record_project_ref(1, "/work/main");
-        assert_eq!(reg.dirs_for_project(1), vec!["/work/extra", "/work/main"]);
-
-        // Unbinding (forget_dir) drops the folder from `paths` too, so releasing the main directory
-        // removes it from the union for good.
-        reg.forget_dir("/work/main");
-        assert_eq!(reg.dirs_for_project(1), vec!["/work/extra"]);
-    }
-
-    #[test]
-    fn additional_bind_does_not_drop_a_paths_only_first_folder() {
-        // Binding an extra folder while the old one lives only in `paths` (never recorded in
-        // `project_dirs`) still enumerates both, because `set` stashes the old main directory into
-        // `project_dirs` before overwriting it.
-        let mut reg = Registry::default();
-        // The first folder is in paths only.
-        reg.paths.insert(1, "/work/A".into());
-        assert_eq!(reg.dirs_for_project(1), vec!["/work/A"]);
-
-        // An extra bind, along the real project_bind_folder path: set + record_project_ref.
-        reg.set(1, "/work/B");
-        reg.record_project_ref(1, "/work/B");
-        // Both folders are there on the first try — the old /work/A does not vanish.
-        assert_eq!(reg.dirs_for_project(1), vec!["/work/A", "/work/B"]);
-
-        // Further binds accumulate, and the main directory is still repointed (that is what resolve_dir
-        // reads).
-        reg.set(1, "/work/C");
-        reg.record_project_ref(1, "/work/C");
-        assert_eq!(reg.dirs_for_project(1), vec!["/work/A", "/work/B", "/work/C"]);
-        assert_eq!(reg.get(1), Some("/work/C"));
-    }
-
-    #[test]
-    fn all_dirs_unions_both_indexes_deduped() {
-        let mut reg = Registry::default();
-        reg.set(1, "/work/main"); // paths
-        reg.record_project_ref(1, "/work/extra"); // project_dirs
+        reg.record_project_ref(1, "/work/extra");
         reg.record_project_ref(2, "/work/main"); // another project points at the same folder
-        // The union of both indexes: deduped, ascending.
+        // Every recorded folder, across projects: deduped, ascending.
         assert_eq!(
             reg.all_dirs(),
             vec!["/work/extra".to_string(), "/work/main".to_string()]
         );
-        // Unbinding drops the folder from every index, so it leaves all_dirs too.
+        // Unbinding drops the folder from every project, so it leaves all_dirs too.
         reg.forget_dir("/work/main");
         assert_eq!(reg.all_dirs(), vec!["/work/extra".to_string()]);
     }
@@ -972,20 +881,18 @@ mod tests {
     #[test]
     fn registry_forget_dir_removes_only_that_folder() {
         let mut reg = Registry::default();
-        // Many-to-one: two projects point at one folder, and another folder holds a main-directory
-        // record.
+        // Many-to-one: two projects point at one folder, and one of them holds a second folder.
         reg.record_project_ref(1, "/work/a");
         reg.record_project_ref(2, "/work/a");
-        reg.set(1, "/work/a");
-        reg.set(2, "/work/b");
+        reg.record_project_ref(2, "/work/b");
 
-        // Forget /work/a: two project_dirs entries plus one paths entry — three records removed.
-        assert_eq!(reg.forget_dir("/work/a"), 3);
+        // Forget /work/a: one record under each of the two projects.
+        assert_eq!(reg.forget_dir("/work/a"), 2);
         // Records for the other folder (/work/b) survive: many-to-one does not drag them along.
-        assert_eq!(reg.get(2), Some("/work/b"));
+        assert_eq!(reg.dirs_for_project(2), vec!["/work/b"]);
         // Nothing pointing at /work/a is left.
         assert!(reg.projects_for_dir("/work/a").is_empty());
-        assert_eq!(reg.get(1), None);
+        assert!(reg.dirs_for_project(1).is_empty());
 
         // Idempotent: forgetting it again removes nothing.
         assert_eq!(reg.forget_dir("/work/a"), 0);
@@ -997,14 +904,13 @@ mod tests {
         let mut reg = Registry::default();
         // Two projects point at /work/a (many-to-one, so it is ambiguous); only one points at /work/b
         // (unique, so it can be recovered).
-        reg.set(1, "/work/a"); // paths only
-        reg.record_project_ref(2, "/work/a"); // project_dirs — another project on the same folder
+        reg.record_project_ref(1, "/work/a");
+        reg.record_project_ref(2, "/work/a");
         reg.record_project_ref(3, "/work/b");
 
         // One: the caller can tell the recovery candidate is unique.
         assert_eq!(reg.projects_for_dir("/work/b"), vec![3]);
-        // Several: the union of both indexes, ascending and deduped — ambiguous, so the caller reports
-        // an error.
+        // Several: ascending and deduped — ambiguous, so the caller reports an error.
         assert_eq!(reg.projects_for_dir("/work/a"), vec![1, 2]);
         // None: a folder no project points at.
         assert!(reg.projects_for_dir("/work/never").is_empty());
@@ -1020,19 +926,23 @@ mod tests {
     }
 
     #[test]
-    fn registry_resolve_dir_flags_stale_paths() {
+    fn stale_dirs_names_every_recorded_folder_that_has_vanished() {
         let home = tmp("reg");
-        let work = home.join("work");
-        std::fs::create_dir_all(&work).unwrap();
+        let (kept, gone) = (home.join("kept"), home.join("gone"));
+        std::fs::create_dir_all(&kept).unwrap();
+        std::fs::create_dir_all(&gone).unwrap();
         let mut reg = Registry::default();
-        reg.set(1, work.to_string_lossy().to_string());
-        // A live path resolves.
-        assert_eq!(reg.resolve_dir(1).unwrap(), Some(work.clone()));
-        // A vanished path is binding_stale.
-        std::fs::remove_dir_all(&work).unwrap();
-        let err = reg.resolve_dir(1).unwrap_err();
-        assert_eq!(err.code(), "binding_stale");
-        // No record at all is None, not an error.
-        assert_eq!(reg.resolve_dir(99).unwrap(), None);
+        reg.record_project_ref(1, kept.to_string_lossy().to_string());
+        reg.record_project_ref(1, gone.to_string_lossy().to_string());
+        // Every folder is there: nothing to report.
+        assert!(reg.stale_dirs(1).is_empty());
+
+        // One of them vanishes — and it is reported even though the project still has a live folder,
+        // because no folder outranks another.
+        std::fs::remove_dir_all(&gone).unwrap();
+        assert_eq!(reg.stale_dirs(1), vec![gone.to_string_lossy()]);
+
+        // A project with no folder recorded has nothing to be stale.
+        assert!(reg.stale_dirs(99).is_empty());
     }
 }

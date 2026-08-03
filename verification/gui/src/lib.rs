@@ -290,6 +290,10 @@ impl Instructor {
     /// `ai-launch-answer` is the third of them and a `Review`, for the reason `plugin config`'s state
     /// is: all three of its answers — the yes, the no, and the never asked — are drawn as words of the
     /// interface, and which of them is standing is not something the presence of text can settle.
+    ///
+    /// `ai-launch-waiting` is a `Review` for the reason `open-existing` is: the folder it names is
+    /// listed a second time on that same screen, among the ones bound to the project, so a reading of
+    /// the name would pass over a build that dropped the inventory and kept the binding.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -685,6 +689,13 @@ impl Instructor {
                 "Confirm the folder \"{}\" is listed under \"{}\"'s text, among the folders that text is still waiting on — with the text itself standing once above the list.",
                 req(with, "dir")?,
                 req(with, "tool")?
+            ),
+            // The same folder where it is listed whichever notice the board is carrying. What the eye is
+            // shown is the inventory itself: the list is on the project's own settings, and the folder is
+            // in it under its own heading rather than among the ones bound to the project.
+            (Domain::Repo, "ai-launch-waiting") => format!(
+                "Confirm this project's own settings list the folder \"{}\" among the ones still starting their AI without amenbo — in that list, not the one of folders bound to the project, and standing there whatever notice the board was carrying.",
+                req(with, "dir")?
             ),
             // Which of the three answers the form is holding. The state is the whole question here:
             // the value a screen shows is its ticks, and two of the three answers leave every box
@@ -1692,6 +1703,30 @@ steps_gui:
         // The list carries whole paths and the scenario names the folder alone; the fold leaves the one
         // inside the other.
         assert!(fold("/Users/reader/work/frontend").contains(&fold("frontend")));
+    }
+
+    /// The same folder read where it is listed whatever the board is carrying. Here the name settles
+    /// nothing — the project's own settings list it a second time, among the folders bound to it — so
+    /// the step is an eye's, and the instruction has to say which of the two lists is meant.
+    #[test]
+    fn the_settings_inventory_names_which_list_the_folder_is_read_in() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: repo
+    op: ai-launch-waiting
+    with: { dir: frontend }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let line = ins.render(&s.steps(Driver::Gui)[0]).unwrap();
+        assert!(line.contains("\"frontend\"") && line.contains("not the one of folders bound"), "got: {line}");
+        assert!(
+            ins.expectation(&s.steps(Driver::Gui)[0]).is_none(),
+            "a name the same screen carries twice is not a reading"
+        );
     }
 
     /// Putting the report aside and finding it again: the two readings are the same file, read one way

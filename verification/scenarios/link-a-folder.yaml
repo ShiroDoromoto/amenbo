@@ -9,6 +9,14 @@
 # road can carry the pointer's whole life: placed, shared, brought forward, taken back. On screen it
 # is a card to open, a project to answer for and a folder to pick.
 #
+# The end of that life is where the terminal road runs longest. Taking the last folder off a project
+# is allowed on purpose — folders get re-homed, and that means taking them all off before putting
+# them back — so nothing here counts and refuses. What holds the line instead is the answer: it says
+# the project has none left, and that nothing can operate it until one is linked again. That sentence
+# is the whole of what stands between a reshuffle and a project nobody can reach, and it is exactly
+# the kind of thing that can go missing with every test in the tree still green. The count it
+# publishes beside itself is what the road reads, since the state left behind is the same either way.
+#
 # ── What only the screen road ever says ──────────────────────────────────────────────────────────
 # A reader arriving with no folder linked yet is offered two ways in: raise a project, or open one
 # this device already holds. Both are the interface's own to carry out — raising goes to a screen of
@@ -42,10 +50,11 @@ description: >
   `init` and read the pointer back from inside it, point a second folder at this run's own project
   with `bind` (the many-to-one relation a shared checkout rests on), resync that folder's guidance
   block and confirm a second pass finds nothing left to write, then unbind and confirm the folder
-  reaches nothing again. On screen the road is the way in that never passes through a terminal: two
-  cards and nothing to paste anywhere, the second asking which of this device's projects the folder
-  is to be linked to — the step it takes before the folder picker — then the folder itself, and the
-  board that opens with the first loop waiting on it.
+  reaches nothing again, and finally take a project's folders off one at a time down to the last,
+  reading off each answer how many it has left. On screen the road is the way in that never passes
+  through a terminal: two cards and nothing to paste anywhere, the second asking which of this
+  device's projects the folder is to be linked to — the step it takes before the folder picker — then
+  the folder itself, and the board that opens with the first loop waiting on it.
 steps_cli:
   # `init` in an unclaimed folder raises a project there and points the folder at it. The binding it
   # hands back is what the next step checks the pointer against.
@@ -123,6 +132,49 @@ steps_cli:
     with:
       dir: standalone
       project: own
+
+  # And the last one off a project goes the same way the others did. A second folder on the project
+  # raised above, so the road can take one off with something still holding it and then take that too.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: spare
+      project: own
+
+  - type: action
+    domain: folder
+    op: unbind
+    with:
+      dir: spare
+
+  - type: assert
+    domain: folder
+    op: folders-left
+    with:
+      left: 1
+
+  # Nothing counts here and refuses: what the answer does instead is say the project has none left,
+  # which is the whole of what stands between a reshuffle and a project nobody can reach. It is read
+  # off that answer and not off the store — a build that stopped saying it leaves the same rows behind.
+  - type: action
+    domain: folder
+    op: unbind
+    with:
+      dir: standalone
+
+  - type: assert
+    domain: folder
+    op: folders-left
+    with:
+      left: 0
+
+  - type: assert
+    domain: folder
+    op: bound
+    with:
+      dir: standalone
+      present: false
 
 steps_gui:
   - type: assert

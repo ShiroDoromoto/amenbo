@@ -663,6 +663,21 @@ const REGISTRY: &[OpSpec] = &[
     // each. `dir` is a plain name, the way `folder bind` takes one: where a folder sits is the run's to
     // decide, and what the scenario writes down is what it called the one it placed.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-folder", required: &["tool", "dir"], refs: &[], strings: &["tool", "dir"], binds: false },
+    // The same folder read where it is listed whatever the board is carrying: the project's own settings.
+    // A board holds one standing notice, so the report is only on it when nothing with a missing premise
+    // is standing ahead of it — and the folders behind it go on waiting either way. This is the place
+    // they are counted, which is what makes the board's single notice a choice of where to act rather
+    // than a list quietly cut short.
+    //
+    // It names no tool, because the inventory does not: a folder that names no tool it uses waits on
+    // every one in the catalog, so grouping the list by tool would put the same path up five times and
+    // read as five folders left. What is outstanding is a folder.
+    //
+    // A `Review`, and not by omission: the same path is listed a second time on that screen, among the
+    // folders bound to the project. A reading answers which words are on a shot and never which part of
+    // it they came from, so one taken here would pass over a build that dropped the inventory entirely.
+    // The shot is what an eye closes it by.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-waiting", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
     // A project as it is read back: one row's fields, and whether it is in the listing at all (and
     // where). `archived: true` asks the listing that carries the archived ones.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
@@ -697,6 +712,17 @@ const REGISTRY: &[OpSpec] = &[
     // which is answered by a resync finding nothing left to write.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "bound", required: &["dir"], refs: &["project"], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "resynced", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // How many folders the project the last `unbind` was taken from has left. Taking the last one off
+    // goes through like any other — re-homing folders means taking them all off before putting them
+    // back, so a count that refused would force an order rather than protect anything — and what
+    // stands in for the refusal is the answer saying what is left. `left: 0` is that line under test.
+    //
+    // It has to **follow its unbind**, the way `plugin returned` follows its call: the count is part
+    // of what that command answered, and afterwards there is only the state it left, which reads the
+    // same whether the answer said anything about it or not. The reading is taken on the number and
+    // not on the sentence beside it: the same fact is published both ways on purpose, so that a
+    // machine has something to read without parsing a line written in the reader's own language.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "folders-left", required: &["left"], refs: &[], strings: &[], binds: false },
     // The warning a project with no folder linked carries on its own board, and the one move that ends
     // it standing beside it. How much work the board holds is not part of the question: a project
     // carrying forty cards and no folder is exactly the one nothing else on the screen speaks about, so

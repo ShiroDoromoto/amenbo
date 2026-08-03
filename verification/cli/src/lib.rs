@@ -71,6 +71,10 @@ pub(crate) struct Driver {
     /// and is deliberately kept out of the execution log, so this is the only place a later step can
     /// read it from — which is why the assert that reads it has to follow its call.
     last_run: Option<serde_json::Value>,
+    /// What the last `unbind` answered. Kept for the reason the line above is: how many folders the
+    /// project has left is part of that answer, and afterwards there is only the state it left —
+    /// which reads the same whether the answer mentioned it or not.
+    last_unbind: Option<serde_json::Value>,
     /// What the last `plugin flush` reported. Kept for the same reason as the line above: what a
     /// flush got through, and which queues it stepped around, is said once as it returns and is
     /// nowhere to be read afterwards — the store shows the state, not who declined to touch it.
@@ -104,6 +108,7 @@ impl Driver {
             project_id: 0,
             bindings: HashMap::new(),
             last_run: None,
+            last_unbind: None,
             last_flush: None,
             artifacts: HashMap::new(),
             catalogs: HashMap::new(),

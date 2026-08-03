@@ -16,11 +16,15 @@
 /**
  * The standing notices, in premise order.
  *
+ * `linkFolder` stands ahead of both the others because it is what they are made of: with no folder there
+ * is nowhere to open a terminal, nowhere to paste the request, and nothing for the wiring to be written
+ * into (`AMB-D-533`).
+ *
  * `firstLoop` comes before `agentHookWiring`: the wiring takes effect from the next session on, and a
  * reader who has never seen amenbo hold a task cannot tell what the setup is for (`AMB-D-516`). The loop
  * is spent by the first task to land — and that same task is what brings the wiring notice up.
  */
-export const BOARD_NOTICES = ["firstLoop", "agentHookWiring"] as const;
+export const BOARD_NOTICES = ["linkFolder", "firstLoop", "agentHookWiring"] as const;
 
 export type BoardNotice = (typeof BOARD_NOTICES)[number];
 

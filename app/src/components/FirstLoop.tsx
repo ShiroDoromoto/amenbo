@@ -12,52 +12,18 @@
 // with nothing on it yet. So it takes the folder it speaks about and nothing about where it sits.
 // One button per move, and each does only what its label says, so nothing the reader did not press
 // happens behind their back.
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useCliCommandName } from "../core/cliCommand";
 import { errText, t, tf } from "../core/i18n";
-import { fetchBoundFolders, openTerminal } from "../core/mutations";
+import { openTerminal } from "../core/mutations";
 
 /**
- * The loop for a project, wherever the project is what the reader is looking at: it finds the folder
- * itself, since a project is bound to its folders and not the other way round. With none — or with
- * only folders that have since moved away — there is no terminal to open and nowhere for an AI to
- * write, so the invitation is to link one, and the loop waits behind it.
+ * The whole flow, for a folder that is linked — `dir` is that folder.
  *
- * Nothing is drawn until the answer is in. A flash of "link a folder" on a project that has one reads
- * as a broken binding, which is a worse thing to say than nothing.
+ * It takes the folder rather than looking one up: a project is bound to its folders and not the other way
+ * round, so whoever draws the loop has already had to ask (`useBoundFolders`), and on the board the answer
+ * decides whether the loop is what gets drawn at all (`AMB-D-533`).
  */
-export function ProjectFirstLoop({ projectId, onLinkFolder }: { projectId: number; onLinkFolder: () => void }) {
-  const [dir, setDir] = useState<string | null>(null);
-  const [answered, setAnswered] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    setAnswered(false);
-    fetchBoundFolders(projectId)
-      .then((folders) => {
-        if (!alive) return;
-        setDir(folders.find((f) => f.exists)?.path ?? null);
-        setAnswered(true);
-      })
-      .catch(() => { if (alive) setAnswered(true); }); // Unanswered is the same as unbound: the invitation is the safe half.
-    return () => { alive = false; };
-  }, [projectId]);
-
-  if (!answered) return null;
-  if (dir) return <FirstLoop dir={dir} />;
-
-  return (
-    <div className="firstloop">
-      <div className="firstloop__head">
-        <span className="firstloop__title">📂 {t("firstloop.noFolderTitle")}</span>
-        <span className="firstloop__intro muted">{t("firstloop.noFolderHint")}</span>
-      </div>
-      <button className="btn" onClick={onLinkFolder}>{t("firstloop.noFolderBtn")}</button>
-    </div>
-  );
-}
-
-/** The whole flow, for a project whose folder is linked — `dir` is that folder. */
 export function FirstLoop({ dir }: { dir: string }) {
   const [copied, setCopied] = useState<"prompt" | "path" | null>(null);
   const [error, setError] = useState<string | null>(null);

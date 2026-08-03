@@ -851,31 +851,45 @@ pub struct WalkOutcome {
     pub passed: bool,
 }
 
+/// A step as it is handed over — everything there is to know about it *before* it is carried out.
+/// It is the record's own front half ([`StepRecord`]), minus everything only the shot can say.
+#[derive(Debug, Clone, Copy)]
+pub struct StepBrief<'a> {
+    /// Zero-based, as [`StepRecord::index`] is; a reader counting steps adds one.
+    pub index: usize,
+    /// `action` or `assert` — what is being asked of whoever is standing at the screen.
+    pub kind: &'static str,
+    /// The step rendered as the sentence an operator reads.
+    pub instruction: &'a str,
+    /// What OCR will be asked to find on the shot, for an assert that named it. `None` on an action,
+    /// and on an assert whose check no reading can settle — the shot goes to a human eye instead.
+    pub expected: Option<&'a Expectation>,
+}
+
 /// Walk a scenario step by step: capture one screenshot per step into `evidence_dir`, and for an
 /// assert OCR can judge, read the shot back and decide `Pass`/`Fail` against the expected text.
-/// Every side effect is injected — `capture` and `read_text` shell out to the screen tool, `pause`
-/// holds the walk at a step boundary; a test passes closures that only touch/return fixtures — so
-/// the walk is verifiable without a GUI. A capture failure aborts the walk (a missing shot is
-/// missing evidence); each judged step's reading is written next to its shot as it came back from
-/// the reader, before the fold the match is taken on.
+/// Every side effect is injected — `capture` and `read_text` shell out to the screen tool,
+/// `hand_over` gives the step away before it is taken; a test passes closures that only
+/// touch/return fixtures — so the walk is verifiable without a GUI. A capture failure aborts the
+/// walk (a missing shot is missing evidence); each judged step's reading is written next to its
+/// shot as it came back from the reader, before the fold the match is taken on.
 ///
-/// `pause` is what lets one scenario carry a screen that moves: it is called with the record just
-/// finished, **after** that step's shot is on disk and before the next step is taken, so the
-/// evidence of where the run stood is written down before anyone is asked to move the screen on.
-/// It is not called after the last step — nothing follows it to hold the screen for. A pause that
-/// fails aborts the walk, since a run that cannot be held is one whose remaining shots would all
-/// come off the same screen.
-pub fn walk<C, O, P>(
+/// `hand_over` is what puts somebody at the screen for every shot. It is called with
+/// the step about to be taken, **before** anything is captured, and it is called for the first step
+/// as well as the rest — so the screen a shot is taken of is one somebody was asked to stand up,
+/// and no shot is filed as evidence of a step nobody carried out. A hand-over that fails aborts the
+/// walk, since a run nobody is holding would shoot whatever screen was left standing.
+pub fn walk<C, O, H>(
     scenario: &Scenario,
     evidence_dir: &Path,
     mut capture: C,
     mut read_text: O,
-    mut pause: P,
+    mut hand_over: H,
 ) -> Result<WalkOutcome, String>
 where
     C: FnMut(&Path) -> Result<(), String>,
     O: FnMut(&Path) -> Result<Reading, String>,
-    P: FnMut(&StepRecord) -> Result<(), String>,
+    H: FnMut(&StepBrief<'_>) -> Result<(), String>,
 {
     std::fs::create_dir_all(evidence_dir)
         .map_err(|e| format!("could not create evidence dir {}: {e}", evidence_dir.display()))?;
@@ -896,6 +910,17 @@ where
         let domain = domain_str(domain);
         let screenshot = format!("{:02}-{kind}-{domain}-{op}.png", i + 1);
         let shot_path = evidence_dir.join(&screenshot);
+
+        // Handed over first, shot second. The screen is nobody's until somebody has been asked to
+        // stand it up, and a shot taken before that is a photograph of the step before this one.
+        hand_over(&StepBrief {
+            index: i,
+            kind,
+            instruction: &instruction,
+            expected: expected.as_ref(),
+        })
+        .map_err(|e| format!("step {}: handing the step over failed: {e}", i + 1))?;
+
         capture(&shot_path)
             .map_err(|e| format!("step {}: capturing `{screenshot}` failed: {e}", i + 1))?;
 
@@ -930,10 +955,6 @@ where
             expected,
             found,
         };
-        if i + 1 < steps.len() {
-            pause(&record)
-                .map_err(|e| format!("step {}: waiting for the next step failed: {e}", i + 1))?;
-        }
         records.push(record);
     }
     Ok(WalkOutcome { records, passed })
@@ -1993,23 +2014,29 @@ steps_gui:
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// The stepped run: the walk is held at every boundary but the last, and what it hands over is
-    /// the step whose shot is already on disk — so an operator moving the screen on is moving it
-    /// away from evidence already written, never from a step still to be captured.
+    /// Every step is handed over, the first one included, and each hand-over comes before that
+    /// step's shot exists — so nothing is ever captured off a screen nobody was asked to stand up.
     #[test]
-    fn a_pause_holds_every_step_boundary_but_the_last() {
+    fn every_step_is_handed_over_before_it_is_shot() {
         let s = load(SCENARIO);
         let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-step-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
 
-        let held: RefCell<Vec<(usize, bool)>> = RefCell::new(Vec::new());
+        let handed: RefCell<Vec<(usize, &'static str, usize)>> = RefCell::new(Vec::new());
+        let shots: RefCell<usize> = RefCell::new(0);
         let outcome = walk(
             &s,
             &dir,
-            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |p| {
+                *shots.borrow_mut() += 1;
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
             |_| Ok(reading("me-ai board\nSEED")),
-            |r| {
-                held.borrow_mut().push((r.index, dir.join(&r.screenshot).is_file()));
+            |b| {
+                // The shot count taken at the hand-over says which side of the capture it fell on:
+                // step `i` is handed over with `i` shots on disk, never `i + 1`.
+                handed.borrow_mut().push((b.index, b.kind, *shots.borrow()));
+                assert!(!b.instruction.is_empty(), "a step is handed over as a sentence to carry out");
                 Ok(())
             },
         )
@@ -2017,30 +2044,36 @@ steps_gui:
 
         assert_eq!(outcome.records.len(), 3);
         assert_eq!(
-            *held.borrow(),
-            vec![(0, true), (1, true)],
-            "held after each step's shot, and not after the last step"
+            *handed.borrow(),
+            vec![(0, "action", 0), (1, "action", 1), (2, "assert", 2)],
+            "one hand-over per step, from the first, each before its own shot"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// A wait that cannot be held is an execution failure, not a nod: were it swallowed, the rest of
-    /// the run would shoot the screen the operator was still standing on and report it as stepped.
+    /// A hand-over that cannot be made is an execution failure, not a nod — and it fails at the
+    /// first step, before any shot: were it swallowed, the run would shoot whatever screen was left
+    /// standing and file it as evidence of steps nobody carried out.
     #[test]
-    fn a_pause_failure_aborts_the_walk() {
+    fn a_hand_over_failure_aborts_the_walk_before_the_first_shot() {
         let s = load(SCENARIO);
         let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-step-red-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
 
+        let shots: RefCell<usize> = RefCell::new(0);
         let err = walk(
             &s,
             &dir,
-            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |p| {
+                *shots.borrow_mut() += 1;
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
             |_| Ok(reading("")),
             |_| Err("nobody is watching".to_string()),
         )
         .unwrap_err();
         assert!(err.contains("step 1") && err.contains("nobody is watching"), "got: {err}");
+        assert_eq!(*shots.borrow(), 0, "nothing was shot");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

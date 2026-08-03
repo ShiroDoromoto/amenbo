@@ -26,7 +26,7 @@
 # one is drawing the first loop, which the report stands aside for. The answer is left where a fresh
 # store leaves it, never given, since the road is the one that gives it. What is left to the operator is
 # to open that project and read the report standing on its board. The screen moves at the press, so
-# drive it stepped (`--step`) and carry out each move at the hand-back before it.
+# carry each move out when the run hands that step over.
 id: take-back-a-no-about-starting-this-projects-ai
 title: A project can decline having its AI started on amenbo where it reads the report, and take the refusal back where it is kept
 description: >

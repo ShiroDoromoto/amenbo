@@ -8,12 +8,11 @@
 //! assert it cannot judge is left as a `Review` for a human eye, and its shot is kept.
 //!
 //! Usage: `verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>]
-//!                    [--step] [--json]`
+//!                    [--json]`
 //!        `verify-gui <scenario.yaml> --print`
 //!   `--app`      the installed `.app` bundle to launch and shoot (e.g. `~/Applications/amenbo.app`)
 //!   `--evidence` where the shots + manifest land (default: a fresh dir under the temp tree)
 //!   `--screen`   path to the screen tool (default: scripts/screen.swift in the repo)
-//!   `--step`     stop after each step's shot and wait for a line on stdin before the next
 //!   `--json`     emit the manifest path, verdict and step count as JSON instead of the summary
 //!   `--print`    print the road's instructions and stop — nothing launched, no shot, no OCR
 //!
@@ -32,14 +31,15 @@
 //! them there. The screen's own moves are not among them — those are the road, and the operator
 //! walks them.
 //!
-//! Without `--step` the run shoots every step back to back, which is one screen photographed as
-//! many times as the scenario is long. `--step` is what lets a scenario carry a screen that moves:
-//! it hands the run back after each shot, and whoever is driving — a person, or an AI calling the
-//! screen tool — carries out the next step and sends a line to say the screen is standing where
-//! the scenario says it should. Waiting on a line rather than on a clock is the whole point: a run held
-//! for a fixed number of seconds shoots whatever is on screen when the clock runs out, so a step
-//! that took a moment longer is filed as evidence of a screen nobody stood on. Everything the wait
-//! says goes to stderr, so a `--json` run is still one line of JSON on stdout.
+//! **Every step is handed over before it is taken, and there is no way to ask for otherwise.**
+//! The run prints the step it is about to shoot and waits for a line on stdin;
+//! whoever is driving — a person, or an AI calling the screen tool — stands the screen where that
+//! step says, and answers. The first step is handed over like every other, so a road whose opening
+//! move is a check is not shot against the untouched screen a launch leaves behind. Waiting on a
+//! line rather than on a clock is the whole point: a run held for a fixed number of seconds shoots
+//! whatever is on screen when the clock runs out, so a step that took a moment longer is filed as
+//! evidence of a screen nobody stood on. Everything the wait says goes to stderr, so a `--json` run
+//! is still one line of JSON on stdout.
 //!
 //! `--print` is the other half of that: the road rendered into the instructions an operator would
 //! read, and nothing else done with them. The sentences are written here in Rust while the road is
@@ -59,7 +59,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use amenbo_verify_cli::World;
 use amenbo_verify_gui::{
-    launch, read_shot, scratch, shoot, walk, write_manifest, StepRecord, Verdict,
+    launch, read_shot, scratch, shoot, walk, write_manifest, StepBrief, StepRecord, Verdict,
 };
 
 fn main() -> ExitCode {
@@ -67,7 +67,7 @@ fn main() -> ExitCode {
         Ok(o) => o,
         Err(msg) => {
             eprintln!("verify-gui: {msg}");
-            eprintln!("usage: verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>] [--step] [--json]");
+            eprintln!("usage: verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>] [--json]");
             eprintln!("       verify-gui <scenario.yaml> --print");
             return ExitCode::from(2);
         }
@@ -138,22 +138,19 @@ fn run(opts: &Opts) -> Result<bool, String> {
         .clone()
         .unwrap_or_else(|| default_evidence_dir(&scenario.id));
 
-    if opts.step {
-        eprintln!(
-            "stepping: {} step(s) — the run stops after each shot",
-            scenario.steps(amenbo_scenario::Driver::Gui).len()
-        );
-    }
+    eprintln!(
+        "{} step(s) — each one is handed over before it is shot",
+        scenario.steps(amenbo_scenario::Driver::Gui).len()
+    );
 
     let screen = opts.screen.clone();
-    let stepping = opts.step;
     let stdin = std::io::stdin();
     let outcome = walk(
         &scenario,
         &evidence,
         |path| shoot(pid, path, &screen),
         |image| read_shot(image, &screen),
-        |record| if stepping { hand_back(&stdin, record) } else { Ok(()) },
+        |brief| hand_over(&stdin, brief),
     )?;
 
     let stood = world.as_ref().map(World::stood).unwrap_or_default();
@@ -204,8 +201,8 @@ fn stand_world<'a>(
 }
 
 /// One step as the summary prints it: its verdict mark, number, kind and instruction, and the shot
-/// it left behind. The same two lines a stepped run hands back at each boundary, so what an operator
-/// reads mid-run and what the summary reports afterwards are the one rendering.
+/// it left behind. The hand-over says the same of a step it has no shot for yet, so what a driver
+/// reads mid-run and what the summary reports afterwards line up.
 fn step_lines(r: &StepRecord) -> String {
     let mark = match r.verdict {
         Verdict::Action => "·",
@@ -222,21 +219,29 @@ fn step_lines(r: &StepRecord) -> String {
     )
 }
 
-/// Hold the run at a step boundary: show the step whose shot is now on disk, then wait for one line
-/// on stdin saying the screen has been moved on to the next one. It writes to stderr so a `--json`
-/// run keeps stdout to its one machine-readable line, and a line is all it asks for — the content is
-/// the operator's to use as a note to themselves.
+/// Hand the step about to be shot to whoever is driving, then wait for one line on stdin saying the
+/// screen is standing where that step says. It writes to stderr so a `--json` run keeps stdout to
+/// its one machine-readable line, and a line is all it asks for — the content is the driver's to use
+/// as a note to themselves.
 ///
-/// End of input is a failure rather than a nod. A run asked to step with nothing left to hold it
-/// would walk the rest of the scenario off whichever screen was up, and file those shots as evidence
-/// of steps nobody carried out.
-fn hand_back(stdin: &std::io::Stdin, record: &StepRecord) -> Result<(), String> {
-    eprintln!("{}", step_lines(record));
-    eprint!("  … carry out the next step on screen, then press Enter: ");
+/// What an assert expects OCR to find is shown with it. The reading is a substring match and no
+/// more, so a driver who can see the screen is the one who can tell a check that genuinely passed
+/// from one the words happened to satisfy.
+///
+/// End of input is a failure rather than a nod. A run with nothing left to hold it would walk the
+/// rest of the scenario off whichever screen was up, and file those shots as evidence of steps
+/// nobody carried out.
+fn hand_over(stdin: &std::io::Stdin, brief: &StepBrief<'_>) -> Result<(), String> {
+    eprintln!("  → {:02} [{}] {}", brief.index + 1, brief.kind, brief.instruction);
+    if let Some(exp) = brief.expected {
+        let side = if exp.present { "reads" } else { "does not read" };
+        eprintln!("        the shot {side}: {}", exp.text);
+    }
+    eprint!("  … stand the screen where this step says, then press Enter: ");
     let _ = std::io::stderr().flush();
     let mut line = String::new();
     match stdin.lock().read_line(&mut line) {
-        Ok(0) => Err("stdin reached end of input — a stepped run needs one line per step".into()),
+        Ok(0) => Err("stdin reached end of input — a run needs one line per step".into()),
         Ok(_) => Ok(()),
         Err(e) => Err(format!("could not read the go-ahead from stdin: {e}")),
     }
@@ -259,7 +264,6 @@ struct Opts {
     app: Option<PathBuf>,
     evidence: Option<PathBuf>,
     screen: PathBuf,
-    step: bool,
     json: bool,
     print: bool,
 }
@@ -270,14 +274,12 @@ impl Opts {
         let mut app = None;
         let mut evidence = None;
         let mut screen = None;
-        let mut step = false;
         let mut json = false;
         let mut print = false;
         let mut it = args.peekable();
         while let Some(a) = it.next() {
             match a.as_str() {
                 "--json" => json = true,
-                "--step" => step = true,
                 "--print" => print = true,
                 "--app" => app = Some(PathBuf::from(it.next().ok_or("--app needs a bundle path")?)),
                 "--evidence" => evidence = Some(PathBuf::from(it.next().ok_or("--evidence needs a path")?)),
@@ -295,7 +297,6 @@ impl Opts {
             app,
             evidence,
             screen: screen.unwrap_or_else(default_screen),
-            step,
             json,
             print,
         })

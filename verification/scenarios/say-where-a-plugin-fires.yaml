@@ -18,7 +18,7 @@
 #
 # The world it starts from is declared below and stood up before the app is launched. What is left to
 # the operator is where to start: the installed plugins screen. Every step after the first moves the
-# screen, so drive it stepped (`--step`) and carry out each move at the hand-back before it.
+# screen, so carry each move out when the run hands that step over.
 #
 # Every line is closed by an eye rather than by a reading. What each one names is a project, and the
 # projects run down the side of every screen: a reading that finds the name cannot say it came from

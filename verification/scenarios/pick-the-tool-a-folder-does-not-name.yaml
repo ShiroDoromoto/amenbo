@@ -19,7 +19,7 @@
 # is drawing the first loop, which the report stands aside for. The answer is left where a fresh store
 # leaves it, never given, which is the state the report is drawn from: only a refusal takes it away, and
 # a yes is not wiring. What is left to the operator is to open that project — the report is drawn on
-# arrival — and to drive the run stepped (`--step`), since the pick is what the shot after it is of.
+# arrival. The pick is what the shot after it is of, so make it when the run hands that step over.
 id: pick-the-tool-a-folder-does-not-name
 title: A folder that shows no sign of any AI tool is handed the catalog, and the tool the reader picks is the tool the text is for
 description: >

@@ -8,7 +8,7 @@
 # the search was never asked for, so neither is on any hit.
 #
 # A screen road alone: a terminal prints its hits as text and the ref is typed into `show`, so there is
-# nothing there to press. Drive it stepped (`--step`).
+# nothing there to press.
 id: follow-a-hit-to-its-record
 title: A hit is a pointer — pressing its ref opens the record it names, and not the one beside it
 description: >

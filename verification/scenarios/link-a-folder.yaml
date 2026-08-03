@@ -36,12 +36,11 @@
 # What that road wants in front of it is a device with a project on it and nothing on that project's
 # board: the open card is offered where there is something to open, the choices it lists are what the
 # store holds, and the loop at the end is what an untouched board leads with. That project is declared
-# below and stood up before the app is launched; what is left to the operator is to start the run on
-# the getting started screen — the one screen nothing here can move to, since the first shot is taken
-# before anyone is handed the run.
+# below and stood up before the app is launched; what is left to the operator is to stand on the
+# getting started screen — the run hands the first step over before it shoots anything, so that is
+# where to be by the time it does.
 #
-# Everything after it is a step: the road crosses three screens, so drive it stepped (`--step`) and
-# carry out each move at the hand-back before it.
+# The road crosses three screens: carry each move out when the run hands that step over.
 id: link-a-folder
 title: A folder is linked to the project it will answer for — from a terminal, and from the screens a reader with nothing linked is offered
 description: >

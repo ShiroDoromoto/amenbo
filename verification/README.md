@@ -264,27 +264,33 @@ cd verification
 cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml --print
 ```
 
-### `--step` — a scenario whose screen moves
+### Every step is handed over before it is shot
 
-By default the run shoots its steps back to back, which photographs one prepared screen as many
-times as the scenario is long: a line whose state advances — open the card, answer which project,
-pick the folder, read the linked screen — cannot be written as one scenario, only prepared for
-outside it and asserted at the end.
+A screen road is walked by somebody, always. The run prints the step it is about to shoot and waits
+for a line on stdin; between the two, the screen belongs to whoever is driving — carry the step out
+by hand, or with the screen tool's `click-named` / `type` / `key`, and send the line once the screen
+is standing where the step says it should. There is no flag for running it any other way.
 
-`--step` stops the run after each step's shot and waits for a line on stdin. Between the two, the
-screen belongs to whoever is driving: carry out the next step by hand, or with the screen tool's
-`click-named` / `type` / `key`, and send the line when the screen is standing where the scenario
-says it should. The
-stop is **after** the shot, never before — the evidence of where the run stood is on disk before
-anyone is invited to move on — and there is no stop after the last step, which has nothing following
-it to hold the screen for. Leave the flag off and nothing changes, so an unattended run stays
-unattended.
+**The hand-over comes before the step, the first one included.** That is what lets a road open with a
+check: a run starts on a store made for it a moment ago, so the screen a launch leaves behind is the
+first-run one, and a road whose opening line reads the board would be judged against that. Handed the
+step first, the driver stands the screen where the line says before anything is captured.
+
+Left to itself a run would photograph one screen as many times as the scenario is long, and pass:
+the verdict is a substring in what OCR read off the shot, so the screen before a step and the screen
+after it are not told apart, and a line asking that something *not* be on screen passes for as long
+as nothing moves. A step nobody carried out is the one thing this harness cannot see, which is why it
+never runs without somebody there.
 
 The wait is on a line and not on a clock on purpose. A run held for a fixed number of seconds shoots
 whatever is up when the clock runs out, so a step that took a moment longer is filed as evidence of a
 screen nobody stood on — a red nobody can tell from a real one, or worse, a green. For the same
-reason end of input is a failure and not a nod: a stepped run with nothing left to hold it would walk
-the rest of the scenario off one screen and report it as though it had been driven.
+reason end of input is a failure and not a nod: a run with nothing left to hold it would walk the
+rest of the scenario off one screen and report it as though it had been driven.
+
+What an assert expects OCR to find is shown with it at the hand-over. The reading is a substring
+match and nothing more, so the driver — who can see the screen — is the one who can tell a check that
+genuinely passed from one the words happened to satisfy, and say so when the evidence is read back.
 
 The moves themselves are written in the scenario, not in a note beside it. Getting from one screen
 to the next is an action step like any other (`folder open-existing-card`, `folder choose-project`),
@@ -300,7 +306,7 @@ settings opened inside it and the press that then goes through, and
 `choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
 the button back to the author's default.
 
-Everything the wait prints — the step just captured, and the prompt — goes to stderr, so `--json`
+Everything the wait prints — the step about to be taken, and the prompt — goes to stderr, so `--json`
 still leaves one machine-readable line on stdout. A driver that is not a person keeps its side open
 through a pipe:
 
@@ -308,10 +314,10 @@ through a pipe:
 cd verification
 mkfifo /tmp/go
 cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml \
-  --app ~/Applications/amenbo.app --step --json < /tmp/go &
+  --app ~/Applications/amenbo.app --json < /tmp/go &
 exec 3>/tmp/go   # hold the writing side open — otherwise the first echo closes it, which is the end
                  # of input, and the run stops rather than carrying on to the next step
-# … drive the screen to the next step (the screen tool), then release the next shot:
+# … stand the screen where the step just handed over says (the screen tool), then release its shot:
 echo >&3
 # … and when the last step has been shot, let it go:
 exec 3>&-

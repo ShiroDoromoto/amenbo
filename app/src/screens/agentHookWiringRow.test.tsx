@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The standing row on a project's own screen — the GUI's only face for the session-start hook
+// The standing row on a project's own screen — the face the reader acts on for the session-start hook
 // (`AMB-D-459`, `AMB-D-460`). Only the boundary is stubbed (core's per-project walk, the answer, and the
 // clipboard); the row's own branching and wording run for real.
 //
@@ -41,7 +41,7 @@ vi.mock("../core/mutations", () => ({
 }));
 
 import { t } from "../core/i18n";
-import { AgentHookWiringRow } from "./AgentHookWiringRow";
+import { AgentHookWiringRow, useAgentHookWiring } from "./AgentHookWiringRow";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -64,9 +64,15 @@ function waiting(over: Partial<AgentHookWiringDto> = {}): AgentHookWiringDto {
   return { tool: tool(), dirs: ["/w/案件X"], ...over };
 }
 
+// The row takes what the project has left to wire rather than reading it — the board needs the same answer
+// to order its one standing notice (`AMB-D-535`), so the read is the Hook's and this is what joins them.
+function Standing({ projectId }: { projectId: number }) {
+  return createElement(AgentHookWiringRow, { projectId, wiring: useAgentHookWiring(projectId) });
+}
+
 async function render(projectId = 7) {
   await act(async () => {
-    root.render(createElement(AgentHookWiringRow, { projectId }));
+    root.render(createElement(Standing, { projectId }));
   });
 }
 

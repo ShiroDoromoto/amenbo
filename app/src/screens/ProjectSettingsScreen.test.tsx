@@ -8,7 +8,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BoundFolderDto } from "../bindings/bindings";
+import type { AgentHookWiringDto, BoundFolderDto } from "../bindings/bindings";
 import type { PluginInstall } from "../core/pluginInstalls";
 
 const hoisted = vi.hoisted(() => ({
@@ -22,6 +22,8 @@ const hoisted = vi.hoisted(() => ({
   answers: [] as boolean[],
   /** What this project answered about starting its AI on amenbo — null for never asked. */
   consent: null as boolean | null,
+  /** What core's per-project walk reports is still waiting to be wired, grouped by harness. */
+  waiting: [] as AgentHookWiringDto[],
   /** The writes that were called, arguments and all. */
   calls: [] as Array<Array<number | string>>,
 }));
@@ -63,6 +65,7 @@ vi.mock("../core/mutations", () => {
     updateProject: record("updateProject"), deleteProject: record("deleteProject"),
     setProjectArchived: record("setProjectArchived"),
     fetchAgentHookConsent: () => Promise.resolve(hoisted.consent),
+    fetchAgentHookProjectWiring: () => Promise.resolve(hoisted.waiting),
     clearAgentHookConsent: (projectId: number) => {
       hoisted.calls.push(["clearAgentHookConsent", projectId]);
       hoisted.consent = null;
@@ -107,6 +110,7 @@ beforeEach(() => {
   hoisted.folders = [];
   hoisted.installs = [];
   hoisted.consent = null;
+  hoisted.waiting = [];
   hoisted.gated.length = 0;
   hoisted.answers.length = 0;
   hoisted.calls.length = 0;
@@ -324,6 +328,14 @@ const clearButton = () =>
   Array.from(harnessSection().querySelectorAll("button")).find(
     (b) => b.textContent === t("projset.harnessClear"),
   ) as HTMLButtonElement;
+/** The folders the section says are still waiting to be wired. */
+const waitingList = () =>
+  [...harnessSection().querySelectorAll("li")].map((li) => li.textContent);
+/** What core's per-project walk answers for one harness. The prose in it is core's, not the screen's. */
+const waitingOn = (tool: string, dirs: string[]): AgentHookWiringDto => ({
+  tool: { tool, label: tool, pasteInto: `.${tool}/settings.json`, request: "REQUEST-A" },
+  dirs,
+});
 
 // The way back out of an answer that is otherwise final (`AMB-D-459`). What the section is judged on is
 // that its three states stay three: a refusal and a project nobody has asked are both silent everywhere
@@ -364,5 +376,35 @@ describe("the answer about starting this project's AI on amenbo", () => {
     expect(hoisted.calls).toContainEqual(["clearAgentHookConsent", 1]);
     expect(harnessSection().textContent).toContain(t("projset.harnessUnanswered"));
     expect(clearButton().disabled).toBe(true);
+  });
+
+  // The board carries one standing notice and no more (`AMB-D-535`), so the report about unwired folders
+  // is not always the one on it. This is where it is legible whatever the board is showing — the reason
+  // narrowing the board to one notice does not lose the work behind the rest.
+  it("lists the folders still waiting to be wired, whether or not the board is showing them", async () => {
+    hoisted.waiting = [waitingOn("claude-code", ["/w/one", "/w/two"])];
+    await render([]);
+
+    expect(waitingList()).toEqual(["/w/one", "/w/two"]);
+  });
+
+  // A folder that names no tool it uses is waiting on every harness in the catalog, so core answers with
+  // the same path under each. Listed by tool it would read as one folder left per tool.
+  it("lists a folder once however many harnesses are waiting on it", async () => {
+    hoisted.waiting = [
+      waitingOn("claude-code", ["/w/one", "/w/two"]),
+      waitingOn("cursor", ["/w/one", "/w/two"]),
+    ];
+    await render([]);
+
+    expect(waitingList()).toEqual(["/w/one", "/w/two"]);
+  });
+
+  // An empty list is what "every folder here is wired" looks like, and it needs no sentence of its own —
+  // a heading standing over nothing reads as a report that failed rather than as nothing to report.
+  it("says nothing where no folder is waiting", async () => {
+    await render([]);
+
+    expect(harnessSection().textContent).not.toContain(t("agentHookWiring.title"));
   });
 });

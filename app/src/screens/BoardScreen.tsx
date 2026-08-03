@@ -11,7 +11,8 @@ import { Pager, usePager } from "../components/Pager";
 import { useTaskPage, useTaskSearchIds } from "../core/reads";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { ProjectFirstLoop } from "../components/FirstLoop";
-import { AgentHookWiringRow } from "./AgentHookWiringRow";
+import { AgentHookWiringRow, useAgentHookWiring } from "./AgentHookWiringRow";
+import { pickBoardNotice } from "./boardNotice";
 import { inTauri } from "../core/snapshot";
 import { DecisionsScreen } from "./DecisionsScreen";
 import { CalendarView } from "./CalendarView";
@@ -103,6 +104,9 @@ export function BoardScreen({
   // layouts share this ref. useBoardFlip is inert outside Tauri and when its flag is off.
   const boardRef = useRef<HTMLDivElement>(null);
   const armMove = useBoardFlip(boardRef, draggingId);
+  // What this project has left to wire. Read here rather than inside the row, because whether the row is
+  // standing is one of the inputs to which notice the board draws (see `notice` below).
+  const wiring = useAgentHookWiring(projectId);
   // The status pull-down on a card is a local move we do want to animate (unlike a drag): arm the flourish just
   // before the write, so the card slides to its new column. A stable ref, to keep the cards' memo intact.
   const setStatusAnimated = useCallback((id: number, status: Status, reason?: string) => {
@@ -178,12 +182,19 @@ export function BoardScreen({
   // violation throws during render and blacks out the screen). groupingDim/dims/tasks above are null-safe through
   // `project?.dimensions ?? []`, so they come out empty and reach no JSX before the guard returns the placeholder.
   const listPager = usePager(tasks, `${view}|${selectionKey(sel)}|${rawQ}`);
-  // A project with nothing in it yet gets the first loop instead of empty columns (`AMB-D-414`) — the
-  // one push that puts something on it. The question is about the project, not about the view: `all`
-  // is the project's whole page, narrowed by nothing at all, so an empty `all` is the project itself
-  // being empty, where an empty `tasks` may only be the search or the filter chips biting. Outside
-  // Tauri there is no folder to open a terminal in, so the browser iteration keeps its bare columns.
-  const untouched = all.length === 0 && inTauri();
+  // The one standing notice this board carries (`AMB-D-535`). Every candidate answers for itself whether
+  // it has something to say, and the ordering — which of them wins when more than one does — is
+  // `pickBoardNotice`'s alone.
+  //
+  // `firstLoop`: a project with nothing in it yet gets the first loop instead of empty columns
+  // (`AMB-D-414`) — the one push that puts something on it. The question is about the project, not about
+  // the view: `all` is the project's whole page, narrowed by nothing at all, so an empty `all` is the
+  // project itself being empty, where an empty `tasks` may only be the search or the filter chips biting.
+  // Outside Tauri there is no folder to open a terminal in, so the browser iteration keeps its bare columns.
+  const notice = pickBoardNotice({
+    firstLoop: all.length === 0 && inTauri(),
+    agentHookWiring: wiring.waiting.length > 0,
+  });
   if (!project) return <div className="placeholder">{t("board.notFound")}</div>;
   const setDim = (id: string, value: string) => setSel((prev) => ({ ...prev, [id]: value }));
 
@@ -222,14 +233,9 @@ export function BoardScreen({
       {headerSlot && createPortal(toolbar, headerSlot)}
 
       {/* Above both tabs, because it is about the project and not about what is being looked at in it.
-          It draws nothing where every folder of this project is wired, or where the project said no
-          (`AMB-D-459`, `AMB-D-460`).
-          Nor on a project with nothing in it yet, where the first loop is standing: both are text to
-          hand an AI of the reader's, they look alike, and neither says which comes first — so the
-          board that has never held a task carries the loop alone (`AMB-D-516`). The wiring keeps: it
-          stands until the folders are wired, while the first loop is spent by the first task to land,
-          and that same task is what puts this row on the board. */}
-      {!untouched && <AgentHookWiringRow projectId={projectId} />}
+          It is here only when it won the ordering; what it lost to is not lost with it, project settings
+          being where every folder still waiting is listed (`AMB-D-535`). */}
+      {notice === "agentHookWiring" && <AgentHookWiringRow projectId={projectId} wiring={wiring} />}
 
       {tab === "decisions" && (
         <DecisionsScreen
@@ -238,13 +244,13 @@ export function BoardScreen({
           onSelectDecision={onSelectDecision}
         />
       )}
-      {tab === "tasks" && untouched && (
+      {tab === "tasks" && notice === "firstLoop" && (
         <div className="board__firstloop">
           <ProjectFirstLoop projectId={projectId} onLinkFolder={onOpenSettings} />
         </div>
       )}
 
-      {tab === "tasks" && !untouched && (
+      {tab === "tasks" && notice !== "firstLoop" && (
       <>
       <div className="filterbar">
         <input

@@ -24,7 +24,6 @@ use crate::store_engine::{StoreEngine, StoreEngineError};
 
 /// The plain tables this module owns, named through the generated column identifiers — so a column
 /// that is not in the store is a name that does not compile.
-const BP: col::binding_path::Cols = col::binding_path::ALL;
 const BPD: col::binding_project_dir::Cols = col::binding_project_dir::ALL;
 const RR: col::read_receipt::Cols = col::read_receipt::ALL;
 const IA: col::inbox_archive::Cols = col::inbox_archive::ALL;
@@ -38,20 +37,10 @@ pub const MAILBOX_LAST_SEEN_META: &str = "read_receipt.mailbox_last_seen";
 
 // ───────────────────────── folder bindings ─────────────────────────
 
-/// Read the folder bindings — [`Registry::paths`] (project → its main dir) and
-/// [`Registry::project_dirs`] (project → every dir pointing at it). Both are keyed by the project's
-/// `INTEGER` id, the same key the `project` record carries.
+/// Read the folder bindings — [`Registry::project_dirs`] (project → every dir pointing at it), keyed by
+/// the project's `INTEGER` id, the same key the `project` record carries.
 pub fn load_bindings(conn: &Connection) -> Registry {
     let mut reg = Registry::default();
-    let mut paths = Select::new();
-    let (bp_project, bp_dir) = (paths.col(BP.project_id), paths.col(BP.dir));
-    if let Ok(mut stmt) = conn.prepare(Sql::from(&paths, BP.table).text()) {
-        if let Ok(rows) = stmt.query_map([], |r| Ok((bp_project.get(r)?, bp_dir.get(r)?))) {
-            for (project_id, dir) in rows.flatten() {
-                reg.paths.insert(project_id, dir);
-            }
-        }
-    }
     let mut dirs = Select::new();
     let (bpd_project, bpd_dir) = (dirs.col(BPD.project_id), dirs.col(BPD.dir));
     if let Ok(mut stmt) = conn.prepare(Sql::from(&dirs, BPD.table).text()) {
@@ -64,22 +53,11 @@ pub fn load_bindings(conn: &Connection) -> Registry {
     reg
 }
 
-/// Replace `binding_path` / `binding_project_dir` with `reg`'s two project-keyed indexes, inside the
-/// caller's transaction. A full rewrite: the data is a handful of folders, so rewriting every row per
-/// save keeps the value-type API (and its whole test surface) intact, and one transaction means a
-/// contended save cannot tear.
+/// Replace `binding_project_dir` with `reg`'s project-keyed index, inside the caller's transaction. A
+/// full rewrite: the data is a handful of folders, so rewriting every row per save keeps the value-type
+/// API (and its whole test surface) intact, and one transaction means a contended save cannot tear.
 pub fn write_bindings(tx: &Transaction<'_>, reg: &Registry) -> Result<()> {
-    for table in [BP.table, BPD.table] {
-        Delete::from(table).sql().execute(tx).map_err(StoreEngineError::from)?;
-    }
-    for (project_id, dir) in &reg.paths {
-        Insert::into(BP.table)
-            .set(BP.project_id, *project_id)
-            .set(BP.dir, dir.as_str())
-            .sql()
-            .execute(tx)
-            .map_err(StoreEngineError::from)?;
-    }
+    Delete::from(BPD.table).sql().execute(tx).map_err(StoreEngineError::from)?;
     for (project_id, dirs) in &reg.project_dirs {
         for dir in dirs {
             Insert::into(BPD.table)
@@ -389,9 +367,8 @@ mod tests {
     fn overview_tables_round_trip_through_the_unified_engine() {
         let engine = StoreEngine::open_in_memory().unwrap();
 
-        // Bindings: the two project-keyed indexes round-trip, keyed by the project's INTEGER id.
+        // Bindings: the project-keyed set of folders round-trips, keyed by the project's INTEGER id.
         let mut reg = Registry::default();
-        reg.set(7, "/work/a");
         reg.record_project_ref(7, "/work/a");
         reg.record_project_ref(7, "/work/b");
         {
@@ -400,7 +377,6 @@ mod tests {
             tx.commit().unwrap();
         }
         let back = load_bindings(engine.conn());
-        assert_eq!(back.get(7), Some("/work/a"));
         assert_eq!(back.dirs_for_project(7), vec!["/work/a", "/work/b"]);
 
         // Read receipts: per-task rows plus the mailbox scalar, and the GC drops dead tasks only.

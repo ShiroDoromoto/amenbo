@@ -297,6 +297,30 @@ pub const STEPS: &[Step] = &[
         // cannot drift by however many faces were added at once.
         apply: Apply::Custom(fill_the_word_index),
     },
+    Step {
+        to: 19,
+        name: "fold the main-folder table into the set of bound folders, and drop it",
+        // `AMB-D-531`. The bindings stop having a main folder: `binding_project_dir` is the whole of
+        // them, so every row `binding_path` still holds has to arrive there before the table goes.
+        //
+        // Seeded, and the seed is not a guess: the two tables held the same fact — this folder is bound
+        // to that project — and readers already took their union, so folding one into the other is what
+        // that union *was*. `INSERT OR IGNORE` because a folder recorded in both is one folder, and the
+        // pair is the key.
+        //
+        // Both tables are device-local and excluded from `export`, so nothing written out has to be
+        // reconciled with this.
+        //
+        // `CREATE TABLE IF NOT EXISTS` ahead of the fold, as v4's does: the registry no longer declares
+        // the table, so open stopped creating it, and a store that never had one then takes the same
+        // path out as a store that did.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS binding_path (project_id INTEGER PRIMARY KEY, dir TEXT);
+             INSERT OR IGNORE INTO binding_project_dir (project_id, dir) \
+                 SELECT project_id, dir FROM binding_path WHERE dir IS NOT NULL;
+             DROP TABLE binding_path;",
+        ),
+    },
 ];
 
 /// v17: build the word index for a store whose records predate it. It is exactly the rebuild any repair
@@ -1868,6 +1892,60 @@ mod tests {
             assert!(found("全文検索"), "v{born}: a long term reaches the record the step indexed");
             assert!(found("検索"), "v{born}: and so does a short one, by the scan path");
             assert!(found("計測ログ"), "v{born}: and so does a face a later step widened the index onto");
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
+    /// **v19** (`AMB-D-531`): a folder recorded as a project's main directory arrives in the set of bound
+    /// folders, and the table that held it is gone. The fold is what keeps a folder bound to its project
+    /// across the upgrade — dropping the table without it would unbind whatever lived only there.
+    #[test]
+    fn the_main_folder_of_a_binding_lands_in_the_set_and_its_table_goes() {
+        // The last version that still had the table, named literally: the question is about that step.
+        const MAIN_FOLDER_VERSION: i64 = 18;
+        for born in OLDEST_FROZEN_VERSION..MAIN_FOLDER_VERSION {
+            let dir = scratch(&format!("binding-fold-v{born}"));
+            let engine = store_at(&dir, born);
+            engine
+                .conn()
+                .execute_batch(
+                    // A build of that age wrote both tables: one folder recorded on each side, and one
+                    // recorded on both.
+                    "INSERT INTO binding_path (project_id, dir) VALUES (1, '/work/main'), (2, '/work/both');
+                     INSERT INTO binding_project_dir (project_id, dir) VALUES (1, '/work/extra'), (2, '/work/both');",
+                )
+                .unwrap();
+
+            run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+            let dirs: Vec<(i64, String)> = {
+                let conn = engine.conn();
+                let mut stmt = conn
+                    .prepare("SELECT project_id, dir FROM binding_project_dir ORDER BY project_id, dir")
+                    .unwrap();
+                let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+                rows.filter_map(|r| r.ok()).collect()
+            };
+            assert_eq!(
+                dirs,
+                vec![
+                    (1, "/work/extra".to_string()),
+                    (1, "/work/main".to_string()),
+                    (2, "/work/both".to_string()),
+                ],
+                "v{born}: the main folder joins the set, and a folder that was in both collapses to one row",
+            );
+            assert!(
+                !engine
+                    .conn()
+                    .query_row(
+                        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'binding_path')",
+                        [],
+                        |r| r.get::<_, bool>(0),
+                    )
+                    .unwrap(),
+                "v{born}: the table the main folder lived in is gone",
+            );
             std::fs::remove_dir_all(&dir).ok();
         }
     }

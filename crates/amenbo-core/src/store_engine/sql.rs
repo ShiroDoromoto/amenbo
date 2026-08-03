@@ -1871,7 +1871,10 @@ mod tests {
         assert_eq!(ints(del.params()), vec![1, 2]);
 
         // No predicate is no `WHERE` — a table-wide delete is something a caller has to mean.
-        assert_eq!(Delete::from(col::binding_path::ALL.table).sql().text(), "DELETE FROM binding_path");
+        assert_eq!(
+            Delete::from(col::binding_project_dir::ALL.table).sql().text(),
+            "DELETE FROM binding_project_dir"
+        );
     }
 
     /// An upsert writes the columns it brought and, on a conflicting key, writes them again — every

@@ -170,7 +170,7 @@ impl Store {
         crate::overview::load_bindings(self.engine.conn())
     }
 
-    /// Write the folder-binding registry back atomically (a full rewrite of both indexes in a single
+    /// Write the folder-binding registry back atomically (a full rewrite of the index in a single
     /// transaction), so a whole-file rewrite can never tear.
     pub fn save_bindings(&self, reg: &crate::binding::Registry) -> Result<()> {
         let tx = self.engine.transaction()?;

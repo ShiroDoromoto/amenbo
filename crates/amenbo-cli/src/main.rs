@@ -4223,11 +4223,9 @@ fn init_cmd(flags: &Flags, name: Option<String>, language: Option<String>, force
         if pointer.write(&cwd).is_ok() {
             placed.push(".amenbo");
             // Record the project→folder reverse lookup (what the settings screen lists, and the index a lost
-            // pointer is recovered from). As in the GUI's provisioning and in CLI bind, `set` (the primary
-            // directory) and `record_project_ref` are called as a pair. Best-effort: a failure to record does
-            // not fail init, same as the pointer write.
+            // pointer is recovered from). Best-effort: a failure to record does not fail init, same as the
+            // pointer write.
             let mut registry = store.bindings();
-            registry.set(project_id, cwd.to_string_lossy());
             registry.record_project_ref(project_id, cwd.to_string_lossy());
             let _ = store.save_bindings(&registry);
         }
@@ -4272,10 +4270,9 @@ fn recover_lost_pointer(
 ) -> Result<i32, CliError> {
     // Rewrite `.amenbo` (this is a bind, in effect).
     amenbo_core::binding::pointer_for(store, project_id).write(cwd).map_err(CliError::from)?;
-    // Update the bindings index idempotently (the primary directory plus the many-to-one reverse lookup).
+    // Update the bindings index idempotently (the many-to-one reverse lookup).
     {
         let mut reg = store.bindings();
-        reg.set(project_id, cwd.to_string_lossy().to_string());
         reg.record_project_ref(project_id, cwd.to_string_lossy());
         let _ = store.save_bindings(&reg);
     }
@@ -4375,8 +4372,7 @@ fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<S
         // directories may point at the same project_id, which makes the relation many-to-one.
         let pid = store.resolve_project_ref(&p).map_err(CliError::from)?;
         amenbo_core::binding::pointer_for(store, pid).write(&cwd).map_err(CliError::from)?;
-        registry.set(pid, cwd.to_string_lossy().to_string());
-        // Record it in the project→folders reverse lookup too (many-to-one; what the settings screen lists).
+        // Record it in the project→folders reverse lookup (many-to-one; what the settings screen lists).
         registry.record_project_ref(pid, cwd.to_string_lossy());
         store.save_bindings(&registry).map_err(CliError::from)?;
         // Upsert the guidance's managed block into both files as well (existing content is kept).
@@ -4398,9 +4394,13 @@ fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<S
     // check the registered path for staleness.
     match amenbo_core::binding::resolve_upward(store, &cwd) {
         Some((dir, b)) => {
-            // A project→dir registration whose path has vanished is binding_stale.
+            // A project→dir registration whose path has vanished is binding_stale. The folders bound to a
+            // project stand alongside each other, so the question is put to each of them and the first
+            // vanished one is what the error names.
             if let Some(pid) = b.project_id {
-                registry.resolve_dir(pid).map_err(CliError::from)?;
+                if let Some(gone) = registry.stale_dirs(pid).first() {
+                    return Err(CliError::from(amenbo_core::Error::BindingStale((*gone).to_string())));
+                }
             }
             let name = project_name(store, b.project_id)?;
             // A recorded slug that disagrees with the store means this pointer likely came from another one.

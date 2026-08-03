@@ -6,6 +6,10 @@
 //! The sentence is what a reader gets where no template exists, and it is English wherever it comes from:
 //! core writes one (`AMB-D-413`), and a refusal raised by this layer ([`CmdError::coded`]) writes one too.
 //! The reader's own language comes from the template, never from here.
+//!
+//! Because every failure a command reports passes through here, this is also where the ones that are the
+//! machine failing — rather than the store answering no — leave a line in the diagnostic log (see
+//! [`is_failure`]).
 
 use serde::Serialize;
 
@@ -91,8 +95,26 @@ impl From<amenbo_core::Error> for CmdError {
         };
         let mut out = CmdError::new(e.code(), e.message_en(), fields);
         out.parts = e.parts().iter().map(part_of).collect();
+        // Every failure that reaches a person comes through here — a command tells the webview it went
+        // wrong by handing it one of these and nothing else — so this is where the diagnostic log gets
+        // its line. What goes in is the code and the English sentence: a reason, and no user content.
+        if is_failure(&e) {
+            log::error!("{}: {}", out.code, out.message_en);
+        }
         out
     }
+}
+
+/// Whether a refusal is the machine giving way, rather than an answer.
+///
+/// Most of what core returns is the store working and saying no — this task is not there, that one is
+/// already reserved, this is out of reach — and a log holding all of those is one nobody can find a real
+/// failure in. These three are the disk, the store engine or a file on it failing, which is the case
+/// where a person is left with nothing to go on unless a line is written (`AMB-D-382` settles what such
+/// a line may hold: reasons, ids and counts, never what the user wrote).
+fn is_failure(e: &amenbo_core::Error) -> bool {
+    use amenbo_core::Error as E;
+    matches!(e, E::Storage(_) | E::Io(_) | E::Json(_))
 }
 
 /// One of a message's parts, on the wire. A part always names its own code — a part that named nothing
@@ -191,6 +213,23 @@ mod tests {
         assert_eq!(e.code, "not_found");
         assert!(e.fields.is_null(), "nothing to interpolate: {}", e.fields);
         assert_eq!(e.message_en, "task 'X' not found");
+    }
+
+    /// The store or the disk giving way is a failure and gets a line; the store answering no is not, and
+    /// does not. The distinction is the whole value of the line: a log that also carries every "that task
+    /// is not there" is a log a real failure hides in.
+    #[test]
+    fn the_machine_failing_is_told_apart_from_the_store_saying_no() {
+        assert!(is_failure(&amenbo_core::Error::Storage("disk I/O error".into())));
+        assert!(is_failure(&amenbo_core::Error::Io(std::io::Error::other("no"))));
+
+        assert!(!is_failure(&amenbo_core::Error::not_found("task 'X' not found")));
+        assert!(!is_failure(&amenbo_core::Error::AlreadyReserved(amenbo_core::Msg::new(
+            "AMB-T-12 is not todo"
+        ))));
+        assert!(!is_failure(&amenbo_core::Error::OutOfReach(amenbo_core::Msg::new(
+            "AMB-T-12 is in another project"
+        ))));
     }
 
     /// A refusal this layer raises carries the code, the values, and one English sentence — and no

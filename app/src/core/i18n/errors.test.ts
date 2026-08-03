@@ -58,6 +58,14 @@ const notReady: CmdError = {
   ],
 };
 
+// The store engine failing. Its own words name a database library nobody asked about, so the reader gets
+// the template instead — the raw sentence belongs in the diagnostic log.
+const storageError: CmdError = {
+  code: "storage_error",
+  message_en: "store (engine) operation failed: disk I/O error",
+  fields: null,
+};
+
 describe("errLabel", () => {
   it("interpolates a code that has a template with its fields (per language)", () => {
     expect(errLabel(bindingStale, "ja")).toBe("プロジェクトの紐付け先ディレクトリが見つかりません: /gone");
@@ -101,6 +109,14 @@ describe("errLabel", () => {
       parts: [{ code: "not_a_code", message_en: "something else stands in the way", fields: null }],
     };
     expect(errLabel(oneOff, "ja")).toBe("AMB-T-12 はまだ予約できません: something else stands in the way");
+  });
+
+  it("keeps the store engine's own words off the screen, in every language", () => {
+    for (const lang of Object.keys(DICTIONARIES) as (keyof typeof DICTIONARIES)[]) {
+      const line = errLabel(storageError, lang);
+      expect(line, lang).not.toContain("disk I/O error");
+      expect(line, lang).toContain("amenbo");
+    }
   });
 
   it("writes a named sentence from its fields, in a language core carries no prose for", () => {

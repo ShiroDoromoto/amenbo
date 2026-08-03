@@ -566,6 +566,7 @@ export const fr: Translation = {
     not_ready_premise_unsettled: "{ref} n'est pas tranchée — attendez la décision ou retirez le lien",
     not_ready_not_started: "elle ne commence que le {start} — changez la date de début si ce n'est pas la bonne",
     store_busy: "Le magasin est en cours de restauration ou de mise à jour. Réessayez dans un instant.",
+    storage_error: "Le magasin n'a pas pu être lu ni écrit, et rien n'a été modifié. Redémarrez amenbo et réessayez ; si cela se reproduit, envoyez ce que contient Réglages > Journaux.",
     not_found_task: "Tâche {ref} introuvable.",
     not_found_decision: "Décision {ref} introuvable.",
     not_found_project: "Projet {ref} introuvable.",

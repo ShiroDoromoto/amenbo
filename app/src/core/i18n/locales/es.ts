@@ -566,6 +566,7 @@ export const es: Translation = {
     not_ready_premise_unsettled: "{ref} está sin resolver: espera la decisión o quita el enlace",
     not_ready_not_started: "no empieza hasta el {start}: cambia la fecha de inicio si no es correcta",
     store_busy: "Se está restaurando o actualizando el almacén. Inténtalo de nuevo en un momento.",
+    storage_error: "No se pudo leer ni escribir el almacén, y no se cambió nada. Reinicia amenbo e inténtalo de nuevo; si sigue ocurriendo, envía lo que haya en Ajustes > Registros.",
     not_found_task: "No se encontró la tarea {ref}.",
     not_found_decision: "No se encontró la decisión {ref}.",
     not_found_project: "No se encontró el proyecto {ref}.",

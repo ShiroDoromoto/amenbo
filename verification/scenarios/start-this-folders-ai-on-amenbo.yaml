@@ -29,6 +29,9 @@ description: >
   the launch instruction rather than the spec itself; making the edit is the reader's own act — theirs
   to ask an AI of theirs for — so the run stands in for the hand that does it; and afterwards the
   folder reads as wired, with nothing left to finish and nothing more said about it.
+
+  Both ends are asked of the standing sweep as well as of the line printed in passing, because a folder
+  nobody is standing in is only ever found in the sweep.
 steps_cli:
   # A folder this reader's AI already works in: the provider's own directory is there, with settings
   # that do nothing about amenbo. That is the state everyone is in before they are told.
@@ -52,6 +55,17 @@ steps_cli:
     with:
       wired: false
       tool: claude-code
+
+  # And told in the other place too. The line above arrives on whatever command the reader happened to
+  # type; the sweep is where they can go and look, which is the only way to find a folder they are not
+  # standing in. It says the same thing, by the same name.
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true
+      issue: unwired_folder
+      present: true
 
   # What is handed over. The file is half the answer — the same text in the wrong place leaves the
   # folder exactly as it was — and what it injects is the launch instruction, the one line that sends
@@ -80,6 +94,16 @@ steps_cli:
     op: ai-launch
     with:
       wired: true
+
+  # The sweep goes quiet with it. Nothing was recorded to end the report either — only the wiring
+  # landing does, which is what keeps a list of folders to wire from outliving the wiring.
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true
+      issue: unwired_folder
+      present: false
 
 steps_gui:
   # The report, standing on the project's own board with nothing asked and nothing over it. What raises

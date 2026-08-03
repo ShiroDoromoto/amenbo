@@ -671,5 +671,13 @@ export const tr: Translation = {
       message: "{name} (#{project}) projesinin hiç klasörü yok — üzerinde çalışılacak bir yer yok ve bir yapay zekâ onu hiç göremez.",
       fix: "Proje ayarları > Klasörler'den bir klasör ekleyin.",
     },
+    unwired_folder: {
+      message: "{dir}, yapay zekâsını amenbo'suz başlatıyor: {tools} burada kurulu ama oturum başında amenbo'yu çalıştıracak bağlantı yok.",
+      fix: "Proje ayarları > Klasörler'de sunulan metni kopyalayın ve o klasörde kullandığınız yapay zekâya verin — amenbo sizin yerinize ayar dosyası yazmaz.",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir}, yapay zekâsını amenbo'suz başlatıyor ve orada hangi aracın kullanıldığına dair bir iz yok.",
+      fix: "Proje ayarları > Klasörler'de orada kullandığınız aracı seçin ve metnini o yapay zekâya verin.",
+    },
   },
 };

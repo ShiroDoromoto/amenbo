@@ -34,6 +34,8 @@ use amenbo_scenario::{Args, Domain, Driver, Scenario, Step};
 
 /// Starting the app under test and holding it — the pid every shot is aimed at comes from here.
 pub mod launch;
+/// The line the run stands on: only a bundle the release workflow produced is launched.
+pub mod shipped;
 
 /// The throwaway store that app is launched against — the CLI driver's own, not a second one. What
 /// isolates a run is the same two things whichever driver is asking (`AMENBO_HOME` at a directory

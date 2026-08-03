@@ -313,6 +313,19 @@ fn version_and_format_state_are_visible() {
     assert!(a["store_status"].get("last_gui_version").is_none(), "agent: no per-surface versions: {a}");
 }
 
+/// The `version` face says whether this binary came out of the release workflow. Pre-distribution
+/// verification reads that answer to decide whether what is in front of it may be driven at all, and
+/// nothing else about a running amenbo tells the two apart — the version number is the released one
+/// on both sides of a release. A binary built for a test is not a release artifact, so the honest
+/// answer here is `false`; what it must never be is absent, since a missing answer is a driver that
+/// cannot tell a shipped build from somebody's working tree.
+#[test]
+fn the_version_face_says_which_build_it_is() {
+    let cli = Cli::new();
+    let v = cli.json(&["version", "--json"]);
+    assert_eq!(v["release_build"], false, "a build the release workflow did not produce says so: {v}");
+}
+
 #[test]
 fn personal_mode_has_no_sharing_commands() {
     let cli = Cli::new();

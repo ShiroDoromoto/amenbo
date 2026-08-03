@@ -24,6 +24,13 @@
 //! format — a local build stays useful for reproducing a bug against real data, which is the reason
 //! not to answer this by quietly sending local builds to their own app-data name.
 //!
+//! **The stamp is also what says a build is worth verifying** (`AMB-D-540`). Pre-distribution
+//! verification exists to walk the bytes that ship, so its drivers refuse anything else — and the
+//! only thing they can ask a binary is a question it answers, which is why [`is_release_build`] is
+//! reported by the `version` face (`release_build` in its `--json`). Nothing else about a running
+//! amenbo tells the two apart: the version number is the released one on both sides of a release,
+//! and a locally built binary answers to the production channel unless it was built for the dev one.
+//!
 //! **The hatch is a run, not a build.** `AMENBO_ALLOW_UNSTAMPED_MIGRATE=1`
 //! ([`env::allow_unstamped_migrate`](crate::env::allow_unstamped_migrate)) opens the gate for one
 //! invocation, for the case the gate cannot help with: a released build that cannot recover the store

@@ -11,8 +11,8 @@
 //! the environment is what points the app at a throwaway store, and `open` hands the launch to
 //! launchd with an environment of its own.
 //!
-//! A bundle carries two programs, and this module answers for both: the app it launches, and the
-//! CLI shipped beside it that a run stands its world up with ([`shipped_cli`]).
+//! A bundle carries two programs, and this module answers for the app. The CLI beside it — what a
+//! run asks which build this is, and stands the scenario's world up with — is [`crate::shipped`]'s.
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -20,12 +20,6 @@ use std::time::{Duration, Instant};
 
 use crate::scratch::Session;
 use crate::{front, shoot};
-
-/// The CLI a mac bundle ships beside the app, as a Tauri sidecar. The name is fixed rather than
-/// asked for the way the app's is: `CFBundleExecutable` names the app alone, and this one is put
-/// there under a name the packaging and its guard both write out (`scripts/build-pkg-mac.sh`,
-/// `guards/check-cli-shim.sh` — the shim on `PATH` is a symlink to this very path).
-const SIDECAR: &str = "Contents/MacOS/amenbo";
 
 /// How long a launched app is given to put a window on screen. Generous on purpose: a first launch
 /// of a signed bundle is checked by the system before a line of the app runs, and a wait that ends
@@ -64,23 +58,6 @@ pub fn launch<'a>(bundle: &Path, store: &'a Session) -> Result<Gui<'a>, String> 
         .spawn()
         .map_err(|e| format!("could not launch {}: {e}", exe.display()))?;
     Ok(Gui { pid: i64::from(child.id()), child, store })
-}
-
-/// The shipped CLI inside `bundle` — the one a run stands its world up with.
-///
-/// It is taken from the bundle under test rather than from `PATH`, and that is the whole of why it
-/// is here: the CLI on `PATH` is whatever build the operator has installed, and a world stood up by
-/// one build and read by another is not a premise but a coincidence. Refused by name when the
-/// bundle carries none, since a premise nothing can stand up has to stop the run before it starts.
-pub fn shipped_cli(bundle: &Path) -> Result<PathBuf, String> {
-    let cli = bundle.join(SIDECAR);
-    if !cli.is_file() {
-        return Err(format!(
-            "`{}` ships no CLI at {SIDECAR}, and a world is stood up with the build under test",
-            bundle.display()
-        ));
-    }
-    Ok(cli)
 }
 
 impl Gui<'_> {
@@ -228,22 +205,6 @@ mod tests {
         assert!(!alive(pid), "and down when the run lets go");
         drop(store);
         assert!(!home.exists(), "the store goes with it");
-    }
-
-    /// The CLI a world is stood up with is the one the bundle under test ships, and a bundle
-    /// carrying none is refused rather than quietly falling back to whatever is on `PATH` — a world
-    /// stood up by another build is not the premise the road was written against.
-    #[test]
-    fn the_cli_a_world_is_stood_up_with_comes_out_of_the_bundle() {
-        let store = crate::scratch::session("selftest-sidecar", false).unwrap();
-        let app = bundle(&store.cwd, "stand-in-app", "#!/bin/sh\nexit 0\n");
-
-        let err = shipped_cli(&app).unwrap_err();
-        assert!(err.contains(SIDECAR), "the refusal names where it looked: {err}");
-
-        let cli = app.join(SIDECAR);
-        std::fs::write(&cli, "#!/bin/sh\nexit 0\n").unwrap();
-        assert_eq!(shipped_cli(&app).unwrap(), cli, "found beside the app it ships with");
     }
 
     /// A path that is not a bundle is refused at the door, naming what was looked for — a launcher

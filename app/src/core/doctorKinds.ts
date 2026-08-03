@@ -22,6 +22,8 @@ export const DOCTOR_ISSUE_KINDS = [
   "dead_ref",
   "start_after_due",
   "project_without_folder",
+  "unwired_folder",
+  "unwired_folder_ambiguous",
 ] as const;
 
 /** The type of a contract kind (single source). The DOCTOR table is a `Record` over it with every key required, so a new kind does not typecheck until its message is written. */

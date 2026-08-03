@@ -14,10 +14,11 @@ name: Rot gates
 #     deliberately not a per-commit event here (it is reserved for changes only CI can judge), so
 #     without the weekly leg these go unjudged for as long as main sits unpushed.
 #
-# What is NOT here, on purpose: rust / app-rust / gui-web. Those only break when code changes, and
-# code changes are already judged — by the local gate (`make test`, plus `make lint-linux` for the
-# Linux-only branches) before the merge, and by ci.yml after it. Running them weekly would buy
-# nothing and spend minutes (this repo is private; see the cost note in ci.yml's header).
+# What is NOT here, on purpose: rust / app-rust / gui-web. Those break when code changes, not on
+# their own, so they are ci.yml's — judged by the local gate before the merge and by ci.yml after
+# it, both on the diff. That they also run on a timer (full-nightly.yml) does not make them rot
+# gates: what that leg is watching is the path filter's own judgment, not the passing of time, and
+# it gets there by running the whole of ci.yml rather than by listing jobs a second time here.
 #
 # Cost: four Linux jobs (x1), a few minutes each (the key comparison is seconds). The weekly leg is
 # on the order of 20 min/month.

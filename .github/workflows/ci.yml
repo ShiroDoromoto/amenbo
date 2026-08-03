@@ -18,11 +18,23 @@ name: CI
 # host crate IS clippy+test gated (the `app-rust` job below), but the native Tauri
 # .app *bundle* (macOS only) is deliberately NOT built here — it is a distribution
 # artifact reserved for a tag/dispatch trigger, not a test gate.
+#
+# The path gate decides what a diff can have moved, and it can be wrong: a layer whose inputs are
+# not all listed, or a path listed under no layer at all, is skipped by a filter that believes it
+# has judged. Nothing in that diff says so — the run is green and short. `full-nightly.yml` calls
+# this workflow once a night with `full: true`, which forces every gated job on whatever the diff
+# touched, so a hole in the filter surfaces within a day instead of on release day.
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
+    inputs:
+      full:
+        description: run every gated job, whatever the diff touched (the nightly leg)
+        type: boolean
+        default: false
 
 # Superseding is a PR-only idea here, which is why the group key differs per event.
 #
@@ -38,6 +50,10 @@ on:
 # (a group holds one pending run, and a third arrival evicts the one waiting).
 # Main is pushed on every merge now, and that is fine: an extra run costs nothing
 # next to a green main that was never built.
+#
+# Called from the nightly leg the key is the head SHA too, under that workflow's own
+# name — so a nightly and a push run over the same commit sit in different groups and
+# neither takes the other down.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
@@ -81,19 +97,27 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+    # `full` is the one place the nightly leg is honoured: every gated job below reads these
+    # outputs and nothing else, so forcing them here turns the whole workflow on without an event
+    # guard on each job. `inputs.full` is empty on push and pull_request, which is falsy, so those
+    # two keep reading the filter. Written as `and/or` rather than `||` because a filter output is
+    # the STRING "false", and a non-empty string is truthy in an expression.
     outputs:
-      rust: ${{ steps.filter.outputs.rust }}
-      verification: ${{ steps.filter.outputs.verification }}
-      gui: ${{ steps.filter.outputs.gui }}
-      go: ${{ steps.filter.outputs.go }}
-      shell: ${{ steps.filter.outputs.shell }}
-      cargo_deps: ${{ steps.filter.outputs.cargo_deps }}
-      npm_deps: ${{ steps.filter.outputs.npm_deps }}
-      catalog_key: ${{ steps.filter.outputs.catalog_key }}
+      rust: ${{ inputs.full && 'true' || steps.filter.outputs.rust }}
+      verification: ${{ inputs.full && 'true' || steps.filter.outputs.verification }}
+      gui: ${{ inputs.full && 'true' || steps.filter.outputs.gui }}
+      go: ${{ inputs.full && 'true' || steps.filter.outputs.go }}
+      shell: ${{ inputs.full && 'true' || steps.filter.outputs.shell }}
+      cargo_deps: ${{ inputs.full && 'true' || steps.filter.outputs.cargo_deps }}
+      npm_deps: ${{ inputs.full && 'true' || steps.filter.outputs.npm_deps }}
+      catalog_key: ${{ inputs.full && 'true' || steps.filter.outputs.catalog_key }}
     steps:
       - uses: actions/checkout@v7
+      # Skipped on the nightly leg: there is no diff to read there (the run is a schedule, not a
+      # push or a pull request), and its answer would be discarded by the outputs above anyway.
       - uses: dorny/paths-filter@v4
         id: filter
+        if: ${{ !inputs.full }}
         with:
           filters: |
             rust:

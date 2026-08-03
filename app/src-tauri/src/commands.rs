@@ -2833,8 +2833,8 @@ pub fn task_set_priority(id: i64, priority: Option<String>) -> Result<WriteAck, 
 }
 
 /// Create **one project row** in the store. What it brings into being is a project, not a store — it
-/// doubles as genesis only on a machine that has no store yet (the GUI's first launch). Both of the
-/// GUI's project-creation paths (by name, by folder) come through here. Returns `(the still-open,
+/// doubles as genesis only on a machine that has no store yet (the GUI's first launch). The GUI raises
+/// projects one way, [`project_add_folder`], and this is the row half of it. Returns `(the still-open,
 /// already-saved store, project_id)`.
 fn provision_project(name: &str) -> Result<(Store, i64), CmdError> {
     ensure_migrated()?;
@@ -2863,15 +2863,6 @@ fn provision_project(name: &str) -> Result<(Store, i64), CmdError> {
     let project_id = project.id;
     store.save_config()?;
     Ok((store, project_id))
-}
-
-/// Create a project by name, with no folder bound to it — one more project row in the store. Every
-/// GUI action is the human facet, so the CLI's `guard_ai_project_ops` (the guardrail aimed at the
-/// AI) never comes into play.
-#[tauri::command]
-pub fn project_add(name: String) -> Result<WriteAck, CmdError> {
-    let (_store, _project_id) = provision_project(&name)?;
-    Ok(WriteAck::new(&["tasks"]))
 }
 
 /// Turn the chosen folder into **a new amenbo project**. The flow: (1) if a `.amenbo` already exists
@@ -6956,7 +6947,7 @@ mod tests {
         let tmp = amenbo_scratch::scratch("app-commentrm");
         std::env::set_var("AMENBO_HOME", &tmp);
 
-        let _ = project_add("PJ".into()).unwrap();
+        provision_project("PJ").unwrap();
         let project_id = snapshot().unwrap().projects[0].id;
         let tid = task_add(Some(project_id), "コメントを消す".into(), None).unwrap().tasks[0];
 
@@ -6990,7 +6981,7 @@ mod tests {
         let tmp = amenbo_scratch::scratch("app-commentedit");
         std::env::set_var("AMENBO_HOME", &tmp);
 
-        let _ = project_add("PJ".into()).unwrap();
+        provision_project("PJ").unwrap();
         let project_id = snapshot().unwrap().projects[0].id;
         let tid = task_add(Some(project_id), "コメントを直す".into(), None).unwrap().tasks[0];
         let _ = comment_add(tid, "誤字のある投稿".into()).unwrap();
@@ -7013,31 +7004,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    /// `project_add` brings a store into being and puts one project row in it. A bare `Store::init`
-    /// leaves no project row, so nothing appears in the snapshot (which comes from
-    /// `project_overview`) and the sidebar stays empty. Checks the creation on disk, the ack, and
-    /// **that it becomes visible in the snapshot** — the evidence that the wiring holds.
-    #[test]
-    fn project_add_provisions_store() {
-        let _env = env_guard();
-        let tmp = amenbo_scratch::scratch("app-projadd");
-        std::env::set_var("AMENBO_HOME", &tmp);
-
-        let ack = project_add("新規プロジェクト".into()).unwrap();
-        assert!(ack.scopes.contains(&"tasks"), "project_add invalidates the board/project lists");
-
-        let engine = amenbo_core::config::Paths::resolve().unwrap().store_file;
-        assert!(engine.is_file(), "the store is created on disk at {}", engine.display());
-
-        let snap = snapshot().unwrap();
-        assert!(
-            snap.projects.iter().any(|p| p.name == "新規プロジェクト"),
-            "the created project is visible in the sidebar projection"
-        );
-
-        let _ = std::fs::remove_dir_all(&tmp);
-    }
-
     /// Round-trips the project settings commands: `project_get` returns the fields for the prefill,
     /// `project_update` applies the delta (name/notes/color/view), `project_set_archived` takes the
     /// project out of the snapshot (`project_overview` — live and not archived) and brings it back,
@@ -7048,7 +7014,7 @@ mod tests {
         let tmp = amenbo_scratch::scratch("app-projset");
         std::env::set_var("AMENBO_HOME", &tmp);
 
-        project_add("設定PJ".into()).unwrap();
+        provision_project("設定PJ").unwrap();
         let project_id = snapshot()
             .unwrap()
             .projects
@@ -7218,11 +7184,13 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    /// `project_add_folder` turns the chosen folder into a new project: (1) the project row, named
-    /// after the folder, appears in the snapshot, (2) a `.amenbo` pointer is written into the folder,
-    /// and (3) a folder that already has a `.amenbo` is refused with `init_pointer_exists`. The
-    /// native folder picker cannot be driven from a Rust test, so the command itself (which takes a
-    /// dir argument) is called directly to check the wiring: guard, creation, pointer.
+    /// `project_add_folder` turns the chosen folder into a new project: (1) on a machine with no store
+    /// yet it brings one into being, (2) the project row, named after the folder, appears in the
+    /// snapshot, (3) a `.amenbo` pointer is written into the folder, and (4) a folder that already has
+    /// a `.amenbo` is refused with `init_pointer_exists`. It is the GUI's only way to raise a project
+    /// (`AMB-D-532`), so the first of those is the genesis path for the whole app. The native folder
+    /// picker cannot be driven from a Rust test, so the command itself (which takes a dir argument) is
+    /// called directly to check the wiring: guard, creation, pointer.
     #[test]
     fn project_add_folder_inits_visible_project_and_guards() {
         let _env = env_guard();
@@ -7235,6 +7203,8 @@ mod tests {
 
         project_add_folder(dir.to_string_lossy().to_string(), None).unwrap();
 
+        let engine = amenbo_core::config::Paths::resolve().unwrap().store_file;
+        assert!(engine.is_file(), "the store is created on disk at {}", engine.display());
         assert!(dir.join(".amenbo").is_file(), ".amenbo pointer is written into the folder");
 
         let folder_name = dir.file_name().unwrap().to_string_lossy().to_string();

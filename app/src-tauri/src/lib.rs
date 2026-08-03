@@ -193,7 +193,6 @@ pub fn run() {
       commands::task_set_notes,
       commands::task_set_title,
       commands::task_set_priority,
-      commands::project_add,
       commands::project_add_folder,
       commands::project_get,
       commands::project_list_archived,

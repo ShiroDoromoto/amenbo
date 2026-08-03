@@ -312,18 +312,20 @@ export async function setPriority(id: number, priority: Priority | null): Promis
 /**
  * Create a project (the equivalent of core/CLI `init`), called from the input step of the creation
  * screen. `name` is required — the front end guarantees it is non-empty and core defensively fills in
- * a default name anyway. Passing `dir` **binds that folder to the new project** (an internal `init`:
- * it drops a `.amenbo` pointer and the AI guide into the folder); `dir=null` creates a project by name
- * only. Afterwards it **awaits** the `loadSnapshot` refresh and returns the project's id, so the caller
- * can navigate straight to its board; null if that cannot be resolved. Outside Tauri (browser
- * iteration) `dir` is ignored and the project is faked into the cache.
+ * a default name anyway. `dir` **binds that folder to the new project** (an internal `init`: it drops a
+ * `.amenbo` pointer and the AI guide into the folder), and on the desktop it is what makes the project
+ * reachable at all, so the screen does not offer a create without one (`AMB-D-532`). Afterwards it
+ * **awaits** the `loadSnapshot` refresh and returns the project's id, so the caller can navigate
+ * straight to its board; null if that cannot be resolved. Outside Tauri (browser iteration) `dir` is
+ * ignored — the mock binds nothing — and the project is faked into the cache.
  */
 export async function createProject(name: string, dir: string | null): Promise<number | null> {
   if (inTauri()) {
     const before = new Set(getSnapshot().projects.map((p) => p.id));
-    const ack = dir
-      ? await invoke<WriteAck>("project_add_folder", { dir, name })
-      : await invoke<WriteAck>("project_add", { name });
+    // One command, because there is one kind of project on the desktop: bound to the folder it was made
+    // for. A null that reached here anyway is refused at the boundary, which is the right end for it —
+    // better than a project no AI can reach.
+    const ack = await invoke<WriteAck>("project_add_folder", { dir, name });
     // Wait for the refreshed snapshot to carry the new project before resolving its id: it is the one that was not there before the call.
     await applyAck(ack);
     return getSnapshot().projects.find((p) => !before.has(p.id))?.id ?? null;

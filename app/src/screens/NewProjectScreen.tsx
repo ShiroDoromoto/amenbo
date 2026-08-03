@@ -1,12 +1,17 @@
 // The project creation screen, in two steps: the form and the done step.
-// Form step: collect a name (required) and a folder (optional — one can be added later), then
-// create. Choosing a folder links it to the new project (a `.amenbo` pointer plus the AI guide land
-// there, so an AI started in that folder can operate this project). A successful create does not
-// jump straight to the board; it shows the done step.
-// Done step: "Created project X", plus — when a folder was linked — what that enables and where it
-// is, and then the first loop (`FirstLoop`), which is what the reader is meant to do next. The rest
-// (reveal the folder, copy `amenbo status`) sits below it as a side offer. The primary action is
-// "Open the board". This carries the same information as the CLI's own init/bind success output.
+// Form step: collect a name and a folder, both required on the desktop, then create. The folder is
+// what links the project to a place (a `.amenbo` pointer plus the AI guide land there, so an AI
+// started in that folder can operate this project) — and a project with none is one no AI can reach,
+// so the create waits for it (`AMB-D-532`). The field says what the folder buys, which is also the
+// answer to why the button is not pressable yet. A successful create does not jump straight to the
+// board; it shows the done step.
+// Done step: "Created project X", what the folder enables and where it is, and then the first loop
+// (`FirstLoop`), which is what the reader is meant to do next. The rest (reveal the folder, copy
+// `amenbo status`) sits below it as a side offer. The primary action is "Open the board". This carries
+// the same information as the CLI's own init/bind success output.
+//
+// The browser iteration is another thing: it writes no store and offers no folder field, so there is
+// nothing there for a folder to bind and the create goes through on a name alone.
 import { useState } from "react";
 import { FirstLoop } from "../components/FirstLoop";
 import { useCliCommandName } from "../core/cliCommand";
@@ -25,7 +30,8 @@ export function NewProjectScreen({ onCreated, onCancel }: { onCreated: (nav: Nav
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Created | null>(null);
-  const canCreate = name.trim().length > 0 && !busy;
+  // The folder is asked for where there is one to ask about — on the desktop — and it is required there.
+  const canCreate = name.trim().length > 0 && !busy && (!inTauri() || dir !== null);
 
   const chooseFolder = async () => {
     try {
@@ -78,11 +84,12 @@ export function NewProjectScreen({ onCreated, onCancel }: { onCreated: (nav: Nav
           <div className="newproj__field">
             <span className="newproj__label">{t("newproj.folderLabel")}</span>
             <span className="newproj__hint">{t("newproj.folderHint")}</span>
+            {/* Changing the choice, but not undoing it: clearing would put the form back in the one
+                state it cannot be created from, which is not a move worth offering. */}
             {dir ? (
               <div className="newproj__folder">
                 <code className="newproj__path">{dir}</code>
                 <button className="btn" onClick={() => void chooseFolder()} disabled={busy}>{t("newproj.changeFolder")}</button>
-                <button className="btn" onClick={() => setDir(null)} disabled={busy}>{t("newproj.clearFolder")}</button>
               </div>
             ) : (
               <button className="btn" onClick={() => void chooseFolder()} disabled={busy}>📂 {t("newproj.chooseFolder")}</button>
@@ -102,12 +109,11 @@ export function NewProjectScreen({ onCreated, onCancel }: { onCreated: (nav: Nav
 }
 
 /**
- * The done step: "Created project X", plus — when a folder was linked — "an AI started in this folder
- * can operate this project", the path, and the first loop, with "Open the board" as the primary
- * action. Both only appear under Tauri, on the desktop; in the browser opening a terminal or a file
- * manager would be a no-op, so they are hidden. With no folder there is no `.amenbo` for anything to
- * resolve through — no terminal to open, and nowhere for an AI to write — so instead the step invites
- * the user to add a folder.
+ * The done step: "Created project X", then "an AI started in this folder can operate this project",
+ * the path, and the first loop, with "Open the board" as the primary action. All of it is about the
+ * folder, and on the desktop there always is one (`AMB-D-532`). In the browser there is none — opening
+ * a terminal or a file manager would be a no-op there anyway — so the step is the heading and the way
+ * on to the board.
  */
 function DoneStep({ created, onOpenBoard }: { created: Created; onOpenBoard: () => void }) {
   const { name, dir } = created;
@@ -134,14 +140,10 @@ function DoneStep({ created, onOpenBoard }: { created: Created; onOpenBoard: () 
         <span className="board__title">✅ {tf("newproj.doneTitle", { name })}</span>
       </div>
       <div className="newproj newproj--done">
-        {dir ? (
+        {dir && (
           <div className="newproj__capability">
             <p>{t("newproj.doneCapability")}</p>
             <code className="newproj__path">{dir}</code>
-          </div>
-        ) : (
-          <div className="newproj__capability">
-            <p className="muted">{t("newproj.doneNoFolder")}</p>
           </div>
         )}
 

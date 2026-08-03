@@ -759,6 +759,10 @@ const doctor = {
     message: "{task} is set to start on {start_on} but was due on {due_on} — it stays out of the inbox until a day that is already past its deadline.",
     fix: "One of the two is wrong: correct either the start day or the due day. Nothing picks a winner between them, since either one could be the typo.",
   },
+  project_without_folder: {
+    message: "Project {name} (#{project}) has no folder — nothing can operate it, and an AI cannot see it at all.",
+    fix: "Add a folder in Project settings > Folders.",
+  },
 } satisfies Record<DoctorIssueKind, DoctorTemplate>;
 
 export const en = { status, priority, view, ui, err, doctor };

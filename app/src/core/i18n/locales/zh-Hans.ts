@@ -665,5 +665,9 @@ export const zhHans: Translation = {
       message: "{task} 设定为 {start_on} 开始，到期日却是 {due_on}——它要到一个已经过了截止的日子才会出现在收件箱里。",
       fix: "两者之中有一个是错的：改开始日或改到期日。没人替你在两者之间挑一个，因为打错的可能是任何一个。",
     },
+    project_without_folder: {
+      message: "项目 {name}（#{project}）没有任何文件夹——没有地方可以操作它，AI 也完全看不到它。",
+      fix: "请在项目设置 > 文件夹中添加一个文件夹。",
+    },
   },
 };

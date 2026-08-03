@@ -665,5 +665,9 @@ export const zhHant: Translation = {
       message: "{task} 設定在 {start_on} 開始，到期日卻是 {due_on}——它要到一個已經過了截止的日子才會出現在收件匣裡。",
       fix: "兩者之中有一個是錯的：改開始日或改到期日。沒人替你在兩者之間挑一個，因為打錯的可能是任何一個。",
     },
+    project_without_folder: {
+      message: "專案 {name}（#{project}）沒有任何資料夾——沒有地方可以操作它，AI 也完全看不到它。",
+      fix: "請在專案設定 > 資料夾中新增一個資料夾。",
+    },
   },
 };

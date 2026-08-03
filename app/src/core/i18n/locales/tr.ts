@@ -667,5 +667,9 @@ export const tr: Translation = {
       message: "{task} {start_on} tarihinde başlayacak ayarlanmış ama son tarihi {due_on} idi — teslim tarihini çoktan geçmiş bir güne kadar gelen kutusunun dışında kalır.",
       fix: "İkisinden biri yanlış: ya başlangıç gününü ya da son tarihi düzeltin. Hangisinin yazım hatası olduğu belli olmadığı için aralarında seçim yapan yoktur.",
     },
+    project_without_folder: {
+      message: "{name} (#{project}) projesinin hiç klasörü yok — üzerinde çalışılacak bir yer yok ve bir yapay zekâ onu hiç göremez.",
+      fix: "Proje ayarları > Klasörler'den bir klasör ekleyin.",
+    },
   },
 };

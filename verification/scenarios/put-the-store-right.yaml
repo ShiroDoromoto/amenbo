@@ -13,7 +13,8 @@ description: >
 
   The repair is walked separately, and it is walked end to end — a fix that sweeps nothing looks
   exactly like a fix that works, so the problem is put there first and the same read that raised it
-  is what says it went.
+  is what says it went. The last thing walked needs no repair at all: a project whose folder has been
+  taken off is intact and unreachable at once, and all that is owed is being told.
 steps_cli:
   - type: action
     domain: task
@@ -147,6 +148,42 @@ steps_cli:
     with:
       dir: elsewhere
       project: theirs
+
+  # ── A project nothing leads to ──────────────────────────────────────────────────────────────
+  # Nothing here is broken: every row is intact and every constraint holds. What is gone is the way
+  # in — a project is reached through the folder someone stands in — so the project left behind by
+  # taking its last folder off is a list nobody can operate. Its own board says so to whoever opens
+  # it; this is the place that says it for the whole machine, which is the only way to find one you
+  # are not looking at.
+  - type: action
+    domain: folder
+    op: unbind
+    with:
+      dir: elsewhere
+
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true
+      issue: project_without_folder
+      present: true
+
+  # Linking a folder back is the whole fix, and the read that raised it is what says it took.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: elsewhere
+      project: theirs
+
+  - type: assert
+    domain: store
+    op: doctor
+    with:
+      ok: true
+      issue: project_without_folder
+      present: false
 
   # ── The bytes the sweep reclaims ────────────────────────────────────────────────────────────
   # The other half of `--fix`, and the half that raises no issue at all: attachment files nothing

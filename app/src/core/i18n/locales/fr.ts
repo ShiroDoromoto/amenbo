@@ -695,5 +695,9 @@ export const fr: Translation = {
       message: "{task} doit commencer le {start_on} mais était due le {due_on} — elle reste hors de la boîte jusqu'à un jour déjà passé après l'échéance.",
       fix: "L'une des deux est fausse : corrigez soit le jour de départ, soit l'échéance. Rien ne tranche entre elles, puisque l'erreur peut venir de l'une comme de l'autre.",
     },
+    project_without_folder: {
+      message: "Le projet {name} (#{project}) n'a aucun dossier : rien ne peut l'utiliser, et une IA ne le voit pas du tout.",
+      fix: "Ajoutez un dossier dans Réglages du projet > Dossiers.",
+    },
   },
 };

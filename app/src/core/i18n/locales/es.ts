@@ -695,5 +695,9 @@ export const es: Translation = {
       message: "{task} empieza el {start_on} pero vencía el {due_on}: no aparece en la bandeja hasta un día que ya pasó su plazo.",
       fix: "Una de las dos está mal: corrige el día de inicio o el de vencimiento. Nada elige entre ellas, porque el error podría estar en cualquiera.",
     },
+    project_without_folder: {
+      message: "El proyecto {name} (#{project}) no tiene ninguna carpeta: nada puede operarlo y una IA ni siquiera lo ve.",
+      fix: "Añade una carpeta en Ajustes del proyecto > Carpetas.",
+    },
   },
 };

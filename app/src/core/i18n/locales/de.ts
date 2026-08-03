@@ -685,5 +685,9 @@ export const de: Translation = {
       message: "{task} soll am {start_on} beginnen, war aber am {due_on} fällig — sie bleibt bis zu einem Tag aus dem Eingang, der die Frist schon überschritten hat.",
       fix: "Eines von beiden ist falsch: Korrigiere entweder den Starttag oder den Fälligkeitstag. Nichts entscheidet zwischen ihnen, denn der Tippfehler kann in jedem von beiden stecken.",
     },
+    project_without_folder: {
+      message: "Projekt {name} (#{project}) hat keinen Ordner — nichts kann damit arbeiten, und eine KI sieht es überhaupt nicht.",
+      fix: "Füge einen Ordner in Projekteinstellungen > Ordner hinzu.",
+    },
   },
 };

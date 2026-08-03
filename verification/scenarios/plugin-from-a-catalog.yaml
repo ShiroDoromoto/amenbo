@@ -15,11 +15,12 @@
 # settings it will ask for, in the author's own words. Nothing outside the official index is reviewed
 # by anybody, so those declarations are the whole of what a reader has to go on.
 #
-# Hence a road written for the screen alone. What it needs is a registered catalog whose entries claim
-# to be official, which the fake world serves and registers (`devtool fixtures gui`, and `--app`
-# points it at the build under test): both of its plugins claim the badge, so a merge that stopped
-# folding takes this shelf's name off both rows rather than one. Start the run on the market screen,
-# and drive it stepped (`--step`) — the panel opens between the two readings.
+# Hence a road written for the screen alone, over a world the run stands up: a catalog of its own on
+# the loopback, serving two entries that both claim to be official, registered under a name a row can
+# be read back by. Two entries and not one because a badge is about telling shelves apart — a merge
+# that stopped folding takes this shelf's name off both rows, which is a screen anyone looking can
+# tell from one row being odd. Start the run on the market screen, and drive it stepped (`--step`) —
+# the panel opens between the two readings.
 id: plugin-from-a-catalog
 title: A plugin a registered catalog serves is badged with that catalog, and opens its detail from that catalog
 description: >
@@ -28,6 +29,36 @@ description: >
   the catalog's document claims for every entry on it and which no shelf outside the official index
   can grant itself. What comes up under the row is that catalog's own detail document: the setting
   the plugin will ask for, in the words its author wrote.
+given:
+  # The shelf itself. It publishes a key because registering one is a trust decision taken on the key
+  # it serves, and a catalog with none registers without a question — a different road from this one.
+  - type: action
+    domain: plugin
+    op: catalog-stand
+    as: in-house
+    with:
+      publishes_key: true
+      offers:
+        - name: standup
+          desc: Post the day's finished tasks to the team channel
+          claims_official: true
+          setting: channel
+          label: Channel webhook
+        - name: burndown
+          desc: Chart what is left in the current milestone
+          claims_official: true
+          setting: milestone
+          label: Milestone name
+
+  # Registered under the name its rows are badged with. Without one the shelf is called after the
+  # host of its URL, which is a loopback address with a port picked this run.
+  - type: action
+    domain: plugin
+    op: catalog-add
+    with:
+      target: in-house
+      name: In-house catalog
+
 steps_gui:
   - type: assert
     domain: plugin

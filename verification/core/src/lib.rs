@@ -523,8 +523,12 @@ const REGISTRY: &[OpSpec] = &[
     // Registering one is a trust decision taken on the key it publishes beside its `catalog.json`,
     // and a key is only published by something that answers on a port — no URL a scenario can write
     // down serves one, so the run stands the catalog it is about to trust.
-    // `publishes_key` is the whole of what it varies: a catalog that publishes none is the other
-    // half of the rule, browsable and uninstallable.
+    // `publishes_key` is the trust half: a catalog that publishes none is the other side of the rule,
+    // browsable and uninstallable. `offers` is the shelf — the rows this catalog's own document
+    // carries, each written as the words that document holds (`name`, `desc`, the `claims_official`
+    // badge it is not entitled to, and the one `setting` its author declares, under the `label` a
+    // form shows). Naming none is an empty shelf, which is what a road about the trust root alone
+    // wants. It is the only arg written as a list of rows, and the loader checks it as one.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-stand", required: &["publishes_key"], refs: &[], strings: &[], binds: true },
     // The same catalog, publishing a different key than the one pinned on it — a publisher rotating
     // their key, which is the event the pin exists to meet.
@@ -534,7 +538,10 @@ const REGISTRY: &[OpSpec] = &[
     // A catalog the run stood up has no URL to write down (its port is handed out at run time), so
     // it is named by the `as:` binding instead: one of `url` / `target`, which the driver settles
     // since neither alone can be required here.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-add", required: &[], refs: &["target"], strings: &["url"], binds: false },
+    // `name` is what the shelf is called on screen, and what a row coming off it is badged with. A
+    // registration that gives none is called after the host of its URL — which for a catalog the run
+    // stood up is an address with a port picked this run, and so is nothing a road can read back.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-add", required: &[], refs: &["target"], strings: &["url", "name"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-remove", required: &[], refs: &["target"], strings: &["url"], binds: false },
     // Opening one row of the browsing view — the move between the list and the panel under it, which
     // is a move only a screen has. It names the shelf as well as the plugin because a name is a
@@ -958,6 +965,47 @@ fn may_stand(domain: Domain, op: &str) -> bool {
     PREMISE_OPS.iter().any(|(d, o)| *d == domain && *o == op)
 }
 
+/// What is wrong with an `offers:` value, if anything — the rows a stood catalog publishes.
+///
+/// Two words are a row's floor: the `name` it is fetched and badged by, and the `desc` a row draws
+/// under it. The rest is optional, and each is held to its own shape — a `claims_official` that
+/// arrived as the word "true" would be a badge nobody claimed, and a `label` that arrived as a
+/// number would reach a form as one.
+fn offers_problems(value: &serde_yaml::Value) -> Vec<String> {
+    let Some(rows) = value.as_sequence() else {
+        return vec!["`offers` must be a list of the entries this catalog serves".to_string()];
+    };
+    let mut problems = Vec::new();
+    for (n, row) in rows.iter().enumerate() {
+        let at_row = |m: String| format!("`offers` entry {}: {m}", n + 1);
+        if row.as_mapping().is_none() {
+            problems.push(at_row("must be a mapping of the fields a catalog entry carries".into()));
+            continue;
+        }
+        for key in ["name", "desc"] {
+            match row.get(key) {
+                Some(v) if v.as_str().is_some() => {}
+                Some(_) => problems.push(at_row(format!("`{key}` must be a string"))),
+                None => problems.push(at_row(format!("missing required field `{key}`"))),
+            }
+        }
+        for key in ["setting", "label"] {
+            if row.get(key).is_some_and(|v| v.as_str().is_none()) {
+                problems.push(at_row(format!("`{key}` must be a string")));
+            }
+        }
+        if row.get("claims_official").is_some_and(|v| v.as_bool().is_none()) {
+            problems.push(at_row("`claims_official` must be a boolean".into()));
+        }
+        // A label with nothing to label is a field that never reaches a form: the key is what a
+        // setting is declared under, and naming only its display text declares nothing.
+        if row.get("label").is_some() && row.get("setting").is_none() {
+            problems.push(at_row("`label` names a `setting`, so one has to be declared".into()));
+        }
+    }
+    problems
+}
+
 // ---------------------------------------------------------------------------
 // Loading
 // ---------------------------------------------------------------------------
@@ -1167,6 +1215,16 @@ impl Scenario {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));
                     }
+                }
+            }
+
+            // The shelf a stood catalog serves — the one arg written as a list of rows rather than
+            // as a word. Its rows are a document's fields, not amenbo's arguments, so the loader
+            // reads them here instead of through `strings`: a row is where a typo would otherwise
+            // travel all the way to a catalog served with a blank line under a name.
+            if let Some(v) = step.with().get("offers") {
+                for problem in offers_problems(v) {
+                    errs.push(at(i, problem));
                 }
             }
 
@@ -1768,5 +1826,63 @@ steps_gui:
 "#;
         let errs = load_str(yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.to_string().starts_with("given step 1:")), "{errs:?}");
+    }
+
+    /// The shelf a stood catalog serves is the one arg written as rows, and a row is where a typo
+    /// would otherwise travel all the way to a catalog served with a blank line under a name.
+    #[test]
+    fn a_shelf_row_is_held_to_the_words_a_catalog_entry_carries() {
+        let stand = |offers: &str| {
+            let yaml = format!(
+                r#"
+id: x
+title: y
+steps_cli:
+  - type: action
+    domain: plugin
+    op: catalog-stand
+    with:
+      publishes_key: true
+      offers:
+{offers}
+    as: shelf
+"#
+            );
+            load_str(&yaml).unwrap().validate()
+        };
+
+        let errs = stand("        - { desc: a row with no name }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("missing required field `name`")), "{errs:?}");
+
+        let errs = stand("        - { name: standup }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("missing required field `desc`")), "{errs:?}");
+
+        // A badge is claimed or it is not, and the word "true" is neither.
+        let errs = stand("        - { name: standup, desc: d, claims_official: \"true\" }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`claims_official` must be a boolean")), "{errs:?}");
+
+        // Display text with no field under it declares nothing, so it never reaches a form.
+        let errs = stand("        - { name: standup, desc: d, label: Channel webhook }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`label` names a `setting`")), "{errs:?}");
+
+        assert!(stand("        - { name: standup, desc: d, setting: channel, label: Channel webhook }").is_ok());
+    }
+
+    /// A shelf is a list of rows. Written as one word it would reach the driver as a catalog offering
+    /// nothing, which reads exactly like a scenario that meant to offer nothing.
+    #[test]
+    fn a_shelf_written_as_one_word_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps_cli:
+  - type: action
+    domain: plugin
+    op: catalog-stand
+    with: { publishes_key: true, offers: standup }
+    as: shelf
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`offers` must be a list")), "{errs:?}");
     }
 }

@@ -16,9 +16,123 @@ const CATALOG_PATH: &str = "/catalog.json";
 /// was given, so this path is not a choice: it follows from the one above.
 const CATALOG_KEY_PATH: &str = "/catalog-key.pub";
 
-/// What a stood catalog offers: nothing. Standing one up is about the trust root taken at
-/// registration, and an empty shelf keeps every count in the run about the official catalog alone.
-const EMPTY_CATALOG: &str = r#"{"catalog_v": 1, "generated_at": "2026-07-27T00:00:00Z", "plugins": []}"#;
+/// Where one plugin's second document is published. amenbo resolves it beside the `catalog.json` it
+/// was given, so this follows from [`CATALOG_PATH`] the same way the key's path does.
+fn detail_path(name: &str) -> String {
+    format!("/plugins/{name}.json")
+}
+
+/// When this catalog says it was generated. A published catalog carries the moment its CI ran; one a
+/// run stands up has no such moment, so it carries a fixed one and the bytes stay the same from run
+/// to run.
+const CATALOG_STAMP: &str = "2026-07-27T00:00:00Z";
+
+/// Who the entries name as their author and where they say they come from. Neither is what a road
+/// standing a catalog up is about — the subject is the shelf — but both are fields the catalog rules
+/// hold every entry to, so they are answered once here rather than asked of every scenario. The
+/// repository is this project's own plugin repo, which is a name that answers: an opened panel reads
+/// stars and a README off it, and one nobody publishes would draw a 404 into a screen the road is
+/// about to be photographed on.
+const OFFER_AUTHOR: &str = "in-house";
+const OFFER_REPO: &str = "ShiroDoromoto/amenbo-plugin-worktree";
+
+/// The category every offered entry is filed under. A browse filters by it, and no road yet turns on
+/// which one an entry carries, so it is one value rather than a word each scenario has to choose.
+const OFFER_CATEGORY: &str = "workflow";
+
+/// One entry a scenario asked a stood catalog to offer, as the two documents a catalog serves carry
+/// it: a row in the list, and a document of its own under [`detail_path`].
+struct Offer {
+    /// The plugin's name — the row's identity, and the key its detail document is fetched by.
+    name: String,
+    /// The one line a row draws under the name.
+    desc: String,
+    /// The badge this catalog's *document* claims. It is not an entry's to grant: a shelf anyone may
+    /// publish into holds no review, so the merge clears it on everything a registered catalog
+    /// serves. Claiming it is therefore the only way a road can see that clearing happen at all.
+    claims_official: bool,
+    /// The one setting the author declares — the key it is stored under, and the label a form shows
+    /// beside it. The panel under an opened row is the only place a detail document reaches the
+    /// screen, so a shelf whose entries declare nothing puts nothing on that panel that came from it.
+    setting: Option<(String, String)>,
+}
+
+impl Offer {
+    /// The row, as the list document carries it.
+    ///
+    /// `detail_sum` is left off. It is the catalog CI's slot — the digest that keeps update detection
+    /// riding on the one list fetch — and amenbo reads it as optional, checking the pairing only where
+    /// an entry declares one. A run that stands its own shelf up publishes both halves in the same
+    /// breath, so there is nothing here for a digest to catch that the publishing could get wrong.
+    fn entry(&self) -> serde_json::Value {
+        serde_json::json!({
+            "name": self.name,
+            "desc": self.desc,
+            "author": OFFER_AUTHOR,
+            "repo": OFFER_REPO,
+            "os": ["macos", "linux"],
+            "category": OFFER_CATEGORY,
+            "official": self.claims_official,
+            "featured": false,
+            "added_at": null,
+        })
+    }
+
+    /// The second document, fetched only when someone opens or installs this row.
+    ///
+    /// It carries no asset, so an install off this shelf stops at the door — which is the point: what
+    /// a stood catalog is for is the seeing, and an install is walked against the real catalog, whose
+    /// signature is the very layer a fixture cannot stand in for.
+    fn detail(&self) -> String {
+        let mut doc = serde_json::json!({ "name": self.name, "payload_v": 1 });
+        if let Some((key, label)) = &self.setting {
+            doc["config"] = serde_json::json!([{ "key": key, "label": label }]);
+        }
+        doc.to_string()
+    }
+}
+
+/// Read what a step asked this catalog to offer. Naming nothing is an empty shelf, which is what a
+/// road about the trust root taken at registration wants: every count in the run then belongs to the
+/// official catalog alone.
+fn offers(with: &Args) -> Result<Vec<Offer>, String> {
+    let Some(rows) = with.get("offers") else { return Ok(Vec::new()) };
+    let rows = rows
+        .as_sequence()
+        .ok_or("`offers` is the list of entries this catalog serves")?;
+    rows.iter()
+        .map(|row| {
+            let word = |key: &str| row.get(key).and_then(|v| v.as_str()).map(str::to_string);
+            let name = word("name").ok_or("an offered entry needs a `name`")?;
+            let desc = word("desc").ok_or_else(|| format!("`{name}` needs a `desc` for its row"))?;
+            let setting = word("setting")
+                .map(|key| (key.clone(), word("label").unwrap_or(key)));
+            Ok(Offer {
+                name,
+                desc,
+                claims_official: row
+                    .get("claims_official")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+                setting,
+            })
+        })
+        .collect()
+}
+
+/// Every document a stood catalog publishes, keyed by the path it answers at: the list, and one
+/// detail beside it per entry.
+fn catalog_docs(offers: &[Offer]) -> Vec<(String, String)> {
+    let mut docs: Vec<(String, String)> =
+        offers.iter().map(|o| (detail_path(&o.name), o.detail())).collect();
+    let list = serde_json::json!({
+        "catalog_v": 1,
+        "generated_at": CATALOG_STAMP,
+        "plugins": offers.iter().map(Offer::entry).collect::<Vec<_>>(),
+    });
+    docs.push((CATALOG_PATH.to_string(), list.to_string()));
+    docs
+}
 
 /// The two signing keys a stood catalog publishes, before and after a rotation. Both are real
 /// minisign public keys from this repository's own tests — which key is which means nothing here,
@@ -382,13 +496,15 @@ impl Driver<'_> {
                 }))
             }
             // A catalog of the run's own on the loopback, so a scenario can walk what only a catalog
-            // that answers can show: the key it publishes beside its `catalog.json`, and the pin
-            // taken on it. What it offers is deliberately nothing — this is about the trust root
-            // amenbo takes at registration, not about what is on the shelf.
+            // that answers can show: the key it publishes beside its `catalog.json`, the pin taken on
+            // it, and the rows it serves. What it offers is the scenario's to say — a road about the
+            // trust root wants an empty shelf, and one about a row coming off a shelf of one's own
+            // wants that row on it, in the words its own document carries.
             "catalog-stand" => {
                 let publishes_key = req_bool(with, "publishes_key")?;
                 let name = bind.ok_or("`catalog-stand` produces a catalog, so it needs an `as:` name")?;
-                let host = StaticHost::serve([(CATALOG_PATH, EMPTY_CATALOG)]);
+                let offered = offers(with)?;
+                let host = StaticHost::serve(catalog_docs(&offered));
                 let url = host.url(CATALOG_PATH);
                 let mut stood = StoodCatalog { host, key: None };
                 if publishes_key {
@@ -396,8 +512,12 @@ impl Driver<'_> {
                 }
                 self.catalogs.insert(name.to_string(), stood);
                 Ok(Outcome::action(format!(
-                    "stood a catalog at {url} ({})",
-                    if publishes_key { "publishing a signing key" } else { "publishing no key" }
+                    "stood a catalog at {url} ({}, offering {})",
+                    if publishes_key { "publishing a signing key" } else { "publishing no key" },
+                    match offered.as_slice() {
+                        [] => "nothing".to_string(),
+                        rows => rows.iter().map(|o| format!("`{}`", o.name)).collect::<Vec<_>>().join(", "),
+                    }
                 )))
             }
             // The publisher rotates their key, at the same URL. Nothing about the catalog moves —
@@ -414,10 +534,18 @@ impl Driver<'_> {
             verb @ ("catalog-add" | "catalog-remove") => {
                 let url = self.catalog_url(with)?;
                 let sub = verb.trim_start_matches("catalog-");
+                let mut argv = vec!["plugin", "catalog", sub, &url, "--yes", "--json"];
+                // What the shelf is called on screen. A registration that names none is called after
+                // the host of its URL, which for a loopback catalog is an address with a port picked
+                // this run — so a road that reads where a row came from has to give the shelf a name
+                // it can be written down by.
+                if let Some(name) = with.get("name").and_then(|v| v.as_str()) {
+                    argv.extend_from_slice(&["--name", name]);
+                }
                 // `--yes` is the consent a registration takes when the catalog publishes a key: this
                 // is a non-interactive run, and amenbo refuses to pin a trust root without being told
                 // so. A catalog with no key to pin never asks, so passing it costs that case nothing.
-                let v = self.run_json(&["plugin", "catalog", sub, &url, "--yes", "--json"])?;
+                let v = self.run_json(&argv)?;
                 // Adding fetches the catalog once, so the count it comes back with is what a first
                 // browse would have found — and the reachability, which is the half a bad URL shows.
                 Ok(Outcome::action(match sub {
@@ -1010,4 +1138,77 @@ fn make_runnable(path: &Path) -> Result<(), String> {
         "{} cannot be stood in for here: a plugin's program is a script only on unix",
         path.display()
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(yaml: &str) -> Args {
+        serde_yaml::from_str(yaml).expect("the args a step would carry")
+    }
+
+    fn served(docs: &[(String, String)], path: &str) -> serde_json::Value {
+        let body = docs
+            .iter()
+            .find(|(p, _)| p == path)
+            .unwrap_or_else(|| panic!("nothing is published at {path}: {docs:?}"));
+        serde_json::from_str(&body.1).expect("a document a catalog serves is JSON")
+    }
+
+    /// A road about the trust root alone names no rows, and the shelf it stands on is empty — which
+    /// is what keeps every count in that run about the official catalog.
+    #[test]
+    fn a_shelf_nobody_stocked_is_empty() {
+        let docs = catalog_docs(&offers(&args("publishes_key: true")).expect("no rows to read"));
+        assert_eq!(docs.len(), 1, "an empty shelf publishes the list and nothing else: {docs:?}");
+        let list = served(&docs, CATALOG_PATH);
+        assert_eq!(list["catalog_v"], 1);
+        assert_eq!(list["plugins"].as_array().expect("a list of entries").len(), 0);
+    }
+
+    /// What a scenario writes is what the catalog's own document says — including the badge it is not
+    /// entitled to, which is the claim a merge has to be seen clearing.
+    #[test]
+    fn a_row_is_served_in_the_words_the_scenario_wrote() {
+        let docs = catalog_docs(
+            &offers(&args(
+                "offers:\n  - name: standup\n    desc: Post the day's finished tasks\n    claims_official: true\n    setting: channel\n    label: Channel webhook\n",
+            ))
+            .expect("one row to read"),
+        );
+        let entry = &served(&docs, CATALOG_PATH)["plugins"][0];
+        assert_eq!(entry["name"], "standup");
+        assert_eq!(entry["desc"], "Post the day's finished tasks");
+        assert_eq!(entry["official"], true, "the claim is the document's, and it is served as written");
+        assert_eq!(entry["detail_sum"], serde_json::Value::Null, "a shelf standing beside its own details declares no digest");
+
+        // Beside it, under the path amenbo resolves from the catalog's own URL.
+        let detail = served(&docs, "/plugins/standup.json");
+        assert_eq!(detail["name"], "standup", "the name is the join between the two documents");
+        assert_eq!(detail["config"][0]["key"], "channel");
+        assert_eq!(detail["config"][0]["label"], "Channel webhook");
+    }
+
+    /// A row that declares no setting carries no schema at all — an absent list, not an empty one, so
+    /// the panel under it has nothing of this catalog's to draw.
+    #[test]
+    fn a_row_declaring_nothing_carries_no_schema() {
+        let docs = catalog_docs(
+            &offers(&args("offers:\n  - name: burndown\n    desc: Chart what is left\n"))
+                .expect("one row to read"),
+        );
+        let detail = served(&docs, "/plugins/burndown.json");
+        assert!(detail["config"].is_null(), "got: {detail}");
+        assert_eq!(served(&docs, CATALOG_PATH)["plugins"][0]["official"], false, "a badge nobody claimed is not served as one");
+    }
+
+    /// The two words a row cannot be served without. A name is what it is fetched and badged by, and
+    /// a description is the line drawn under it — a row missing either reaches a screen as a blank.
+    #[test]
+    fn a_row_needs_a_name_and_a_line() {
+        assert!(offers(&args("offers:\n  - desc: no name here\n")).is_err());
+        assert!(offers(&args("offers:\n  - name: nameless\n")).is_err());
+        assert!(offers(&args("offers: standup")).is_err(), "a shelf is a list of rows, not one word");
+    }
 }

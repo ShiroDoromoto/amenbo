@@ -107,6 +107,18 @@ it by the `as:` binding rather than by a URL it could not have known. `catalog-r
 other of two keys from the same address, which is a publisher rotating theirs as amenbo sees it. The
 host is `amenbo-static-host`, shared with the main workspace's own tests.
 
+What that catalog puts on its shelf is the scenario's to write, under `offers:` — the one arg written
+as a list of rows rather than as a word. Each row is the words a catalog's own documents carry: the
+`name` it is fetched and badged by, the `desc` drawn under it, the `claims_official` badge it is not
+entitled to (a shelf anyone may publish into holds no review, so seeing the merge clear that claim
+needs one to have been made), and the one `setting` its author declares under the `label` a form
+shows. Naming no rows is an empty shelf, which is what a road about the trust root alone wants. A
+registration takes a `name:` for the same reason the rows are named at all: a catalog registered
+without one is called after the host of its URL, and a loopback address with a port picked this run
+is nothing a road can read a row's provenance back by. Nothing on such a shelf installs — the rows
+carry no asset, and an install is walked against the real catalog, whose signature is the layer no
+fixture can stand in for.
+
 Each op the driver maps is an arm in its domain's module under `cli/src/domain/` — `task depend` in
 `task.rs`, `plugin install` in `plugin.rs` — and an op that is in the scenario registry but not yet
 mapped fails loudly rather than passing silently. `cli/src/lib.rs` keeps only what every arm stands

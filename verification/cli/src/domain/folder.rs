@@ -6,7 +6,7 @@ use amenbo_scenario::{Args, Domain};
 
 use crate::{opt_bool, req_i64, unmapped, Driver, Outcome};
 
-impl Driver {
+impl Driver<'_> {
     pub(crate) fn folder_action(&mut self, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
         match op {
             "init" => {

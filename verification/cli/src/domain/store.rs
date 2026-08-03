@@ -9,7 +9,7 @@ use amenbo_scenario::{Args, Domain};
 use crate::{opt_bool, path_str, req_bool, req_i64, req_str, unmapped, Driver, Outcome};
 use crate::judge::judge_field;
 
-impl Driver {
+impl Driver<'_> {
     pub(crate) fn store_action(&mut self, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
         match op {
             "export" => {

@@ -9,7 +9,7 @@ use amenbo_scenario::{Args, Domain};
 
 use crate::{req_bool, req_str, unmapped, Driver, Outcome};
 
-impl Driver {
+impl Driver<'_> {
     pub(crate) fn repo_action(&mut self, op: &str, with: &Args) -> Result<Outcome, String> {
         match op {
             // The folder the run works in. `write-file` is a person already having a file there —

@@ -24,7 +24,9 @@ verification/
   fixtures/    text a scenario cannot hold itself (a file carrying an amenbo ref for the lint)
   core/        the scenario schema + validating loader (crate `amenbo-scenario`, `lint` + `emit` bins)
   cli/         CLI driver + runner — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
-  gui/         mac harness — scenario → screen checklist, shot and read by the screen tool (crate `amenbo-verify-gui`)
+  gui/         mac harness — scenario → screen checklist, shot and read by the screen tool (crate `amenbo-verify-gui`).
+               It reaches into `cli/` for the two things a screen run needs of the binary: the
+               throwaway store, and the vocabulary a `given:` world is stood up in.
 ```
 
 `core/`, `cli/` and `gui/` are members of this cargo workspace, outside the main workspace, so
@@ -163,15 +165,15 @@ parent under the temp tree, a name that does not lean on the pid, a sweep of wha
 on the way in — and the app is started from a directory of its own, since a child inherits the
 harness's, and the harness is run from this repository.
 
-An app launched that way opens on an empty store, which is where a screen road stands today: what a
-road needs standing before its first step is not declared anywhere yet, so the roads that assume a
-world — a registered catalog, an installed plugin, a folder card waiting to be linked — are the ones
-that still have to be prepared by hand.
-
-or confirm on screen, and the shooting is the screen tool's (`scripts/screen.swift`) — the harness
-names the app by pid and receives one file per step in an evidence directory (plus a
-`manifest.json` pairing each instruction, verdict and shot). Which window was shot, and the id it
-was shot by, stay inside the tool: a format nobody is handed is a format nobody parses.
+**The world a road starts from is stood up before the app is.** A scenario's [`given:`](#given--the-world-a-road-starts-from)
+is walked by the CLI the same bundle ships (`Contents/MacOS/amenbo`), pointed at that same throwaway
+store: the build under test stands up its own world, rather than whichever amenbo the operator has
+on `PATH`. It runs before the launch, since a store is read as the app comes up, and before there is
+an evidence directory, so a premise that could not be stood up leaves no shots of a half-built
+world. Where it stops is the screen's own moves — `steps_gui` is the operator's to walk, and a
+driver that carried those out would leave the road proving something already done. A scenario that
+declares no world gets none and opens on an empty store. What was stood up is written into
+`manifest.json` under `world`, because the store it describes goes out with the run.
 
 An assert is judged by asking that same tool to read the shot back (macOS's own **Vision** behind
 it): the harness derives the text the step expects on screen — for a `listed` assert, the bound

@@ -18,5 +18,10 @@ path = "src/main.rs"
 
 [dependencies]
 amenbo-scenario = { path = "../core" }
+# The CLI driver, for the two things this harness needs that are already written there: the
+# throwaway store a run is given, and the vocabulary a premise is stood up in. Both are the shipped
+# binary being driven, which is what that crate is — a second spelling of `plugin install` here
+# would drift from the road's the moment either learned something.
+amenbo-verify-cli = { path = "../cli" }
 serde_json = "1"
 serde_yaml = "0.9"

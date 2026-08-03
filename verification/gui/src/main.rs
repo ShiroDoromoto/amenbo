@@ -27,6 +27,11 @@
 //! backlog, and it holds the pid that launch answered with, so what is captured is that app and not
 //! whichever copy of the same build happened to be open. Both go when the run ends.
 //!
+//! Into that store, before the app is started, goes the world the scenario declared: `given` is
+//! walked with the CLI the same bundle ships, so a road that stands on records it never makes finds
+//! them there. The screen's own moves are not among them — those are the road, and the operator
+//! walks them.
+//!
 //! Without `--step` the run shoots every step back to back, which is one screen photographed as
 //! many times as the scenario is long. `--step` is what lets a scenario carry a screen that moves:
 //! it hands the run back after each shot, and whoever is driving — a person, or an AI calling the
@@ -52,6 +57,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use amenbo_verify_cli::World;
 use amenbo_verify_gui::{
     launch, read_shot, scratch, shoot, walk, write_manifest, StepRecord, Verdict,
 };
@@ -112,11 +118,18 @@ fn run(opts: &Opts) -> Result<bool, String> {
     // evidence a run files is only worth what the build behind it is.
     amenbo_verify_gui::shipped::ensure_release_build(bundle)?;
 
-    // The store is made first and handed to the launch, which owns both from here: the app is up
-    // for exactly as long as this binding lives, and the store goes down with it.
-    let store = scratch::store(&scenario.id)
+    // The store comes next, and everything after it is pointed at it: the world is stood up in it,
+    // and the app is launched at it. Both are let go of before it is, which is what the order of
+    // these bindings says — the app goes down, then whatever the premise was holding, then the store.
+    let store = scratch::session(&scenario.id, false)
         .map_err(|e| format!("could not create a throwaway store: {e}"))?;
-    let mut gui = launch::launch(bundle, store)?;
+
+    // The world the scenario declared, stood up with the CLI this very bundle ships. Before the
+    // launch, because a store is read as the app starts; and before there is an evidence directory,
+    // because a premise that could not be stood up must leave no shots of a half-built world.
+    let world = stand_world(&scenario, bundle, &store)?;
+
+    let mut gui = launch::launch(bundle, &store)?;
     gui.wait_until_shootable(&opts.screen)?;
     let pid = gui.pid;
 
@@ -143,7 +156,8 @@ fn run(opts: &Opts) -> Result<bool, String> {
         |record| if stepping { hand_back(&stdin, record) } else { Ok(()) },
     )?;
 
-    let manifest = write_manifest(&evidence, &scenario, &outcome)?;
+    let stood = world.as_ref().map(World::stood).unwrap_or_default();
+    let manifest = write_manifest(&evidence, &scenario, stood, &outcome)?;
 
     if opts.json {
         println!(
@@ -156,6 +170,9 @@ fn run(opts: &Opts) -> Result<bool, String> {
         );
     } else {
         println!("scenario: {} — {}", scenario.id, scenario.title);
+        for line in stood {
+            println!("  world: {line}");
+        }
         println!("evidence: {}", evidence.display());
         for r in &outcome.records {
             println!("{}", step_lines(r));
@@ -164,6 +181,26 @@ fn run(opts: &Opts) -> Result<bool, String> {
         println!("VERDICT:  {}", if outcome.passed { "green" } else { "red" });
     }
     Ok(outcome.passed)
+}
+
+/// Stand up the world the scenario says the screen starts from, in the store the app is about to be
+/// pointed at, with the CLI the bundle under test ships.
+///
+/// A scenario that declares none gets none: an empty store is exactly the world a road written
+/// without a premise was written against, and booting one to be tidy would put records on screen no
+/// line of that road asked for.
+fn stand_world<'a>(
+    scenario: &amenbo_scenario::Scenario,
+    bundle: &Path,
+    store: &'a scratch::Session,
+) -> Result<Option<World<'a>>, String> {
+    if scenario.given.is_empty() {
+        return Ok(None);
+    }
+    let cli = amenbo_verify_gui::shipped::sidecar(bundle)?;
+    amenbo_verify_cli::stand_world(&cli, store, &scenario.given)
+        .map(Some)
+        .map_err(|e| format!("the world `{}` starts from could not be stood up: {e}", scenario.id))
 }
 
 /// One step as the summary prints it: its verdict mark, number, kind and instruction, and the shot

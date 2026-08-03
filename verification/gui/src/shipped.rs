@@ -37,7 +37,11 @@ pub fn ensure_release_build(bundle: &Path) -> Result<(), String> {
 
 /// The CLI inside a mac app bundle. Named rather than searched for: the installer puts one CLI in
 /// one place, and a harness that went looking would be reading whichever amenbo it found first.
-fn sidecar(bundle: &Path) -> Result<PathBuf, String> {
+///
+/// It answers two questions with one path. Which build this is, above — and, once that is settled,
+/// what the run stands the scenario's world up with: the world a road starts from is raised by the
+/// bundle under test, never by whichever amenbo the operator has on `PATH`.
+pub fn sidecar(bundle: &Path) -> Result<PathBuf, String> {
     let cli = bundle.join("Contents/MacOS/amenbo");
     if !cli.is_file() {
         return Err(format!(
@@ -58,7 +62,7 @@ fn sidecar(bundle: &Path) -> Result<PathBuf, String> {
 /// hand the app a store somebody had already been in — which is the one thing a road through the
 /// setup screens is written to walk out of.
 fn release_build(cli: &Path) -> Result<bool, String> {
-    let probe = scratch::store("build-stamp")
+    let probe = scratch::session("build-stamp", false)
         .map_err(|e| format!("could not create a throwaway store to ask which build it is: {e}"))?;
     let out = Command::new(cli)
         .args(["version", "--json"])
@@ -107,7 +111,7 @@ mod tests {
     /// The stamped bundle is the one that gets launched.
     #[test]
     fn a_release_bundle_is_launched() {
-        let d = scratch::store("selftest-shipped-yes").unwrap();
+        let d = scratch::session("selftest-shipped-yes", false).unwrap();
         let app = bundle(&d.cwd, r#"{"version":"5.3.0","release_build":true}"#);
         assert!(ensure_release_build(&app).is_ok());
     }
@@ -116,7 +120,7 @@ mod tests {
     /// carries several amenbos, and which one was refused is the answer the operator needs.
     #[test]
     fn a_local_bundle_is_refused_by_name() {
-        let d = scratch::store("selftest-shipped-no").unwrap();
+        let d = scratch::session("selftest-shipped-no", false).unwrap();
         let app = bundle(&d.cwd, r#"{"version":"5.3.0","release_build":false}"#);
         let err = ensure_release_build(&app).unwrap_err();
         assert!(err.contains("stand-in.app"), "the refusal names the bundle it was handed: {err}");
@@ -127,7 +131,7 @@ mod tests {
     /// question left unanswered is not a yes.
     #[test]
     fn a_bundle_that_will_not_answer_is_refused_with_why() {
-        let d = scratch::store("selftest-shipped-mute").unwrap();
+        let d = scratch::session("selftest-shipped-mute", false).unwrap();
         let older = bundle(&d.cwd, r#"{"version":"5.3.0"}"#);
         let err = ensure_release_build(&older).unwrap_err();
         assert!(err.contains("release_build"), "the field that was missing is named: {err}");

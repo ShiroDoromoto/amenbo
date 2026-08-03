@@ -6,7 +6,9 @@
 //! directory by the screen tool (`scripts/screen.swift`), which is named the app's pid and hands
 //! back a file — which window it shot, and the id it shot by, never leave it. The pid it is named
 //! is the harness's own: the app under test is started here, against a throwaway store
-//! ([`launch`], [`scratch`]), and goes down with the run.
+//! ([`launch`], [`scratch`]), and goes down with the run. The world that store holds when the app
+//! opens it is the scenario's `given`, stood up beforehand with the CLI the bundle ships
+//! ([`amenbo_verify_cli::stand_world`]) — never the screen's own moves, which are the road.
 //!
 //! An assert step is judged from that shot by asking the same tool to read it (macOS **Vision**
 //! behind it): the harness derives the text the step expects on screen and matches it against the
@@ -32,10 +34,15 @@ use amenbo_scenario::{Args, Domain, Driver, Scenario, Step};
 
 /// Starting the app under test and holding it — the pid every shot is aimed at comes from here.
 pub mod launch;
-/// The throwaway store that app is launched against.
-pub mod scratch;
 /// The line the run stands on: only a bundle the release workflow produced is launched.
 pub mod shipped;
+
+/// The throwaway store that app is launched against — the CLI driver's own, not a second one. What
+/// isolates a run is the same two things whichever driver is asking (`AMENBO_HOME` at a directory
+/// the run made, and a working directory carrying no pointer to a real project), and the premise is
+/// stood up in this store by the shipped CLI, so a store of this harness's own would be a second
+/// implementation of one rule with two drivers walking into it.
+pub use amenbo_verify_cli::scratch;
 
 // ---------------------------------------------------------------------------
 // The screen tool (the side effects: front, shoot, read)
@@ -153,6 +160,23 @@ impl Instructor {
         Instructor { labels: HashMap::new() }
     }
 
+    /// Learn what the world a road starts from left standing, without rendering a word of it. The
+    /// premise is the driver's to stand up and none of it is an instruction — but what it made is
+    /// what a road then points at, and an operator has to be told to open "Greenhouse" rather than
+    /// to open a binding they cannot see.
+    ///
+    /// It renders nothing on purpose, which is also what keeps it from failing: the premise takes
+    /// ops that never reach the screen, and this harness maps the screen's.
+    fn learn(&mut self, steps: &[Step]) {
+        for step in steps {
+            if let Step::Action { with, bind: Some(name), .. } = step {
+                if let Some(label) = label(with) {
+                    self.labels.insert(name.clone(), label.to_string());
+                }
+            }
+        }
+    }
+
     /// The human label a step's `target:` points at — the title the bound action created, or a
     /// `<name>` placeholder if it never bound one (the loader has already proven it resolves).
     fn target_label(&self, with: &Args) -> String {
@@ -180,8 +204,8 @@ impl Instructor {
                     );
                 }
                 if let Some(name) = bind {
-                    if let Some(title) = arg_str(with, "title") {
-                        self.labels.insert(name.clone(), title.to_string());
+                    if let Some(label) = label(with) {
+                        self.labels.insert(name.clone(), label.to_string());
                     }
                 }
                 Ok(text)
@@ -731,6 +755,7 @@ impl Instructor {
 /// should not have to wait for a person to be standing in front of a screen.
 pub fn instructions(scenario: &Scenario) -> Result<Vec<String>, String> {
     let mut instructor = Instructor::new();
+    instructor.learn(&scenario.given);
     scenario.steps(Driver::Gui).iter().map(|s| instructor.render(s)).collect()
 }
 
@@ -742,6 +767,13 @@ fn unmapped(domain: Domain, op: &str) -> String {
 
 fn arg_str<'a>(with: &'a Args, key: &str) -> Option<&'a str> {
     with.get(key).and_then(|v| v.as_str())
+}
+
+/// The words on screen for what an action made — what a later step's `target:` has to be read back
+/// as. A record is written under a `title`, and the two things that hold records (a project, a
+/// dimension's axis) under a `name`; an action that made neither has no label to offer.
+fn label(with: &Args) -> Option<&str> {
+    arg_str(with, "title").or_else(|| arg_str(with, "name"))
 }
 
 fn req<'a>(with: &'a Args, key: &str) -> Result<&'a str, String> {
@@ -849,6 +881,7 @@ where
         .map_err(|e| format!("could not create evidence dir {}: {e}", evidence_dir.display()))?;
 
     let mut instructor = Instructor::new();
+    instructor.learn(&scenario.given);
     let mut records = Vec::new();
     let mut passed = true;
 
@@ -921,12 +954,19 @@ fn domain_str(d: Domain) -> &'static str {
     }
 }
 
-/// Write the run's manifest — the scenario, the roll-up, and every step's instruction, verdict and
-/// evidence — as JSON into the evidence dir, so a later pass (a human closing the `Review`s, or a
-/// release gate) reads the checklist and its verdicts back without re-walking the scenario.
+/// Write the run's manifest — the scenario, the world it was walked from, the roll-up, and every
+/// step's instruction, verdict and evidence — as JSON into the evidence dir, so a later pass (a
+/// human closing the `Review`s, or a release gate) reads the checklist and its verdicts back
+/// without re-walking the scenario.
+///
+/// `stood` is what the premise put in the store before the first shot, a line per step. It belongs
+/// in the evidence for the reason the shots do: what a screen showed is only as good as the world it
+/// was showing, and a reader coming back to a manifest cannot ask the store — it went out with the
+/// run.
 pub fn write_manifest(
     dir: &Path,
     scenario: &Scenario,
+    stood: &[String],
     outcome: &WalkOutcome,
 ) -> Result<PathBuf, String> {
     let steps: Vec<String> = outcome
@@ -955,11 +995,13 @@ pub fn write_manifest(
             )
         })
         .collect();
+    let world: Vec<String> = stood.iter().map(|s| js(s)).collect();
     let json = format!(
-        "{{\"scenario\":{},\"title\":{},\"passed\":{},\"steps\":[{}]}}",
+        "{{\"scenario\":{},\"title\":{},\"passed\":{},\"world\":[{}],\"steps\":[{}]}}",
         js(&scenario.id),
         js(&scenario.title),
         outcome.passed,
+        world.join(","),
         steps.join(",")
     );
     let path = dir.join("manifest.json");
@@ -1649,6 +1691,50 @@ steps_gui:
     /// The report a project keeps standing: one text, and the folders it is still waiting on listed under
     /// it. The folder names are the readings — they are the reader's own words, and the board names no
     /// folder anywhere else — so a report that had shrunk to one folder leaves the second shot red.
+    /// A road that points at what the premise stood up reads by the card's own title. The world is
+    /// the driver's to stand up and never an instruction — but the operator is sent to a card, and
+    /// a binding is a name only the file uses.
+    #[test]
+    fn a_road_reads_what_the_premise_stood_up_by_its_title() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Greenhouse }
+    as: greenhouse
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+steps_gui:
+  - type: action
+    domain: task
+    op: assign
+    with: { target: seed, assignee: me-ai }
+  - type: assert
+    domain: task
+    op: listed
+    with: { filter: "status:todo", target: seed, present: true }
+"#;
+        let s = load(yaml);
+        let lines = instructions(&s).expect("the road renders");
+        assert_eq!(lines.len(), s.steps(Driver::Gui).len(), "the premise is no instruction of its own");
+        assert!(lines[0].contains("\"SEED\""), "got: {}", lines[0]);
+
+        // And the same name is what the shot is read for — a run judged against `<seed>` would fail
+        // every time, on a screen that was right.
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        assert_eq!(
+            ins.expectation(&s.steps(Driver::Gui)[1]),
+            Some(Expectation { text: "SEED".to_string(), present: true })
+        );
+    }
+
     #[test]
     fn the_standing_report_reads_each_folder_the_one_text_is_waiting_on() {
         let yaml = r#"
@@ -1861,10 +1947,14 @@ steps_gui:
         let kept = std::fs::read_to_string(dir.join("03-assert-task-listed.txt")).expect("the reading");
         assert!(kept.contains("me-ai board"), "got: {kept}");
 
-        let manifest = write_manifest(&dir, &s, &outcome).expect("manifest");
+        let stood = ["raised the project `Greenhouse`".to_string()];
+        let manifest = write_manifest(&dir, &s, &stood, &outcome).expect("manifest");
         let text = std::fs::read_to_string(&manifest).unwrap();
         assert!(text.contains("\"passed\":true"));
         assert!(text.contains("\"verdict\":\"pass\""));
+        // What the shots were taken in front of is written down with them: the store the run stood
+        // on is gone by the time anyone reads this back.
+        assert!(text.contains("\"world\":[\"raised the project `Greenhouse`\"]"), "got: {text}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

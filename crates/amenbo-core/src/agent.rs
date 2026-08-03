@@ -713,6 +713,7 @@ fn cycles() -> Value {
         "decision": {
             "when": "You are putting a 'why' on the record — offering a new one, or fitting it to the decisions already there (step 0 is where you judge that it is worth offering).",
             "backbone": [
+                backbone_step("Read the neighbourhood before you write, not after — a duplicate you find first is one you never propose. Pull a bounded, relevant slice (search <term> --kind decision --limit N), not the whole corpus, and read the bodies it points at (decision show). Don't settle for one term: prose is written in the human's language while identifiers and code spans stay English, so pull again on another word for the same idea. If one contradicts what you are about to record, propose it to the human as a candidate supersede/amend with your reasoning; do not author the edge yourself (detection proposes, the human disposes).", &["search", "decision show"]),
                 backbone_step("Freeze the rationale as an append-only decision — it starts proposed (your proposal; the human accepts or rejects it), so offer the record, don't impose it.", &["decision add", "decision promote"]),
             ],
             "optional": [
@@ -720,7 +721,6 @@ fn cycles() -> Value {
                 optional_step("a new decision partially revises an existing one that stays current", "Chain it as an amendment — the old one is not superseded; read the two together.", &["decision amend"]),
                 optional_step("a proposed decision is agreed and ready to settle", "Accept it (stamps decided_at/decided_by).", &["decision accept"]),
                 optional_step("an accepted decision needs a minor fix (typo / stale line)", "Edit it in place — accepting no longer freezes the body, so there is no reopen/re-accept round-trip. Supersede stays for a change of mind; reopen for un-settling a too-hasty acceptance.", &["decision edit"]),
-                optional_step("you just added or accepted a decision", "Check whether it semantically contradicts an existing one. Pull a bounded, relevant neighbourhood — search the new decision's key terms (search <term> --kind decision --limit N), not the whole corpus — and read the bodies it points at (decision show). If one contradicts, propose it to the human as a candidate supersede/amend with your reasoning; do not author the edge yourself (detection proposes, the human disposes).", &["search", "decision show", "decision supersede", "decision amend"]),
                 optional_step("the decision drove concrete implementation tasks", "Link it to those tasks: the link declares the decision is their premise, so they stay unreservable (not_ready) until it is accepted and current — link before proposing, and the work cannot start ahead of its own rationale. It freezes what it touches, so link implementation tasks only: never the task of ruling on the decision itself, and never a rejected decision, or one that has been superseded, that you merely want to cite (that belongs in the body).", &["decision link"]),
             ]
         },

@@ -695,5 +695,9 @@ export const it: Translation = {
       message: "{task} deve cominciare il {start_on} ma scadeva il {due_on} — resta fuori dalla posta in arrivo fino a un giorno che ha già superato la scadenza.",
       fix: "Una delle due è sbagliata: correggi il giorno di inizio o quello di scadenza. Niente sceglie fra le due, perché l'errore può stare in entrambe.",
     },
+    project_without_folder: {
+      message: "Il progetto {name} (#{project}) non ha nessuna cartella: non c'è da dove operarlo, e un'IA non lo vede affatto.",
+      fix: "Aggiungi una cartella in Impostazioni del progetto > Cartelle.",
+    },
   },
 };

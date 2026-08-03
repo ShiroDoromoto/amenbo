@@ -702,5 +702,9 @@ export const pl: Translation = {
       message: "{task} ma ruszyć {start_on}, a termin minął {due_on} — zostaje poza skrzynką do dnia, który już jest po terminie.",
       fix: "Jedno z dwóch jest błędne: popraw albo dzień startu, albo termin. Nikt nie rozstrzygnie tego za Ciebie, bo literówka może być po każdej ze stron.",
     },
+    project_without_folder: {
+      message: "Projekt {name} (#{project}) nie ma żadnego folderu — nie ma skąd nim operować, a AI w ogóle go nie widzi.",
+      fix: "Dodaj folder w Ustawieniach projektu > Foldery.",
+    },
   },
 };

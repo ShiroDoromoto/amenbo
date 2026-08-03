@@ -56,6 +56,8 @@ pub enum DoctorIssueKind {
     /// A task declared to start after the day it is due. Two declarations that contradict each other,
     /// and the pair hides: the task stays out of the mailbox while the day it was due goes by.
     StartAfterDue,
+    /// A live project no folder on this machine leads to — nothing can operate it.
+    ProjectWithoutFolder,
 }
 
 impl DoctorIssueKind {
@@ -72,6 +74,7 @@ impl DoctorIssueKind {
         Self::OrphanBinding,
         Self::DeadRef,
         Self::StartAfterDue,
+        Self::ProjectWithoutFolder,
     ];
 
     /// The one and only place a kind string is written — `Serialize` goes through here too.
@@ -87,6 +90,7 @@ impl DoctorIssueKind {
             Self::OrphanBinding => "orphan_binding",
             Self::DeadRef => "dead_ref",
             Self::StartAfterDue => "start_after_due",
+            Self::ProjectWithoutFolder => "project_without_folder",
         }
     }
 
@@ -118,6 +122,7 @@ impl DoctorIssueKind {
             Self::OrphanBinding => &["dir"],
             Self::DeadRef => &["at", "refs"],
             Self::StartAfterDue => &["task", "start_on", "due_on"],
+            Self::ProjectWithoutFolder => &["project", "name"],
         }
     }
 }
@@ -196,6 +201,7 @@ pub fn report(store: &Store) -> crate::error::Result<DoctorResult> {
         .into_iter()
         .chain(pointer_issues(store))
         .chain(orphan_binding_issues(store))
+        .chain(project_without_folder_issues(store)?)
         .chain(store.dead_refs()?);
     for issue in env {
         result.summary.warning += 1;
@@ -326,6 +332,40 @@ fn orphan_binding_issues(store: &Store) -> Vec<DoctorIssue> {
         .collect()
 }
 
+/// Warns about a live project **no folder on this machine leads to** (`AMB-D-533`). A project is reached
+/// through the folder someone stands in, so one with no folder is a list nothing can operate: an AI cannot
+/// see it at all (`AMB-D-222`), and every command that takes its project from the current directory lands
+/// somewhere else. Unbinding the last folder is allowed and says so on the spot (`AMB-D-530`), which covers
+/// the moment it happens and nothing after it — this is the standing check.
+///
+/// A folder recorded but **gone** counts as none: the registry is a best-effort index, and a path that has
+/// vanished leads nowhere. That is the same measure the project's own board takes, so the warning a person
+/// meets on one board and the list they read here say the same thing (`AMB-D-535` gives the list to `doctor`).
+///
+/// Archived projects are left out. Archiving is what keeps a record you no longer work on, so having no
+/// folder is exactly what is expected of one, not a fault to report.
+fn project_without_folder_issues(store: &Store) -> crate::error::Result<Vec<DoctorIssue>> {
+    let registry = store.bindings();
+    Ok(store
+        .project_list(false)?
+        .projects
+        .into_iter()
+        .filter(|p| {
+            registry
+                .dirs_for_project(p.id)
+                .into_iter()
+                .all(|dir| !std::path::Path::new(dir).is_dir())
+        })
+        .map(|p| {
+            DoctorIssue::new(
+                DoctorIssueKind::ProjectWithoutFolder,
+                format!("project:{}", p.id),
+                &[("project", &p.id.to_string()), ("name", &p.name)],
+            )
+        })
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -336,6 +376,9 @@ mod tests {
         p
     }
 
+    /// A store holding one project **with a folder** — a store nothing is wrong with. The folder is what
+    /// makes it that: a project no folder leads to is itself an issue ([`project_without_folder_issues`]),
+    /// so a fixture without one would put every test that starts from "nothing raised yet" one warning down.
     fn store_with_project(tag: &str) -> (Store, i64) {
         let mut store = Store::open_at(crate::config::Paths::at(tmp(&format!("home-{tag}")))).unwrap();
         let project = store
@@ -347,7 +390,19 @@ mod tests {
             })
             .unwrap();
         let id = project.id;
+        bind_folder(&store, id, &format!("{tag}-home-dir"));
         (store, id)
+    }
+
+    /// Bind a fresh folder to the project the way a real bind does — the pointer written and the registry
+    /// row recorded — so no environment check reads it as broken. Returns the folder.
+    fn bind_folder(store: &Store, project_id: i64, tag: &str) -> PathBuf {
+        let dir = tmp(tag);
+        crate::binding::pointer_for(store, project_id).write(&dir).unwrap();
+        let mut registry = store.bindings();
+        registry.record_project_ref(project_id, dir.to_string_lossy());
+        store.save_bindings(&registry).unwrap();
+        dir
     }
 
     /// A kind is part of the `--json` machine contract and, at the same time, the template id a surface looks
@@ -369,7 +424,78 @@ mod tests {
                 "orphan_binding",
                 "dead_ref",
                 "start_after_due",
+                "project_without_folder",
             ]
+        );
+    }
+
+    /// A project no folder leads to cannot be operated by anyone, and the board that says so is only read by
+    /// whoever opens it — so the machine-wide list is `doctor`'s. It is raised for a project whose folders
+    /// have all vanished just as for one that never had any: a path that is gone leads nowhere either.
+    #[test]
+    fn a_project_no_folder_leads_to_is_raised_until_one_does() {
+        let (store, pid) = store_with_project("no-folder");
+        let of_kind = |store: &Store| -> Vec<DoctorIssue> {
+            report(store)
+                .unwrap()
+                .issues
+                .into_iter()
+                .filter(|i| i.kind == DoctorIssueKind::ProjectWithoutFolder)
+                .collect()
+        };
+        assert!(of_kind(&store).is_empty(), "the fixture project has a folder, so nothing is raised");
+
+        // The folder is taken off, as `unbind` leaves it: the project is still there, with nowhere to
+        // operate it from.
+        let mut registry = store.bindings();
+        for dir in registry.dirs_for_project(pid).into_iter().map(str::to_string).collect::<Vec<_>>() {
+            registry.forget_dir(&dir);
+        }
+        store.save_bindings(&registry).unwrap();
+
+        let raised = of_kind(&store);
+        assert_eq!(raised.len(), 1, "one project, one warning: {raised:?}");
+        assert_eq!(raised[0].severity, "warning", "the store is intact — only the way in is gone");
+        assert_eq!(raised[0].target, format!("project:{pid}"));
+        assert_eq!(
+            (raised[0].params.get("project").map(String::as_str), raised[0].params.get("name").map(String::as_str)),
+            (Some(pid.to_string().as_str()), Some("案件X")),
+            "it carries what a surface needs to name the project a reader has to go and bind",
+        );
+
+        // A folder recorded but gone leads nowhere, so it does not answer the warning.
+        let vanished = tmp("no-folder-vanished");
+        let mut registry = store.bindings();
+        registry.record_project_ref(pid, vanished.to_string_lossy());
+        store.save_bindings(&registry).unwrap();
+        std::fs::remove_dir_all(&vanished).unwrap();
+        assert_eq!(of_kind(&store).len(), 1, "a folder that is gone is not a folder to work in");
+
+        bind_folder(&store, pid, "no-folder-again");
+        assert!(of_kind(&store).is_empty(), "once a folder leads to it again, the warning is gone");
+    }
+
+    /// A project you have stopped working on is expected to have no folder — archiving is what keeps the
+    /// record — so it is not something to be told about every time `doctor` runs.
+    #[test]
+    fn an_archived_project_is_not_asked_for_a_folder() {
+        let (mut store, pid) = store_with_project("archived");
+        let mut registry = store.bindings();
+        for dir in registry.dirs_for_project(pid).into_iter().map(str::to_string).collect::<Vec<_>>() {
+            registry.forget_dir(&dir);
+        }
+        store.save_bindings(&registry).unwrap();
+        assert_eq!(
+            report(&store).unwrap().issues.iter().filter(|i| i.kind == DoctorIssueKind::ProjectWithoutFolder).count(),
+            1,
+            "while it is live, the missing folder is raised",
+        );
+
+        store.project_set_archived(pid, true).unwrap();
+        assert_eq!(
+            report(&store).unwrap().issues.iter().filter(|i| i.kind == DoctorIssueKind::ProjectWithoutFolder).count(),
+            0,
+            "archived, it is a record rather than work in flight",
         );
     }
 

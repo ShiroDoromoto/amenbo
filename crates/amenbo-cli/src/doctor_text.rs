@@ -64,6 +64,11 @@ pub fn message(issue: &DoctorIssue) -> String {
             p(issue, "start_on"),
             p(issue, "due_on"),
         ),
+        DoctorIssueKind::ProjectWithoutFolder => format!(
+            "Project #{project} '{}' has no folder on this machine leading to it: there is nowhere to \
+             operate it from, and an AI cannot reach it at all.",
+            p(issue, "name"),
+        ),
     }
 }
 
@@ -107,6 +112,11 @@ pub fn fix_hint(issue: &DoctorIssue) -> String {
             "Correct whichever of the two declarations is wrong: `{cmd} task update <task> --start <date>` \
              or `--due <date>`. Nothing picks a winner between them on your behalf - a start day that \
              falls after the deadline could mean either one was mistyped."
+        ),
+        DoctorIssueKind::ProjectWithoutFolder => format!(
+            "Link a folder to it: `{cmd} bind --project <name or id>` in the folder you work in. \
+             Archive it instead (`{cmd} project archive`) if you have stopped working on it - an \
+             archived project is not asked for a folder."
         ),
     }
 }

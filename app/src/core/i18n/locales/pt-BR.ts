@@ -694,5 +694,9 @@ export const ptBR: Translation = {
       message: "{task} começa em {start_on} mas vencia em {due_on} — ela fica fora da caixa de entrada até um dia que já passou do prazo.",
       fix: "Uma das duas está errada: corrija o dia de início ou o de vencimento. Nada escolhe entre elas, já que o erro pode estar em qualquer uma.",
     },
+    project_without_folder: {
+      message: "O projeto {name} (#{project}) não tem nenhuma pasta: não há de onde operá-lo, e uma IA nem o enxerga.",
+      fix: "Adicione uma pasta em Configurações do projeto > Pastas.",
+    },
   },
 };

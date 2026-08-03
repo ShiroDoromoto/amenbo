@@ -670,5 +670,9 @@ export const id: Translation = {
       message: "{task} disetel mulai {start_on} padahal tenggatnya {due_on} — ia tetap di luar kotak masuk sampai hari yang sudah melewati tenggatnya.",
       fix: "Salah satu dari keduanya keliru: perbaiki hari mulainya atau tenggatnya. Tidak ada yang memilihkan, karena salah ketik bisa ada di mana saja.",
     },
+    project_without_folder: {
+      message: "Proyek {name} (#{project}) tidak punya folder — tidak ada tempat untuk mengoperasikannya, dan AI sama sekali tidak melihatnya.",
+      fix: "Tambahkan folder di Pengaturan proyek > Folder.",
+    },
   },
 };

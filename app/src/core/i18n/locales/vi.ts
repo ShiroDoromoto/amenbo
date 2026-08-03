@@ -669,5 +669,9 @@ export const vi: Translation = {
       message: "{task} được đặt bắt đầu vào {start_on} trong khi hạn là {due_on} — nó nằm ngoài hộp thư cho tới một ngày vốn đã quá hạn.",
       fix: "Một trong hai là sai: hãy sửa ngày bắt đầu hoặc hạn chót. Không gì phân xử giúp được, vì lỗi gõ có thể nằm ở bên nào cũng được.",
     },
+    project_without_folder: {
+      message: "Dự án {name} (#{project}) không có thư mục nào — không có chỗ nào để làm việc với nó, và AI hoàn toàn không thấy nó.",
+      fix: "Hãy thêm thư mục ở Cài đặt dự án > Thư mục.",
+    },
   },
 };

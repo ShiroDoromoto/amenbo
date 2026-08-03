@@ -7525,6 +7525,16 @@ mod tests {
                 .unwrap()
                 .id
         };
+        // A folder leads to that project, the way one does after `init`. A project no folder leads to is
+        // itself an issue, so without this the "plain store" below would start one warning down.
+        let home_dir = amenbo_scratch::scratch("app-doctor-dir");
+        {
+            let store = Store::open().unwrap();
+            amenbo_core::binding::pointer_for(&store, project_id).write(&home_dir).unwrap();
+            let mut reg = store.bindings();
+            reg.record_project_ref(project_id, home_dir.to_string_lossy());
+            store.save_bindings(&reg).unwrap();
+        }
         let clean = doctor_report().unwrap();
         assert!(clean.ok && clean.issues.is_empty(), "a plain store has no issues");
 
@@ -7552,6 +7562,7 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&orphan);
+        let _ = std::fs::remove_dir_all(&home_dir);
     }
 
     /// The "what next" affordances on the completion screen (reveal_folder / open_terminal) refuse a

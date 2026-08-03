@@ -669,5 +669,9 @@ export const nl: Translation = {
       message: "{task} moet beginnen op {start_on} maar had als deadline {due_on} — hij blijft buiten het postvak tot een dag die de deadline al voorbij is.",
       fix: "Een van de twee klopt niet: pas de startdag aan of de deadline. Niemand kiest daartussen, want de typefout kan aan beide kanten zitten.",
     },
+    project_without_folder: {
+      message: "Project {name} (#{project}) heeft geen map — er is nergens vandaan mee te werken, en een AI ziet het helemaal niet.",
+      fix: "Voeg een map toe in Projectinstellingen > Mappen.",
+    },
   },
 };

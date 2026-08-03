@@ -14,7 +14,7 @@ verification/
   fixtures/    text a scenario cannot hold itself (a file carrying an amenbo ref for the lint)
   core/        the scenario schema + validating loader (crate `amenbo-scenario`, `lint` + `emit` bins)
   cli/         CLI driver + runner — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
-  gui/         mac harness — scenario → screen checklist + screencapture + Vision OCR verdict (crate `amenbo-verify-gui`)
+  gui/         mac harness — scenario → screen checklist, shot and read by the screen tool (crate `amenbo-verify-gui`)
 ```
 
 `core/`, `cli/` and `gui/` are members of this cargo workspace, outside the main workspace, so
@@ -28,9 +28,9 @@ cargo test --manifest-path verification/Cargo.toml
 ```
 
 `-A clippy::disallowed_methods` is not slack, it is the one rule that cannot apply here: this
-workspace black-box-drives the shipped binary, so it reads process env raw (`AMENBO_BIN`,
-`AMENBO_GUI_CAPTURE_BIN`) rather than through `amenbo_core::env`, which it has no dependency on.
-A plain `cargo clippy --all-targets` in this directory fails on those lines and on nothing else.
+workspace black-box-drives the shipped binary, so it reads process env raw (`AMENBO_BIN`) rather
+than through `amenbo_core::env`, which it has no dependency on. A plain `cargo clippy
+--all-targets` in this directory fails on those lines and on nothing else.
 
 ## One scenario per path a reader walks
 
@@ -128,10 +128,10 @@ whose roads it carries).
 `verify-gui` walks a scenario's `steps_gui` road as a **screen checklist**, and only a scenario
 that has one — it refuses the rest by name instead of shooting a road written for the binary. It
 bakes in no command line and no pixel: each step becomes a plain-language instruction of what to do
-or confirm on screen, the window of the app it launched is located through
-`app/scripts/uiauto/uiauto.swift`, and every
-step is captured with `screencapture -l <winid>` into an evidence directory (plus a
-`manifest.json` pairing each instruction, verdict and shot).
+or confirm on screen, and the shooting is the screen tool's (`scripts/screen.swift`) — the harness
+names the app by pid and receives one file per step in an evidence directory (plus a
+`manifest.json` pairing each instruction, verdict and shot). Which window was shot, and the id it
+was shot by, stay inside the tool: a format nobody is handed is a format nobody parses.
 
 **The run owns the app it shoots.** It launches the `.app` bundle named by `--app`, with
 `AMENBO_HOME` pointed at a throwaway store of its own, holds the pid that launch answered with, and
@@ -156,13 +156,20 @@ road needs standing before its first step is not declared anywhere yet, so the r
 world — a registered catalog, an installed plugin, a folder card waiting to be linked — are the ones
 that still have to be prepared by hand.
 
-An assert is judged from its shot with macOS's own **Vision** OCR (`gui/ocr.swift`):
-the harness derives the text the step expects on screen — for a `listed` assert, the bound task's
-title — reads the shot back, and passes when that text is present (or absent, for `present:
-false`). Both sides are matched on their words rather than their glyphs — case, punctuation and the
-line a wrapped card broke on are folded away, and so is the long vowel mark Vision returns where a
-title carries a dash, which Unicode files under letters. The recognized text is written next to the
-shot (`NN-…​.txt`) as evidence of the reading.
+or confirm on screen, and the shooting is the screen tool's (`scripts/screen.swift`) — the harness
+names the app by pid and receives one file per step in an evidence directory (plus a
+`manifest.json` pairing each instruction, verdict and shot). Which window was shot, and the id it
+was shot by, stay inside the tool: a format nobody is handed is a format nobody parses.
+
+An assert is judged by asking that same tool to read the shot back (macOS's own **Vision** behind
+it): the harness derives the text the step expects on screen — for a `listed` assert, the bound
+task's title — and passes when it is present in the reading (or absent, for `present: false`).
+Both sides meet on their words rather than their glyphs — case, punctuation and the line a wrapped
+card broke on are folded away, and so is the long vowel mark Vision returns where a title carries a
+dash, which Unicode files under letters. That fold is the reader's habit, so the tool applies it to
+what it read and hands back the unfolded reading as well; the harness folds its own expectation by
+the same rule and matches. The reading as it came back is written next to the shot (`NN-…​.txt`),
+which is what a person reads when a step comes out red.
 An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`: its shot is
 kept for an AI/human eye and does not fail the run. tesseract stays the Linux container path
 (`scripts/docker/gui-e2e.sh`); each driver walks the road written for it.
@@ -183,38 +190,38 @@ cargo run -p amenbo-scenario --bin emit -- scenarios/delegate-to-ai.yaml
 ```sh
 cd verification
 ID=2147   # the task whose own dev GUI you built
-# launch that bundle against a throwaway store, resolve its window via uiauto, and shoot one shot
-# per step:
+# launch that bundle against a throwaway store and shoot one shot per step:
 cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/delegate-to-ai.yaml \
   --app "/Applications/amenbo (dev $ID).app"
 ```
 
 `--app` is the bundle itself, not a name: what is verified before a release is the `.app` the
 installer put in place, and what is verified while a change is being written is the dev bundle that
-task's own build produced. The executable inside is asked of the bundle (`CFBundleExecutable`) rather
-than assumed, since a dev build carries a name of its own (`amenbo-app-dev-<id>`, against prod's
-`amenbo-app`).
+task's own build produced. The executable inside is asked of the bundle (`CFBundleExecutable`)
+rather than assumed, since a dev build carries a name of its own (`amenbo-app-dev-<id>`, against
+prod's `amenbo-app`).
 
 A screen line sometimes needs a world the app cannot be talked into from its own interface — the
 browsing view reads the badge on a row a **registered** catalog served, and a plugin's row is only
 there once one is installed. On a store the run makes fresh, none of that is standing, and putting
 it there is the seeding step this harness does not have yet.
 
-uiauto is the input primitive, called here, never moved: `window <pid>` yields the id
-`screencapture -l` needs and the window bounds (in the manifest) that put a shot in the frame the
-screen stands in, and its `find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the
-action steps the checklist names. The run fronts the app it launched by pid while it waits for the
-window, since uiauto skips a window behind another Space; an app that never draws one inside a
-minute is reported as that, and an app that exits on the way up is reported the moment it does.
-`--evidence <dir>`
-chooses where the shots and manifest land (default: a fresh dir under the temp tree); `--ocr
-<path>` overrides `ocr.swift`. Exit is 0 when every OCR-judged assert passed and every step was
-captured, non-zero on a failed assert or a load/capture/OCR failure — a `Review` step is closed by
-a human from the evidence, not by the exit code.
+The screen tool is the input primitive too, called by whoever drives the screen between steps: its
+`find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the action steps the
+checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
+at all — the proof it waits for is a shot it throws away, since an app the system has taken up is
+not yet an app with a window, and a walk that started between the two would fail on its first step.
+An app that never draws one inside a minute is reported as that, and one that exits on the way up is
+reported the moment it does. `--evidence <dir>` chooses where
+the shots and manifest land (default: a fresh dir under the temp tree); `--screen <path>` points at
+a tool other than the repo's own. Exit is 0 when every OCR-judged assert passed and every step was
+captured, non-zero on a failed assert or a load/capture/reading failure — a `Review` step is closed
+by a human from the evidence, not by the exit code.
 
-**Name what to press rather than aim at it.** `find <pid>` lists every element on screen with the name
-it answers to and where it stands, and `click-named <pid> <name>` clicks the one of that name. The
-screen is a webview, so both read it through the accessibility tree the app serves once asked.
+**Name what to press rather than aim at it.** `swift scripts/screen.swift find <pid>` lists every
+element on screen with the name it answers to and where it stands, and `click-named <pid> <name>`
+clicks the one of that name. The screen is a webview, so both read it through the accessibility tree
+the app serves once asked.
 A point worked out from a shot's pixels carries two errors instead: the shot's pixels are the window's
 points times the scale of the display it was on (2 on a built-in panel, 1 on an external one), and the
 screen goes on moving after the shot — opening the right pane pushes a column header down by tens of
@@ -246,8 +253,9 @@ pick the folder, read the linked screen — cannot be written as one scenario, o
 outside it and asserted at the end.
 
 `--step` stops the run after each step's shot and waits for a line on stdin. Between the two, the
-screen belongs to whoever is driving: carry out the next step by hand, or with uiauto's `click-named` /
-`type` / `key`, and send the line when the screen is standing where the scenario says it should. The
+screen belongs to whoever is driving: carry out the next step by hand, or with the screen tool's
+`click-named` / `type` / `key`, and send the line when the screen is standing where the scenario
+says it should. The
 stop is **after** the shot, never before — the evidence of where the run stood is on disk before
 anyone is invited to move on — and there is no stop after the last step, which has nothing following
 it to hold the screen for. Leave the flag off and nothing changes, so an unattended run stays
@@ -284,7 +292,7 @@ cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml 
   --app "/Applications/amenbo (dev $ID).app" --step --json < /tmp/go &
 exec 3>/tmp/go   # hold the writing side open — otherwise the first echo closes it, which is the end
                  # of input, and the run stops rather than carrying on to the next step
-# … drive the screen to the next step (uiauto), then release the next shot:
+# … drive the screen to the next step (the screen tool), then release the next shot:
 echo >&3
 # … and when the last step has been shot, let it go:
 exec 3>&-

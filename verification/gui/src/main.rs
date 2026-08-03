@@ -2,18 +2,17 @@
 //!
 //! It reads the same scenario the CLI driver black-box-drives, renders each step into a screen
 //! instruction (no command line, no pixel), launches the app bundle it was pointed at against a
-//! throwaway store, locates that process's window through `app/scripts/uiauto/uiauto.swift`, and
-//! captures one `screencapture -l <winid>` per step into an evidence directory. Each assert OCR can
-//! judge is decided from its shot with macOS Vision (`ocr.swift`); an assert it cannot judge is left
-//! as a `Review` for a human eye, and its shot is kept.
+//! throwaway store, and hands the shooting and the reading to the screen tool
+//! (`scripts/screen.swift`): the app is named by the pid that launch answered with, one shot per
+//! step lands in an evidence directory, and each assert OCR can judge is decided from that shot. An
+//! assert it cannot judge is left as a `Review` for a human eye, and its shot is kept.
 //!
-//! Usage: `verify-gui <scenario.yaml> --app <bundle.app>
-//!                    [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--step] [--json]`
+//! Usage: `verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>]
+//!                    [--step] [--json]`
 //!        `verify-gui <scenario.yaml> --print`
 //!   `--app`      the `.app` bundle to launch and shoot (e.g. `/Applications/amenbo.app`)
 //!   `--evidence` where the shots + manifest land (default: a fresh dir under the temp tree)
-//!   `--uiauto`   path to uiauto.swift (default: app/scripts/uiauto/uiauto.swift in the repo)
-//!   `--ocr`      path to ocr.swift (default: the ocr.swift beside this crate)
+//!   `--screen`   path to the screen tool (default: scripts/screen.swift in the repo)
 //!   `--step`     stop after each step's shot and wait for a line on stdin before the next
 //!   `--json`     emit the manifest path, verdict and step count as JSON instead of the summary
 //!   `--print`    print the road's instructions and stop — nothing launched, no shot, no OCR
@@ -25,9 +24,9 @@
 //!
 //! Without `--step` the run shoots every step back to back, which is one screen photographed as
 //! many times as the scenario is long. `--step` is what lets a scenario carry a screen that moves:
-//! it hands the run back after each shot, and whoever is driving — a person, or an AI calling
-//! uiauto — carries out the next step and sends a line to say the screen is standing where the
-//! scenario says it should. Waiting on a line rather than on a clock is the whole point: a run held
+//! it hands the run back after each shot, and whoever is driving — a person, or an AI calling the
+//! screen tool — carries out the next step and sends a line to say the screen is standing where
+//! the scenario says it should. Waiting on a line rather than on a clock is the whole point: a run held
 //! for a fixed number of seconds shoots whatever is on screen when the clock runs out, so a step
 //! that took a moment longer is filed as evidence of a screen nobody stood on. Everything the wait
 //! says goes to stderr, so a `--json` run is still one line of JSON on stdout.
@@ -45,17 +44,19 @@
 
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use amenbo_verify_gui::{launch, ocr, scratch, walk, write_manifest, StepRecord, Verdict};
+use amenbo_verify_gui::{
+    launch, read_shot, scratch, shoot, walk, write_manifest, StepRecord, Verdict,
+};
 
 fn main() -> ExitCode {
     let opts = match Opts::parse(std::env::args().skip(1)) {
         Ok(o) => o,
         Err(msg) => {
             eprintln!("verify-gui: {msg}");
-            eprintln!("usage: verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--uiauto <path>] [--ocr <path>] [--step] [--json]");
+            eprintln!("usage: verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>] [--step] [--json]");
             eprintln!("       verify-gui <scenario.yaml> --print");
             return ExitCode::from(2);
         }
@@ -107,7 +108,8 @@ fn run(opts: &Opts) -> Result<bool, String> {
     let store = scratch::store(&scenario.id)
         .map_err(|e| format!("could not create a throwaway store: {e}"))?;
     let mut gui = launch::launch(bundle, store)?;
-    let window = gui.window(&opts.uiauto)?;
+    gui.wait_until_shootable(&opts.screen)?;
+    let pid = gui.pid;
 
     let evidence = opts
         .evidence
@@ -121,35 +123,18 @@ fn run(opts: &Opts) -> Result<bool, String> {
         );
     }
 
-    let capture_bin =
-        std::env::var_os("AMENBO_GUI_CAPTURE_BIN").unwrap_or_else(|| "screencapture".into());
-    let winid = window.id.clone();
-    let ocr_swift = opts.ocr.clone();
+    let screen = opts.screen.clone();
     let stepping = opts.step;
     let stdin = std::io::stdin();
     let outcome = walk(
         &scenario,
         &evidence,
-        |path| {
-            // `screencapture -x -l <winid> <path>`: -x is silent, -l shoots one window, path last.
-            let status = Command::new(&capture_bin)
-                .arg("-x")
-                .arg("-l")
-                .arg(&winid)
-                .arg(path)
-                .status()
-                .map_err(|e| format!("could not run `{}`: {e}", capture_bin.to_string_lossy()))?;
-            if status.success() {
-                Ok(())
-            } else {
-                Err(format!("screencapture exited with {status}"))
-            }
-        },
-        |image| ocr(image, &ocr_swift),
+        |path| shoot(pid, path, &screen),
+        |image| read_shot(image, &screen),
         |record| if stepping { hand_back(&stdin, record) } else { Ok(()) },
     )?;
 
-    let manifest = write_manifest(&evidence, &scenario, &window, &outcome)?;
+    let manifest = write_manifest(&evidence, &scenario, &outcome)?;
 
     if opts.json {
         println!(
@@ -162,7 +147,6 @@ fn run(opts: &Opts) -> Result<bool, String> {
         );
     } else {
         println!("scenario: {} — {}", scenario.id, scenario.title);
-        println!("window:   {} ({}x{})", window.id, window.w, window.h);
         println!("evidence: {}", evidence.display());
         for r in &outcome.records {
             println!("{}", step_lines(r));
@@ -228,8 +212,7 @@ struct Opts {
     /// road back without anything running.
     app: Option<PathBuf>,
     evidence: Option<PathBuf>,
-    uiauto: PathBuf,
-    ocr: PathBuf,
+    screen: PathBuf,
     step: bool,
     json: bool,
     print: bool,
@@ -240,8 +223,7 @@ impl Opts {
         let mut scenario = None;
         let mut app = None;
         let mut evidence = None;
-        let mut uiauto = None;
-        let mut ocr = None;
+        let mut screen = None;
         let mut step = false;
         let mut json = false;
         let mut print = false;
@@ -253,8 +235,7 @@ impl Opts {
                 "--print" => print = true,
                 "--app" => app = Some(PathBuf::from(it.next().ok_or("--app needs a bundle path")?)),
                 "--evidence" => evidence = Some(PathBuf::from(it.next().ok_or("--evidence needs a path")?)),
-                "--uiauto" => uiauto = Some(PathBuf::from(it.next().ok_or("--uiauto needs a path")?)),
-                "--ocr" => ocr = Some(PathBuf::from(it.next().ok_or("--ocr needs a path")?)),
+                "--screen" => screen = Some(PathBuf::from(it.next().ok_or("--screen needs a path")?)),
                 s if s.starts_with("--") => return Err(format!("unknown flag `{s}`")),
                 _ => {
                     if scenario.replace(PathBuf::from(a)).is_some() {
@@ -267,8 +248,7 @@ impl Opts {
             scenario: scenario.ok_or("no scenario file given")?,
             app,
             evidence,
-            uiauto: uiauto.unwrap_or_else(default_uiauto),
-            ocr: ocr.unwrap_or_else(default_ocr),
+            screen: screen.unwrap_or_else(default_screen),
             step,
             json,
             print,
@@ -276,18 +256,12 @@ impl Opts {
     }
 }
 
-/// uiauto.swift's place in the repo, resolved from this crate so it is found whatever the CWD:
-/// `verification/gui` → `app/scripts/uiauto/uiauto.swift`.
-fn default_uiauto() -> PathBuf {
+/// The screen tool's place in the repo, resolved from this crate so it is found whatever the CWD:
+/// `verification/gui` → `scripts/screen.swift`.
+fn default_screen() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent() // verification/
         .and_then(|p| p.parent()) // repo root
-        .map(|p| p.join("app/scripts/uiauto/uiauto.swift"))
-        .unwrap_or_else(|| PathBuf::from("app/scripts/uiauto/uiauto.swift"))
-}
-
-/// ocr.swift sits beside this crate (`verification/gui/ocr.swift`), resolved from the manifest dir
-/// so it is found whatever the CWD.
-fn default_ocr() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("ocr.swift")
+        .map(|p| p.join("scripts/screen.swift"))
+        .unwrap_or_else(|| PathBuf::from("scripts/screen.swift"))
 }

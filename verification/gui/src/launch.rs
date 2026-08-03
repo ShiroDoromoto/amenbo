@@ -16,15 +16,15 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use crate::scratch::Store;
-use crate::{resolve_window, Window};
+use crate::{front, shoot};
 
 /// How long a launched app is given to put a window on screen. Generous on purpose: a first launch
 /// of a signed bundle is checked by the system before a line of the app runs, and a wait that ends
 /// early reports a slow machine as a broken build.
 const WINDOW_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// How long to wait between asks while the app is starting. Each ask runs uiauto, which is a swift
-/// invocation, so the wait between them is the smaller half of the cost.
+/// How long to wait between asks while the app is starting. Each ask runs the screen tool, which is
+/// a swift invocation, so the wait between them is the smaller half of the cost.
 const POLL: Duration = Duration::from_millis(500);
 
 /// The app this run launched: the process it holds, and the store that process was pointed at.
@@ -32,11 +32,11 @@ const POLL: Duration = Duration::from_millis(500);
 /// neither behind.
 #[derive(Debug)]
 pub struct Gui {
-    /// The process id the launch answered with — what uiauto is asked about, and what is fronted.
+    /// The process id the launch answered with — the app the screen tool is named.
     pub pid: i64,
     child: Child,
     /// Held so the store outlives the process writing into it, and goes when that process goes.
-    _store: Store,
+    store: Store,
 }
 
 /// Launch the app in `bundle` against `store`, and hand back the running process.
@@ -52,20 +52,21 @@ pub fn launch(bundle: &Path, store: Store) -> Result<Gui, String> {
         .stdout(Stdio::null())
         .spawn()
         .map_err(|e| format!("could not launch {}: {e}", exe.display()))?;
-    Ok(Gui { pid: i64::from(child.id()), child, _store: store })
+    Ok(Gui { pid: i64::from(child.id()), child, store })
 }
 
 impl Gui {
-    /// Wait for the launched app to put its window on screen, and hand back the window to shoot.
+    /// Hold the run until the app is up, in front, and can actually be shot.
     ///
-    /// Both halves are asked for together, and the wait ends only when both answer: a window nobody
-    /// brought forward is one uiauto may be reading from behind another Space, and a shot of it is
-    /// evidence of a screen that was never on screen. A launched app is not there to be fronted
-    /// until the system has taken it up, which is a moment after its window can already be found —
-    /// so a fronting that failed is a reason to go round again, not one to shrug at. An app that
-    /// exits on the way up is reported the moment it does, rather than after a timeout spent asking
-    /// about a process that is already gone.
-    pub fn window(&mut self, uiauto: &Path) -> Result<Window, String> {
+    /// The proof asked for is a shot, because that is what every step of the walk asks for: an app
+    /// the system has taken up is not yet an app with a window, and a run that started walking
+    /// between the two would fail on step one with half an evidence directory behind it. The shot
+    /// taken here is thrown away — it is asked for as a question, not kept as evidence — and
+    /// fronting is asked for with it, since a window standing behind another Space is not one the
+    /// tool will find. An app that exits on the way up is reported the moment it does, rather than
+    /// after a timeout spent asking about a process that is already gone.
+    pub fn wait_until_shootable(&mut self, screen: &Path) -> Result<(), String> {
+        let probe = self.store.cwd.join("on-screen-probe.png");
         let deadline = Instant::now() + WINDOW_TIMEOUT;
         loop {
             if let Ok(Some(status)) = self.child.try_wait() {
@@ -73,8 +74,11 @@ impl Gui {
                     "the app exited while starting ({status}) — no window was ever put on screen"
                 ));
             }
-            let last = match front(self.pid).and_then(|()| resolve_window(self.pid, uiauto)) {
-                Ok(window) => return Ok(window),
+            let last = match front(self.pid, screen).and_then(|()| shoot(self.pid, &probe, screen)) {
+                Ok(()) => {
+                    let _ = std::fs::remove_file(&probe);
+                    return Ok(());
+                }
                 Err(e) => e,
             };
             if Instant::now() >= deadline {
@@ -96,32 +100,6 @@ impl Drop for Gui {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
-    }
-}
-
-/// Bring the app to the front by pid, so its window counts as on-screen before a shot is taken.
-/// The pid is what keeps this aimed: named, it would reach whichever copy of that name the system
-/// answered with, which is exactly the coin-flip the launch was there to remove.
-pub fn front(pid: i64) -> Result<(), String> {
-    let script = format!(
-        "tell application \"System Events\" to set frontmost of (first process whose unix id is {pid}) to true"
-    );
-    // Taken rather than inherited: this is asked again while an app is starting, and osascript's
-    // own complaint about a process the system has not taken up yet would be printed each time,
-    // over the very stderr a stepped run talks to the operator on. It is carried in the error
-    // instead, where the run that gives up reports it once.
-    let out = Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .output()
-        .map_err(|e| format!("could not run osascript to front pid {pid}: {e}"))?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "osascript could not bring pid {pid} to the front: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ))
     }
 }
 

@@ -2,29 +2,29 @@
 //!
 //! The same scenario the CLI driver black-box-drives, this harness reads as a **screen
 //! checklist**. It bakes in no command line and no pixel: each step becomes a plain-language
-//! instruction of what to do or confirm on screen, and every step is captured with
-//! `screencapture -l <winid>` into an evidence directory. The app under test is started by the
-//! harness itself, against a throwaway store ([`launch`], [`scratch`]), and its window is located
-//! through `app/scripts/uiauto/uiauto.swift` by the pid that launch answered with.
+//! instruction of what to do or confirm on screen, and every step is shot into an evidence
+//! directory by the screen tool (`scripts/screen.swift`), which is named the app's pid and hands
+//! back a file — which window it shot, and the id it shot by, never leave it. The pid it is named
+//! is the harness's own: the app under test is started here, against a throwaway store
+//! ([`launch`], [`scratch`]), and goes down with the run.
 //!
-//! An assert step is judged from that shot with macOS's own **Vision** OCR (`ocr.swift`): the
-//! harness derives the text the step expects on screen and reads the shot back, passing when that
-//! text is present (or absent, for a `present: false` assert). An assert OCR cannot mechanically
-//! judge — a structured field value — is left as a `Review`: its shot is kept for an AI/human eye,
-//! the run is not failed by it. tesseract stays the Linux container path
+//! An assert step is judged from that shot by asking the same tool to read it (macOS **Vision**
+//! behind it): the harness derives the text the step expects on screen and matches it against the
+//! reading, passing when it is present (or absent, for a `present: false` assert). An assert OCR
+//! cannot mechanically judge — a structured field value — is left as a `Review`: its shot is kept
+//! for an AI/human eye, the run is not failed by it. tesseract stays the Linux container path
 //! (`scripts/docker/gui-e2e.sh`); each driver maps the one scenario source to its own world.
 //!
-//! uiauto is the input primitive, called here, never moved: `window` resolves the id
-//! `screencapture -l` needs and the bounds an operator uses to turn a shot's pixel into a click
-//! point (uiauto's own coordinate rule), and its `click` / `type` / `key` carry out the action
-//! steps the checklist names.
+//! The screen tool is the input primitive too, called by whoever drives the screen between steps:
+//! its `find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the action steps
+//! the checklist names.
 //!
 //! The pure part — turning a step into an instruction and an expectation, and walking a scenario
-//! into per-step evidence with a verdict — is separated from the side effects (running
-//! `swift`/`osascript`/`screencapture`) so the walk is testable with injected capture, OCR and
-//! step-boundary wait.
+//! into per-step evidence with a verdict — is separated from the side effects (running the tool)
+//! so the walk is testable with injected capture, reading and step-boundary wait.
 
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -36,58 +36,61 @@ pub mod launch;
 pub mod scratch;
 
 // ---------------------------------------------------------------------------
-// Locating and fronting the app (the side effects: swift / osascript)
+// The screen tool (the side effects: front, shoot, read)
 // ---------------------------------------------------------------------------
 
-/// The app window `screencapture` targets. `id` feeds `screencapture -l`; the bounds let an
-/// operator translate a pixel in the shot to a screen click point, the way uiauto documents.
-#[derive(Debug, Clone)]
-pub struct Window {
-    pub id: String,
-    pub x: f64,
-    pub y: f64,
-    pub w: f64,
-    pub h: f64,
+/// What the tool read off one shot. `text` is the reading folded to its words — the correction the
+/// reader behind the tool needs, applied by the tool — and `raw` is what that reader handed back
+/// before it. A verdict is taken on `text`; `raw` is what a person reads when one comes out red.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reading {
+    pub text: String,
+    pub raw: String,
 }
 
-/// Ask uiauto for the running app's window (`swift uiauto.swift window <pid>` → `id x y w h`).
-/// The first substantial window wins — uiauto has already dropped the shadows and tooltips. An
-/// empty answer means the app is not running or is behind another Space (see uiauto's own notes).
-pub fn resolve_window(pid: i64, uiauto: &Path) -> Result<Window, String> {
+/// Run one of the tool's subcommands and hand back its stdout.
+fn tool(screen: &Path, cmd: &str, args: &[&OsStr]) -> Result<Vec<u8>, String> {
     let out = Command::new("swift")
-        .arg(uiauto)
-        .arg("window")
-        .arg(pid.to_string())
+        .arg(screen)
+        .arg(cmd)
+        .args(args)
         .output()
-        .map_err(|e| format!("could not run `swift {}`: {e}", uiauto.display()))?;
+        .map_err(|e| format!("could not run `swift {} {cmd}`: {e}", screen.display()))?;
     if !out.status.success() {
         return Err(format!(
-            "uiauto could not find a window for pid {pid}: {}",
+            "`screen {cmd}` failed: {}",
             String::from_utf8_lossy(&out.stderr).trim()
         ));
     }
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let line = stdout
-        .lines()
-        .next()
-        .ok_or_else(|| format!("uiauto reported no window for pid {pid}"))?;
-    parse_window(line)
+    Ok(out.stdout)
 }
 
-/// Parse one `id x y w h` line from uiauto into a [`Window`].
-fn parse_window(line: &str) -> Result<Window, String> {
-    let f: Vec<&str> = line.split_whitespace().collect();
-    if f.len() != 5 {
-        return Err(format!("could not read a window from uiauto output `{line}`"));
-    }
-    let num = |s: &str, what: &str| s.parse::<f64>().map_err(|_| format!("uiauto gave a non-number {what} in `{line}`"));
-    Ok(Window {
-        id: f[0].to_string(),
-        x: num(f[1], "x")?,
-        y: num(f[2], "y")?,
-        w: num(f[3], "width")?,
-        h: num(f[4], "height")?,
-    })
+/// Bring the app under test to the front, so the window the tool goes looking for counts as
+/// on-screen (one behind another Space does not).
+pub fn front(pid: i64, screen: &Path) -> Result<(), String> {
+    tool(screen, "front", &[OsStr::new(&pid.to_string())]).map(|_| ())
+}
+
+/// Shoot the app's window into `path`. The harness names the app by pid and receives a file: which
+/// of its windows was shot, and the id the shot was taken by, are the tool's and stay there.
+pub fn shoot(pid: i64, path: &Path, screen: &Path) -> Result<(), String> {
+    tool(screen, "shot", &[OsStr::new(&pid.to_string()), path.as_os_str()]).map(|_| ())
+}
+
+/// Read the words off a shot. An error is an execution failure, not a miss: a shot the reader found
+/// no text in comes back as an empty [`Reading`], which is the honest answer for an assert that
+/// expected words there.
+pub fn read_shot(image: &Path, screen: &Path) -> Result<Reading, String> {
+    let out = tool(screen, "read", &[image.as_os_str()])?;
+    let v: serde_json::Value = serde_json::from_slice(&out)
+        .map_err(|e| format!("could not read `screen read {}` as JSON: {e}", image.display()))?;
+    let field = |k: &str| {
+        v.get(k)
+            .and_then(|s| s.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| format!("`screen read {}` answered without `{k}`", image.display()))
+    };
+    Ok(Reading { text: field("text")?, raw: field("raw")? })
 }
 
 /// The dashes Unicode files under letters. A long vowel mark is what Vision most often returns for an
@@ -97,12 +100,16 @@ fn parse_window(line: &str) -> Result<Window, String> {
 /// really carries one still matches itself.
 const DASHES_FILED_AS_LETTERS: [char; 2] = ['\u{30FC}', '\u{FF70}'];
 
-/// Fold a reading to the part of it OCR can be held to: the words, not the glyphs. Vision reads the
-/// words on a card reliably and the punctuation between them however it likes — an em dash comes
-/// back as a hyphen, a space, a long vowel mark, or nothing — so a verbatim comparison fails on a
-/// title no human would call misread. Case goes the same way, and a line break where the card wrapped
-/// folds to the single space the title was written with. Alphanumerics are what survives, Japanese
-/// included: the screen under test is in Japanese and is judged by this same rule.
+/// Fold an expectation to the part of it a reading can be held to: the words, not the glyphs. Vision
+/// reads the words on a card reliably and the punctuation between them however it likes — an em dash
+/// comes back as a hyphen, a space, a long vowel mark, or nothing — so a verbatim comparison fails on
+/// a title no human would call misread. Case goes the same way, and a line break where the card
+/// wrapped folds to the single space the title was written with. Alphanumerics are what survives,
+/// Japanese included: the screen under test is in Japanese and is judged by this same rule.
+///
+/// This side of the match is the expectation's, which is this harness's own text. The reading's side
+/// is folded by the same rule in the tool that read it, where a reader's habits belong
+/// (`scripts/screen.swift`) — the two meet already folded.
 fn fold(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut pending_space = false;
@@ -118,27 +125,6 @@ fn fold(s: &str) -> String {
         }
     }
     out
-}
-
-/// Read the text off a screenshot with `ocr.swift` (macOS Vision). Returns the recognized text as
-/// one string (Vision's per-region lines joined by newlines), which the caller
-/// judges an expected string against by substring, both sides folded (`fold`). An error is an
-/// execution failure, not a miss:
-/// a shot Vision read but found no text in comes back as `Ok("")`.
-pub fn ocr(image: &Path, ocr_swift: &Path) -> Result<String, String> {
-    let out = Command::new("swift")
-        .arg(ocr_swift)
-        .arg(image)
-        .output()
-        .map_err(|e| format!("could not run `swift {}`: {e}", ocr_swift.display()))?;
-    if !out.status.success() {
-        return Err(format!(
-            "ocr.swift failed on {}: {}",
-            image.display(),
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -833,11 +819,11 @@ pub struct WalkOutcome {
 
 /// Walk a scenario step by step: capture one screenshot per step into `evidence_dir`, and for an
 /// assert OCR can judge, read the shot back and decide `Pass`/`Fail` against the expected text.
-/// Every side effect is injected — `capture` shells out to `screencapture`, `read_text` to
-/// `ocr.swift`, `pause` holds the walk at a step boundary; a test passes closures that only
-/// touch/return fixtures — so the walk is verifiable without a GUI. A capture failure aborts the
-/// walk (a missing shot is missing evidence); the recognized text of each judged step is written
-/// next to its shot as evidence of the reading.
+/// Every side effect is injected — `capture` and `read_text` shell out to the screen tool, `pause`
+/// holds the walk at a step boundary; a test passes closures that only touch/return fixtures — so
+/// the walk is verifiable without a GUI. A capture failure aborts the walk (a missing shot is
+/// missing evidence); each judged step's reading is written next to its shot as it came back from
+/// the reader, before the fold the match is taken on.
 ///
 /// `pause` is what lets one scenario carry a screen that moves: it is called with the record just
 /// finished, **after** that step's shot is on disk and before the next step is taken, so the
@@ -854,7 +840,7 @@ pub fn walk<C, O, P>(
 ) -> Result<WalkOutcome, String>
 where
     C: FnMut(&Path) -> Result<(), String>,
-    O: FnMut(&Path) -> Result<String, String>,
+    O: FnMut(&Path) -> Result<Reading, String>,
     P: FnMut(&StepRecord) -> Result<(), String>,
 {
     std::fs::create_dir_all(evidence_dir)
@@ -881,12 +867,12 @@ where
         // Judge an assert that named an expectation; keep the reading as evidence.
         let (verdict, found) = match (kind, &expected) {
             ("assert", Some(exp)) => {
-                let text = read_text(&shot_path)
+                let reading = read_text(&shot_path)
                     .map_err(|e| format!("step {}: reading `{screenshot}` failed: {e}", i + 1))?;
-                let hit = fold(&text).contains(&fold(&exp.text));
+                let hit = reading.text.contains(&fold(&exp.text));
                 let _ = std::fs::write(
                     evidence_dir.join(format!("{:02}-{kind}-{domain}-{op}.txt", i + 1)),
-                    &text,
+                    &reading.raw,
                 );
                 let pass = hit == exp.present;
                 if !pass {
@@ -933,14 +919,12 @@ fn domain_str(d: Domain) -> &'static str {
     }
 }
 
-/// Write the run's manifest — the scenario, the window it was shot against, the roll-up, and every
-/// step's instruction, verdict and evidence — as JSON into the evidence dir, so a later pass (a
-/// human closing the `Review`s, or a release gate) reads the checklist and its verdicts back
-/// without re-walking the scenario.
+/// Write the run's manifest — the scenario, the roll-up, and every step's instruction, verdict and
+/// evidence — as JSON into the evidence dir, so a later pass (a human closing the `Review`s, or a
+/// release gate) reads the checklist and its verdicts back without re-walking the scenario.
 pub fn write_manifest(
     dir: &Path,
     scenario: &Scenario,
-    window: &Window,
     outcome: &WalkOutcome,
 ) -> Result<PathBuf, String> {
     let steps: Vec<String> = outcome
@@ -970,15 +954,10 @@ pub fn write_manifest(
         })
         .collect();
     let json = format!(
-        "{{\"scenario\":{},\"title\":{},\"passed\":{},\"window\":{{\"id\":{},\"x\":{},\"y\":{},\"w\":{},\"h\":{}}},\"steps\":[{}]}}",
+        "{{\"scenario\":{},\"title\":{},\"passed\":{},\"steps\":[{}]}}",
         js(&scenario.id),
         js(&scenario.title),
         outcome.passed,
-        js(&window.id),
-        window.x,
-        window.y,
-        window.w,
-        window.h,
         steps.join(",")
     );
     let path = dir.join("manifest.json");
@@ -1024,6 +1003,13 @@ steps_gui:
     op: listed
     with: { filter: "assignee:me-ai status:todo", target: seed, present: true }
 "#;
+
+    /// A reading as the tool hands one back: what the reader returned, and that folded. The fold is
+    /// the tool's own in a real run, so a test standing in for it applies the same rule here rather
+    /// than writing a folded string by hand that nothing would keep honest.
+    fn reading(raw: &str) -> Reading {
+        Reading { text: fold(raw), raw: raw.to_string() }
+    }
 
     fn load(yaml: &str) -> Scenario {
         let s = amenbo_scenario::load_str(yaml).expect("parses");
@@ -1859,7 +1845,7 @@ steps_gui:
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
             // The board OCRs to text that contains the seed title.
-            |_| Ok("me-ai board\nSEED\nsome other card".to_string()),
+            |_| Ok(reading("me-ai board\nSEED\nsome other card")),
             |_| Ok(()),
         )
         .expect("walk");
@@ -1869,11 +1855,11 @@ steps_gui:
         let assert_rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
         assert_eq!(assert_rec.verdict, Verdict::Pass);
         assert_eq!(assert_rec.found, Some(true));
-        // The reading is kept next to the shot as evidence.
-        assert!(dir.join("03-assert-task-listed.txt").is_file());
+        // The reading is kept next to the shot as evidence, as the reader gave it.
+        let kept = std::fs::read_to_string(dir.join("03-assert-task-listed.txt")).expect("the reading");
+        assert!(kept.contains("me-ai board"), "got: {kept}");
 
-        let win = Window { id: "42".into(), x: 0.0, y: 0.0, w: 800.0, h: 600.0 };
-        let manifest = write_manifest(&dir, &s, &win, &outcome).expect("manifest");
+        let manifest = write_manifest(&dir, &s, &outcome).expect("manifest");
         let text = std::fs::read_to_string(&manifest).unwrap();
         assert!(text.contains("\"passed\":true"));
         assert!(text.contains("\"verdict\":\"pass\""));
@@ -1892,7 +1878,7 @@ steps_gui:
             &s,
             &dir,
             |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
-            |_| Ok("an empty board with no such card".to_string()),
+            |_| Ok(reading("an empty board with no such card")),
             |_| Ok(()),
         )
         .expect("walk");
@@ -1909,7 +1895,7 @@ steps_gui:
         let s = load(SCENARIO);
         let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-fail-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let err = walk(&s, &dir, |_| Err("no screen".to_string()), |_| Ok(String::new()), |_| Ok(()))
+        let err = walk(&s, &dir, |_| Err("no screen".to_string()), |_| Ok(reading("")), |_| Ok(()))
             .unwrap_err();
         assert!(err.contains("step 1") && err.contains("no screen"), "got: {err}");
         let _ = std::fs::remove_dir_all(&dir);
@@ -1929,7 +1915,7 @@ steps_gui:
             &s,
             &dir,
             |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
-            |_| Ok("me-ai board\nSEED".to_string()),
+            |_| Ok(reading("me-ai board\nSEED")),
             |r| {
                 held.borrow_mut().push((r.index, dir.join(&r.screenshot).is_file()));
                 Ok(())
@@ -1958,19 +1944,11 @@ steps_gui:
             &s,
             &dir,
             |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
-            |_| Ok(String::new()),
+            |_| Ok(reading("")),
             |_| Err("nobody is watching".to_string()),
         )
         .unwrap_err();
         assert!(err.contains("step 1") && err.contains("nobody is watching"), "got: {err}");
         let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn parse_window_reads_id_and_bounds() {
-        let w = parse_window("7 100 200 1440 900").unwrap();
-        assert_eq!(w.id, "7");
-        assert_eq!((w.x, w.y, w.w, w.h), (100.0, 200.0, 1440.0, 900.0));
-        assert!(parse_window("garbage").is_err());
     }
 }

@@ -794,6 +794,7 @@ fn version_unbound(flags: &Flags) -> Result<i32, CliError> {
             "version": agent::VERSION,
             "schema_version": agent::SCHEMA_VERSION,
             "channel": channel,
+            "release_build": amenbo_core::build_stamp::is_release_build(),
             // No store was opened, so claim no store-derived fact — do not pad these with 0 or false.
             "format_version": serde_json::Value::Null,
             "max_supported_format": amenbo_core::model::FORMAT_VERSION,
@@ -804,8 +805,22 @@ fn version_unbound(flags: &Flags) -> Result<i32, CliError> {
         let suffix = if channel == "amenbo" { String::new() } else { format!(" ({channel})") };
         human(flags, format!("amenbo {}{}", agent::VERSION, suffix));
         human(flags, format!("format: this build opens up to store v{}", amenbo_core::model::FORMAT_VERSION));
+        if let Some(line) = unstamped_line() {
+            human(flags, line);
+        }
     }
     Ok(0)
+}
+
+/// What a build says about where it came from, and only when that is worth a line: a binary the
+/// release workflow did not produce. The stamp is the one thing about a running amenbo that no
+/// version number, channel or path reveals ([`amenbo_core::build_stamp`]) — the number is the same
+/// on both sides of a release, and a locally built binary answers to the production channel unless
+/// it was built for the dev one. A shipped build stays silent here because it is the ordinary case;
+/// `--json` carries `release_build` either way, which is what a machine reads (`AMB-D-540`).
+fn unstamped_line() -> Option<&'static str> {
+    (!amenbo_core::build_stamp::is_release_build())
+        .then_some("build: local — this binary did not come out of the release workflow")
 }
 
 /// The explicit update route: look up this OS's all-in-one installer URL in latest.json and open it. There
@@ -2834,6 +2849,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     "version": agent::VERSION,
                     "schema_version": agent::SCHEMA_VERSION,
                     "channel": channel,
+                    "release_build": amenbo_core::build_stamp::is_release_build(),
                     "format_version": vs.format_version,
                     "max_supported_format": vs.max_supported_format,
                     "latest_version": vs.latest_version,
@@ -2843,6 +2859,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 let suffix = if channel == "amenbo" { String::new() } else { format!(" ({channel})") };
                 human(flags, format!("amenbo {}{}", agent::VERSION, suffix));
                 human(flags, format!("format: store v{} (this build opens up to v{})", vs.format_version, vs.max_supported_format));
+                if let Some(line) = unstamped_line() {
+                    human(flags, line);
+                }
                 if let Some(latest) = vs.latest_version.as_deref() {
                     human(flags, format!("latest published: {latest}"));
                 }

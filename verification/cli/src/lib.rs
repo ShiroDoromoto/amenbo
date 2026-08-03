@@ -1,7 +1,8 @@
 //! The CLI driver's reusable core: drive the **shipped / installed**
 //! `amenbo` binary against one scenario in an isolated throwaway store, and judge the asserts
 //! from that binary's `--json` output. A black-box driver — it knows the domain vocabulary, not
-//! the build under test.
+//! the build under test. Shipped is the whole of what it will drive, and the binary is asked to
+//! prove it is one before a run starts (`shipped`).
 //!
 //! Two bins sit on top of this: `verify-cli` runs one scenario, `verify-all` runs a whole set
 //! and aggregates. Both call [`run_scenario`] and read a [`Report`]; the isolation, the driver
@@ -18,6 +19,7 @@ pub mod scratch;
 
 mod domain;
 mod judge;
+mod shipped;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -28,9 +30,14 @@ use amenbo_scenario::{Args, Domain, Scenario, Step};
 use crate::domain::plugin::StoodCatalog;
 
 /// Load, isolate, execute, judge — one scenario against one binary. `Err` is an execution error
-/// (the scenario would not load, the binary would not run); a scenario that ran but had a failing
-/// assert comes back as an `Ok(Report)` with `passed == false`.
+/// (the scenario would not load, the binary is not one a run may drive, it would not run); a
+/// scenario that ran but had a failing assert comes back as an `Ok(Report)` with `passed == false`.
+///
+/// The binary is asked which build it is before anything is run against it (`shipped`): this is
+/// the one door both bins come through, so the line holds for a single scenario and for a whole set
+/// without either bin restating it.
 pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Report, String> {
+    shipped::ensure_release_build(bin)?;
     let session = scratch::session(&scenario.id, keep)
         .map_err(|e| format!("could not create a throwaway store: {e}"))?;
     let mut driver = Driver::new(bin, session)?;
@@ -47,8 +54,9 @@ pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Repor
 /// Every run drives the binary from a throwaway cwd, so a relative path handed in on `--bin` (or
 /// `$AMENBO_BIN`) would be counted from *that* directory and land on nothing — and the failure it
 /// raises names the binary, never the directory it looked in, so the path itself reads as the
-/// suspect. Resolving it at the door is what keeps `--bin ../target/debug/amenbo` meaning what the
-/// caller sees. A bare name carries no separator and is a `PATH` lookup, so it is left alone.
+/// suspect. Resolving it at the door is what keeps `--bin ../dist/amenbo` — an artifact unpacked
+/// beside the repository — meaning what the caller sees. A bare name carries no separator and is a
+/// `PATH` lookup, so it is left alone.
 pub fn anchor_bin(bin: PathBuf) -> PathBuf {
     let names_a_path = bin.parent().is_some_and(|p| !p.as_os_str().is_empty());
     if bin.is_absolute() || !names_a_path {
@@ -552,10 +560,7 @@ mod tests {
     #[test]
     fn a_relative_binary_is_anchored_where_it_was_typed() {
         let here = std::env::current_dir().expect("a cwd to anchor to");
-        assert_eq!(
-            anchor_bin(PathBuf::from("../target/debug/amenbo")),
-            here.join("../target/debug/amenbo")
-        );
+        assert_eq!(anchor_bin(PathBuf::from("../dist/amenbo")), here.join("../dist/amenbo"));
         assert_eq!(anchor_bin(PathBuf::from("./amenbo")), here.join("./amenbo"));
     }
 

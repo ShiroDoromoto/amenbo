@@ -10,12 +10,17 @@
 //! Usage: `verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>]
 //!                    [--step] [--json]`
 //!        `verify-gui <scenario.yaml> --print`
-//!   `--app`      the `.app` bundle to launch and shoot (e.g. `/Applications/amenbo.app`)
+//!   `--app`      the installed `.app` bundle to launch and shoot (e.g. `~/Applications/amenbo.app`)
 //!   `--evidence` where the shots + manifest land (default: a fresh dir under the temp tree)
 //!   `--screen`   path to the screen tool (default: scripts/screen.swift in the repo)
 //!   `--step`     stop after each step's shot and wait for a line on stdin before the next
 //!   `--json`     emit the manifest path, verdict and step count as JSON instead of the summary
 //!   `--print`    print the road's instructions and stop — nothing launched, no shot, no OCR
+//!
+//! What it will launch is a build the release workflow produced, and nothing else
+//! ([`amenbo_verify_gui::shipped`]). The bundle is asked before the run starts; a build made here is
+//! turned away at the door, since the point of shooting a screen before a release is to have shot
+//! the one that ships.
 //!
 //! The run owns the app it shoots. It starts the bundle with `AMENBO_HOME` pointed at a store of
 //! its own, so a screen road that creates projects and tasks writes them nowhere near the user's
@@ -102,6 +107,10 @@ fn run(opts: &Opts) -> Result<bool, String> {
         .app
         .as_ref()
         .ok_or("need --app <bundle.app> to know which build to launch and shoot")?;
+
+    // What a run may shoot is settled at the door, before a store is made or a window is drawn: the
+    // evidence a run files is only worth what the build behind it is.
+    amenbo_verify_gui::shipped::ensure_release_build(bundle)?;
 
     // The store is made first and handed to the launch, which owns both from here: the app is up
     // for exactly as long as this binding lives, and the store goes down with it.

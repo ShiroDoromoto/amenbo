@@ -34,6 +34,8 @@ use amenbo_scenario::{Args, Domain, Driver, Scenario, Step};
 pub mod launch;
 /// The throwaway store that app is launched against.
 pub mod scratch;
+/// The line the run stands on: only a bundle the release workflow produced is launched.
+pub mod shipped;
 
 // ---------------------------------------------------------------------------
 // The screen tool (the side effects: front, shoot, read)

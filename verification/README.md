@@ -8,6 +8,16 @@ The single source of truth is the set of **scenarios**: declarative YAML naming 
 proved and the road each driver takes to prove it, with no command line or coordinates baked in.
 The goal is shared; the steps belong to the driver that walks them (`steps_cli` / `steps_gui`).
 
+**What the drivers drive is the shipped bytes, and nothing else.** Each asks before it starts —
+the CLI driver asks the binary `--bin` names, the GUI harness asks the CLI the bundle it was
+pointed at ships — and the answer is the release workflow's stamp, which a build reports as
+`release_build` in what `amenbo version --json` says. There is no flag to wave a local build
+through: evidence gathered from a shipped build and evidence gathered from somebody's working tree
+read alike afterwards, and a promotion resting on the second rests on nothing. Reading a road back
+is not driving one, so `lint`, `emit` and `verify-gui --print` sit outside that line — they touch no
+binary at all. To see a change you are writing on screen, build and drive its own dev GUI with the
+development tooling; that is what it is for, and it is not this harness's road.
+
 ```
 verification/
   scenarios/   the single source of truth (YAML). Every driver walks its own road through these.
@@ -69,9 +79,11 @@ cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/delegate-to-ai.yaml
 cargo run -p amenbo-verify-cli --bin verify-cli -- scenarios/delegate-to-ai.yaml --json
 ```
 
-`--bin` (and `$AMENBO_BIN`) takes a relative path as well — `--bin ../target/debug/amenbo` to point
-at your own build — read from where you run the command, not from the throwaway directory the
-scenario is driven in. A value with no separator in it (`--bin amenbo`) stays a `PATH` lookup.
+`--bin` (and `$AMENBO_BIN`) takes a relative path as well, read from where you run the command and
+not from the throwaway directory the scenario is driven in — so a path to an artifact you unpacked
+beside the repository means what you see. A value with no separator in it (`--bin amenbo`) stays a
+`PATH` lookup. A binary the release workflow did not produce is refused by name, before the first
+step of the first scenario.
 
 The run is isolated by `AMENBO_HOME` pointed at a throwaway store plus a `.amenbo`-free CWD;
 the real app-data is never touched, and `AMENBO_UPDATE_CHECK=0` keeps it off the
@@ -189,17 +201,15 @@ cargo run -p amenbo-scenario --bin emit -- scenarios/delegate-to-ai.yaml
 
 ```sh
 cd verification
-ID=2147   # the task whose own dev GUI you built
-# launch that bundle against a throwaway store and shoot one shot per step:
+# launch the installed bundle against a throwaway store and shoot one shot per step:
 cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/delegate-to-ai.yaml \
-  --app "/Applications/amenbo (dev $ID).app"
+  --app ~/Applications/amenbo.app
 ```
 
 `--app` is the bundle itself, not a name: what is verified before a release is the `.app` the
-installer put in place, and what is verified while a change is being written is the dev bundle that
-task's own build produced. The executable inside is asked of the bundle (`CFBundleExecutable`)
-rather than assumed, since a dev build carries a name of its own (`amenbo-app-dev-<id>`, against
-prod's `amenbo-app`).
+installer put in place, and the bundle is asked whether it is one — through the CLI it ships, which
+one build produces alongside the app and one installer carries with it. The executable to start is
+asked of the bundle too (`CFBundleExecutable`) rather than assumed.
 
 A screen line sometimes needs a world the app cannot be talked into from its own interface — the
 browsing view reads the badge on a row a **registered** catalog served, and a plugin's row is only
@@ -289,7 +299,7 @@ through a pipe:
 cd verification
 mkfifo /tmp/go
 cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml \
-  --app "/Applications/amenbo (dev $ID).app" --step --json < /tmp/go &
+  --app ~/Applications/amenbo.app --step --json < /tmp/go &
 exec 3>/tmp/go   # hold the writing side open — otherwise the first echo closes it, which is the end
                  # of input, and the run stops rather than carrying on to the next step
 # … drive the screen to the next step (the screen tool), then release the next shot:

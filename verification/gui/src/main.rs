@@ -1,20 +1,26 @@
 //! `verify-gui` — drive one verification scenario as a mac GUI checklist.
 //!
 //! It reads the same scenario the CLI driver black-box-drives, renders each step into a screen
-//! instruction (no command line, no pixel), and hands the shooting and the reading to the screen
-//! tool (`scripts/screen.swift`): the app is named by pid, one shot per step lands in an evidence
-//! directory, and each assert OCR can judge is decided from that shot. An assert it cannot judge is
-//! left as a `Review` for a human eye, and its shot is kept.
+//! instruction (no command line, no pixel), launches the app bundle it was pointed at against a
+//! throwaway store, and hands the shooting and the reading to the screen tool
+//! (`scripts/screen.swift`): the app is named by the pid that launch answered with, one shot per
+//! step lands in an evidence directory, and each assert OCR can judge is decided from that shot. An
+//! assert it cannot judge is left as a `Review` for a human eye, and its shot is kept.
 //!
-//! Usage: `verify-gui <scenario.yaml> --pid <pid> [--evidence <dir>] [--screen <path>] [--step]
-//!                    [--json]`
+//! Usage: `verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>]
+//!                    [--step] [--json]`
 //!        `verify-gui <scenario.yaml> --print`
-//!   `--pid`      pid of the running GUI app — the app to front, and the app to shoot
+//!   `--app`      the `.app` bundle to launch and shoot (e.g. `/Applications/amenbo.app`)
 //!   `--evidence` where the shots + manifest land (default: a fresh dir under the temp tree)
 //!   `--screen`   path to the screen tool (default: scripts/screen.swift in the repo)
 //!   `--step`     stop after each step's shot and wait for a line on stdin before the next
 //!   `--json`     emit the manifest path, verdict and step count as JSON instead of the summary
-//!   `--print`    print the road's instructions and stop — no window, no shot, no OCR
+//!   `--print`    print the road's instructions and stop — nothing launched, no shot, no OCR
+//!
+//! The run owns the app it shoots. It starts the bundle with `AMENBO_HOME` pointed at a store of
+//! its own, so a screen road that creates projects and tasks writes them nowhere near the user's
+//! backlog, and it holds the pid that launch answered with, so what is captured is that app and not
+//! whichever copy of the same build happened to be open. Both go when the run ends.
 //!
 //! Without `--step` the run shoots every step back to back, which is one screen photographed as
 //! many times as the scenario is long. `--step` is what lets a scenario carry a screen that moves:
@@ -41,14 +47,16 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use amenbo_verify_gui::{front, read_shot, shoot, walk, write_manifest, StepRecord, Verdict};
+use amenbo_verify_gui::{
+    launch, read_shot, scratch, shoot, walk, write_manifest, StepRecord, Verdict,
+};
 
 fn main() -> ExitCode {
     let opts = match Opts::parse(std::env::args().skip(1)) {
         Ok(o) => o,
         Err(msg) => {
             eprintln!("verify-gui: {msg}");
-            eprintln!("usage: verify-gui <scenario.yaml> --pid <pid> [--evidence <dir>] [--screen <path>] [--step] [--json]");
+            eprintln!("usage: verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>] [--step] [--json]");
             eprintln!("       verify-gui <scenario.yaml> --print");
             return ExitCode::from(2);
         }
@@ -90,11 +98,18 @@ fn run(opts: &Opts) -> Result<bool, String> {
         return Ok(true);
     }
 
-    let pid = opts.pid.ok_or("need --pid to know which app to shoot")?;
+    let bundle = opts
+        .app
+        .as_ref()
+        .ok_or("need --app <bundle.app> to know which build to launch and shoot")?;
 
-    // Front the app first: a window behind another Space is not on screen, and the tool goes
-    // looking for one that is.
-    front(pid, &opts.screen)?;
+    // The store is made first and handed to the launch, which owns both from here: the app is up
+    // for exactly as long as this binding lives, and the store goes down with it.
+    let store = scratch::store(&scenario.id)
+        .map_err(|e| format!("could not create a throwaway store: {e}"))?;
+    let mut gui = launch::launch(bundle, store)?;
+    gui.wait_until_shootable(&opts.screen)?;
+    let pid = gui.pid;
 
     let evidence = opts
         .evidence
@@ -193,7 +208,9 @@ fn default_evidence_dir(id: &str) -> PathBuf {
 /// Parsed command line.
 struct Opts {
     scenario: PathBuf,
-    pid: Option<i64>,
+    /// The `.app` bundle to launch. Optional here and required in [`run`], since `--print` reads a
+    /// road back without anything running.
+    app: Option<PathBuf>,
     evidence: Option<PathBuf>,
     screen: PathBuf,
     step: bool,
@@ -204,7 +221,7 @@ struct Opts {
 impl Opts {
     fn parse(args: impl Iterator<Item = String>) -> Result<Opts, String> {
         let mut scenario = None;
-        let mut pid = None;
+        let mut app = None;
         let mut evidence = None;
         let mut screen = None;
         let mut step = false;
@@ -216,10 +233,7 @@ impl Opts {
                 "--json" => json = true,
                 "--step" => step = true,
                 "--print" => print = true,
-                "--pid" => {
-                    let v = it.next().ok_or("--pid needs a number")?;
-                    pid = Some(v.parse::<i64>().map_err(|_| format!("--pid `{v}` is not a number"))?);
-                }
+                "--app" => app = Some(PathBuf::from(it.next().ok_or("--app needs a bundle path")?)),
                 "--evidence" => evidence = Some(PathBuf::from(it.next().ok_or("--evidence needs a path")?)),
                 "--screen" => screen = Some(PathBuf::from(it.next().ok_or("--screen needs a path")?)),
                 s if s.starts_with("--") => return Err(format!("unknown flag `{s}`")),
@@ -232,7 +246,7 @@ impl Opts {
         }
         Ok(Opts {
             scenario: scenario.ok_or("no scenario file given")?,
-            pid,
+            app,
             evidence,
             screen: screen.unwrap_or_else(default_screen),
             step,

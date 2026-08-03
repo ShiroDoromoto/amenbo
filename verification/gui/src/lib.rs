@@ -4,7 +4,9 @@
 //! checklist**. It bakes in no command line and no pixel: each step becomes a plain-language
 //! instruction of what to do or confirm on screen, and every step is shot into an evidence
 //! directory by the screen tool (`scripts/screen.swift`), which is named the app's pid and hands
-//! back a file — which window it shot, and the id it shot by, never leave it.
+//! back a file — which window it shot, and the id it shot by, never leave it. The pid it is named
+//! is the harness's own: the app under test is started here, against a throwaway store
+//! ([`launch`], [`scratch`]), and goes down with the run.
 //!
 //! An assert step is judged from that shot by asking the same tool to read it (macOS **Vision**
 //! behind it): the harness derives the text the step expects on screen and matches it against the
@@ -27,6 +29,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use amenbo_scenario::{Args, Domain, Driver, Scenario, Step};
+
+/// Starting the app under test and holding it — the pid every shot is aimed at comes from here.
+pub mod launch;
+/// The throwaway store that app is launched against.
+pub mod scratch;
 
 // ---------------------------------------------------------------------------
 // The screen tool (the side effects: front, shoot, read)

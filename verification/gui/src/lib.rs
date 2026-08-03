@@ -248,6 +248,11 @@ impl Instructor {
     /// names an order instead, and an order is not something a reading settles — which words are on a
     /// shot is all OCR answers — so that one is left for a `Review`.
     ///
+    /// `none-linked` is read the same way, and for the same reason twice over: the warning's own words
+    /// are the interface's, and the command it is judged on is what the two notices that would
+    /// otherwise be standing there both hand over — so a reading that comes back without it says both
+    /// that the loop is not up and that the wiring text is not either.
+    ///
     /// `ways-in` is the one assert judged the other way round: what it names is a command, and a
     /// command is the same words in any language, so the reading has to come back without it. Its
     /// sibling `open-existing` names a project, and a reading answers which words are on a shot and
@@ -306,7 +311,7 @@ impl Instructor {
             (Domain::Folder, "first-loop") => {
                 Some(Expectation { text: arg_str(with, "hands_over")?.to_string(), present: true })
             }
-            (Domain::Folder, "ways-in") => {
+            (Domain::Folder, "ways-in") | (Domain::Folder, "none-linked") => {
                 Some(Expectation { text: arg_str(with, "absent")?.to_string(), present: false })
             }
             (Domain::Repo, "ai-launch-notice") => {
@@ -629,6 +634,10 @@ impl Instructor {
                     }
                 }
             }
+            (Domain::Folder, "none-linked") => format!(
+                "Confirm this project's board warns that it has no folder linked, with the one move that ends it — linking a folder — offered in the warning, and the board's own cards still standing under it: \"{}\" is nowhere on the screen.",
+                req(with, "absent")?
+            ),
             (Domain::Folder, "first-loop") => format!(
                 "Confirm the first loop is offered here: its first move opens a terminal already inside the linked folder, its second hands over the request to paste — which names \"{}\" — and its third says the tasks will appear on the board.",
                 req(with, "hands_over")?
@@ -1557,6 +1566,29 @@ steps_gui:
         let exp = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the command is what must not be read back");
         assert_eq!(exp, Expectation { text: "bind --project".to_string(), present: false });
         assert!(ins.expectation(&s.steps(Driver::Gui)[3]).is_none(), "a name the whole window carries is not a reading");
+    }
+
+    /// The board's own warning is read the same way round, and the words it names buy two readings for
+    /// one: they are what both of the notices it stands ahead of hand over, so a shot they are missing
+    /// from says neither of those is up in its place.
+    #[test]
+    fn a_none_linked_assert_expects_the_other_notices_command_to_be_absent() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: folder
+    op: none-linked
+    with: { absent: "agent --json" }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let line = ins.render(&s.steps(Driver::Gui)[0]).unwrap();
+        assert!(line.contains("\"agent --json\"") && line.contains("no folder linked"), "got: {line}");
+
+        let exp = ins.expectation(&s.steps(Driver::Gui)[0]).expect("the command is what must not be read back");
+        assert_eq!(exp, Expectation { text: "agent --json".to_string(), present: false });
     }
 
     /// Starting a folder's AI on amenbo, as the screen walks it: the report standing on the board, and

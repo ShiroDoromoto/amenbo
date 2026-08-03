@@ -697,6 +697,20 @@ const REGISTRY: &[OpSpec] = &[
     // which is answered by a resync finding nothing left to write.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "bound", required: &["dir"], refs: &["project"], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "resynced", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // The warning a project with no folder linked carries on its own board, and the one move that ends
+    // it standing beside it. How much work the board holds is not part of the question: a project
+    // carrying forty cards and no folder is exactly the one nothing else on the screen speaks about, so
+    // the warning stands above those cards rather than in place of them.
+    //
+    // `absent` is judged the way `ways-in` is, the other way round. What it names is the command the
+    // board's other two standing notices both hand over — the first loop's request, and the wiring text
+    // — so a reading that comes back without it is what says this notice is standing alone. The
+    // warning's own words are the interface's, in whatever language the app is in, and there is nothing
+    // in them a reading could be held to.
+    //
+    // GUI only, and not by omission: which notice a board carries leaves behind exactly the rows the
+    // others do. There is no read to ask, and the screen is the only witness.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "none-linked", required: &["absent"], refs: &[], strings: &["absent"], binds: false },
     // What a project with no work in it yet hands its reader: the loop that joins the two ends — the
     // reader asks their AI, the AI writes to amenbo, and what it wrote lands on the board. Every move
     // the interface can make on their behalf it makes, so what the screen carries is a terminal

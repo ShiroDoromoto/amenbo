@@ -14,13 +14,12 @@
 # really behind the picker is a tool being picked that the folder shows no trace of, and the text on
 # screen turning into that tool's.
 #
-# What this wants standing before the run: one folder bound to a project this device holds, with nothing
-# in it — no provider's directory, nothing about amenbo — and that project's answer never refused here.
-# It should be the only folder bound, so that every file named on screen is named about this one. The
-# folder is empty but the project is not: one task on its board, since a project that has never held one
-# is drawing the first loop, which the report stands aside for. The app draws the report when that
-# project is opened, and it opens on a project — so the run opens with it standing. Drive it stepped
-# (`--step`), since the pick is what the shot after it is of.
+# The world is declared below: a project with one folder bound and nothing in it — no provider's
+# directory, nothing about amenbo — and one task on its board, since a project that has never held one
+# is drawing the first loop, which the report stands aside for. The answer is left where a fresh store
+# leaves it, never given, which is the state the report is drawn from: only a refusal takes it away, and
+# a yes is not wiring. What is left to the operator is to open that project — the report is drawn on
+# arrival — and to drive the run stepped (`--step`), since the pick is what the shot after it is of.
 id: pick-the-tool-a-folder-does-not-name
 title: A folder that shows no sign of any AI tool is handed the catalog, and the tool the reader picks is the tool the text is for
 description: >
@@ -29,6 +28,25 @@ description: >
   holding the rest. Picking one the folder shows no trace of turns the text into that tool's — its
   settings, and the file they go in — and the button hands that one over. A report that came back empty,
   or a picker whose choice the text does not follow, is the promise this road exists to keep.
+given:
+  # The folder is made by the linking and left as it is made — empty. That emptiness is the premise:
+  # amenbo has nothing to read a provider's name off, which is the case the whole road is about.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: workspace
+    as: greenhouse
+
+  # The card that spends the first loop, so the report is the notice this board carries.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Order the spring seed trays
+      project: greenhouse
+
 steps_gui:
   # Something is handed over, where amenbo has no provider's name to go on. With nothing to read off the
   # folder, the report leads with the first tool in the catalog rather than an empty line — the file it

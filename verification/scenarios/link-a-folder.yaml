@@ -35,9 +35,9 @@
 #
 # What that road wants in front of it is a device with a project on it and nothing on that project's
 # board: the open card is offered where there is something to open, the choices it lists are what the
-# store holds, and the loop at the end is what an untouched board leads with. Stand the project named
-# below in the store the build under test opens (`devtool devgui cli`), and start the run on the
-# getting started screen — the one screen nothing here can move to, since the first shot is taken
+# store holds, and the loop at the end is what an untouched board leads with. That project is declared
+# below and stood up before the app is launched; what is left to the operator is to start the run on
+# the getting started screen — the one screen nothing here can move to, since the first shot is taken
 # before anyone is handed the run.
 #
 # Everything after it is a step: the road crosses three screens, so drive it stepped (`--step`) and
@@ -55,6 +55,16 @@ description: >
   through a terminal: two cards and nothing to paste anywhere, the second asking which of this
   device's projects the folder is to be linked to — the step it takes before the folder picker — then
   the folder itself, and the board that opens with the first loop waiting on it.
+given:
+  # The project the card lists and the reader answers with. It is the screen road's alone — the road
+  # from a terminal raises its own — but a premise stands before both, and a project more on the device
+  # is nothing the terminal road reads.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+
 steps_cli:
   # `init` in an unclaimed folder raises a project there and points the folder at it. The binding it
   # hands back is what the next step checks the pointer against.

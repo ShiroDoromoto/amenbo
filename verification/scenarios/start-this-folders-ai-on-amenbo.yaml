@@ -12,14 +12,14 @@
 # Nothing in it is visible from inside the workspace's own tests: the settings file is a real file in
 # a real folder, and the folder is what answers for it.
 #
-# The screen walks the same road from the other end, and what it needs is the state standing before
-# the run: a folder bound to a project this device holds, with the provider's own directory in it and
-# nothing about amenbo in that, and that project's answer never refused here — a no is what takes the
-# report away. One task on that project's board, too: a project that has never held one is drawing the
-# first loop, which the report stands aside for, so a board with nothing on it is a board with no
-# report on it either. The app draws the report when that project is opened, and it opens on a project
-# — so the run opens with it standing. Drive it stepped (`--step`), since the copy is a move the shot
-# follows.
+# The screen walks the same road from the other end, and the state both roads start from is declared
+# below: the run's own folder carrying the provider's directory with nothing about amenbo in it, and a
+# task on the board of the project that folder answers for — a project that has never held one is
+# drawing the first loop, which the report stands aside for, so a board with nothing on it is a board
+# with no report on it either. The answer is left where a fresh store leaves it, never given: a no is
+# what takes the report away, and a yes is not wiring. What is left to the operator is to open that
+# project — the report is drawn on arrival — and to drive the run stepped (`--step`), since the copy is
+# a move the shot follows.
 id: start-this-folders-ai-on-amenbo
 title: A folder that does not start its AI on amenbo says so, hands over what wires it, and stops saying it once that lands
 description: >
@@ -32,9 +32,11 @@ description: >
 
   Both ends are asked of the standing sweep as well as of the line printed in passing, because a folder
   nobody is standing in is only ever found in the sweep.
-steps_cli:
+given:
   # A folder this reader's AI already works in: the provider's own directory is there, with settings
-  # that do nothing about amenbo. That is the state everyone is in before they are told.
+  # that do nothing about amenbo. That is the state everyone is in before they are told, and it is the
+  # run's own folder, which is already answering for a project — so both roads read this one folder and
+  # the screen road has somewhere to be standing.
   - type: action
     domain: repo
     op: write-file
@@ -47,6 +49,15 @@ steps_cli:
           }
         }
 
+  # The card that spends the first loop, so the board the screen road stands on carries the report
+  # rather than the loop. The terminal road never looks at a board, so it reads nothing here.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Draft the winter planting order
+
+steps_cli:
   # Told, and told by name: the folder shows what tool it is, so the report names it rather than
   # leaving the reader to work out which of five it means.
   - type: assert

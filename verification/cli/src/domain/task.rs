@@ -12,13 +12,19 @@ impl Driver<'_> {
         match op {
             "create" => {
                 let title = req_str(with, "title")?;
-                let pid = self.project_id.to_string();
+                // Which board it lands on: this run's own unless the step names another, the same
+                // way `folder bind` picks the project it points a folder at.
+                let pid = match with.get("project") {
+                    Some(_) => self.resolve_key(with, "project")?,
+                    None => self.project_id,
+                }
+                .to_string();
                 let v = self.run_json(&["task", "add", "--title", title, "--project", &pid, "--json"])?;
                 let id = v["task"]["id"].as_i64().ok_or("task add did not report an id")?;
                 if let Some(name) = bind {
                     self.bindings.insert(name.to_string(), id);
                 }
-                Ok(Outcome::action(format!("created task {id} `{title}`")))
+                Ok(Outcome::action(format!("created task {id} `{title}` in project {pid}")))
             }
             "assign" => {
                 let target = self.resolve(with)?;

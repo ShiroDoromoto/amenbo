@@ -14,15 +14,23 @@ impl Driver<'_> {
         match op {
             // The folder the run works in. `write-file` is a person already having a file there —
             // what gets attached, and what the lint is pointed at.
+            // Where it lands is the run's own folder, unless the step names one of the folders a
+            // `folder` step binds: what a folder traces is read off its own contents, so a bound
+            // folder that already carries a provider's settings can only be made by writing inside
+            // it. Which is which is said by `dir:` and never by the path, so a path can no more
+            // climb out of one folder than out of the other.
             "write-file" => {
                 let path = req_str(with, "path")?;
                 let content = req_str(with, "content")?;
-                let full = self.in_session(path)?;
+                let full = match with.get("dir") {
+                    Some(_) => self.folder(with)?.join(self.inside(path)?),
+                    None => self.in_session(path)?,
+                };
                 if let Some(dir) = full.parent() {
                     std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
                 }
                 std::fs::write(&full, content).map_err(|e| format!("could not write {path}: {e}"))?;
-                Ok(Outcome::action(format!("wrote {path} ({} bytes)", content.len())))
+                Ok(Outcome::action(format!("wrote {} ({} bytes)", full.display(), content.len())))
             }
             // The same, for text a scenario cannot hold itself. A file under `fixtures/` is where the
             // reference form lives: this tree's prose rule keeps a bare ref out of every `.yaml`, and

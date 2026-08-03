@@ -13,11 +13,9 @@
 # Hence a road written for the screen alone. A terminal is already standing in one project — the folder
 # it is run from says which — so it has no second face to arrive at, no picker, and nothing to draw.
 #
-# What the road wants in front of it is a device holding the project named below, with the official
-# `worktree` plugin installed and its gate shut everywhere — stand the project and install the plugin in
-# the store the build under test opens (`devtool devgui cli`). Where the run starts does not matter: the
-# first step is the arrival. Every step after it moves the screen, so drive it stepped (`--step`) and
-# carry out each move at the hand-back before it.
+# The world it starts from is declared below and stood up before the app is launched. Where the run
+# starts does not matter: the first step is the arrival. Every step after it moves the screen, so drive
+# it stepped (`--step`) and carry out each move at the hand-back before it.
 #
 # Every line is closed by an eye rather than by a reading. What separates a row just drawn from one
 # turned on is the button standing in it, and a button's label is a word of the interface — both states
@@ -30,6 +28,21 @@ description: >
   picker and read what that left — the row standing, the plugin still off in it, which is the whole of
   what a picker that no longer enables does. Then move the switch inside that row and read the same row
   saying the plugin is on, without having left the project's own face at any point.
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+
+  # On the machine and firing nowhere. Both halves are the premise: a plugin nobody installed has no
+  # row to draw, and one already firing here would leave the road nothing to turn on.
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
 steps_gui:
   # Nothing to say about this plugin here, and the screen says exactly that: what the list carries is
   # what is on in this project or filled in for it, and this is neither.

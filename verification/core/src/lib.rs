@@ -213,7 +213,11 @@ struct OpSpec {
 
 const REGISTRY: &[OpSpec] = &[
     // Actions
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create", required: &["title"], refs: &[], strings: &["title"], binds: true },
+    // `project` names the board it lands on, for a world that has to put work in front of a project
+    // the run does not itself stand in — a board with a card on it is a different screen from an
+    // empty one, and which project it is drawn for is the whole question where a road walks to a
+    // named project. Left out, it is the run's own project like everything else.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "assign", required: &["target", "assignee"], refs: &["target"], strings: &["assignee"], binds: false },
     // Posting binds the comment, since editing, removing and promoting one all name it afterwards.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "comment", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: true },
@@ -367,7 +371,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Attachment, op: "rm", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The folder the run works in: the files a person already has there, the repository the hooks
     // are written into, and the two hook commands themselves.
-    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], strings: &["path", "content"], binds: false },
+    // `dir` names one of the folders a `folder` step binds, for a file that has to be lying in *that*
+    // folder rather than in the one the run stands in — what a folder traces is read off its own
+    // contents, so a world where a bound folder already carries a provider's settings is only
+    // reachable by writing inside it. Left out, the file lands in the run's own folder.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], strings: &["from", "path"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], strings: &[], binds: false },
@@ -920,8 +928,16 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Task, "status"),
     (Domain::Task, "update"),
     // A folder already answering for a project — what a screen showing bindings has to be looking at.
+    // Taking a pointer back off is here for the state it leaves rather than for the act: a project
+    // with no folder left is what one whole notice is about, and creating a project links one, so
+    // there is no other way to arrive at it.
     (Domain::Folder, "init"),
     (Domain::Folder, "bind"),
+    (Domain::Folder, "unbind"),
+    // A file already lying in one of those folders. What a folder traces is read off its contents and
+    // recorded nowhere, so a bound folder that already carries a provider's settings — the state every
+    // road about wiring an AI starts from — is a world no amount of store seeding reaches.
+    (Domain::Repo, "write-file"),
     // A catalog registered and a plugin already on the machine. Both are worlds a screen only reads:
     // the browsing view draws rows a catalog served, and a plugin's row is there once one is
     // installed. Standing a catalog of the run's own comes with them, since a catalog is trusted on
@@ -930,6 +946,11 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Plugin, "catalog-add"),
     (Domain::Plugin, "install"),
     (Domain::Plugin, "enable"),
+    // And what an installed plugin says it takes. Which settings a plugin declares is its author's
+    // word, no published one declares any, and a screen road about answering them has to find them
+    // already declared — the declaration is the world, and the answering is the road.
+    (Domain::Plugin, "declare-setting"),
+    (Domain::Plugin, "declare-choice"),
 ];
 
 /// Whether this op may stand a world up (see [`PREMISE_OPS`]).

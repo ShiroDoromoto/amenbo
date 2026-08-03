@@ -16,11 +16,9 @@
 # there is itself the permission to run its code, so there is no third question and no step here answers
 # one.
 #
-# What the road wants in front of it is a device holding the two projects named below, with the
-# official `worktree` plugin installed and its gate shut everywhere — stand the projects and install
-# the plugin in the store the build under test opens (`devtool devgui cli`), and start the run on the
-# installed plugins screen. Every step after the first moves the screen, so drive it stepped
-# (`--step`) and carry out each move at the hand-back before it.
+# The world it starts from is declared below and stood up before the app is launched. What is left to
+# the operator is where to start: the installed plugins screen. Every step after the first moves the
+# screen, so drive it stepped (`--step`) and carry out each move at the hand-back before it.
 #
 # Every line is closed by an eye rather than by a reading. What each one names is a project, and the
 # projects run down the side of every screen: a reading that finds the name cannot say it came from
@@ -33,6 +31,29 @@ description: >
   which is the whole of what a truth value cannot say. Then shut the first project's gate and read the
   two rows again: the one just shut offers to turn the plugin back on, and the other is still firing,
   untouched by a switch moved somewhere else.
+given:
+  # Two projects, because one is what a truth value can already say. The row has to name more than one
+  # before shutting a gate can be seen leaving the other alone.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Toolshed
+
+  # On the machine and firing nowhere, which is what installing leaves behind: opening a gate is the
+  # separate act, and it is the one the road walks.
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
 steps_gui:
   # Off everywhere is a state the row has to be able to say, or the readings after it would pass over
   # a row that names every project on the device.

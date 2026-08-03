@@ -19,9 +19,9 @@
 # GUI only, and not by omission: which notice a board carries leaves behind exactly the rows the others
 # do. There is no read to ask and no exit code to fail — the screen is the only witness.
 #
-# What this wants in front of it is a project with no folder linked, standing on its own board
-# (`devtool devgui cli`). Drive it stepped (`--step`): the card is made on the screen the warning is
-# then read over.
+# The project with no folder linked is declared below and stood up before the app is launched. What is
+# left to the operator is to stand on that project's own board, and to drive the run stepped
+# (`--step`): the card is made on the screen the warning is then read over.
 id: learn-this-project-has-no-folder
 title: A project with no folder linked says so on its own board, over the work it is already holding, and is the only notice standing there
 description: >
@@ -29,6 +29,22 @@ description: >
   it. The warning is there whatever the board holds, it offers the one move that ends it, and the cards
   it stands over are left where they were. What says it is standing alone is the command the other two
   notices both hand over being nowhere on the screen.
+given:
+  # Raised with a folder, because raising one asks for a folder — the way into this state is having
+  # the last one taken off afterwards, which is the second step and the whole of the premise.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Orchard
+      dir: orchard
+
+  - type: action
+    domain: folder
+    op: unbind
+    with:
+      dir: orchard
+
 steps_gui:
   - type: action
     domain: task

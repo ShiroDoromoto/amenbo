@@ -12,12 +12,12 @@
 # The screen is the only witness. A terminal is asked in one folder at a time and answers about that one,
 # so there is nothing there for a list to be a list of.
 #
-# What this wants standing before the run: one project on this device bound to more than one folder, each
-# of them carrying the same tool's own directory and nothing about amenbo in it, that project's answer a
-# yes rather than a refusal — put it in the store the build under test opens (`devtool devgui cli`), since
-# a refusal takes the report away — and that project's board open, with one task on it: a project that
-# has never held one is drawing the first loop, which the report stands aside for. Nothing else on that
-# screen may name a folder, the task included, since a reading finds a name wherever it stands. The
+# The world is declared below: one project bound to two folders, each carrying the same tool's own
+# directory with nothing about amenbo in it, and one task on its board — a project that has never held
+# one is drawing the first loop, which the report stands aside for. The answer is left where a fresh
+# store leaves it, never given: only a refusal takes the report away, and a yes is not wiring. Nothing
+# the premise makes may name a folder except the folders themselves, the task included, since a reading
+# finds a name wherever it stands. What is left to the operator is to open that project's board. The
 # screen does not move under the run, so it needs no stepping.
 id: wire-the-folders-a-yes-left-behind
 title: A project says which of its folders still start their AI without amenbo, with the request standing once above the list
@@ -27,6 +27,61 @@ description: >
   the file the text goes into, and the folders the text is still waiting on, listed under one copy of it.
   A screen that named a single folder, or that repeated the request once per folder, is the promise this
   road exists to keep.
+given:
+  # Two folders on one project, which is the whole premise: the list under the request is a list only
+  # where more than one folder is waiting on it, and a project with one would read the same on a screen
+  # that had dropped the list altogether.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: frontend
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: worker
+      project: greenhouse
+
+  # The same tool in both, so the two land under one copy of one request rather than under one apiece.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: frontend
+      path: .claude/settings.json
+      content: |
+        {
+          "permissions": {
+            "allow": []
+          }
+        }
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: worker
+      path: .claude/settings.json
+      content: |
+        {
+          "permissions": {
+            "allow": []
+          }
+        }
+
+  # The card that spends the first loop, so the report is the notice this board carries. Its words name
+  # no folder: a reading finds a name wherever it stands on the shot.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Order the spring seed trays
+      project: greenhouse
+
 steps_gui:
   # The text, and the file it goes into. The file is the one thing on screen the report alone names, so a
   # board carrying the report is told apart from one carrying nothing by it.

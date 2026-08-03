@@ -291,11 +291,18 @@ impl<'a> Driver<'a> {
     /// this driver is handed real machines to run on, so an absolute path or a `..` in a scenario is
     /// refused rather than followed.
     fn in_session(&self, path: &str) -> Result<std::path::PathBuf, String> {
+        Ok(self.session.cwd.join(self.inside(path)?))
+    }
+
+    /// The same check on its own, for a step that has a folder of its own to hang the path off. A
+    /// path is refused by its shape rather than by where it was about to be joined, so every folder
+    /// a scenario writes into is closed the one way.
+    fn inside<'p>(&self, path: &'p str) -> Result<&'p Path, String> {
         let p = Path::new(path);
         if p.is_absolute() || p.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
-            return Err(format!("`path: {path}` must stay inside the run's own folder"));
+            return Err(format!("`path: {path}` must stay inside the folder it is written into"));
         }
-        Ok(self.session.cwd.join(p))
+        Ok(p)
     }
 
     /// The code a refusal came back with, but only while a step is expecting one. amenbo prints the

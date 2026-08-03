@@ -13,9 +13,13 @@
 # the row has answered — and a second place to choose one is a second answer that can disagree. And the
 # switch is pressed twice on the same row, which is what "answered without leaving it" has to mean.
 #
-# Like every line that installs a plugin, the road below goes to the catalog over the network on purpose
-# (see `put-a-plugin-on-the-machine.yaml`): a refusal about a plugin's settings is a face of a plugin that
-# is really there.
+# Like every line that installs a plugin, the premise below goes to the catalog over the network on
+# purpose (see `put-a-plugin-on-the-machine.yaml`): a refusal about a plugin's settings is a face of a
+# plugin that is really there.
+#
+# The screen road wants the project named below standing as well, since the crossing it is walked on is
+# that project's. The world is declared below; the moves on the row are the operator's, driven stepped
+# (`--step`).
 id: fill-in-what-a-plugin-cannot-fire-without
 title: A plugin short of a setting its author calls required is refused rather than half-enabled, and the value goes in where the refusal was read
 description: >
@@ -26,7 +30,15 @@ description: >
   anything is pressed, the switch is refused, the settings open inside that row and ask for no project,
   the value goes in there, the mark gives way to a row saying the settings are filled, and the second
   press goes through.
-steps_cli:
+given:
+  # The project the screen road walks its crossing on. A crossing is a plugin and a project, and the
+  # project is not one a road on screen can raise on its way past.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+
   - type: action
     domain: plugin
     op: install
@@ -45,6 +57,7 @@ steps_cli:
       label: Base branch
       required: true
 
+steps_cli:
   # The premise, said out loud: this project holds nothing for it. The refusal below is about the value
   # being absent, and a road that never said so would read the same over one that was filled in.
   - type: assert

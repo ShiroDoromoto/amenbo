@@ -21,10 +21,12 @@
 # asked in one folder and answers about that one, and there is no board there for a notice to lose a
 # place on.
 #
-# What this wants standing before the run: one project on this device bound to the folder named below,
-# that folder carrying the tool's own directory with nothing about amenbo in it, the project's answer a
-# yes rather than a refusal, and its board open with no task on it (`devtool devgui cli`). The screen
-# moves once, so drive it stepped (`--step`) and open the settings at the hand-back before that step.
+# The world is declared below: one project bound to the folder named there, that folder carrying the
+# tool's own directory with nothing about amenbo in it, and no task on its board — which is what puts
+# the first loop ahead of the report. The answer is left where a fresh store leaves it, never given,
+# since only a refusal would take the report out of the inventory as well. What is left to the operator
+# is to open that project's board. The screen moves once, so drive it stepped (`--step`) and open the
+# settings at the hand-back before that step.
 id: look-over-what-the-board-left-out
 title: The folders still starting their AI without amenbo are listed in the project's own settings, including when the board is carrying another notice entirely
 description: >
@@ -32,6 +34,29 @@ description: >
   the report is not up. Then open the project's own settings and find the folder still waiting there.
   What is under test is the inventory: one notice on the board is a decision about where the reader
   acts, and it holds only while everything left off the board is still counted somewhere.
+given:
+  # The folder the inventory has to go on naming. It is the project's only one, so a build that dropped
+  # the inventory leaves the settings screen with nothing on it rather than with one row fewer.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: frontend
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: frontend
+      path: .claude/settings.json
+      content: |
+        {
+          "permissions": {
+            "allow": []
+          }
+        }
+
 steps_gui:
   # The notice that won, read on the words its request carries — the command it sends the reader's AI to
   # run, which is the same in whatever language the app is in.

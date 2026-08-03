@@ -4,7 +4,7 @@ import { getSnapshot, subscribe } from "../core/snapshot";
 import {
   bindFolder, cancelDataOp, fetchDoctorReport, fetchStoreLocations, fileToAvatarDataUrl, listenDataProgress,
   openLogsDir, pickBackupPath, pickExportPath, pickRestoreArchive, resyncManagedBlocks, runBackup, runDoctorFix,
-  runExport, runRestore, setFacetNames, setLanguage, setFacetAvatar, setPerfLog, setUpdateCheck,
+  runExport, runRestore, setAutostart, setFacetNames, setLanguage, setFacetAvatar, setPerfLog, setUpdateCheck,
 } from "../core/mutations";
 import { useIsDevBuild } from "../core/devChannel";
 import { doctorRepair, groupDoctorIssues, type DoctorRepair } from "../core/doctorKinds";
@@ -42,6 +42,14 @@ export function SettingsScreen() {
         </div>
         <LanguageSetting />
       </Category>
+
+      {/* Nor does a development build carry the startup section: it registers nothing at login, so the
+          switch would be an offer it cannot keep. */}
+      {!devBuild && (
+        <Category title={t("settings.startup")}>
+          <AutostartSetting />
+        </Category>
+      )}
 
       {/* A development build carries no update section. Its one control is a switch core does not read
           — the check is withheld from the channel outright — so what would be left is a heading over a
@@ -575,6 +583,30 @@ function UpdateCheckSetting() {
           <option value="off">{t("settings.updateCheckOff")}</option>
         </select>
         <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.updateCheckNote")}</div>
+      </span>
+    </div>
+  );
+}
+
+/** Turn "start when I log in" (config.autostart) on or off. It subscribes to autostart in the snapshot,
+ *  which core rewrites only after the OS registration was actually written, so a switch that moved is a
+ *  login that changed. What comes up is the ordinary window — there is no tray-resident shape behind it.
+ *
+ *  Only a shipped build draws this. A development build registers nothing at login, because the
+ *  executable it would name sits in a working tree that gets rebuilt and thrown away, and the leftover
+ *  registration would go on trying to start a file that is gone. */
+function AutostartSetting() {
+  const on = useSyncExternalStore(subscribe, () => getSnapshot().autostart);
+  const change = (e: React.ChangeEvent<HTMLSelectElement>) => { void setAutostart(e.target.value === "on"); };
+  return (
+    <div className="settings__row">
+      <span className="settings__k">{t("settings.autostart")}</span>
+      <span>
+        <select className="btn" value={on ? "on" : "off"} onChange={change}>
+          <option value="on">{t("settings.autostartOn")}</option>
+          <option value="off">{t("settings.autostartOff")}</option>
+        </select>
+        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.autostartNote")}</div>
       </span>
     </div>
   );

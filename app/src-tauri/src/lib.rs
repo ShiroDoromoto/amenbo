@@ -47,12 +47,19 @@ const CHECK_UPDATES_EVENT: &str = "menu://check-updates";
 /// Starts the long-lived threads that keep the store open. Call it **only once migration is
 /// through**, so nothing ever reads a store caught mid-version or left at an old one — which is why
 /// there are exactly two callers: startup (no migration needed, or migration succeeded) and a
-/// successful `migration_retry`. Garbage-collecting device state (read receipts, inbox archive)
-/// scans, so it goes to a thread of its own rather than hold up launch; a failure there is not fatal
-/// and is only logged.
+/// successful `migration_retry` — so this launch is tallied exactly once however the store was
+/// reached. Device-local housekeeping (tallying the launch, then garbage-collecting read receipts and
+/// the inbox archive) opens the store and scans, so it goes to a thread of its own rather than hold up
+/// launch; a failure there is not fatal and is only logged.
 fn start_store_threads(app: tauri::AppHandle) {
   std::thread::spawn(move || commands::watch_store(app));
   std::thread::spawn(|| {
+    // One thread for both, in this order: they open the same store, so running them in turn is what
+    // keeps them from contending for it — and the tally is what the nudges are judged on (`AMB-D-542`),
+    // so it is written before anything reads it.
+    if let Err(e) = commands::record_launch() {
+      log::warn!("record_launch failed: {e}");
+    }
     if let Err(e) = commands::gc_device_state() {
       log::warn!("gc_device_state failed: {e}");
     }
@@ -249,6 +256,8 @@ pub fn run() {
       commands::inbox_unarchive,
       commands::mailbox_notified_ids,
       commands::mailbox_notified_add,
+      commands::pending_nudges,
+      commands::mark_nudge_put,
       commands::notify_os,
       commands::run_backup,
       commands::run_restore,

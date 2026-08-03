@@ -674,5 +674,13 @@ export const id: Translation = {
       message: "Proyek {name} (#{project}) tidak punya folder — tidak ada tempat untuk mengoperasikannya, dan AI sama sekali tidak melihatnya.",
       fix: "Tambahkan folder di Pengaturan proyek > Folder.",
     },
+    unwired_folder: {
+      message: "{dir} memulai AI-nya tanpa amenbo: {tools} terpasang di sini dan belum disambungkan agar berjalan saat sesi dimulai.",
+      fix: "Di Pengaturan proyek > Folder, salin teks yang ditawarkan dan berikan ke AI yang Anda jalankan di folder itu — amenbo tidak menulis berkas pengaturan untuk Anda.",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir} memulai AI-nya tanpa amenbo, dan tidak ada tanda alat mana yang dipakai di sana.",
+      fix: "Di Pengaturan proyek > Folder, pilih alat yang Anda pakai di sana dan berikan teksnya ke AI itu.",
+    },
   },
 };

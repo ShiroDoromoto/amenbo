@@ -673,5 +673,13 @@ export const vi: Translation = {
       message: "Dự án {name} (#{project}) không có thư mục nào — không có chỗ nào để làm việc với nó, và AI hoàn toàn không thấy nó.",
       fix: "Hãy thêm thư mục ở Cài đặt dự án > Thư mục.",
     },
+    unwired_folder: {
+      message: "{dir} khởi động AI mà không qua amenbo: {tools} có ở đây nhưng chưa được nối để chạy khi bắt đầu phiên.",
+      fix: "Ở Cài đặt dự án > Thư mục, hãy sao chép đoạn văn bản được đưa ra và giao cho AI bạn dùng trong thư mục đó — amenbo không tự ghi tệp cài đặt thay bạn.",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir} khởi động AI mà không qua amenbo, và không có dấu hiệu nào cho biết công cụ nào được dùng ở đó.",
+      fix: "Ở Cài đặt dự án > Thư mục, hãy chọn công cụ bạn dùng ở đó và giao văn bản của nó cho AI.",
+    },
   },
 };

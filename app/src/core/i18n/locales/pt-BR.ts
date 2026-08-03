@@ -698,5 +698,13 @@ export const ptBR: Translation = {
       message: "O projeto {name} (#{project}) não tem nenhuma pasta: não há de onde operá-lo, e uma IA nem o enxerga.",
       fix: "Adicione uma pasta em Configurações do projeto > Pastas.",
     },
+    unwired_folder: {
+      message: "{dir} inicia sua IA sem o amenbo: {tools} está configurado aqui e não está ligado para rodar no início da sessão.",
+      fix: "Em Configurações do projeto > Pastas, copie o texto oferecido e entregue-o à IA que você usa nessa pasta: o amenbo não escreve nenhum arquivo de configuração por você.",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir} inicia sua IA sem o amenbo e não mostra sinal de qual ferramenta é usada ali.",
+      fix: "Em Configurações do projeto > Pastas, escolha a ferramenta que você usa ali e entregue o texto dela a essa IA.",
+    },
   },
 };

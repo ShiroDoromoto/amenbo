@@ -669,5 +669,13 @@ export const zhHans: Translation = {
       message: "项目 {name}（#{project}）没有任何文件夹——没有地方可以操作它，AI 也完全看不到它。",
       fix: "请在项目设置 > 文件夹中添加一个文件夹。",
     },
+    unwired_folder: {
+      message: "{dir} 里的 AI 启动时不读 amenbo：这里装了 {tools}，但没有接上会话开始时运行 amenbo 的那一步。",
+      fix: "在项目设置 > 文件夹里复制给出的文本，交给你在那个文件夹里用的 AI。amenbo 不会替你写配置文件。",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir} 里的 AI 启动时不读 amenbo，而且看不出那里用的是哪个工具。",
+      fix: "在项目设置 > 文件夹里选出你在那里用的工具，把它的文本交给那个 AI。",
+    },
   },
 };

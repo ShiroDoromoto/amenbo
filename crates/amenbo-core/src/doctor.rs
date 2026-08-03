@@ -58,6 +58,10 @@ pub enum DoctorIssueKind {
     StartAfterDue,
     /// A live project no folder on this machine leads to — nothing can operate it.
     ProjectWithoutFolder,
+    /// A bound folder that does not start its AI on amenbo, and that names the tools it is waiting on.
+    UnwiredFolder,
+    /// A bound folder that does not start its AI on amenbo and shows no sign of which tool it uses.
+    UnwiredFolderAmbiguous,
 }
 
 impl DoctorIssueKind {
@@ -75,6 +79,8 @@ impl DoctorIssueKind {
         Self::DeadRef,
         Self::StartAfterDue,
         Self::ProjectWithoutFolder,
+        Self::UnwiredFolder,
+        Self::UnwiredFolderAmbiguous,
     ];
 
     /// The one and only place a kind string is written — `Serialize` goes through here too.
@@ -91,6 +97,8 @@ impl DoctorIssueKind {
             Self::DeadRef => "dead_ref",
             Self::StartAfterDue => "start_after_due",
             Self::ProjectWithoutFolder => "project_without_folder",
+            Self::UnwiredFolder => "unwired_folder",
+            Self::UnwiredFolderAmbiguous => "unwired_folder_ambiguous",
         }
     }
 
@@ -123,6 +131,8 @@ impl DoctorIssueKind {
             Self::DeadRef => &["at", "refs"],
             Self::StartAfterDue => &["task", "start_on", "due_on"],
             Self::ProjectWithoutFolder => &["project", "name"],
+            Self::UnwiredFolder => &["dir", "tools"],
+            Self::UnwiredFolderAmbiguous => &["dir"],
         }
     }
 }
@@ -202,6 +212,7 @@ pub fn report(store: &Store) -> crate::error::Result<DoctorResult> {
         .chain(pointer_issues(store))
         .chain(orphan_binding_issues(store))
         .chain(project_without_folder_issues(store)?)
+        .chain(unwired_folder_issues(store)?)
         .chain(store.dead_refs()?);
     for issue in env {
         result.summary.warning += 1;
@@ -366,6 +377,55 @@ fn project_without_folder_issues(store: &Store) -> crate::error::Result<Vec<Doct
         .collect())
 }
 
+/// Warns about a bound folder that **does not start its AI on amenbo** (`AMB-D-535`). An AI launched
+/// there reads the guidance only if it happens to read the managed block; the session-start hook is what
+/// makes it read at every session, and amenbo writes no settings file, so the wiring lands only when a
+/// person hands their AI the text (`AMB-D-440`).
+///
+/// The warning already printed on every command can only name a tool the folder shows a trace of — a
+/// standing line about a tool a reader does not use is one they cannot act on. A folder that traces
+/// nothing therefore never gets a line at all, and that is exactly the folder nobody comes back to. Here
+/// there is room for both, which is why the sweep is the place the whole list is read
+/// (the GUI's is its project settings screen).
+///
+/// The two kinds split where the fix does: one names the tools waiting, the other can only ask the reader
+/// which one they use. What silences either is core's own judgement ([`crate::harness::setup_notice`]) —
+/// a refusal, or the wiring landing — and a project that said no stays silent here too.
+///
+/// Walked per project, because consent is recorded per project; a folder claimed by two of them is
+/// reported once, by the first that still has something to say. Folders that are gone are skipped: there
+/// is nothing to paste into one.
+fn unwired_folder_issues(store: &Store) -> crate::error::Result<Vec<DoctorIssue>> {
+    use crate::harness;
+    let cmd = crate::config::Paths::command_name();
+    let registry = store.bindings();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut issues = Vec::new();
+    for project in store.project_list(false)?.projects {
+        let consent = store.harness_consent(project.id)?;
+        for dir in registry.dirs_for_project(project.id) {
+            if seen.contains(dir) || !std::path::Path::new(dir).is_dir() {
+                continue;
+            }
+            let Some(notice) = harness::setup_notice(&harness::probe(std::path::Path::new(dir), cmd), consent)
+            else {
+                continue;
+            };
+            seen.insert(dir);
+            issues.push(match notice.unwired.as_slice() {
+                [] => DoctorIssue::new(DoctorIssueKind::UnwiredFolderAmbiguous, dir, &[("dir", dir)]),
+                named => {
+                    // The token `agent-hook snippet` takes, not the product's own spelling: what the
+                    // sentence names is what the reader types next.
+                    let tools = named.iter().map(|one| one.id).collect::<Vec<_>>().join(", ");
+                    DoctorIssue::new(DoctorIssueKind::UnwiredFolder, dir, &[("dir", dir), ("tools", &tools)])
+                }
+            });
+        }
+    }
+    Ok(issues)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -376,9 +436,12 @@ mod tests {
         p
     }
 
-    /// A store holding one project **with a folder** — a store nothing is wrong with. The folder is what
-    /// makes it that: a project no folder leads to is itself an issue ([`project_without_folder_issues`]),
-    /// so a fixture without one would put every test that starts from "nothing raised yet" one warning down.
+    /// A store holding one project **with a folder** — a store nothing is wrong with. Two things make it
+    /// that: a project no folder leads to is itself an issue ([`project_without_folder_issues`]), and a
+    /// folder that does not start its AI on amenbo is another ([`unwired_folder_issues`]), so a fixture
+    /// missing either would put every test that starts from "nothing raised yet" a warning down. The
+    /// wiring is answered with a refusal rather than a settings file: it is the shortest way to say this
+    /// fixture is not about the hook.
     fn store_with_project(tag: &str) -> (Store, i64) {
         let mut store = Store::open_at(crate::config::Paths::at(tmp(&format!("home-{tag}")))).unwrap();
         let project = store
@@ -390,6 +453,7 @@ mod tests {
             })
             .unwrap();
         let id = project.id;
+        store.set_harness_consent(id, crate::harness::Consent::answered(false)).unwrap();
         bind_folder(&store, id, &format!("{tag}-home-dir"));
         (store, id)
     }
@@ -425,8 +489,52 @@ mod tests {
                 "dead_ref",
                 "start_after_due",
                 "project_without_folder",
+                "unwired_folder",
+                "unwired_folder_ambiguous",
             ]
         );
+    }
+
+    /// A folder whose AI does not start on amenbo is raised until the wiring lands or the reader says no —
+    /// and which of the two kinds it is turns on whether the folder shows any sign of the tool used there,
+    /// because that is what decides whether the fix can name one.
+    #[test]
+    fn a_folder_whose_ai_does_not_start_on_amenbo_is_raised_until_it_is_answered() {
+        let (store, pid) = store_with_project("unwired");
+        let of_kind = |store: &Store, kind: DoctorIssueKind| -> Vec<DoctorIssue> {
+            report(store).unwrap().issues.into_iter().filter(|i| i.kind == kind).collect()
+        };
+        // The fixture answered the question with a no, which is one of the two things that end this.
+        assert!(of_kind(&store, DoctorIssueKind::UnwiredFolderAmbiguous).is_empty());
+
+        store.clear_harness_consent(pid).unwrap();
+        let raised = of_kind(&store, DoctorIssueKind::UnwiredFolderAmbiguous);
+        assert_eq!(raised.len(), 1, "unanswered, the bound folder is raised: {raised:?}");
+        assert_eq!(raised[0].severity, "warning", "an unwired folder works exactly as it always did");
+        assert!(
+            of_kind(&store, DoctorIssueKind::UnwiredFolder).is_empty(),
+            "with no trace of a tool, nothing can be named",
+        );
+
+        // The folder now shows it is used with a tool from the catalog, still unwired: the sentence can
+        // name what the reader is waiting on.
+        let tool = &crate::harness::HARNESSES[0];
+        let dir = store.bindings().dirs_for_project(pid)[0].to_string();
+        std::fs::create_dir_all(std::path::Path::new(&dir).join(tool.home)).unwrap();
+        let named = of_kind(&store, DoctorIssueKind::UnwiredFolder);
+        assert_eq!(named.len(), 1, "the traced tool is what gets named: {named:?}");
+        assert_eq!(named[0].params.get("tools").map(String::as_str), Some(tool.id));
+        assert_eq!(named[0].params.get("dir").map(String::as_str), Some(dir.as_str()));
+        assert!(
+            of_kind(&store, DoctorIssueKind::UnwiredFolderAmbiguous).is_empty(),
+            "a folder is one or the other, never both",
+        );
+
+        // The other thing that ends it: a refusal. Consent is not wiring, so only a no silences it here.
+        store.set_harness_consent(pid, crate::harness::Consent::answered(true)).unwrap();
+        assert_eq!(of_kind(&store, DoctorIssueKind::UnwiredFolder).len(), 1, "a yes is not the wiring");
+        store.set_harness_consent(pid, crate::harness::Consent::answered(false)).unwrap();
+        assert!(of_kind(&store, DoctorIssueKind::UnwiredFolder).is_empty(), "a no ends the report");
     }
 
     /// A project no folder leads to cannot be operated by anyone, and the board that says so is only read by

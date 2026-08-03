@@ -689,5 +689,13 @@ export const de: Translation = {
       message: "Projekt {name} (#{project}) hat keinen Ordner — nichts kann damit arbeiten, und eine KI sieht es überhaupt nicht.",
       fix: "Füge einen Ordner in Projekteinstellungen > Ordner hinzu.",
     },
+    unwired_folder: {
+      message: "{dir} startet seine KI ohne amenbo: {tools} ist hier eingerichtet und nicht so verdrahtet, dass es beim Sitzungsstart läuft.",
+      fix: "Kopiere in Projekteinstellungen > Ordner den angebotenen Text und gib ihn der KI, die du in diesem Ordner nutzt — amenbo schreibt keine Einstellungsdatei für dich.",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir} startet seine KI ohne amenbo und zeigt kein Zeichen davon, welches Werkzeug dort genutzt wird.",
+      fix: "Wähle in Projekteinstellungen > Ordner das Werkzeug, das du dort nutzt, und gib dessen Text deiner KI.",
+    },
   },
 };

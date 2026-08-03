@@ -699,5 +699,13 @@ export const es: Translation = {
       message: "El proyecto {name} (#{project}) no tiene ninguna carpeta: nada puede operarlo y una IA ni siquiera lo ve.",
       fix: "Añade una carpeta en Ajustes del proyecto > Carpetas.",
     },
+    unwired_folder: {
+      message: "{dir} arranca su IA sin amenbo: {tools} está configurado aquí y no está conectado para ejecutarse al iniciar la sesión.",
+      fix: "En Ajustes del proyecto > Carpetas, copia el texto que se ofrece y dáselo a la IA que usas en esa carpeta: amenbo no escribe ningún archivo de configuración por ti.",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir} arranca su IA sin amenbo y no muestra señal de qué herramienta se usa allí.",
+      fix: "En Ajustes del proyecto > Carpetas, elige la herramienta que usas allí y dale su texto a esa IA.",
+    },
   },
 };

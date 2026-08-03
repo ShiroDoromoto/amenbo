@@ -673,5 +673,13 @@ export const nl: Translation = {
       message: "Project {name} (#{project}) heeft geen map — er is nergens vandaan mee te werken, en een AI ziet het helemaal niet.",
       fix: "Voeg een map toe in Projectinstellingen > Mappen.",
     },
+    unwired_folder: {
+      message: "{dir} start zijn AI zonder amenbo: {tools} staat hier en is niet aangesloten om bij het begin van een sessie te draaien.",
+      fix: "Kopieer in Projectinstellingen > Mappen de aangeboden tekst en geef die aan de AI die je in die map gebruikt — amenbo schrijft geen instellingenbestand voor je.",
+    },
+    unwired_folder_ambiguous: {
+      message: "{dir} start zijn AI zonder amenbo, en laat geen spoor zien van welk gereedschap daar wordt gebruikt.",
+      fix: "Kies in Projectinstellingen > Mappen het gereedschap dat je daar gebruikt en geef de tekst ervan aan die AI.",
+    },
   },
 };

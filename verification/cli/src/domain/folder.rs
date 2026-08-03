@@ -4,7 +4,7 @@
 
 use amenbo_scenario::{Args, Domain};
 
-use crate::{opt_bool, unmapped, Driver, Outcome};
+use crate::{opt_bool, req_i64, unmapped, Driver, Outcome};
 
 impl Driver {
     pub(crate) fn folder_action(&mut self, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
@@ -35,7 +35,8 @@ impl Driver {
                 let dir = self.folder(with)?;
                 let path = dir.to_string_lossy().into_owned();
                 // Removing a pointer asks first; the driver is unattended, so it answers up front.
-                self.run_json(&["unbind", "--dir", &path, "--yes", "--json"])?;
+                let v = self.run_json(&["unbind", "--dir", &path, "--yes", "--json"])?;
+                self.last_unbind = Some(v);
                 Ok(Outcome::action(format!("unbound {path}")))
             }
             // Leave the folder's pointer in the shape an older amenbo wrote: a `project_id` that is
@@ -94,6 +95,29 @@ impl Driver {
                             (true, Some(named)) => format!("project {named}"),
                             (true, None) => "a binding".to_string(),
                             (false, _) => "none".to_string(),
+                        },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            // What the unbind just before this one answered about the project it took the folder from.
+            // Read off that answer and not off the store: with the pointer gone there is only the
+            // state left behind, which is the same whether the answer said a word about it or not.
+            "folders-left" => {
+                let want = req_i64(with, "left")?;
+                let last = self
+                    .last_unbind
+                    .as_ref()
+                    .ok_or("no folder has been unbound yet, so there is no answer to read the count off")?;
+                let left = last["binding"]["project_folders_left"].as_i64();
+                let pass = left == Some(want);
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "the unbind answered {} (expected {want}, {})",
+                        match left {
+                            Some(n) => format!("{n} folder(s) left on the project"),
+                            None => "nothing about how many folders are left".to_string(),
                         },
                         if pass { "as expected" } else { "MISMATCH" }
                     ),

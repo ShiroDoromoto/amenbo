@@ -697,6 +697,17 @@ const REGISTRY: &[OpSpec] = &[
     // which is answered by a resync finding nothing left to write.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "bound", required: &["dir"], refs: &["project"], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "resynced", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // How many folders the project the last `unbind` was taken from has left. Taking the last one off
+    // goes through like any other — re-homing folders means taking them all off before putting them
+    // back, so a count that refused would force an order rather than protect anything — and what
+    // stands in for the refusal is the answer saying what is left. `left: 0` is that line under test.
+    //
+    // It has to **follow its unbind**, the way `plugin returned` follows its call: the count is part
+    // of what that command answered, and afterwards there is only the state it left, which reads the
+    // same whether the answer said anything about it or not. The reading is taken on the number and
+    // not on the sentence beside it: the same fact is published both ways on purpose, so that a
+    // machine has something to read without parsing a line written in the reader's own language.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "folders-left", required: &["left"], refs: &[], strings: &[], binds: false },
     // The warning a project with no folder linked carries on its own board, and the one move that ends
     // it standing beside it. How much work the board holds is not part of the question: a project
     // carrying forty cards and no folder is exactly the one nothing else on the screen speaks about, so

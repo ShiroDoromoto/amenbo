@@ -640,8 +640,6 @@ const err: Partial<Record<ErrorCode, string>> = {
     "“{name}” was installed from {url}, which did not answer and has nothing cached, so there is nothing to compare its build against.",
   not_found_plugin_build_delisted:
     "“{name}” was installed from {url}, which no longer lists it, so there is no build to update to.",
-  not_found_plugin_rollback_build:
-    "“{name}” has no earlier build kept: it was never updated, or a rollback has already used the one that was.",
   conflict_plugin_installed: "“{name}” is already installed on this device.",
   conflict_plugin_install_broken:
     "A broken install of “{name}” is in the way ({reason}). Remove it first.",
@@ -696,10 +694,6 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_plugin_manifest_names_other: "“{name}” has a manifest describing another plugin (“{other}”).",
   invalid_plugin_program_absent: "“{name}” has no program at {path}.",
   invalid_plugin_update_platform: "Plugins cannot name {os}, so “{name}” cannot be updated here.",
-  invalid_plugin_rollback_manifest_absent:
-    "“{name}” kept an earlier program but no description beside it ({reason}), and a rollback needs both.",
-  invalid_plugin_rollback_manifest_unparsable:
-    "The description kept beside “{name}”'s earlier build will not read ({reason}).",
   invalid_plugin_project_required:
     "This plugin is switched on per project, and no project is in context.",
   invalid_plugin_settings_required:

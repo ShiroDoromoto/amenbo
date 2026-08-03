@@ -92,7 +92,6 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_found_plugin_build_source_gone",
   "not_found_plugin_build_source_silent",
   "not_found_plugin_build_delisted",
-  "not_found_plugin_rollback_build",
   "conflict_plugin_installed",
   "conflict_plugin_install_broken",
   "invalid_catalog_unreadable",
@@ -128,8 +127,6 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_plugin_manifest_names_other",
   "invalid_plugin_program_absent",
   "invalid_plugin_update_platform",
-  "invalid_plugin_rollback_manifest_absent",
-  "invalid_plugin_rollback_manifest_unparsable",
   "invalid_plugin_project_required",
   "invalid_plugin_settings_required",
   "invalid_plugin_config_value_too_large",
@@ -144,8 +141,23 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "plugin_incompatible_floor_unreadable",
 ] as const;
 
-/** Every code core can emit (`amenbo_core::ErrorCode::ALL`), at both grains. */
-export const CORE_ERROR_CODES = [...CORE_FAMILY_ERROR_CODES, ...CORE_SENTENCE_ERROR_CODES] as const;
+/** Core codes the webview never receives, because the only door they come through is the CLI. Putting a
+ * plugin back on its earlier build is that door and nothing else (`AMB-D-522`): the screen offers no way
+ * to ask for it, so nothing on it can be refused for these reasons. They are listed because the parity
+ * test reads every code core declares, not because a reader ever meets one — which is also why they owe
+ * no template. A code that reaches a screen belongs in the sentence list instead, with its prose. */
+export const CORE_CLI_ONLY_ERROR_CODES = [
+  "not_found_plugin_rollback_build",
+  "invalid_plugin_rollback_manifest_absent",
+  "invalid_plugin_rollback_manifest_unparsable",
+] as const;
+
+/** Every code core can emit (`amenbo_core::ErrorCode::ALL`), at every grain. */
+export const CORE_ERROR_CODES = [
+  ...CORE_FAMILY_ERROR_CODES,
+  ...CORE_SENTENCE_ERROR_CODES,
+  ...CORE_CLI_ONLY_ERROR_CODES,
+] as const;
 
 /** GUI-specific codes the Tauri command layer raises via `CmdError::coded(...)` — contexts core knows nothing about.
  * They come from the guards in `project_add_folder`, which makes a folder into a new project (an existing

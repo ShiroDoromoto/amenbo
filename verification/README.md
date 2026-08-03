@@ -300,7 +300,8 @@ exec 3>&-
 
 ## Scenario format
 
-A scenario is an `id`, a human `title`, an optional `description`, and an ordered list of steps
+A scenario is an `id`, a human `title`, an optional `description`, an optional `given` (the world
+the roads start from), and an ordered list of steps
 under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
 `comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` / `plugin`) and an
@@ -427,6 +428,35 @@ keeps, which is the only place a reorder is visible. Its neighbour `narrowed` as
 screen puts instead: which of the cards drawn a moment ago the words typed over them left standing.
 It names no filter because there is none to name — the words travel as words, and they are matched
 over the whole record, including faces a card does not show.
+
+### `given:` — the world a road starts from
+
+Some roads stand on records the road itself never makes: a plugin already installed, a catalog
+already registered, a project that is simply there. Left unwritten, that is a precondition living in
+whoever prepared the screen last — an operator reading the file cannot tell what to put in place,
+and no driver can put it there for them.
+
+`given:` is where it is written. It carries **actions**, in the same shape a road's steps have, and
+what it names with `as:` is in scope on **both** roads — the world belongs to the scenario, not to
+one of its roads:
+
+```yaml
+given:
+  - { type: action, domain: plugin, op: install, with: { name: worktree } }
+  - { type: action, domain: task, op: create, with: { title: SEED }, as: seed }
+steps_gui:
+  - { type: assert, domain: task, op: listed, with: { filter: "status:todo", target: seed, present: true } }
+```
+
+The driver stands it up before it walks, and the line it may not cross is the screen's own moves: an
+op is allowed here only if it is one a driver can reach without the screen (a second closed list in
+`core/src/lib.rs`, cut out of the registry). Opening a card, answering the question it puts, typing
+words over a listing — those are what a screen road is watching, and a premise that carried them out
+would leave the road proving something already done. For the same reason a premise takes no
+`assert` (nothing is being proved yet) and no `refused:` (a refusal leaves nothing standing).
+
+A premise is not a road: a file carrying a world and no steps is refused like any other file nothing
+walks.
 
 ### `refused:` — the step that is right to fail
 

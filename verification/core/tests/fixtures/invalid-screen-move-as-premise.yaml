@@ -1,0 +1,17 @@
+# Rejected: `folder open-existing-card` is a move on the screen, and a premise is the world the
+# screen road starts from. A driver that carried this out would be walking the road it is meant to
+# be preparing — and the step after it would read green over an act nobody watched.
+id: invalid-screen-move-as-premise
+title: a premise that carries out the screen's own move
+given:
+  - type: action
+    domain: folder
+    op: open-existing-card
+    with:
+      dir: shared
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SEED

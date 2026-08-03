@@ -38,6 +38,14 @@ pub struct Scenario {
     /// Optional longer prose (rationale, preconditions).
     #[serde(default)]
     pub description: Option<String>,
+    /// The world that has to be standing before any road is walked — the records a road takes for
+    /// granted and does not make: a project that is already there, a catalog already registered, a
+    /// plugin already installed, a folder already linked. Written as actions, and left to the driver
+    /// to stand up before it starts, so an operator reads what a screen needs rather than guessing
+    /// it. What it may not carry is the screen's own moves: those are what a road is for, and a
+    /// premise that carried them would verify itself.
+    #[serde(default)]
+    pub given: Vec<Step>,
     /// The road the CLI driver walks. Empty means the CLI is not asked to walk one.
     #[serde(default)]
     pub steps_cli: Vec<Step>,
@@ -895,6 +903,40 @@ fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {
         .find(|s| s.kind == kind && s.domain == domain && s.op == op)
 }
 
+/// The ops a premise may use — the second closed list, cut out of the first. What separates them is
+/// not the op's shape but who carries it out: a premise is stood up by a driver before a road
+/// begins, and everything on it is a record the store would hold whether or not this scenario ran.
+/// A screen's own moves are the other half of the vocabulary — opening a card, answering the
+/// question it puts, typing words over a listing — and a premise that stood those up would be
+/// carrying out the very steps the road exists to watch.
+///
+/// It stays short on purpose: an entry here is a claim that a driver can reach this state without
+/// the screen, so the list grows one line at a time, beside the driver that learned to seed it.
+const PREMISE_OPS: &[(Domain, &str)] = &[
+    // Where work is filed, and the work itself in whatever state the screen needs to find it.
+    (Domain::Project, "create"),
+    (Domain::Task, "create"),
+    (Domain::Task, "assign"),
+    (Domain::Task, "status"),
+    (Domain::Task, "update"),
+    // A folder already answering for a project — what a screen showing bindings has to be looking at.
+    (Domain::Folder, "init"),
+    (Domain::Folder, "bind"),
+    // A catalog registered and a plugin already on the machine. Both are worlds a screen only reads:
+    // the browsing view draws rows a catalog served, and a plugin's row is there once one is
+    // installed. Standing a catalog of the run's own comes with them, since a catalog is trusted on
+    // the key it serves and there is no other way to have one to register.
+    (Domain::Plugin, "catalog-stand"),
+    (Domain::Plugin, "catalog-add"),
+    (Domain::Plugin, "install"),
+    (Domain::Plugin, "enable"),
+];
+
+/// Whether this op may stand a world up (see [`PREMISE_OPS`]).
+fn may_stand(domain: Domain, op: &str) -> bool {
+    PREMISE_OPS.iter().any(|(d, o)| *d == domain && *o == op)
+}
+
 // ---------------------------------------------------------------------------
 // Loading
 // ---------------------------------------------------------------------------
@@ -932,8 +974,9 @@ pub fn load_file(path: impl AsRef<Path>) -> Result<Scenario, LoadError> {
 // Semantic validation
 // ---------------------------------------------------------------------------
 
-/// A single semantic problem, anchored to the step that carries it (0-based) inside the driver's
-/// list it sits in. Both are `None` for a scenario-wide problem such as an empty id.
+/// A single semantic problem, anchored to the step that carries it (0-based) inside the list it
+/// sits in. A step on no driver is one of the premise's, since the world belongs to the scenario
+/// rather than to a road; both are `None` for a scenario-wide problem such as an empty id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationError {
     /// Whose road the step is on. Two lists number from one apiece, so a step number alone would
@@ -947,6 +990,9 @@ impl fmt::Display for ValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match (self.driver, self.step) {
             (Some(d), Some(i)) => write!(f, "{} step {}: {}", d.steps_key(), i + 1, self.message),
+            // A step on no driver's road is one of the premise's: the world belongs to the scenario
+            // rather than to either road, which is what having no driver says.
+            (None, Some(i)) => write!(f, "given step {}: {}", i + 1, self.message),
             _ => write!(f, "{}", self.message),
         }
     }
@@ -996,8 +1042,12 @@ impl Scenario {
             errs.push(whole("scenario has no steps — give at least one of `steps_cli` / `steps_gui` a road"));
         }
 
+        // The premise is walked first, and what it names is in scope on both roads: a card the world
+        // was stood up with is the card a road then points at, and it is named the way any earlier
+        // step is named.
+        let standing = self.validate_list(None, &self.given, &HashSet::new(), &mut errs);
         for driver in Driver::ALL {
-            self.validate_steps(driver, &mut errs);
+            self.validate_list(Some(driver), self.steps(driver), &standing, &mut errs);
         }
 
         if errs.is_empty() {
@@ -1007,13 +1057,33 @@ impl Scenario {
         }
     }
 
-    /// One driver's road, checked end to end.
-    fn validate_steps(&self, driver: Driver, errs: &mut Vec<ValidationError>) {
-        let at =
-            |i: usize, m: String| ValidationError { driver: Some(driver), step: Some(i), message: m };
+    /// One list of steps, checked end to end — a driver's road, or (with no driver) the premise that
+    /// stands before both. `standing` is what the premise already named; the bindings this list
+    /// introduces come back, which is how the premise hands its names on.
+    ///
+    /// Two rules are the premise's alone, and both say the same thing: what stands before a road is
+    /// a world, not the walking of it. So it takes actions rather than asserts — nothing is being
+    /// proved yet — and only ops that can be reached without the screen ([`PREMISE_OPS`]).
+    fn validate_list<'a>(
+        &self,
+        driver: Option<Driver>,
+        steps: &'a [Step],
+        standing: &HashSet<&'a str>,
+        errs: &mut Vec<ValidationError>,
+    ) -> HashSet<&'a str> {
+        let at = |i: usize, m: String| ValidationError { driver, step: Some(i), message: m };
+        let premise = driver.is_none();
 
-        let mut bound: HashSet<&str> = HashSet::new();
-        for (i, step) in self.steps(driver).iter().enumerate() {
+        let mut bound: HashSet<&str> = standing.clone();
+        for (i, step) in steps.iter().enumerate() {
+            if premise && step.kind() == Kind::Assert {
+                errs.push(at(
+                    i,
+                    "a premise stands a world up rather than proving anything — `given` takes actions alone"
+                        .to_string(),
+                ));
+                continue;
+            }
             let spec = match lookup(step.kind(), step.domain(), step.op()) {
                 Some(s) => s,
                 None => {
@@ -1029,6 +1099,14 @@ impl Scenario {
                     continue;
                 }
             };
+
+            if premise && !may_stand(step.domain(), step.op()) {
+                errs.push(at(i, format!(
+                    "op `{}` cannot stand a world up — a premise is what a driver arranges before the road, and this is a step on one",
+                    step.op()
+                )));
+                continue;
+            }
 
             for key in spec.required {
                 if !step.with().contains_key(*key) {
@@ -1076,7 +1154,9 @@ impl Scenario {
             // the refusal has to carry, so a step written against one guard cannot pass on another
             // guard's refusal.
             if let Some(v) = step.with().get("refused") {
-                if step.kind() == Kind::Assert {
+                if premise {
+                    errs.push(at(i, "a premise is the world a road starts from, so it cannot be an operation that was turned away — nothing stands up".to_string()));
+                } else if step.kind() == Kind::Assert {
                     errs.push(at(i, "`refused` belongs on an action — an assert already carries a verdict".to_string()));
                 } else if v.as_str().is_none() {
                     errs.push(at(i, "`refused` must be the error code the operation is expected to be rejected with".to_string()));
@@ -1096,6 +1176,9 @@ impl Scenario {
                 }
             }
         }
+        // What this list named, for whoever walks after it. A road's own go nowhere — the two are
+        // never walked together — and the premise's are what both roads then stand on.
+        bound
     }
 }
 
@@ -1501,5 +1584,168 @@ steps_cli:
         let s = load_str("id: x\ntitle: y\nsteps_cli: []\nsteps_gui: []\n").unwrap();
         let errs = s.validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("no steps")));
+    }
+
+    const WITH_PREMISE: &str = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Greenhouse }
+    as: greenhouse
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+steps_gui:
+  - type: assert
+    domain: task
+    op: listed
+    with: { filter: "status:todo", target: seed, present: true }
+"#;
+
+    /// What the premise stands up is named by the road that walks afterwards — that is the whole
+    /// point of writing it down rather than leaving it to whoever prepares the screen.
+    #[test]
+    fn a_road_names_what_the_premise_stood_up() {
+        let s = load_str(WITH_PREMISE).expect("parses");
+        s.validate().expect("valid");
+        assert_eq!(s.given.len(), 2);
+    }
+
+    /// The premise's names reach **both** roads, unlike a road's own: the world is the scenario's,
+    /// and each road walks from it.
+    #[test]
+    fn both_roads_stand_on_the_premise() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+steps_cli:
+  - type: action
+    domain: task
+    op: assign
+    with: { target: seed, assignee: me-ai }
+steps_gui:
+  - type: action
+    domain: task
+    op: assign
+    with: { target: seed, assignee: me-ai }
+"#;
+        load_str(yaml).unwrap().validate().expect("valid");
+    }
+
+    /// A premise proves nothing — it is the state a road starts from. An assert written there would
+    /// be a verdict nobody reads, since no driver reports on the world it stood up.
+    #[test]
+    fn an_assert_in_the_premise_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: assert
+    domain: task
+    op: listed
+    with: { filter: "status:todo", present: true }
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("takes actions alone")));
+    }
+
+    /// The line the premise cannot cross: a screen's own move is what the road is watching, so a
+    /// premise that carried it out would leave the road proving something already done.
+    #[test]
+    fn a_screen_move_cannot_stand_in_the_premise() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: folder
+    op: open-existing-card
+    with: { dir: shared }
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("cannot stand a world up")));
+    }
+
+    /// A refusal leaves nothing standing, so it cannot be a premise: a driver that seeded one would
+    /// hand the road an empty world and report having prepared it.
+    #[test]
+    fn a_refusal_cannot_be_a_premise() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T, refused: out_of_reach }
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("nothing stands up")));
+    }
+
+    /// A premise is not a road. A file carrying a world and no way through it is walked by nobody,
+    /// which is the same rot an empty road is refused for.
+    #[test]
+    fn a_premise_alone_is_not_a_road() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("no steps")));
+    }
+
+    /// A problem in the premise is reported as the premise's, not as some road's step: the two lists
+    /// number from one apiece, and a reader fixing it has to be told which file section to open.
+    #[test]
+    fn a_premise_problem_names_the_premise() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: task
+    op: assign
+    with: { target: ghost, assignee: me-ai }
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.to_string().starts_with("given step 1:")), "{errs:?}");
     }
 }

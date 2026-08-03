@@ -10,8 +10,11 @@ import { isClosed, STATUS_COLUMNS } from "../core/status";
 import { Pager, usePager } from "../components/Pager";
 import { useTaskPage, useTaskSearchIds } from "../core/reads";
 import { asTyped, isEnterSubmit } from "../core/keys";
-import { ProjectFirstLoop } from "../components/FirstLoop";
-import { AgentHookWiringRow } from "./AgentHookWiringRow";
+import { FirstLoop } from "../components/FirstLoop";
+import { AgentHookWiringRow, useAgentHookWiring } from "./AgentHookWiringRow";
+import { LinkFolderNotice } from "./LinkFolderNotice";
+import { pickBoardNotice } from "./boardNotice";
+import { useBoundFolders } from "../core/boundFolders";
 import { inTauri } from "../core/snapshot";
 import { DecisionsScreen } from "./DecisionsScreen";
 import { CalendarView } from "./CalendarView";
@@ -103,6 +106,12 @@ export function BoardScreen({
   // layouts share this ref. useBoardFlip is inert outside Tauri and when its flag is off.
   const boardRef = useRef<HTMLDivElement>(null);
   const armMove = useBoardFlip(boardRef, draggingId);
+  // What this project has left to wire. Read here rather than inside the row, because whether the row is
+  // standing is one of the inputs to which notice the board draws (see `notice` below).
+  const wiring = useAgentHookWiring(projectId);
+  // The project's folders, for the same reason: whether it has one an AI could be started in decides
+  // which notice is drawn, and the first loop needs the folder itself to speak about.
+  const folders = useBoundFolders(projectId);
   // The status pull-down on a card is a local move we do want to animate (unlike a drag): arm the flourish just
   // before the write, so the card slides to its new column. A stable ref, to keep the cards' memo intact.
   const setStatusAnimated = useCallback((id: number, status: Status, reason?: string) => {
@@ -178,12 +187,29 @@ export function BoardScreen({
   // violation throws during render and blacks out the screen). groupingDim/dims/tasks above are null-safe through
   // `project?.dimensions ?? []`, so they come out empty and reach no JSX before the guard returns the placeholder.
   const listPager = usePager(tasks, `${view}|${selectionKey(sel)}|${rawQ}`);
-  // A project with nothing in it yet gets the first loop instead of empty columns (`AMB-D-414`) — the
-  // one push that puts something on it. The question is about the project, not about the view: `all`
-  // is the project's whole page, narrowed by nothing at all, so an empty `all` is the project itself
-  // being empty, where an empty `tasks` may only be the search or the filter chips biting. Outside
-  // Tauri there is no folder to open a terminal in, so the browser iteration keeps its bare columns.
-  const untouched = all.length === 0 && inTauri();
+  // The one standing notice this board carries (`AMB-D-535`). Every candidate answers for itself whether
+  // it has something to say, and the ordering — which of them wins when more than one does — is
+  // `pickBoardNotice`'s alone.
+  //
+  // `linkFolder`: no folder an AI could be started in, so nothing here is reachable from a session
+  // (`AMB-D-533`). Asked of the folders and not of the tasks — a project carrying tasks and no folder is
+  // exactly the case nothing else on the screen speaks about. Nothing is drawn until the read comes back.
+  //
+  // `firstLoop`: a project with nothing in it yet gets the first loop instead of empty columns
+  // (`AMB-D-414`) — the one push that puts something on it. The question is about the project, not about
+  // the view: `all` is the project's whole page, narrowed by nothing at all, so an empty `all` is the
+  // project itself being empty, where an empty `tasks` may only be the search or the filter chips biting.
+  // Outside Tauri there is no folder to open a terminal in, so the browser iteration keeps its bare columns.
+  const notice = pickBoardNotice({
+    linkFolder: inTauri() && folders.answered && folders.live.length === 0,
+    firstLoop: all.length === 0 && inTauri(),
+    agentHookWiring: wiring.waiting.length > 0,
+  });
+  // Whether the columns give way to the notice, rather than standing under it. They give way only where
+  // there is nothing in them and the notice is the whole of what there is to do here — empty columns under
+  // a "link a folder" warning is a screen saying nothing twice. A project that holds tasks keeps its board
+  // whatever is standing above it: a notice is a band over the work, not a replacement for it.
+  const bareBoard = all.length === 0 && (notice === "linkFolder" || notice === "firstLoop");
   if (!project) return <div className="placeholder">{t("board.notFound")}</div>;
   const setDim = (id: string, value: string) => setSel((prev) => ({ ...prev, [id]: value }));
 
@@ -221,15 +247,11 @@ export function BoardScreen({
     <>
       {headerSlot && createPortal(toolbar, headerSlot)}
 
-      {/* Above both tabs, because it is about the project and not about what is being looked at in it.
-          It draws nothing where every folder of this project is wired, or where the project said no
-          (`AMB-D-459`, `AMB-D-460`).
-          Nor on a project with nothing in it yet, where the first loop is standing: both are text to
-          hand an AI of the reader's, they look alike, and neither says which comes first — so the
-          board that has never held a task carries the loop alone (`AMB-D-516`). The wiring keeps: it
-          stands until the folders are wired, while the first loop is spent by the first task to land,
-          and that same task is what puts this row on the board. */}
-      {!untouched && <AgentHookWiringRow projectId={projectId} />}
+      {/* Above both tabs, because a notice is about the project and not about what is being looked at in
+          it. At most one of them is here, and the one that is won the ordering (`AMB-D-535`); what it
+          beat is not lost with it — project settings lists every folder still waiting to be wired. */}
+      {notice === "linkFolder" && <LinkFolderNotice onLinkFolder={onOpenSettings} />}
+      {notice === "agentHookWiring" && <AgentHookWiringRow projectId={projectId} wiring={wiring} />}
 
       {tab === "decisions" && (
         <DecisionsScreen
@@ -238,13 +260,15 @@ export function BoardScreen({
           onSelectDecision={onSelectDecision}
         />
       )}
-      {tab === "tasks" && untouched && (
+      {/* The loop speaks about a folder, and `linkFolder` standing ahead of it is what guarantees there
+          is one to speak about. */}
+      {tab === "tasks" && notice === "firstLoop" && folders.live[0] && (
         <div className="board__firstloop">
-          <ProjectFirstLoop projectId={projectId} onLinkFolder={onOpenSettings} />
+          <FirstLoop dir={folders.live[0].path} />
         </div>
       )}
 
-      {tab === "tasks" && !untouched && (
+      {tab === "tasks" && !bareBoard && (
       <>
       <div className="filterbar">
         <input

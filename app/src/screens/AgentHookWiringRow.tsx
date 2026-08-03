@@ -1,6 +1,10 @@
-// What this project still has to wire, standing on the project's own screen — and the whole of what the
+// What this project still has to wire, standing on the project's own screen — the acting face of what the
 // GUI has to say about the session-start hook (`AMB-D-459`, `AMB-D-460`). It reports the work, explains
 // what the text does, hands the text over, and takes the refusal that ends it.
+//
+// It is one of the board's standing notices and the board carries only one (`AMB-D-535`), so it is not
+// always the one drawn. What it loses to does not take the work with it: project settings lists the
+// folders waiting whatever the board is showing, and that is the looking-over face to this acting one.
 //
 // **Consent is per project, wiring is per folder — and that gap is what this closes.** A reader who
 // answered yes and pasted into one of four folders is, on the record, done: the question has an answer and
@@ -22,23 +26,59 @@
 //
 // The text is shown rather than hidden behind the copy button: what it asks for is an edit to a file the
 // reader owns, made by an AI of theirs, so the moment to read it is before it is handed over.
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { answerAgentHookOffer, fetchAgentHookProjectWiring } from "../core/mutations";
 import { errText, t, tf } from "../core/i18n";
 import type { AgentHookWiringDto } from "../bindings/bindings";
 
+/** What a project still has to wire, and the row's way of saying a refusal has landed. */
+export type AgentHookWiring = {
+  /** The folders waiting, grouped by harness. Empty is nothing left to say. */
+  waiting: AgentHookWiringDto[];
+  /** Called once a refusal is recorded — the report ends, and the reading is not repeated to learn that. */
+  answered: () => void;
+};
+
 /**
- * `projectId` is the project being looked at — the row answers for that one alone, which is what lets it
- * name folders the reader can walk to from here, and what the refusal is recorded against.
+ * What this project has left to wire, read once for whoever needs it.
+ *
+ * It is a Hook rather than the row's own state because **whether the row has anything to say is part of
+ * the board's ordering** (`pickBoardNotice`): the board draws one standing notice, and it cannot pick
+ * between them without knowing which of them are standing. Reading it here also keeps it to one read where
+ * two surfaces want the answer.
  *
  * It reads settings files on disk, so it is fetched when the project changes and not on every store tick:
- * a task moving on the board cannot wire a folder. A failure to read is swallowed and draws nothing — a
- * report that could not be made is not a report of trouble. A failure to *record* is not swallowed: the
- * row stays up with the reason on it, because a row that vanished on a write that never landed would
- * report an answer nobody has.
+ * a task moving on the board cannot wire a folder. A failure to read is swallowed and reports nothing — a
+ * report that could not be made is not a report of trouble.
  */
-export function AgentHookWiringRow({ projectId }: { projectId: number }) {
+export function useAgentHookWiring(projectId: number): AgentHookWiring {
   const [waiting, setWaiting] = useState<AgentHookWiringDto[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    setWaiting([]);
+    fetchAgentHookProjectWiring(projectId)
+      .then((rows) => alive && setWaiting(rows))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [projectId]);
+
+  const answered = useCallback(() => setWaiting([]), []);
+  return { waiting, answered };
+}
+
+/**
+ * `projectId` is the project being looked at — the row answers for that one alone, which is what lets it
+ * name folders the reader can walk to from here, and what the refusal is recorded against. `wiring` is what
+ * that project has left to wire ({@link useAgentHookWiring}).
+ *
+ * A failure to *record* is not swallowed: the row stays up with the reason on it, because a row that
+ * vanished on a write that never landed would report an answer nobody has.
+ */
+export function AgentHookWiringRow({ projectId, wiring }: { projectId: number; wiring: AgentHookWiring }) {
+  const { waiting } = wiring;
   // Which tool the reader picked. Unset means the first on offer — the only one where the project's folders
   // point at exactly one, and the head of the catalog where they point at none.
   const [picked, setPicked] = useState<string | null>(null);
@@ -52,18 +92,10 @@ export function AgentHookWiringRow({ projectId }: { projectId: number }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let alive = true;
-    setWaiting([]);
     setPicked(null);
     setCopied(null);
     setClosed(false);
     setError(null);
-    fetchAgentHookProjectWiring(projectId)
-      .then((rows) => alive && setWaiting(rows))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
   }, [projectId]);
 
   if (closed || waiting.length === 0) return null;
@@ -85,7 +117,7 @@ export function AgentHookWiringRow({ projectId }: { projectId: number }) {
     setError(null);
     try {
       await answerAgentHookOffer(projectId, false);
-      setWaiting([]);
+      wiring.answered();
     } catch (e) {
       setError(errText(e));
     } finally {

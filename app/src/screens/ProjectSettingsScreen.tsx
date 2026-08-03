@@ -8,6 +8,7 @@ import {
   fetchProjectSettings, openTerminal, pickFolder, revealFolder, setProjectArchived, unbindFolder,
   updateProject,
 } from "../core/mutations";
+import { useAgentHookWiring } from "./AgentHookWiringRow";
 import { PluginCrossingRow } from "../components/PluginCrossingRow";
 import { usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
@@ -159,7 +160,7 @@ export function ProjectSettingsScreen({
 
         {inTauri() && <FoldersSection projectId={projectId} />}
 
-        {inTauri() && <HarnessConsentSection projectId={projectId} />}
+        {inTauri() && <HarnessSection projectId={projectId} />}
 
         {inTauri() && <PluginsSection projectId={projectId} />}
 
@@ -330,14 +331,20 @@ function FoldersSection({ projectId }: { projectId: number }) {
  * showed only yes/no would report a refusal from a project that has simply never said anything. Clearing
  * is offered only where there is an answer to clear.
  *
- * What is shown is the record alone. Whether the wiring is actually in the folder is read from disk
- * every time and reported by the standing row, not from here — a yes buys the text, never the wiring.
+ * **The record and the wiring are two different things, and both are here.** A yes buys the text, never
+ * the wiring — so what is answered is read from the store and what is actually in the folders is read
+ * from disk. The board draws one standing notice and no more (`AMB-D-535`), which means the folders still
+ * waiting are not always on it; this is the place they are always listed. The board is where the reader
+ * acts, this is where they look over what there is.
  */
-function HarnessConsentSection({ projectId }: { projectId: number }) {
+function HarnessSection({ projectId }: { projectId: number }) {
   // undefined while the record is being read, null for a project that has never been asked.
   const [answer, setAnswer] = useState<boolean | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { waiting } = useAgentHookWiring(projectId);
+  // In core's order, and each folder once however many harnesses are waiting on it.
+  const waitingDirs = [...new Set(waiting.flatMap((one) => one.dirs))];
 
   useEffect(() => {
     let alive = true;
@@ -373,6 +380,22 @@ function HarnessConsentSection({ projectId }: { projectId: number }) {
                 ? t("projset.harnessUnanswered")
                 : answer ? t("projset.harnessYes") : t("projset.harnessNo")}
             </span>
+          </div>
+        )}
+
+        {/* The inventory: every folder of this project that still starts its AI without amenbo, whichever
+            notice the board happens to be carrying. Silent where there is nothing waiting — an empty list
+            is what "all wired" looks like, and it needs no sentence of its own.
+            The folders are listed once each, not once per tool. Core answers by harness, and a folder that
+            names no tool it uses is waiting on every one in the catalog — so the same path grouped by tool
+            comes out five times, reading as five folders left. Which tool to hand the text to is the
+            board row's question, asked where the text is; what is outstanding is a folder. */}
+        {waitingDirs.length > 0 && (
+          <div className="settings__row">
+            <span className="settings__k">{t("agentHookWiring.title")}</span>
+            <ul className="agenthookrow__dirs">
+              {waitingDirs.map((dir) => <li key={dir}>{dir}</li>)}
+            </ul>
           </div>
         )}
 

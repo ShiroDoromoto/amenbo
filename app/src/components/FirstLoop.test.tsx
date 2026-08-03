@@ -12,8 +12,6 @@ const hoisted = vi.hoisted(() => ({
   opened: [] as string[],
   /** What `openTerminal` rejects with, when the environment has no terminal to open. */
   terminalFails: null as { code: string; message_en: string } | null,
-  /** What the project's folders come back as. */
-  folders: [] as Array<{ path: string; exists: boolean }>,
   /** The CLI name this build installs — what the request has to name. */
   cli: "amenbo" as string,
 }));
@@ -24,11 +22,10 @@ vi.mock("../core/mutations", () => ({
     hoisted.opened.push(path);
     return Promise.resolve();
   },
-  fetchBoundFolders: () => Promise.resolve(hoisted.folders),
   fetchCliCommandName: () => Promise.resolve(hoisted.cli),
 }));
 
-import { FirstLoop, ProjectFirstLoop } from "./FirstLoop";
+import { FirstLoop } from "./FirstLoop";
 import { t, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -36,7 +33,6 @@ import { t, tf } from "../core/i18n";
 let container: HTMLDivElement;
 let root: Root;
 let clipboard: string[];
-let linkFolder: number;
 
 const button = (label: string) =>
   Array.from(container.querySelectorAll("button")).find((b) => (b.textContent ?? "").includes(label));
@@ -44,9 +40,7 @@ const button = (label: string) =>
 beforeEach(() => {
   hoisted.opened = [];
   hoisted.terminalFails = null;
-  hoisted.folders = [];
   hoisted.cli = "amenbo";
-  linkFolder = 0;
   clipboard = [];
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
@@ -110,32 +104,6 @@ describe("what the request text says", () => {
     expect(container.textContent).toContain("amenbo-dev-2627 agent --json");
     await act(async () => { button(t("firstloop.s2btn"))!.click(); });
     expect(clipboard).toEqual([prompt()]);
-  });
-});
-
-describe("the same loop, asked for by project", () => {
-  const renderForProject = () =>
-    act(async () => {
-      root.render(createElement(ProjectFirstLoop, { projectId: 7, onLinkFolder: () => { linkFolder++; } }));
-    });
-
-  it("finds the project's folder itself and hands it to the loop", async () => {
-    hoisted.folders = [{ path: "/w/bound", exists: true }];
-    await renderForProject();
-    await act(async () => { button(t("firstloop.s1btn"))!.click(); });
-
-    expect(hoisted.opened).toEqual(["/w/bound"]);
-  });
-
-  // A folder that has moved away is no folder: there is nothing to open, and nowhere for an AI to write.
-  it("invites the reader to link one when every folder it finds has gone", async () => {
-    hoisted.folders = [{ path: "/w/gone", exists: false }];
-    await renderForProject();
-
-    expect(container.textContent).toContain(t("firstloop.noFolderTitle"));
-    expect(button(t("firstloop.s1btn"))).toBeUndefined();
-    await act(async () => { button(t("firstloop.noFolderBtn"))!.click(); });
-    expect(linkFolder).toBe(1);
   });
 });
 

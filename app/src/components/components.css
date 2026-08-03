@@ -609,6 +609,17 @@ button.feed__target:hover { color: var(--c-accent); }
    three buttons to meet the edge in a language that spells them out. */
 .agenthookrow__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .agenthookrow__error { font-size: var(--fs-sm); color: var(--c-danger); }
+/* The board's warning band: the same shape as the wiring row above, marked in the warning colour rather
+   than the accent, because a project with no folder is short of something rather than offered something. */
+.boardwarn {
+  display: flex; flex-direction: column; gap: var(--s-2);
+  margin: var(--s-4) var(--s-5) 0; padding: var(--s-4);
+  border: 1px solid var(--c-border); border-left: 3px solid var(--c-warn); border-radius: var(--r-md);
+  background: var(--c-surface); max-width: 720px;
+}
+.boardwarn__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
+.boardwarn__what { font-size: var(--fs-sm); }
+.boardwarn__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 
 /* ---------- pager (list/smart-view windowing) ---------- */
 .pager { display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: var(--s-3); }

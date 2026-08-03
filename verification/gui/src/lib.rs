@@ -296,6 +296,12 @@ impl Instructor {
     /// `ai-launch-waiting` is a `Review` for the reason `open-existing` is: the folder it names is
     /// listed a second time on that same screen, among the ones bound to the project, so a reading of
     /// the name would pass over a build that dropped the inventory and kept the binding.
+    ///
+    /// `nudge` is a `Review`, and the sentence it names is why: an offer is put in the interface's own
+    /// words, so a reading of it would hold this gate to the one language the run happened to be set up
+    /// in. What the step names is written down all the same — it is what the eye closing the shot is
+    /// looking for. The road has a second reader besides that one: an offer that never came up is an
+    /// offer nobody can decline, so the step after it cannot be carried out at all.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -416,6 +422,21 @@ impl Instructor {
                 "In the folder picker that opens, choose a folder for this project — the road calls it \"{}\" — and open it.",
                 req(with, "dir")?
             ),
+            // The answer given to an offer nobody asked for. It names the button by what it does and
+            // not by its wording: the two sit side by side in the same modal, and pressing the other
+            // one is exactly the mistake this road exists to catch, so a line a reader could satisfy
+            // either way would be no line at all.
+            //
+            // The refusal is the only answer the driver takes, and the reason is what an acceptance
+            // leaves behind: a login registration with the OS, outside the throwaway store and
+            // outside anything the run can hand back. That half is walked on real machines.
+            (Domain::Store, "nudge-answer") => match req(with, "answer")? {
+                "no" => "In the offer standing on screen, press the button that declines it — the one that changes no setting."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `nudge-answer` does not know the answer `{other}`"))
+                }
+            },
             (Domain::Plugin, "open-entry") => format!(
                 "Open the row for \"{}\", the one served by the catalog \"{}\".",
                 req(with, "name")?,
@@ -534,6 +555,19 @@ impl Instructor {
 
     fn assert(&self, domain: Domain, op: &str, with: &Args) -> Result<String, String> {
         Ok(match (domain, op) {
+            // A nudge came up by itself, or has gone. Nothing is pressed here and nothing is opened —
+            // what is under test is that the offer arrives unasked, on a device that has been used
+            // enough for it, so the line is the screen as the app left it.
+            (Domain::Store, "nudge") => match present(with) {
+                true => format!(
+                    "Confirm the offer that came up by itself asks \"{}\" — nothing was pressed to bring it up.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "Confirm the offer is off the screen: \"{}\" is nowhere on it.",
+                    req(with, "shows")?
+                ),
+            },
             (Domain::Task, "listed") => format!(
                 "Confirm the task \"{}\" is {} the listing filtered by `{}`.",
                 self.target_label(with),

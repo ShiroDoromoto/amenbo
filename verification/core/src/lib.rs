@@ -336,6 +336,22 @@ const REGISTRY: &[OpSpec] = &[
     // exactly this would go unproven. Backdating is the only way to reach the state from a scenario,
     // the way `folder legacy-pointer` reaches its own.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "age-blobs", required: &[], refs: &[], strings: &[], binds: false },
+    // A device somebody has been coming back to. What says so is two numbers the store keeps and no
+    // command sets: how many times the app has been launched here, and on how many separate days
+    // something was written. They are what a usage nudge is held behind, and both are reached by
+    // living rather than by doing — a run that tried to earn them would have to be several days long.
+    // So the driver backdates them, the way `age-blobs` backdates the bytes a sweep is about:
+    // `launches` is written to the tally as it stands, and `days` spreads the records already in the
+    // store back over that many separate days (the store has to hold at least that many).
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "worn-in", required: &["launches", "days"], refs: &[], strings: &[], binds: false },
+    // The answer given to a nudge that came up on its own. A screen road alone: nothing in a terminal
+    // puts one, so the CLI driver never meets it.
+    //
+    // The answer travels as a value rather than in the op's name, the way a consent answer does. The
+    // one this road gives is the refusal, and it is the only one the driver takes: an acceptance
+    // registers this machine's login with the OS, which is the one piece of state no throwaway store
+    // can hold and no run can hand back — that half is walked on real machines instead.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "nudge-answer", required: &["nudge", "answer"], refs: &[], strings: &["nudge", "answer"], binds: false },
     // What a folder's binding is made of. A folder is named, not pointed at: `dir` is a plain name
     // the driver places somewhere of its own, since a pointer is answered by where a folder sits.
     // `init` raises a project of its own and binds it (hence the binding), `bind` points a folder at
@@ -638,6 +654,11 @@ const REGISTRY: &[OpSpec] = &[
     // reports nothing a machine reads, so what says it ran is the count going down.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "blobs", required: &["count"], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "validate", required: &["ok"], refs: &["target"], strings: &[], binds: false },
+    // Whether the nudge named is standing on screen. A screen road alone — a nudge is put on a
+    // surface, and a terminal has none to put it on. `shows` is the sentence the question is put in,
+    // and it is what the reading is matched against: the id is the name the build declares the nudge
+    // under, it never reaches a screen, and a line naming only that could not be judged from a shot.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "nudge", required: &["nudge", "present", "shows"], refs: &[], strings: &["nudge", "shows"], binds: false },
     // An attachment read back three ways: its own row, the owner's list it hangs in, and — for a
     // blob — the bytes coming out again, which is the only proof the ingest kept them.
     OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
@@ -934,6 +955,10 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Task, "assign"),
     (Domain::Task, "status"),
     (Domain::Task, "update"),
+    // A device that has been used for a while. It is the one premise no amount of doing reaches: what
+    // it stands up is the passage of time itself — launches tallied across days written on — which a
+    // road can only be given, never earn.
+    (Domain::Store, "worn-in"),
     // A folder already answering for a project — what a screen showing bindings has to be looking at.
     // Taking a pointer back off is here for the state it leaves rather than for the act: a project
     // with no folder left is what one whole notice is about, and creating a project links one, so

@@ -302,9 +302,11 @@ walks the arrival screen, the card, the picker and the board it lands on,
 `put-a-plugin-to-work-from-the-project` walks the same crossing from the other face — the arrival, the
 picker that draws the row, and the switch inside it —
 `fill-in-what-a-plugin-cannot-fire-without` walks one row from the mark it wears through the refusal, the
-settings opened inside it and the press that then goes through, and
+settings opened inside it and the press that then goes through,
 `choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
-the button back to the author's default.
+the button back to the author's default, and `be-offered-a-start-at-login` walks the one thing on
+screen nobody went and asked for — an offer that comes up on its own once the app has been come back
+to, and the answer that takes it away.
 
 Everything the wait prints — the step about to be taken, and the prompt — goes to stderr, so `--json`
 still leaves one machine-readable line on stdout. A driver that is not a person keeps its side open
@@ -404,6 +406,15 @@ same idea as `repo write-file`: the
 state on disk a scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach
 for one only when the line under test is what amenbo does about that state.
 
+One of them puts nothing wrong — it puts time. `store worn-in` leaves the store reading as one
+somebody has been coming back to: the launches this device has tallied, and the days its records were
+written on. Both are what amenbo holds an unasked offer behind, and neither is reachable by doing
+anything — a launch tally is raised by the app coming up, and days are days, so a run that tried to
+earn this would have to last a week. It is written straight onto the store, which is the one place a
+driver reaches past the binary's face: the two scalars amenbo tallies into, and one record moved back
+per day asked for (the store has to hold at least that many). A store is a plain SQLite file — no
+shipped path keys one — so this crate carries `rusqlite` for that single op and for nothing else.
+
 `fixtures/` is for text a scenario cannot hold itself. This tree's prose rule keeps a bare amenbo
 reference out of every `.yaml`, and the lint has nothing to find unless a file really carries one —
 so the file carries it and the scenario names the file.
@@ -482,6 +493,11 @@ would leave the road proving something already done. For the same reason a premi
 
 A premise is not a road: a file carrying a world and no steps is refused like any other file nothing
 walks.
+
+The list holds one premise that is not a record at all. `store worn-in` stands up the passage of
+time — how much amenbo has been used on this device — which is the one world a road can only be given:
+every other premise is something somebody could have done a moment before the run, and this one is
+something they could only have done over days.
 
 **A premise that does not stand ends that scenario, red, on the line that failed, and the road is not
 walked at all.** Judging a road against a world half built says nothing about the road — every line it

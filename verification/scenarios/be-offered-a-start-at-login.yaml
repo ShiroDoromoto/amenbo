@@ -1,0 +1,98 @@
+# The one offer amenbo makes on its own. Everything else on screen is something the reader went and
+# asked for; this arrives unasked, and only after they have kept coming back — five launches across
+# three separate days written on. Asked at the first launch it would be premature, and worse than
+# premature: the no it would collect is kept in the setting forever, from somebody who had not yet
+# decided to keep amenbo at all.
+#
+# Which is exactly why nothing before this file has ever walked it. The thresholds are reached by
+# living, not by doing: no test in the tree lasts three days, and a build could ship with the
+# judgement wired to nothing — a stage that never opens, a tally nobody raises, a modal rendered
+# behind the board — with every green in place. The world below is the way past that. It is stood up
+# by hand because it is the passage of time, which is the one premise a road can only be given.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A terminal is not a surface an offer can be put on, so there is no second road here and no gap in
+# one: the CLI runner skips this file by name.
+#
+# What the road watches is the arrival and the way out. The offer has to come up with nothing pressed
+# to bring it up — that is the whole of what "unasked" means, and a shot of it standing there is the
+# only evidence there is. Then it is declined, which is the answer that writes nothing anywhere: the
+# setting already says off, and Settings › Startup is where it can be turned around later. The
+# acceptance is deliberately not walked here. It registers this machine's login with the OS, which is
+# outside the throwaway store this run makes and outside anything the run can hand back — that half
+# belongs on the real machines, where somebody can sign out and back in and see for themselves.
+#
+# Both readings are left for an eye. An offer is put in the interface's own words, so a reading of the
+# sentence would hold this gate to whichever language the run was set up in. What closes them is the
+# shot — and the road itself, since an offer that never came up is one nobody can decline, and the
+# step after the first cannot be carried out at all.
+#
+# What the road wants in front of it is the app open on the board with the first two questions behind
+# it: an offer takes its turn after first-run setup and the hooks question, both of which are put to
+# someone who has not used amenbo yet. The run hands the first step over before it shoots anything,
+# so that is where to stand by the time it does.
+id: be-offered-a-start-at-login
+title: Somebody who keeps coming back is offered a start at login, unasked, and can decline it
+description: >
+  The goal is one offer, arriving on its own. A device that has been used for a while — launches
+  tallied, records written on separate days — opens the app, and the offer to start amenbo at login
+  comes up with nothing pressed to bring it up. Declining it takes it off the screen and writes
+  nothing: the setting says off already, and the answer is what keeps the offer from being put a
+  second time.
+
+given:
+  # What a device that has been used for a while is holding. Three of them, because three separate
+  # days of writing is what the offer is held behind and one record is moved per day — and because a
+  # board with nothing on it is not what somebody five launches in is looking at.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Draft the quarterly summary
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Ask the supplier about the delayed order
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Book the venue for the March workshop
+
+  # And the use itself, which is the premise this road exists behind: five launches of the app, across
+  # three separate days something was written on. Both numbers are what the offer is declared to wait
+  # for — written here rather than left to the driver, so what the world stands up is read off the
+  # road rather than out of a Rust file nobody opens beside it.
+  - type: action
+    domain: store
+    op: worn-in
+    with:
+      launches: 5
+      days: 3
+
+steps_gui:
+  - type: assert
+    domain: store
+    op: nudge
+    with:
+      nudge: autostart
+      present: true
+      shows: "Open amenbo when you sign in?"
+
+  - type: action
+    domain: store
+    op: nudge-answer
+    with:
+      nudge: autostart
+      answer: "no"
+
+  - type: assert
+    domain: store
+    op: nudge
+    with:
+      nudge: autostart
+      present: false
+      shows: "Open amenbo when you sign in?"

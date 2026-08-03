@@ -28,3 +28,9 @@ amenbo-scenario = { path = "../core" }
 amenbo-static-host = { path = "../../crates/amenbo-static-host" }
 serde_json = "1"
 serde_yaml = "0.9"
+# The one place a driver reaches past the binary's face: a premise that stands up a device somebody
+# has been coming back to (`store worn-in`). What it writes are launches tallied and days written on,
+# which no command sets and no run can wait for — the same kind of reach `age-blobs` makes on a blob's
+# mtime, and the store is a plain SQLite file (no shipped path keys one). `bundled` so the build
+# carries its own SQLite rather than asking each machine for one.
+rusqlite = { version = "0.40", features = ["bundled"] }

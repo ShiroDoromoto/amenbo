@@ -321,7 +321,7 @@ func devGUIProcessMarker(bundle string) string {
 // devGUIExecPrefix is what the command line of the bundle's own app process starts with. The pid
 // lookup matches on this rather than on the bundle path alone, because a window belongs to the app
 // process: anything else executed out of the bundle, or merely naming it in an argument, is not
-// something `uiauto window <pid>` can resolve a window from.
+// something a window can be resolved from.
 func devGUIExecPrefix(bundle string) string {
 	return filepath.Join(macAppsDir, bundle+".app", "Contents", "MacOS") + "/"
 }
@@ -376,12 +376,13 @@ type devGUITarget struct {
 // window answers with whichever app is in front, which on a machine running several of them is rarely
 // the one being verified (in practice the production app, which is how a session came to shoot it and
 // report it as the dev app — 2026-07-24). A dev build does carry an executable name of its own, so a
-// name is another way to reach for one; a pid remains the exact handle, and the one uiauto takes.
+// name is another way to reach for one; a pid remains the exact handle, and the one the screen tool
+// takes.
 //
 // With no id it resolves the dev GUI *this checkout* launches, in the order devGUIBundleNames gives
 // — a task worktree's own instance ahead of the shared app — so the same words work from either.
-// `front` activates it first, because uiauto skips a window behind another Space and a shot of a
-// window nobody fronted is a shot of what is over it.
+// `front` brings it forward first, because a window behind another Space cannot be found at all and a
+// shot of a window nobody fronted is a shot of what is over it.
 func resolveDevGUI(id string, front bool) (devGUITarget, error) {
 	if runtime.GOOS != "darwin" {
 		return devGUITarget{}, fmt.Errorf("the dev GUI is only installed on macOS — there is nothing to address here")
@@ -398,7 +399,7 @@ func resolveDevGUI(id string, front bool) (devGUITarget, error) {
 			continue
 		}
 		if front {
-			if _, err := run("", "osascript", "-e", fmt.Sprintf("tell application %q to activate", bundle)); err != nil {
+			if _, err := run("", "swift", screenTool(), "front", strconv.Itoa(pid)); err != nil {
 				logf("  warning: bringing %s to the front failed (%v) — it is still the instance addressed below", bundle, err)
 			}
 		}
@@ -408,8 +409,15 @@ func resolveDevGUI(id string, front bool) (devGUITarget, error) {
 	return devGUITarget{}, fmt.Errorf("no dev GUI is running (%s) — build it with `%s`, then open it", strings.Join(bundles, ", "), build)
 }
 
+// screenTool is the mac screen tool in this tree — the one door to fronting a window, shooting it and
+// reading the words off the shot. devtool calls it rather than driving a window itself: what belongs
+// here is finding the instance, not operating a screen.
+func screenTool() string {
+	return filepath.Join(mustTreeRoot(), "scripts", "screen.swift")
+}
+
 // devGUIShowPID prints on stdout the pid of a dev GUI instance, so a caller can hand it straight to
-// `uiauto window <pid>`.
+// the screen tool.
 func devGUIShowPID(id string, front bool) error {
 	target, err := resolveDevGUI(id, front)
 	if err != nil {
@@ -419,83 +427,19 @@ func devGUIShowPID(id string, front bool) error {
 	return nil
 }
 
-// devGUIWindow is the on-screen rectangle of one window, as `uiauto window` reports it: the window id
-// `screencapture -l` takes, and the origin and size a click point is computed from.
-type devGUIWindow struct {
-	id   int
-	x, y float64
-	w, h float64
-}
-
-// parseUIAutoWindow reads `uiauto window <pid>`'s answer — one line per substantial window, `<id> <x>
-// <y> <width> <height>` — and returns the windows in the order they were listed.
-//
-// It is separate from the call so the parsing can be held to uiauto's format by a test rather than by
-// a running app: this is the seam where a change on the Swift side would otherwise be found the hard
-// way, in a shot of the wrong rectangle.
-func parseUIAutoWindow(out string) ([]devGUIWindow, error) {
-	var windows []devGUIWindow
-	for _, line := range strings.Split(out, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 0 {
-			continue
-		}
-		if len(fields) != 5 {
-			return nil, fmt.Errorf("uiauto window answered %q, which is not `<id> <x> <y> <width> <height>`", strings.TrimSpace(line))
-		}
-		id, err := strconv.Atoi(fields[0])
-		if err != nil {
-			return nil, fmt.Errorf("uiauto window answered %q, whose window id is not a number", strings.TrimSpace(line))
-		}
-		nums := make([]float64, 4)
-		for i, f := range fields[1:] {
-			if nums[i], err = strconv.ParseFloat(f, 64); err != nil {
-				return nil, fmt.Errorf("uiauto window answered %q, whose bounds are not numbers", strings.TrimSpace(line))
-			}
-		}
-		windows = append(windows, devGUIWindow{id: id, x: nums[0], y: nums[1], w: nums[2], h: nums[3]})
-	}
-	if len(windows) == 0 {
-		return nil, fmt.Errorf("uiauto window found no window — is the instance open and on this Space?")
-	}
-	return windows, nil
-}
-
-// devGUIShot captures the dev GUI's own window and prints, on stdout, the png's path and the window's
-// origin and size:
+// devGUIShot captures the dev GUI's own window and prints the png's path on stdout:
 //
 //	/var/folders/…/amenbo-devgui-2377-1234.png
-//	0 38 1512 944
 //
-// The three steps were being assembled by hand every time a task looked at a screen, and each one has
-// a way to go wrong that costs a wasted shot to notice. `screencapture -x` with no window named takes
-// the *main* display, so a window on a second one comes back as somebody else's screen (observed
-// 2026-07-24). Naming the window with `-l` is what settles that, and the id for it comes from
-// `uiauto window <pid>`, which was already there — the tool existed, the door into it did not.
-//
-// `-o` is not decoration: without it the shot carries the window's shadow, and the shadow is
-// asymmetric, so the png's pixels stop corresponding to screen points by any fixed offset. With it the
-// png's top-left *is* the window origin, and uiauto's arithmetic — halve the pixel on Retina, add the
-// origin — lands on the thing that was clicked. That is why the origin is printed beside the path: a
-// caller reading a point off the shot needs it, and asking `uiauto window` again would be asking a
-// second time about a window that may have moved.
+// Finding the instance is devtool's; finding its window and shooting it are the screen tool's, which
+// is handed the pid and hands back a file. Which window it shot, and the id it shot by, stay in
+// there — a caller that never sees a rectangle has nothing to aim a click by, which is the point:
+// press what a thing is called (`screen click-named <pid> <name>`) rather than a point worked out
+// from a shot, whose pixels are screen points times the scale of the display it was on.
 func devGUIShot(id string, front bool) error {
 	target, err := resolveDevGUI(id, front)
 	if err != nil {
 		return err
-	}
-	root := mustTreeRoot()
-	out, err := run(root, "swift", filepath.Join(root, "app", "scripts", "uiauto", "uiauto.swift"), "window", strconv.Itoa(target.pid))
-	if err != nil {
-		return fmt.Errorf("locating the window of %s failed: %w", target.bundle, err)
-	}
-	windows, err := parseUIAutoWindow(out)
-	if err != nil {
-		return err
-	}
-	win := windows[0]
-	if len(windows) > 1 {
-		logf("  %s has %d windows on screen — shooting the first one (%d)", target.bundle, len(windows), win.id)
 	}
 
 	name := id
@@ -508,19 +452,13 @@ func devGUIShot(id string, front bool) error {
 	}
 	path := file.Name()
 	file.Close()
-	if _, err := run("", "screencapture", "-x", "-o", "-l", strconv.Itoa(win.id), path); err != nil {
+	if _, err := run("", "swift", screenTool(), "shot", strconv.Itoa(target.pid), path); err != nil {
 		os.Remove(path)
-		return fmt.Errorf("screencapture failed: %w — screen recording has to be granted to the terminal running this", err)
-	}
-	info, err := os.Stat(path)
-	if err != nil || info.Size() == 0 {
-		os.Remove(path)
-		return fmt.Errorf("screencapture wrote nothing — screen recording has to be granted to the terminal running this")
+		return fmt.Errorf("shooting the window of %s failed: %w — screen recording has to be granted to the terminal running this", target.bundle, err)
 	}
 
-	logf("  shot window %d of %s", win.id, target.bundle)
+	logf("  shot the window of %s", target.bundle)
 	fmt.Printf("%s\n", path)
-	fmt.Printf("%g %g %g %g\n", win.x, win.y, win.w, win.h)
 	return nil
 }
 

@@ -25,8 +25,12 @@ fn ensure_migrated() -> Result<(), CmdError> {
 
 /// Open the store for writing. There is exactly one store, so the target is always `resolve()`
 /// (**directory-independent** — the GUI process has no `.amenbo` of its own).
+///
+/// The one long-lived connection this process holds is let go of first when it has been orphaned
+/// ([`release_orphaned_watch`]) — held on to, it would fail this write and every write after it.
 fn open_store() -> Result<Store, CmdError> {
     ensure_migrated()?;
+    release_orphaned_watch();
     Store::open_at(amenbo_core::config::Paths::resolve()?).map_err(CmdError::from)
 }
 
@@ -1113,6 +1117,40 @@ fn watch() -> &'static std::sync::Mutex<Watch> {
     })
 }
 
+/// The WAL's shared-memory index beside the store file (`store.sqlite-shm`).
+fn shm_file(store: &std::path::Path) -> std::path::PathBuf {
+    let mut p = store.as_os_str().to_os_string();
+    p.push("-shm");
+    std::path::PathBuf::from(p)
+}
+
+/// Whether the connection we are holding is attached to a `-shm` that no longer exists on disk.
+///
+/// A live connection to a WAL store keeps `-shm` there, so its absence while we hold one says the
+/// index we are attached to is an orphan — the file was unlinked (a `restore`/migration clears the
+/// sidecars; so does anything else that reaches into the store directory), and we are the last
+/// reference to an inode nobody will ever commit to again.
+///
+/// The orphan does not stay ours alone. SQLite shares one shared-memory node **per process**, so
+/// every connection opened afterwards inherits the dead index: `open` still succeeds, reads still
+/// answer, and only writes fail — with `disk I/O error`, until the process exits. That is exactly the
+/// one guarantee open-per-action is supposed to give us (a broken connection costs one action, never
+/// the session), and this single long-lived connection is the only thing standing in its way.
+fn watch_is_orphaned(w: &Watch, store: &std::path::Path) -> bool {
+    w.store.is_some() && !shm_file(store).exists()
+}
+
+/// Let go of an orphaned watch connection, so the open that follows attaches to the live index
+/// instead of inheriting the dead one. The next signature read opens a fresh connection.
+fn release_orphaned_watch() {
+    let Some(path) = store_file() else { return };
+    let Ok(mut w) = watch().lock() else { return };
+    if watch_is_orphaned(&w, &path) {
+        log::warn!("the store's -shm was deleted under the watch connection; reopening it");
+        w.store = None;
+    }
+}
+
 /// The store's change signature, on three legs: **`PRAGMA data_version`, the identity of the main
 /// file, and the identity of `config.json`**. `data_version` is the value SQLite guarantees will
 /// tell you that **some connection has
@@ -1125,7 +1163,9 @@ fn watch() -> &'static std::sync::Mutex<Watch> {
 /// identity alongside it because `fold`, `restore` and migration **swap the file out wholesale** —
 /// the connection we are holding would go on reading a dead inode where nobody will ever commit
 /// again, so when mtime/size moves we reopen it. That degrades cleanly into "the whole file changed
-/// → gap → refetch everything".
+/// → gap → refetch everything". The same reopen covers a sidecar cleared without the main file
+/// moving ([`watch_is_orphaned`]), where the connection is just as dead but nothing about the main
+/// file says so.
 ///
 /// The third leg is `config.json`, which is not in the database at all: it is written straight to
 /// disk (`Store::save_config`) and so moves neither `data_version` nor the store file. It needs a leg
@@ -1139,7 +1179,7 @@ fn store_signature_string() -> String {
     let Ok(mut w) = watch().lock() else { return String::new() };
 
     let file = file_identity(&path);
-    if w.store.is_none() || w.file != file || w.path != path {
+    if w.store.is_none() || watch_is_orphaned(&w, &path) || w.file != file || w.path != path {
         w.store = amenbo_core::config::Paths::resolve().ok().and_then(|p| Store::open_read_at(p).ok());
         w.file = file;
         w.path = path;
@@ -6191,6 +6231,73 @@ mod tests {
         assert_ne!(before, store_signature_string(), "an external writer's commit moves the signature");
 
         assert!(!store_signature_string().contains('|'), "does not mix in the `|` separator");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The store's `-wal`/`-shm` can be cleared while this process holds the watch connection — a
+    /// `restore` and a migration both do it deliberately, and they cannot reach a connection that was
+    /// already open. What is left is an orphan, and SQLite shares one shared-memory node per process,
+    /// so it takes every later connection down with it: opens succeed, reads answer, writes come back
+    /// `disk I/O error` — for the life of the process, which is why restarting the app was the only
+    /// way out. Pinned here at the write open: the sidecars go, and the next write still lands.
+    #[test]
+    fn a_write_survives_the_sidecars_being_cleared_under_the_watch_connection() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("orphaned-shm");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "テストPJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+
+        // Take the watch connection, and leave committed frames in the WAL for it to be holding an
+        // index of — an empty WAL leaves nothing to go stale.
+        assert!(!store_signature_string().is_empty(), "the watch connection is open");
+        {
+            let mut writer = Store::open().unwrap();
+            writer
+                .add_task(amenbo_core::ops::task::NewTask {
+                    title: "先に届いたタスク".into(),
+                    project_id: Some(project_id),
+                    due_on: None,
+                    start_on: None,
+                    priority: None,
+                    notes: String::new(),
+                    created_by_kind: Some(ActorKind::Ai),
+                })
+                .unwrap();
+        }
+
+        let store_path = store_file().expect("the store path resolves");
+        assert!(shm_file(&store_path).exists(), "a live WAL connection keeps -shm on disk");
+        for ext in ["-wal", "-shm"] {
+            let mut side = store_path.as_os_str().to_os_string();
+            side.push(ext);
+            std::fs::remove_file(std::path::PathBuf::from(side)).expect("the sidecar is cleared");
+        }
+
+        let mut store = open_store().expect("the store opens");
+        store
+            .add_task(amenbo_core::ops::task::NewTask {
+                title: "巻き添えを免れたタスク".into(),
+                project_id: Some(project_id),
+                due_on: None,
+                start_on: None,
+                priority: None,
+                notes: String::new(),
+                created_by_kind: Some(ActorKind::Human),
+            })
+            .expect("a write still lands after the sidecars were cleared");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

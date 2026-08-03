@@ -716,3 +716,45 @@ fn bind_refuses_nested_subdirectory_without_force() {
     assert_eq!(code2, 0, "--force overrides the nested guard: {stderr2}");
     assert!(subdir.join(".amenbo").exists(), "--force writes the pointer");
 }
+
+/// Taking the last folder off a project goes through, and the answer says the project is left with none
+/// (`AMB-D-530`). There is no count that refuses: re-homing folders means peeling them all off before
+/// putting them back, so a refusal would force an order rather than protect anything — what is closed is
+/// the creating end (`AMB-D-528`). The report is what stands in its place, since a folder is how an AI
+/// reaches a project (`AMB-D-222`) and only the person unbinding knows whether they are mid-reshuffle.
+/// Machine-readable as a count, so nobody has to read the sentence to know.
+#[test]
+fn unbinding_the_last_folder_goes_through_and_says_the_project_has_none_left() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let first = amenbo_scratch::scratch("last-first");
+    let first_str = first.to_string_lossy().to_string();
+    let pid = id_str(
+        &cli.json(&["project", "add", "--name", "組み直すPJ", "--dir", &first_str, "--json"])["project"]["id"],
+    );
+    let second = amenbo_scratch::scratch("last-second");
+    let second_str = second.to_string_lossy().to_string();
+    cli.run(&["bind", "--project", &pid, "--dir", &second_str]);
+
+    // One off, one left: nothing to report yet.
+    let one = cli.json(&["unbind", "--dir", &second_str, "--yes", "--json"]);
+    assert_eq!(one["binding"]["project_folders_left"], 1, "one folder still holds it: {one}");
+
+    // And the last one off: allowed, with the count at zero.
+    let none = cli.json(&["unbind", "--dir", &first_str, "--yes", "--json"]);
+    assert_eq!(none["ok"], true, "the last folder comes off like any other: {none}");
+    assert_eq!(none["binding"]["project_folders_left"], 0, "and the project is left with none: {none}");
+
+    // The project itself is untouched — this is an unbind, not a teardown.
+    let shown = cli.json(&["project", "show", &pid, "--json"]);
+    assert!(shown["bound_folders"].as_array().is_none_or(|f| f.is_empty()), "no folders left: {shown}");
+
+    // The human face says it in words, and names the way back.
+    let third = amenbo_scratch::scratch("last-third");
+    let third_str = third.to_string_lossy().to_string();
+    cli.run(&["bind", "--project", &pid, "--dir", &third_str]);
+    let (out, code) = cli.run(&["unbind", "--dir", &third_str, "--yes"]);
+    assert_eq!(code, 0, "the human face exits 0 too: {out}");
+    assert!(out.contains("no folder"), "it says the project has none left: {out}");
+    assert!(out.contains("bind --project"), "and names the way back: {out}");
+}

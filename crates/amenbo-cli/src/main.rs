@@ -4451,6 +4451,14 @@ fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<S
 /// Class P content is preserved) and forgets this folder in the registry, keeping the orphan-detection index
 /// consistent. It never unbinds an ancestor: with no `.amenbo` directly in this folder, the tree above is not
 /// dragged in — `unbind_no_binding` says where to run it instead.
+///
+/// **The last folder goes too** (`AMB-D-530`). There is no count here that refuses: peeling a folder off is a
+/// deliberate act, and re-homing folders means taking them all off before putting them back, so a refusal
+/// would only force an order rather than protect anything. What is closed instead is the creating end
+/// (`AMB-D-528`). What is owed is the report: the answer says the project has no folder left and that
+/// nothing can operate it until one is linked again, because a binding **is** an AI's reach (`AMB-D-222`),
+/// and only the person doing it knows whether they are mid-reshuffle. `--json` carries the same fact as a
+/// number (`project_folders_left`), so a machine reads it without parsing the sentence.
 fn unbind_cmd(flags: &Flags, dir: Option<String>) -> Result<i32, CliError> {
     use amenbo_core::binding::{find_upward, DirBinding};
     let target = match dir {
@@ -4484,7 +4492,11 @@ fn unbind_cmd(flags: &Flags, dir: Option<String>) -> Result<i32, CliError> {
     // the pointer and the managed block and stop — never silently genesis a store, same rule as the exec
     // guard.
     let dir_str = target.to_string_lossy().to_string();
+    let project_id = pointer.as_ref().and_then(|b| b.project_id);
     let mut forgot = 0usize;
+    // How many folders the project has left, once this one is off. None where there is nothing to ask —
+    // no store on this machine, or a pointer naming no project.
+    let mut folders_left: Option<usize> = None;
     let paths = Paths::resolve().map_err(CliError::from)?;
     if amenbo_core::store_engine::probe_is_populated(&paths.store_file) {
         let store = Store::open_at(paths).map_err(CliError::from)?;
@@ -4501,17 +4513,34 @@ fn unbind_cmd(flags: &Flags, dir: Option<String>) -> Result<i32, CliError> {
         if forgot > 0 {
             store.save_bindings(&registry).map_err(CliError::from)?;
         }
+        // Counted after the forgetting, so it is what is left rather than what there was.
+        folders_left = project_id.map(|pid| registry.dirs_for_project(pid).len());
     }
-    let project_id = pointer.as_ref().and_then(|b| b.project_id);
+    let mut binding = json!({ "dir": dir_str, "project_id": project_id, "removed": removed, "registry_entries_forgotten": forgot });
+    if let Some(left) = folders_left {
+        binding["project_folders_left"] = json!(left);
+    }
     write_envelope(
         flags,
         "unbind",
         "binding",
-        json!({ "dir": dir_str, "project_id": project_id, "removed": removed, "registry_entries_forgotten": forgot }),
+        binding,
         None,
         false,
         format!("✓ Unbound {} (removed: {}). The project is kept.", dir_str, removed.join(", ")),
     );
+    // Taking the last one is allowed, and saying so is what stands in for refusing it. A folder is how an
+    // AI reaches a project, so with none left there is nobody to operate it — which is either the middle of
+    // a reshuffle or a surprise, and only the person here knows which.
+    if folders_left == Some(0) {
+        human(
+            flags,
+            format!(
+                "  This project now has no folder. An AI reaches a project through a folder, so nothing can operate it until one is linked again (`{} bind --project <name or ID>`).",
+                Paths::command_name()
+            ),
+        );
+    }
     Ok(0)
 }
 

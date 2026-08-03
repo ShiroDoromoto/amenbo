@@ -213,11 +213,6 @@ installer put in place, and the bundle is asked whether it is one — through th
 one build produces alongside the app and one installer carries with it. The executable to start is
 asked of the bundle too (`CFBundleExecutable`) rather than assumed.
 
-A screen line sometimes needs a world the app cannot be talked into from its own interface — the
-browsing view reads the badge on a row a **registered** catalog served, and a plugin's row is only
-there once one is installed. On a store the run makes fresh, none of that is standing, and putting
-it there is the seeding step this harness does not have yet.
-
 The screen tool is the input primitive too, called by whoever drives the screen between steps: its
 `find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the action steps the
 checklist names. The run holds itself at the launch until the app is up, in front, and can be shot

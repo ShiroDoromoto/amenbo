@@ -307,8 +307,8 @@ amenbo project add --name "Website refresh" --dir ~/work/website-refresh --view 
 # draw its dependencies, premises and classification before anyone picks it up. Say the
 # writing is finished with `task finish-creating` — nobody's approval is being asked for
 amenbo task add --title "Wireframes" --project "Website refresh" --due tomorrow --priority high
-amenbo task finish-creating <n>            # <n> is the number `task add` just handed back
 amenbo task add --title "Pick colors" --project "Website refresh"
+amenbo task finish-creating <n>            # each one, once it is written (<n> is what add handed back)
 # Every id is the number amenbo shows you: task AMB-T-<n> is `<n>`, decision AMB-D-<n> is `<n>`
 amenbo task depend <n> --on <m>            # <n> waits on <m> (dependency, not a subtask)
 amenbo task done <n>

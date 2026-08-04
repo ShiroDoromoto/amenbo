@@ -114,21 +114,96 @@ impl LatestRelease {
     }
 }
 
-/// Map the running binary's OS/arch onto wharfy's `assets` platform key (`os-arch`). We follow
-/// wharfy's vocabulary: the OS matches `std::env::consts::OS` verbatim (macOS → `macos`, plus
-/// `windows` and `linux`), and only the arch is rewritten — `aarch64` → `arm64`, `x86_64` → `x64`.
-/// So macOS/aarch64 → `macos-arm64`, Windows/x86_64 → `windows-x64`, Linux/x86_64 → `linux-x64`.
-/// This is also the key of the CLI archive (the suffix-less one); [`installer_asset_key`] appends
-/// the kind to get the installer key.
+/// Map the machine onto wharfy's `assets` platform key (`os-arch`). We follow wharfy's vocabulary:
+/// the OS matches `std::env::consts::OS` verbatim (macOS → `macos`, plus `windows` and `linux`), and
+/// the arch is [`native_arch`] — the machine's own, not the running binary's (`AMB-D-551`). So a Mac
+/// with Apple silicon answers `macos-arm64` whether the amenbo asking is the arm64 build or the
+/// Intel one under Rosetta. This is also the key of the CLI archive (the suffix-less one);
+/// [`installer_asset_key`] appends the kind to get the installer key.
 #[must_use]
 pub fn current_platform_key() -> String {
-    let os = std::env::consts::OS;
-    let arch = match std::env::consts::ARCH {
+    format!("{}-{}", std::env::consts::OS, native_arch())
+}
+
+/// The architecture of the **machine**, in wharfy's tokens (`arm64` / `x64`) — what an update is
+/// aimed at (`AMB-D-551`).
+///
+/// It is asked of the OS rather than read off the build, because the two disagree exactly where it
+/// matters: a binary built for one arch and running on another under emulation carries the
+/// emulated arch in `std::env::consts::ARCH` for its whole life, so it would go on fetching the
+/// emulated build forever and the machine would never come off the translation layer. Whoever
+/// applies an update lands on the build their machine runs natively.
+///
+/// Where the OS has no answer — it does not emulate, it was not asked in a way it understands, or
+/// this is a platform with no ask at all — the running binary's own arch is the answer, which is
+/// what this returned before there was a question. Mapping it is the same rewrite wharfy's names
+/// use: `aarch64` → `arm64`, `x86_64` → `x64`, anything else verbatim (an arch amenbo does not
+/// distribute simply keys nothing).
+#[must_use]
+pub fn native_arch() -> &'static str {
+    machine_arch().unwrap_or(match std::env::consts::ARCH {
         "aarch64" => "arm64",
         "x86_64" => "x64",
         other => other,
+    })
+}
+
+/// Ask macOS whether this process is being translated. Rosetta 2 is the only translation the OS
+/// runs and it runs x86_64 on Apple silicon, so "translated" names the machine on its own: arm64.
+/// A process that is not translated is running natively, and `sysctl.proc_translated` is absent
+/// altogether on a Mac with no Rosetta — both are "nothing to say", and the build's own arch is
+/// then the machine's.
+#[cfg(target_os = "macos")]
+fn machine_arch() -> Option<&'static str> {
+    let mut translated: libc::c_int = 0;
+    let mut size = std::mem::size_of::<libc::c_int>();
+    // SAFETY: the name is a NUL-terminated C string, and the out-buffer is one `c_int` with its
+    // length passed alongside — sysctl writes at most that many bytes and reports what it wrote.
+    let asked = unsafe {
+        libc::sysctlbyname(
+            c"sysctl.proc_translated".as_ptr(),
+            std::ptr::addr_of_mut!(translated).cast(),
+            std::ptr::addr_of_mut!(size),
+            std::ptr::null_mut(),
+            0,
+        )
     };
-    format!("{os}-{arch}")
+    (asked == 0 && translated == 1).then_some("arm64")
+}
+
+/// Ask Windows what machine it is, which is the one question `IsWow64Process2` answers directly:
+/// its second out-parameter is the native machine, whatever the process itself was built for. An
+/// arch amenbo has no token for — and a call the OS turns away — is left to the caller's fallback.
+#[cfg(windows)]
+fn machine_arch() -> Option<&'static str> {
+    use windows_sys::Win32::System::SystemInformation::{
+        IMAGE_FILE_MACHINE, IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_ARM64,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, IsWow64Process2};
+
+    let mut process: IMAGE_FILE_MACHINE = 0;
+    let mut native: IMAGE_FILE_MACHINE = 0;
+    // SAFETY: a pseudo-handle to this process, and two out-parameters the call fills in; both are
+    // live for the duration of it.
+    let answered = unsafe {
+        IsWow64Process2(GetCurrentProcess(), std::ptr::addr_of_mut!(process), std::ptr::addr_of_mut!(native))
+    };
+    if answered == 0 {
+        return None;
+    }
+    match native {
+        IMAGE_FILE_MACHINE_ARM64 => Some("arm64"),
+        IMAGE_FILE_MACHINE_AMD64 => Some("x64"),
+        _ => None,
+    }
+}
+
+/// Nowhere else has an ask. Linux runs a foreign binary through a user-mode emulator that answers
+/// as the emulated machine from the kernel down, so there is no question whose answer would differ
+/// from the build's own arch.
+#[cfg(not(any(target_os = "macos", windows)))]
+fn machine_arch() -> Option<&'static str> {
+    None
 }
 
 /// The wharfy `assets` key (`os-arch-kind`) of the **unified installer** for the current OS. The
@@ -422,13 +497,32 @@ mod tests {
         let (os, arch) = key.split_once('-').expect("os-arch");
         assert!(["macos", "windows", "linux"].contains(&os) || !os.is_empty());
         assert!(["arm64", "x64"].contains(&arch) || !arch.is_empty());
-        // The key matches the running OS/arch (macOS arm64 gives macos-arm64, and so on).
+        // The key matches the running OS, and the machine's own architecture. Nothing translates a
+        // test run — a developer's checkout and a CI runner both build for the machine they are on
+        // — so here the machine's arch is the build's, which is what makes this assertable at all.
+        //
+        // Which is also to say: aim a test run at the *other* arch on purpose (`cargo test --target
+        // x86_64-apple-darwin` on Apple silicon) and the arch line below fails, because the key
+        // comes back naming the machine rather than the build. That is the change working, not a
+        // regression — it is the shortest way to see the ask answer at all.
         #[cfg(target_os = "macos")]
         assert!(key.starts_with("macos-"));
         #[cfg(target_arch = "aarch64")]
         assert!(key.ends_with("-arm64"));
         #[cfg(target_arch = "x86_64")]
         assert!(key.ends_with("-x64"));
+        assert!(key.ends_with(&format!("-{}", native_arch())));
+    }
+
+    /// The arches amenbo distributes are the two it has tokens for, and a machine answering as one
+    /// of them is what every asset key rests on.
+    #[test]
+    fn native_arch_is_one_amenbo_distributes() {
+        assert!(
+            ["arm64", "x64"].contains(&native_arch()),
+            "the machine answered `{}`, which keys nothing amenbo publishes",
+            native_arch()
+        );
     }
 
     /// `update_url` falls back in order: the current OS's installer, then notes_url, then the

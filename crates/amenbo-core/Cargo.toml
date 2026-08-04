@@ -91,6 +91,14 @@ pulldown-cmark = { version = "0.13", default-features = false }
 # features off keeps only Deflate (the method wharfy writes), dropping the aes/bzip2/zstd/time extras.
 [target.'cfg(windows)'.dependencies]
 zip = { version = "8", default-features = false, features = ["deflate"] }
+# The one question the updater asks the OS: which machine is this, whatever the running binary was
+# built for (`IsWow64Process2`, plus the pseudo-handle it takes and the machine constants it answers
+# with). Windows-only — macOS is asked through `libc` and Linux is not asked at all. Two features, so
+# the crate compiles the two headers this needs and nothing else.
+windows-sys = { version = "0.61", features = [
+    "Win32_System_Threading",
+    "Win32_System_SystemInformation",
+] }
 
 # SIGPIPE control for the plugin stdin writer. The CLI hands SIGPIPE back to the kernel so `amenbo … |
 # head` ends cleanly (a process-wide disposition), which would otherwise kill the whole process when a

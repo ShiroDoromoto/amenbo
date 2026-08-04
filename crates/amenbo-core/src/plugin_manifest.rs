@@ -105,6 +105,12 @@ impl Os {
 /// [`update_check`](crate::update_check) uses** (`AMB-D-384`): `std::env::consts::ARCH` normalized to
 /// wharfy's tokens (`aarch64` → `arm64`, `x86_64` → `x64`), so a plugin's asset keys and the self-updater's
 /// keys never spell the same machine two ways.
+///
+/// What the two ask about is not the same, and deliberately so. A plugin's asset is run **by this
+/// build**, so the arch that picks it is this build's own — an arm64 asset is of no use to an x86_64
+/// amenbo, whatever the machine underneath could run. An update replaces the build itself, so it is
+/// aimed at the machine ([`native_arch`](crate::update_check::native_arch), `AMB-D-551`). One
+/// vocabulary, two questions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Arch {
     Arm64,
@@ -136,8 +142,8 @@ impl Arch {
         }
     }
 
-    /// Normalize a `std::env::consts::ARCH` value onto the wire token — the same mapping the self-updater's
-    /// `current_platform_key` applies, kept here so the two never drift.
+    /// Normalize a `std::env::consts::ARCH` value onto the wire token — the same mapping the
+    /// self-updater's fallback applies, kept here so the two never spell an arch differently.
     fn parse_consts(s: &str) -> Option<Arch> {
         match s {
             "aarch64" => Some(Arch::Arm64),

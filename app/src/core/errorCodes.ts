@@ -47,6 +47,7 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_premise_rejected",
   "not_ready_premise_unsettled",
   "not_ready_not_started",
+  "not_ready_draft",
   "not_found_task",
   "not_found_decision",
   "not_found_project",

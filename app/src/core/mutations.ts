@@ -132,15 +132,22 @@ function notReadyParts(t: TaskCard): CmdErrorPart[] {
       fields: { start: t.notStartedUntil },
     });
   }
+  if (t.draft) {
+    parts.push({
+      code: "not_ready_draft",
+      message_en: "it is still being created — finish creating it first",
+      fields: null,
+    });
+  }
   return parts;
 }
 
 /**
  * Rebuild the dependents when one blocker goes away (completed or deleted). In core, `blocked_by` is
  * derived as "blockers not yet done" and `ready` as "no unfinished blocker, no unsettled grounding
- * decision, and the declared start day arrived" (core's `reserve_blockers`, whose emptiness *is*
- * `ready`); the mock runs the same derivation here. Clearing a blocker cannot clear the other two, so
- * they are re-read rather than assumed away.
+ * decision, the declared start day arrived, and the creation finished" (core's `reserve_blockers`,
+ * whose emptiness *is* `ready`); the mock runs the same derivation here. Clearing a blocker cannot
+ * clear the other three, so they are re-read rather than assumed away.
  * **The dependency edges themselves are not in the mock fixtures**, though — the snapshot only carries
  * the already-derived `blockedBy` — so reopening a task (done → todo) **cannot put its blockers back**.
  * That is a face we chose not to act out. To see dependencies re-form during browser iteration, edit
@@ -151,7 +158,10 @@ function unblock(tasks: TaskCard[], blockerId: number): TaskCard[] {
     if (!x.blockedBy?.some((b) => b.id === blockerId)) return x;
     const blockedBy = x.blockedBy.filter((b) => b.id !== blockerId);
     const ready =
-      blockedBy.length === 0 && x.blockedByDecisions.length === 0 && x.notStartedUntil == null;
+      blockedBy.length === 0 &&
+      x.blockedByDecisions.length === 0 &&
+      x.notStartedUntil == null &&
+      !x.draft;
     return { ...x, blockedBy, ready };
   });
 }
@@ -202,6 +212,8 @@ export async function addTask(projectId: number | null, title: string, notes?: s
       due: null, comments: 0, createdBy: me(),
       ref: taskRef(id), projectId, completedAt: null,
       ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], notStartedUntil: null,
+      // What core's `add` still writes: the creation lands finished (`AMB-D-554` moves that, not this).
+      draft: false,
     };
     return { ...s, tasks: [...s.tasks, task], activity: [sysItem(id, title, { kind: "task.created" }), ...s.activity] };
   });

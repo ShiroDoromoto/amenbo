@@ -280,6 +280,14 @@ pub struct Task {
     /// predates the column (an older store never stamped it).
     #[serde(default)]
     pub status_changed_at: Option<Timestamp>,
+    /// Is the task still being put together? Creation is two stages, and this is the one it is at
+    /// (`AMB-D-552`): `true` while it is being assembled, `false` once the creation was finished. It is a
+    /// premise of `ready` and not a sixth status (`AMB-D-553`) — a draft is on the board and in every
+    /// listing, it just cannot be reserved (`AMB-D-555`). `false` is what a task from a store that
+    /// predates the column means, and it is the truth about it: the build that wrote it had no second
+    /// stage to leave it in.
+    #[serde(default)]
+    pub draft: bool,
     /// The creator's facet. `None` means unknown (older data), which reads as "not authored by the AI".
     #[serde(default)]
     pub created_by_kind: Option<ActorKind>,

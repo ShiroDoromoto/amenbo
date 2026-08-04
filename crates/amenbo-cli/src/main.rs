@@ -5349,7 +5349,10 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                     let waiting = t.not_started_until
                         .map(|d| format!(" waiting-until:{}", time::date_to_string(d)))
                         .unwrap_or_default();
-                    human(flags, format!("  [{check}] {}  {}{}{}{}", task_label(t.id), t.title, due, waiting, pri));
+                    // The same thing said about the fourth premise: a task still being created is listed
+                    // like any other (`AMB-D-555`), so the row is where it says why the mailbox skips it.
+                    let draft = if t.draft { " draft" } else { "" };
+                    human(flags, format!("  [{check}] {}  {}{}{}{}{}", task_label(t.id), t.title, due, waiting, draft, pri));
                 }
             }
         }
@@ -5441,6 +5444,17 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                         format!("not started until: {} (cannot start yet)", time::date_to_string(d)),
                     ),
                 }
+                // The fourth reason (`AMB-D-553`). Marked even when empty, like the three above: a task
+                // still being created is on this page like any other (`AMB-D-555`), so the page is where
+                // a reader finds out that is what is holding it — and the reader is the one who clears it.
+                human(
+                    flags,
+                    if detail.draft {
+                        "creation: not finished (cannot start yet)"
+                    } else {
+                        "creation: finished"
+                    },
+                );
                 // The quiet early-warning surface of `AMB-D-366`: if this task is reserved (in_progress) and a
                 // premise was pinned on after the reservation — silently dropping `ready` — say so here, on
                 // an ordinary read, so the holder notices long before they try to complete it. Only printed

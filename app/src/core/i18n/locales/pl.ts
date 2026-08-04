@@ -581,6 +581,7 @@ export const pl: Translation = {
     not_ready_premise_rejected: "{ref} zostało odrzucone, więc zadanie wymaga przemyślenia",
     not_ready_premise_unsettled: "{ref} jest nierozstrzygnięte — poczekaj na rozstrzygnięcie albo je odepnij",
     not_ready_not_started: "zaczyna się dopiero {start} — zmień datę startu, jeśli to pomyłka",
+    not_ready_draft: "wciąż jest tworzone — najpierw zakończ tworzenie",
     store_busy: "Magazyn jest przywracany lub aktualizowany. Spróbuj ponownie za chwilę.",
     storage_error: "Nie udało się odczytać ani zapisać magazynu i nic nie zostało zmienione. Uruchom amenbo ponownie i spróbuj jeszcze raz — jeśli będzie się powtarzać, wyślij to, co jest w Ustawienia > Dzienniki.",
     not_found_task: "Nie znaleziono zadania {ref}.",

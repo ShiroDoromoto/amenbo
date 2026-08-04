@@ -84,9 +84,13 @@ pub struct Filter {
     pub ai: Option<bool>,
     /// Derived: `ready:yes` = actionable, `ready:no` = blocked. `ready:no` catches not only tasks
     /// with open blockers but also tasks linked to a decision that is not live as a rationale — the
-    /// two reasons [`crate::view::ReserveBlocker`] enumerates, which the reservation guard reads off
+    /// reasons [`crate::view::ReserveBlocker`] enumerates, which the reservation guard reads off
     /// the same derivation.
     pub ready: Option<bool>,
+    /// `draft:yes|no` — whether the task is still being put together (`AMB-D-553`). The way to look at
+    /// the creations still open on purpose, rather than inferring them from a `ready:no` four premises
+    /// share — the same reason `start:` exists beside `ready:`.
+    pub draft: Option<bool>,
     /// Filtering by classification axis (dimension). Folds together `dim:<axis>=<value>` and
     /// `time_axis:<value>`, the sugar that names only the time axis. The key may appear several
     /// times (`dim:a=x dim:b=y`) and the elements AND together.
@@ -423,6 +427,14 @@ impl Filter {
                         _ => return Err(Error::invalid("blocked must be none / open")),
                     })
                 }
+                // `draft:yes|no` — the fourth premise of `ready`, asked for on its own.
+                "draft" => {
+                    f.draft = Some(match value {
+                        "yes" => true,
+                        "no" => false,
+                        _ => return Err(Error::invalid("draft must be yes / no")),
+                    })
+                }
                 // Traverse the decision ⇄ task link (symmetric with `task:` on `decision list`).
                 "decision" => f.decision = Some(parse_cross_ref(value, true)?),
                 // Reverse chain git → task: tasks recording this commit SHA. Normalise through the same
@@ -458,7 +470,7 @@ impl Filter {
                 }
                 other => {
                     return Err(Error::invalid(
-                        format!("unknown filter key '{other}' (done/status/due/start/priority/project/number/ref/assignee/ai/ready/decision/commit/dim/time_axis)"),
+                        format!("unknown filter key '{other}' (done/status/due/start/priority/project/number/ref/assignee/ai/ready/draft/decision/commit/dim/time_axis)"),
                     ))
                 }
             }
@@ -1842,9 +1854,14 @@ pub fn task_detail(
     let start_on = parse_date(&row.start_on);
     let today = time::today();
     // The one ready predicate, shared with the task card and the `ready:` filter, and beside it the
-    // third reason it can return false.
-    let ready =
-        crate::view::is_ready(!blocked_by.is_empty(), !blocked_by_decisions.is_empty(), start_on, today);
+    // third reason it can return false (the fourth rides on the row as `draft`).
+    let ready = crate::view::is_ready(
+        !blocked_by.is_empty(),
+        !blocked_by_decisions.is_empty(),
+        start_on,
+        today,
+        row.draft,
+    );
     let not_started_until = crate::view::not_started_until(start_on, today);
     let blocks: Vec<crate::view::TaskRef> =
         row.blocks.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
@@ -1876,6 +1893,7 @@ pub fn task_detail(
         blocked_by,
         blocked_by_decisions,
         not_started_until,
+        draft: row.draft,
         ready,
         blocks,
         num_comments: row.num_comments,

@@ -1281,8 +1281,9 @@ ref: string, notes: string, projectId: number | null, status: "todo" | "in_progr
  */
 completedAt: string | null, comments: number, 
 /**
- * Can it be reserved? — no open blockers, every decision it rests on settled, and the declared
- * start day arrived: the three reasons [`amenbo_core::view::ReserveBlocker`] enumerates.
+ * Can it be reserved? — no open blockers, every decision it rests on settled, the declared start
+ * day arrived, and the creation finished: the reasons
+ * [`amenbo_core::view::ReserveBlocker`] enumerates.
  */
 ready: boolean, 
 /**
@@ -1313,6 +1314,12 @@ blockedByDecisions: Array<DecisionRefDto>,
  * day is no reason, so every `ready: false` the GUI draws carries a reason it can name on screen.
  */
 notStartedUntil: string | null, 
+/**
+ * Is the task still being put together — the fourth reason `ready` is false (`AMB-D-553`). A draft
+ * is drawn on the board like any other card (`AMB-D-555`), so the card has to carry the reason it
+ * cannot be picked up, the way `not_started_until` does for the third.
+ */
+draft: boolean, 
 /**
  * Premises pinned on **after this task was reserved** (`AMB-D-366`, the holder-side surface): a
  * blocker or an unsettled decision added since it went `in_progress`, silently withdrawing readiness

@@ -545,6 +545,7 @@ export const zhHans: Translation = {
     not_ready_premise_rejected: "{ref} 已被否决，这个任务需要重新考虑",
     not_ready_premise_unsettled: "{ref} 尚未定论——等待裁定或解除关联",
     not_ready_not_started: "它要到 {start} 才开始——日期不对就改开始日",
+    not_ready_draft: "它还在创建中——请先完成创建",
     store_busy: "正在恢复或更新存储，请稍后重试。",
     storage_error: "无法读取或写入存储，什么都没有改动。请重启 amenbo 后重试；如果仍然发生，请把 设置 > 日志 里的内容发过来。",
     not_found_task: "找不到任务 {ref}。",

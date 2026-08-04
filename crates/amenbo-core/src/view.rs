@@ -16,13 +16,20 @@ use crate::time::Timestamp;
 
 /// **The** ready predicate — every read that projects `ready` derives it here, so the task card, the
 /// task detail and the reserve guard cannot come to disagree about what "this can be started" means.
-/// Three premises, all of them declared by the user rather than by amenbo: no blocker still open, no
-/// linked decision still unsettled, and the declared start day arrived. No `start_on` means nothing was
-/// declared about when to start, which is not a reason to hold the task back.
+/// Four premises, all of them the user's own rather than amenbo's: no blocker still open, no linked
+/// decision still unsettled, the declared start day arrived, and the task's creation finished. No
+/// `start_on` means nothing was declared about when to start, which is not a reason to hold the task
+/// back.
+///
+/// The fourth is `draft` (`AMB-D-553`): while a task is still being put together its other premises have
+/// not been declared yet, so a `ready` taken before the creation finished would be saying "every premise
+/// holds" about a task nobody has finished writing (`AMB-D-552`). It holds the task out of the mailbox
+/// and out of a reservation, and out of nothing else — a draft is on the board and in every listing
+/// (`AMB-D-555`).
 ///
 /// `today` is the caller's reference day ([`crate::time::today`]), the same one the `status` view's
 /// buckets are cut against — a task the status view calls started must not read as not-yet-started here.
-/// The `ready:` filter says the same thing in SQL, where the three premises are predicates rather than
+/// The `ready:` filter says the same thing in SQL, where the premises are predicates rather than
 /// booleans; that is the one restatement, and it is held to this one by test.
 #[must_use]
 pub fn is_ready(
@@ -30,8 +37,12 @@ pub fn is_ready(
     has_unsettled_premise: bool,
     start_on: Option<NaiveDate>,
     today: NaiveDate,
+    draft: bool,
 ) -> bool {
-    !has_open_blocker && !has_unsettled_premise && not_started_until(start_on, today).is_none()
+    !has_open_blocker
+        && !has_unsettled_premise
+        && not_started_until(start_on, today).is_none()
+        && !draft
 }
 
 /// The third premise as a *reason* rather than a boolean: the declared start day, when it is still ahead
@@ -160,8 +171,13 @@ pub struct TaskCompact {
     /// ahead ([`not_started_until`]). The third reason a task is not ready, beside the two above — always
     /// serialized, `null` when the start day is no reason.
     pub not_started_until: Option<NaiveDate>,
-    /// Derived: no open blockers, no unsettled grounds, and the declared start day arrived — i.e. this
-    /// can be started ([`is_ready`]).
+    /// Still being put together: the fourth reason a task is not ready (`AMB-D-553`). Carried on the row
+    /// rather than derived, because the stage a creation is at is stored and not computed — and carried
+    /// at all because a draft **is** listed (`AMB-D-555`), so its row has to be able to say why it is not
+    /// in the mailbox.
+    pub draft: bool,
+    /// Derived: no open blockers, no unsettled grounds, the declared start day arrived, and the creation
+    /// finished — i.e. this can be started ([`is_ready`]).
     pub ready: bool,
 }
 
@@ -216,8 +232,11 @@ pub struct TaskDetail {
     /// The declared start day, when it is still ahead ([`not_started_until`]) — the third reason this task
     /// is not ready, beside the two above. Always serialized, `null` when the start day is no reason.
     pub not_started_until: Option<NaiveDate>,
-    /// Derived: no open blockers, no unsettled grounds, and the declared start day arrived — i.e. this
-    /// can be started ([`is_ready`]).
+    /// Still being put together — the fourth reason this task is not ready (`AMB-D-553`). The one premise
+    /// the reader of a detail page can settle on the spot: finishing the creation is what clears it.
+    pub draft: bool,
+    /// Derived: no open blockers, no unsettled grounds, the declared start day arrived, and the creation
+    /// finished — i.e. this can be started ([`is_ready`]).
     pub ready: bool,
     /// The reverse of `blocked_by`: the not-yet-done tasks that hold this one as a blocker — what
     /// finishing this task unblocks (empty means nothing waits on it).
@@ -346,8 +365,9 @@ pub fn priority_rank(p: Option<Priority>) -> u8 {
 ///
 /// **Invariant**: [`crate::store_engine::read::reserve_blockers`] is empty ⇔ `ready`. To keep the
 /// reservation guard and the mailbox's `ready:` filter from drifting onto different predicates, both look
-/// at the same two derivations, and nothing else — open blockers (a live dependency edge whose far end is
-/// not done) and unsettled grounds (a linked decision that is not accepted).
+/// at the same derivations, and nothing else — open blockers (a live dependency edge whose far end is
+/// not done), unsettled grounds (a linked decision that is not accepted), a start day still ahead, and a
+/// creation not finished.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReserveBlocker {
     /// A predecessor task that is not done yet. `label` is the conversational ref (`AMB-T-12`).
@@ -359,8 +379,12 @@ pub enum ReserveBlocker {
         status: DecisionStatus,
         superseded_by: Option<String>,
     },
-    /// The task declares a start day that has not arrived. Unlike the other two, this one clears itself:
+    /// The task declares a start day that has not arrived. Unlike the two above, this one clears itself:
     /// the day comes and the task is ready, with nothing to do. `start_on` is the declared day, so the
     /// error can say when the wait ends.
     NotStartedYet { start_on: NaiveDate },
+    /// The task is still being put together (`AMB-D-553`). It carries no value: the whole of the reason
+    /// is that the creation has not been finished, and what clears it is finishing it — there is nothing
+    /// further for the refusal to name.
+    StillDraft,
 }

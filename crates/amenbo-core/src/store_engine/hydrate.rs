@@ -149,6 +149,7 @@ pub(super) fn task_row(r: &Row) -> rusqlite::Result<Task> {
         completed_at: ts_opt(r, C.completed_at)?,
         status: enum_req(r, C.status, TaskStatus::parse)?,
         status_changed_at: ts_opt(r, C.status_changed_at)?,
+        draft: get(r, C.draft)?,
         created_by_kind: enum_opt(r, C.created_by_kind, ActorKind::parse)?,
         assignee_kind: enum_opt(r, C.assignee_kind, ActorKind::parse)?,
         start_on: date_opt(r, C.start_on)?,
@@ -481,6 +482,9 @@ mod tests {
                 completed_at: Some(now),
                 status: TaskStatus::Done,
                 status_changed_at: Some(now),
+                // Set, like every other field here: `false` is the default, so a dropped column would
+                // round-trip clean against it.
+                draft: true,
                 created_by_kind: Some(ActorKind::Ai),
                 assignee_kind: Some(ActorKind::Ai),
                 start_on: Some("2026-07-01".parse().unwrap()),

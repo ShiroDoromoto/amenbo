@@ -536,6 +536,11 @@ datasets! {
         // it answers "when did the current status begin" where `updated_at` (moved by any write) cannot.
         // Nullable: a task from a store that predates the column was never stamped (`AMB-D-366`).
         status_changed_at: ts_opt,
+        // Is the task still being put together? The fourth premise of `ready` (`AMB-D-553`) — a draft is
+        // visible everywhere but cannot be reserved (`AMB-D-555`), which is why it sits here rather than
+        // widening `status`. False is "the creation is finished", and it is what an existing row means: a
+        // task written before this column was declared was never a draft.
+        draft: bool_col,
         created_by_kind: actor_kind,
         assignee_kind: actor_kind,
         start_on: date_opt,

@@ -559,6 +559,7 @@ export const de: Translation = {
     not_ready_premise_rejected: "{ref} wurde abgelehnt, diese Aufgabe muss also neu gedacht werden",
     not_ready_premise_unsettled: "{ref} ist noch nicht entschieden — warte auf die Entscheidung oder löse die Verknüpfung",
     not_ready_not_started: "sie beginnt erst am {start} — ändere das Startdatum, falls das nicht stimmt",
+    not_ready_draft: "sie wird noch erstellt — schließe die Erstellung zuerst ab",
     store_busy: "Der Speicher wird gerade wiederhergestellt oder aktualisiert. Versuche es gleich noch einmal.",
     storage_error: "Der Speicher konnte nicht gelesen oder geschrieben werden, und es wurde nichts geändert. Starte amenbo neu und versuche es noch einmal — wenn es weiter passiert, schick, was unter Einstellungen > Protokolle liegt.",
     not_found_task: "Aufgabe {ref} wurde nicht gefunden.",

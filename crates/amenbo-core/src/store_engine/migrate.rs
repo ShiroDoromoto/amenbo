@@ -339,6 +339,23 @@ pub const STEPS: &[Step] = &[
              );",
         ),
     },
+    Step {
+        to: 21,
+        name: "add task.draft, the fourth premise of ready",
+        // `AMB-D-553`. Creation becomes two stages, and which stage a task is at is a premise of `ready`
+        // rather than a sixth status — so it arrives as a column on `task`, not as a widened `CHECK`.
+        //
+        // **Seeded, and the seed is not a guess: `0` on every row.** A task that already exists was
+        // written by a build that had no second stage, so its creation is finished by construction —
+        // there is no half-built task anywhere in an older store to mistake for one. `NOT NULL DEFAULT 0`
+        // is what writes that into every existing row, so there is nothing further to backfill.
+        //
+        // The column is spelled out here in frozen text, as every step's is: the registry may rename it
+        // tomorrow, and what this step added must keep meaning what it meant.
+        apply: Apply::Sql(
+            "ALTER TABLE task ADD COLUMN draft BOOLEAN NOT NULL DEFAULT 0 CHECK(draft IN (0, 1));",
+        ),
+    },
 ];
 
 /// v17: build the word index for a store whose records predate it. It is exactly the rebuild any repair
@@ -1304,9 +1321,20 @@ mod tests {
             "the store starts out refusing the value the step exists to admit"
         );
 
-        let run = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v9, the step this test is about, and read the shape there. Steps further along add
+        // columns of their own (v21's `draft`), and folding those into the comparison would accuse v9 of
+        // reshaping a table it only re-declared.
+        let through_v9 = STEPS.iter().position(|s| s.to == 9).expect("v9 is in the chain") + 1;
+        let v9 = run(&engine, &dir, &STEPS[..through_v9], &mut crate::progress::ignore).unwrap();
+        assert!(v9.applied.iter().any(|s| s.contains("'rejected'")), "v9 ran: {:?}", v9.applied);
+        let after = {
+            let tx = engine.conn().unchecked_transaction().unwrap();
+            column_names(&tx, "task").unwrap()
+        };
+        assert_eq!(before, after, "a constraint changed, not the shape");
 
-        assert!(run.applied.iter().any(|s| s.contains("'rejected'")), "v9 ran: {:?}", run.applied);
+        // Then the rest of the chain, so the store ends where every other store ends.
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
         assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
         engine
             .conn()
@@ -1322,11 +1350,6 @@ mod tests {
         assert_eq!(count("task_comment"), 1, "the cascade never fired: the comment is still there");
         assert_eq!(count("task_dependency"), 1, "…and so is the dependency edge");
         assert_eq!(count("task_commit"), 1, "…and so is the commit anchor");
-        let after = {
-            let tx = engine.conn().unchecked_transaction().unwrap();
-            column_names(&tx, "task").unwrap()
-        };
-        assert_eq!(before, after, "a constraint changed, not the shape");
         assert!(
             engine.conn().execute("UPDATE task SET status = 'shipped' WHERE id = 1", []).is_err(),
             "the set is still closed — one value wider, not open"

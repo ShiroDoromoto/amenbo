@@ -581,14 +581,20 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
             Pred::is_null(T.assignee_kind).or(Pred::ne(T.assignee_kind, ActorKind::Ai.as_str()))
         });
     }
+    if let Some(draft) = f.draft {
+        // `draft:` — the fourth premise asked for on its own, the way `start:` asks for the third. It is
+        // the one premise stored as a column, so it needs no join and no clock.
+        preds.push(Pred::eq(T.draft, draft));
+    }
     if let Some(ready) = f.ready {
-        // This is `crate::view::is_ready` restated in SQL, because a filter cannot ask three
+        // This is `crate::view::is_ready` restated in SQL, because a filter cannot ask four
         // booleans of a row it has not read yet. A task is held back by an *open* blocker (a live
         // dependency edge to a live blocker that has not ended), by an *unsettled premise*
-        // (`unsettled_premise`), or by a *start day that has not arrived*. The reserve guard
-        // (`reserve_blockers`) reads the same derivations, so the filter and the guard cannot drift
-        // apart, and `a_start_day_still_ahead_holds_the_task_back_on_every_read` holds this restatement
-        // to the predicate on every arm.
+        // (`unsettled_premise`), by a *start day that has not arrived*, or by a *creation not yet
+        // finished*. The reserve guard (`reserve_blockers`) reads the same derivations, so the filter
+        // and the guard cannot drift apart, and
+        // `a_start_day_still_ahead_holds_the_task_back_on_every_read` holds this restatement to the
+        // predicate on every arm.
         const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
         const DC: col::decision::Cols = col::decision::of("dc");
         const D: col::task_dependency::Cols = col::task_dependency::of("d");
@@ -612,7 +618,10 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         let not_started = (!Pred::is_blank(T.start_on))
             .and(Pred::cmp(T.start_on, ">", q.today.to_string().as_str()));
 
-        preds.push(open_blocker.or(premise).or(not_started).negated_if(ready));
+        // The fourth premise, read straight off the column — the creation has not been finished.
+        let still_draft = Pred::eq(T.draft, true);
+
+        preds.push(open_blocker.or(premise).or(not_started).or(still_draft).negated_if(ready));
     }
     if let Some(decision) = f.decision {
         // `decision:` — tasks a decision links to (live link, live decision), as an EXISTS so it seeks
@@ -1272,8 +1281,9 @@ pub fn reserve_blockers(
         }
     }
     {
-        // The third premise. Read from the same transaction as the other two, off the row this guard is
-        // about — a `start_on` the caller edited a moment ago is already in view.
+        // The last two premises, both read off the row this guard is about, from the same transaction as
+        // the two above — a `start_on` the caller edited a moment ago, or a creation they finished a
+        // moment ago, is already in view.
         const TA: col::task::Cols = col::task::ALL;
         let stored = scalar_by_id(conn, TA.id, TA.start_on, task_id)?.flatten();
         // A date that will not parse is raised, not shrugged off: letting a reservation through on an
@@ -1282,6 +1292,11 @@ pub fn reserve_blockers(
             if start_on > today {
                 out.push(ReserveBlocker::NotStartedYet { start_on });
             }
+        }
+        // Last, because it is the reason a reader acts on last: the other three name work elsewhere, and
+        // this one is settled on the task in front of them (`AMB-D-553`).
+        if scalar_by_id(conn, TA.id, TA.draft, task_id)?.unwrap_or(false) {
+            out.push(ReserveBlocker::StillDraft);
         }
     }
     Ok(out)
@@ -2681,6 +2696,9 @@ pub struct TaskDetailRow {
     pub start_on: Option<String>,
     pub due_on: Option<String>,
     pub priority: Option<String>,
+    /// Whether the creation is still unfinished — the fourth premise of `ready` (`AMB-D-553`), read
+    /// straight off the row like `status`.
+    pub draft: bool,
     pub created_at: String,
     pub updated_at: String,
     pub placement: Option<PlacementRow>,
@@ -2703,6 +2721,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
     let (subtype, status, completed_at) = (sel.col(T.subtype), sel.col(T.status), sel.col(T.completed_at));
     let (created_by_kind, assignee_kind) = (sel.col(T.created_by_kind), sel.col(T.assignee_kind));
     let (start_on, due_on, priority) = (sel.col(T.start_on), sel.col(T.due_on), sel.col(T.priority));
+    let draft = sel.col(T.draft);
     let (created_at, updated_at) = (sel.col(T.created_at), sel.col(T.updated_at));
     let mut sql = Sql::from(&sel, T.table);
     sql.push_where(Some(&Pred::eq(T.id, task_id)));
@@ -2720,6 +2739,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
                 start_on: start_on.get(r)?,
                 due_on: due_on.get(r)?,
                 priority: priority.get(r)?,
+                draft: draft.get(r)?,
                 created_at: created_at.get(r)?,
                 updated_at: updated_at.get(r)?,
                 placement: None,
@@ -2823,6 +2843,10 @@ pub struct TaskCardRow {
     /// come is [`crate::view::not_started_until`]'s to say, and the surface asks it against its own
     /// `today` rather than the row freezing an answer.
     pub start_on: Option<String>,
+    /// Whether the creation is still unfinished — the fourth premise of `ready` (`AMB-D-553`). Unlike
+    /// `start_on` it needs no reading against a clock: the stage a creation is at is stored, so the row
+    /// carries the answer itself.
+    pub draft: bool,
     pub completed_at: Option<String>,
     pub assignee: Option<CardActor>,
     pub created_by: Option<CardActor>,
@@ -2847,7 +2871,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
     let mut sel = Select::new();
     let (id, title, notes, status) = (sel.col(T.id), sel.col(T.title), sel.col(T.notes), sel.col(T.status));
     let (priority, due_on, completed_at) = (sel.col(T.priority), sel.col(T.due_on), sel.col(T.completed_at));
-    let start_on = sel.col(T.start_on);
+    let (start_on, draft) = (sel.col(T.start_on), sel.col(T.draft));
     let (assignee, creator) = (sel.col(T.assignee_kind), sel.col(T.created_by_kind));
     let mut sql = Sql::from(&sel, T.table);
     sql.push_where(Some(&Pred::eq(T.id, task_id)));
@@ -2863,6 +2887,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
                 priority: priority.get(r)?,
                 due_on: due_on.get(r)?,
                 start_on: start_on.get(r)?,
+                draft: draft.get(r)?,
                 completed_at: completed_at.get(r)?,
                 assignee: assignee_kind
                     .map(|k| CardActor { name: facet_display(Some(&k)), kind: Some(k) }),
@@ -3559,6 +3584,7 @@ struct CardBase {
     start_on: Option<NaiveDate>,
     priority: Option<Priority>,
     assignee_kind: Option<ActorKind>,
+    draft: bool,
 }
 
 /// The placement context of a task: the project ref resolved from its placement,
@@ -3595,6 +3621,7 @@ pub fn hydrate_task_cards(
         let (id, title, status) = (sel.col(TA.id), sel.col(TA.title), sel.col(TA.status));
         let (due_on, start_on) = (sel.col(TA.due_on), sel.col(TA.start_on));
         let (priority, assignee_kind) = (sel.col(TA.priority), sel.col(TA.assignee_kind));
+        let draft = sel.col(TA.draft);
         let mut pred = Pred::is_in(TA.id, ids.iter().copied());
         if let Some(pid) = reach.project() {
             pred = pred.and(Pred::eq(TA.project_id, pid));
@@ -3616,6 +3643,7 @@ pub fn hydrate_task_cards(
                         assignee_kind.get(r)?,
                         ActorKind::parse,
                     )?,
+                    draft: draft.get(r)?,
                 })
             })
             .map_err(StoreEngineError::from)?;
@@ -3721,6 +3749,7 @@ pub fn hydrate_task_cards(
             !blocked_by_decisions.is_empty(),
             b.start_on,
             today,
+            b.draft,
         );
         let not_started_until = crate::view::not_started_until(b.start_on, today);
         out.push(TaskCompact {
@@ -3731,6 +3760,7 @@ pub fn hydrate_task_cards(
             due_on: b.due_on,
             start_on: b.start_on,
             priority: b.priority,
+            draft: b.draft,
             r#ref: crate::idref::task(b.id),
             project: ctx.and_then(|c| c.project.clone()),
             assignee_kind: b.assignee_kind,

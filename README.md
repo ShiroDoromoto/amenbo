@@ -376,14 +376,18 @@ amenbo task list --filter "commit:<full-sha>" --json # walk history -> task insi
 # Dependencies: this task must wait for a blocker to be done first
 amenbo task depend 13 --on 12                # 13 is blocked until 12 is done
 amenbo task undepend 13 --on 12
-# A task is ready when no blocker is open, every decision linked to it is accepted, and
-# its declared start day has arrived; ready:yes hides what is not ready, ready:no lists
-# what's waiting — and every task says which of the three is holding it back. Reserving a
-# task that is not ready is refused (not_ready) — resolve the premise; there is no --force
+# A task is ready when no blocker is open, every decision linked to it is accepted, its
+# declared start day has arrived, and it is no longer being created; ready:yes hides what
+# is not ready, ready:no lists what's waiting — and every task says which of the four is
+# holding it back. Reserving a task that is not ready is refused (not_ready) — resolve the
+# premise; there is no --force
 amenbo task list --filter "ready:yes" --json
 # start:future is the waiting queue on its own — what a start day still ahead holds back
 # (start:today = the day has come, start:none = no start day declared)
 amenbo task list --filter "start:future" --json
+# draft:yes is the same doorway onto the fourth premise — the tasks still being put
+# together, which are listed like any other but cannot be reserved (draft:no is the rest)
+amenbo task list --filter "draft:yes" --json
 
 # Decision records: durable "why we chose X" (a Task sibling, not a task —
 # no mailbox workflow, its own device-global number space)

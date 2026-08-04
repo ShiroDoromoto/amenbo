@@ -111,6 +111,11 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
         status: TaskStatus::Todo,
         // The task's first status (`todo`) begins now, so its status clock starts here.
         status_changed_at: Some(now),
+        // Creation still lands finished here. The premise exists (`AMB-D-553`) before anything raises
+        // it, so that the stage a task is at can be read and enforced from the day the column arrives;
+        // making the creation two stages by default is the next change (`AMB-D-554`), and it moves this
+        // line alone.
+        draft: false,
         created_by_kind: input.created_by_kind,
         assignee_kind: None,
         start_on: input.start_on,
@@ -262,6 +267,17 @@ fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
                     ))
                     .coded(ErrorCode::NotReadyNotStarted)
                     .with("start", start_on),
+                );
+            }
+            // The one reason the reserver can clear where they stand, so the sentence is the next thing
+            // to do rather than something to go and wait for. It asks for nobody's ruling (`AMB-D-558`):
+            // the task is not finished being written, and finishing it is the whole of what is left.
+            // No value rides with it — the refusal above already names the task, and the reason itself
+            // has nothing further to point at.
+            ReserveBlocker::StillDraft => {
+                reasons.push(
+                    Msg::new("it is still being created — finish creating it first")
+                        .coded(ErrorCode::NotReadyDraft),
                 );
             }
         }
@@ -434,6 +450,16 @@ mod tests {
     /// The current status, read from the source of truth.
     fn status_of(tx: &WriteTx<'_>, id: i64) -> TaskStatus {
         read::task_status(tx.conn(), id).unwrap().expect("the task is live")
+    }
+
+    /// Put a task back into the stage where its creation is unfinished, or take it out again. Nothing
+    /// raises the premise yet — making the creation two stages is the next change (`AMB-D-554`) — so the
+    /// tests that hold the premise honest move the column themselves, through the same production
+    /// mapping every other write goes through.
+    fn set_draft(tx: &WriteTx<'_>, id: i64, draft: bool) {
+        let before = live_before(tx, id).unwrap();
+        let after = Task { draft, updated_at: Timestamp::now(), ..before.clone() };
+        emit_update(tx, record::task(&before), record::task(&after)).unwrap();
     }
 
     #[test]
@@ -710,7 +736,118 @@ mod tests {
             check(tx);
             update(tx, tid, TaskPatch { clear_start: true, ..TaskPatch::default() }).unwrap();
             check(tx);
+            // And the fourth: a creation still unfinished has to hide the task from the mailbox and
+            // refuse the reserve, on the same predicate as the three before it.
+            set_draft(tx, tid, true);
+            check(tx);
+            set_draft(tx, tid, false);
+            check(tx);
             assert!(read::reserve_blockers(tx.conn(), tid, crate::time::today()).unwrap().is_empty());
+        });
+    }
+
+    #[test]
+    fn reserving_a_task_still_being_created_is_rejected_as_not_ready() {
+        // The premise is a guard, not a filter: naming the number directly must not get past what the
+        // mailbox hides (`AMB-D-555`). What clears it is the one thing the reserver can do where they
+        // stand — finish creating the task — and the refusal says so without asking anyone's ruling
+        // (`AMB-D-558`).
+        with_numbered_task(|tx, _pid, tid| {
+            set_draft(tx, tid, true);
+
+            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            assert_eq!(err.code(), "not_ready");
+            assert!(err.message_en().contains("still being created"), "{}", err.message_en());
+            assert_eq!(status_of(tx, tid), TaskStatus::Todo, "rejected, and the status has not moved");
+
+            // Finishing the creation is the way through — the same move the message names.
+            set_draft(tx, tid, false);
+            assert_eq!(
+                set_status(tx, tid, TaskStatus::InProgress).unwrap().status,
+                TaskStatus::InProgress
+            );
+        });
+    }
+
+    #[test]
+    fn the_creation_guard_only_fires_on_the_reserve_transition() {
+        // Same rule as the other three premises: a task pushed back into being created does not strip a
+        // reservation already held, and the other transitions stay unconditional.
+        with_numbered_task(|tx, _pid, tid| {
+            set_status(tx, tid, TaskStatus::InProgress).unwrap();
+            set_draft(tx, tid, true);
+
+            assert_eq!(status_of(tx, tid), TaskStatus::InProgress, "a creation reopened after the fact does not strip the reservation");
+            assert_eq!(set_status(tx, tid, TaskStatus::Todo).unwrap().status, TaskStatus::Todo);
+            assert_eq!(set_status(tx, tid, TaskStatus::Blocked).unwrap().status, TaskStatus::Blocked);
+            assert_eq!(set_status(tx, tid, TaskStatus::Done).unwrap().status, TaskStatus::Done);
+        });
+    }
+
+    #[test]
+    fn a_task_still_being_created_is_listed_but_held_back_on_every_read() {
+        // The fourth premise, and the half of it that is easy to get wrong: a draft is **not** hidden
+        // (`AMB-D-555`) — it stays on every listing and carries the reason it cannot be picked up. So
+        // three things have to hold at once: the task is still listed, every read that projects `ready`
+        // says false, and the mailbox drops it.
+        with_numbered_task(|tx, _pid, tid| {
+            let card = |tx: &WriteTx<'_>| {
+                crate::query::list(tx.conn(), crate::reach::Reach::All, list_params(None))
+                    .unwrap()
+                    .tasks
+                    .into_iter()
+                    .find(|t| t.id == tid)
+                    .expect("a task being created is listed like any other")
+            };
+            let detail = |tx: &WriteTx<'_>| crate::query::task_detail(tx.conn(), tid).unwrap();
+            let in_mailbox = |tx: &WriteTx<'_>| {
+                crate::query::list(tx.conn(), crate::reach::Reach::All, list_params(Some("ready:yes")))
+                    .unwrap()
+                    .tasks
+                    .iter()
+                    .any(|t| t.id == tid)
+            };
+
+            for (draft, what) in [(true, "still being created"), (false, "creation finished")] {
+                set_draft(tx, tid, draft);
+                let (card, detail) = (card(tx), detail(tx));
+                // The reason and the verdict are one derivation, as they are for the start day.
+                assert_eq!(card.draft, draft, "card reason: {what}");
+                assert_eq!(detail.draft, draft, "detail reason: {what}");
+                assert_eq!(card.ready, !draft, "card ready: {what}");
+                assert_eq!(detail.ready, !draft, "detail ready: {what}");
+                assert_eq!(in_mailbox(tx), !draft, "ready:yes filter: {what}");
+            }
+        });
+    }
+
+    #[test]
+    fn the_draft_filter_cuts_the_store_in_the_two_stages_a_creation_has() {
+        // `draft:` is the doorway to the creations still open, which `ready:no` cannot open on its own —
+        // it lumps four premises together. The two arms have to partition the store: every task is being
+        // created or has been, and never both.
+        with_numbered_task(|tx, pid, being_created| {
+            let matches = |tx: &WriteTx<'_>, filter: &str| -> Vec<i64> {
+                let mut ids =
+                    crate::query::list(tx.conn(), crate::reach::Reach::All, list_params(Some(filter)))
+                        .unwrap()
+                        .tasks
+                        .iter()
+                        .map(|t| t.id)
+                        .collect::<Vec<_>>();
+                ids.sort_unstable();
+                ids
+            };
+            let finished = mk_task_in(tx, "created and done being created", Some(pid));
+            set_draft(tx, being_created, true);
+
+            assert_eq!(matches(tx, "draft:yes"), vec![being_created], "draft:yes = still being created");
+            assert_eq!(matches(tx, "draft:no"), vec![finished], "draft:no = the creation is finished");
+
+            let mut all = matches(tx, "draft:yes");
+            all.extend(matches(tx, "draft:no"));
+            all.sort_unstable();
+            assert_eq!(all, matches(tx, ""), "the two arms partition the store");
         });
     }
 

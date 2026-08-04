@@ -546,6 +546,7 @@ export const nl: Translation = {
     not_ready_premise_rejected: "{ref} is afgewezen, dus deze taak moet opnieuw doordacht worden",
     not_ready_premise_unsettled: "{ref} is nog niet beslecht — wacht de uitspraak af of ontkoppel hem",
     not_ready_not_started: "hij begint pas op {start} — pas de startdatum aan als die niet klopt",
+    not_ready_draft: "hij wordt nog aangemaakt — rond het aanmaken eerst af",
     store_busy: "De opslag wordt hersteld of bijgewerkt. Probeer het zo meteen opnieuw.",
     storage_error: "De opslag kon niet worden gelezen of geschreven, en er is niets gewijzigd. Start amenbo opnieuw en probeer het nog eens — als het blijft gebeuren, stuur dan wat er onder Instellingen > Logboeken staat.",
     not_found_task: "Taak {ref} is niet gevonden.",

@@ -448,8 +448,9 @@ pub struct TaskCardDto {
     /// things. None while the task is still open.
     completed_at: Option<String>,
     comments: usize,
-    /// Can it be reserved? — no open blockers, every decision it rests on settled, and the declared
-    /// start day arrived: the three reasons [`amenbo_core::view::ReserveBlocker`] enumerates.
+    /// Can it be reserved? — no open blockers, every decision it rests on settled, the declared start
+    /// day arrived, and the creation finished: the reasons
+    /// [`amenbo_core::view::ReserveBlocker`] enumerates.
     ready: bool,
     /// Dependencies: blockers that are not done yet (id + name). Drives the "waiting on X" line in
     /// the detail pane. Empty means it can be started.
@@ -470,6 +471,10 @@ pub struct TaskCardDto {
     /// false, beside `blocked_by` and `blocked_by_decisions`. Always serialized, `null` when the start
     /// day is no reason, so every `ready: false` the GUI draws carries a reason it can name on screen.
     not_started_until: Option<String>,
+    /// Is the task still being put together — the fourth reason `ready` is false (`AMB-D-553`). A draft
+    /// is drawn on the board like any other card (`AMB-D-555`), so the card has to carry the reason it
+    /// cannot be picked up, the way `not_started_until` does for the third.
+    draft: bool,
     /// Premises pinned on **after this task was reserved** (`AMB-D-366`, the holder-side surface): a
     /// blocker or an unsettled decision added since it went `in_progress`, silently withdrawing readiness
     /// the holder never asked to give up. Present only for an `in_progress` task that actually acquired
@@ -763,9 +768,15 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
     let start_date = row.start_on.as_deref().and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
     let not_started_until =
         amenbo_core::view::not_started_until(start_date, amenbo_core::time::today());
-    let ready = row.blocked_by.is_empty()
-        && row.blocked_by_decisions.is_empty()
-        && not_started_until.is_none();
+    // Core's own predicate rather than a fourth restatement of it: `ready` on a card and `ready` at the
+    // reserve are the same question, and the only way they cannot drift is by being one call.
+    let ready = amenbo_core::view::is_ready(
+        !row.blocked_by.is_empty(),
+        !row.blocked_by_decisions.is_empty(),
+        start_date,
+        amenbo_core::time::today(),
+        row.draft,
+    );
     let blocked_by: Vec<TaskRefDto> = row
         .blocked_by
         .into_iter()
@@ -809,6 +820,7 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         linked_decisions,
         blocked_by_decisions,
         not_started_until: not_started_until.map(date_iso),
+        draft: row.draft,
         premise_change,
     }
 }

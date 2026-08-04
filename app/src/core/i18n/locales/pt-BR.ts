@@ -573,6 +573,7 @@ export const ptBR: Translation = {
     not_ready_premise_rejected: "{ref} foi rejeitada, então esta tarefa precisa ser repensada",
     not_ready_premise_unsettled: "{ref} não está resolvida — espere a decisão ou desvincule",
     not_ready_not_started: "ela só começa em {start} — mude a data de início se não for essa",
+    not_ready_draft: "ela ainda está sendo criada — termine a criação primeiro",
     store_busy: "O armazenamento está sendo restaurado ou atualizado. Tente de novo em instantes.",
     storage_error: "Não foi possível ler nem gravar no armazenamento, e nada foi alterado. Reinicie o amenbo e tente de novo; se continuar acontecendo, envie o que está em Configurações > Logs.",
     not_found_task: "Tarefa {ref} não encontrada.",

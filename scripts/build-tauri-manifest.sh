@@ -8,8 +8,8 @@
 #
 # It reads each per-platform updater artifact's detached minisign signature (<artifact>.sig, written
 # by `tauri signer sign` / createUpdaterArtifacts) out of dist/ and points url at that artifact's
-# release-download URL. A platform whose .sig is absent is skipped, so the set can grow (Linux
-# AppImage arrives with the AppImage self-update work) without touching this script.
+# release-download URL. A platform whose .sig is absent is skipped, so a keyless build simply drops
+# that row rather than failing the release.
 #
 # Usage: build-tauri-manifest.sh <tag> [dist_dir]   (tag e.g. v1.6.0)
 set -euo pipefail
@@ -35,6 +35,7 @@ rows=(
   "darwin-x86_64:amenbo-darwin-amd64-update.app.tar.gz"
   "windows-x86_64:amenbo-app-windows-x64-setup-update.exe"
   "linux-x86_64:amenbo-app-linux-x86_64-update.AppImage"
+  "linux-aarch64:amenbo-app-linux-aarch64-update.AppImage"
 )
 
 platforms='{}'

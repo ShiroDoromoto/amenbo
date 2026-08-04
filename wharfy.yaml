@@ -39,13 +39,14 @@ prebuilt:
 #                It is not a single universal build because the asset-key scheme (os-arch) and the
 #                update_check mapping assume a per-arch layout.
 #   linux AppImage … `make dist-gui-linux` — the whole of the Linux GUI distribution, and a per-user
-#                    one (needs no root; the user puts it on PATH). For amd64 the Tauri CLI dies under
-#                    qemu, so GitHub Actions' native x86_64 runner release.yml is the primary path.
+#                    one (needs no root; the user puts it on PATH). Two builds, x86_64 / aarch64,
+#                    each on a runner of its own architecture: the Tauri CLI dies under qemu, so
+#                    GitHub Actions' native runners in release.yml are the primary path.
 #                    Declared here so a first install has a URL in latest.json
-#                    (`linux-x64-appimage`) instead of only the Releases page. What the running GUI
-#                    downloads to update itself is a byte-identical copy under a `-update` name,
-#                    attached by release.yml via gh — deliberately not a bundle here, so the two
-#                    audiences' download counts stay apart.
+#                    (`linux-x64-appimage` / `linux-arm64-appimage`) instead of only the Releases
+#                    page. What the running GUI downloads to update itself is a byte-identical copy
+#                    under a `-update` name, attached by release.yml via gh — deliberately not a
+#                    bundle here, so the two audiences' download counts stay apart.
 #   win  NSIS … built natively by public CI (release.yml's windows job runs `tauri build --bundles
 #               nsis`); registers GUI + bundled CLI on PATH; **unsigned** = the SmartScreen first-run
 #               warning is accepted.
@@ -56,4 +57,5 @@ bundle:
     - { os: darwin,  arch: arm64, kind: pkg,  path: dist/amenbo-darwin-arm64.pkg }
     - { os: darwin,  arch: amd64, kind: pkg,  path: dist/amenbo-darwin-amd64.pkg }
     - { os: linux,   arch: amd64, kind: appimage, path: dist/amenbo-app-linux-x86_64.AppImage }
+    - { os: linux,   arch: arm64, kind: appimage, path: dist/amenbo-app-linux-aarch64.AppImage }
     - { os: windows, arch: amd64, kind: nsis, path: dist/amenbo-app-windows-x64-setup.exe }

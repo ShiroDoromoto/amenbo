@@ -147,8 +147,8 @@ jobs:
       # The amd64 CLI is built in the Ubuntu 22.04 container, not on the runner: the runner's glibc
       # is newer than the floor the AppImage sets, and a natively built CLI stops dead with
       # `GLIBC_2.39 not found` on the distributions the GUI beside it still runs on. Docker is
-      # preinstalled here and this runner is native amd64. The arm64 CLI is a separate native job
-      # (linux-arm-cli) running the same recipe, so nothing here has to cross-compile.
+      # preinstalled here and this runner is native amd64. arm64 is a separate native job
+      # (linux-arm) running the same recipes, so nothing here has to cross-compile.
       - name: Build the Linux amd64 CLI
         run: make dist-cli-linux LINUX_CLI_ARCH=amd64
 
@@ -190,8 +190,8 @@ jobs:
             dist/amenbo-app-linux-x86_64.AppImage.sig
           if-no-files-found: error
 
-  linux-arm-cli:
-    name: Linux arm64 CLI
+  linux-arm:
+    name: Linux arm64 AppImage + CLI
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
@@ -200,15 +200,31 @@ jobs:
 
       # On an arm64 runner (free for public repos) rather than cross-compiled — no zig, no
       # emulation — and through the same 22.04 container as amd64, so both architectures carry the
-      # one glibc floor. arm64 ships the CLI only (the `script` channel + CLI archive); there is no
-      # arm64 Linux GUI bundle.
+      # one glibc floor.
       - name: Build the Linux arm64 CLI
         run: make dist-cli-linux LINUX_CLI_ARCH=arm64
+
+      # The same Docker recipe the amd64 job runs, on a runner that is natively this arch, so the
+      # Linux GUI reaches both architectures rather than x86_64 alone.
+      # TAURI_SIGNING_* present → the AppImage stage layers createUpdaterArtifacts and
+      # minisign-signs the AppImage in place, emitting the .AppImage.sig updater artifact the
+      # GUI self-update path reads. Absent on a fork → the AppImage still builds, just unsigned
+      # (no updater artifact), and the manifest step skips this platform.
+      # The GUI e2e is not repeated here: what it watches is tauri's emit reaching the WebKitGTK
+      # webview, which is the same code on both architectures, and the amd64 job runs it.
+      - name: Build the Linux arm64 GUI bundle (AppImage)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: make dist-gui-linux LINUX_GUI_ARCH=arm64
 
       - uses: actions/upload-artifact@v7
         with:
           name: dist-linux-arm
-          path: dist/amenbo-linux-arm64
+          path: |
+            dist/amenbo-linux-arm64
+            dist/amenbo-app-linux-aarch64.AppImage
+            dist/amenbo-app-linux-aarch64.AppImage.sig
           if-no-files-found: error
 
   windows:
@@ -289,7 +305,7 @@ jobs:
 
   release:
     name: Prerelease + attest provenance
-    needs: [macos, linux, linux-arm-cli, windows]
+    needs: [macos, linux, linux-arm, windows]
     runs-on: ubuntu-latest
     # id-token + attestations let wharfy sign build provenance with the workflow's
     # keyless OIDC identity (no secret to register); contents lets it write the GitHub
@@ -361,6 +377,7 @@ jobs:
           pairs=(
             "amenbo-app-windows-x64-setup.exe:amenbo-app-windows-x64-setup-update.exe"
             "amenbo-app-linux-x86_64.AppImage:amenbo-app-linux-x86_64-update.AppImage"
+            "amenbo-app-linux-aarch64.AppImage:amenbo-app-linux-aarch64-update.AppImage"
             "amenbo-darwin-arm64.pkg:amenbo-darwin-arm64-update.pkg"
             "amenbo-darwin-amd64.pkg:amenbo-darwin-amd64-update.pkg"
           )
@@ -438,6 +455,8 @@ jobs:
             dist/amenbo-app-windows-x64-setup-update.exe dist/amenbo-app-windows-x64-setup-update.exe.sig \
             dist/amenbo-app-linux-x86_64.AppImage.sig \
             dist/amenbo-app-linux-x86_64-update.AppImage dist/amenbo-app-linux-x86_64-update.AppImage.sig \
+            dist/amenbo-app-linux-aarch64.AppImage.sig \
+            dist/amenbo-app-linux-aarch64-update.AppImage dist/amenbo-app-linux-aarch64-update.AppImage.sig \
             dist/amenbo-darwin-arm64-update.pkg dist/amenbo-darwin-amd64-update.pkg \
             dist/latest-tauri.json \
             --clobber
@@ -463,6 +482,9 @@ jobs:
             dist/amenbo-app-linux-x86_64.AppImage.sig
             dist/amenbo-app-linux-x86_64-update.AppImage
             dist/amenbo-app-linux-x86_64-update.AppImage.sig
+            dist/amenbo-app-linux-aarch64.AppImage.sig
+            dist/amenbo-app-linux-aarch64-update.AppImage
+            dist/amenbo-app-linux-aarch64-update.AppImage.sig
             dist/amenbo-darwin-arm64-update.pkg
             dist/amenbo-darwin-amd64-update.pkg
             dist/cli-update/*-update.tar.gz
@@ -514,6 +536,8 @@ jobs:
             "amenbo-app-windows-x64-setup-update.exe" "amenbo-app-windows-x64-setup-update.exe.sig"
             "amenbo-app-linux-x86_64.AppImage.sig"
             "amenbo-app-linux-x86_64-update.AppImage" "amenbo-app-linux-x86_64-update.AppImage.sig"
+            "amenbo-app-linux-aarch64.AppImage.sig"
+            "amenbo-app-linux-aarch64-update.AppImage" "amenbo-app-linux-aarch64-update.AppImage.sig"
             "amenbo-darwin-arm64-update.pkg" "amenbo-darwin-amd64-update.pkg"
             "latest-tauri.json"
           )

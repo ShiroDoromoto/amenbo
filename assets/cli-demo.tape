@@ -45,6 +45,20 @@ Sleep 800ms
 Type "amenbo init --name Alex --actor human" Sleep 400ms Enter
 Sleep 2.5s
 
+# Off camera: `init` leaves one session-start question for the next human command, and a terminal is
+# where it fires. A film cannot answer it in character — and left unanswered it eats the next line the
+# tape types, which is how a re-recording silently films a broken tour. So it is answered here, and the
+# screen reset, which also keeps the half below from scrolling. `tests/demo_tape.rs` skips Hide blocks,
+# so this run stays out of the transcript.
+Hide
+Type "amenbo task list --actor human" Enter
+Sleep 800ms
+Type "n" Enter
+Sleep 800ms
+Type "clear" Enter
+Sleep 500ms
+Show
+
 Type "amenbo task add --title 'Draft the launch note' --project website --due +3d --actor human" Sleep 400ms Enter
 Sleep 1.5s
 Type "amenbo task add --title 'Ship the installer' --project website --to me-ai --actor human" Sleep 400ms Enter

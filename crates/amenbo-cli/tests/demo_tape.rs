@@ -24,14 +24,33 @@ fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
 }
 
-/// Every `amenbo …` command the tape types, in the order it types them. The setup and teardown the
-/// film hides (`export`, `rm -rf`, `cd`) invoke no amenbo, so naming the binary is enough to pick out
-/// exactly the lines the viewer sees run.
+/// Every `amenbo …` command the tape types **on camera**, in the order it types them.
+///
+/// `Hide` / `Show` is what the film uses to step outside itself, and what it does there is not always
+/// shell housekeeping: `init` leaves one session-start question for the next human command, a terminal
+/// is where that question fires, and a film cannot answer it in character — so it is answered off
+/// camera, with amenbo. A hidden line is therefore no longer recognisable by "it does not name the
+/// binary", and picking it up would put in the transcript a command the viewer never sees run.
 fn demo_commands(tape: &str) -> Vec<String> {
-    tape.lines()
-        .filter_map(|line| line.strip_prefix(r#"Type "amenbo "#))
-        .filter_map(|rest| rest.split_once('"').map(|(cmd, _)| format!("amenbo {cmd}")))
-        .collect()
+    let mut on_camera = true;
+    let mut out = Vec::new();
+    for line in tape.lines() {
+        match line.trim() {
+            "Hide" => on_camera = false,
+            "Show" => on_camera = true,
+            _ if on_camera => {
+                if let Some(cmd) = line
+                    .strip_prefix(r#"Type "amenbo "#)
+                    .and_then(|rest| rest.split_once('"'))
+                    .map(|(cmd, _)| format!("amenbo {cmd}"))
+                {
+                    out.push(cmd);
+                }
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 /// Split a command line into argv, honouring the single quotes the tape uses to hold a title or a
@@ -167,6 +186,21 @@ mod tests {
                     Type \"# a comment the film shows\" Sleep 400ms Enter\n\
                     Type \"amenbo task list --actor human\" Sleep 400ms Enter\n";
         assert_eq!(demo_commands(tape), vec!["amenbo task list --actor human"]);
+    }
+
+    /// And an amenbo command run off camera stays out of it — the transcript is the film's own text, so
+    /// a line the viewer never sees run must not appear in what the film is held to.
+    #[test]
+    fn an_amenbo_command_run_off_camera_is_not_picked_up() {
+        let tape = "Type \"amenbo init --name Alex --actor human\" Enter\n\
+                    Hide\nType \"amenbo task list --actor human\" Enter\nType \"n\" Enter\n\
+                    Type \"clear\" Enter\nShow\n\
+                    Type \"amenbo task list --actor human\" Enter\n";
+        assert_eq!(
+            demo_commands(tape),
+            vec!["amenbo init --name Alex --actor human", "amenbo task list --actor human"],
+            "the hidden run is skipped, and the visible one that repeats it is kept",
+        );
     }
 
     #[test]

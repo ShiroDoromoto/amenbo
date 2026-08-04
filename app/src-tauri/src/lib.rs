@@ -104,6 +104,40 @@ pub fn run_plugin_runner() -> bool {
     true
 }
 
+/// The `platforms` key this build asks the update manifest for — the machine's, not the build's
+/// (`AMB-D-551`).
+///
+/// Left to itself the plugin keys the lookup on the architecture it was compiled for, so a build
+/// running under emulation asks for its own kind forever and the machine never comes off the
+/// translation layer. Only the architecture is asked of the machine, through the same door the CLI
+/// uses ([`amenbo_core::update_check::native_arch`]); the operating system half has no such
+/// question, no one running a Windows build on a Mac.
+///
+/// The vocabulary here is the updater plugin's, which is neither amenbo's nor wharfy's: `darwin`
+/// for macOS, and `aarch64` / `x86_64` where wharfy writes `arm64` / `x64`. Naming the key outright
+/// also settles which one is read — the plugin otherwise tries a bundle-type-suffixed key first,
+/// and the manifest amenbo publishes (`scripts/build-tauri-manifest.sh`) has only the plain ones.
+/// `None` is "nothing to say": an operating system or an architecture with no name in that
+/// vocabulary leaves the plugin on its own default, which is what it had before this.
+#[cfg(desktop)]
+fn updater_target() -> Option<String> {
+    let os = if cfg!(target_os = "macos") {
+        "darwin"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        return None;
+    };
+    let arch = match amenbo_core::update_check::native_arch() {
+        "arm64" => "aarch64",
+        "x64" => "x86_64",
+        _ => return None,
+    };
+    Some(format!("{os}-{arch}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   #[allow(unused_mut)]
@@ -149,9 +183,17 @@ pub fn run() {
       // bundle under test with the production one. Not registering the plugin is the half that fails
       // closed no matter who asks: the front end is never offered the update either (`upstream_release`
       // in commands.rs), and neither half depends on the other holding.
+      //
+      // What it is aimed at is the machine rather than this build (`updater_target`), so an amenbo
+      // running under emulation lands on the native one the next time the user applies an update,
+      // instead of fetching its own kind forever.
       #[cfg(desktop)]
       if !amenbo_core::config::Paths::is_dev_channel() {
-        app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+        let mut updater = tauri_plugin_updater::Builder::new();
+        if let Some(target) = updater_target() {
+          updater = updater.target(target);
+        }
+        app.handle().plugin(updater.build())?;
       }
       // Start at login (`AMB-D-541`). A development build does not get it either, and for a reason of
       // its own: the executable it would register sits in a working tree that gets rebuilt and thrown
@@ -328,4 +370,29 @@ pub fn run() {
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
+}
+
+#[cfg(all(test, desktop))]
+mod tests {
+    /// The keys `scripts/build-tauri-manifest.sh` writes into the `platforms` object of every
+    /// release. A target naming anything else finds no row and the update simply never arrives, so
+    /// the mapping is worth holding against the list it has to hit.
+    const PUBLISHED: [&str; 6] = [
+        "darwin-aarch64",
+        "darwin-x86_64",
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+    ];
+
+    /// Whatever machine this runs on, the key it asks for is one the release actually carries.
+    #[test]
+    fn updater_target_names_a_published_platform() {
+        let target = super::updater_target().expect("a machine amenbo is built for names a target");
+        assert!(
+            PUBLISHED.contains(&target.as_str()),
+            "the machine answered `{target}`, which no release publishes"
+        );
+    }
 }

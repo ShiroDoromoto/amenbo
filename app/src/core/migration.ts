@@ -4,9 +4,11 @@
 // and all the GUI may do is ask where it stands (`migration_status`) and put a failed one through again
 // (`migration_retry`). There is no consent gate either.
 //
-// The stage is **pulled once, then followed by push**: the window mounts after the migration has already begun, so a
-// subscription alone would miss the first announce. Pull status once on mount, then listen to `migration-changed`
-// (the stage) and `migration-progress` (ticks from the pre-migration backup and from each step of the version chain).
+// The stage is **both pulled and pushed**: the window mounts after the migration has already begun, so a
+// subscription alone would miss the first announce — and a subscription wired *after* a read would miss the end of a
+// run that finished in between. So the screen listens to `migration-changed` (the stage) and `migration-progress`
+// (ticks from the pre-migration backup and from each step of the version chain) **first**, and only then reads the
+// stage again: a read taken after the subscription is live can be superseded, never missed.
 
 import { invoke } from "./ipc";
 import { inTauri } from "./snapshot";
@@ -19,10 +21,20 @@ import type { DataProgressDto, MigrationStatusDto } from "../bindings/bindings";
  * and if there is no store, there is nothing to migrate.
  */
 export async function migrationGate(): Promise<MigrationStatusDto | null> {
+  const status = await migrationStatus();
+  return status && status.stage !== "idle" ? status : null;
+}
+
+/**
+ * The stage as core holds it right now, `idle` included — what the gate above is built on, and what the migration
+ * screen reads a second time once its subscriptions are up. Core keeps the terminal stage in the same state the
+ * events are published from, so this read answers with the end of a run whose event went out before anyone listened.
+ * Null on every failure and outside Tauri, exactly as the gate is.
+ */
+export async function migrationStatus(): Promise<MigrationStatusDto | null> {
   if (!inTauri()) return null;
   try {
-    const status = await invoke<MigrationStatusDto>("migration_status");
-    return status.stage === "idle" ? null : status;
+    return await invoke<MigrationStatusDto>("migration_status");
   } catch {
     return null;
   }

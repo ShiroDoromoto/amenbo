@@ -25,8 +25,9 @@ use crate::commands::DataProgressDto;
 use crate::error::CmdError;
 
 /// Stage transitions, carrying the whole [`MigrationStatusDto`]. The window may well mount *after* one of
-/// them, so this is a nudge and not the source of truth — the screen pulls [`status()`] on mount and
-/// listens from there.
+/// them — a short chain is over in about a second — so this is a nudge and not the source of truth:
+/// [`status()`] is, and the screen reads it both before it subscribes and once again after, so a
+/// transition published into the gap between the two is caught rather than waited on forever.
 const CHANGED_EVENT: &str = "migration-changed";
 /// One tick of the run ([`DataProgressDto`] — the same shape the data ops emit, so the front reads both
 /// with one type): the pre-migration backup's phases, then one per step of the chain

@@ -21,7 +21,7 @@ import type { DataProgressDto, MigrationStatusDto } from "../bindings/bindings";
 import { progressLabel, progressPct } from "../components/DataProgressModal";
 import { currentLang, errLabel, normalizeLang, t, tn, tf, type Lang } from "../core/i18n";
 import { invoke } from "../core/ipc";
-import { listenMigrationChanged, listenMigrationProgress, mib, retryMigration } from "../core/migration";
+import { listenMigrationChanged, listenMigrationProgress, mib, migrationStatus, retryMigration } from "../core/migration";
 import { inTauri } from "../core/snapshot";
 
 export function MigrationScreen({
@@ -44,12 +44,24 @@ export function MigrationScreen({
     return () => { alive = false; };
   }, []);
 
+  // Subscribe first, then read the stage again. A one-step chain finishes in about a second — well inside the window
+  // between the read that raised this screen and the subscriptions below — and the `migration-changed` carrying its
+  // end is published to whoever is listening at that instant, which is nobody. The screen would then hold the last
+  // thing it was told, for as long as the app is open, over a store that finished moving. The second read is what
+  // closes that window; it stands down the moment an event has arrived, since from there the subscription is the
+  // fresher of the two (a retry moves the stage back to `running`, and only the events carry that).
   useEffect(() => {
     let alive = true;
+    let pushed = false;
     const stops: Array<() => void> = [];
     const keep = (un: () => void) => { if (alive) stops.push(un); else un(); };
-    void listenMigrationChanged((s) => { setStatus(s); setProgress(s.progress); }).then(keep);
-    void listenMigrationProgress(setProgress).then(keep);
+    const apply = (s: MigrationStatusDto) => { setStatus(s); setProgress(s.progress); };
+    void Promise.all([
+      listenMigrationChanged((s) => { pushed = true; apply(s); }).then(keep),
+      listenMigrationProgress(setProgress).then(keep),
+    ])
+      .then(() => migrationStatus())
+      .then((s) => { if (alive && s && !pushed) apply(s); });
     return () => { alive = false; for (const stop of stops) stop(); };
   }, []);
 

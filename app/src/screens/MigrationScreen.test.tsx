@@ -6,7 +6,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MigrationStatusDto } from "../bindings/bindings";
 
-const hoisted = vi.hoisted(() => ({ retries: 0 }));
+const hoisted = vi.hoisted(() => ({
+  retries: 0,
+  /** What the read taken *after* the subscriptions are up answers with (null = the screen is left as it mounted). */
+  pulled: null as MigrationStatusDto | null,
+  /** Run while that read is in flight, so a test can land an event on the screen before the read comes back. */
+  duringPull: null as (() => void) | null,
+  /** The `migration-changed` handler the screen registered. */
+  push: null as ((s: MigrationStatusDto) => void) | null,
+}));
 
 vi.mock("../core/ipc", () => ({
   invoke: vi.fn(async () => "ja"), // ui_language
@@ -20,8 +28,9 @@ vi.mock("../core/migration", async () => {
   const actual = await vi.importActual<typeof import("../core/migration")>("../core/migration");
   return {
     ...actual,
-    listenMigrationChanged: async () => () => {},
+    listenMigrationChanged: async (cb: (s: MigrationStatusDto) => void) => { hoisted.push = cb; return () => {}; },
     listenMigrationProgress: async () => () => {},
+    migrationStatus: async () => { hoisted.duringPull?.(); return hoisted.pulled; },
     retryMigration: async () => { hoisted.retries += 1; },
   };
 });
@@ -43,6 +52,9 @@ async function render(initial: MigrationStatusDto, onDone = () => {}) {
 
 beforeEach(() => {
   hoisted.retries = 0;
+  hoisted.pulled = null;
+  hoisted.duringPull = null;
+  hoisted.push = null;
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -127,5 +139,38 @@ describe("MigrationScreen", () => {
     const onDone = vi.fn();
     await render(status({ stage: "idle" }), onDone);
     expect(onDone).toHaveBeenCalled();
+  });
+
+  // A one-step chain takes about a second, which is less than it takes to raise a window: the end is published while
+  // the screen is still wiring its subscriptions, and an event published to nobody is gone. The screen would then sit
+  // on the last thing it was told — a progress bar over a store that finished moving — until the app is quit.
+  it("takes up the end that was published before it could listen", async () => {
+    hoisted.pulled = status({
+      stage: "done",
+      report: { from: 19, to: 20, backupPath: "/data/pre-migrate-20260803T185354Z.amenbo-backup", superseded: [] },
+    });
+    await render(status({ progress: { phase: "verifying", done: 0, total: 1 } }));
+    expect(host.textContent ?? "").toContain("/data/pre-migrate-20260803T185354Z.amenbo-backup");
+  });
+
+  it("takes up an end that left nothing to show (the CLI carried the store while we waited on the lock)", async () => {
+    const onDone = vi.fn();
+    hoisted.pulled = status({ stage: "idle" });
+    await render(status({}), onDone);
+    expect(onDone).toHaveBeenCalled();
+  });
+
+  // The read is a catch-up, not a source of truth: it is answered from a stage that may already have moved on, so an
+  // event that lands while it is in flight has to stand.
+  it("does not let that read put back a stage an event has already moved past", async () => {
+    hoisted.pulled = status({ progress: { phase: "verifying", done: 0, total: 1 } });
+    hoisted.duringPull = () => {
+      hoisted.push?.(status({
+        stage: "done",
+        report: { from: 19, to: 20, backupPath: "/data/pre-migrate-20260803T185354Z.amenbo-backup", superseded: [] },
+      }));
+    };
+    await render(status({}));
+    expect(host.textContent ?? "").toContain("/data/pre-migrate-20260803T185354Z.amenbo-backup");
   });
 });

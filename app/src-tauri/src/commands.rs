@@ -2164,6 +2164,25 @@ pub fn task_add(
     Ok(WriteAck::new(&["tasks"]).task(id))
 }
 
+/// Finish creating a task — the second stage of the creation [`task_add`] began (`AMB-D-554`). It clears
+/// the fourth premise of `ready` and touches nothing else, so the task stops being held out of the mailbox
+/// and out of a reservation, and keeps every edge drawn while it was being put together.
+///
+/// Already finished is a no-op rather than a refusal, and short-circuited here the way the CLI's
+/// `task finish-creating` does it: core would write the same row back, and a ledger row saying nothing
+/// changed is not worth keeping. It runs one way — a task filed by mistake ends at [`task_reject`] or
+/// [`task_delete`].
+#[tauri::command]
+pub fn task_finish_creating(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        if store.task(id)?.is_some_and(|t| t.draft) {
+            store.finish_task_creation(id)?;
+        }
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]).task(id))
+}
+
 /// Set the status explicitly (done keeps completed in step). Setting the same status again is a
 /// no-op, with one exception: `in_progress → in_progress` is never waved through. It goes down to
 /// `set_status` so the reservation CAS is not defused, and a second session trying to start the same
@@ -5680,11 +5699,10 @@ mod tests {
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     /// Finish creating a task — the second stage every creation has (`AMB-D-554`), without which the
-    /// task cannot be reserved. The GUI's own way through it is `AMB-T-2714`'s, so a test that needs a
-    /// task nobody is still writing closes the creation on the store directly, the way it already
-    /// draws a dependency there.
+    /// task cannot be reserved. It goes through the command the pane's button calls, so every test that
+    /// needs a task nobody is still writing crosses that path too.
     fn finish_creating(id: i64) {
-        Store::open().unwrap().finish_task_creation(id).unwrap();
+        task_finish_creating(id).unwrap();
     }
 
     /// When the target is gone and no ledger row carrying its name can be recovered either (dropped
@@ -6897,6 +6915,57 @@ mod tests {
         let _ = task_add(Some(project_id), "シグネチャ確認".into(), None).unwrap();
         assert!(!sig_before.is_empty(), "store signature is non-empty when a store exists");
         assert_ne!(store_signature(), sig_before, "a write advances the store signature");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The two stages of a creation on the GUI's face (`AMB-D-554`): what `task_add` hands back is still
+    /// being created — drawn on the board like any other card, but refused a reservation — and
+    /// `task_finish_creating` is what ends that. Finishing one already finished is a no-op, and it is
+    /// short-circuited rather than written, so nothing lands on the ledger saying nothing changed.
+    #[test]
+    fn a_creation_is_two_stages_here_too() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-finish-creating");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "作成PJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
+
+        let id = task_add(Some(project_id), "作りかけ".into(), None).unwrap().tasks[0];
+        let t = card(id);
+        assert!(t.draft, "a creation lands unfinished");
+        assert!(!t.ready, "which is the fourth premise holding the reservation back");
+        let err = task_status(id, "in_progress".into())
+            .err()
+            .expect("a task still being created cannot be reserved");
+        assert_eq!(err.code, "not_ready", "and it is the premise, not the CAS, that turns it away");
+
+        let ack = task_finish_creating(id).unwrap();
+        assert_eq!(ack.tasks, vec![id], "finishing acks the task");
+        assert!(ack.scopes.contains(&"tasks"), "and invalidates the lists it now belongs in");
+        let t = card(id);
+        assert!(!t.draft, "the creation is finished");
+        assert!(t.ready, "so nothing holds the reservation back");
+        assert_eq!(t.status, "todo", "and ending a creation moves nothing else");
+
+        let before = store_signature();
+        task_finish_creating(id).unwrap();
+        assert_eq!(store_signature(), before, "finishing an already finished creation writes nothing");
+
+        let _ = task_status(id, "in_progress".into()).unwrap();
+        assert_eq!(card(id).status, "in_progress", "and now it can be picked up");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

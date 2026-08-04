@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addComment, deleteProject, deleteTask, rejectTask, setStatus } from "./mutations";
+import { addComment, addTask, deleteProject, deleteTask, finishTaskCreation, rejectTask, setStatus } from "./mutations";
 import { agoLabel } from "./i18n";
 import { applySnapshot, getSnapshot, type Snapshot } from "./snapshot";
 import type { TaskCard } from "../mock/types";
@@ -102,6 +102,44 @@ describe("setStatus (browser-loop mock)", () => {
     expect(waiting.ready).toBe(true);
     await setStatus(10, "in_progress"); // Now that it is ready, the reservation goes through
     expect(getSnapshot().tasks.find((t) => t.id === 10)!.status).toBe("in_progress");
+  });
+});
+
+describe("the two stages of a creation (browser-loop mock)", () => {
+  // The mock runs the same two stages core does (`AMB-D-554`); waving the first one through here would make
+  // browser iteration the one place a task straight out of the compose form can be picked up.
+  it("a creation lands unfinished and is refused a reservation until it is ended", async () => {
+    seedTasks([]);
+    const id = (await addTask(1, "作りかけ"))!;
+    const created = getSnapshot().tasks.find((t) => t.id === id)!;
+    expect(created.draft).toBe(true);
+    expect(created.ready).toBe(false);
+
+    await expect(setStatus(id, "in_progress")).rejects.toMatchObject({
+      code: "not_ready",
+      parts: [{ code: "not_ready_draft" }],
+    });
+
+    await finishTaskCreation(id);
+    const finished = getSnapshot().tasks.find((t) => t.id === id)!;
+    expect(finished.draft).toBe(false);
+    expect(finished.ready).toBe(true);
+    await setStatus(id, "in_progress");
+    expect(getSnapshot().tasks.find((t) => t.id === id)!.status).toBe("in_progress");
+  });
+
+  it("ending a creation does not lift the premises that are someone else's to lift", async () => {
+    seedTasks([]);
+    const id = (await addTask(1, "先行待ち"))!;
+    applySnapshot({
+      ...getSnapshot(),
+      tasks: getSnapshot().tasks.map((t) => (t.id === id ? { ...t, blockedBy: [{ id: 9, name: "t9" }] } : t)),
+    });
+
+    await finishTaskCreation(id);
+    const t = getSnapshot().tasks.find((x) => x.id === id)!;
+    expect(t.draft).toBe(false);
+    expect(t.ready).toBe(false); // The blocker is still there, and readiness reads all four premises
   });
 });
 

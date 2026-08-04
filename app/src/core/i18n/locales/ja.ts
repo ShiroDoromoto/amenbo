@@ -157,6 +157,7 @@ export const ja: Translation = {
     "detail.project": "プロジェクト", "detail.none": "なし",
     "detail.blockedBy": "待ち", "detail.blockedByHint": "着手不可（依存）",
     "detail.notStarted": "着手日待ち",
+    "detail.draft": "作成", "detail.finishCreating": "作成を終える",
     "detail.linkedDecisions": "動機の決定",
     "detail.premiseUnsettled": "根拠が未確定です。裁定を待つか link を外してください（予約できません）",
     "detail.priority": "優先度", "detail.priorityNone": "なし",
@@ -536,6 +537,8 @@ export const ja: Translation = {
     "block.deps": "着手不可（依存）: {names} の完了待ち",
     "block.decisions": "着手不可（根拠が未確定）: {refs}",
     "block.notStarted": "着手不可（着手日待ち）: {date} から",
+    "block.draft": "着手不可（作成中）: 作成を終えてください",
+    "chip.draft": "作成中",
     "premise.changed": "予約後に前提が変わった: {detail}",
     "premise.warn": "予約後に前提が変わりました（AMB-D-366）: {detail}。独立に仕上がる部分だけ完了するか、todo に戻して手放してください。",
     // One phrase covering both arms of the axis — unsettled (reopen/reject) and superseded. A word naming

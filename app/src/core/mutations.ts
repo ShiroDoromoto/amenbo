@@ -143,11 +143,20 @@ function notReadyParts(t: TaskCard): CmdErrorPart[] {
 }
 
 /**
+ * The mock's copy of core's readiness derivation: no unfinished blocker, no unsettled grounding decision,
+ * the declared start day arrived, and the creation finished (core's `reserve_blockers`, whose emptiness
+ * *is* `ready`). It lives in one place so that clearing any one premise cannot come to disagree with
+ * clearing another about what the remaining three mean.
+ */
+function readyOf(t: Pick<TaskCard, "blockedBy" | "blockedByDecisions" | "notStartedUntil" | "draft">): boolean {
+  return t.blockedBy.length === 0 && t.blockedByDecisions.length === 0 && t.notStartedUntil == null && !t.draft;
+}
+
+/**
  * Rebuild the dependents when one blocker goes away (completed or deleted). In core, `blocked_by` is
- * derived as "blockers not yet done" and `ready` as "no unfinished blocker, no unsettled grounding
- * decision, the declared start day arrived, and the creation finished" (core's `reserve_blockers`,
- * whose emptiness *is* `ready`); the mock runs the same derivation here. Clearing a blocker cannot
- * clear the other three, so they are re-read rather than assumed away.
+ * derived as "blockers not yet done" and `ready` by {@link readyOf}'s four premises; the mock runs the
+ * same derivation here. Clearing a blocker cannot clear the other three, so they are re-read rather
+ * than assumed away.
  * **The dependency edges themselves are not in the mock fixtures**, though — the snapshot only carries
  * the already-derived `blockedBy` — so reopening a task (done → todo) **cannot put its blockers back**.
  * That is a face we chose not to act out. To see dependencies re-form during browser iteration, edit
@@ -157,12 +166,7 @@ function unblock(tasks: TaskCard[], blockerId: number): TaskCard[] {
   return tasks.map((x) => {
     if (!x.blockedBy?.some((b) => b.id === blockerId)) return x;
     const blockedBy = x.blockedBy.filter((b) => b.id !== blockerId);
-    const ready =
-      blockedBy.length === 0 &&
-      x.blockedByDecisions.length === 0 &&
-      x.notStartedUntil == null &&
-      !x.draft;
-    return { ...x, blockedBy, ready };
+    return { ...x, blockedBy, ready: readyOf({ ...x, blockedBy }) };
   });
 }
 
@@ -211,16 +215,32 @@ export async function addTask(projectId: number | null, title: string, notes?: s
       id, title, notes: notes ?? "", status: "todo", assignee: null, priority: null,
       due: null, comments: 0, createdBy: me(),
       ref: taskRef(id), projectId, completedAt: null,
-      ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], notStartedUntil: null,
-      // Core's `add` now leaves the creation unfinished (`AMB-D-554`), and the mock deliberately does
-      // not yet: there is no "finish creating" anywhere on screen (`AMB-T-2714`), so a mock task that
-      // landed unfinished could never be reserved and browser iteration would have nothing to drive.
-      // This line moves with that screen, not before it.
-      draft: false,
+      // A creation lands unfinished, exactly as core's `add` leaves it (`AMB-D-554`): the task is on the
+      // board and refused a reservation until the detail pane's "finish creating" ends the second stage.
+      ready: false, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], notStartedUntil: null,
+      draft: true,
     };
     return { ...s, tasks: [...s.tasks, task], activity: [sysItem(id, title, { kind: "task.created" }), ...s.activity] };
   });
   return id;
+}
+
+/**
+ * Finish creating a task — the second stage of the creation `addTask` began (`AMB-D-554`). It clears the
+ * fourth premise and nothing else, so the task stops being held out of the mailbox and out of a
+ * reservation. One direction: there is no way back, and a task filed by mistake is rejected or deleted.
+ * Finishing one already finished is a no-op on both faces.
+ */
+export async function finishTaskCreation(id: number): Promise<void> {
+  if (inTauri()) return invokeAck("task_finish_creating", { id });
+  mockMutate((s) => ({
+    ...s,
+    tasks: s.tasks.map((x) => {
+      if (x.id !== id || !x.draft) return x;
+      const finished = { ...x, draft: false };
+      return { ...finished, ready: readyOf(finished) };
+    }),
+  }));
 }
 
 /**

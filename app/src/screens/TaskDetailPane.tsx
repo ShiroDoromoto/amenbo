@@ -319,6 +319,21 @@ export function TaskDetailPane({
               </span>
             </div>
           )}
+          {/* The fourth premise (`AMB-D-553`), and the only one whose resolution is the creator's own next move
+              rather than something to wait on — so it carries the button that ends the creation. It sits with the
+              other premises because what it reports is why the task cannot start yet, and it says "finish creating"
+              rather than anything borrowed from publishing: nobody is being asked to approve it (`AMB-D-558`). */}
+          {task.draft && (
+            <div className="detail__field">
+              <span className="detail__flabel">{t("detail.draft")}</span>
+              <span title={t("block.draft")}>
+                ✎ {t("chip.draft")}
+                <button className="btn" style={{ marginLeft: 6 }} onClick={() => store.finishCreating(taskId)}>
+                  {t("detail.finishCreating")}
+                </button>
+              </span>
+            </div>
+          )}
           {/* Holder-side surface of `AMB-D-366` / `AMB-D-373`: what moved under the holder after they reserved
               this. Core fills it only for a reservation that actually acquired one, so the field appears
               exactly when there is something to say. */}

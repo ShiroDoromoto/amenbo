@@ -166,6 +166,9 @@ const ui = {
   "detail.project": "Project", "detail.none": "None",
   "detail.blockedBy": "Waiting on", "detail.blockedByHint": "blocked (dependency)",
   "detail.notStarted": "Starts on",
+  // The fourth premise, and the move that ends it. Never "publish" or "approve": the one who created the
+  // task is the one who ends the creation, and there is nobody to ask (`AMB-D-558`).
+  "detail.draft": "Creation", "detail.finishCreating": "Finish creating",
   "detail.linkedDecisions": "Motivated by",
   "detail.premiseUnsettled": "premise not settled — wait for the ruling or unlink it (cannot reserve)",
   "detail.priority": "Priority", "detail.priorityNone": "None",
@@ -551,6 +554,9 @@ const ui = {
   "block.deps": "Cannot start (dependency): waiting on {names}",
   "block.decisions": "Cannot start (premise not settled): {refs}",
   "block.notStarted": "Cannot start (waiting on its start day): from {date}",
+  "block.draft": "Cannot start (still being created): finish creating it first",
+  // The state, as the chip and the detail row both name it (`AMB-D-558`).
+  "chip.draft": "Being created",
   "premise.changed": "Premises changed after you reserved this: {detail}",
   "premise.warn": "Premises changed after you reserved this (AMB-D-366): {detail}. Finish only the part that stands on its own, or hand it back by setting it to todo.",
   "premise.noLongerSettled": "no longer settled",

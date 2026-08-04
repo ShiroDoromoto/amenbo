@@ -74,14 +74,23 @@ describe("BlockedChips", () => {
     expect(chips()[0].getAttribute("title")).toContain("2026-08-01");
   });
 
-  it("shows all three when all three hold it back — no reason hides behind another", () => {
+  it("shows an unfinished creation as ✎, naming the state rather than a count", () => {
+    render(card({ ready: false, draft: true }));
+    expect(chips()).toHaveLength(1);
+    expect(chips()[0].textContent).toContain("✎");
+    expect(chips()[0].textContent).toContain("Being created");
+    expect(chips()[0].getAttribute("title")).toContain("finish creating it first");
+  });
+
+  it("shows all four when all four hold it back — no reason hides behind another", () => {
     render(card({
       ready: false,
       blockedBy: [{ id: 2, name: "先行" }],
       blockedByDecisions: [{ id: 159, name: "根拠", ref: "D-159" }],
       notStartedUntil: "2026-08-01",
+      draft: true,
     }));
-    expect(chips()).toHaveLength(3);
+    expect(chips()).toHaveLength(4);
   });
 
   it("shows both when both are present", () => {
@@ -125,6 +134,13 @@ describe("BlockedChips compact", () => {
     expect(chips()).toHaveLength(0);
     expect(glyphs()[0].textContent).toBe("⏳");
     expect(glyphs()[0].getAttribute("title")).toContain("2026-08-01");
+  });
+
+  it("drops the word and keeps the glyph for an unfinished creation", () => {
+    renderCompact(card({ ready: false, draft: true }));
+    expect(chips()).toHaveLength(0);
+    expect(glyphs()[0].textContent).toBe("✎");
+    expect(glyphs()[0].getAttribute("title")).toContain("finish creating it first");
   });
 
   it("shows nothing even on a dense surface when ready", () => {

@@ -24,6 +24,11 @@ interface Store {
    * pull-down collects it and this routes it to the write that keeps it (`AMB-D-397`).
    */
   setStatus(id: number, status: Status, reason?: string): void;
+  /**
+   * End the second stage of a creation (`AMB-D-554`): the task stops being held out of the mailbox and
+   * out of a reservation. It runs one way — nothing puts a task back to being created.
+   */
+  finishCreating(id: number): void;
   setPriority(id: number, priority: Priority | null): void;
   setAssignee(id: number, kind: Facet | null): void;
   addComment(taskId: number, text: string): void;
@@ -117,6 +122,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // no surface can reach `rejected` and leave the reasoning behind.
       run(status === "rejected" ? mut.rejectTask(id, reason ?? "") : mut.setStatus(id, status));
     },
+    finishCreating(id) { run(mut.finishTaskCreation(id)); },
     setPriority(id, priority) { run(mut.setPriority(id, priority)); },
     setAssignee(id, kind) { run(mut.setAssignee(id, kind)); },
     addComment(taskId, text) { run(mut.addComment(taskId, text)); },

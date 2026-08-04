@@ -247,6 +247,7 @@ pub fn run() {
       commands::decisions_by_ids,
       commands::resolve_ref,
       commands::task_add,
+      commands::task_finish_creating,
       commands::task_status,
       commands::task_reject,
       commands::task_delete,

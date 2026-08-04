@@ -11,6 +11,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { TaskDetailPane } from "./TaskDetailPane";
 import { StoreProvider } from "../store/store";
 import { loadSnapshot } from "../core/snapshot";
+import { addTask } from "../core/mutations";
 import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -81,6 +82,30 @@ describe("TaskDetailPane reply focus", () => {
     const box = commentBox();
     expect(box).not.toBeNull();
     expect(document.activeElement).toBe(box);
+  });
+});
+
+describe("TaskDetailPane finishing a creation", () => {
+  // The pane the compose form hands over to is where a creation is ended (`AMB-D-554`): the task it just
+  // made is still being created, so the row saying so has to be there, and pressing it has to clear the
+  // premise rather than merely hide the row.
+  it("a task just created says it is still being created, and the button ends that", async () => {
+    const id = await addTask(null, "作りかけ");
+    expect(id).not.toBeNull();
+    render({ taskId: id! });
+    await settle();
+
+    expect(container.textContent).toContain(t("chip.draft"));
+    const finish = Array.from(container.querySelectorAll("button"))
+      .find((b) => b.textContent === t("detail.finishCreating"));
+    expect(finish).toBeDefined();
+
+    await act(async () => { finish!.click(); });
+    await settle();
+
+    expect(container.textContent).not.toContain(t("chip.draft"));
+    expect(Array.from(container.querySelectorAll("button")).some((b) => b.textContent === t("detail.finishCreating")))
+      .toBe(false);
   });
 });
 

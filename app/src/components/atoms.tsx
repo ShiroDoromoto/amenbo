@@ -220,7 +220,10 @@ export function DueChip({ due }: { due: string | null }) {
 /**
  * The chip that names, in the list itself, the premises blocking a reservation (`ready === false`) before anyone
  * tries to start. ⛔ = an unfinished dependency blocker; ⚠ = a decision not yet settled as grounds; ⏳ = a declared
- * start day that has not come. Every `ready === false` has at least one of the three, so the chip row is never empty
+ * start day that has not come; ✎ = the creation is not finished (`AMB-D-555`: a task still being written is on the
+ * board like any other, and what keeps it from being picked up is the premise, not being hidden). The fourth one
+ * carries a word rather than a count — there is nothing to count, and "still being created" is the whole fact.
+ * Every `ready === false` has at least one of the four, so the chip row is never empty
  * where a reason exists — an unexplained "cannot start" reads as no reason at all. The reason a
  * reservation was refused only ever appears in a toast that vanishes in 4 seconds, so this is the one permanent place
  * it is visible before starting. It is a derived inability to start, on a different axis from a stop a person
@@ -267,6 +270,16 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
         >
           {/* The date, not a count: one start day is never plural, and the day itself is the fact. */}
           {compact ? "⏳" : `⏳ ${task.notStartedUntil}`}
+        </span>
+      )}
+      {task.draft && (
+        <span
+          className={cls}
+          role="img"
+          title={t("block.draft")}
+          aria-label={t("block.draft")}
+        >
+          {compact ? "✎" : `✎ ${t("chip.draft")}`}
         </span>
       )}
     </>

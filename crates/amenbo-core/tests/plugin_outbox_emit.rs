@@ -41,11 +41,11 @@ fn new_task(title: &str, project_id: i64) -> amenbo_core::ops::task::NewTask {
 
 /// File a task and finish creating it — **both stages** (`AMB-D-554`). A creation lands unfinished, and a
 /// task still being created cannot be reserved, so a test that goes on to move its status closes the
-/// creation the way the surfaces do. Finishing emits no event of its own, so what the outbox holds is
-/// unchanged by it.
+/// creation the way the surfaces do. The second stage is what fires `task.created` (`AMB-D-557`), so a
+/// test reading the outbox from before this call sees that event and not only its own step's.
 fn filed(store: &mut Store, input: amenbo_core::ops::task::NewTask) -> i64 {
     let id = store.add_task(input).unwrap().id;
-    store.finish_task_creation(id).unwrap();
+    store.finish_task_creation(id, ActorKind::Ai).unwrap();
     id
 }
 
@@ -77,21 +77,31 @@ fn only(store: &Store, after: i64) -> OutboxRow {
     rows.pop().unwrap()
 }
 
-/// Creating a task fires `task.created`: id the task's own, actor the creator's facet from `NewTask`,
-/// and no `new` — the name is the whole state.
+/// A task is announced when its creation **ends**, not when it is filed (`AMB-D-557`). Filing one emits
+/// nothing — nobody can reserve it yet, so there is nothing a subscriber could do with it — and ending
+/// the creation fires `task.created`: id the task's own, actor whoever ended it, and no `new`, the name
+/// being the whole state. Ending a creation that is already over is not a change to observe.
 #[test]
-fn creating_a_task_fires_created_with_the_creator_facet() {
+fn a_task_is_announced_when_its_creation_ends() {
     let mut store = temp_store();
     let project = store.project_add(new_project("PJ")).unwrap().id;
 
     let h = head(&store);
     let task = store.add_task(new_task("タスク", project)).unwrap().id;
+    assert!(since(&store, h).is_empty(), "a task still being created is nothing to announce");
+
+    let h = head(&store);
+    store.finish_task_creation(task, ActorKind::Ai).unwrap();
     let ev = only(&store, h);
     assert_eq!(ev.event, "task.created");
     assert_eq!(ev.record_id, task);
-    assert_eq!(ev.actor, "ai", "the actor is the creator facet the task was made with");
+    assert_eq!(ev.actor, "ai", "the actor is whoever ended the creation");
     assert_eq!(ev.new_state, None, "the name is the whole state");
     assert_eq!(ev.project, Some(project), "the event is stamped with the task's project");
+
+    let h = head(&store);
+    store.finish_task_creation(task, ActorKind::Ai).unwrap();
+    assert!(since(&store, h).is_empty(), "a creation already over announces nothing a second time");
 }
 
 /// Deleting a task fires `task.deleted`: id the task's own, actor the caller's, no `new`. A task with no
@@ -569,7 +579,7 @@ fn an_event_keeps_the_project_it_fired_in_after_the_task_moves() {
     let beta = store.project_add(new_project("Beta")).unwrap().id;
 
     let h = head(&store);
-    let task = store.add_task(new_task("引っ越すタスク", alpha)).unwrap().id;
+    let task = filed(&mut store, new_task("引っ越すタスク", alpha));
     store.move_task(task, Some(beta), Position::Bottom, ActorKind::Ai).unwrap();
 
     let rows = since(&store, h);
@@ -588,7 +598,7 @@ fn a_task_outside_every_project_stamps_no_project() {
     input.project_id = None;
 
     let h = head(&store);
-    let task = store.add_task(input).unwrap().id;
+    let task = filed(&mut store, input);
     assert_eq!(only(&store, h).project, None, "a task with no project has none to stamp");
 
     // And the same holds for the event nobody could re-derive afterwards.

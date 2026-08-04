@@ -53,7 +53,7 @@ fn new_task(title: &str, project_id: i64) -> amenbo_core::ops::task::NewTask {
 /// creation the way the surfaces do.
 fn filed(store: &mut Store, input: amenbo_core::ops::task::NewTask) -> i64 {
     let id = store.add_task(input).unwrap().id;
-    store.finish_task_creation(id).unwrap();
+    store.finish_task_creation(id, ActorKind::Human).unwrap();
     id
 }
 

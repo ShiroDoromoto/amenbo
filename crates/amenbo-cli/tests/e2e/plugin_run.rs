@@ -278,11 +278,13 @@ fn a_mutating_command_fires_the_enabled_plugin_that_subscribes_to_it() {
     cli.json(&["plugin", "enable", "logger", "--json"]);
     cli.json(&["plugin", "enable", "quiet", "--json"]);
 
-    // A task add commits, the dispatcher fans what it appended onto the plugin's queue, and launches the
-    // runner that works it. The command is gone by then, so the payload is waited for.
+    // Ending the creation commits, the dispatcher fans what it appended onto the plugin's queue, and
+    // launches the runner that works it. The command is gone by then, so the payload is waited for.
+    // Filing the task is the stage before, and it announces nothing (`AMB-D-557`).
     let pid = cli.bound_project();
     let added = cli.json(&["task", "add", "--title", "発火の確認", "--project", &pid, "--json"]);
     let id = id_str(&added["task"]["id"]);
+    cli.json(&["task", "finish-creating", &id, "--json"]);
 
     let payload = wrote_json(&capture, |v| !v["id"].is_null());
     assert_eq!(payload["event"], "task.created");
@@ -290,7 +292,8 @@ fn a_mutating_command_fires_the_enabled_plugin_that_subscribes_to_it() {
     assert_eq!(payload["actor"], "human");
 
     // The cursor advanced with it: a second mutation delivers only its own event, never the first again.
-    cli.json(&["task", "add", "--title", "二件目", "--project", &pid, "--json"]);
+    let second_add = cli.json(&["task", "add", "--title", "二件目", "--project", &pid, "--json"]);
+    cli.json(&["task", "finish-creating", &id_str(&second_add["task"]["id"]), "--json"]);
     let second = wrote_json(&capture, |v| v["id"] != payload["id"]);
     assert_ne!(second["id"], payload["id"], "the second run fired for the second task");
 }
@@ -326,10 +329,11 @@ fn plugin_log_says_why_a_hook_did_nothing() {
     cli.json(&["plugin", "enable", "logger", "--json"]);
 
     let pid = cli.bound_project();
-    cli.json(&["task", "add", "--title", "発火の確認", "--project", &pid, "--json"]);
+    let added = cli.json(&["task", "add", "--title", "発火の確認", "--project", &pid, "--json"]);
+    cli.json(&["task", "finish-creating", &id_str(&added["task"]["id"]), "--json"]);
 
-    // Waited for: the runner that fired it is a process of its own, so the line lands after `task add`
-    // returned (`AMB-T-2175`).
+    // Waited for: the runner that fired it is a process of its own, so the line lands after the command
+    // that ended the creation returned (`AMB-T-2175`).
     let runs = logged_runs(&cli, 1);
     let run = &runs["runs"][0];
     assert_eq!(run["plugin"], "logger");

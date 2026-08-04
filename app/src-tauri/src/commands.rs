@@ -2176,7 +2176,7 @@ pub fn task_add(
 pub fn task_finish_creating(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         if store.task(id)?.is_some_and(|t| t.draft) {
-            store.finish_task_creation(id)?;
+            store.finish_task_creation(id, ActorKind::Human)?;
         }
         Ok(())
     })?;
@@ -6567,7 +6567,7 @@ mod tests {
                 })
                 .unwrap()
                 .id;
-            store.finish_task_creation(id).unwrap();
+            store.finish_task_creation(id, ActorKind::Human).unwrap();
             id
         };
         let held = mk(&mut store, "タスク");
@@ -8178,7 +8178,7 @@ mod tests {
                     })
                     .unwrap()
                     .id;
-                store.finish_task_creation(id).unwrap();
+                store.finish_task_creation(id, ActorKind::Human).unwrap();
                 id
             };
             let a = mk(&mut store, "親");

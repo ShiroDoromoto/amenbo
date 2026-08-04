@@ -3,7 +3,7 @@
 
 use super::Store;
 use crate::config::Paths;
-use crate::model::{Database, TaskStatus, View};
+use crate::model::{ActorKind, Database, TaskStatus, View};
 use crate::ops::task::NewTask;
 use std::fs;
 
@@ -368,7 +368,7 @@ fn task(title: &str, project_id: Option<i64>) -> NewTask {
 /// way the surfaces do. Tests that only need a row can add and leave it.
 fn filed(s: &mut Store, input: NewTask) -> crate::model::Task {
     let t = s.add_task(input).unwrap();
-    s.finish_task_creation(t.id).unwrap()
+    s.finish_task_creation(t.id, ActorKind::Human).unwrap()
 }
 
 /// **One logical operation, one transaction**: by the time a write wrapper returns, the operation is

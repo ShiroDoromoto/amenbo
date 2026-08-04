@@ -47,7 +47,9 @@ pub const VERSION: u32 = 1;
 /// deletion, a terminal, a comment posted or taken back. Together they are the v1 catalog
 /// ([`V1_EVENTS`]).
 pub mod name {
-    /// A task was created. No `new` — the name is the whole state.
+    /// A task was created. No `new` — the name is the whole state. It fires when the **creation ends**
+    /// (`task finish-creating`), not when `task add` returns (`AMB-D-557`): between the two nobody can
+    /// reserve the task, so a subscriber hearing about it then has nothing it can act on.
     pub const TASK_CREATED: &str = "task.created";
     /// A task's status changed (to something other than a terminal; see [`TASK_DONE`] and
     /// [`TASK_REJECTED`]). Carries `new`.
@@ -144,7 +146,8 @@ impl Payload {
         Self { v: VERSION, event, id, actor, at, new: None, record: None, parent: None }
     }
 
-    /// `task.created` — a task was created.
+    /// `task.created` — a task was created, which on this wire means its creation ended and it can be
+    /// picked up (`AMB-D-557`). `actor` is whoever ended it and `at` is when.
     pub fn task_created(id: i64, actor: ActorKind, at: Timestamp) -> Self {
         Self::base(name::TASK_CREATED, id, actor, at)
     }

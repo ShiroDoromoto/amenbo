@@ -111,9 +111,10 @@ mod tests {
         Store::open_at(Paths::at(amenbo_scratch::scratch(tag))).unwrap()
     }
 
-    /// Add a task, so the outbox gains one `task.created` event.
+    /// File a task and end its creation, so the outbox gains one `task.created` event — the second stage
+    /// is what fires it (`AMB-D-557`), the first announcing nothing.
     fn add_task(store: &mut Store, project: i64, title: &str) {
-        store
+        let id = store
             .add_task(amenbo_core::ops::task::NewTask {
                 title: title.to_string(),
                 project_id: Some(project),
@@ -123,7 +124,9 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Human),
             })
-            .unwrap();
+            .unwrap()
+            .id;
+        store.finish_task_creation(id, ActorKind::Human).unwrap();
     }
 
     fn a_project(store: &mut Store) -> i64 {

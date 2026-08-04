@@ -55,7 +55,7 @@ fn build_backlog(paths: &Paths) -> (String, i64) {
                 })
                 .unwrap()
                 .id;
-            store.finish_task_creation(id).unwrap();
+            store.finish_task_creation(id, ActorKind::Human).unwrap();
             id
         };
 

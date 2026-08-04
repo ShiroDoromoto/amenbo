@@ -6616,7 +6616,7 @@ fn task_finish_creating(store: &mut Store, flags: &Flags, id: &str) -> Result<i3
         write_envelope(flags, "task.finish-creating", "task", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("(no change) {}", task_label(tid)));
         return Ok(0);
     }
-    let t = store.finish_task_creation(tid).map_err(CliError::from)?;
+    let t = store.finish_task_creation(tid, flags.facet()?).map_err(CliError::from)?;
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
     write_envelope(flags, "task.finish-creating", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["draft".to_string(), "ready".to_string()]), false, format!("✓ Finished creating: {}", task_label(t.id)));
     Ok(0)

@@ -235,15 +235,25 @@ fn emit_decision_verdict(
     emit(tx, event, decision.id, actor, &at, None)
 }
 
-/// `task.created`: a task was created (`AMB-D-367`). The name is the whole state, so it carries no
-/// `new`, and it fires unconditionally — every `add_task` is a creation to observe. The actor is the
-/// creator's facet (`NewTask::created_by_kind`), which defaults to human when the creator was unstated.
+/// `task.created`: a task was created (`AMB-D-367`). The name is the whole state, so it carries no `new`.
+///
+/// It fires when the **creation ends**, not when `add_task` returns (`AMB-D-557`): between the two the
+/// task is on the board but nobody can reserve it, so a subscriber told about it then has nothing it can
+/// do — and the firing point is a wire contract, which cannot be moved quietly later. `at` is therefore
+/// the moment the creation closed, and the actor is whoever closed it.
+///
+/// A creation that had already ended is not a change to observe, so `was_being_created` guards it the way
+/// the status, assignment and move events guard on their own before-state.
 fn emit_task_created(
     tx: &WriteTx<'_>,
     task: &crate::model::Task,
+    was_being_created: bool,
     actor: crate::model::ActorKind,
 ) -> Result<()> {
-    let at = task.created_at.to_rfc3339_z();
+    if !was_being_created {
+        return Ok(());
+    }
+    let at = task.updated_at.to_rfc3339_z();
     emit(tx, crate::plugin_payload::name::TASK_CREATED, task.id, actor, &at, None)
 }
 
@@ -377,8 +387,6 @@ impl Store {
         value_ids: &[i64],
     ) -> Result<crate::model::Task> {
         let today = crate::time::today();
-        // The creator's facet, read before `input` is moved into the op — the actor of `task.created`.
-        let actor = input.created_by_kind.unwrap_or_default();
         let home = WriteTarget::NewIn(input.project_id);
         self.write_one(&[home], |tx| {
             let task = crate::ops::task::add(tx, input)?;
@@ -399,7 +407,9 @@ impl Store {
                     }
                 }
             }
-            emit_task_created(tx, &task, actor)?;
+            // No `task.created` here: the creation is not over yet, and a subscriber hearing about a task
+            // nobody can pick up has nothing to do with it (`AMB-D-557`). It fires from
+            // `finish_task_creation` instead.
             Ok(task)
         })
     }
@@ -408,8 +418,21 @@ impl Store {
     /// [`Self::add_task`] began (`AMB-D-554`). It clears the fourth premise of `ready` and nothing else,
     /// so the task stops being held out of the mailbox and out of a reservation, and keeps everything it
     /// was given while it was being put together.
-    pub fn finish_task_creation(&mut self, id: i64) -> Result<crate::model::Task> {
-        self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::task::finish_creating(tx, id))
+    ///
+    /// This is also where `task.created` reaches the plugins (`AMB-D-557`): for a subscriber, the moment a
+    /// task is born is the moment it can be acted on. `actor` is whoever ended the creation.
+    pub fn finish_task_creation(
+        &mut self,
+        id: i64,
+        actor: crate::model::ActorKind,
+    ) -> Result<crate::model::Task> {
+        self.write_one(&[WriteTarget::Task(id)], |tx| {
+            let was_being_created =
+                crate::store_engine::read::task(tx.conn(), id)?.is_some_and(|t| t.draft);
+            let task = crate::ops::task::finish_creating(tx, id)?;
+            emit_task_created(tx, &task, was_being_created, actor)?;
+            Ok(task)
+        })
     }
 
     /// Update a task's fields (one operation = one transaction).

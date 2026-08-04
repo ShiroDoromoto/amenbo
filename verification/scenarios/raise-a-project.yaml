@@ -17,10 +17,11 @@
 # a shot and never which came first, so that step is closed by an eye — which is why the road is
 # walked to it rather than the screen being stood up by hand.
 #
-# What this wants in front of it is a device with a project on it, so that both ways in are offered
-# where the run starts (`devtool devgui cli`), and a folder to give the new project — the loop is
-# what a linked folder buys, and the screen says so in its place. Stand on the getting started screen
-# when the run hands its first step over.
+# The device this starts on already holds a project, and that is what the premise stands up: the open
+# card is drawn only where there is something to open, so on an empty device the screen the first step
+# reads offers one way in rather than two. What is left to bring is a folder to give the new project —
+# the loop is what a linked folder buys, and the screen says so in its place. Stand on the getting
+# started screen when the run hands its first step over.
 #
 # Clear the notices along the top of the window before shooting. One of them — the one that says the
 # AI guidance in a folder is an old version — names the very file the request names, and a reading
@@ -34,6 +35,16 @@ description: >
   the request it hands over names AGENTS.md, which is what sends the reader's AI to learn amenbo
   before it writes anything. The moves that were there before the loop sit underneath it, and the way
   on to the board is last.
+given:
+  # The project the open card has to have to be drawn at all. It is nothing this road touches — the
+  # one it raises is its own — but the first step reads a screen offering both ways in, and with an
+  # empty device there is only one.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+
 steps_gui:
   - type: assert
     domain: folder

@@ -26,6 +26,14 @@ impl Driver<'_> {
                 }
                 Ok(Outcome::action(format!("created task {id} `{title}` in project {pid}")))
             }
+            // The second stage of the creation, run as the caller runs it — as its own command, once
+            // the task is written. Idempotent on the binary's side, so a road that walks it twice is
+            // reporting a no-op rather than failing.
+            "finish-creating" => {
+                let target = self.resolve(with)?;
+                self.run_json(&["task", "finish-creating", &target.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("finished creating task {target}")))
+            }
             "assign" => {
                 let target = self.resolve(with)?;
                 let assignee = req_str(with, "assignee")?;

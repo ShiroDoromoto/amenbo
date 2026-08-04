@@ -16,6 +16,14 @@ steps_cli:
       title: SCENARIO SEED — waiting on its premise
     as: seed
 
+  # Finished being written before the premise is drawn, so the only thing holding it below is the
+  # edge to the decision — an unfinished creation would hold it too, and the line would prove nothing.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
   - type: action
     domain: decision
     op: create

@@ -18,8 +18,10 @@ steps_cli:
   - { type: assert, domain: task, op: status-bucket, with: { target: today_task, bucket: due_today, present: true } }
   - { type: assert, domain: task, op: status-bucket, with: { target: today_task, bucket: overdue, present: false } }
 
-  # Reserved: in progress, with no day on it to put it there.
+  # Reserved: in progress, with no day on it to put it there. Reserving is what puts it in that
+  # bucket, so the creation is finished first — until it is, there is no reservation to be had.
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — reserved, and dateless }, as: running }
+  - { type: action, domain: task, op: finish-creating, with: { target: running } }
   - { type: action, domain: task, op: status, with: { target: running, status: in_progress } }
   - { type: assert, domain: task, op: status-bucket, with: { target: running, bucket: in_progress, present: true } }
 

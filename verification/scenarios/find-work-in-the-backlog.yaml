@@ -37,6 +37,20 @@ steps_cli:
       target: beta
       priority: low
 
+  # Both are written now, so both creations are finished — a backlog to look through is work anyone
+  # can take, and the reserve further down would be turned away otherwise.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: alpha
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: beta
+
   - type: assert
     domain: task
     op: listed

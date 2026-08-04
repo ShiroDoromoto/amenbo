@@ -87,6 +87,14 @@ steps_cli:
       title: SCENARIO SEED — given a checkout of its own by a plugin
     as: seed
 
+  # Handed over before a plugin is pointed at it, and before the reserve further down: a creation
+  # nobody finished is a task no session can hold.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
   - type: action
     domain: plugin
     op: run
@@ -175,6 +183,14 @@ steps_cli:
     with:
       title: SCENARIO SEED — the write whose delivery is left standing
     as: parked
+
+  # Finished here, while what is installed is still readable: the write whose delivery this step is
+  # about is the status change below, and the creation's own is not left standing with it.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: parked
 
   - type: action
     domain: plugin

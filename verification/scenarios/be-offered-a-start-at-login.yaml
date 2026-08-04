@@ -49,18 +49,41 @@ given:
     op: create
     with:
       title: Draft the quarterly summary
+    as: summary
 
   - type: action
     domain: task
     op: create
     with:
       title: Ask the supplier about the delayed order
+    as: supplier
 
   - type: action
     domain: task
     op: create
     with:
       title: Book the venue for the March workshop
+    as: venue
+
+  # Each of them finished being written, which is what work somebody filed days ago looks like. A
+  # creation left open is a real state, but not one three cards on a worn-in device would all be in.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: summary
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: supplier
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: venue
 
   # And the use itself, which is the premise this road exists behind: five launches of the app, across
   # three separate days something was written on. Both numbers are what the offer is declared to wait

@@ -27,6 +27,14 @@ steps_cli:
       target: seed
       assignee: me-ai
 
+  # Who it is for is part of what the task says, so the creation is finished once that is on it.
+  # Until it lands the task is nobody's to take, whoever it was handed to.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
   - type: assert
     domain: task
     op: field
@@ -230,6 +238,12 @@ steps_gui:
       target: seed
       assignee: me-ai
 
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
   - type: assert
     domain: task
     op: field
@@ -238,6 +252,8 @@ steps_gui:
       field: assignee_kind
       equals: ai
 
+  # Named the way the board's own controls narrow — who it is for and what state it is in. Readiness
+  # is not one of them on screen, so the mailbox filter for filter is the terminal road's line.
   - type: assert
     domain: task
     op: listed

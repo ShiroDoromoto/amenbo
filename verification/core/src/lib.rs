@@ -218,6 +218,12 @@ const REGISTRY: &[OpSpec] = &[
     // empty one, and which project it is drawn for is the whole question where a road walks to a
     // named project. Left out, it is the run's own project like everything else.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
+    // The other half of that creation. Between the two the task is on the board and in every listing,
+    // out of the mailbox and refused a reservation, so a road that means to hand work over walks this
+    // step — and one that reserves has to, or it meets the guard instead. It names the task and
+    // nothing else: nobody is being asked to approve it, so there is nothing further for a step to
+    // say, and it binds nothing because the task it finishes was bound where it was created.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "finish-creating", required: &["target"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "assign", required: &["target", "assignee"], refs: &["target"], strings: &["assignee"], binds: false },
     // Posting binds the comment, since editing, removing and promoting one all name it afterwards.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "comment", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: true },
@@ -952,6 +958,11 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // Where work is filed, and the work itself in whatever state the screen needs to find it.
     (Domain::Project, "create"),
     (Domain::Task, "create"),
+    // With the step that ends the creation, since a world of work already on the board is work
+    // somebody finished writing. Left out, every task a premise stands up would be a creation nobody
+    // closed — a state a store really can be in, but not the one a road about ordinary work is
+    // standing on, and the screen says so on every card.
+    (Domain::Task, "finish-creating"),
     (Domain::Task, "assign"),
     (Domain::Task, "status"),
     (Domain::Task, "update"),

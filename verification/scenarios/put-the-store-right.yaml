@@ -59,6 +59,21 @@ steps_cli:
       target: premise
       task: seed
 
+  # The edges and the premise are all on now, so both creations are finished. A store carrying real
+  # work is one where the writing ended: what holds the work back below is the two premises above it,
+  # declared on purpose, and not a creation nobody closed.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: blocker
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
   # The device-wide sweep: orphaned references, broken ordering, stale bindings.
   - type: assert
     domain: store

@@ -63,6 +63,15 @@ given:
     with:
       title: Order the spring seed trays
       project: greenhouse
+    as: card
+
+  # Finished being written, the way work already on a board is: what this card is here for is
+  # to be an ordinary one.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: card
 
 steps_gui:
   # The report, standing where the reader met it. It is read first so the press below lands on a screen

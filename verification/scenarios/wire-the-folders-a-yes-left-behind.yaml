@@ -81,6 +81,15 @@ given:
     with:
       title: Order the spring seed trays
       project: greenhouse
+    as: card
+
+  # Finished being written, the way work already on a board is: what this card is here for is
+  # to be an ordinary one.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: card
 
 steps_gui:
   # The text, and the file it goes into. The file is the one thing on screen the report alone names, so a

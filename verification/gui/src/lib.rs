@@ -341,6 +341,13 @@ impl Instructor {
             (Domain::Task, "create") => {
                 format!("Create a task titled \"{}\" on the board.", req(with, "title")?)
             }
+            // The one premise a reader settles where it is reported: the row that says the creation is
+            // still open is the row carrying the button that ends it, so the move is opening the task
+            // and pressing it rather than going anywhere else for it.
+            (Domain::Task, "finish-creating") => format!(
+                "Open the task \"{}\" and press the button that finishes creating it.",
+                self.target_label(with)
+            ),
             (Domain::Task, "assign") => format!(
                 "Open the task \"{}\" and set its assignee to \"{}\".",
                 self.target_label(with),

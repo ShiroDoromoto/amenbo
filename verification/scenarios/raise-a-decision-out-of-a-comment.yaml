@@ -22,6 +22,14 @@ steps_cli:
       title: SCENARIO SEED — the task the decision was made on
     as: seed
 
+  # A task being worked on rather than one still being written — the reasoning below is had over work
+  # that was handed over, and the premise it ends up waiting on is the one the promotion drew.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
   - type: action
     domain: task
     op: comment

@@ -29,6 +29,14 @@ steps_cli:
       field: status
       equals: todo
 
+  # Filing it is two moves, and the second one is walked here so that the readiness read further down
+  # is the start day's answer alone. What the two stages are for is its own road.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
   - type: action
     domain: task
     op: update

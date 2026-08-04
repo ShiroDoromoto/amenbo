@@ -53,6 +53,13 @@ given:
     with:
       title: Draft the winter planting order
       project: orchard
+    as: card
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: card
 
   - type: action
     domain: folder

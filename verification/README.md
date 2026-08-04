@@ -307,7 +307,9 @@ picker that draws the row, and the switch inside it —
 `fill-in-what-a-plugin-cannot-fire-without` walks one row from the mark it wears through the refusal, the
 settings opened inside it and the press that then goes through,
 `choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
-the button back to the author's default, and `be-offered-a-start-at-login` walks the one thing on
+the button back to the author's default, `finish-writing-a-task-before-anyone-takes-it` walks the one
+premise a reader settles where it is reported — the card drawn while its creation is still open, and
+the button inside it that ends the creation — and `be-offered-a-start-at-login` walks the one thing on
 screen nobody went and asked for — an offer that comes up on its own once the app has been come back
 to, and the answer that takes it away.
 

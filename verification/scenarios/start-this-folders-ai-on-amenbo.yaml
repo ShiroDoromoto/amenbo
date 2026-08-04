@@ -56,6 +56,15 @@ given:
     op: create
     with:
       title: Draft the winter planting order
+    as: card
+
+  # Finished being written, the way work already on a board is: what this card is here for is
+  # to be an ordinary one.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: card
 
 steps_cli:
   # Told, and told by name: the folder shows what tool it is, so the report names it rather than

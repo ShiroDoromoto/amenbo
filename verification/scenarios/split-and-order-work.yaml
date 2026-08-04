@@ -35,6 +35,21 @@ steps_cli:
       target: dependent
       on: blocker
 
+  # The edge is drawn while both creations are still open — that window is what the second stage of a
+  # creation exists for — and they are finished once it is there. From here on the only premise left
+  # holding the dependent is the edge, which is what every line below reads.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: blocker
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: dependent
+
   - type: assert
     domain: task
     op: field
@@ -162,6 +177,18 @@ steps_cli:
     with:
       target: waiting
       on: dropped
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: dropped
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: waiting
 
   - type: assert
     domain: task

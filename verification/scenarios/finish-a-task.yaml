@@ -18,6 +18,14 @@ steps_cli:
       title: SCENARIO SEED — carried out
     as: done_one
 
+  # Work that ends is work that was handed over first, so the creation is finished before any of it —
+  # a task nobody finished writing has not been anywhere near the listing it is read back through.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: done_one
+
   - type: action
     domain: task
     op: done
@@ -96,6 +104,12 @@ steps_cli:
     with:
       title: SCENARIO SEED — decided against
     as: dropped
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: dropped
 
   - type: action
     domain: task

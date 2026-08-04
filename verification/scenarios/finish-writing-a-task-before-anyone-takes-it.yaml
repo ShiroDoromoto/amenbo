@@ -1,0 +1,172 @@
+# Filing a task is two moves, and the gap between them is the point: what `add` hands back is still
+# being written, so it is on the board and in every listing but out of the mailbox and refused a
+# reservation, until the one who filed it says the writing is finished. What that window protects is
+# the edges, premises and classification a task needs — drawn before anyone can pick the task up
+# half-written. A guard is only proven by meeting it, so this road is written to be turned away in
+# the middle: a set that walked nothing but the green half would read the same over a build where
+# the creation ends the moment it starts.
+id: finish-writing-a-task-before-anyone-takes-it
+title: A task still being created is on the board but out of the mailbox, refuses a reservation, and is handed over only when its creation is finished
+description: >
+  Register a task and read the stage it lands in — still being created, listed all the same, and out
+  of the listing a session takes its next work from. Name it by number and watch the reserve turned
+  away, since the guard sits in the write path and not in the filtering in front of it. Then finish
+  the creation and read the same three answers come back the other way, the last of them being the
+  reserve that now goes through.
+steps_cli:
+  # Nothing about this line says "draft": it is the ordinary way a task is filed, which is what makes
+  # the stage it lands in worth reading back.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — still being written
+    as: seed
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: draft
+      equals: true
+
+  # An unfinished creation is not ready, and the field says which of the four premises is holding it —
+  # the reason has to be legible before anyone tries, not only once they are turned away.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: false
+
+  # Held back is not hidden. The task is on the board and in every listing, and the fourth premise can
+  # be asked for on its own — which is how the creations somebody left open are found again.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "draft:yes"
+      target: seed
+      present: true
+
+  # Out of exactly one listing: the one a session takes its next task from.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: seed
+      present: false
+
+  # And naming it by number gets no further. Nobody holds this one — its own creation is unfinished —
+  # so what turns the reserve away is the premise guard and not the double-work one.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: in_progress
+      refused: not_ready
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo
+
+  # The one premise the person in front of it can settle where they stand. It asks for nobody's
+  # ruling: the creator is the one who says the writing is finished.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: draft
+      equals: false
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: seed
+      present: true
+
+  # The other side of the refusal, and the half that says the guard let go rather than never having
+  # been there: the same reserve, named the same way, now goes through.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: in_progress
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: in_progress
+steps_gui:
+  # The screen's half of the same road, and it is a different half. There is no reserve on a screen
+  # and the board's own controls do not narrow on readiness, so what a screen answers for is the part
+  # a terminal cannot show at all: the card drawn like every other one while its creation is open, the
+  # reason standing on it where a reader meets it, and the button that ends the creation.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — still being written
+    as: seed
+
+  # Held back is not hidden — the card is on the board with the rest of the open work.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo"
+      target: seed
+      present: true
+
+  # And the reason it cannot be picked up is legible before anyone tries: the card wears it, and the
+  # task's own page spells it out beside the other premises.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: draft
+      equals: true
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: draft
+      equals: false

@@ -34,6 +34,7 @@ rows=(
   "darwin-aarch64:amenbo-darwin-arm64-update.app.tar.gz"
   "darwin-x86_64:amenbo-darwin-amd64-update.app.tar.gz"
   "windows-x86_64:amenbo-app-windows-x64-setup-update.exe"
+  "windows-aarch64:amenbo-app-windows-arm64-setup-update.exe"
   "linux-x86_64:amenbo-app-linux-x86_64-update.AppImage"
   "linux-aarch64:amenbo-app-linux-aarch64-update.AppImage"
 )

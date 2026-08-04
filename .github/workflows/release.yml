@@ -303,8 +303,8 @@ jobs:
             dist/amenbo-app-windows-x64-setup.exe.sig
           if-no-files-found: error
 
-  windows-arm-cli:
-    name: Windows arm64 CLI
+  windows-arm:
+    name: Windows arm64 installer (NSIS) + CLI
     runs-on: windows-11-arm
     # Same OpenSSL-from-source path as the amd64 job, and the same reason for naming the perl: this
     # image carries Strawberry Perl too (chocolatey puts it under C:\Strawberry), while a step under
@@ -321,9 +321,14 @@ jobs:
           rustc --version && cargo --version
           & $env:OPENSSL_SRC_PERL --version
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
       # On an arm64 runner (free for public repos) rather than cross-compiled — the MSVC target is
-      # the host's own, so this is the amd64 job's recipe on another machine. arm64 ships the CLI
-      # only (the `script` channel + CLI archive); the NSIS installer stays an amd64 job.
+      # the host's own, so this is the amd64 job's recipe on another machine.
       - name: Build the Windows arm64 CLI
         shell: bash
         run: |
@@ -331,15 +336,39 @@ jobs:
           cargo build --release -p amenbo-cli
           cp target/release/amenbo.exe dist/amenbo-windows-arm64.exe
 
+      - name: Install GUI deps
+        working-directory: app
+        run: npm ci
+
+      # The same unified installer the amd64 job builds, on a runner of this architecture: the
+      # sidecar CLI follows the host triple, so it is an arm64 slice too. The bundler itself is
+      # x86 and runs under the emulation Windows on arm carries, and the webview arrives at
+      # install time through the bootstrapper, which resolves the machine's own architecture.
+      - name: Build the Windows arm64 installer (NSIS)
+        working-directory: app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build -- --bundles nsis -c src-tauri/updater.conf.json
+
+      - name: Collect the installer + updater artifact under their release names
+        shell: bash
+        run: |
+          cp app/src-tauri/target/release/bundle/nsis/*setup.exe dist/amenbo-app-windows-arm64-setup.exe
+          cp app/src-tauri/target/release/bundle/nsis/*setup.exe.sig dist/amenbo-app-windows-arm64-setup.exe.sig
+
       - uses: actions/upload-artifact@v7
         with:
           name: dist-windows-arm
-          path: dist/amenbo-windows-arm64.exe
+          path: |
+            dist/amenbo-windows-arm64.exe
+            dist/amenbo-app-windows-arm64-setup.exe
+            dist/amenbo-app-windows-arm64-setup.exe.sig
           if-no-files-found: error
 
   release:
     name: Prerelease + attest provenance
-    needs: [macos, linux, linux-arm, windows, windows-arm-cli]
+    needs: [macos, linux, linux-arm, windows, windows-arm]
     runs-on: ubuntu-latest
     # id-token + attestations let wharfy sign build provenance with the workflow's
     # keyless OIDC identity (no secret to register); contents lets it write the GitHub
@@ -410,6 +439,7 @@ jobs:
           set -euo pipefail
           pairs=(
             "amenbo-app-windows-x64-setup.exe:amenbo-app-windows-x64-setup-update.exe"
+            "amenbo-app-windows-arm64-setup.exe:amenbo-app-windows-arm64-setup-update.exe"
             "amenbo-app-linux-x86_64.AppImage:amenbo-app-linux-x86_64-update.AppImage"
             "amenbo-app-linux-aarch64.AppImage:amenbo-app-linux-aarch64-update.AppImage"
             "amenbo-darwin-arm64.pkg:amenbo-darwin-arm64-update.pkg"
@@ -487,6 +517,8 @@ jobs:
             dist/amenbo-darwin-amd64-update.app.tar.gz dist/amenbo-darwin-amd64-update.app.tar.gz.sig \
             dist/amenbo-app-windows-x64-setup.exe.sig \
             dist/amenbo-app-windows-x64-setup-update.exe dist/amenbo-app-windows-x64-setup-update.exe.sig \
+            dist/amenbo-app-windows-arm64-setup.exe.sig \
+            dist/amenbo-app-windows-arm64-setup-update.exe dist/amenbo-app-windows-arm64-setup-update.exe.sig \
             dist/amenbo-app-linux-x86_64.AppImage.sig \
             dist/amenbo-app-linux-x86_64-update.AppImage dist/amenbo-app-linux-x86_64-update.AppImage.sig \
             dist/amenbo-app-linux-aarch64.AppImage.sig \
@@ -513,6 +545,9 @@ jobs:
             dist/amenbo-app-windows-x64-setup.exe.sig
             dist/amenbo-app-windows-x64-setup-update.exe
             dist/amenbo-app-windows-x64-setup-update.exe.sig
+            dist/amenbo-app-windows-arm64-setup.exe.sig
+            dist/amenbo-app-windows-arm64-setup-update.exe
+            dist/amenbo-app-windows-arm64-setup-update.exe.sig
             dist/amenbo-app-linux-x86_64.AppImage.sig
             dist/amenbo-app-linux-x86_64-update.AppImage
             dist/amenbo-app-linux-x86_64-update.AppImage.sig
@@ -568,6 +603,8 @@ jobs:
             "amenbo-darwin-amd64-update.app.tar.gz" "amenbo-darwin-amd64-update.app.tar.gz.sig"
             "amenbo-app-windows-x64-setup.exe.sig"
             "amenbo-app-windows-x64-setup-update.exe" "amenbo-app-windows-x64-setup-update.exe.sig"
+            "amenbo-app-windows-arm64-setup.exe.sig"
+            "amenbo-app-windows-arm64-setup-update.exe" "amenbo-app-windows-arm64-setup-update.exe.sig"
             "amenbo-app-linux-x86_64.AppImage.sig"
             "amenbo-app-linux-x86_64-update.AppImage" "amenbo-app-linux-x86_64-update.AppImage.sig"
             "amenbo-app-linux-aarch64.AppImage.sig"

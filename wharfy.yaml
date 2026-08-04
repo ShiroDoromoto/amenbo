@@ -48,9 +48,11 @@ prebuilt:
 #                    page. What the running GUI downloads to update itself is a byte-identical copy
 #                    under a `-update` name, attached by release.yml via gh — deliberately not a
 #                    bundle here, so the two audiences' download counts stay apart.
-#   win  NSIS … built natively by public CI (release.yml's windows job runs `tauri build --bundles
+#   win  NSIS … built natively by public CI (release.yml's windows jobs run `tauri build --bundles
 #               nsis`); registers GUI + bundled CLI on PATH; **unsigned** = the SmartScreen first-run
-#               warning is accepted.
+#               warning is accepted. Two builds, x64 / arm64, each on a runner of its own
+#               architecture: the sidecar CLI follows the build's host triple, and the bundler
+#               expects Windows either way.
 # Note: applying an update has no self-update; it detects latest.json → opens the latest installer URL
 # and re-runs it.
 bundle:
@@ -60,3 +62,4 @@ bundle:
     - { os: linux,   arch: amd64, kind: appimage, path: dist/amenbo-app-linux-x86_64.AppImage }
     - { os: linux,   arch: arm64, kind: appimage, path: dist/amenbo-app-linux-aarch64.AppImage }
     - { os: windows, arch: amd64, kind: nsis, path: dist/amenbo-app-windows-x64-setup.exe }
+    - { os: windows, arch: arm64, kind: nsis, path: dist/amenbo-app-windows-arm64-setup.exe }

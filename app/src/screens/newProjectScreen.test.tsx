@@ -114,7 +114,12 @@ describe("raising a project on the desktop", () => {
     await act(async () => { button(t("newproj.chooseFolder")).click(); });
 
     expect(() => button(t("newproj.changeFolder"))).not.toThrow();
-    expect(container.textContent).not.toContain(t("newproj.clearFolder"));
+    // Read off the row rather than off a label an unset would carry: naming a label the screen does
+    // not have asserts nothing, since the row could grow any other button and still pass.
+    const folder = container.querySelector(".newproj__folder")!;
+    expect([...folder.querySelectorAll("button")].map((b) => b.textContent)).toEqual([
+      t("newproj.changeFolder"),
+    ]);
   });
 
   // Backing out of the picker is an answer, and it leaves the form where it was.

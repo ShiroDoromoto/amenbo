@@ -29,6 +29,7 @@ prebuilt:
     - { os: linux,   arch: amd64, path: dist/amenbo-linux-amd64 }
     - { os: linux,   arch: arm64, path: dist/amenbo-linux-arm64 }
     - { os: windows, arch: amd64, path: dist/amenbo-windows-amd64.exe }
+    - { os: windows, arch: arm64, path: dist/amenbo-windows-arm64.exe }
 
 # BYO-bundle: the unified installer (GUI + bundled CLI). Built on the amenbo side and brought in;
 # wharfy does not re-sign (relay) and uploads it to the GitHub Release. Stable distribution signing is

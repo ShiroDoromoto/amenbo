@@ -86,8 +86,8 @@ impl LatestRelease {
 
     /// The unified-installer URL for the current OS/arch: the URL listed in `assets` under this
     /// platform's installer key ([`installer_asset_key`], e.g. `macos-arm64-pkg`), or `None` if
-    /// there is none. `None` is the honest answer where no installer is shipped — macOS x64 and
-    /// Linux arm64 only get the CLI archive.
+    /// there is none. `None` is the honest answer for an OS/arch that ships no unified installer:
+    /// the CLI archive is then the whole of what is published for it.
     ///
     /// This is the manifest as published: the name a **first install** fetches. The update side of it
     /// is [`update_named`], which [`update_url`](Self::update_url) applies.

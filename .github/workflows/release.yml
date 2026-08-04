@@ -287,9 +287,43 @@ jobs:
             dist/amenbo-app-windows-x64-setup.exe.sig
           if-no-files-found: error
 
+  windows-arm-cli:
+    name: Windows arm64 CLI
+    runs-on: windows-11-arm
+    # Same OpenSSL-from-source path as the amd64 job, and the same reason for naming the perl: this
+    # image carries Strawberry Perl too (chocolatey puts it under C:\Strawberry), while a step under
+    # git-bash would resolve `perl` to MSYS2's and die in ./Configure.
+    env:
+      OPENSSL_SRC_PERL: C:/Strawberry/perl/bin/perl.exe
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Show toolchain
+        run: |
+          rustc --version && cargo --version
+          & $env:OPENSSL_SRC_PERL --version
+
+      # On an arm64 runner (free for public repos) rather than cross-compiled — the MSVC target is
+      # the host's own, so this is the amd64 job's recipe on another machine. arm64 ships the CLI
+      # only (the `script` channel + CLI archive); the NSIS installer stays an amd64 job.
+      - name: Build the Windows arm64 CLI
+        shell: bash
+        run: |
+          mkdir -p dist
+          cargo build --release -p amenbo-cli
+          cp target/release/amenbo.exe dist/amenbo-windows-arm64.exe
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-windows-arm
+          path: dist/amenbo-windows-arm64.exe
+          if-no-files-found: error
+
   release:
     name: Prerelease + attest provenance
-    needs: [macos, linux, linux-arm-cli, windows]
+    needs: [macos, linux, linux-arm-cli, windows, windows-arm-cli]
     runs-on: ubuntu-latest
     # id-token + attestations let wharfy sign build provenance with the workflow's
     # keyless OIDC identity (no secret to register); contents lets it write the GitHub

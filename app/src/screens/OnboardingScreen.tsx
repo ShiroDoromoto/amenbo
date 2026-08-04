@@ -99,13 +99,15 @@ function BindCard({ projects, onBound }: { projects: Project[]; onBound: (id: nu
   const [error, setError] = useState<string | null>(null);
 
   if (!open) {
+    // The line saying where the card leads borrows the word the board's own no-folder warning
+    // offers: both end in the same move, and one wording for it is one thing to learn.
     return (
       <button className="onboard__action" onClick={() => setOpen(true)}>
         <span className="onboard__action-icon">📂</span>
         <span className="onboard__action-body">
           <span className="onboard__action-label">{t("onboard.openLabel")}</span>
           <span className="onboard__action-hint">{t("onboard.openHint")}</span>
-          <span className="onboard__go">{t("firstloop.noFolderBtn")} →</span>
+          <span className="onboard__go">{t("noFolder.btn")} →</span>
         </span>
       </button>
     );

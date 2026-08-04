@@ -102,6 +102,17 @@ describe("the two ways in", () => {
     expect(navs).toEqual([{ type: "project", id: "9" }]);
   });
 
+  // The line under each hint says where the card leads, and it is read out of the dictionary. A key
+  // no language holds renders as the key itself — a failure that costs nothing at runtime and so
+  // reaches the screen — which is why the key is asked to resolve, and not only to be printed.
+  it("says where each card leads in words, not in a key", async () => {
+    await render();
+    for (const [label, go] of [["onboard.createLabel", "onboard.createGo"], ["onboard.openLabel", "noFolder.btn"]]) {
+      expect(t(go), `${go} is a key some dictionary holds`).not.toBe(go);
+      expect(button(t(label))?.querySelector(".onboard__go")?.textContent).toBe(`${t(go)} →`);
+    }
+  });
+
   // Dismissing the picker is an answer, not a failure: nothing is bound and the reader stays put.
   it("binds nothing when the folder picker is dismissed", async () => {
     hoisted.picked = null;

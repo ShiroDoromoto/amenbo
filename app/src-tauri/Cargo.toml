@@ -88,6 +88,15 @@ objc2 = "0.6"
 objc2-foundation = "0.3"
 objc2-user-notifications = "0.3"
 block2 = "0.6"
+# The macOS half of "start at login" is written by hand through SMAppService for the same reason as the
+# notifications above: what tauri-plugin-autostart writes on this OS is a plain ~/Library/LaunchAgents
+# plist, which macOS files as a legacy agent under the developer's name instead of listing the app under
+# System Settings > Login Items, where somebody looking for it would find it. Windows and Linux stay on
+# the plugin.
+objc2-service-management = "0.3"
+# Names the user's home directory, which is where a login registration written by an older version of
+# this app sits. Same crate core resolves the app-data base with.
+directories = "6"
 
 # Windows OS notifications are delivered by hand through notify-rust. The default
 # tauri-plugin-notification desktop route fires a toast and forgets it, exposing no click or action

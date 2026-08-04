@@ -6,25 +6,138 @@
 //! the reason to be up early is that the inbox items which arrived while the app was closed are
 //! collected on the next open (`AMB-D-310`), so opening more often is noticing sooner.
 //!
+//! Which door writes it is not the same on every OS (`AMB-D-549`). Windows and Linux go through
+//! `tauri-plugin-autostart`, which writes the `HKCU` Run key and a `~/.config/autostart` desktop entry
+//! — per-user, and listed by the OS beside the app they name. On macOS the plugin writes a plist under
+//! `~/Library/LaunchAgents`, and macOS files such a plist as a *legacy agent*: it belongs to no bundle,
+//! so System Settings lists it under the developer's name among background items, where someone looking
+//! for this app does not find it. `SMAppService` registers the app itself instead, which is what puts a
+//! row under "Open at Login" with a button to take it away. A macOS without that API (before 13) has
+//! neither that list nor `SMAppService`, and keeps the plugin.
+//!
 //! Two states have to agree, and only one of them is ours: `config.autostart` is what the user asked
 //! for, and the OS registration is what actually happens. [`crate::autostart::set`] writes the OS half
 //! and the command that calls it writes the config half, in that order — a registration that could not
 //! be written leaves the config saying "off", never the reverse. Between two runs the two can still
-//! drift apart, because the registration is a file the user can delete and a path that stops naming
-//! this executable, so [`crate::autostart::reconcile`] settles them once as the app comes up
+//! drift apart, because the registration is something the user can take away and a path that stops
+//! naming this executable, so [`crate::autostart::reconcile`] settles them once as the app comes up
 //! (`AMB-D-546`).
 //!
 //! A development build has none of it (`AMB-D-547`): the plugin is not registered, and this refuses.
 
 use crate::error::CmdError;
 
-/// The plugin that owns the per-user registration, ready to hand to `app.handle().plugin(…)`. On
-/// macOS it is asked for a LaunchAgent plist rather than a Login Item, so the registration is a file
-/// under the user's own `~/Library/LaunchAgents` — visible, removable, and needing no scripting of
-/// another application. No extra arguments are passed: a launch at login is the ordinary launch.
+/// The plugin that owns the per-user registration on Windows and Linux, ready to hand to
+/// `app.handle().plugin(…)`. It is registered on macOS as well, where it is what a system too old for
+/// `SMAppService` falls back to. No extra arguments are passed: a launch at login is the ordinary
+/// launch.
 #[cfg(desktop)]
 pub fn init() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None)
+}
+
+/// The macOS door: the app registers *itself* as a login item, which is what a user can see and undo
+/// from System Settings (`AMB-D-549`).
+#[cfg(target_os = "macos")]
+mod login_item {
+    use objc2_service_management::{SMAppService, SMAppServiceStatus};
+
+    /// Whether this macOS has `SMAppService` at all — it arrived in macOS 13, and the framework
+    /// holding it is old enough that only the class itself can answer.
+    pub fn available() -> bool {
+        objc2::runtime::AnyClass::get(c"SMAppService").is_some()
+    }
+
+    /// Register (`enabled`) or unregister this app as a login item.
+    pub fn set(enabled: bool) -> Result<(), String> {
+        let service = unsafe { SMAppService::mainAppService() };
+        let outcome = unsafe {
+            if enabled {
+                service.registerAndReturnError()
+            } else {
+                service.unregisterAndReturnError()
+            }
+        };
+        match outcome {
+            Ok(()) => Ok(()),
+            // Asking for the state it is already in is answered as a failure by macOS, and is not one:
+            // what the caller wanted is what the OS holds. Only a status that disagrees is an error.
+            Err(_) if registered() == enabled => Ok(()),
+            Err(e) => Err(e.localizedDescription().to_string()),
+        }
+    }
+
+    /// Whether the OS is holding a login item for this app *and* honouring it. A user who switches the
+    /// row off in System Settings leaves a status that is neither enabled nor gone, and the answer for
+    /// every one of those is the same as having none: what they can see is off (`AMB-D-546`).
+    pub fn registered() -> bool {
+        let service = unsafe { SMAppService::mainAppService() };
+        let status = unsafe { service.status() };
+        status == SMAppServiceStatus::Enabled
+    }
+
+    /// Take away the plist that the versions writing this registration through the plugin left in
+    /// `~/Library/LaunchAgents`, and say whether one was there.
+    ///
+    /// It is removed rather than kept because both would fire: the plist starts the app at login on its
+    /// own, and the login item does too. What it says while it is there is that this user had asked to
+    /// start at login, which is why the answer is carried into the same pass that removes it.
+    ///
+    /// Only a plist naming this app's bundle is touched — the file is in the user's own directory, and
+    /// the name alone is not enough to be sure it is ours.
+    pub fn take_legacy_plist() -> bool {
+        let Some(dirs) = directories::UserDirs::new() else {
+            return false;
+        };
+        let plist = dirs.home_dir().join("Library/LaunchAgents/amenbo.plist");
+        let Ok(body) = std::fs::read_to_string(&plist) else {
+            return false;
+        };
+        if !body.contains("/amenbo.app/Contents/MacOS/") {
+            return false;
+        }
+        if let Err(e) = std::fs::remove_file(&plist) {
+            log::warn!("autostart: the login registration this app used to write could not be taken away ({e})");
+            return false;
+        }
+        true
+    }
+}
+
+/// Write (`enabled`) or remove (`!enabled`) this user's login registration, through whichever door
+/// this OS uses.
+#[cfg(desktop)]
+fn write(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    if login_item::available() {
+        return login_item::set(enabled);
+    }
+    use tauri_plugin_autostart::ManagerExt;
+    let launcher = app.autolaunch();
+    let written = if enabled { launcher.enable() } else { launcher.disable() };
+    written.map_err(|e| e.to_string())
+}
+
+/// Whether the OS is holding a registration for this build right now.
+#[cfg(desktop)]
+fn read(app: &tauri::AppHandle) -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    if login_item::available() {
+        return Ok(login_item::registered());
+    }
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+/// Whether a registration written by an older version of this app was found and taken away, so that
+/// this pass can read it as the registration it replaces. Only macOS has ever written one.
+#[cfg(desktop)]
+fn take_legacy_registration() -> bool {
+    #[cfg(target_os = "macos")]
+    if login_item::available() {
+        return login_item::take_legacy_plist();
+    }
+    false
 }
 
 /// Write (`enabled`) or remove (`!enabled`) this user's login registration.
@@ -35,16 +148,14 @@ pub fn init() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 /// [`crate::commands::config_set_autostart`], which writes both.
 #[cfg(desktop)]
 pub fn set(app: &tauri::AppHandle, enabled: bool) -> Result<(), CmdError> {
-    use tauri_plugin_autostart::ManagerExt;
     if amenbo_core::config::Paths::is_dev_channel() {
-        // The plugin is not registered on this channel, so `autolaunch()` would have nothing to ask.
-        // Refusing here is the half that holds whoever the caller is, the way the front end not
-        // drawing the switch is the half that holds for the user (`AMB-D-547`).
+        // Nothing is registered on this channel, so there is nothing here to move. Refusing is the
+        // half that holds whoever the caller is, the way the front end not drawing the switch is the
+        // half that holds for the user (`AMB-D-547`).
         return Err("a development build does not register a login item".into());
     }
-    let launcher = app.autolaunch();
-    let written = if enabled { launcher.enable() } else { launcher.disable() };
-    written.map_err(|e| CmdError::from(format!("could not write the login registration: {e}")))
+    write(app, enabled)
+        .map_err(|e| CmdError::from(format!("could not write the login registration: {e}")))
 }
 
 /// The same door on a target that has no login of its own to register with. It refuses rather than
@@ -73,11 +184,11 @@ pub enum Fix {
 /// The whole of the reconciliation rule (`AMB-D-546`), as a truth table over the two states.
 ///
 /// The registered-and-current row is not distinguished from registered-and-stale, and cannot be:
-/// the plugin answers whether *something* is registered and offers no way to read what it points at,
-/// so telling the two apart would mean parsing a plist, a desktop entry and a registry value that
+/// what is registered can be read as a yes or no and offers no way to read what it points at, so
+/// telling the two apart would mean parsing a plist, a desktop entry and a registry value that
 /// another crate writes and may reformat. Writing the registration again covers both — it is what a
 /// stale one needs, and what a current one already says. The user sees the same thing either way; the
-/// cost is a few hundred bytes rewritten at launch.
+/// cost is one write at launch.
 pub fn fix_for(setting_on: bool, registered: bool) -> Fix {
     match (setting_on, registered) {
         (true, true) => Fix::Rewrite,
@@ -94,7 +205,6 @@ pub fn fix_for(setting_on: bool, registered: bool) -> Fix {
 /// left working. A development build returns without asking anything (`AMB-D-547`).
 #[cfg(desktop)]
 pub fn reconcile(app: &tauri::AppHandle) {
-    use tauri_plugin_autostart::ManagerExt;
     if amenbo_core::config::Paths::is_dev_channel() {
         return;
     }
@@ -102,18 +212,21 @@ pub fn reconcile(app: &tauri::AppHandle) {
         return;
     };
     let mut config = amenbo_core::config::Config::load(&paths.config_file);
-    let launcher = app.autolaunch();
-    let registered = match launcher.is_enabled() {
+    // A registration this app wrote through an older door is swept away here and counted in — for the
+    // user it is the same answer, given once, and it goes on holding through the pass that moves it to
+    // the door this build uses.
+    let carried_over = take_legacy_registration();
+    let registered = match read(app) {
         Ok(v) => v,
         Err(e) => {
             log::warn!("autostart: could not read the login registration ({e})");
             return;
         }
     };
-    match fix_for(config.autostart, registered) {
+    match fix_for(config.autostart, registered || carried_over) {
         Fix::Nothing => {}
         Fix::Rewrite => {
-            if let Err(e) = launcher.enable() {
+            if let Err(e) = write(app, true) {
                 log::warn!("autostart: could not point the login registration at this build ({e})");
             }
         }
@@ -124,7 +237,7 @@ pub fn reconcile(app: &tauri::AppHandle) {
             }
         }
         Fix::Deregister => {
-            if let Err(e) = launcher.disable() {
+            if let Err(e) = write(app, false) {
                 log::warn!("autostart: could not take the login registration away ({e})");
             }
         }
@@ -151,5 +264,16 @@ mod tests {
         // Not wanted but registered: left over from a switch that was on, and it goes.
         assert_eq!(fix_for(false, true), Fix::Deregister);
         assert_eq!(fix_for(false, false), Fix::Nothing);
+    }
+
+    /// The registration a machine carries in from an older door is a registration: the pass that
+    /// sweeps it away writes the new one, instead of reading the sweep as the user having said no.
+    #[test]
+    fn a_registration_carried_in_from_the_older_door_keeps_the_answer() {
+        let registered_now = false;
+        let carried_over = true;
+        assert_eq!(fix_for(true, registered_now || carried_over), Fix::Rewrite);
+        // Nothing carried in, and the absence means what it has always meant.
+        assert_eq!(fix_for(true, false), Fix::TurnSettingOff);
     }
 }

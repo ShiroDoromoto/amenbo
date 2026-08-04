@@ -49,6 +49,10 @@ pub struct Gui<'a> {
 /// The app's stdout is dropped rather than inherited: a `--json` run answers with one machine
 /// readable line, and an app writing to the same stream would be read as part of it. Its stderr is
 /// left alone, which is where a build that dies on launch says why.
+///
+/// `AMENBO_HOME` carries a second meaning beside the store it names: a launch that names its own
+/// store is the one the app leaves out of its single-instance guard. That is what lets this one come
+/// up beside whatever the operator already has open, instead of being turned away into their window.
 pub fn launch<'a>(bundle: &Path, store: &'a Session) -> Result<Gui<'a>, String> {
     let exe = executable(bundle)?;
     let child = Command::new(&exe)

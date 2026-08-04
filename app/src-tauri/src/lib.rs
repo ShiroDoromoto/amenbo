@@ -25,6 +25,10 @@ mod perf;
 /// mutating command, over the store's own cursor (`AMB-D-380`), and the one this app makes as it comes up
 /// for what a previous run left half delivered (`AMB-D-399`).
 mod plugin_dispatch;
+/// One process per store: what turns a second launch into the window that is already open, coming to
+/// the front. Desktop-only, because the claim it holds is an OS primitive with no shape elsewhere.
+#[cfg(desktop)]
+mod single_instance;
 /// OS-specific file watching — the half that wakes `commands::watch_store`. It does not depend on
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three
 /// operating systems.
@@ -102,7 +106,16 @@ pub fn run_plugin_runner() -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  #[allow(unused_mut)]
+  let mut builder = tauri::Builder::default();
+  // One process per store, claimed before anything else this app does: a builder plugin is
+  // initialized while the app is still being built, so a launch that finds the claim taken ends
+  // before a window, a watcher or a migration screen exists to be doubled (`single_instance`).
+  #[cfg(desktop)]
+  if single_instance::guards_this_run() {
+    builder = builder.plugin(single_instance::init());
+  }
+  builder
     .menu(menu::build)
     .on_menu_event(|app, event| {
       if event.id() == menu::CHECK_UPDATES_ID {

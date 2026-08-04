@@ -59,6 +59,11 @@ tauri-plugin-updater = "2"
 # administrator right is asked for. Desktop-only crate, and the login of a desktop session is the whole
 # subject, so it is pulled in off mobile targets alone (matches `#[cfg(desktop)]` in `autostart.rs`).
 tauri-plugin-autostart = "2"
+# One process per store: claims the running instance, and hands a second launch's argv to the process
+# holding the claim so that launch can raise the window already open and end (`single_instance.rs`).
+# The claim is an OS primitive with no shape off the desktop — a Unix socket, a D-Bus name, a named
+# mutex — which is why this too is pulled in off mobile targets alone.
+tauri-plugin-single-instance = "2"
 
 # The store-watch tests (`tests/store_watch.rs`) dig real directories on a real filesystem.
 [dev-dependencies]

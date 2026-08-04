@@ -85,9 +85,9 @@ impl LatestRelease {
     }
 
     /// The unified-installer URL for the current OS/arch: the URL listed in `assets` under this
-    /// platform's installer key ([`installer_asset_key`], e.g. `macos-arm64-pkg`), or `None` if
-    /// there is none. `None` is the honest answer for an OS/arch that ships no unified installer:
-    /// the CLI archive is then the whole of what is published for it.
+    /// platform's installer key ([`installer_asset_key`], e.g. `macos-arm64-pkg`), or `None` when
+    /// the manifest lists nothing under it. `None` is the honest answer for a platform the release
+    /// published no installer for, and for a manifest published before it did.
     ///
     /// This is the manifest as published: the name a **first install** fetches. The update side of it
     /// is [`update_named`], which [`update_url`](Self::update_url) applies.
@@ -134,9 +134,9 @@ pub fn current_platform_key() -> String {
 /// The wharfy `assets` key (`os-arch-kind`) of the **unified installer** for the current OS. The
 /// kind follows from the OS: macOS → `pkg`, Windows → `exe`, Linux → `appimage` — the per-user
 /// AppImage is the whole of the Linux GUI distribution (`AMB-D-428`). This composite key is
-/// what picks the installer rather than the CLI archive (the suffix-less `os-arch` tar.gz/zip); on
-/// mac we ship both arm64 and x64. Where no installer exists for an OS/arch (Linux arm64, say), the
-/// key is simply absent from `assets` and
+/// what picks the installer rather than the CLI archive (the suffix-less `os-arch` tar.gz/zip);
+/// every OS ships one per architecture it is published for (`AMB-D-550`), so the arch rides in the
+/// key. Where `assets` carries no installer under this key,
 /// [`LatestRelease::installer_for_current_platform`] yields `None`, falling back to the
 /// release-notes page.
 fn installer_asset_key() -> String {

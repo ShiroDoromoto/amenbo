@@ -15,8 +15,8 @@
 //   swift screen.swift front <pid>               bring the app owning that pid to the front
 //   swift screen.swift shot <pid> <out.png>      shoot that app's window into a png
 //   swift screen.swift read <image.png>          the words on a shot, as JSON: corrected, and as read
-//   swift screen.swift find <pid> [name]         every named element on screen, or those of that name
-//   swift screen.swift click-named <pid> <name>  left-click the one element of that name
+//   swift screen.swift find <pid> [name]         every named element on screen, or those that name reaches
+//   swift screen.swift click-named <pid> <name>  left-click what that name names (a part of it will do)
 //   swift screen.swift click <x> <y>             left-click at a screen point
 //   swift screen.swift dblclick <x> <y>          double-click at a screen point (what opens a dialog's row)
 //   swift screen.swift type "text"               type into the focused element (Unicode direct, so no IME)
@@ -238,34 +238,56 @@ func openTree(_ app: AXUIElement) {
     usleep(300_000) // the contents arrive from the web process, not from the call
 }
 
-/// Every named element under `el`, in the order the tree holds them. `matching` narrows to one exact
-/// name — exact rather than partial because a partial match makes "Create" find "Create a project"
-/// too, and a click on the wrong one of two is the failure this whole route exists to remove.
-func elements(under el: AXUIElement, matching wanted: String?, depth: Int = 0) -> [Element] {
+/// Every named element under `el`, in the order the tree holds them.
+func elements(under el: AXUIElement, depth: Int = 0) -> [Element] {
     guard depth < 60 else { return [] } // a tree deeper than this is a cycle, not a screen
     var found: [Element] = []
-    if let name = axName(el), wanted == nil || name == wanted!, let frame = axFrame(el) {
+    if let name = axName(el), let frame = axFrame(el) {
         let role = axString(el, kAXRoleAttribute as String) ?? ""
         found.append(Element(role: role.isEmpty ? "?" : role, name: name, frame: frame))
     }
     for child in axAttribute(el, kAXChildrenAttribute as String) as? [AXUIElement] ?? [] {
-        found += elements(under: child, matching: wanted, depth: depth + 1)
+        found += elements(under: child, depth: depth + 1)
     }
     return found
 }
 
 /// The elements of one app, menu bar left out: it belongs to whichever app is frontmost rather than
 /// to the window under test, and its items carry names that collide with the screen's own.
-func appElements(pid: Int, matching wanted: String?) -> [Element] {
+func appElements(pid: Int) -> [Element] {
     let app = AXUIElementCreateApplication(pid_t(pid))
     openTree(app)
     let windows = axAttribute(app, kAXWindowsAttribute as String) as? [AXUIElement] ?? []
     if windows.isEmpty { fail("no window for pid \(pid) — is the app running and on screen?") }
-    return windows.flatMap { elements(under: $0, matching: wanted) }
+    return windows.flatMap { elements(under: $0) }
+}
+
+/// The elements `wanted` names: the ones called exactly that, or — when the screen carries no such
+/// name — the ones whose name holds it.
+///
+/// Partial is needed because the name an element answers to is not the label a person reads off the
+/// screen. An emoji in front of the words is part of it (`🪿 はじめに` for the sidebar item that
+/// reads はじめに), and a card folds every line it shows into one string. Neither is knowable before
+/// looking, so an exact-only match sends every caller through a full listing to copy a name out of,
+/// for a thing it can already see.
+///
+/// Exact first, and not merely as an optimization: a whole name is the caller saying which one, and
+/// a screen where one name is also a part of another (a column called 未着手, over cards whose names
+/// end in it) would otherwise have no way to name the shorter.
+func named(_ wanted: String, among all: [Element]) -> [Element] {
+    let exact = all.filter { $0.name == wanted }
+    return exact.isEmpty ? all.filter { $0.name.contains(wanted) } : exact
+}
+
+/// A card's name carries the line breaks of the lines it folded, so it is shown escaped rather than
+/// broken across the message it is listed in.
+func oneLine(_ s: String) -> String {
+    s.replacingOccurrences(of: "\n", with: "\\n")
 }
 
 func find(pid: Int, name: String?) {
-    let found = appElements(pid: pid, matching: name)
+    let all = appElements(pid: pid)
+    let found = name.map { named($0, among: all) } ?? all
     for e in found {
         print("\(e.role)\t\(e.name)\t\(Int(e.frame.minX)) \(Int(e.frame.minY)) \(Int(e.frame.width)) \(Int(e.frame.height))")
     }
@@ -280,16 +302,30 @@ func find(pid: Int, name: String?) {
 /// point aimed at is where every element of that name overlaps. Two of a name in two *places* has no
 /// such point, and that is refused rather than guessed at: `find` is how to see both and aim at one.
 ///
+/// Matching a part of a name (above) is what puts *several* names within reach of one word, and that
+/// is a different ambiguity: ステータス is a label, a filter's pop-up and a group's button; 未着手 is
+/// a column header and every card standing under it. Nothing here can tell which was meant, so the
+/// names it reached are printed and nothing is pressed — pressing the first would be a click on
+/// whatever the tree happened to hold first, reported as success.
+///
 /// The click is a real one, at where the element stands now: what the name saves is the arithmetic,
 /// not the input path, and a press delivered through the accessibility API would go through whether
 /// or not anything was covering the element.
 func clickNamed(pid: Int, name: String) {
-    let found = appElements(pid: pid, matching: name)
+    let found = named(name, among: appElements(pid: pid))
     guard let first = found.first else { fail("nothing on screen is called \(name)") }
+
+    var reached: [String] = []
+    for e in found where !reached.contains(e.name) { reached.append(e.name) }
+    if reached.count > 1 {
+        let names = reached.map(oneLine).joined(separator: " / ")
+        fail("\(reached.count) names on screen hold \(name) — \(names); name one of them, or more of the one meant")
+    }
+
     let overlap = found.dropFirst().reduce(first.frame) { $0.intersection($1.frame) }
     if overlap.isNull || overlap.isEmpty {
         let places = found.map { "\(Int($0.frame.minX)),\(Int($0.frame.minY))" }.joined(separator: " ")
-        fail("\(found.count) elements are called \(name), in different places — at \(places); click a point instead")
+        fail("\(found.count) elements are called \(oneLine(first.name)), in different places — at \(places); click a point instead")
     }
     click(x: overlap.midX, y: overlap.midY)
 }

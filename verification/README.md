@@ -240,7 +240,10 @@ by a human from the evidence, not by the exit code.
 **Name what to press rather than aim at it.** `swift scripts/screen.swift find <pid>` lists every
 element on screen with the name it answers to and where it stands, and `click-named <pid> <name>`
 clicks the one of that name. The screen is a webview, so both read it through the accessibility tree
-the app serves once asked.
+the app serves once asked. A part of a name will do — the name an element answers to is not the label
+on the screen (an emoji in front of the words belongs to it, and a card folds its lines into one
+string), so a whole one is rarely knowable in advance. When several names hold what was asked for,
+the tool prints them and presses nothing.
 A point worked out from a shot's pixels carries two errors instead: the shot's pixels are the window's
 points times the scale of the display it was on (2 on a built-in panel, 1 on an external one), and the
 screen goes on moving after the shot — opening the right pane pushes a column header down by tens of

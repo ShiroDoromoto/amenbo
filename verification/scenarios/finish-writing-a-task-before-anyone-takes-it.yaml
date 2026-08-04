@@ -11,8 +11,8 @@ description: >
   Register a task and read the stage it lands in — still being created, listed all the same, and out
   of the listing a session takes its next work from. Name it by number and watch the reserve turned
   away, since the guard sits in the write path and not in the filtering in front of it. Then finish
-  the creation and read the same three answers come back the other way, the last of them being the
-  reserve that now goes through.
+  the creation and read every one of those answers come back the other way, the last of them being
+  the reserve that now goes through.
 steps_cli:
   # Nothing about this line says "draft": it is the ordinary way a task is filed, which is what makes
   # the stage it lands in worth reading back.

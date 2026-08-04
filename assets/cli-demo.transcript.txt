@@ -5,10 +5,18 @@ $ amenbo init --name Alex --actor human
   AI agents: run `amenbo agent --json` now and follow it — the managed guidance just written to CLAUDE.md/AGENTS.md does not take effect until your next session.
 
 $ amenbo task add --title 'Draft the launch note' --project website --due +3d --actor human
-✓ Created task: Draft the launch note (AMB-T-1)
+✓ Created task: Draft the launch note (AMB-T-1) — still being created
+  finish creating it: amenbo task finish-creating AMB-T-1
 
 $ amenbo task add --title 'Ship the installer' --project website --to me-ai --actor human
-✓ Created task: Ship the installer (AMB-T-2)
+✓ Created task: Ship the installer (AMB-T-2) — still being created
+  finish creating it: amenbo task finish-creating AMB-T-2
+
+$ amenbo task finish-creating 1 --actor human
+✓ Finished creating: AMB-T-1
+
+$ amenbo task finish-creating 2 --actor human
+✓ Finished creating: AMB-T-2
 
 $ amenbo task list --actor human
 2 task(s)

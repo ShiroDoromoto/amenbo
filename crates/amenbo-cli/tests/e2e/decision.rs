@@ -235,7 +235,9 @@ fn a_decision_says_which_of_the_tasks_it_created_are_still_standing() {
     cli.json(&["decision", "accept", &did, "--json"]);
 
     let a_task = |title: &str| -> String {
-        id_str(&cli.json(&["task", "add", "--project", &pid, "--title", title, "--json"])["task"]["id"])
+        let id = id_str(&cli.json(&["task", "add", "--project", &pid, "--title", title, "--json"])["task"]["id"]);
+        cli.finish_creating(&id);
+        id
     };
     let todo = a_task("まだ手を付けていない");
     let doing = a_task("いま進めている");

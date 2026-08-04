@@ -5306,7 +5306,25 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             }
             let detail = store.task_detail(t.id).map_err(CliError::from)?;
             warn_body(&detail.notes); // non-blocking readability hint on write (stderr)
-            write_envelope(flags, "task.add", "task", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Created task: {} ({})", t.title, task_label(t.id)));
+            // The creation is two stages, and this response is where the one who just typed it learns so
+            // (`AMB-D-556`): the id it was given, that it is still being created, and the command that
+            // ends the creation. The wording is the next move to make, not a question to answer
+            // (`AMB-D-558`) — there is nobody to ask, the creator being the one who ends it.
+            let finish = format!("{} task finish-creating {}", Paths::command_name(), task_label(t.id));
+            let mut resource = serde_json::to_value(&detail).unwrap();
+            // Read off the task rather than assumed: what the response says about the stage it is at is
+            // whatever the store put there.
+            if detail.draft {
+                if let Some(obj) = resource.as_object_mut() {
+                    obj.insert("next".to_string(), json!(finish));
+                }
+            }
+            let created = format!("✓ Created task: {} ({})", t.title, task_label(t.id));
+            let human_line = if detail.draft { format!("{created} — still being created") } else { created };
+            write_envelope(flags, "task.add", "task", resource, None, false, human_line);
+            if detail.draft {
+                human(flags, format!("  finish creating it: {finish}"));
+            }
         }
         TaskCmd::List { project, filter, sort, limit, offset } => {
             let project_id = project.map(|p| store.resolve_project_ref(&p)).transpose().map_err(CliError::from)?;
@@ -5524,6 +5542,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             }
             write_envelope(flags, "task.update", "task", serde_json::to_value(&detail).unwrap(), Some(changed), false, format!("✓ Updated task: {}", task_label(t.id)));
         }
+        TaskCmd::FinishCreating { id } => return task_finish_creating(store, flags, &id),
         TaskCmd::Done { id } => return task_complete(store, flags, &id, true),
         TaskCmd::Reopen { id } => return task_complete(store, flags, &id, false),
         TaskCmd::Status { id, status } => return task_set_status(store, flags, &id, &status),
@@ -6583,6 +6602,24 @@ fn os_open(target: &str) -> Result<(), CliError> {
     };
     cmd.status().map_err(mkerr)?;
     Ok(())
+}
+
+/// `task finish-creating <id>`: end the second stage of a creation (`AMB-D-554`). Until this lands the task
+/// is held out of the mailbox and refused a reservation; after it, it is ordinary work. Finishing a creation
+/// that is already finished is a reported no-op rather than an error — the caller wanted the task creatable,
+/// and it is.
+fn task_finish_creating(store: &mut Store, flags: &Flags, id: &str) -> Result<i32, CliError> {
+    let tid = resolve_task(store, id).map_err(CliError::from)?;
+    let still_being_created = store.task(tid).map_err(CliError::from)?.is_some_and(|t| t.draft);
+    if !still_being_created {
+        let detail = store.task_detail(tid).map_err(CliError::from)?;
+        write_envelope(flags, "task.finish-creating", "task", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("(no change) {}", task_label(tid)));
+        return Ok(0);
+    }
+    let t = store.finish_task_creation(tid).map_err(CliError::from)?;
+    let detail = store.task_detail(t.id).map_err(CliError::from)?;
+    write_envelope(flags, "task.finish-creating", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["draft".to_string(), "ready".to_string()]), false, format!("✓ Finished creating: {}", task_label(t.id)));
+    Ok(0)
 }
 
 fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) -> Result<i32, CliError> {

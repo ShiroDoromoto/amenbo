@@ -11,6 +11,7 @@ fn activity_records_system_events_and_comments() {
     cli.run(&["init", "--name", "tester"]);
     // An AI cannot pass --project; the binding fills in where the task goes.
     let t = id_str(&cli.json(&["task", "add", "--title", "do it", "--actor", "ai", "--json"])["task"]["id"]);
+    cli.finish_creating(&t);
     // reserve via status (todo→in_progress).
     cli.run(&["task", "status", &t, "in_progress", "--actor", "ai"]);
     cli.run(&["comment", "add", &t, "--actor", "ai", "--text", "starting"]);
@@ -102,7 +103,9 @@ fn a_past_line_of_a_deleted_subject_says_the_subject_is_gone() {
     cli.run(&["init", "--name", "tester"]);
     let pid = cli.a_project();
     let add = |title: &str| -> String {
-        id_str(&cli.json(&["task", "add", "--title", title, "--project", &pid, "--json"])["task"]["id"])
+        let id = id_str(&cli.json(&["task", "add", "--title", title, "--project", &pid, "--json"])["task"]["id"]);
+        cli.finish_creating(&id);
+        id
     };
 
     let t = add("消されるタスク");
@@ -188,6 +191,8 @@ fn activity_incremental_cursor_and_for_me_scope() {
     let pid = cli.bound_project(); // what the AI touches lives in the bound project
     let mine = id_str(&cli.json(&["task", "add", "--title", "ai task", "--to", "tester", "--ai", "--actor", "ai", "--json"])["task"]["id"]);
     let theirs = id_str(&cli.json(&["task", "add", "--title", "human task", "--project", &pid, "--json"])["task"]["id"]);
+    cli.finish_creating(&mine);
+    cli.finish_creating(&theirs);
     cli.run(&["task", "status", &theirs, "in_progress"]); // the human facet reserves it via status → an event on the human side
 
     // Read once to get the cursor to resume from; history responses carry one too.

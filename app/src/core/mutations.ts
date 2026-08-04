@@ -212,7 +212,10 @@ export async function addTask(projectId: number | null, title: string, notes?: s
       due: null, comments: 0, createdBy: me(),
       ref: taskRef(id), projectId, completedAt: null,
       ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], notStartedUntil: null,
-      // What core's `add` still writes: the creation lands finished (`AMB-D-554` moves that, not this).
+      // Core's `add` now leaves the creation unfinished (`AMB-D-554`), and the mock deliberately does
+      // not yet: there is no "finish creating" anywhere on screen (`AMB-T-2714`), so a mock task that
+      // landed unfinished could never be reserved and browser iteration would have nothing to drive.
+      // This line moves with that screen, not before it.
       draft: false,
     };
     return { ...s, tasks: [...s.tasks, task], activity: [sysItem(id, title, { kind: "task.created" }), ...s.activity] };

@@ -48,6 +48,15 @@ fn new_task(title: &str, project_id: i64) -> amenbo_core::ops::task::NewTask {
     }
 }
 
+/// File a task and finish creating it — **both stages** (`AMB-D-554`). A creation lands unfinished, and a
+/// task still being created cannot be reserved, so a test that goes on to move its status has to close the
+/// creation the way the surfaces do.
+fn filed(store: &mut Store, input: amenbo_core::ops::task::NewTask) -> i64 {
+    let id = store.add_task(input).unwrap().id;
+    store.finish_task_creation(id).unwrap();
+    id
+}
+
 /// The plain case: a mutation puts its row in the feed, with the dataset, the id the reader knows
 /// (the row's primary key), and what happened to it.
 #[test]
@@ -56,7 +65,7 @@ fn a_committed_mutation_names_the_row_it_changed() {
     let project = store.project_add(new_project("PJ")).unwrap().id;
 
     let head = read::change_feed_head(store.read_model().conn()).unwrap();
-    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+    let task = filed(&mut store, new_task("タスク", project));
 
     let rows = feed(&store, head);
     assert!(
@@ -138,7 +147,7 @@ fn a_rolled_back_batch_leaves_no_trace_in_the_feed() {
 fn one_operation_writes_one_feed_row_per_row_it_touched() {
     let mut store = temp_store();
     let project = store.project_add(new_project("PJ")).unwrap().id;
-    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+    let task = filed(&mut store, new_task("タスク", project));
 
     let head = read::change_feed_head(store.read_model().conn()).unwrap();
     store.set_task_status(task, amenbo_core::model::TaskStatus::InProgress, ActorKind::Ai).unwrap();
@@ -233,7 +242,7 @@ fn the_feed_is_bounded_and_stops_growing() {
     let project = store.project_add(new_project("PJ")).unwrap().id;
 
     // Enough operations to run well past the retention (each writes a few rows).
-    let task = store.add_task(new_task("回転させるタスク", project)).unwrap().id;
+    let task = filed(&mut store, new_task("回転させるタスク", project));
     for i in 0..6_000 {
         let status = if i % 2 == 0 {
             amenbo_core::model::TaskStatus::InProgress
@@ -272,7 +281,7 @@ fn the_feed_is_bounded_and_stops_growing() {
 fn a_cursor_the_truncation_outran_is_declared_a_gap_not_an_empty_answer() {
     let mut store = temp_store();
     let project = store.project_add(new_project("PJ")).unwrap().id;
-    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+    let task = filed(&mut store, new_task("タスク", project));
 
     // A reader that saw the very first change, then went away for a long time.
     let stale_cursor = 1;
@@ -311,7 +320,7 @@ fn a_cursor_the_truncation_outran_is_declared_a_gap_not_an_empty_answer() {
 fn a_short_page_says_there_is_more() {
     let mut store = temp_store();
     let project = store.project_add(new_project("PJ")).unwrap().id;
-    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+    let task = filed(&mut store, new_task("タスク", project));
     let head = read::change_feed_head(store.read_model().conn()).unwrap();
     for _ in 0..5 {
         store.set_task_status(task, amenbo_core::model::TaskStatus::InProgress, ActorKind::Ai).unwrap();
@@ -340,7 +349,7 @@ fn the_bound_holds_when_every_write_is_a_new_process() {
     let (project, task) = {
         let mut store = Store::open_at(paths.clone()).unwrap();
         let project = store.project_add(new_project("PJ")).unwrap().id;
-        let task = store.add_task(new_task("タスク", project)).unwrap().id;
+        let task = filed(&mut store, new_task("タスク", project));
         (project, task)
     };
     {

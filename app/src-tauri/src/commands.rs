@@ -5679,6 +5679,14 @@ mod tests {
     /// serialized to keep parallel runs from treading on each other.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+    /// Finish creating a task — the second stage every creation has (`AMB-D-554`), without which the
+    /// task cannot be reserved. The GUI's own way through it is `AMB-T-2714`'s, so a test that needs a
+    /// task nobody is still writing closes the creation on the store directly, the way it already
+    /// draws a dependency there.
+    fn finish_creating(id: i64) {
+        Store::open().unwrap().finish_task_creation(id).unwrap();
+    }
+
     /// When the target is gone and no ledger row carrying its name can be recovered either (dropped
     /// in compaction, or beyond the lookback budget), core returns an empty title. It is passed on
     /// empty: the stand-in a reader sees is a sentence in their language, so it is the GUI that puts
@@ -6529,7 +6537,7 @@ mod tests {
             .unwrap()
             .id;
         let mk = |store: &mut Store, title: &str| {
-            store
+            let id = store
                 .add_task(amenbo_core::ops::task::NewTask {
                     title: title.into(),
                     project_id: Some(project_id),
@@ -6540,7 +6548,9 @@ mod tests {
                     created_by_kind: Some(ActorKind::Ai),
                 })
                 .unwrap()
-                .id
+                .id;
+            store.finish_task_creation(id).unwrap();
+            id
         };
         let held = mk(&mut store, "タスク");
         let blocker = mk(&mut store, "ブロッカー");
@@ -6603,6 +6613,8 @@ mod tests {
 
         let blocker = task_add(Some(project_id), "先行".into(), None).unwrap().tasks[0];
         let dependent = task_add(Some(project_id), "後続".into(), None).unwrap().tasks[0];
+        finish_creating(blocker);
+        finish_creating(dependent);
         {
             let mut store = Store::open().unwrap();
             store.depend_task(dependent, blocker, Some(ActorKind::Human)).unwrap();
@@ -6648,6 +6660,7 @@ mod tests {
         };
 
         let task = task_add(Some(project_id), "実装".into(), None).unwrap().tasks[0];
+        finish_creating(task);
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
         let c = card(task);
@@ -6705,6 +6718,7 @@ mod tests {
         };
 
         let task = task_add(Some(project_id), "実装".into(), None).unwrap().tasks[0];
+        finish_creating(task);
         let did = decision_add(project_id, "決めごと".into(), Some("結論".into())).unwrap().decisions[0];
         decision_set_link(did, task, true).unwrap();
 
@@ -6810,6 +6824,7 @@ mod tests {
         assert_eq!(t.id, 1, "the id is the conversational number");
         assert_eq!(t.r#ref, "AMB-T-1", "ref is the namespaced form");
 
+        finish_creating(id);
         let ack = task_status(id, "in_progress".into()).unwrap();
         assert_eq!(ack.tasks, vec![id], "status acks the task");
         assert!(ack.scopes.contains(&"tasks"), "status invalidates the task lists");
@@ -8082,17 +8097,20 @@ mod tests {
             )
             .unwrap();
             let mk = |store: &mut Store, title: &str| {
-                store.add_task(amenbo_core::ops::task::NewTask {
-                    title: title.into(),
-                    project_id: Some(p.id),
-                    due_on: None,
-                    start_on: None,
-                    priority: Some(amenbo_core::model::Priority::High),
-                    notes: "本文".into(),
-                    created_by_kind: Some(ActorKind::Human),
-                })
-                .unwrap()
-                .id
+                let id = store
+                    .add_task(amenbo_core::ops::task::NewTask {
+                        title: title.into(),
+                        project_id: Some(p.id),
+                        due_on: None,
+                        start_on: None,
+                        priority: Some(amenbo_core::model::Priority::High),
+                        notes: "本文".into(),
+                        created_by_kind: Some(ActorKind::Human),
+                    })
+                    .unwrap()
+                    .id;
+                store.finish_task_creation(id).unwrap();
+                id
             };
             let a = mk(&mut store, "親");
             let b = mk(&mut store, "ブロッカー");

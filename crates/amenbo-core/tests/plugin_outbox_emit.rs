@@ -39,6 +39,16 @@ fn new_task(title: &str, project_id: i64) -> amenbo_core::ops::task::NewTask {
     }
 }
 
+/// File a task and finish creating it — **both stages** (`AMB-D-554`). A creation lands unfinished, and a
+/// task still being created cannot be reserved, so a test that goes on to move its status closes the
+/// creation the way the surfaces do. Finishing emits no event of its own, so what the outbox holds is
+/// unchanged by it.
+fn filed(store: &mut Store, input: amenbo_core::ops::task::NewTask) -> i64 {
+    let id = store.add_task(input).unwrap().id;
+    store.finish_task_creation(id).unwrap();
+    id
+}
+
 fn new_decision(title: &str, project_id: i64) -> amenbo_core::ops::decision::NewDecision {
     amenbo_core::ops::decision::NewDecision {
         title: title.to_string(),
@@ -194,7 +204,7 @@ fn an_event_whose_record_survives_carries_no_shape() {
     let project = store.project_add(new_project("PJ")).unwrap().id;
 
     let h = head(&store);
-    let task = store.add_task(new_task("残るタスク", project)).unwrap().id;
+    let task = filed(&mut store, new_task("残るタスク", project));
     assert_eq!(only(&store, h).record, None, "a creation carries no shape");
 
     let h = head(&store);
@@ -361,7 +371,7 @@ fn a_decision_comment_is_not_observed() {
 fn a_status_change_and_a_done_carry_the_actor_and_new_state() {
     let mut store = temp_store();
     let project = store.project_add(new_project("PJ")).unwrap().id;
-    let task = store.add_task(new_task("タスク", project)).unwrap().id;
+    let task = filed(&mut store, new_task("タスク", project));
 
     let h = head(&store);
     store.set_task_status(task, TaskStatus::InProgress, ActorKind::Ai).unwrap();

@@ -59,6 +59,8 @@ fn adding_a_premise_to_a_reserved_task_warns_the_changer() {
     let b = cli.json(&["task", "add", "--title", "前提", "--project", &pid, "--json"]);
     let bid = id_str(&b["task"]["id"]);
     let a_ref = a["task"]["ref"].as_str().unwrap();
+    cli.finish_creating(&aid);
+    cli.finish_creating(&bid);
 
     // A todo target is silent — no advisory on stderr.
     let (_o0, e0, c0) = cli.run_both(&["task", "depend", &aid, "--on", &bid, "--json"]);
@@ -98,6 +100,7 @@ fn reopening_a_decision_under_a_reserved_task_warns_the_changer() {
     let t = cli.json(&["task", "add", "--title", "根拠に立つ作業", "--project", &pid, "--json"]);
     let tid = id_str(&t["task"]["id"]);
     let t_ref = t["task"]["ref"].as_str().unwrap().to_string();
+    cli.finish_creating(&tid);
 
     // A premise must be accepted before the task it holds can be reserved, so accept, then link.
     cli.json(&["decision", "accept", &did, "--json"]);
@@ -152,6 +155,7 @@ fn superseding_a_decision_under_a_reserved_task_warns_the_changer() {
         let did = id_str(&d["decision"]["id"]);
         let t = cli.json(&["task", "add", "--title", title, "--project", &pid, "--json"]);
         let tid = id_str(&t["task"]["id"]);
+        cli.finish_creating(&tid);
         cli.json(&["decision", "accept", &did, "--json"]);
         cli.json(&["decision", "link", &did, &tid, "--json"]);
         let d_ref = d["decision"]["ref"].as_str().unwrap().to_string();
@@ -195,6 +199,8 @@ fn task_dependencies_drive_ready_and_unblock() {
     let aid = id_str(&a["task"]["id"]);
     let b = cli.json(&["task", "add", "--title", "上物", "--project", &pid, "--json"]);
     let bid = id_str(&b["task"]["id"]);
+    cli.finish_creating(&aid);
+    cli.finish_creating(&bid);
 
     // b depends on a (a must be done first).
     let dep = cli.json(&["task", "depend", &bid, "--on", &aid, "--json"]);
@@ -244,6 +250,8 @@ fn rejecting_a_blocker_releases_its_dependents() {
     let aid = id_str(&a["task"]["id"]);
     let b = cli.json(&["task", "add", "--title", "上物", "--project", &pid, "--json"]);
     let bid = id_str(&b["task"]["id"]);
+    cli.finish_creating(&aid);
+    cli.finish_creating(&bid);
     cli.json(&["task", "depend", &bid, "--on", &aid, "--json"]);
     assert_eq!(cli.json(&["task", "show", &bid, "--json"])["ready"], false);
 
@@ -454,6 +462,8 @@ fn status_lists_the_reserved_as_in_progress_and_not_the_merely_startable() {
         &cli.json(&["task", "add", "--title", "予約済み", "--project", &pid, "--json"])["task"]
             ["id"],
     );
+    cli.finish_creating(&startable);
+    cli.finish_creating(&reserved);
     cli.json(&["task", "status", &reserved, "in_progress", "--json"]);
 
     let s = cli.json(&["status", "--json"]);
@@ -492,6 +502,7 @@ fn status_transitions_and_completed_stays_in_sync() {
     let pid = cli.a_project();
     let t = cli.json(&["task", "add", "--title", "S3", "--project", &pid, "--json"]);
     let tid = id_str(&t["task"]["id"]);
+    cli.finish_creating(&tid);
     // A new task starts as todo.
     assert_eq!(cli.json(&["task", "show", &tid, "--json"])["status"], "todo");
 
@@ -578,6 +589,8 @@ fn a_premise_pinned_on_after_reservation_surfaces_on_show_and_completion() {
     let pid = cli.a_project();
     let a = id_str(&cli.json(&["task", "add", "--title", "保持タスク", "--project", &pid, "--json"])["task"]["id"]);
     let b = id_str(&cli.json(&["task", "add", "--title", "後付けブロッカー", "--project", &pid, "--json"])["task"]["id"]);
+    cli.finish_creating(&a);
+    cli.finish_creating(&b);
 
     // A plain todo task surfaces nothing — the surface is scoped to the reservation holder.
     assert!(cli.json(&["task", "show", &a, "--json"]).get("premise_change").is_none());
@@ -620,6 +633,9 @@ fn assign_facet_and_mailbox_filters() {
     cli.run(&["task", "assign", &t2, "--to", me]);
     // Assigned to my AI and under way — reservation is status alone (in_progress).
     let t3 = id_str(&cli.json(&["task", "add", "--title", "ai-inprogress", "--project", &pid, "--json"])["task"]["id"]);
+    cli.finish_creating(&t1);
+    cli.finish_creating(&t2);
+    cli.finish_creating(&t3);
     cli.run(&["task", "assign", &t3, "--to", me, "--ai"]);
     cli.run(&["task", "status", &t3, "in_progress", "--actor", "ai"]);
 
@@ -680,6 +696,7 @@ fn status_reserves_and_hands_back_and_reserve_is_compare_and_swap() {
     let pid = cli.bound_project(); // what the AI touches lives in the bound project
     let t = cli.json(&["task", "add", "--title", "reservable", "--project", &pid, "--json"]);
     let tid = id_str(&t["task"]["id"]);
+    cli.finish_creating(&tid);
 
     // reserve: todo → in_progress.
     let c = cli.json(&["task", "status", &tid, "in_progress", "--actor", "ai", "--json"]);
@@ -722,6 +739,8 @@ fn reserving_a_not_ready_task_is_refused_with_a_way_out() {
     let bid = id_str(&blocker["task"]["id"]);
     let t = cli.json(&["task", "add", "--title", "後続", "--project", &pid, "--json"]);
     let tid = id_str(&t["task"]["id"]);
+    cli.finish_creating(&bid);
+    cli.finish_creating(&tid);
     cli.json(&["task", "depend", &tid, "--on", &bid, "--json"]);
 
     // An open blocker: naming the task by number gets you no reserve — the guard is in the write path, not the filter.

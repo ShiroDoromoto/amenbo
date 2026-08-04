@@ -28,8 +28,9 @@ fn hydrated(s: &Store) -> Database {
 
         // Meanwhile a further write open succeeds, and really can write.
         let mut other = Store::open_at(Paths::at(dir.clone())).unwrap();
-        let t = other
-            .add_task(NewTask {
+        let t = filed(
+            &mut other,
+            NewTask {
                 title: "written while the GUI holds the store".to_string(),
                 project_id: None,
                 due_on: None,
@@ -37,8 +38,8 @@ fn hydrated(s: &Store) -> Database {
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,
-            })
-            .unwrap();
+            },
+        );
 
         // The resident side can write too. SQLite decides the order; neither is locked out.
         resident_writer.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap();
@@ -190,7 +191,7 @@ fn hydrated(s: &Store) -> Database {
                 color: None,
             })
             .unwrap();
-        let t = s.add_task(crate::ops::task::NewTask {
+        let t = filed(&mut s, crate::ops::task::NewTask {
             title: "T".into(),
             project_id: Some(proj.id),
             due_on: None,
@@ -198,8 +199,7 @@ fn hydrated(s: &Store) -> Database {
             priority: Some(Priority::High),
             notes: String::new(),
             created_by_kind: None,
-        })
-        .unwrap();
+        });
         s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap();
         s.add_task_comment(t.id, crate::model::ActorKind::Human, "コメント").unwrap();
         s.add_system_event(
@@ -363,6 +363,14 @@ fn task(title: &str, project_id: Option<i64>) -> NewTask {
     }
 }
 
+/// File a task and finish creating it — **both stages** (`AMB-D-554`). A creation lands unfinished, which
+/// holds the task out of a reservation, so a test that goes on to reserve one has to close the creation the
+/// way the surfaces do. Tests that only need a row can add and leave it.
+fn filed(s: &mut Store, input: NewTask) -> crate::model::Task {
+    let t = s.add_task(input).unwrap();
+    s.finish_task_creation(t.id).unwrap()
+}
+
 /// **One logical operation, one transaction**: by the time a write wrapper returns, the operation is
 /// committed to the truth source. Drop the store, reopen it as another process would, and everything
 /// is still there. The conversational number is taken the same way — `next_id` read **inside**
@@ -381,7 +389,7 @@ fn task_writes_commit_per_operation() {
         .unwrap();
 
     let t1 = s.add_task(task("first", Some(proj.id))).unwrap();
-    let t2 = s.add_task(task("second", Some(proj.id))).unwrap();
+    let t2 = filed(&mut s, task("second", Some(proj.id)));
     s.set_task_status(t2.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap();
     assert_eq!((t1.id, t2.id), (1, 2), "numbering is MAX+1 within the transaction");
     drop(s);
@@ -401,7 +409,7 @@ fn task_writes_commit_per_operation() {
 #[test]
 fn reserving_is_a_compare_and_swap_against_the_truth_source() {
     let (mut s, dir) = fresh_store("seam-cas");
-    let t = s.add_task(task("reserve me", None)).unwrap();
+    let t = filed(&mut s, task("reserve me", None));
     s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap();
 
     let err = s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap_err();
@@ -415,8 +423,8 @@ fn reserving_is_a_compare_and_swap_against_the_truth_source() {
 #[test]
 fn the_ready_guard_reads_the_blockers_from_the_truth_source() {
     let (mut s, dir) = fresh_store("seam-ready");
-    let t = s.add_task(task("reserve me", None)).unwrap();
-    let blocker = s.add_task(task("do me first", None)).unwrap();
+    let t = filed(&mut s, task("reserve me", None));
+    let blocker = filed(&mut s, task("do me first", None));
     s.depend_task(t.id, blocker.id, None).unwrap();
 
     let err = s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap_err();

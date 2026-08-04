@@ -282,7 +282,7 @@ yourself (`amenbo plugin update <name>`, or the button on the banner).
 
 <div align="center">
 
-<img src="assets/cli-demo.gif" alt="A terminal recording: a person binds a folder with amenbo init, adds two tasks and hands one to their AI; the AI then lists its mailbox, reserves that task, reads the spec for the command it needs, and closes it" width="880">
+<img src="assets/cli-demo.gif" alt="A terminal recording: a person binds a folder with amenbo init, files two tasks and finishes creating them, handing one to their AI; the AI then lists its mailbox, reserves that task, reads the spec for the command it needs, and closes it" width="880">
 
 <sub>One store, two hands — the person files the work, their AI takes it (filmed from <a href="assets/cli-demo.tape">this script</a>).</sub>
 
@@ -302,7 +302,12 @@ amenbo agent --full          # every command's full spec inline
 
 # Projects, tasks
 amenbo project add --name "Website refresh" --dir ~/work/website-refresh --view board
+# Creating a task is two steps. What `task add` returns is still being created: it is on the
+# board and in every listing, but out of the mailbox and refused a reservation, so you can
+# draw its dependencies, premises and classification before anyone picks it up. Say the
+# writing is finished with `task finish-creating` — nobody's approval is being asked for
 amenbo task add --title "Wireframes" --project "Website refresh" --due tomorrow --priority high
+amenbo task finish-creating <n>            # <n> is the number `task add` just handed back
 amenbo task add --title "Pick colors" --project "Website refresh"
 # Every id is the number amenbo shows you: task AMB-T-<n> is `<n>`, decision AMB-D-<n> is `<n>`
 amenbo task depend <n> --on <m>            # <n> waits on <m> (dependency, not a subtask)

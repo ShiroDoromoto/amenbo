@@ -62,7 +62,7 @@ fn phrasebook(locale: &str) -> &'static [(&'static str, &'static str)] {
 /// English source and its key here must change with it, or the tests fail.
 const JA_PHRASEBOOK: &[(&str, &str)] = &[
     // capability (the group headings)
-    ("Register a task", "タスクを登録する"),
+    ("Register a task — filed in one command, then finished in another once it is fully written", "タスクを登録する ── 1 つのコマンドで起こし、書き切ったところで別のコマンドで締める"),
     ("Find and filter tasks (see filterGrammar)", "タスクを検索・絞り込む（filterGrammar 参照）"),
     ("See a task's details, project, classification, blockers and dependents", "タスクの詳細・プロジェクト・分類・ブロッカー・被依存を見る"),
     ("Edit a task's fields (title / notes / due / start / priority)", "タスクのフィールドを編集する（タイトル / メモ / 期日 / 開始日 / 優先度）"),
@@ -162,7 +162,8 @@ const JA_PHRASEBOOK: &[(&str, &str)] = &[
     ("Deletes a dimension value permanently; its task assignments go with it (alias: value-delete).", "次元の値を完全に削除します。そのタスクへの割り当ても一緒に消えます（別名: value-delete）。"),
     ("Assigns a task a value of a dimension. An axis is single-select, so the task's prior value on that axis is replaced.", "タスクに次元の値を割り当てます。軸は単一選択なので、その軸の以前の値は置き換わります。"),
     ("Clears a task's value of a dimension.", "タスクの次元の値をクリアします。"),
-    ("Creates a task in a project. Break larger work into separate tasks linked with task depend (no subtasks).", "プロジェクトにタスクを作成します。大きな作業は task depend で結んだ別タスクに分けます（サブタスクは無い）。"),
+    ("Creates a task in a project — the first of the two stages every creation has. What it returns is still being created: on the board and in every listing, but out of the mailbox and refused a reservation (ready:no), so the dependencies, premises and classification it needs can be drawn before anyone can pick it up. Finish it with task finish-creating; the response carries the id and that command. Break larger work into separate tasks linked with task depend (no subtasks).", "プロジェクトにタスクを作成します ── どの作成にも二段あり、その 1 段目です。返ってくるのは作成中のタスクで、盤面にも一覧にも出ますが、受信箱からは外れ、予約は拒まれます（ready:no）。必要な依存・根拠・分類を、誰にも掴まれないうちに張るためです。締めるのは task finish-creating で、その id とコマンドは応答が持ちます。大きな作業は task depend で結んだ別タスクに分けます（サブタスクは無い）。"),
+    ("Ends the second stage of a creation: the task stops being held back and becomes work anyone can take. Nobody is being asked to approve it — the one who created it is the one who says the writing is finished — so run it as the last step of filing, once the edges and classification the task needs are on it. One way only: a task filed by mistake ends with task reject (decided against) or task delete. Idempotent — finishing a creation that is already finished reports a no-op.", "作成の 2 段目を終えます: タスクは留め置きから外れ、誰でも取れる作業になります。承認を求めるものではありません ── 書き終わったと言うのは作った本人です ── ので、必要なエッジと分類が乗った、起票の最後の一手として打ちます。向きは一方通行で、誤って作ったタスクは task reject（やらないと決めた）か task delete で終わらせます。冪等 ── すでに作成を終えたタスクに打っても、変更なしとして返ります。"),
     ("Lists tasks. --limit/--offset page in sort order (JSON carries total_matched = the count before paging, count = this page).", "タスクを一覧します。--limit/--offset はソート順でページングします（JSON は total_matched = ページング前の件数、count = このページの件数を持ちます）。"),
     ("Shows task details — project, classification (dimensions: the axis=value pairs it is filed under, absent when it is filed under none), blockers (blocked_by) and dependents (blocks: what finishing this task would unblock). It carries the timeline too: the count of what has been said on the task, the newest three previewed a line each (cut where they run long), and the way to the rest — --json returns every comment whole, under `comments`.", "タスクの詳細を表示します ── プロジェクト、分類（dimensions: 軸=値。どの軸にも入っていなければ出ません）、ブロッカー（blocked_by）、被依存（blocks: このタスクを終えると着手可能になるもの）。 コメント面も併せて出ます: 何件付いているか、新しい順に3件を1行ずつのプレビュー（長ければ切り詰め）、残りへの導線。--json は全件を `comments` で丸ごと返します。"),
     ("Updates a task. --start is not a note to self: a day still ahead holds the task at ready:no and refuses its reserve, so declare one only when you mean it (--clear-start takes it back).", "タスクを更新します。--start は覚え書きではありません: 未到来の日はタスクを ready:no に留め、予約を拒みます。そのつもりのときだけ宣言してください（--clear-start で取り消せます）。"),
@@ -795,7 +796,7 @@ fn cmd(name: &str, summary: &str, flags: Value, examples: Value) -> Value {
 /// listed.
 fn capabilities() -> Value {
     let caps = vec![
-        cap("Register a task", &["task add"]),
+        cap("Register a task — filed in one command, then finished in another once it is fully written", &["task add", "task finish-creating"]),
         cap("Find and filter tasks (see filterGrammar)", &["task list"]),
         cap("See a task's details, project, classification, blockers and dependents", &["task show"]),
         cap("Edit a task's fields (title / notes / due / start / priority)", &["task update"]),
@@ -1160,7 +1161,7 @@ fn all_commands() -> Value {
                      { "name": "value", "required": true, "help": "value id or name (within the dimension)" }],
             "examples": ["amenbo dimension unset 42 Category Design"] }),
 
-        cmd("task add", "Creates a task in a project. Break larger work into separate tasks linked with task depend (no subtasks).",
+        cmd("task add", "Creates a task in a project — the first of the two stages every creation has. What it returns is still being created: on the board and in every listing, but out of the mailbox and refused a reservation (ready:no), so the dependencies, premises and classification it needs can be drawn before anyone can pick it up. Finish it with task finish-creating; the response carries the id and that command. Break larger work into separate tasks linked with task depend (no subtasks).",
             json!([{ "name": "--title <str>", "required": true, "help": "title (required, non-empty)" },
                    { "name": "--project <id>", "help": "owning project (a project-less task is refused). A human must name one — omit it to list the existing projects. An AI does not: the binding fills the slot, and naming a project is refused" },
                    { "name": "--due <date>", "help": "due date (YYYY-MM-DD / today / +3d)" },
@@ -1173,6 +1174,9 @@ fn all_commands() -> Value {
             json!(["amenbo task add --title \"Create wireframes\" --due tomorrow --priority high",
                    "amenbo task add --title \"Triage logs\" --to Alice --ai",
                    "amenbo task add --title \"Ship the installer\" --dim \"Category=release\""])),
+        json!({ "name": "task finish-creating", "summary": "Ends the second stage of a creation: the task stops being held back and becomes work anyone can take. Nobody is being asked to approve it — the one who created it is the one who says the writing is finished — so run it as the last step of filing, once the edges and classification the task needs are on it. One way only: a task filed by mistake ends with task reject (decided against) or task delete. Idempotent — finishing a creation that is already finished reports a no-op.",
+            "args": [{ "name": "id", "required": true, "help": "task ID" }],
+            "flags": [], "examples": ["amenbo task finish-creating AMB-T-<n>"] }),
         cmd("task list", "Lists tasks. --limit/--offset page in sort order (JSON carries total_matched = the count before paging, count = this page).",
             json!([{ "name": "--project <id>", "help": "filter by project (human only — an AI is already scoped to its bound project)" },
                    { "name": "--filter <expr>", "help": "filter expression (see filterGrammar)" },
@@ -1583,8 +1587,14 @@ mod tests {
         let ja_caps = ja["capabilities"].as_array().unwrap();
         let en_reg = en_caps.iter().find(|c| c["commands"][0] == "task add").unwrap();
         let ja_reg = ja_caps.iter().find(|c| c["commands"][0] == "task add").unwrap();
-        assert_eq!(en_reg["capability"], "Register a task");
-        assert_eq!(ja_reg["capability"], "タスクを登録する");
+        assert_eq!(
+            en_reg["capability"],
+            "Register a task — filed in one command, then finished in another once it is fully written"
+        );
+        assert_eq!(
+            ja_reg["capability"],
+            "タスクを登録する ── 1 つのコマンドで起こし、書き切ったところで別のコマンドで締める"
+        );
 
         let find = |spec: &Value, name: &str| -> Value {
             spec["commands"].as_array().unwrap().iter().find(|c| c["name"] == name).unwrap().clone()

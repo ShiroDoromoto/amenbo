@@ -1012,6 +1012,16 @@ pub enum TaskCmd {
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
     },
+    /// Finish creating a task — the second stage of every create. `task add` leaves the task still
+    /// being created: it is on the board and in every listing, but held out of the mailbox and refused
+    /// a reservation, so dependencies, premises and classification can be drawn before anyone picks it
+    /// up. This says the writing is finished. It asks for nobody's approval — the one who created it is
+    /// the one who ends the creation — and it runs one way (a task filed by mistake ends with
+    /// `task reject` or `task delete`)
+    FinishCreating {
+        /// target task ref (AMB-T-n)
+        id: String,
+    },
     List {
         #[arg(long)]
         project: Option<String>,

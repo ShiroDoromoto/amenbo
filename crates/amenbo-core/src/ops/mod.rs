@@ -127,9 +127,12 @@ pub(crate) mod test_support {
         mk_task_in(tx, title, None)
     }
 
-    /// Create one task in the given project (`None` for the inbox) and return its id.
+    /// Create one task in the given project (`None` for the inbox) and return its id. **Both stages of the
+    /// creation** run here (`AMB-D-554`), so what the fixture hands back is a task there is nothing left to
+    /// write on — which is what every test that reserves it, lists it or ends it is asking for. A test about
+    /// the first stage calls `task::add` itself and stops there.
     pub(crate) fn mk_task_in(tx: &WriteTx<'_>, title: &str, project_id: Option<i64>) -> i64 {
-        super::task::add(
+        let id = super::task::add(
             tx,
             super::task::NewTask {
                 title: title.to_string(),
@@ -142,7 +145,9 @@ pub(crate) mod test_support {
             },
         )
         .expect("add task")
-        .id
+        .id;
+        super::task::finish_creating(tx, id).expect("finish creating the task");
+        id
     }
 
     /// Create one project and return its id.

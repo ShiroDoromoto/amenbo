@@ -111,11 +111,11 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
         status: TaskStatus::Todo,
         // The task's first status (`todo`) begins now, so its status clock starts here.
         status_changed_at: Some(now),
-        // Creation still lands finished here. The premise exists (`AMB-D-553`) before anything raises
-        // it, so that the stage a task is at can be read and enforced from the day the column arrives;
-        // making the creation two stages by default is the next change (`AMB-D-554`), and it moves this
-        // line alone.
-        draft: false,
+        // A creation begins here and is finished by `finish_creating`, and this is the default rather
+        // than a flag (`AMB-D-554`): a guard the caller has to remember to ask for is broken on the run
+        // where they forget, and what it guards — nobody picking work up before its premises are
+        // declared — is exactly what a forgotten flag would let through.
+        draft: true,
         created_by_kind: input.created_by_kind,
         assignee_kind: None,
         start_on: input.start_on,
@@ -128,6 +128,26 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
     };
     emit_create(tx, record::task(&task))?;
     Ok(task)
+}
+
+/// Finish creating a task — the second stage of the creation [`add`] began (`AMB-D-554`). It clears the
+/// fourth premise and touches nothing else: the status, the assignee, and every edge drawn while the task
+/// was being put together all stay as they are. What changes is that the task stops being held out of the
+/// mailbox and out of a reservation.
+///
+/// **One direction.** The premise exists so that nobody picks work up before the person filing it has
+/// finished writing it; once they have, there is nothing left for it to hold, so there is no route back.
+/// A task filed by mistake ends the way any other does — `reject` for work decided against, `delete` for a
+/// row that should not exist.
+///
+/// Finishing a creation that is already finished writes the same row back rather than refusing: there is no
+/// state to protect and nothing the caller would do differently on being told. The surfaces short-circuit
+/// it into a reported no-op, which is where "already finished" is worth saying.
+pub fn finish_creating(tx: &WriteTx<'_>, id: i64) -> Result<Task> {
+    let before = live_before(tx, id)?;
+    let after = Task { draft: false, updated_at: Timestamp::now(), ..before.clone() };
+    emit_update(tx, record::task(&before), record::task(&after))?;
+    Ok(after)
 }
 
 #[derive(Default)]
@@ -452,14 +472,52 @@ mod tests {
         read::task_status(tx.conn(), id).unwrap().expect("the task is live")
     }
 
-    /// Put a task back into the stage where its creation is unfinished, or take it out again. Nothing
-    /// raises the premise yet — making the creation two stages is the next change (`AMB-D-554`) — so the
-    /// tests that hold the premise honest move the column themselves, through the same production
-    /// mapping every other write goes through.
+    /// Move a task between the two stages of its creation. Finishing one is production's own
+    /// [`finish_creating`]; putting one back is a move no surface offers — the premise runs one way
+    /// (`AMB-D-554`) — so a test that needs the far side of a transition writes the column itself, through
+    /// the same mapping every other write goes through.
     fn set_draft(tx: &WriteTx<'_>, id: i64, draft: bool) {
+        if !draft {
+            finish_creating(tx, id).unwrap();
+            return;
+        }
         let before = live_before(tx, id).unwrap();
         let after = Task { draft, updated_at: Timestamp::now(), ..before.clone() };
         emit_update(tx, record::task(&before), record::task(&after)).unwrap();
+    }
+
+    #[test]
+    fn a_creation_lands_unfinished_and_finishing_it_is_the_second_stage() {
+        // The default, which is the whole of the guard (`AMB-D-554`): what `add` returns is a task still
+        // being created, so no run has to remember to ask for it. Finishing it is the other stage, and it
+        // moves that one premise and nothing else.
+        with_tx(|tx| {
+            let pid = mk_project(tx, "PJ");
+            let t = add(
+                tx,
+                NewTask {
+                    title: "組み立て中".to_string(),
+                    project_id: Some(pid),
+                    due_on: None,
+                    start_on: None,
+                    priority: None,
+                    notes: String::new(),
+                    created_by_kind: None,
+                },
+            )
+            .unwrap();
+            assert!(t.draft, "a creation begins unfinished");
+            assert_eq!(t.status, TaskStatus::Todo, "which is not a status — the task is todo like any other");
+
+            let finished = finish_creating(tx, t.id).unwrap();
+            assert!(!finished.draft, "finishing the creation clears the premise");
+            assert_eq!(finished.status, TaskStatus::Todo, "and moves nothing else");
+            assert_eq!(finished.title, t.title);
+
+            // Asked again it does not refuse: there is no state to protect, and saying so is the surface's
+            // job rather than this one's.
+            assert!(!finish_creating(tx, t.id).unwrap().draft);
+        });
     }
 
     #[test]

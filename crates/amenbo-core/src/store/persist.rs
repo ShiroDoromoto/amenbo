@@ -404,6 +404,14 @@ impl Store {
         })
     }
 
+    /// Finish creating a task (one operation = one transaction) — the second stage of the creation
+    /// [`Self::add_task`] began (`AMB-D-554`). It clears the fourth premise of `ready` and nothing else,
+    /// so the task stops being held out of the mailbox and out of a reservation, and keeps everything it
+    /// was given while it was being put together.
+    pub fn finish_task_creation(&mut self, id: i64) -> Result<crate::model::Task> {
+        self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::task::finish_creating(tx, id))
+    }
+
     /// Update a task's fields (one operation = one transaction).
     pub fn update_task(
         &mut self,

@@ -49,6 +49,12 @@ Type "amenbo task add --title 'Draft the launch note' --project website --due +3
 Sleep 1.5s
 Type "amenbo task add --title 'Ship the installer' --project website --to me-ai --actor human" Sleep 400ms Enter
 Sleep 1.5s
+
+# What add returns is still being created — nobody can take it until the writing is finished.
+Type "amenbo task finish-creating 1 --actor human" Sleep 400ms Enter
+Sleep 1.2s
+Type "amenbo task finish-creating 2 --actor human" Sleep 400ms Enter
+Sleep 1.2s
 Type "amenbo task list --actor human" Sleep 400ms Enter
 Sleep 3s
 

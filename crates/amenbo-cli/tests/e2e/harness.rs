@@ -231,6 +231,13 @@ impl Cli {
         id_str(&self.json(&["project", "add", "--name", "P", "--json"])["project"]["id"])
     }
 
+    /// Test helper: finish creating a task — the second stage of every creation (`AMB-D-554`). What
+    /// `task add` leaves behind cannot be reserved, so a test that goes on to reserve one runs this the
+    /// way a caller does; a test that only reads back the row `add` wrote does not need it.
+    pub(crate) fn finish_creating(&self, id: &str) {
+        self.json(&["task", "finish-creating", id, "--json"]);
+    }
+
     /// Test helper: the project this CWD's `.amenbo` points at (the default project `init` made, first
     /// in the listing). AI-facet work is confined to the bound project, so **tests acting as the AI must
     /// target this one** — the separate project `a_project` creates is outside the AI's reach.

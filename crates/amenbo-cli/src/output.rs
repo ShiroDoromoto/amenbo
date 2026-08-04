@@ -304,7 +304,7 @@ impl From<amenbo_core::Error> for CliError {
             // the next task); this one means a premise you declared is unmet (→ resolve the premise).
             // The two point in opposite directions, so keep them apart.
             E::NotReady(_) => Some(format!(
-                "A declared premise is unmet, and there is no --force. Resolve it: finish the blocker (`{cmd} task done <blocker>`) or drop the edge (`{cmd} task undepend <id> --on <blocker>`); settle the premise (`{cmd} decision accept AMB-D-N`) or unlink it (`{cmd} decision link AMB-D-N <id> --unlink`)."
+                "A declared premise is unmet, and there is no --force. Resolve it: finish the blocker (`{cmd} task done <blocker>`) or drop the edge (`{cmd} task undepend <id> --on <blocker>`); settle the premise (`{cmd} decision accept AMB-D-N`) or unlink it (`{cmd} decision link AMB-D-N <id> --unlink`); finish creating the task (`{cmd} task finish-creating <id>`)."
             )),
             _ => None,
         };

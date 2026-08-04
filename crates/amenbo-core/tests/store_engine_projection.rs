@@ -40,8 +40,10 @@ fn build_backlog(paths: &Paths) -> (String, i64) {
             .unwrap()
             .id;
 
+        // Both stages of the creation (`AMB-D-554`): what this seeds is a store as it is worked in, where
+        // the tasks have been finished being written and can be reserved.
         let add = |store: &mut Store, title: &str, pri: Option<Priority>| {
-            store
+            let id = store
                 .add_task(ops::task::NewTask {
                     title: title.to_string(),
                     project_id: Some(p1),
@@ -52,7 +54,9 @@ fn build_backlog(paths: &Paths) -> (String, i64) {
                     created_by_kind: Some(ActorKind::Human),
                 })
                 .unwrap()
-                .id
+                .id;
+            store.finish_task_creation(id).unwrap();
+            id
         };
 
         let t1 = add(&mut store, "alpha", Some(Priority::High));

@@ -98,6 +98,7 @@ fn actor_facet_is_stamped_from_flag_and_defaults_to_human() {
     let pid = cli.bound_project(); // what the AI touches lives in the bound project
     let t = cli.json(&["task", "add", "--title", "facet", "--project", &pid, "--json"]);
     let tid = id_str(&t["task"]["id"]);
+    cli.finish_creating(&tid);
 
     // --actor ai stamps author_kind=ai on the comment, and the write echoes the effective facet (acted_facet).
     let ai = cli.json(&["comment", "add", &tid, "--text", "from ai", "--actor", "ai", "--json"]);

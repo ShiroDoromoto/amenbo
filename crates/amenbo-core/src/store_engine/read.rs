@@ -27,7 +27,7 @@ use super::sql::{
     Sql, Text as SqlText, Union,
 };
 use super::{StoreEngineError, Result};
-use crate::model::{ActorKind, Priority, TaskStatus};
+use crate::model::{ActorKind, DecisionStatus, Priority, TaskStatus};
 use crate::query::{AssigneeFilter, DueFilter, Filter, StartFilter};
 use crate::view::{ProjectRef, TaskCompact};
 
@@ -2024,6 +2024,123 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
 
     crate::perf::record_query("engine.search_hits", total, hits.len(), started.elapsed());
     Ok(SearchPage { total_matched: total, hits })
+}
+
+/// Where the records a page of hits points at stand: a task's status, priority and classification, and a
+/// decision's status.
+///
+/// Keyed by record id, not by hit — a record the words reach on three faces is three hits and one entry,
+/// which is also why this is not a column of [`search_hits`]: folding it in would read the same task once
+/// per face, and the classification is one-to-many on top of that.
+pub struct HitStandingRows {
+    pub tasks: HashMap<i64, (TaskStatus, Option<Priority>)>,
+    /// `(axis, value)` names per task, in axis order — a task sits on as many axes as it was placed on,
+    /// and on none at all just as often, so an id absent here is a task with no classification.
+    pub labels: HashMap<i64, Vec<(String, String)>>,
+    pub decisions: HashMap<i64, DecisionStatus>,
+}
+
+/// Read that standing for the records a page names, **after** the page has been cut (`AMB-D-567`).
+///
+/// Three statements, each over an id set the caller already holds, so what is read is bounded by the page
+/// and not by the store: a page of twenty reads twenty tasks' rows however many hits the words have in
+/// all. That is the whole reason this is a second read rather than more columns on the first — the hit
+/// query's own rows are the places a word is written, and there are more of those than there are records.
+///
+/// The reach rides on the id sets as a predicate, as it does in [`hydrate_task_cards`]: the ids arrive
+/// from a scoped query, and this is still the floor under them. An id that hydrates nothing — gone
+/// between the two reads, or outside the reach — is simply absent, which is how a face reads "nothing to
+/// say about this one" rather than an invented default.
+pub fn hit_standings(
+    conn: &Connection,
+    reach: crate::reach::Reach,
+    task_ids: &[i64],
+    decision_ids: &[i64],
+) -> Result<HitStandingRows> {
+    let started = std::time::Instant::now();
+    let mut out =
+        HitStandingRows { tasks: HashMap::new(), labels: HashMap::new(), decisions: HashMap::new() };
+
+    if !task_ids.is_empty() {
+        const TA: col::task::Cols = col::task::ALL;
+        let mut sel = Select::new();
+        let (id, status, priority) = (sel.col(TA.id), sel.col(TA.status), sel.col(TA.priority));
+        let mut pred = Pred::is_in(TA.id, task_ids.iter().copied());
+        if let Some(pid) = reach.project() {
+            pred = pred.and(Pred::eq(TA.project_id, pid));
+        }
+        let mut sql = Sql::from(&sel, TA.table);
+        sql.push_where(Some(&pred));
+        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+                Ok((
+                    id.get(r)?,
+                    card_enum_req(TA.status, status.get(r)?, TaskStatus::parse)?,
+                    card_enum_opt(TA.priority, priority.get(r)?, Priority::parse)?,
+                ))
+            })
+            .map_err(StoreEngineError::from)?;
+        for row in rows {
+            let (id, status, priority) = row.map_err(StoreEngineError::from)?;
+            out.tasks.insert(id, (status, priority));
+        }
+    }
+
+    // Only the tasks that answered above are asked for their labels: an id the reach turned away is one
+    // this join must not reach either, and keying off the hydrated set says so once instead of repeating
+    // the scope in a second predicate.
+    let placed: Vec<i64> = task_ids.iter().copied().filter(|id| out.tasks.contains_key(id)).collect();
+    if !placed.is_empty() {
+        const TV: col::task_dimension_value::Cols = col::task_dimension_value::of("tv");
+        const D: col::dimension::Cols = col::dimension::of("d");
+        const V: col::dimension_value::Cols = col::dimension_value::of("v");
+        let mut sel = Select::new();
+        let (task, axis, value) = (sel.col(TV.task_id), sel.col(D.name), sel.col(V.name));
+        let mut sql = Sql::from(&sel, TV.table);
+        // Both joins are inner, as in `task_classification`: an assignment whose axis or value is gone
+        // names nothing to show. The order is the axis's, so two tasks read down the same columns.
+        sql.join(D.table, same(D.id, TV.dimension_id))
+            .join(V.table, same(V.id, TV.value_id))
+            .push_where(Some(&Pred::is_in(TV.task_id, placed.iter().copied())))
+            .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+                Ok((task.get(r)?, axis.get(r)?, value.get(r)?))
+            })
+            .map_err(StoreEngineError::from)?;
+        for row in rows {
+            let (task, axis, value): (i64, String, String) = row.map_err(StoreEngineError::from)?;
+            out.labels.entry(task).or_default().push((axis, value));
+        }
+    }
+
+    if !decision_ids.is_empty() {
+        const DE: col::decision::Cols = col::decision::ALL;
+        let mut sel = Select::new();
+        let (id, status) = (sel.col(DE.id), sel.col(DE.status));
+        let mut pred = Pred::is_in(DE.id, decision_ids.iter().copied());
+        if let Some(pid) = reach.project() {
+            pred = pred.and(Pred::eq(DE.project_id, pid));
+        }
+        let mut sql = Sql::from(&sel, DE.table);
+        sql.push_where(Some(&pred));
+        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+                Ok((id.get(r)?, card_enum_req(DE.status, status.get(r)?, DecisionStatus::parse)?))
+            })
+            .map_err(StoreEngineError::from)?;
+        for row in rows {
+            let (id, status) = row.map_err(StoreEngineError::from)?;
+            out.decisions.insert(id, status);
+        }
+    }
+
+    let read = out.tasks.len() + out.decisions.len();
+    crate::perf::record_query("engine.hit_standings", read, read, started.elapsed());
+    Ok(out)
 }
 
 /// The line a record is named by: its title, when it was last written, and where it sits. What a search

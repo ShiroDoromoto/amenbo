@@ -1746,6 +1746,38 @@ pub struct SearchHitDto {
     /// takes (NFKC, case, kana) lives with the index, and a second one on this side would be a second
     /// answer to what a term matches (`AMB-D-566`).
     matches: Vec<SearchMatchDto>,
+    /// Where the record this row points at stands — what the row shows past the ref and the title, so the
+    /// reader can tell a task still to be done from one that is over without opening it. Absent only when
+    /// the record stopped being readable between the page and the read that fills this in.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    standing: Option<SearchStandingDto>,
+}
+
+/// A record's state, and — for a task — its priority and what it is filed under. The wire form of
+/// [`amenbo_core::query::HitStanding`]; `kind` on the row says which vocabulary `status` is drawn from.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SearchStandingDto {
+    /// `todo` / `in_progress` / `done` / `blocked` / `rejected` for a task, `proposed` / `accepted` /
+    /// `rejected` for a decision.
+    status: String,
+    /// Tasks only, and only where one was set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    priority: Option<String>,
+    /// Tasks only, in axis order — empty for a task placed on no axis.
+    labels: Vec<SearchLabelDto>,
+}
+
+/// One placement, in the words a person gave it.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SearchLabelDto {
+    axis: String,
+    value: String,
 }
 
 /// One run of `snippet` a term landed on — half-open, in characters. The wire form of
@@ -1818,6 +1850,15 @@ pub fn search(
                     .into_iter()
                     .map(|m| SearchMatchDto { start: m.start, end: m.end })
                     .collect(),
+                standing: h.standing.map(|s| SearchStandingDto {
+                    status: s.status,
+                    priority: s.priority,
+                    labels: s
+                        .labels
+                        .into_iter()
+                        .map(|l| SearchLabelDto { axis: l.axis, value: l.value })
+                        .collect(),
+                }),
             })
             .collect(),
     })

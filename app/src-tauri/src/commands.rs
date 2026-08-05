@@ -1826,6 +1826,9 @@ pub fn search(
     let store = open_store_read()?;
     let result = store.search(amenbo_core::query::SearchParams {
         text,
+        // The screen does not offer a project yet — its pull-down is `AMB-T-2737`'s to add. Unscoped is
+        // every project the reach allows, which on this face is every one of them.
+        project_id: None,
         filter_expr: filter.filter(|f| !f.trim().is_empty()),
         kind: kind.as_deref().map(amenbo_core::query::SearchKind::parse).transpose()?,
         sort: amenbo_core::query::SearchSort::default(),

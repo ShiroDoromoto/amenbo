@@ -2106,6 +2106,8 @@ pub struct HitLabel {
 pub struct SearchQueryEcho {
     /// The words as they were typed.
     pub text: String,
+    /// The project the search was scoped to, as it was asked for (`null` when it was not scoped).
+    pub project: Option<i64>,
     pub filter: Option<String>,
     /// The `--kind` value, as it was written (`null` when the search was not narrowed to one).
     pub kind: Option<String>,
@@ -2126,6 +2128,11 @@ pub struct SearchResult {
 pub struct SearchParams {
     /// The words, as typed. Split on whitespace and folded by the index ([`crate::store_engine::search`]).
     pub text: String,
+    /// The one project to look in. An argument of its own, and deliberately **not** a key of
+    /// `filter_expr` (`AMB-D-564`): a project is a common axis that tasks and decisions carry alike,
+    /// whereas the expression is task vocabulary — so putting it there would drop every decision from
+    /// the answer as the side effect of naming a project. `None` is every project the reach allows.
+    pub project_id: Option<i64>,
     /// The structural narrowing, in `task list`'s own grammar. Task vocabulary, so a search carrying one
     /// is a search of tasks.
     pub filter_expr: Option<String>,
@@ -2171,11 +2178,15 @@ pub fn search(
         }
         f.project_id = reach.narrow(f.project_id)?;
     }
+    // The scope, folded the same way `list` folds its own: a closed reach fills an unnamed slot with the
+    // bound project, and naming another one is an error rather than an empty page. `--project` itself is
+    // human vocabulary, refused for an AI at the surface that takes it (refuse_project_choice).
+    let project_id = reach.narrow(params.project_id)?;
 
     // The refs among the words, resolved to the records they name. A pin is a line of the **first** page,
     // and it takes its share of that page — a `--limit 5` is five lines whatever they are. Paging past
     // them walks the index alone, shifted by however many lines they took.
-    let pins = pinned(conn, reach, &params.text)?;
+    let pins = pinned(conn, project_id, &params.text)?;
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(SEARCH_LIMIT_DEFAULT);
     let shown_pins = if offset == 0 { pins.clone() } else { Vec::new() };
@@ -2186,6 +2197,7 @@ pub fn search(
         &crate::store_engine::read::SearchQuery {
             reach,
             terms: &terms,
+            project_id,
             filter: filter.as_ref(),
             today,
             kind: params.kind,
@@ -2229,6 +2241,7 @@ pub fn search(
     Ok(SearchResult {
         query: SearchQueryEcho {
             text: params.text,
+            project: params.project_id,
             filter: params.filter_expr,
             kind: params.kind.map(|k| k.as_str().to_string()),
             sort: params.sort.as_str().to_string(),
@@ -2304,9 +2317,13 @@ fn stand(
 /// The **raw** words are read, not the folded terms: a ref is a spelling, and the fold has already
 /// lower-cased it. A ref naming nothing live, or something outside the reach, pins nothing — a search must
 /// not become a way to ask whether a record exists somewhere it cannot be read.
+///
+/// `scope` is the search's project slot with the reach already folded in, so the one check answers for
+/// both. A pin is a line of the answer like any other: a search told to look in one project must not be
+/// the one place another project's records still surface.
 fn pinned(
     conn: &rusqlite::Connection,
-    reach: crate::reach::Reach,
+    scope: Option<i64>,
     text: &str,
 ) -> Result<Vec<SearchHit>> {
     use crate::ops::task::{parse_typed_ref, TypedKind};
@@ -2325,7 +2342,7 @@ fn pinned(
         else {
             continue;
         };
-        if !reach.allows(head.project_id) {
+        if scope.is_some_and(|pid| head.project_id != Some(pid)) {
             continue;
         }
         out.push(SearchHit {
@@ -3031,6 +3048,108 @@ mod filter_tests {
 
         let r = run(&crate::idref::task(9999));
         assert!(r.hits.is_empty(), "a ref naming nothing live pins nothing");
+    }
+
+    /// A decision carrying the word, for the cases that check both sides come back.
+    fn worded_decision(tx: &WriteTx<'_>, title: &str, project_id: i64) -> i64 {
+        ops::decision::add(
+            tx,
+            ops::decision::NewDecision {
+                title: title.to_string(),
+                body: String::new(),
+                project_id,
+            },
+        )
+        .expect("add decision")
+        .id
+    }
+
+    /// `--project` is an argument of its own, not a `--filter` key, so it narrows **both** sides
+    /// (`AMB-D-564`): naming a project drops the neighbour's rows and keeps this one's decisions. The
+    /// contrast is the line below it — a filter is task vocabulary, so it takes the decisions out.
+    #[test]
+    fn search_scoped_to_a_project_keeps_that_projects_decisions() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let mine = proj(tx, "bound");
+        let theirs = proj(tx, "other");
+        worded_task(tx, "索引を張る", "", mine);
+        worded_decision(tx, "索引の張り方", mine);
+        worded_task(tx, "索引を消す", "", theirs);
+        worded_decision(tx, "索引を消す理由", theirs);
+
+        let run = |params| search(tx.conn(), crate::reach::Reach::All, params).unwrap();
+
+        let all = run(SearchParams { text: "索引".to_string(), ..Default::default() });
+        assert_eq!(all.total_matched, 4, "unscoped, every project answers");
+
+        let scoped = run(SearchParams {
+            text: "索引".to_string(),
+            project_id: Some(mine),
+            ..Default::default()
+        });
+        assert_eq!(scoped.total_matched, 2, "the neighbour's rows are gone");
+        assert!(
+            scoped.hits.iter().any(|h| h.kind == "decision"),
+            "and the decision is not gone with them"
+        );
+        assert_eq!(scoped.query.project, Some(mine), "the scope is echoed as it was asked for");
+
+        let filtered = run(SearchParams {
+            text: "索引".to_string(),
+            project_id: Some(mine),
+            filter_expr: Some("status:todo".to_string()),
+            ..Default::default()
+        });
+        assert!(
+            filtered.hits.iter().all(|h| h.kind == "task"),
+            "a filter is task vocabulary, and that is what takes the decisions out — not the scope"
+        );
+    }
+
+    /// A pin is a line of the answer like any other, so the scope reaches it too — otherwise a search
+    /// told to look in one project would be the one place another project's records still surface.
+    #[test]
+    fn search_scoped_to_a_project_pins_nothing_outside_it() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let mine = proj(tx, "bound");
+        let theirs = proj(tx, "other");
+        let t = worded_task(tx, "索引を張る", "", theirs);
+
+        let run = |project_id| {
+            search(
+                tx.conn(),
+                crate::reach::Reach::All,
+                SearchParams { text: crate::idref::task(t), project_id, ..Default::default() },
+            )
+            .unwrap()
+        };
+        assert_eq!(run(None).hits.len(), 1, "unscoped, the ref names the record it points at");
+        assert!(run(Some(mine)).hits.is_empty(), "scoped elsewhere, it names nothing here");
+        assert_eq!(run(Some(theirs)).hits.len(), 1, "scoped to its own project, it names it again");
+    }
+
+    /// A closed reach fills an unnamed scope with the bound project and refuses another one outright —
+    /// the same fold `list` does, so an AI cannot widen a search by leaving the slot empty.
+    #[test]
+    fn a_closed_reach_narrows_the_search_and_refuses_a_project_outside_it() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let mine = proj(tx, "bound");
+        let theirs = proj(tx, "other");
+        worded_task(tx, "索引を張る", "", mine);
+        worded_task(tx, "索引を消す", "", theirs);
+
+        let run = |project_id| {
+            search(
+                tx.conn(),
+                crate::reach::Reach::binding(mine),
+                SearchParams { text: "索引".to_string(), project_id, ..Default::default() },
+            )
+        };
+        assert_eq!(run(None).unwrap().total_matched, 1, "an unnamed scope is the bound project");
+        assert!(run(Some(theirs)).is_err(), "another project is out of reach, not an empty page");
     }
 
     /// The `--sort` spec: the default weights the face, and the two timeline forms take that weight off.

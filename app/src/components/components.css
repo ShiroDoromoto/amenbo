@@ -455,6 +455,14 @@ button.feed__target:hover { color: var(--c-accent); }
   font-size: var(--fs-sm); color: var(--c-text-muted); margin-top: 2px;
   white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
 }
+/* Where the words landed. The excerpt is muted on purpose, so the run they are on is lifted back to the
+   reading colour and sat on a weak accent — a band inside a list of results reads as "this is your match"
+   without a legend, which is what the reader came here to find. The browser's own yellow is dropped: it
+   is loud enough to outrank the ref beside it, and it belongs to neither theme. */
+.srch__snippet mark {
+  background: var(--c-accent-weak); color: var(--c-text);
+  border-radius: 2px; padding: 0 1px;
+}
 .srch__error { color: var(--c-danger, #c0392b); font-size: var(--fs-sm); }
 
 /* ---------- empty / placeholder ---------- */

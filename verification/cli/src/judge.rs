@@ -70,6 +70,13 @@ impl Driver<'_> {
                 args.push(value.to_string());
             }
         }
+        // The face narrowing, under a name of its own: `face` is already the face a step reads the
+        // answer against, and the two are opposite ends of the same run — one goes in with the
+        // question, the other is checked against what came back.
+        if let Some(value) = with.get("only_face").and_then(|v| v.as_str()) {
+            args.push("--face".into());
+            args.push(value.to_string());
+        }
         // The project is named the way every other step names one — by a binding a `project create`
         // left behind — because it is a record, not a word of the grammar. So it rides a flag of its
         // own here, and never goes into the filter expression.
@@ -89,7 +96,7 @@ impl Driver<'_> {
 ///
 /// A face is what separates this from a listing: a listing can only say a record matched, and what a
 /// search is for is saying where. `present: false` is the same question in reverse — the proof that a
-/// narrowing (`kind`, `filter`) really left something out.
+/// narrowing (`kind`, `only_face`, `filter`) really left something out.
 pub(crate) fn judge_found(
     noun: &str,
     id_ref: &str,

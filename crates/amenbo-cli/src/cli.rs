@@ -26,7 +26,8 @@ pub struct Cli {
     /// suppress the human-facing success message
     #[arg(long, global = true)]
     pub quiet: bool,
-    /// disable color
+    /// disable color. It is off already when NO_COLOR is set, or when the output is not a terminal —
+    /// this is for saying so on a terminal that would otherwise get it
     #[arg(long, global = true)]
     pub no_color: bool,
     /// facet of this operation (human / ai). AI agents pass ai. Required by every operation that uses the
@@ -173,6 +174,11 @@ pub enum Command {
         /// keep one side: task / decision
         #[arg(long)]
         kind: Option<String>,
+        /// keep one face: title / body / comment / label / attachment. The other axis, judged apart from
+        /// `--kind`, so naming both is the product of them (`--kind decision --face comment` is the
+        /// remarks on decisions)
+        #[arg(long)]
+        face: Option<String>,
         /// face (the face first, newest within it) / -time (newest first) / time (oldest first)
         #[arg(long, default_value = "face")]
         sort: String,

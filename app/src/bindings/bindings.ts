@@ -1150,7 +1150,23 @@ comment?: string,
  * The hit's own instant, RFC3339 — a comment's posting time, or when the text it sits in was last
  * written.
  */
-at: string, snippet: string, };
+at: string, snippet: string, 
+/**
+ * Where in `snippet` the words landed, for the row to highlight. Sorted and never overlapping, and
+ * counted in the excerpt's **characters** — `Array.from(snippet)` splits it in that unit, `snippet[i]`
+ * does not.
+ *
+ * The core says this so that the screen does not have to match anything itself: the folding a match
+ * takes (NFKC, case, kana) lives with the index, and a second one on this side would be a second
+ * answer to what a term matches (`AMB-D-566`).
+ */
+matches: Array<SearchMatchDto>, };
+
+/**
+ * One run of `snippet` a term landed on — half-open, in characters. The wire form of
+ * [`amenbo_core::query::MatchRange`].
+ */
+export type SearchMatchDto = { start: number, end: number, };
 
 /**
  * One page of hits, and how many there are in all.

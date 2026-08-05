@@ -1738,6 +1738,24 @@ pub struct SearchHitDto {
     /// written.
     at: String,
     snippet: String,
+    /// Where in `snippet` the words landed, for the row to highlight. Sorted and never overlapping, and
+    /// counted in the excerpt's **characters** — `Array.from(snippet)` splits it in that unit, `snippet[i]`
+    /// does not.
+    ///
+    /// The core says this so that the screen does not have to match anything itself: the folding a match
+    /// takes (NFKC, case, kana) lives with the index, and a second one on this side would be a second
+    /// answer to what a term matches (`AMB-D-566`).
+    matches: Vec<SearchMatchDto>,
+}
+
+/// One run of `snippet` a term landed on — half-open, in characters. The wire form of
+/// [`amenbo_core::query::MatchRange`].
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SearchMatchDto {
+    start: usize,
+    end: usize,
 }
 
 /// One page of hits, and how many there are in all.
@@ -1795,6 +1813,11 @@ pub fn search(
                 comment: h.comment,
                 at: h.at.to_rfc3339_z(),
                 snippet: h.snippet,
+                matches: h
+                    .matches
+                    .into_iter()
+                    .map(|m| SearchMatchDto { start: m.start, end: m.end })
+                    .collect(),
             })
             .collect(),
     })

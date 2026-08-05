@@ -342,9 +342,11 @@ amenbo task list --filter "time_axis:v2 done:false" --json
 # excerpt. Words are ANDed; --filter takes the same grammar as `task list`, and since
 # that grammar is task vocabulary, a search carrying one is a search of tasks. A project
 # is an axis both sides carry, so it rides its own flag instead — narrowing to one keeps
-# the decisions in the answer.
+# the decisions in the answer. Which record the words are on (--kind) and which face of it
+# they are on (--face) are two axes judged apart, so naming both asks for their product.
 amenbo search plugin distribution --json
 amenbo search rollout --kind decision --limit 5 --json
+amenbo search rollout --kind decision --face comment --json   # the remarks on decisions
 amenbo search backup --filter "status:todo" --json
 amenbo search rollout --project "Website refresh" --json
 

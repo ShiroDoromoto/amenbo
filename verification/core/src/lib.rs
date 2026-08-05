@@ -617,8 +617,13 @@ const REGISTRY: &[OpSpec] = &[
     // listing answers which records match, and this answers which *places* carry the word — so the
     // step names the face it expects to be found on, which a listing has no way to say. The side is
     // the domain's, since a hit says whose it is and a bound id alone does not.
-    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "kind", "filter"], binds: false },
-    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "kind", "filter"], binds: false },
+    //
+    // The face appears twice under two names because the step asks two different things of it:
+    // `face` is what the answer is read against (the hit landed *there*), `only_face` is the
+    // narrowing put to the search on the way in. One key could not be both — a step that narrows to
+    // a face and then reads the face back would be asserting the narrowing against itself.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter"], binds: false },
     // What the typed words left standing. Separate from `listed` because there is no filter to write it
     // as: the narrowing is the screen's own, and the question it answers is which of the cards drawn a
     // moment ago are drawn still. The words belong to the `narrow` that put them in — repeating them

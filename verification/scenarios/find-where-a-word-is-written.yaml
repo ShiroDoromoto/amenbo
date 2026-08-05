@@ -2,7 +2,7 @@
 # carry the word, which is the question anyone holding half a memory of something actually asks — and
 # since words left the filter grammar, this is the only place they go. The line holds the five faces a
 # reader lands on (a title, a body, a remark on it, a label it was filed under, the name of what is
-# attached), the folding that decides what counts as a match at all, and the two narrowings.
+# attached), the folding that decides what counts as a match at all, and the narrowings.
 id: find-where-a-word-is-written
 title: A word leads to the places it is written — a title, a body, a comment, a label, an attachment — and the narrowings leave the rest out
 description: >
@@ -206,8 +206,7 @@ steps_cli:
       target: window
       present: false
 
-  # `--kind` keeps one side: the decision is out of a search narrowed to tasks. Which face of a record
-  # the words are on is the other axis, and the terminal has no way to ask it yet.
+  # `--kind` keeps one side: the decision is out of a search narrowed to tasks.
   - type: assert
     domain: decision
     op: found
@@ -215,6 +214,58 @@ steps_cli:
       words: retention
       target: outbox
       kind: task
+      present: false
+
+  # `--face` is the other axis: which face of the record the words are on. The word written in the
+  # notes is still a place when the search is narrowed to the body, and nowhere when it is narrowed to
+  # the title — the record carries the word either way, so a narrowing that did nothing would read as
+  # green without the second half.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: measured
+      target: window
+      only_face: body
+      face: body
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: measured
+      target: window
+      only_face: title
+      present: false
+
+  # The two axes are judged apart, so naming both asks for their product — the remarks on decisions,
+  # which neither axis alone can reach. The same word is written on a remark on each side, and the
+  # pair keeps the decision's while the task's falls away.
+  - type: action
+    domain: decision
+    op: comment
+    with:
+      target: outbox
+      text: the sweep was agreed to here
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: sweep
+      target: outbox
+      kind: decision
+      only_face: comment
+      face: comment
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: sweep
+      target: window
+      kind: decision
+      only_face: comment
       present: false
 
   # `--filter` is the task list's own grammar, and it is task vocabulary: it narrows the task side,

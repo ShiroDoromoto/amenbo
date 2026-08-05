@@ -361,6 +361,8 @@ SCENARIO ?= verification/scenarios/delegate-to-ai.yaml
 ## The judgment is mechanical (OCR): the title of the card the CLI wrote is absent from 1-before.png
 ## and present in 2-after.png. That title is not baked into the container — the host resolves it from
 ## $(SCENARIO) through the amenbo-scenario crate and passes it in (the container has no toolchain).
+## The name the road asserts on is looked up across `given:` as well as `steps_gui:`, since the world a
+## road opens on is declared in the former: a card the road only reads back was never named in its steps.
 ## Not on the always-on CI (it needs a full GUI build); it runs in the later stage of release.yml,
 ## which builds the bundle = catch the breaking trigger (a tauri/webview update) right before it
 ## ships.
@@ -374,7 +376,7 @@ verify-gui-linux: $(GUI_APPIMAGE_HOST) $(CLI_LINUX_HOST)
 	  -t amenbo-linux-gui-e2e:latest scripts/docker/
 	rm -f scripts/docker/$(notdir $(GUI_APPIMAGE_HOST)) scripts/docker/$(notdir $(CLI_LINUX_HOST))
 	@card="$$(cargo run -q --manifest-path verification/Cargo.toml -p amenbo-scenario --bin emit -- $(SCENARIO) \
-	  | jq -r '([ .steps_gui[] | select(.as != null) | {key: .as, value: .with.title} ] | from_entries) as $$labels \
+	  | jq -r '([ (.given + .steps_gui)[] | select(.as != null and .with.title != null) | {key: .as, value: .with.title} ] | from_entries) as $$labels \
 	    | ([ .steps_gui[] | select(.type == "assert" and .op == "listed" and (.with.present != false)) | .with.target ] | .[0]) as $$tgt \
 	    | $$labels[$$tgt] // empty')"; \
 	  [ -n "$$card" ] || { echo "✗ $(SCENARIO) has no listed/present title to drive the GUI check"; exit 1; }; \

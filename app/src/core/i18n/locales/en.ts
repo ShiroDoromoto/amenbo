@@ -318,13 +318,19 @@ const ui = {
   "activity.today": "Today", "activity.reply": "Reply",
   // search screen (where a word is written, across tasks, decisions and the comments on either)
   "search.placeholder": "Words to look for", "search.run": "Search",
-  "search.filterPh": "status:todo …",
+  // The narrowing box, in the vocabulary of whichever side is picked (`AMB-D-563`) — the same key can
+  // mean different things on the two, so the hint is the side's own. Off with no side picked: there
+  // would be no grammar to read the expression in, and the box says which move turns it back on.
+  "search.filterPh.task": "status:todo …", "search.filterPh.decision": "status:accepted …",
+  "search.filterPhOff": "Pick a kind first",
   // The two knobs the screen narrows by, each labelling its own axis (`AMB-D-562`). "In" used to head one
   // row holding both, which is what made a comment look like a third kind of record.
   "search.kind": "Kind", "search.kindAll": "Both",
   "search.kind.task": "Tasks", "search.kind.decision": "Decisions",
   "search.faceAxis": "Where", "search.faceAll": "Anywhere",
-  "search.note": "Where a word is written · every project",
+  // The scope, drawn as a pull-down and kept out of the box beside it (`AMB-D-564`).
+  "search.project": "Project", "search.projectAll": "Every project",
+  "search.note": "Where a word is written",
   "search.idle": "Type the words you are looking for.",
   "search.empty": "Nothing is written with those words.",
   "search.failed": "The search could not run:",

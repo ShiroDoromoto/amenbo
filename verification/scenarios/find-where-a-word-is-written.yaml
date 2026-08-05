@@ -520,10 +520,10 @@ steps_gui:
       target: window
       present: false
 
-  # The three narrowings the screen draws its own controls for — one row of chips for which record, a
-  # second for which of its faces, and the box that takes that side's own grammar. Each takes something
-  # out of an answer it was in a step ago, and the box is read in whichever grammar the chips beside it
-  # name.
+  # The narrowings the screen draws its own controls for — one row of chips for which record, a second
+  # for which of its faces, and the box that takes that side's own grammar. Each takes something out of
+  # an answer it was in a step ago, and the box is read in whichever grammar the chips beside it name.
+  # The scope is the fourth, and comes at the end of the road because it needs a second project first.
   - type: assert
     domain: decision
     op: found
@@ -626,3 +626,60 @@ steps_gui:
       target: outbox
       face: title
       standing: proposed
+
+  # The fourth control, and the only one the screen offers as a choice rather than as an expression: a
+  # project is one finite list of names, the same for both sides. A second project is raised to have
+  # something to choose between, and a record of each kind is written into it — the board and the
+  # decisions face both stand in the project just created.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: scenario-elsewhere
+    as: elsewhere
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO TASK — the retention window, filed elsewhere
+    as: exile
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — retention, decided elsewhere
+    as: exile_why
+
+  # Both halves, because a scope that did nothing would read as green from either one alone: the
+  # neighbour's rows fall away, and the rows of the project asked for stay.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: exile
+      project: elsewhere
+      face: title
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: window
+      project: elsewhere
+      present: false
+
+  # The half the narrowing box cannot do at all. Written into that box a project would take the
+  # decisions out of the answer as the side effect of being named, which is the whole reason it is a
+  # pull-down of its own.
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: exile_why
+      project: elsewhere
+      face: title

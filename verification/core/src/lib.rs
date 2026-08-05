@@ -634,6 +634,17 @@ const REGISTRY: &[OpSpec] = &[
     // survive a pipe at all: a highlight is a pair of offsets in `--json` and paint on the screen.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter", "standing", "landed_on", "marked"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter", "standing", "landed_on", "marked"], binds: false },
+    // The box `filter` is written into, asked whether it can be used at all. The grammar it is read in
+    // is the side's own, so with no side chosen there is none for the words to be read in and the box
+    // takes nothing — which is a state only a screen has. A flag either arrives on a command line or it
+    // does not, so a terminal holds nothing that stands where it always stands and refuses the hand;
+    // what a screen holds instead is a control a reader can see, reach and not use.
+    //
+    // It takes no argument, and neither the side nor a `present` is one of them. Naming a side would be
+    // asking about a screen that has already moved past this state, and the other half — the same box
+    // taking typing once a side is named — is not a second reading of the box but every `found` below it
+    // that carries a `filter`.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "narrowing-shut", required: &[], refs: &[], strings: &[], binds: false },
     // What the typed words left standing. Separate from `listed` because there is no filter to write it
     // as: the narrowing is the screen's own, and the question it answers is which of the cards drawn a
     // moment ago are drawn still. The words belong to the `narrow` that put them in — repeating them

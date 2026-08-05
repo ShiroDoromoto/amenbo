@@ -297,6 +297,11 @@ impl Instructor {
     /// listed a second time on that same screen, among the ones bound to the project, so a reading of
     /// the name would pass over a build that dropped the inventory and kept the binding.
     ///
+    /// `narrowing-shut` is a `Review`, and doubly so. What it is about is a box refusing the hand, which
+    /// leaves no text on a shot either way — and what tells a box shut from a box merely empty is the
+    /// words standing in it in place of an example, which are the interface's own and would hold this
+    /// gate to whichever language the run was set up in.
+    ///
     /// `nudge` is a `Review`, and the sentence it names is why: an offer is put in the interface's own
     /// words, so a reading of it would hold this gate to the one language the run happened to be set up
     /// in. What the step names is written down all the same — it is what the eye closing the shot is
@@ -661,6 +666,18 @@ impl Instructor {
                 }
                 line.push('.');
                 line
+            }
+            // The same box, asked whether it can be used at all. The line stands the screen up itself, as
+            // `found` does: what puts the box in this state is a side left unchosen, so a step that only
+            // said "confirm" would be read against whichever side the step before it had picked. What it
+            // names in the box is the words standing in place of an example, since a box shut and a box
+            // merely empty look alike until those are read.
+            (Domain::Task, "narrowing-shut") => {
+                "On the cross-cutting search, leave the side unchosen — the chips back on the arm that \
+                 narrows nothing — and confirm the box that narrows by a side's own grammar is standing \
+                 there and cannot be typed into, holding in place of an example the words that say to \
+                 choose a side first."
+                    .to_string()
             }
             (Domain::Task, "field") => format!(
                 "Confirm the task \"{}\" shows {} = {}.",
@@ -1467,6 +1484,31 @@ steps_gui:
         assert!(line.contains("on its comment"), "got: {line}");
         assert!(line.contains("calls the place a comment on a task"), "got: {line}");
         assert!(line.ends_with("with \"sweep\" marked inside its excerpt."), "got: {line}");
+    }
+
+    /// The control a reader can see, reach and not use. The line has to stand the screen up as well as
+    /// read it — the box is shut by the side being unchosen, and the step before this one on a real road
+    /// has chosen one — and it has to name what is standing in the box, since shut and empty look alike
+    /// until those words are read. It is closed by an eye: neither half leaves anything on a shot that a
+    /// reading could match without being held to one language.
+    #[test]
+    fn the_narrowing_box_is_read_for_refusing_the_hand_while_no_side_is_chosen() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: task
+    op: narrowing-shut
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let step = &s.steps(Driver::Gui)[0];
+        let line = ins.render(step).unwrap();
+        assert!(line.contains("leave the side unchosen"), "got: {line}");
+        assert!(line.contains("cannot be typed into"), "got: {line}");
+        assert!(line.contains("choose a side first"), "got: {line}");
+        assert!(ins.expectation(step).is_none(), "the shut box is closed by an eye, not by a reading");
     }
 
     #[test]

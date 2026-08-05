@@ -12,7 +12,11 @@ description: >
   second session try the same reserve. Leave the state of play on the timeline, say it better, take
   it back. Then park the task on an external stall and hand it back to the mailbox it came from, so
   the next session finds it where it looked the first time.
-steps_cli:
+# The work itself, which neither road is about: what is under test is the handing over, and filing a
+# task is another road's subject. Standing it up is also what gets the screen open at all — an
+# untouched store has no project, so there is no board for a card to stand on. Its creation is
+# deliberately left open: finishing it is the road's own move, on both sides.
+given:
   - type: action
     domain: task
     op: create
@@ -20,6 +24,7 @@ steps_cli:
       title: SCENARIO SEED — handed to me-ai
     as: seed
 
+steps_cli:
   - type: action
     domain: task
     op: assign
@@ -224,13 +229,6 @@ steps_cli:
 # wrote has to appear on the board, which is the one hop no CLI run can see. Both OCR harnesses
 # drive this file.
 steps_gui:
-  - type: action
-    domain: task
-    op: create
-    with:
-      title: SCENARIO SEED — handed to me-ai
-    as: seed
-
   - type: action
     domain: task
     op: assign

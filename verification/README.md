@@ -497,6 +497,13 @@ words over a listing — those are what a screen road is watching, and a premise
 would leave the road proving something already done. For the same reason a premise takes no
 `assert` (nothing is being proved yet) and no `refused:` (a refusal leaves nothing standing).
 
+**A screen road needs one even where the records look like its own to make.** A board with nothing on
+it draws the first loop in place of its columns, and the way to add a card is in a column head — so a
+road that opens by filing a task has no way to make that move, and an untouched store has no project
+to open a board for in the first place. The premise is what puts the columns there: the work the road
+takes for granted, or — where filing is what the road is about — one piece of ordinary work that was
+already standing on that board.
+
 A premise is not a road: a file carrying a world and no steps is refused like any other file nothing
 walks.
 

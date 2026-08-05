@@ -6,8 +6,10 @@
 # are ANDed over the card as a record rather than over any one face of it: one of them is written in a
 # comment, which the board draws as a count and never as a body.
 #
-# What this wants in front of it is a project's own board, with the three cards the road makes and
-# nothing else standing on it.
+# What this wants in front of it is a project's own board, with three cards on it and nothing else.
+# The cards are the world rather than the road: filing work is not what is under test here, and an
+# untouched store has no project for a board to be opened on. The remark stays on the road, since it
+# is the face the narrowing has to reach.
 id: narrow-the-board-to-a-phrase
 title: A phrase typed over the board leaves the cards it touches, and reaches them through a face no card shows
 description: >
@@ -16,7 +18,7 @@ description: >
   under test is the phrase surviving the trip and being ANDed over the record: a narrowing that took
   the first word only, or that kept whatever either word touched, leaves a half match standing, and one
   that never reached the comment takes the full match away.
-steps_gui:
+given:
   - type: action
     domain: task
     op: create
@@ -24,14 +26,11 @@ steps_gui:
       title: Ship the delivery gate before Friday
     as: gate
 
-  # The second word goes where the board cannot draw it. A card carries a title and its notes; a
-  # comment is a count on the card, so a narrowing judged on what is drawn would never find this.
   - type: action
     domain: task
-    op: comment
+    op: finish-creating
     with:
       target: gate
-      text: Measure the rollout window before it opens
 
   - type: action
     domain: task
@@ -42,10 +41,32 @@ steps_gui:
 
   - type: action
     domain: task
+    op: finish-creating
+    with:
+      target: archive
+
+  - type: action
+    domain: task
     op: create
     with:
       title: Measure the cold start
     as: coldstart
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: coldstart
+
+steps_gui:
+  # The second word goes where the board cannot draw it. A card carries a title and its notes; a
+  # comment is a count on the card, so a narrowing judged on what is drawn would never find this.
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: gate
+      text: Measure the rollout window before it opens
 
   - type: action
     domain: task

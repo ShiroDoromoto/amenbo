@@ -9,6 +9,11 @@
 #
 # A screen road alone: a terminal prints its hits as text and the ref is typed into `show`, so there is
 # nothing there to press.
+#
+# The two records are the world and not the road: what is under test is where a press lands, and
+# making the records that answer the word is not. Standing them up is also what gets the screen open
+# at all — an untouched store has no project, so there is no board to walk this on. What the operator
+# is left with is the remark on each and the press itself.
 id: follow-a-hit-to-its-record
 title: A hit is a pointer — pressing its ref opens the record it names, and not the one beside it
 description: >
@@ -16,7 +21,7 @@ description: >
   the cross-record search for that word and press the ref on one hit. What is under test is where the
   press lands: the pressed record's own face is standing open with its remark on it, and the remark
   belonging to the record that answered the same word is nowhere on the screen.
-steps_gui:
+given:
   - type: action
     domain: task
     op: create
@@ -26,10 +31,9 @@ steps_gui:
 
   - type: action
     domain: task
-    op: comment
+    op: finish-creating
     with:
       target: nightly
-      text: Closed by hand every Sunday
 
   - type: action
     domain: task
@@ -37,6 +41,22 @@ steps_gui:
     with:
       title: Reconciliation of the archived ledgers
     as: archived
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: archived
+
+steps_gui:
+  # The remarks are the road's own: each is the one thing that separates the two faces, and the press
+  # under test is judged on which of them is standing after it.
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: nightly
+      text: Closed by hand every Sunday
 
   - type: action
     domain: task

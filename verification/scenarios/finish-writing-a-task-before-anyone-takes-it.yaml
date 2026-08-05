@@ -13,6 +13,25 @@ description: >
   away, since the guard sits in the write path and not in the filtering in front of it. Then finish
   the creation and read every one of those answers come back the other way, the last of them being
   the reserve that now goes through.
+# One piece of ordinary, settled work, and it is the only premise this road has. Filing a task is what
+# the road is about, so the task it reads back is its own to make — but a board with nothing on it draws
+# the first loop in place of its columns, and the way to add a card is in a column head. So the world
+# stands up the card that puts the columns there, and nothing else. Neither road asks anything of it:
+# every line below names the task it filed itself.
+given:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — work this board already carried
+    as: standing
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: standing
+
 steps_cli:
   # Nothing about this line says "draft": it is the ordinary way a task is filed, which is what makes
   # the stage it lands in worth reading back.

@@ -16,7 +16,11 @@ description: >
   every arm names the face it expects and every narrowing is asserted from both sides. The row is asked
   one thing more — where the record it points at stands — because a place in work that is over is a
   different answer from a place in work still to be taken, and the ref says neither.
-steps_cli:
+# The record both roads write their words onto. Filing it is nothing this scenario asks about — the
+# question is where a word is written, not how work gets onto a board — and standing it up is what
+# gets the screen open at all: an untouched store has no project, so there is no board to walk this
+# on, and none of the columns the road's own later card is added from.
+given:
   - type: action
     domain: task
     op: create
@@ -24,6 +28,13 @@ steps_cli:
       title: SCENARIO TASK — the retention window
     as: window
 
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: window
+
+steps_cli:
   - type: action
     domain: task
     op: update
@@ -450,13 +461,6 @@ steps_cli:
 # something to be missing asks it of the whole record — a word narrowed off one face still draws the
 # other faces' rows, and the title with them.
 steps_gui:
-  - type: action
-    domain: task
-    op: create
-    with:
-      title: SCENARIO TASK — the retention window
-    as: window
-
   - type: action
     domain: task
     op: update

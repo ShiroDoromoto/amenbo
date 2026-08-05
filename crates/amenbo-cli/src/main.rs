@@ -2913,7 +2913,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 render_status(&result);
             }
         }
-        Command::Search { words, project, filter, kind, sort, limit, offset } => {
+        Command::Search { words, project, filter, kind, face, sort, limit, offset } => {
             let project_id =
                 project.map(|p| store.resolve_project_ref(&p)).transpose().map_err(CliError::from)?;
             let result = store
@@ -2924,7 +2924,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     project_id,
                     filter_expr: filter,
                     kind: kind.as_deref().map(query::SearchKind::parse).transpose().map_err(CliError::from)?,
-                    face: None,
+                    face: face.as_deref().map(query::HitFace::parse).transpose().map_err(CliError::from)?,
                     sort: query::SearchSort::parse(&sort).map_err(CliError::from)?,
                     limit,
                     offset,

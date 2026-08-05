@@ -460,3 +460,66 @@ fn search_reaches_what_is_attached_to_a_decision() {
     assert_eq!(ids_for("実測メモ"), vec![carrying.clone()], "a file hanging off one of its comments");
     assert!(!ids_for("latency-profile").contains(&bystander));
 }
+
+/// The terminal's two axes (`AMB-D-562`): `--kind` says which record the words are on, `--face` which
+/// face of it, and they are judged apart — so the pair asks for the product neither one alone can, the
+/// remarks on decisions. The same word is written on a remark on each side here, which is what makes
+/// the narrowing visible: a `--face` that did nothing would answer with both.
+#[test]
+fn search_narrows_by_face_as_an_axis_apart_from_the_side() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "面で絞るPJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    let did = id_str(
+        &cli.json(&["decision", "add", "--project", &pid, "--title", "掃引の決定", "--json"])["decision"]["id"],
+    );
+    cli.json(&["decision", "comment", "add", &did, "--text", "掃引は夜に回す", "--json"]);
+    let tid = id_str(
+        &cli.json(&["task", "add", "--project", &pid, "--title", "掃引を書く", "--json"])["task"]["id"],
+    );
+    cli.finish_creating(&tid);
+    cli.json(&["comment", "add", &tid, "--text", "掃引はここで走る", "--json"]);
+
+    let asked = |narrowing: &[&str]| -> Vec<String> {
+        let mut args = vec!["search", "掃引"];
+        args.extend_from_slice(narrowing);
+        args.extend_from_slice(&["--limit", "100", "--json"]);
+        let mut said: Vec<String> = cli.json(&args)["hits"]
+            .as_array()
+            .expect("hits is an array")
+            .iter()
+            .map(|h| format!("{} {}", h["face"].as_str().expect("a hit names its face"), h["ref"].as_str().unwrap()))
+            .collect();
+        said.sort();
+        said
+    };
+
+    assert_eq!(
+        asked(&["--face", "comment"]),
+        vec![format!("comment AMB-D-{did}"), format!("comment AMB-T-{tid}")],
+        "the face alone keeps both sides' remarks"
+    );
+    assert_eq!(
+        asked(&["--kind", "decision", "--face", "comment"]),
+        vec![format!("comment AMB-D-{did}")],
+        "the product: the remarks on decisions, which neither axis alone asks for"
+    );
+    assert_eq!(
+        asked(&["--kind", "decision", "--face", "title"]),
+        vec![format!("title AMB-D-{did}")],
+        "the other face of the same side"
+    );
+
+    // The narrowing is echoed back apart from the first axis, so a caller can see which of the two it
+    // actually asked for.
+    let echo = cli.json(&["search", "掃引", "--kind", "decision", "--face", "comment", "--json"])["query"].clone();
+    assert_eq!(echo["kind"], "decision");
+    assert_eq!(echo["face"], "comment");
+
+    // A value the axis does not have is refused, rather than read as "no narrowing" and answered with
+    // everything.
+    let (err, code) = cli.run_err(&["search", "掃引", "--face", "notes", "--json"]);
+    assert_eq!(code, 1, "an unknown face is an error: {err}");
+    assert!(err.contains("notes"), "the message names what was asked for: {err}");
+}

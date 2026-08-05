@@ -2038,7 +2038,7 @@ impl SearchKind {
     }
 }
 
-pub use crate::store_engine::search::HitFace;
+pub use crate::store_engine::search::{HitFace, MatchRange};
 
 impl HitFace {
     /// Parse the face a caller narrows by — the axis beside [`SearchKind`] (`AMB-D-562`). The spellings
@@ -2089,6 +2089,13 @@ pub struct SearchHit {
     /// pointer at where something is written, not the reading itself — the whole text is `show` and
     /// `comment list`'s to give.
     pub snippet: String,
+    /// Where in `snippet` the words landed, for a face to highlight. Counted in the excerpt's own
+    /// characters, sorted, and never overlapping.
+    ///
+    /// It is the core that says this, and not each face for itself: highlighting takes the same folding
+    /// the index matched on (NFKC, case, kana), and a face doing its own would be a second definition of
+    /// what a term matches (`AMB-D-566`, on `AMB-D-450`'s one rule).
+    pub matches: Vec<crate::store_engine::search::MatchRange>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -2195,6 +2202,7 @@ pub fn search(
     let mut hits = shown_pins;
     hits.extend(page.hits.into_iter().map(|h| {
         let is_task = h.owner_kind == crate::store_engine::search::DATASET_TASK;
+        let excerpt = crate::store_engine::search::snippet(&h.text, &terms);
         SearchHit {
             face: h.face,
             r#ref: if is_task {
@@ -2212,7 +2220,8 @@ pub fn search(
             kind: h.owner_kind,
             title: h.owner_title,
             at: Timestamp::parse_rfc3339(&h.at).unwrap_or_default(),
-            snippet: crate::store_engine::search::snippet(&h.text, &terms),
+            snippet: excerpt.text,
+            matches: excerpt.matches,
         }
     }));
 
@@ -2270,6 +2279,9 @@ fn pinned(
             comment: None,
             at: Timestamp::parse_rfc3339(&head.at).unwrap_or_default(),
             snippet: head.title,
+            // A pin was reached by the ref and not by the words, so there is nothing here that a word
+            // landed on. Its snippet is the title, which the row already carries beside it.
+            matches: Vec::new(),
         });
     }
     Ok(out)
@@ -2814,6 +2826,31 @@ mod filter_tests {
             Some(crate::idref::task_comment(c.id).as_str()),
             "the comment to open to find the words"
         );
+    }
+
+    /// Every hit says where in its own excerpt the words landed, so a face highlights by slicing what it
+    /// was given rather than by matching again (`AMB-D-566`) — and the fold is the core's, so the
+    /// half-width spelling lights up for a search nobody typed that way.
+    #[test]
+    fn search_says_where_in_each_excerpt_the_words_landed() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pj = proj(tx, "PJ");
+        worded_task(tx, "ｻｰﾊﾞの索引", "索引を索引で引く", pj);
+
+        let r = search(
+            tx.conn(),
+            crate::reach::Reach::All,
+            SearchParams { text: "サーバ 索引".to_string(), ..Default::default() },
+        )
+        .unwrap();
+
+        let lit = |h: &SearchHit| -> Vec<String> {
+            let chars: Vec<char> = h.snippet.chars().collect();
+            h.matches.iter().map(|m| chars[m.start..m.end].iter().collect()).collect()
+        };
+        assert_eq!(lit(&r.hits[0]), ["ｻｰﾊﾞ", "索引"], "both words, in the characters that were written");
+        assert_eq!(lit(&r.hits[1]), ["索引", "索引"], "each place it is written on this face");
     }
 
     /// A hit carries a snippet, so `search` is the one read that **has** a ceiling of its own: no limit

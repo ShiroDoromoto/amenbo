@@ -44,6 +44,7 @@ const hit = (over: Partial<SearchAnswer["hits"][number]> & { ref: string }): Sea
   title: "a record",
   at: "2026-07-30T00:00:00Z",
   snippet: "…the words…",
+  matches: [],
   ...over,
 });
 

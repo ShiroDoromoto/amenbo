@@ -209,6 +209,28 @@ pub const SNIPPET_CHARS: usize = 120;
 /// end of a narrow terminal.
 pub const SNIPPET_LEAD: usize = 30;
 
+/// A run of the characters a term landed on, as a half-open range of **[`Snippet::text`]'s own
+/// characters** — counted in characters, the unit the snippet is cut in, so a face reading it splits the
+/// text the same way (`Array.from` on the GUI side, `chars()` on the CLI's).
+///
+/// The range is over the excerpt and not over the field it was cut from: the excerpt is the only text the
+/// face was given, so a position into anything else is one it cannot use (`AMB-D-566`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct MatchRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+/// An excerpt, and where in it the words landed.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct Snippet {
+    pub text: String,
+    /// Sorted, and never overlapping: a face walks them in order and alternates plain and highlighted, so
+    /// two terms landing on the same characters have to arrive as one run rather than as two to reconcile.
+    /// Empty when this face carries none of the words, which is routine — see [`match_at`].
+    pub matches: Vec<MatchRange>,
+}
+
 /// A short excerpt of `text` around the first place one of `terms` lands in it, in **the characters the
 /// person wrote** — the copy the index matched on is folded, and returning that would answer a search for
 /// `ＡＩ` with a snippet nobody typed.
@@ -218,21 +240,34 @@ pub const SNIPPET_LEAD: usize = 30;
 /// ([`terms`] splits on it), so flattening can neither break a match nor invent one — it only ever leaves
 /// one space where there were several.
 ///
-/// Ellipses mark each end that was cut, so a snippet never reads as the whole of a field.
-pub fn snippet(text: &str, terms: &[String]) -> String {
+/// Ellipses mark each end that was cut, so a snippet never reads as the whole of a field. They are the
+/// snippet's own characters rather than the record's, so the ranges are shifted past a leading one and no
+/// term is ever reported as landing on an ellipsis.
+///
+/// Two searches happen here, and they are not the same size: **where to cut** is asked of the whole field
+/// ([`match_at`], which stops at the first answer), and **what to light up** only of the window that was
+/// cut ([`match_ranges`], which finds every one). The second is the expensive question, and bounding it to
+/// [`SNIPPET_CHARS`] is what keeps a long body from paying for it (`AMB-D-566`).
+pub fn snippet(text: &str, terms: &[String]) -> Snippet {
     let chars: Vec<char> = text.split_whitespace().collect::<Vec<_>>().join(" ").chars().collect();
     let at = match_at(&chars, terms).unwrap_or(0);
     let start = at.saturating_sub(SNIPPET_LEAD);
     let end = (start + SNIPPET_CHARS).min(chars.len());
+    let window = &chars[start..end];
+    let lead = usize::from(start > 0);
     let mut out = String::new();
     if start > 0 {
         out.push('…');
     }
-    out.extend(&chars[start..end]);
+    out.extend(window);
     if end < chars.len() {
         out.push('…');
     }
-    out
+    let matches = match_ranges(window, terms)
+        .into_iter()
+        .map(|r| MatchRange { start: r.start + lead, end: r.end + lead })
+        .collect();
+    Snippet { text: out, matches }
 }
 
 /// The earliest character of `chars` a term lands on, or `None` when none of them does — which is not a
@@ -245,8 +280,62 @@ pub fn snippet(text: &str, terms: &[String]) -> String {
 /// place it does. Only when that finds nothing does the second pass run, normalising a window of the
 /// original at each position: exact, and paid for only where the cheap map could not answer.
 fn match_at(chars: &[char], terms: &[String]) -> Option<usize> {
+    let (folded, source) = fold_map(chars);
+    let cheap = terms
+        .iter()
+        .filter_map(|term| folded.find(term.as_str()))
+        .map(|byte| source[folded[..byte].chars().count()])
+        .min();
+    cheap.or_else(|| terms.iter().filter_map(|term| scan_from(chars, term, 0)).map(|r| r.start).min())
+}
+
+/// Every run of `chars` a term lands on, merged into a set no two members of which overlap.
+///
+/// The same two passes as [`match_at`], but taken **per term**: there is no earliest answer to stop at, so
+/// a term the cheap map cannot follow falls through to the scan on its own rather than dragging the others
+/// with it. Each term is read for the places it is written and not for every offset it could be read at —
+/// occurrences of one term do not overlap each other — but two *different* terms can land on the same
+/// characters, and a face that received those runs separately would have to reconcile them to draw
+/// anything, so they are merged here where the positions are already sorted.
+fn match_ranges(chars: &[char], terms: &[String]) -> Vec<MatchRange> {
+    let (folded, source) = fold_map(chars);
+    let mut found: Vec<MatchRange> = Vec::new();
+    for term in terms {
+        let cheap: Vec<MatchRange> = folded
+            .match_indices(term.as_str())
+            .map(|(byte, hit)| {
+                let from = folded[..byte].chars().count();
+                let to = from + hit.chars().count();
+                MatchRange { start: source[from], end: source[to - 1] + 1 }
+            })
+            .collect();
+        if cheap.is_empty() {
+            let mut at = 0;
+            while let Some(range) = scan_from(chars, term, at) {
+                at = range.end;
+                found.push(range);
+            }
+        } else {
+            found.extend(cheap);
+        }
+    }
+    found.sort_by_key(|r| (r.start, r.end));
+    found.into_iter().fold(Vec::new(), |mut runs: Vec<MatchRange>, r| {
+        match runs.last_mut() {
+            // Touching counts as overlapping: two runs that meet are one highlight, and saying so here
+            // spares every face the same join.
+            Some(last) if r.start <= last.end => last.end = last.end.max(r.end),
+            _ => runs.push(r),
+        }
+        runs
+    })
+}
+
+/// The fold of `chars`, character by character, beside which character of the original each character of
+/// the fold came from — the cheap half of both [`match_at`] and [`match_ranges`], and the reason a position
+/// in the fold can be answered in the characters the person wrote.
+fn fold_map(chars: &[char]) -> (String, Vec<usize>) {
     let mut folded = String::with_capacity(chars.len());
-    // Which character of the original each character of the fold came from.
     let mut source: Vec<usize> = Vec::with_capacity(chars.len());
     for (i, c) in chars.iter().enumerate() {
         for f in normalize(c.encode_utf8(&mut [0u8; 4])).chars() {
@@ -254,25 +343,26 @@ fn match_at(chars: &[char], terms: &[String]) -> Option<usize> {
             source.push(i);
         }
     }
-    let cheap = terms
-        .iter()
-        .filter_map(|term| folded.find(term.as_str()))
-        .map(|byte| source[folded[..byte].chars().count()])
-        .min();
-    cheap.or_else(|| terms.iter().filter_map(|term| scan(chars, term)).min())
+    (folded, source)
 }
 
-/// The earliest character `term` lands on, found by normalising a window of the original at each position
-/// — the exact fallback of [`match_at`], and its slow half.
+/// The first place at or after `from` that `term` lands on, found by normalising a window of the original
+/// at each position — the exact fallback of [`match_at`] and [`match_ranges`], and their slow half.
 ///
 /// The window is wider than the term because the folding can shorten what it reads (two characters
 /// composing into one), never by more than a third of what went in — a Hangul syllable, at three jamo, is
-/// the deepest composition there is.
-fn scan(chars: &[char], term: &str) -> Option<usize> {
+/// the deepest composition there is. That width is what the walk tests, one normalisation per position;
+/// only where it answers is the run narrowed to the fewest characters that still carry the term, so a
+/// highlight covers what was matched rather than the whole window it was found in.
+fn scan_from(chars: &[char], term: &str, from: usize) -> Option<MatchRange> {
     let width = term.chars().count() * 3 + 4;
-    (0..chars.len()).find(|&i| {
+    let folds = |run: &[char]| normalize(&run.iter().collect::<String>()).starts_with(term);
+    (from..chars.len()).find_map(|i| {
         let end = (i + width).min(chars.len());
-        normalize(&chars[i..end].iter().collect::<String>()).starts_with(term)
+        folds(&chars[i..end]).then(|| {
+            let taken = (1..=end - i).find(|&k| folds(&chars[i..i + k])).unwrap_or(end - i);
+            MatchRange { start: i, end: i + taken }
+        })
     })
 }
 
@@ -687,7 +777,7 @@ mod tests {
     #[test]
     fn a_snippet_is_cut_around_the_match_and_marks_each_cut_end() {
         let text = format!("{}索引{}", "あ".repeat(200), "い".repeat(200));
-        let s = snippet(&text, &[normalize("索引")]);
+        let s = snippet(&text, &[normalize("索引")]).text;
         assert!(s.starts_with('…') && s.ends_with('…'), "both ends were cut: {s}");
         assert!(s.contains("索引"));
         assert_eq!(s.chars().count(), SNIPPET_CHARS + 2, "the window, plus one ellipsis at each end");
@@ -697,19 +787,93 @@ mod tests {
             "the run-up ahead of the match, past the leading ellipsis"
         );
 
-        let short = snippet("索引の話", &[normalize("索引")]);
+        let short = snippet("索引の話", &[normalize("索引")]).text;
         assert_eq!(short, "索引の話", "a field that fits is not cut, and says so by having no ellipsis");
+    }
+
+    /// The whole point of the ranges: they are read against the snippet that came back, so slicing the
+    /// snippet by one gives the characters that were matched — including past a leading ellipsis, which is
+    /// the snippet's own character and not the record's.
+    #[test]
+    fn the_ranges_are_read_against_the_snippet_that_came_back() {
+        let text = format!("{}索引{}", "あ".repeat(200), "い".repeat(200));
+        let s = snippet(&text, &[normalize("索引")]);
+        let chars: Vec<char> = s.text.chars().collect();
+        assert_eq!(s.matches.len(), 1, "one place, matched once: {:?}", s.matches);
+        let m = s.matches[0];
+        assert_eq!(chars[m.start..m.end].iter().collect::<String>(), "索引");
+        assert_eq!(m.start, 1 + SNIPPET_LEAD, "past the leading ellipsis, after the run-up");
+    }
+
+    /// A snippet holds as many matches as land in it, and every term's — one range per place, not one per
+    /// snippet, because a reader scanning a page is looking for whichever word they typed.
+    #[test]
+    fn every_place_a_word_lands_in_the_window_is_returned() {
+        let s = snippet("索引と走査、索引の話", &[normalize("索引"), normalize("走査")]);
+        let chars: Vec<char> = s.text.chars().collect();
+        let lit: Vec<String> =
+            s.matches.iter().map(|m| chars[m.start..m.end].iter().collect()).collect();
+        assert_eq!(lit, ["索引", "走査", "索引"], "in reading order, whichever term found them");
+    }
+
+    /// Ranges never overlap: two terms landing on the same characters arrive as one run, so a face can
+    /// walk them in order without reconciling anything.
+    #[test]
+    fn overlapping_matches_arrive_merged() {
+        let s = snippet("abcd", &[normalize("abc"), normalize("bcd")]);
+        assert_eq!(s.matches, [MatchRange { start: 0, end: 4 }], "one run, not two that overlap");
+
+        // One term is read for the places it is written, not for every offset it could be read at: the
+        // second `aa` of `aaa` starts inside the first, so the run stays one place and not two.
+        let same = snippet("aaa", &[normalize("aa")]);
+        assert_eq!(same.matches, [MatchRange { start: 0, end: 2 }]);
+    }
+
+    /// The ranges point at the characters the person wrote, not at the fold — so a search for `ai`
+    /// highlights the full-width spelling that is on the page, and a search in full-width kana the
+    /// half-width one the cheap map cannot follow (the exact scan narrows that to the characters it took,
+    /// voicing mark included).
+    #[test]
+    fn a_range_covers_the_characters_that_were_written() {
+        let wide = snippet("ＡＩ が引く", &[normalize("ai")]);
+        let chars: Vec<char> = wide.text.chars().collect();
+        assert_eq!(chars[wide.matches[0].start..wide.matches[0].end].iter().collect::<String>(), "ＡＩ");
+
+        let composed = snippet("ｻｰﾊﾞの設定", &[normalize("サーバ")]);
+        let chars: Vec<char> = composed.text.chars().collect();
+        assert_eq!(
+            chars[composed.matches[0].start..composed.matches[0].end].iter().collect::<String>(),
+            "ｻｰﾊﾞ",
+            "narrowed to what carries the term, and no further"
+        );
+    }
+
+    /// A face carrying none of the words has nothing to light up — the same routine case as the snippet
+    /// showing its opening, and not a fault.
+    #[test]
+    fn a_face_that_carries_no_term_has_no_ranges() {
+        assert!(snippet("索引の話", &[normalize("走査")]).matches.is_empty());
+    }
+
+    /// Only the window is asked what to light up: a word written past the excerpt is not in the text the
+    /// face was given, so a range pointing at it would point outside the string.
+    #[test]
+    fn a_word_past_the_end_of_the_window_is_not_ranged() {
+        let text = format!("索引{}索引", "あ".repeat(SNIPPET_CHARS));
+        let s = snippet(&text, &[normalize("索引")]);
+        assert_eq!(s.matches, [MatchRange { start: 0, end: 2 }], "the one that is in the excerpt");
+        assert!(s.text.chars().count() >= s.matches[0].end, "the range lands inside the text");
     }
 
     /// The excerpt is in the characters the person wrote: the fold is the index's copy, and answering a
     /// search for `ai` with a snippet nobody typed would be answering about the copy.
     #[test]
     fn a_snippet_comes_back_in_the_characters_that_were_written() {
-        assert_eq!(snippet("ＡＩ が引く", &[normalize("ai")]), "ＡＩ が引く");
+        assert_eq!(snippet("ＡＩ が引く", &[normalize("ai")]).text, "ＡＩ が引く");
         // The folding composes here (half-width kana with its voicing mark), which the cheap map cannot
         // follow — the exact scan behind it still points at the word.
         let text = format!("{}ｻｰﾊﾞの設定", "あ".repeat(100));
-        let s = snippet(&text, &[normalize("サーバ")]);
+        let s = snippet(&text, &[normalize("サーバ")]).text;
         assert!(s.contains("ｻｰﾊﾞの設定"), "the scan found the composed spelling: {s}");
     }
 
@@ -717,7 +881,7 @@ mod tests {
     /// list.
     #[test]
     fn a_snippet_is_flattened_to_one_line() {
-        assert_eq!(snippet("## 見出し\n\n索引を  引く\n", &[normalize("索引")]), "## 見出し 索引を 引く");
+        assert_eq!(snippet("## 見出し\n\n索引を  引く\n", &[normalize("索引")]).text, "## 見出し 索引を 引く");
     }
 
     /// A face routinely carries only some of the words — every term has to land on the *record*, not on
@@ -725,7 +889,7 @@ mod tests {
     #[test]
     fn a_face_that_carries_no_term_shows_its_opening() {
         let text = format!("{}索引", "あ".repeat(200));
-        let s = snippet(&text, &[normalize("走査")]);
+        let s = snippet(&text, &[normalize("走査")]).text;
         assert!(!s.starts_with('…'), "cut from the front, not around a match that is not there: {s}");
         assert!(s.ends_with('…'));
     }

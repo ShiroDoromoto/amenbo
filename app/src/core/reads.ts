@@ -333,7 +333,17 @@ function mockSearch(text: string, q: SearchQuery): SearchAnswer {
     const source = face === "title" ? title : body;
     if (!has(source)) return;
     const at = source.toLowerCase().indexOf(needles[0] ?? "");
-    hits.push({ face, kind, ref, title, at: "", snippet: source.slice(Math.max(0, at - 30), at + 90) });
+    // The mock matches on the raw text, not through the core's fold, so it has no ranges to give: the
+    // browser shows the excerpt unhighlighted rather than a highlight drawn to a second definition.
+    hits.push({
+      face,
+      kind,
+      ref,
+      title,
+      at: "",
+      snippet: source.slice(Math.max(0, at - 30), at + 90),
+      matches: [],
+    });
   };
   if (q.kind !== "decision") {
     for (const t of getSnapshot().tasks) {

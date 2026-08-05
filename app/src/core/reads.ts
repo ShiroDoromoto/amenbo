@@ -327,12 +327,24 @@ export function useSearch(q: SearchQuery): { answer: SearchAnswer | null; loadin
  * attachments, so title and body *are* the whole of what could match here — the mock's shape, not a
  * second definition of the search. Nothing in a fixture carries the instant a hit would report, so the
  * row shows no time rather than an invented one.
+ *
+ * The standing is filled from the same fixture the hit came off, down to what a fixture actually holds:
+ * the state and the priority, and no placements, because nothing here is filed on an axis. An empty list
+ * is what that is — the absent standing means something else entirely (a record that stopped being
+ * readable), and handing one back here would draw a row the Tauri path never draws.
  */
 function mockSearch(text: string, q: SearchQuery): SearchAnswer {
   const needles = text.toLowerCase().split(/\s+/).filter(Boolean);
   const has = (s: string) => needles.every((n) => s.toLowerCase().includes(n));
   const hits: SearchHit[] = [];
-  const push = (kind: "task" | "decision", face: SearchFace, ref: string, title: string, body: string) => {
+  const push = (
+    kind: "task" | "decision",
+    face: SearchFace,
+    ref: string,
+    title: string,
+    body: string,
+    standing: SearchHit["standing"],
+  ) => {
     if (q.face !== null && q.face !== face) return;
     const source = face === "title" ? title : body;
     if (!has(source)) return;
@@ -350,18 +362,21 @@ function mockSearch(text: string, q: SearchQuery): SearchAnswer {
       // highlight disagreeing with the rows around it; the folded answer is the core's, and under Tauri
       // it is the core that answers.
       matches: mockRanges(snippet, needles),
+      standing,
     });
   };
   if (q.kind !== "decision") {
     for (const t of getSnapshot().tasks) {
-      push("task", "title", taskRef(t.id), t.title, t.notes);
-      push("task", "body", taskRef(t.id), t.title, t.notes);
+      const standing = { status: t.status, priority: t.priority ?? undefined, labels: [] };
+      push("task", "title", taskRef(t.id), t.title, t.notes, standing);
+      push("task", "body", taskRef(t.id), t.title, t.notes, standing);
     }
   }
   if (q.kind !== "task") {
     for (const d of getSnapshot().decisions) {
-      push("decision", "title", decisionRef(d.id), d.title, d.body);
-      push("decision", "body", decisionRef(d.id), d.title, d.body);
+      const standing = { status: d.status, labels: [] };
+      push("decision", "title", decisionRef(d.id), d.title, d.body, standing);
+      push("decision", "body", decisionRef(d.id), d.title, d.body, standing);
     }
   }
   // Face first, as core orders it; within a face the fixtures carry no instant to break ties by.

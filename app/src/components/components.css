@@ -451,6 +451,15 @@ button.feed__target:hover { color: var(--c-accent); }
    because they name the same hit, and apart because they answer different questions (`AMB-D-565`). */
 .srch__face { flex: none; width: 38px; text-align: center; white-space: nowrap; letter-spacing: 1px; }
 .srch__ref { font-family: var(--font-mono); }
+/* What the record itself is, under the ref (`AMB-D-567`). One line, clipped: a task can be filed on any
+   number of axes, and the excerpt below is what the reader came for — so the placements give way, never
+   the height of the row. The chips keep their size rather than shrink, or the ones that do fit would be
+   squeezed until none of them read. */
+.srch__standing { display: flex; gap: var(--s-2); margin-top: 3px; overflow: hidden; }
+.srch__standing > * { flex: none; }
+/* `axis=value`, as the narrowing box above takes it — set in the same face the box is, so what is read
+   here is visibly the thing that can be typed back in there. */
+.srch__filed { font-family: var(--font-mono); }
 /* The excerpt is a glance at where something is written, not the reading — it keeps the writer's own
    line breaks but never grows the row past two lines. */
 .srch__snippet {

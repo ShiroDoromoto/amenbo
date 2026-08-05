@@ -297,8 +297,17 @@ export function eventText(
   }
 }
 
-function isStatus(s: string): s is Status {
+/**
+ * Is this bare string one of the statuses there is a word for? Asked wherever the value arrives off the
+ * wire without the union still on it — an activity line's payload, a search hit's standing — so that a
+ * value the dictionary does not know is shown as it came instead of rendering as a blank.
+ */
+export function isStatus(s: string): s is Status {
   return s in en.status;
+}
+/** The same question for a priority: the dictionary is the list, so there is no second one to keep in step. */
+export function isPriority(p: string): p is Priority {
+  return p in en.priority;
 }
 export function priorityLabel(p: Priority, lang: Lang = currentLang()): string {
   return DICTIONARIES[lang]?.priority[p] ?? en.priority[p];

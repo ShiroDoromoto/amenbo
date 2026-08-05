@@ -206,8 +206,8 @@ steps_cli:
       target: window
       present: false
 
-  # `--kind` keeps one side, or one face. The decision is out of a search narrowed to tasks, and the
-  # task's title is out of one narrowed to comments — the record still matches, the face does not.
+  # `--kind` keeps one side: the decision is out of a search narrowed to tasks. Which face of a record
+  # the words are on is the other axis, and the terminal has no way to ask it yet.
   - type: assert
     domain: decision
     op: found
@@ -215,15 +215,6 @@ steps_cli:
       words: retention
       target: outbox
       kind: task
-      present: false
-
-  - type: assert
-    domain: task
-    op: found
-    with:
-      words: retention
-      target: window
-      kind: comment
       present: false
 
   # `--filter` is the task list's own grammar, and it is task vocabulary: it narrows the task side,

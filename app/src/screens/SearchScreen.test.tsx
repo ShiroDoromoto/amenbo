@@ -127,7 +127,11 @@ describe("the search screen", () => {
     press(button("›")); // walk forward a page…
     expect(lastAsked().offset).toBeGreaterThan(0);
     press(button(t("search.kind.comment"))); // …then narrow
-    expect(lastAsked()).toMatchObject({ text: "search", kind: "comment", offset: 0 });
+    // The chip that reads "comment" narrows the face, not the kind: which record the words are on and
+    // which face of it are two axes, so this one leaves both sides standing (`AMB-D-562`).
+    expect(lastAsked()).toMatchObject({ text: "search", kind: null, face: "comment", offset: 0 });
+    press(button(t("search.kind.task")));
+    expect(lastAsked()).toMatchObject({ text: "search", kind: "task", face: null, offset: 0 });
   });
 
   it("says a search could not run rather than showing it as nothing matched", () => {

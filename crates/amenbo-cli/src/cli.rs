@@ -170,7 +170,7 @@ pub enum Command {
         /// task vocabulary, so a search carrying one is a search of tasks
         #[arg(long)]
         filter: Option<String>,
-        /// keep one side or one face: task / decision / comment
+        /// keep one side: task / decision
         #[arg(long)]
         kind: Option<String>,
         /// face (the face first, newest within it) / -time (newest first) / time (oldest first)

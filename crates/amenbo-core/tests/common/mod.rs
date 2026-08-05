@@ -291,6 +291,7 @@ pub fn run_search(s: &Seeded, term: &str) -> (usize, usize) {
             filter: None,
             today: time::today(),
             kind: None,
+            face: None,
             sort: amenbo_core::query::SearchSort::default(),
             limit: Some(HOT_TASKS),
             offset: 0,

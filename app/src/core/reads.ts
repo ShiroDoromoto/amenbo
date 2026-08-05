@@ -261,8 +261,8 @@ export function useDecisionComments(decisionId: number | null): DecisionComment[
 export type SearchHit = SearchHitDto;
 /** Which face a hit landed on — a title, a body, a comment, an axis label, an attachment's name. */
 export type SearchFace = SearchHitDto["face"];
-/** Narrowing to one side of the store. `null` searches every face. */
-export type SearchKind = "task" | "decision" | "comment";
+/** Which record the words are on — one of the two axes (`AMB-D-562`). `null` keeps both sides. */
+export type SearchKind = "task" | "decision";
 
 /** How many hits one page of the search screen holds. Core's own default is the same number. */
 export const SEARCH_PAGE = 20;
@@ -271,6 +271,8 @@ export interface SearchQuery {
   /** The words as typed. Empty means nothing was asked. */
   text: string;
   kind: SearchKind | null;
+  /** Which face of the record the words are on — the other axis. `null` keeps every face. */
+  face: SearchFace | null;
   /** `task list`'s grammar, so a search carrying one is a search of tasks. Empty means no narrowing. */
   filter: string;
   offset: number;
@@ -294,6 +296,7 @@ export async function fetchSearch(q: SearchQuery): Promise<SearchAnswer | null> 
     const r = await invoke<SearchResultDto>("search", {
       text,
       kind: q.kind,
+      face: q.face,
       filter: q.filter.trim() || null,
       limit: SEARCH_PAGE,
       offset: q.offset,
@@ -309,7 +312,7 @@ export async function fetchSearch(q: SearchQuery): Promise<SearchAnswer | null> 
  */
 export function useSearch(q: SearchQuery): { answer: SearchAnswer | null; loading: boolean; error: unknown } {
   const { data, loading, error } = useQuery<SearchAnswer | null>(
-    ["search", q.text.trim(), q.kind, q.filter.trim(), q.offset],
+    ["search", q.text.trim(), q.kind, q.face, q.filter.trim(), q.offset],
     () => fetchSearch(q),
   );
   return { answer: data ?? null, loading, error };
@@ -326,6 +329,7 @@ function mockSearch(text: string, q: SearchQuery): SearchAnswer {
   const has = (s: string) => needles.every((n) => s.toLowerCase().includes(n));
   const hits: SearchHit[] = [];
   const push = (kind: "task" | "decision", face: SearchFace, ref: string, title: string, body: string) => {
+    if (q.face !== null && q.face !== face) return;
     const source = face === "title" ? title : body;
     if (!has(source)) return;
     const at = source.toLowerCase().indexOf(needles[0] ?? "");
@@ -341,13 +345,13 @@ function mockSearch(text: string, q: SearchQuery): SearchAnswer {
       matches: [],
     });
   };
-  if (q.kind !== "decision" && q.kind !== "comment") {
+  if (q.kind !== "decision") {
     for (const t of getSnapshot().tasks) {
       push("task", "title", taskRef(t.id), t.title, t.notes);
       push("task", "body", taskRef(t.id), t.title, t.notes);
     }
   }
-  if (q.kind !== "task" && q.kind !== "comment") {
+  if (q.kind !== "task") {
     for (const d of getSnapshot().decisions) {
       push("decision", "title", decisionRef(d.id), d.title, d.body);
       push("decision", "body", decisionRef(d.id), d.title, d.body);

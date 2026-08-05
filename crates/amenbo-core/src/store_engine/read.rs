@@ -27,7 +27,7 @@ use super::sql::{
     Sql, Text as SqlText, Union,
 };
 use super::{StoreEngineError, Result};
-use crate::model::{ActorKind, Priority, TaskStatus};
+use crate::model::{ActorKind, DecisionStatus, Priority, TaskStatus};
 use crate::query::{AssigneeFilter, DueFilter, Filter, StartFilter};
 use crate::view::{ProjectRef, TaskCompact};
 
@@ -1622,22 +1622,27 @@ fn face_hit(dataset: &str, id: Col<Int>, columns: &[&str], terms: &[search::Term
 }
 
 /// One arm's `WHERE`: this face carries a term, the record it belongs to answers everything asked of
-/// that side (the terms, the reach, the structural filter), and the arm is one `--kind` left standing.
+/// that side (the terms, the reach, the structural filter), and the arm is one the two axes left standing.
 fn hit_where(face: Pred, side: &Option<Pred>, gate: &Option<Pred>) -> Option<Pred> {
     Pred::all([Some(face), side.clone(), gate.clone()].into_iter().flatten())
 }
 
-/// Is this arm one the caller's `--kind` keeps? Two of the three narrow by **whose** words they are and
-/// the third by **which face**, because that is how the three are asked for — "only decisions", "only what
-/// is on a timeline". They are three narrowings, not a partition, so they overlap: a comment on a task is
-/// both the task's and a comment.
-fn kept_by_kind(kind: Option<crate::query::SearchKind>, owner_kind: &str, face: HitFace) -> bool {
-    match kind {
+/// Is this arm one the caller's two axes keep (`AMB-D-562`)? `kind` says **which record** the words are
+/// on and `face` **which face of it**, and they are judged apart and ANDed — an axis left unnamed keeps
+/// everything on it. Because they are a product rather than one mixed narrowing, "the remarks on
+/// decisions" is a thing a caller can ask for; a single four-valued `--kind` could not express it.
+fn kept_by_axes(
+    kind: Option<crate::query::SearchKind>,
+    want: Option<HitFace>,
+    owner_kind: &str,
+    face: HitFace,
+) -> bool {
+    let by_kind = match kind {
         None => true,
         Some(crate::query::SearchKind::Task) => owner_kind == search::DATASET_TASK,
         Some(crate::query::SearchKind::Decision) => owner_kind == search::DATASET_DECISION,
-        Some(crate::query::SearchKind::Comment) => face == HitFace::Comment,
-    }
+    };
+    by_kind && want.is_none_or(|w| w == face)
 }
 
 /// What a word search is asked for. The shape [`TaskQuery`] has, for the same reason: everything the read
@@ -1657,7 +1662,9 @@ pub struct SearchQuery<'a> {
     pub filter: Option<&'a Filter>,
     /// Today, for the filter's day-relative keys (`due:today` and friends).
     pub today: NaiveDate,
+    /// Which record the words are on, and which face of it — the two axes, kept apart ([`kept_by_axes`]).
     pub kind: Option<crate::query::SearchKind>,
+    pub face: Option<HitFace>,
     pub sort: crate::query::SearchSort,
     pub limit: Option<usize>,
     pub offset: usize,
@@ -1677,9 +1684,10 @@ pub struct SearchQuery<'a> {
 /// places both happen to sit together.
 ///
 /// **What narrows it.** The reach, first and always — folded into `project_id` before it gets here. Then
-/// the caller's own three: `project_id` again where the caller named one, which narrows both sides alike;
-/// a structural `filter`, which is the very predicate `task list` narrows by and therefore speaks of tasks
-/// alone; and a `kind`, which keeps the arms whose side or whose face was asked for ([`kept_by_kind`]).
+/// the caller's own: `project_id` again where the caller named one, which narrows both sides alike; a
+/// structural `filter`, which is the very predicate `task list` narrows by and therefore speaks of tasks
+/// alone; and the two axes — `kind`, which record the words are on, and `face`, which face of it — which
+/// between them keep the arms that were asked for ([`kept_by_axes`]).
 ///
 /// **The order arrives with the rows.** The page is cut in SQL, so the sort cannot be something the
 /// reader applies to what it was handed. The compound query names its order by position, which is the
@@ -1752,7 +1760,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         )
     };
     let gate = |face: HitFace, owner_kind: &str| {
-        (!kept_by_kind(q.kind, owner_kind, face)).then(Pred::never)
+        (!kept_by_axes(q.kind, q.face, owner_kind, face)).then(Pred::never)
     };
     let (slots, mut sql) = Union::all(|sel| {
         // A task's title.
@@ -2034,6 +2042,123 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
 
     crate::perf::record_query("engine.search_hits", total, hits.len(), started.elapsed());
     Ok(SearchPage { total_matched: total, hits })
+}
+
+/// Where the records a page of hits points at stand: a task's status, priority and classification, and a
+/// decision's status.
+///
+/// Keyed by record id, not by hit — a record the words reach on three faces is three hits and one entry,
+/// which is also why this is not a column of [`search_hits`]: folding it in would read the same task once
+/// per face, and the classification is one-to-many on top of that.
+pub struct HitStandingRows {
+    pub tasks: HashMap<i64, (TaskStatus, Option<Priority>)>,
+    /// `(axis, value)` names per task, in axis order — a task sits on as many axes as it was placed on,
+    /// and on none at all just as often, so an id absent here is a task with no classification.
+    pub labels: HashMap<i64, Vec<(String, String)>>,
+    pub decisions: HashMap<i64, DecisionStatus>,
+}
+
+/// Read that standing for the records a page names, **after** the page has been cut (`AMB-D-567`).
+///
+/// Three statements, each over an id set the caller already holds, so what is read is bounded by the page
+/// and not by the store: a page of twenty reads twenty tasks' rows however many hits the words have in
+/// all. That is the whole reason this is a second read rather than more columns on the first — the hit
+/// query's own rows are the places a word is written, and there are more of those than there are records.
+///
+/// The reach rides on the id sets as a predicate, as it does in [`hydrate_task_cards`]: the ids arrive
+/// from a scoped query, and this is still the floor under them. An id that hydrates nothing — gone
+/// between the two reads, or outside the reach — is simply absent, which is how a face reads "nothing to
+/// say about this one" rather than an invented default.
+pub fn hit_standings(
+    conn: &Connection,
+    reach: crate::reach::Reach,
+    task_ids: &[i64],
+    decision_ids: &[i64],
+) -> Result<HitStandingRows> {
+    let started = std::time::Instant::now();
+    let mut out =
+        HitStandingRows { tasks: HashMap::new(), labels: HashMap::new(), decisions: HashMap::new() };
+
+    if !task_ids.is_empty() {
+        const TA: col::task::Cols = col::task::ALL;
+        let mut sel = Select::new();
+        let (id, status, priority) = (sel.col(TA.id), sel.col(TA.status), sel.col(TA.priority));
+        let mut pred = Pred::is_in(TA.id, task_ids.iter().copied());
+        if let Some(pid) = reach.project() {
+            pred = pred.and(Pred::eq(TA.project_id, pid));
+        }
+        let mut sql = Sql::from(&sel, TA.table);
+        sql.push_where(Some(&pred));
+        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+                Ok((
+                    id.get(r)?,
+                    card_enum_req(TA.status, status.get(r)?, TaskStatus::parse)?,
+                    card_enum_opt(TA.priority, priority.get(r)?, Priority::parse)?,
+                ))
+            })
+            .map_err(StoreEngineError::from)?;
+        for row in rows {
+            let (id, status, priority) = row.map_err(StoreEngineError::from)?;
+            out.tasks.insert(id, (status, priority));
+        }
+    }
+
+    // Only the tasks that answered above are asked for their labels: an id the reach turned away is one
+    // this join must not reach either, and keying off the hydrated set says so once instead of repeating
+    // the scope in a second predicate.
+    let placed: Vec<i64> = task_ids.iter().copied().filter(|id| out.tasks.contains_key(id)).collect();
+    if !placed.is_empty() {
+        const TV: col::task_dimension_value::Cols = col::task_dimension_value::of("tv");
+        const D: col::dimension::Cols = col::dimension::of("d");
+        const V: col::dimension_value::Cols = col::dimension_value::of("v");
+        let mut sel = Select::new();
+        let (task, axis, value) = (sel.col(TV.task_id), sel.col(D.name), sel.col(V.name));
+        let mut sql = Sql::from(&sel, TV.table);
+        // Both joins are inner, as in `task_classification`: an assignment whose axis or value is gone
+        // names nothing to show. The order is the axis's, so two tasks read down the same columns.
+        sql.join(D.table, same(D.id, TV.dimension_id))
+            .join(V.table, same(V.id, TV.value_id))
+            .push_where(Some(&Pred::is_in(TV.task_id, placed.iter().copied())))
+            .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+                Ok((task.get(r)?, axis.get(r)?, value.get(r)?))
+            })
+            .map_err(StoreEngineError::from)?;
+        for row in rows {
+            let (task, axis, value): (i64, String, String) = row.map_err(StoreEngineError::from)?;
+            out.labels.entry(task).or_default().push((axis, value));
+        }
+    }
+
+    if !decision_ids.is_empty() {
+        const DE: col::decision::Cols = col::decision::ALL;
+        let mut sel = Select::new();
+        let (id, status) = (sel.col(DE.id), sel.col(DE.status));
+        let mut pred = Pred::is_in(DE.id, decision_ids.iter().copied());
+        if let Some(pid) = reach.project() {
+            pred = pred.and(Pred::eq(DE.project_id, pid));
+        }
+        let mut sql = Sql::from(&sel, DE.table);
+        sql.push_where(Some(&pred));
+        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+                Ok((id.get(r)?, card_enum_req(DE.status, status.get(r)?, DecisionStatus::parse)?))
+            })
+            .map_err(StoreEngineError::from)?;
+        for row in rows {
+            let (id, status) = row.map_err(StoreEngineError::from)?;
+            out.decisions.insert(id, status);
+        }
+    }
+
+    let read = out.tasks.len() + out.decisions.len();
+    crate::perf::record_query("engine.hit_standings", read, read, started.elapsed());
+    Ok(out)
 }
 
 /// The line a record is named by: its title, when it was last written, and where it sits. What a search
@@ -5683,6 +5808,7 @@ mod tests {
             filter: None,
             today: crate::time::today(),
             kind: None,
+            face: None,
             sort: crate::query::SearchSort::Face,
             limit: None,
             offset: 0,
@@ -5815,19 +5941,42 @@ mod tests {
         assert!(scoped.contains(&"Title AMB-D-1".to_string()), "and this project's decision is in");
     }
 
-    /// `--kind` narrows by whose words they are, or by the face they are on — three narrowings that
-    /// deliberately overlap, since a comment on a task is both.
+    /// `--kind` narrows by which record the words are on, and nothing else: every face of that side is
+    /// still in, because where on it the words sit is the other axis's to say.
     #[test]
-    fn the_kind_keeps_one_side_or_one_face() {
+    fn the_kind_keeps_one_side_whole() {
         let e = search_store();
         let t = search::terms("索引");
         let only = |k| found(&e, &SearchQuery { kind: Some(k), ..ask(&t) }).1;
         assert_eq!(only(crate::query::SearchKind::Decision), vec!["Title AMB-D-1"]);
-        assert_eq!(only(crate::query::SearchKind::Comment), vec!["Comment AMB-T-1 #5"]);
         assert_eq!(
             only(crate::query::SearchKind::Task),
             vec!["Title AMB-T-1", "Body AMB-T-1", "Comment AMB-T-1 #5", "Label AMB-T-2", "Attachment AMB-T-2"],
             "a task's own faces, its timeline, its labels and what is attached to it"
+        );
+    }
+
+    /// The face narrows on its own axis, across both sides — and the two ANDed are the product a mixed
+    /// `--kind` could not express: the remarks on one side alone (`AMB-D-562`).
+    #[test]
+    fn the_face_narrows_across_both_sides_and_meets_the_kind_as_a_product() {
+        let e = search_store();
+        let t = search::terms("索引");
+        let asked = |kind, face| found(&e, &SearchQuery { kind, face, ..ask(&t) }).1;
+        assert_eq!(
+            asked(None, Some(HitFace::Title)),
+            vec!["Title AMB-D-1", "Title AMB-T-1"],
+            "a face with no side named crosses to the decision, which `--kind comment` never could"
+        );
+        assert_eq!(asked(None, Some(HitFace::Comment)), vec!["Comment AMB-T-1 #5"]);
+        assert_eq!(
+            asked(Some(crate::query::SearchKind::Task), Some(HitFace::Comment)),
+            vec!["Comment AMB-T-1 #5"],
+            "the product of the two: the remarks on tasks"
+        );
+        assert!(
+            asked(Some(crate::query::SearchKind::Decision), Some(HitFace::Comment)).is_empty(),
+            "the same product on the other side — askable now, and empty in this fixture"
         );
     }
 

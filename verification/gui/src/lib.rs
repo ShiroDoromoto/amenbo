@@ -624,8 +624,13 @@ impl Instructor {
                     self.target_label(with),
                     if present(with) { "among" } else { "not among" }
                 ));
-                match arg_str(with, "face") {
-                    Some(face) => format!("{line}, on its {face}."),
+                if let Some(face) = arg_str(with, "face") {
+                    line.push_str(&format!(", on its {face}"));
+                }
+                // What the row says about the record it points at, which the eye closing the shot reads
+                // off the same line as the ref.
+                match arg_str(with, "standing") {
+                    Some(standing) => format!("{line}, and that the row says it stands at {standing}."),
                     None => format!("{line}."),
                 }
             }

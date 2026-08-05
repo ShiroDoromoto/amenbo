@@ -2943,6 +2943,29 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     let face = format!("{:?}", h.face).to_lowercase();
                     let at = h.comment.as_deref().map(|c| format!(" · {c}")).unwrap_or_default();
                     human(flags, format!("  [{face}] {} {}{at}", h.r#ref, h.title));
+                    // Where the record stands, on a line of its own before the excerpt (`AMB-D-567`): a
+                    // hit on a task that is over is a different answer from one still to be taken, and
+                    // the ref and the title say neither. Each side speaks its own vocabulary — a task
+                    // states its status, its priority and what it is filed under, a decision its status,
+                    // which is all it has — so the same line reads as the record's own without naming
+                    // which of the two it is. Nothing is printed when the read that fills this in came
+                    // back empty: the words really are written there, and a blank line claiming a state
+                    // would be worse than the row saying nothing about one.
+                    if let Some(standing) = &h.standing {
+                        let pri = standing.priority.as_deref().map(|p| format!(" [{p}]")).unwrap_or_default();
+                        // Written the way the filter takes it (`axis=value`), like `task show`'s own
+                        // line, so what is read here pastes straight into `--filter "dim:…"`.
+                        let filed = match standing.labels.is_empty() {
+                            true => String::new(),
+                            false => format!(
+                                " · {}",
+                                standing.labels.iter()
+                                    .map(|l| format!("{}={}", l.axis, l.value))
+                                    .collect::<Vec<_>>().join(", ")
+                            ),
+                        };
+                        human(flags, format!("      {}{pri}{filed}", standing.status));
+                    }
                     // The excerpt says where the words are; this says where in the excerpt they are, which
                     // is the question a two-word search leaves open (`AMB-D-566`).
                     human(flags, format!("      {}", highlight(&h.snippet, &h.matches, color)));

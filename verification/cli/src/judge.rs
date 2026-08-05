@@ -97,6 +97,10 @@ impl Driver<'_> {
 /// A face is what separates this from a listing: a listing can only say a record matched, and what a
 /// search is for is saying where. `present: false` is the same question in reverse — the proof that a
 /// narrowing (`kind`, `only_face`, `filter`) really left something out.
+///
+/// `standing` asks the other half of what a row says: where the record it points at stands. It is put
+/// to the rows this record owns, so a step naming it is asserting that the answer carries the state and
+/// not merely the ref — which is what saves the reader the `show` the search was meant to replace.
 pub(crate) fn judge_found(
     noun: &str,
     id_ref: &str,
@@ -112,6 +116,23 @@ pub(crate) fn judge_found(
         Some(want) => mine.iter().any(|h| h["face"].as_str() == Some(want)),
         None => !mine.is_empty(),
     };
+    // Where the record stands, asked of the rows it owns. A step naming it is one that expects the
+    // record to be there, so a row that is missing the state fails as loudly as a wrong one.
+    if let Some(want) = with.get("standing").and_then(|v| v.as_str()) {
+        let said: Vec<&str> = mine.iter().filter_map(|h| h["standing"]["status"].as_str()).collect();
+        let says = said.iter().any(|s| *s == want);
+        return Ok(Outcome::assert(
+            says,
+            format!(
+                "{noun} {id_ref} is a place that carries `{words}`, and its row says it stands at {} (expected {want}, {})",
+                match said.first() {
+                    Some(s) => (*s).to_string(),
+                    None => "nothing at all".to_string(),
+                },
+                if says { "as expected" } else { "MISMATCH" }
+            ),
+        ));
+    }
     let present = opt_bool(with, "present").unwrap_or(true);
     let pass = found == present;
     let where_ = match face {

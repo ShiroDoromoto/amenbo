@@ -1818,12 +1818,17 @@ pub struct SearchResultDto {
 ///
 /// `kind` and `face` are the two axes (`AMB-D-562`) and travel apart: which record the words are on, and
 /// which face of it. Either left unnamed keeps everything on that axis.
+///
+/// `project_id` is an argument of its own and deliberately not a key of `filter` (`AMB-D-564`): a project
+/// is an axis both sides carry, so putting it in the expression would drop the decisions from the answer
+/// as the side effect of naming a project. `None` is every project the reach allows.
 #[tauri::command]
 pub fn search(
     text: String,
     kind: Option<String>,
     face: Option<String>,
     filter: Option<String>,
+    project_id: Option<i64>,
     limit: Option<usize>,
     offset: Option<usize>,
 ) -> Result<SearchResultDto, CmdError> {
@@ -1831,9 +1836,7 @@ pub fn search(
     let store = open_store_read()?;
     let result = store.search(amenbo_core::query::SearchParams {
         text,
-        // The screen does not offer a project yet — its pull-down is `AMB-T-2737`'s to add. Unscoped is
-        // every project the reach allows, which on this face is every one of them.
-        project_id: None,
+        project_id,
         filter_expr: filter.filter(|f| !f.trim().is_empty()),
         kind: kind.as_deref().map(amenbo_core::query::SearchKind::parse).transpose()?,
         face: face.as_deref().map(amenbo_core::query::HitFace::parse).transpose()?,

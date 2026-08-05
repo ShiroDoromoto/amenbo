@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { PriorityDot } from "../components/atoms";
 import { agoLabel, errText, isPriority, isStatus, statusLabel, t, tf } from "../core/i18n";
 import { parseRef } from "../core/idref";
 import { SEARCH_PAGE, useSearch, type SearchFace, type SearchHit, type SearchKind } from "../core/reads";
 import { asTyped } from "../core/keys";
+import { getSnapshot, subscribe } from "../core/snapshot";
 
 /**
  * The two knobs, each its own axis (`AMB-D-562`). `null` leads both: it is the arm that narrows nothing,
@@ -29,6 +30,11 @@ const FACES: readonly (SearchFace | null)[] = [null, "title", "body", "comment",
  * The words are submitted rather than searched per keystroke. A page of hits is drawn from every record
  * in reach, the narrowing box takes an expression that can fail to parse, and neither wants to be re-run
  * mid-word — a half-typed `status:t` would answer a search with an error message.
+ *
+ * The narrowings around the words come in two shapes, and which shape each takes is the point. The box
+ * takes an expression because the keys and values differ per side and compose (`AMB-D-563`); the project
+ * takes a pull-down because it is one finite list of names, the same for both sides, and nothing about it
+ * is worth spelling (`AMB-D-564`).
  */
 export function SearchScreen({
   onOpenTask,
@@ -48,7 +54,19 @@ export function SearchScreen({
   // can put, where one row of chips could only give up one to ask the other.
   const [kind, setKind] = useState<SearchKind | null>(null);
   const [face, setFace] = useState<SearchFace | null>(null);
+  // The one narrowing that is a pull-down (`AMB-D-564`): a project is finite and named, so there is
+  // nothing here for a reader to spell. `null` is every project — the arm that has to lead, since a
+  // reader who scoped once must be able to widen again.
+  const [projectId, setProjectId] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
+  const projects = useSyncExternalStore(subscribe, () => getSnapshot().projects);
+
+  // The narrowing is one side's vocabulary or the other's, so with no side named there is nothing to
+  // read it in (`AMB-D-563`) — the box is off, and what is written in it is not part of the question.
+  // Kept rather than cleared: crossing to the other side to look and back again is no reason to
+  // retype it.
+  const narrowable = kind !== null;
+  const narrowing = narrowable ? filter : "";
 
   const submit = () => {
     setAsked(draft);
@@ -63,7 +81,14 @@ export function SearchScreen({
     setOffset(0);
   };
 
-  const { answer, loading, error } = useSearch({ text: asked, kind, face, filter, offset });
+  const { answer, loading, error } = useSearch({
+    text: asked,
+    kind,
+    face,
+    filter: narrowing,
+    projectId,
+    offset,
+  });
   const total = answer?.totalMatched ?? 0;
   const shown = answer?.hits.length ?? 0;
 
@@ -80,10 +105,15 @@ export function SearchScreen({
             if (e.key === "Enter") submit();
           }}
         />
+        {/* Off until a side is named, and saying which side it is being read in while it is on: the
+            two grammars share their keys and mean different things by them, so a box that looked the
+            same either way would be the screen keeping that to itself (`AMB-D-563`). */}
         <input
           {...asTyped}
           className="palette__input srch__filter"
-          placeholder={t("search.filterPh")}
+          placeholder={narrowable ? t(`search.filterPh.${kind}`) : t("search.filterPhOff")}
+          title={narrowable ? undefined : t("search.filterPhOff")}
+          disabled={!narrowable}
           value={filterDraft}
           onChange={(e) => setFilterDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -91,6 +121,23 @@ export function SearchScreen({
           }}
         />
         <button className="btn btn--primary" onClick={submit}>{t("search.run")}</button>
+        <div className="board__sep" />
+        {/* The scope, and the only narrowing the screen spells out for the reader rather than taking
+            as an expression (`AMB-D-564`). It sits outside the box on purpose: a project is an axis
+            both sides carry, so naming one inside the narrowing would drop the decisions from the
+            answer as a side effect of choosing it. */}
+        <label className="faint srch__label">
+          {t("search.project")}{" "}
+          <select
+            value={projectId ?? ""}
+            onChange={(e) => narrow(() => setProjectId(e.target.value === "" ? null : Number(e.target.value)))}
+          >
+            <option value="">{t("search.projectAll")}</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </label>
         <div className="board__sep" />
         <span className="faint srch__label">{t("search.kind")}</span>
         {KINDS.map((k) => (

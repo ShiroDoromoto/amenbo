@@ -627,6 +627,14 @@ impl Instructor {
                 if let Some(filter) = arg_str(with, "filter") {
                     line.push_str(&format!(", narrowed by `{filter}`"));
                 }
+                // The scope, and the one narrowing on this screen that is chosen rather than written.
+                // It is said as a pull-down because that is the move: a step that read like the box
+                // beside it would have the operator typing a project into the grammar the project is
+                // deliberately kept out of.
+                if let Some(project) = with.get("project").and_then(|v| v.as_str()) {
+                    let name = self.labels.get(project).cloned().unwrap_or_else(|| format!("<{project}>"));
+                    line.push_str(&format!(", scoped to the project \"{name}\" in the pull-down"));
+                }
                 line.push_str(&format!(
                     ", and confirm the {side} \"{}\" is {} the hits",
                     self.target_label(with),

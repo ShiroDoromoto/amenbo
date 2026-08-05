@@ -14,7 +14,9 @@
 //! hot queries must *not* touch. So the O(result) reads stay flat as N grows, and a regression that
 //! starts scanning the bulk shows up. The carve-out is what the word search's terms
 //! ([`HOT_TERM_SCAN`] / [`HOT_TERM_INDEX`]) are written into, for the same reason: a fixed answer, over
-//! a copy that grows.
+//! a copy that grows. **Every** seeded task is filed on both axes ([`AXES`]), the bulk included, so the
+//! classification the search reads once its page is settled (`AMB-D-567`) sits in a child table that
+//! grows with N — a follow-up read that stopped being bounded by the page has somewhere to grow into.
 
 #![allow(dead_code)] // each consumer (bench / guard) uses a different subset of these helpers.
 
@@ -22,8 +24,8 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use amenbo_core::model::{
-    ActorKind, Database, Decision, DecisionStatus, Priority, Project, Task, TaskComment,
-    TaskStatus, View,
+    ActorKind, Database, Decision, DecisionStatus, Dimension, DimensionValue, Priority, Project,
+    Task, TaskComment, TaskDimensionValue, TaskStatus, View,
 };
 use amenbo_core::store_engine::{self, StoreEngine};
 use amenbo_core::query::Filter;
@@ -48,6 +50,20 @@ pub const HOT_TERM_SCAN: &str = "qz";
 /// The **index** half of [`HOT_TERM_SCAN`]: long enough for the trigram index to answer it. Sharing no
 /// characters with the short one, so a search for either reaches the hot titles by its own path alone.
 pub const HOT_TERM_INDEX: &str = "wombat";
+
+/// How many axes every seeded task is filed on — the one-to-many the search collapses after its page is
+/// settled (`AMB-D-567`). Two, because a single label per task would read like one more column on the
+/// task and never put the second read under the weight it exists to carry.
+pub const AXES: usize = 2;
+/// How many values each axis carries. Small and fixed: what the follow-up read pays for is the
+/// assignments, and the values only have to be several so two tasks are not filed identically.
+const VALUES_PER_AXIS: usize = 3;
+/// The axes' and the values' names, which the index carries as the **label** face — so they are spelled
+/// apart from [`HOT_TERM_SCAN`] / [`HOT_TERM_INDEX`], or a search for either would reach every placed
+/// task through its label and the fixed answer would be gone.
+const AXIS_NAME: &str = "axis";
+/// See [`AXIS_NAME`].
+const VALUE_NAME: &str = "value";
 
 /// A seeded read-model plus the ids a read needs to address its hot slice.
 pub struct Seeded {
@@ -77,6 +93,9 @@ fn temp_paths() -> (PathBuf, amenbo_core::config::Paths) {
 /// [`seed`] for why this bypasses `ops::task::add`. `idx` drives the key (the id *is* the
 /// conversational number) and a lexicographically-increasing order_key. Placement is task-held. The task starts
 /// `todo`/unassigned; the caller tweaks the just-pushed row via `db.tasks.last_mut()` (O(1)).
+///
+/// It is also filed on every axis ([`file_on_axes`]), hot task and bulk task alike — the classification
+/// has to grow with N for a follow-up read that outgrew the page to show it.
 fn push_task(db: &mut Database, pid: i64, idx: usize, title: String, pri: Priority) -> i64 {
     let now = Timestamp::now();
     let id = (idx + 1) as i64;
@@ -92,7 +111,38 @@ fn push_task(db: &mut Database, pid: i64, idx: usize, title: String, pri: Priori
         updated_at: now,
         ..Default::default()
     });
+    file_on_axes(db, id, idx);
     id
+}
+
+/// File one task on every axis — the placements the search reads back once its page is settled
+/// (`AMB-D-567`). `idx` picks the value on each axis, so the rows point at different values rather than
+/// all at one, as a real store's do. O(1) per task, like the push it follows, so the bulk loop stays
+/// O(N).
+fn file_on_axes(db: &mut Database, task_id: i64, idx: usize) {
+    let now = Timestamp::now();
+    for axis in 0..AXES {
+        let id = (db.task_dimension_values.len() + 1) as i64;
+        db.task_dimension_values.push(TaskDimensionValue {
+            id,
+            task_id,
+            dimension_id: axis_id(axis),
+            value_id: value_id(axis, (idx + axis) % VALUES_PER_AXIS),
+            created_at: now,
+            updated_at: now,
+        });
+    }
+}
+
+/// The id of one axis, and of one value on it. Pre-assigned rather than allocated, the same way every
+/// other row in this seed is: the ids are what [`file_on_axes`] points at without reading anything back.
+fn axis_id(axis: usize) -> i64 {
+    (axis + 1) as i64
+}
+
+/// See [`axis_id`].
+fn value_id(axis: usize, value: usize) -> i64 {
+    (axis * VALUES_PER_AXIS + value + 1) as i64
 }
 
 /// Seed a store with `bulk` background tasks plus the fixed hot carve-out, project it into an
@@ -126,6 +176,33 @@ pub fn seed(bulk: usize) -> Seeded {
         ..Default::default()
     });
     let pid = project_id;
+
+    // The axes and their values: fixed and small in themselves — what grows with N is every task's
+    // placement on them (file_on_axes), which is where a follow-up read that outgrew the page would
+    // show. Pushed before the tasks so the rows the tasks point at are already there.
+    for axis in 0..AXES {
+        db.dimensions.push(Dimension {
+            id: axis_id(axis),
+            project_id: pid,
+            name: format!("{AXIS_NAME} #{axis}"),
+            order_key: format!("{axis:03}"),
+            created_at: now,
+            updated_at: now,
+            ..Default::default()
+        });
+        for value in 0..VALUES_PER_AXIS {
+            db.dimension_values.push(DimensionValue {
+                id: value_id(axis, value),
+                dimension_id: axis_id(axis),
+                name: format!("{VALUE_NAME} #{axis}-{value}"),
+                order_key: format!("{value:03}"),
+                created_at: now,
+                updated_at: now,
+                ..Default::default()
+            });
+        }
+    }
+
     let mut idx = 0;
 
     // Hot mailbox slice: todo + assigned to my AI + ready. Matches the mailbox filter; a fixed count
@@ -273,32 +350,57 @@ pub fn run_count_only_list(s: &Seeded) -> (usize, usize) {
     (page.total_matched, page.ids.len())
 }
 
-/// Run the **word search** (`search_hits`) once for one term, returning its (matched, page) pair. The
-/// term is the whole query, unnarrowed by kind or filter — the shape `amenbo search <word>` runs, which
-/// is the widest one: every face of both sides is asked.
+/// Run the **whole word search** ([`amenbo_core::query::search`]) once for one term. The term is the
+/// whole query, unnarrowed by kind or filter — the shape `amenbo search <word>` runs, which is the widest
+/// one: every face of both sides is asked.
+///
+/// The whole read, not `search_hits` alone: where each hit's record stands is read *after* the page is
+/// settled (`AMB-D-567`), so a guard that called the engine directly would leave that second read
+/// unwatched — the one place the search touches the classification, which is one-to-many and grows with
+/// the store. What a face pays for is both reads together, so both are what is timed.
 ///
 /// The seeded terms ([`HOT_TERM_SCAN`] / [`HOT_TERM_INDEX`]) are written only into the hot carve-out, so
 /// the answer is a fixed set at any N while the *copy* the search reads grows with the store — which is
 /// what makes this read's cost worth timing (`AMB-D-509`).
-pub fn run_search(s: &Seeded, term: &str) -> (usize, usize) {
-    let terms = store_engine::search::terms(term);
-    let page = store_engine::read::search_hits(
+pub fn run_search(s: &Seeded, term: &str) -> amenbo_core::query::SearchResult {
+    amenbo_core::query::search(
         s.engine.conn(),
-        &store_engine::read::SearchQuery {
-            reach: amenbo_core::reach::Reach::All,
-            terms: &terms,
-            project_id: None,
-            filter: None,
-            today: time::today(),
-            kind: None,
-            face: None,
-            sort: amenbo_core::query::SearchSort::default(),
+        amenbo_core::reach::Reach::All,
+        amenbo_core::query::SearchParams {
+            text: term.to_string(),
             limit: Some(HOT_TASKS),
-            offset: 0,
+            ..Default::default()
         },
     )
+    .unwrap()
+}
+
+/// The ids of the hot carve-out's tasks — the page a search for either seeded term settles on (the guard
+/// asserts it really does, rather than taking this on trust). Known without reading anything back: the
+/// hot tasks are written first and a task's id *is* its number.
+pub fn hot_task_ids() -> Vec<i64> {
+    (1..=HOT_TASKS as i64).collect()
+}
+
+/// Run the search's **follow-up read** on its own ([`store_engine::read::hit_standings`]) — where each
+/// record the settled page names stands, classification included (`AMB-D-567`). The ids are the page's at
+/// either N, which is the read's whole contract: what it costs follows the page, never the store.
+///
+/// Timed apart from the search it belongs to, and not only inside it. The search's own time grows with
+/// the store legitimately — the short term scans a copy that grows — so a follow-up read that started
+/// reading the child table whole is a handful of milliseconds hidden inside a read that is already
+/// several times slower at N=BIG. Measured, that regression moved the whole search from ×2.3 to ×5.4,
+/// nowhere near the ×20 a regression has to cross; the same regression measured alone is ×34. So the
+/// whole search is timed for what a face pays, and this for what would otherwise hide inside it.
+pub fn run_hit_standings(s: &Seeded) -> usize {
+    let rows = store_engine::read::hit_standings(
+        s.engine.conn(),
+        amenbo_core::reach::Reach::All,
+        &hot_task_ids(),
+        &[],
+    )
     .unwrap();
-    (page.total_matched, page.hits.len())
+    rows.labels.len()
 }
 
 /// Run the project `decision_page` read once, returning its (scanned, returned) pair.

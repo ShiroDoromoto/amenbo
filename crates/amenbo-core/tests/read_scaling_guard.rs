@@ -12,7 +12,11 @@
 //! cannot — e.g. a dropped index that makes a selective query physically scan the table, or a word the
 //! cross-cutting search looks up once per candidate record): the reads checked are the ones whose
 //! *answer* is fixed as N grows, with a noise floor so a sub-millisecond healthy read never
-//! trips, so the guard bites only when a read both gets slow *and* scales with N. The
+//! trips, so the guard bites only when a read both gets slow *and* scales with N. The cross-cutting
+//! search is timed **whole** — where each hit's record stands is read after the page is settled
+//! (`AMB-D-567`), outside the hit query, so timing that query alone would leave the second read
+//! unwatched — and that second read is timed **again on its own**, since a search whose own time may
+//! grow with the store cannot hold to account a read that must not. The
 //! inherently-O(store) aggregates (`store_activity`, `project_overview`) are deliberately **not** in
 //! the time guard — they aggregate the whole workspace by design — but the bench still observes them.
 
@@ -62,6 +66,7 @@ fn hot_reads_stay_o_result_as_the_store_grows() {
     assert_complexity_ratio_n_independent(&small, &big);
     assert_count_only_read_not_flagged(&big);
     assert_search_terms_reach_only_the_hot_carve_out(&small, &big);
+    assert_search_hits_carry_their_standing(&big);
 
     // Wall-clock guards: only meaningful at the full 10k, so reserved for the heavy tier.
     #[cfg(feature = "scale-heavy")]
@@ -106,8 +111,9 @@ fn assert_count_only_read_not_flagged(big: &Seeded) {
 /// and this fails here, rather than leaving the timed guard silently measuring a search of nothing.
 fn assert_search_terms_reach_only_the_hot_carve_out(small: &Seeded, big: &Seeded) {
     for term in [common::HOT_TERM_SCAN, common::HOT_TERM_INDEX] {
-        let (matched_s, _returned_s) = common::run_search(small, term);
-        let (matched_b, returned_b) = common::run_search(big, term);
+        let matched_s = common::run_search(small, term).total_matched;
+        let big_page = common::run_search(big, term);
+        let (matched_b, returned_b) = (big_page.total_matched, big_page.count);
         assert_eq!(
             matched_s, HOT_TASKS,
             "search({term}): should reach only the hot carve-out at N={SMALL}, matched {matched_s} — seeding drift"
@@ -120,6 +126,44 @@ fn assert_search_terms_reach_only_the_hot_carve_out(small: &Seeded, big: &Seeded
         assert_eq!(
             returned_b, HOT_TASKS,
             "search({term}): the page should carry the whole answer at N={BIG}, returned {returned_b}"
+        );
+    }
+}
+
+/// Guard 6 — every hit comes back with its record's standing, classification included (`AMB-D-567`).
+///
+/// The same job for the follow-up read that guard 5 does for the hit query: pin what it is reading, so
+/// the timed guard below is not silently measuring a second read that found nothing. Placements are what
+/// make that read worth timing at all — they are one-to-many, and the child table holding them grows with
+/// the store — so a seed that stopped writing them would leave the guard green over a read of one column.
+///
+/// It also pins the ids the timed follow-up stands the read up with ([`common::hot_task_ids`]): those are
+/// the page's only for as long as the page really is the hot carve-out, so the page is asked, not assumed.
+fn assert_search_hits_carry_their_standing(big: &Seeded) {
+    let page = common::run_search(big, common::HOT_TERM_INDEX);
+
+    let mut reached: Vec<String> = page.hits.iter().map(|h| h.r#ref.clone()).collect();
+    reached.sort();
+    reached.dedup();
+    let mut want: Vec<String> =
+        common::hot_task_ids().into_iter().map(amenbo_core::idref::task).collect();
+    want.sort();
+    assert_eq!(
+        reached, want,
+        "the page should settle on the hot carve-out's tasks — the ids the timed follow-up read is stood \
+         up with are these, so a page reaching elsewhere makes that read measure something else"
+    );
+
+    for hit in &page.hits {
+        let standing = hit.standing.as_ref().unwrap_or_else(|| {
+            panic!("{}: a hit on a live record should carry where it stands", hit.r#ref)
+        });
+        assert_eq!(
+            standing.labels.len(),
+            common::AXES,
+            "{}: the follow-up read should reach every axis the task is filed on, got {:?} — seeding drift",
+            hit.r#ref,
+            standing.labels
         );
     }
 }
@@ -197,6 +241,16 @@ fn assert_complexity_ratio_n_independent(small: &Seeded, big: &Seeded) {
 /// strictly O(result) — the scan reads the whole copy once per term, and the copy grows with N — but the
 /// regression this catches is the *multiplication*, a term looked up once per candidate record
 /// (`AMB-D-507` / `AMB-D-511`): at ×50 data that ran ×1414, against the ×6 a healthy scan costs here.
+///
+/// The search runs **whole**, the follow-up read included — where each hit's record stands is read after
+/// the page is settled (`AMB-D-567`), outside the hit query this guard used to call directly — and the
+/// follow-up runs **again on its own**, because the whole search cannot hold it to account. Its cost is
+/// bounded by the page by construction (the ids are known, so it asks for exactly them), while the
+/// search around it grows with the store legitimately; a follow-up that started reading the placements
+/// whole is milliseconds hidden inside a read already several times slower at N=BIG. Measured with that
+/// regression injected, the whole search went ×2.3 → ×5.4 — green, against the ×20 threshold — while the
+/// follow-up alone showed ×34 and failed. So the pair says two different things: what a face pays, and
+/// what it pays it for.
 #[cfg(feature = "scale-heavy")]
 fn assert_time_sublinear(small: &Seeded, big: &Seeded) {
     // Below this, a read is "instant" and cannot be doing O(N) work at N=BIG (a table scan of 10k
@@ -207,18 +261,21 @@ fn assert_time_sublinear(small: &Seeded, big: &Seeded) {
     const MAX_GROWTH: f64 = 20.0;
     const ITERS: usize = 25;
 
-    let reads: [(&str, TimedRead); 4] = [
+    let reads: [(&str, TimedRead); 5] = [
         ("list_task_ids(mailbox)", |s| {
             std::hint::black_box(common::run_mailbox_list(s));
         }),
         ("decision_page", |s| {
             std::hint::black_box(common::run_decision_page(s));
         }),
-        ("search_hits(scan path)", |s| {
+        ("search(scan path, standing included)", |s| {
             std::hint::black_box(common::run_search(s, common::HOT_TERM_SCAN));
         }),
-        ("search_hits(index path)", |s| {
+        ("search(index path, standing included)", |s| {
             std::hint::black_box(common::run_search(s, common::HOT_TERM_INDEX));
+        }),
+        ("search follow-up (hit_standings)", |s| {
+            std::hint::black_box(common::run_hit_standings(s));
         }),
     ];
 

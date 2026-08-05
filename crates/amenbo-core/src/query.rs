@@ -2096,6 +2096,35 @@ pub struct SearchHit {
     /// the index matched on (NFKC, case, kana), and a face doing its own would be a second definition of
     /// what a term matches (`AMB-D-566`, on `AMB-D-450`'s one rule).
     pub matches: Vec<crate::store_engine::search::MatchRange>,
+    /// Where the record this hit points at stands. `None` only when it stopped being readable between the
+    /// page and the read that fills this in — the row is still shown, since the words really are written
+    /// there.
+    pub standing: Option<HitStanding>,
+}
+
+/// What a record is, past its ref and its title: enough to tell a task still to be done from one that is
+/// over, and a decision that was adopted from one that was not (`AMB-D-567`).
+///
+/// Read after the page is cut, on the records the page names — which is why it is not a column of the hit
+/// query ([`crate::store_engine::read::hit_standings`] says why at length).
+#[derive(Clone, Debug, Serialize)]
+pub struct HitStanding {
+    /// The record's own state, in the vocabulary its side speaks: `todo` / `in_progress` / `done` /
+    /// `blocked` / `rejected` for a task, `proposed` / `accepted` / `rejected` for a decision. Which of
+    /// the two to read it as is `kind`'s to say, as it is for everything else the two sides share here.
+    pub status: String,
+    /// How urgent it is — tasks only, and only where one was set.
+    pub priority: Option<String>,
+    /// What it is filed under — tasks only, in axis order, and empty for a task placed on no axis. It is
+    /// also what a hit on the label face landed in, so a row can show why it came back.
+    pub labels: Vec<HitLabel>,
+}
+
+/// One placement, in the words a person gave it: the axis, and the value on it.
+#[derive(Clone, Debug, Serialize)]
+pub struct HitLabel {
+    pub axis: String,
+    pub value: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -2234,8 +2263,12 @@ pub fn search(
             at: Timestamp::parse_rfc3339(&h.at).unwrap_or_default(),
             snippet: excerpt.text,
             matches: excerpt.matches,
+            // Filled in below, once the page's rows are all here: it is read per record, and the page is
+            // what says which records those are.
+            standing: None,
         }
     }));
+    stand(conn, reach, &mut hits)?;
 
     Ok(SearchResult {
         query: SearchQueryEcho {
@@ -2252,6 +2285,63 @@ pub fn search(
         total_matched: page.total_matched + pins.len(),
         hits,
     })
+}
+
+/// Fill in every hit's [`HitStanding`], once the page is settled (`AMB-D-567`).
+///
+/// **This is a second read, deliberately.** Where the record stands is per *record*, and a page of hits is
+/// per *place a word is written* — a task the words reach on its title, its notes and two of its comments
+/// is four rows and one task. Asking the hit query for it would read the same task four times, and the
+/// classification, being one-to-many, would either multiply the rows again or need collapsing in SQL. Here
+/// the ids are known, so the engine reads each record once and the cost is the page's, not the store's.
+///
+/// A hit holds no id — the ref is its only handle, and reading the number back out of it is what the ref
+/// spelling is for (the screen's rows do the same). Pins go through this as well: a row reached by its ref
+/// is exactly the row someone wants the standing of.
+fn stand(
+    conn: &rusqlite::Connection,
+    reach: crate::reach::Reach,
+    hits: &mut [SearchHit],
+) -> Result<()> {
+    use crate::ops::task::{parse_typed_ref, TypedKind};
+    let owner = |hit: &SearchHit| parse_typed_ref(&hit.r#ref).map(|(k, n)| (k, i64::from(n)));
+    let ids = |want: TypedKind| {
+        let mut out: Vec<i64> =
+            hits.iter().filter_map(owner).filter(|(k, _)| *k == want).map(|(_, id)| id).collect();
+        out.sort_unstable();
+        out.dedup();
+        out
+    };
+    let rows = crate::store_engine::read::hit_standings(
+        conn,
+        reach,
+        &ids(TypedKind::Task),
+        &ids(TypedKind::Decision),
+    )
+    .map_err(crate::error::engine_on(conn))?;
+
+    for hit in hits.iter_mut() {
+        hit.standing = match owner(hit) {
+            Some((TypedKind::Task, id)) => rows.tasks.get(&id).map(|(status, priority)| HitStanding {
+                status: status.as_str().to_string(),
+                priority: priority.map(|p| p.as_str().to_string()),
+                labels: rows
+                    .labels
+                    .get(&id)
+                    .into_iter()
+                    .flatten()
+                    .map(|(axis, value)| HitLabel { axis: axis.clone(), value: value.clone() })
+                    .collect(),
+            }),
+            Some((TypedKind::Decision, id)) => rows.decisions.get(&id).map(|status| HitStanding {
+                status: status.as_str().to_string(),
+                priority: None,
+                labels: Vec::new(),
+            }),
+            None => None,
+        };
+    }
+    Ok(())
 }
 
 /// The records the words name outright — a word written as a ref (`AMB-T-<n>` / `AMB-D-<n>`, the bare
@@ -2299,6 +2389,8 @@ fn pinned(
             // A pin was reached by the ref and not by the words, so there is nothing here that a word
             // landed on. Its snippet is the title, which the row already carries beside it.
             matches: Vec::new(),
+            // As for every other row, and for the same reason: `stand` reads it once the page is settled.
+            standing: None,
         });
     }
     Ok(out)
@@ -2868,6 +2960,69 @@ mod filter_tests {
         };
         assert_eq!(lit(&r.hits[0]), ["ｻｰﾊﾞ", "索引"], "both words, in the characters that were written");
         assert_eq!(lit(&r.hits[1]), ["索引", "索引"], "each place it is written on this face");
+    }
+
+    /// Every row says where its record stands, so a reader can tell a task still to be done from one that
+    /// is over without opening either (`AMB-D-567`). A task carries its status, its priority and what it
+    /// is filed under; a decision carries its status and nothing a decision does not have.
+    #[test]
+    fn every_hit_says_where_its_record_stands() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pj = proj(tx, "PJ");
+        let t = ops::task::add(
+            tx,
+            ops::task::NewTask {
+                title: "索引の設計".to_string(),
+                notes: String::new(),
+                project_id: Some(pj),
+                due_on: None,
+                start_on: None,
+                priority: Some(crate::model::Priority::High),
+                created_by_kind: None,
+            },
+        )
+        .expect("add task")
+        .id;
+        let axis = ops::dimension::add(
+            tx,
+            pj,
+            ops::dimension::NewDimension { name: "面".to_string(), ..Default::default() },
+        )
+        .expect("add dimension");
+        let value = ops::dimension::value_add(tx, axis.id, "コア").expect("add value");
+        ops::dimension::set(tx, t, value.id).expect("place the task on the axis");
+        ops::decision::add(
+            tx,
+            ops::decision::NewDecision {
+                title: "索引をどう引くか".to_string(),
+                body: String::new(),
+                project_id: pj,
+            },
+        )
+        .expect("add decision");
+
+        let r = search(
+            tx.conn(),
+            crate::reach::Reach::All,
+            SearchParams { text: "索引".to_string(), ..Default::default() },
+        )
+        .unwrap();
+
+        let task_hit = r.hits.iter().find(|h| h.kind == "task").expect("the task's title");
+        let s = task_hit.standing.as_ref().expect("the task's standing");
+        assert_eq!((s.status.as_str(), s.priority.as_deref()), ("todo", Some("high")));
+        assert_eq!(
+            s.labels.iter().map(|l| (l.axis.as_str(), l.value.as_str())).collect::<Vec<_>>(),
+            [("面", "コア")],
+            "what it is filed under, in the words a person gave it"
+        );
+
+        let decision_hit = r.hits.iter().find(|h| h.kind == "decision").expect("the decision's title");
+        let d = decision_hit.standing.as_ref().expect("the decision's standing");
+        assert_eq!(d.status, "proposed");
+        assert_eq!(d.priority, None, "a decision has no priority to carry");
+        assert!(d.labels.is_empty(), "and nothing is filed under an axis but a task");
     }
 
     /// A hit carries a snippet, so `search` is the one read that **has** a ceiling of its own: no limit

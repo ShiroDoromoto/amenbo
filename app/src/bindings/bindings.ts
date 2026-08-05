@@ -1160,7 +1160,18 @@ at: string, snippet: string,
  * takes (NFKC, case, kana) lives with the index, and a second one on this side would be a second
  * answer to what a term matches (`AMB-D-566`).
  */
-matches: Array<SearchMatchDto>, };
+matches: Array<SearchMatchDto>, 
+/**
+ * Where the record this row points at stands — what the row shows past the ref and the title, so the
+ * reader can tell a task still to be done from one that is over without opening it. Absent only when
+ * the record stopped being readable between the page and the read that fills this in.
+ */
+standing?: SearchStandingDto, };
+
+/**
+ * One placement, in the words a person gave it.
+ */
+export type SearchLabelDto = { axis: string, value: string, };
 
 /**
  * One run of `snippet` a term landed on — half-open, in characters. The wire form of
@@ -1176,6 +1187,25 @@ export type SearchResultDto = { hits: Array<SearchHitDto>,
  * How many there are in all — what tells the screen its page left something behind.
  */
 totalMatched: number, };
+
+/**
+ * A record's state, and — for a task — its priority and what it is filed under. The wire form of
+ * [`amenbo_core::query::HitStanding`]; `kind` on the row says which vocabulary `status` is drawn from.
+ */
+export type SearchStandingDto = { 
+/**
+ * `todo` / `in_progress` / `done` / `blocked` / `rejected` for a task, `proposed` / `accepted` /
+ * `rejected` for a decision.
+ */
+status: string, 
+/**
+ * Tasks only, and only where one was set.
+ */
+priority?: string, 
+/**
+ * Tasks only, in axis order — empty for a task placed on no axis.
+ */
+labels: Array<SearchLabelDto>, };
 
 /**
  * The slug in `.amenbo` disagrees with what the store actually holds

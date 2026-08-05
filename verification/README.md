@@ -574,6 +574,15 @@ the GUI harness renders them into the line an eye closes, and the CLI driver ref
 either instead of passing over it. Silence would be worse than a red: a step that asked and was never
 answered reads exactly like one that was.
 
+An argument can also mean two different things on the two roads, and `attach`'s `file:` is the one
+that does. To the CLI driver it is a path in the run's own folder, put there by a `repo write-file` a
+step earlier; on screen it is a **name** and nothing more — both ways in there (the picker and the
+drop) read the disk the operator is sitting at, and nothing a run lays down is anywhere either of them
+is pointed, so the instruction asks for a file of that name and the operator brings one. Nothing is
+given up by that: what a search reaches of an attachment is what it is called, never its bytes. A
+`url:` has no way in on that face at all, so the GUI harness refuses one rather than writing a line
+about a face the app does not have.
+
 Bindings belong to the road they are made on. A `target:` in `steps_gui` resolves against
 `steps_gui` alone, because the two lists are never walked in one run.
 

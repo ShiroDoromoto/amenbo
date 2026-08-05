@@ -464,12 +464,15 @@ steps_gui:
       target: window
       notes: the window is measured in days, never in rows
 
+  # Bound, because the road comes back to this remark at the end to hang something off it: an
+  # attachment is the one face that lands on a record and on a remark alike.
   - type: action
     domain: task
     op: comment
     with:
       target: window
       text: the sweep runs nightly
+    as: nightly
 
   - type: action
     domain: decision
@@ -752,3 +755,41 @@ steps_gui:
       face: comment
       landed_on: decision-comment
       marked: drained
+
+  # The pair the face cannot separate at all. An attachment hangs off a record or off a remark on one,
+  # and the row says "attachment" of both — so which of the two it is is read off the place the row
+  # names and nowhere else. Two files, because one hung twice would leave the two rows telling apart by
+  # nothing but their place, which is the very reading under test.
+  - type: action
+    domain: task
+    op: attach
+    with:
+      target: window
+      file: throughput.log
+
+  - type: action
+    domain: comment
+    op: attach
+    with:
+      target: nightly
+      file: handover.log
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: throughput
+      target: window
+      face: attachment
+      landed_on: task
+      marked: throughput
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: handover
+      target: window
+      face: attachment
+      landed_on: task-comment
+      marked: handover

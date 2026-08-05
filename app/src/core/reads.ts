@@ -279,6 +279,12 @@ export interface SearchQuery {
    * being no vocabulary to read it in.
    */
   filter: string;
+  /**
+   * The one project to look in, held apart from `filter` rather than written into it (`AMB-D-564`):
+   * a project is an axis both sides carry, so naming one inside the expression would take the
+   * decisions out of the answer as a side effect. `null` is every project.
+   */
+  projectId: number | null;
   offset: number;
 }
 
@@ -302,6 +308,7 @@ export async function fetchSearch(q: SearchQuery): Promise<SearchAnswer | null> 
       kind: q.kind,
       face: q.face,
       filter: q.filter.trim() || null,
+      projectId: q.projectId,
       limit: SEARCH_PAGE,
       offset: q.offset,
     });
@@ -316,7 +323,7 @@ export async function fetchSearch(q: SearchQuery): Promise<SearchAnswer | null> 
  */
 export function useSearch(q: SearchQuery): { answer: SearchAnswer | null; loading: boolean; error: unknown } {
   const { data, loading, error } = useQuery<SearchAnswer | null>(
-    ["search", q.text.trim(), q.kind, q.face, q.filter.trim(), q.offset],
+    ["search", q.text.trim(), q.kind, q.face, q.filter.trim(), q.projectId, q.offset],
     () => fetchSearch(q),
   );
   return { answer: data ?? null, loading, error };
@@ -352,14 +359,20 @@ function mockSearch(text: string, q: SearchQuery): SearchAnswer {
       matches: mockRanges(snippet, needles),
     });
   };
+  // The scope reaches both sides alike, which is the whole reason it is an argument and not a key of
+  // the narrowing expression (`AMB-D-564`).
+  const inScope = (projectId: number | null | undefined) =>
+    q.projectId === null || projectId === q.projectId;
   if (q.kind !== "decision") {
     for (const t of getSnapshot().tasks) {
+      if (!inScope(t.projectId)) continue;
       push("task", "title", taskRef(t.id), t.title, t.notes);
       push("task", "body", taskRef(t.id), t.title, t.notes);
     }
   }
   if (q.kind !== "task") {
     for (const d of getSnapshot().decisions) {
+      if (!inScope(d.project?.id)) continue;
       push("decision", "title", decisionRef(d.id), d.title, d.body);
       push("decision", "body", decisionRef(d.id), d.title, d.body);
     }

@@ -101,6 +101,12 @@ impl Driver<'_> {
 /// `standing` asks the other half of what a row says: where the record it points at stands. It is put
 /// to the rows this record owns, so a step naming it is asserting that the answer carries the state and
 /// not merely the ref — which is what saves the reader the `show` the search was meant to replace.
+///
+/// The two questions a row is asked on the screen's road alone are turned away here instead of quietly
+/// passing. What a row *calls* a place and where the words are marked inside its excerpt are both drawn
+/// rather than reported: down this pipe the first is a `kind` and a comment ref for the reader to put
+/// together, and the second is a pair of offsets. A step asking either would come back green off a build
+/// that had stopped drawing it, which is the reading this gate exists to refuse.
 pub(crate) fn judge_found(
     noun: &str,
     id_ref: &str,
@@ -108,6 +114,13 @@ pub(crate) fn judge_found(
     with: &Args,
     hits: &serde_json::Value,
 ) -> Result<Outcome, String> {
+    for key in ["landed_on", "marked"] {
+        if with.contains_key(key) {
+            return Err(format!(
+                "`{key}` is a question about what the row draws, so it belongs on a `steps_gui` road where an eye reads it"
+            ));
+        }
+    }
     let rows = hits.as_array().map(Vec::as_slice).unwrap_or(&[]);
     let face = with.get("face").and_then(|v| v.as_str());
     let mine: Vec<&serde_json::Value> =
@@ -244,5 +257,20 @@ mod tests {
         let v = json!({ "blocked_by": [] });
         assert_eq!(dig(&v, "blocked_by.0.name"), None);
         assert_eq!(dig(&v, "placement.project.name"), None);
+    }
+
+    /// What only a screen draws is turned away here, and the turning away is the point: this pipe
+    /// carries a `kind` and a pair of offsets where the screen carries a word and a highlight, so a
+    /// step asking about either would come back green off a build that had stopped drawing it.
+    #[test]
+    fn the_two_questions_only_a_screen_can_answer_are_refused_here() {
+        let hits = json!([{ "ref": "AMB-T-1", "face": "comment" }]);
+        for key in ["landed_on", "marked"] {
+            let with: Args = [(key.to_string(), serde_yaml::Value::from("anything"))].into();
+            let Err(err) = judge_found("task", "AMB-T-1", "sweep", &with, &hits) else {
+                panic!("`{key}` is a screen's question, and it has no answer down this pipe");
+            };
+            assert!(err.contains(key) && err.contains("steps_gui"), "got: {err}");
+        }
     }
 }

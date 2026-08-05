@@ -561,6 +561,15 @@ hit through to the record it points at, and reading which record that opened (`t
 `task opened`), is the same kind again: a terminal prints its hits as text, and the ref is typed into
 `show` rather than pressed.
 
+One road's alone is sometimes an *argument* rather than a whole op, and then it is the driver that
+cannot answer it which says so. A search hit is the case: what the row **calls** the place it points
+at (`landed_on`) and the run of characters it **marks** inside its excerpt (`marked`) are drawn, not
+reported — down the CLI's pipe the first arrives as a `kind` and a comment ref for the reader to put
+together, and the second as a pair of offsets. Both are declared on `found` like any other argument,
+the GUI harness renders them into the line an eye closes, and the CLI driver refuses a step naming
+either instead of passing over it. Silence would be worse than a red: a step that asked and was never
+answered reads exactly like one that was.
+
 Bindings belong to the road they are made on. A `target:` in `steps_gui` resolves against
 `steps_gui` alone, because the two lists are never walked in one run.
 

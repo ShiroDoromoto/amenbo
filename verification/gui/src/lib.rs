@@ -374,6 +374,14 @@ impl Instructor {
             (Domain::Decision, "create") => {
                 format!("Create a decision titled \"{}\".", req(with, "title")?)
             }
+            // The same move on the other side. It is written out rather than shared with the task's,
+            // because the pane it is made in is the decision's own and the road has to say which screen
+            // the operator is standing on.
+            (Domain::Decision, "comment") => format!(
+                "Open the decision \"{}\" and add the comment \"{}\".",
+                self.target_label(with),
+                req(with, "text")?
+            ),
             // The words go into the box, and what they do to the board is the shot after this one. It is
             // written as a move rather than folded into the assert for the reason the other moves here
             // are: the screen it arrives at is the whole of the road, so it is photographed rather than
@@ -629,10 +637,22 @@ impl Instructor {
                 }
                 // What the row says about the record it points at, which the eye closing the shot reads
                 // off the same line as the ref.
-                match arg_str(with, "standing") {
-                    Some(standing) => format!("{line}, and that the row says it stands at {standing}."),
-                    None => format!("{line}."),
+                if let Some(standing) = arg_str(with, "standing") {
+                    line.push_str(&format!(", and that the row says it stands at {standing}"));
                 }
+                // Which of the four places the row calls it. The words are the interface's own, so this
+                // is the eye's to close and never the reading's: a match on them would hold the gate to
+                // whichever language the run happened to be set up in.
+                if let Some(landed) = arg_str(with, "landed_on") {
+                    line.push_str(&format!(", and that the row calls the place {}", place(landed)?));
+                }
+                // Where the words landed inside the excerpt. The eye's for a reason of its own: what is
+                // under test is paint, and a reading gives back characters with nothing on them.
+                if let Some(marked) = arg_str(with, "marked") {
+                    line.push_str(&format!(", with \"{marked}\" marked inside its excerpt"));
+                }
+                line.push('.');
+                line
             }
             (Domain::Task, "field") => format!(
                 "Confirm the task \"{}\" shows {} = {}.",
@@ -830,6 +850,22 @@ fn label(with: &Args) -> Option<&str> {
 
 fn req<'a>(with: &'a Args, key: &str) -> Result<&'a str, String> {
     arg_str(with, key).ok_or_else(|| format!("arg `{key}` must be a string"))
+}
+
+/// The four places a hit can be on, in words an operator reads off the row. The set is closed and a
+/// name outside it is refused here rather than passed through: this is what the reader is asked to
+/// confirm, and a line inviting them to look for a phrase the screen has no word for would be closed
+/// on nothing.
+fn place(landed_on: &str) -> Result<&'static str, String> {
+    Ok(match landed_on {
+        "task" => "a task",
+        "task-comment" => "a comment on a task",
+        "decision" => "a decision",
+        "decision-comment" => "a comment on a decision",
+        other => return Err(format!(
+            "`landed_on: {other}` is not one of the four places a hit is on (task / task-comment / decision / decision-comment)"
+        )),
+    })
 }
 
 /// Whether a step says the entry wears the official badge. The op requires the key, so the default
@@ -1394,6 +1430,59 @@ steps_gui:
         let mut ins = Instructor::new();
         let err = ins.render(&s.steps(Driver::Gui)[0]).expect_err("an unknown state has no instruction");
         assert!(err.contains("half-on"), "got: {err}");
+    }
+
+    /// What a hit row draws, which is the half only a screen has: which of the four places it calls
+    /// itself, and the run of characters marked inside its excerpt. Both ride the same step as the
+    /// reading that finds the row, so the line an eye closes says everything it is being asked at once.
+    #[test]
+    fn a_hit_row_is_read_for_the_place_it_names_and_the_run_it_marks() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: assert
+    domain: task
+    op: found
+    with: { words: sweep, target: seed, face: comment, landed_on: task-comment, marked: sweep }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        ins.render(&steps[0]).unwrap();
+        let line = ins.render(&steps[1]).unwrap();
+        assert!(line.contains("on its comment"), "got: {line}");
+        assert!(line.contains("calls the place a comment on a task"), "got: {line}");
+        assert!(line.ends_with("with \"sweep\" marked inside its excerpt."), "got: {line}");
+    }
+
+    #[test]
+    fn a_place_outside_the_four_a_hit_can_be_on_is_refused() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: assert
+    domain: task
+    op: found
+    with: { words: sweep, target: seed, landed_on: project }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        ins.render(&steps[0]).unwrap();
+        let err = ins.render(&steps[1]).expect_err("a place off the list has no instruction");
+        assert!(err.contains("project"), "got: {err}");
     }
 
     /// The settings form: a choice is answered by ticking and saving, declined by clearing every box,

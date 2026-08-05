@@ -3,7 +3,9 @@
 # since words left the filter grammar, this is the only place they go. The line holds the five faces a
 # reader lands on (a title, a body, a remark on it, a label it was filed under, the name of what is
 # attached), the folding that decides what counts as a match at all, the narrowings, and what each row
-# says about where the record it points at stands.
+# says about where the record it points at stands. The screen's road asks the row two things more, both
+# of them things only it draws: which of the four places it calls itself, and where the words are marked
+# inside its excerpt.
 id: find-where-a-word-is-written
 title: A word leads to the places it is written — a title, a body, a comment, a label, an attachment — and the narrowings leave the rest out
 description: >
@@ -476,6 +478,16 @@ steps_gui:
       title: SCENARIO DECISION — retention of the outbox
     as: outbox
 
+  # A remark on the other side, so all four of the places a hit can be on are written somewhere on this
+  # road. Its word is its own: what the rows are asked at the end is which place each one names, and a
+  # word two of them carried would leave the reader with nothing to tell those two rows apart by.
+  - type: action
+    domain: decision
+    op: comment
+    with:
+      target: outbox
+      text: the queue is drained at dawn
+
   # One word per face. Each was written in exactly one of the three, so the record coming back for all
   # three is the screen reaching every face a card of its own would never show.
   - type: assert
@@ -626,3 +638,52 @@ steps_gui:
       target: outbox
       face: title
       standing: proposed
+
+  # What each row actually draws, which is the half a pipe cannot carry. Two things are asked of it at
+  # once: which of the four places it calls itself, and whether the words are marked where they landed
+  # inside the excerpt. Both go wrong on one token — a dictionary key crossed and the row still reads,
+  # in the wrong words; a style dropped and the excerpt still reads, with nothing lit inside it — so a
+  # gate that never looked at the row would stay green through either.
+  #
+  # All four places are walked, because the row's wording is the only thing that tells them apart: the
+  # ref says which side and nothing about a remark, and the face says "attachment" of one hung on a
+  # record and one hung on a remark alike.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: window
+      face: title
+      landed_on: task
+      marked: retention
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: sweep
+      target: window
+      face: comment
+      landed_on: task-comment
+      marked: sweep
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      face: title
+      landed_on: decision
+      marked: retention
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: drained
+      target: outbox
+      face: comment
+      landed_on: decision-comment
+      marked: drained

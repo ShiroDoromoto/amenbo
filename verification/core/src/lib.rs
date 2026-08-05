@@ -625,8 +625,15 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `standing` is the other thing a row says: where the record it points at stands, which is what
     // separates a place in work still to be taken from a place in work that is over.
-    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter", "standing"], binds: false },
-    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter", "standing"], binds: false },
+    //
+    // `landed_on` and `marked` are the two things only a screen says, so they belong on a `steps_gui`
+    // road and the CLI driver turns them away rather than passing over them. `landed_on` is what the
+    // row calls the place — a task, a decision, or a remark on either — which is the one reading that
+    // tells an attachment on a record from an attachment on a remark, the pair a face alone leaves
+    // together. `marked` is the run of characters the excerpt has to show marked, which does not
+    // survive a pipe at all: a highlight is a pair of offsets in `--json` and paint on the screen.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter", "standing", "landed_on", "marked"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter", "standing", "landed_on", "marked"], binds: false },
     // What the typed words left standing. Separate from `listed` because there is no filter to write it
     // as: the narrowing is the screen's own, and the question it answers is which of the cards drawn a
     // moment ago are drawn still. The words belong to the `narrow` that put them in — repeating them

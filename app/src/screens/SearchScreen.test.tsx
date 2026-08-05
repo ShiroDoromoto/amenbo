@@ -134,6 +134,47 @@ describe("the search screen", () => {
     expect(lastAsked()).toMatchObject({ text: "search", kind: "task", face: null, offset: 0 });
   });
 
+  it("marks the runs the core says the words landed on, and leaves the excerpt otherwise whole", () => {
+    hoisted.answer = {
+      hits: [
+        hit({
+          ref: "AMB-T-1",
+          snippet: "全文検索の索引を張る",
+          matches: [{ start: 2, end: 4 }, { start: 5, end: 7 }],
+        }),
+      ],
+      totalMatched: 1,
+    };
+    render();
+    type(inputs()[0], "検索 索引");
+    press(button(t("search.run")));
+    const marks = Array.from(container.querySelectorAll(".srch__snippet mark")).map((m) => m.textContent);
+    // The ranges are character positions, so a marked run is the characters they name — not the bytes
+    // or the code units at those offsets.
+    expect(marks).toEqual(["検索", "索引"]);
+    expect(container.querySelector(".srch__snippet")!.textContent).toBe("全文検索の索引を張る");
+  });
+
+  it("shows an excerpt with no ranges exactly as it came, and never loses one to a range that does not fit", () => {
+    const excerpt = "…the words…";
+    hoisted.answer = {
+      hits: [
+        hit({ ref: "AMB-T-1", snippet: excerpt, matches: [] }),
+        hit({ ref: "AMB-T-2", snippet: excerpt, matches: [{ start: 5, end: 99 }] }),
+        hit({ ref: "AMB-T-3", snippet: excerpt, matches: [{ start: 90, end: 99 }] }),
+      ],
+      totalMatched: 3,
+    };
+    render();
+    type(inputs()[0], "words");
+    press(button(t("search.run")));
+    const snippets = Array.from(container.querySelectorAll(".srch__snippet"));
+    expect(snippets.map((s) => s.textContent)).toEqual([excerpt, excerpt, excerpt]);
+    // A face carrying none of the words is the routine case, and one past the end costs the emphasis
+    // rather than a character: only the range that fits draws a mark at all.
+    expect(snippets.map((s) => s.querySelectorAll("mark").length)).toEqual([0, 1, 0]);
+  });
+
   it("says a search could not run rather than showing it as nothing matched", () => {
     hoisted.error = new Error("unknown filter key 'stats'");
     render();

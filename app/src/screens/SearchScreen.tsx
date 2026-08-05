@@ -178,7 +178,7 @@ function HitRow({
           )}{" "}
           {hit.title}
         </div>
-        <div className="srch__snippet">{hit.snippet}</div>
+        <div className="srch__snippet"><Excerpt snippet={hit.snippet} matches={hit.matches} /></div>
         <div className="feed__meta">
           <span>{t(`search.face.${hit.face}`)}</span>
           {hit.comment && <span>{hit.comment}</span>}
@@ -187,4 +187,36 @@ function HitRow({
       </div>
     </div>
   );
+}
+
+/**
+ * The excerpt, with the runs the words landed on marked.
+ *
+ * **The ranges are taken as given and never re-derived here** (`AMB-D-566`). Deciding which characters a
+ * term matches takes the folding the index already applied once (NFKC, case, kana), and a screen matching
+ * again for itself would be a second answer to what a word matches — so the core says where, and this only
+ * slices. `<mark>` is the element for it: relevance to what the reader asked, which is exactly what a hit
+ * is.
+ *
+ * The positions are counted in **characters**, so the split is `Array.from` and not `snippet[i]` — an
+ * excerpt is a person's prose, and indexing would cut a surrogate pair in half and draw the wreckage.
+ *
+ * A range that does not fit the excerpt is skipped rather than trusted: this is display, and a bad pair
+ * should cost the emphasis, never a character of the text.
+ */
+function Excerpt({ snippet, matches }: { snippet: string; matches: SearchHit["matches"] }) {
+  if (matches.length === 0) return <>{snippet}</>;
+  const chars = Array.from(snippet);
+  const parts: React.ReactNode[] = [];
+  let at = 0;
+  matches.forEach((m, i) => {
+    const start = Math.min(Math.max(m.start, at), chars.length);
+    const end = Math.min(m.end, chars.length);
+    if (end <= start) return;
+    if (start > at) parts.push(chars.slice(at, start).join(""));
+    parts.push(<mark key={i}>{chars.slice(start, end).join("")}</mark>);
+    at = end;
+  });
+  if (at < chars.length) parts.push(chars.slice(at).join(""));
+  return <>{parts}</>;
 }

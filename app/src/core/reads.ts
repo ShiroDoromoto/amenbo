@@ -333,16 +333,19 @@ function mockSearch(text: string, q: SearchQuery): SearchAnswer {
     const source = face === "title" ? title : body;
     if (!has(source)) return;
     const at = source.toLowerCase().indexOf(needles[0] ?? "");
-    // The mock matches on the raw text, not through the core's fold, so it has no ranges to give: the
-    // browser shows the excerpt unhighlighted rather than a highlight drawn to a second definition.
+    const snippet = source.slice(Math.max(0, at - 30), at + 90);
     hits.push({
       face,
       kind,
       ref,
       title,
       at: "",
-      snippet: source.slice(Math.max(0, at - 30), at + 90),
-      matches: [],
+      snippet,
+      // Drawn from the same rule this mock already picked the row by — a lowercase substring, with none
+      // of the core's folding. That keeps the browser's approximation one thing end to end rather than a
+      // highlight disagreeing with the rows around it; the folded answer is the core's, and under Tauri
+      // it is the core that answers.
+      matches: mockRanges(snippet, needles),
     });
   };
   if (q.kind !== "decision") {
@@ -361,6 +364,37 @@ function mockSearch(text: string, q: SearchQuery): SearchAnswer {
   const tier: SearchFace[] = ["title", "body", "comment", "label", "attachment"];
   hits.sort((a, b) => tier.indexOf(a.face) - tier.indexOf(b.face));
   return { hits: hits.slice(q.offset, q.offset + SEARCH_PAGE), totalMatched: hits.length };
+}
+
+/**
+ * Every place a needle sits in the excerpt, in the shape a hit row reads: character positions, sorted,
+ * and merged so no two overlap — two needles landing on the same characters have to arrive as one run,
+ * or the row would have to reconcile them.
+ *
+ * Characters, not code units: the row splits the excerpt with `Array.from`, and positions counted any
+ * other way would point at the wrong place the moment a fixture holds one.
+ */
+function mockRanges(snippet: string, needles: string[]): SearchHit["matches"] {
+  const hay = Array.from(snippet).map((c) => c.toLowerCase());
+  const found: { start: number; end: number }[] = [];
+  for (const raw of needles) {
+    const needle = Array.from(raw.toLowerCase());
+    if (needle.length === 0) continue;
+    for (let i = 0; i + needle.length <= hay.length; i++) {
+      if (needle.every((c, k) => hay[i + k] === c)) {
+        found.push({ start: i, end: i + needle.length });
+        i += needle.length - 1;
+      }
+    }
+  }
+  found.sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged: { start: number; end: number }[] = [];
+  for (const r of found) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end);
+    else merged.push({ ...r });
+  }
+  return merged;
 }
 
 /** One option (flag). `help` is its description; `required` marks a mandatory flag. */

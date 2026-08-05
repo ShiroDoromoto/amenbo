@@ -560,7 +560,10 @@ left (`task narrow` / `task narrowed`) is the same kind: a terminal has no listi
 it, so asking a word where it is written is one command there and there is nothing to narrow. Pressing a
 hit through to the record it points at, and reading which record that opened (`task open-hit` /
 `task opened`), is the same kind again: a terminal prints its hits as text, and the ref is typed into
-`show` rather than pressed.
+`show` rather than pressed. Reading the cross-cutting search's narrowing box as one that cannot be typed
+into at all (`task narrowing-shut`) is the last of them: a flag either arrives on a command line or it
+does not, so only a screen holds a control a reader can see, reach and not use — which is the shape the
+box takes while no side is chosen and there is no grammar to read the words in.
 
 One road's alone is sometimes an *argument* rather than a whole op, and then it is the driver that
 cannot answer it which says so. A search hit is the case: what the row **calls** the place it points

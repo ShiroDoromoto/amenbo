@@ -590,6 +590,14 @@ steps_gui:
       only_face: comment
       present: false
 
+  # The third control, before anything is written into it. Its grammar follows the side, so with no side
+  # chosen there is none for the words to be read in and the box takes nothing at all. The steps under
+  # this one are the other half: each types into that same box, having named a side first — so a build
+  # that let it be typed into either way walks every one of them and is caught only here.
+  - type: assert
+    domain: task
+    op: narrowing-shut
+
   - type: assert
     domain: task
     op: found

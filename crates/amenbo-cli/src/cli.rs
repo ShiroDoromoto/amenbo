@@ -165,8 +165,9 @@ pub enum Command {
         /// keeps decisions in the answer
         #[arg(long)]
         project: Option<String>,
-        /// narrow structurally, in the grammar `task list` uses (e.g. `--filter "status:todo"`). That is
-        /// task vocabulary, so a search carrying one is a search of tasks
+        /// narrow structurally, in the grammar of the side `--kind` names — `task list`'s for a task
+        /// (e.g. `--kind task --filter "status:todo"`), `decision list`'s for a decision. Requires
+        /// `--kind`: the two grammars share spellings that mean different things
         #[arg(long)]
         filter: Option<String>,
         /// keep one side: task / decision

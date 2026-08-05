@@ -2151,19 +2151,35 @@ pub struct SearchResult {
     pub hits: Vec<SearchHit>,
 }
 
+/// A search's structural narrowing, in the vocabulary of the side it was asked of (`AMB-D-563`).
+///
+/// The two grammars do not overlap, and where they share a spelling they mean different things:
+/// `status:rejected` is "decided against" on a task and "turned down" on a decision. So which one an
+/// expression is read in is the caller's to declare through `--kind`, and never something guessed here —
+/// a search that defaulted to one of them would answer the other question in silence.
+pub enum SearchNarrowing {
+    /// `task list`'s grammar, narrowing the task side.
+    Task(Filter),
+    /// `decision list`'s grammar, narrowing the decision side.
+    Decision(DecisionFilter),
+}
+
 #[derive(Default)]
 pub struct SearchParams {
     /// The words, as typed. Split on whitespace and folded by the index ([`crate::store_engine::search`]).
     pub text: String,
     /// The one project to look in. An argument of its own, and deliberately **not** a key of
     /// `filter_expr` (`AMB-D-564`): a project is a common axis that tasks and decisions carry alike,
-    /// whereas the expression is task vocabulary — so putting it there would drop every decision from
-    /// the answer as the side effect of naming a project. `None` is every project the reach allows.
+    /// whereas the expression is one side's vocabulary or the other's — so putting it there would drop
+    /// the other side from the answer as the side effect of naming a project. `None` is every project the
+    /// reach allows.
     pub project_id: Option<i64>,
-    /// The structural narrowing, in `task list`'s own grammar. Task vocabulary, so a search carrying one
-    /// is a search of tasks.
+    /// The structural narrowing, written in the vocabulary of the side [`SearchParams::kind`] names
+    /// ([`SearchNarrowing`], `AMB-D-563`). With no side named it cannot be read at all, and saying so is
+    /// an error rather than a guess.
     pub filter_expr: Option<String>,
-    /// Which record the words are on. `None` keeps both sides.
+    /// Which record the words are on. `None` keeps both sides — and is what a `filter_expr` cannot be
+    /// given alongside, there being no vocabulary to read it in.
     pub kind: Option<SearchKind>,
     /// Which face of it they are on. `None` keeps every face — and the two axes are judged apart, so
     /// naming both is the product of them ("the remarks on decisions", `AMB-D-562`).
@@ -2196,19 +2212,36 @@ pub fn search(
     params: SearchParams,
 ) -> Result<SearchResult> {
     let today = time::today();
-    let mut filter = match &params.filter_expr {
-        Some(e) => Some(Filter::parse(e, today)?),
-        None => None,
-    };
-    // The same entry-point discipline as `list`: `project:` is resolved exactly once, here where the
-    // `conn` is, and naming a project inside a closed reach is refused rather than quietly obeyed.
-    if let Some(f) = filter.as_mut() {
-        f.resolve(conn)?;
-        if f.project_id.is_some() {
-            reach.refuse_project_choice("the `project:` filter")?;
+    // Which grammar the expression is read in follows the side that was named, and there is no reading
+    // without one (`AMB-D-563`). The same entry-point discipline as `list` either way: `project:` is
+    // resolved exactly once, here where the `conn` is, and naming a project inside a closed reach is
+    // refused rather than quietly obeyed.
+    let filter = match (&params.filter_expr, params.kind) {
+        (None, _) => None,
+        (Some(expr), Some(SearchKind::Task)) => {
+            let mut f = Filter::parse(expr, today)?;
+            f.resolve(conn)?;
+            if f.project_id.is_some() {
+                reach.refuse_project_choice("the `project:` filter")?;
+            }
+            f.project_id = reach.narrow(f.project_id)?;
+            Some(SearchNarrowing::Task(f))
         }
-        f.project_id = reach.narrow(f.project_id)?;
-    }
+        (Some(expr), Some(SearchKind::Decision)) => {
+            let mut f = DecisionFilter::parse(expr, today)?;
+            f.resolve(conn)?;
+            if f.project_id.is_some() {
+                reach.refuse_project_choice("the `project:` filter")?;
+            }
+            f.project_id = reach.narrow(f.project_id)?;
+            Some(SearchNarrowing::Decision(f))
+        }
+        (Some(_), None) => {
+            return Err(Error::invalid(
+                "a --filter is one side's vocabulary or the other's, so say which with --kind task or --kind decision (the same key can mean different things: `status:rejected` is work decided against on a task, and a decision turned down on a decision)",
+            ))
+        }
+    };
     // The scope, folded the same way `list` folds its own: a closed reach fills an unnamed slot with the
     // bound project, and naming another one is an error rather than an empty page. `--project` itself is
     // human vocabulary, refused for an AI at the surface that takes it (refuse_project_choice).
@@ -3099,7 +3132,8 @@ mod filter_tests {
 
     /// `--project` is an argument of its own, not a `--filter` key, so it narrows **both** sides
     /// (`AMB-D-564`): naming a project drops the neighbour's rows and keeps this one's decisions. The
-    /// contrast is the line below it — a filter is task vocabulary, so it takes the decisions out.
+    /// contrast is the line below it — a filter comes with a side named beside it, and that is what
+    /// takes the decisions out.
     #[test]
     fn search_scoped_to_a_project_keeps_that_projects_decisions() {
         let e = new_engine();
@@ -3131,13 +3165,44 @@ mod filter_tests {
         let filtered = run(SearchParams {
             text: "索引".to_string(),
             project_id: Some(mine),
+            kind: Some(SearchKind::Task),
             filter_expr: Some("status:todo".to_string()),
             ..Default::default()
         });
         assert!(
             filtered.hits.iter().all(|h| h.kind == "task"),
-            "a filter is task vocabulary, and that is what takes the decisions out — not the scope"
+            "the side named beside the filter is what takes the decisions out — not the scope"
         );
+    }
+
+    /// A filter is one side's vocabulary or the other's, so it cannot be read without a side to read it
+    /// in (`AMB-D-563`). Refused rather than defaulted: the two grammars share spellings that mean
+    /// different things, so a guess would answer the other question in silence.
+    #[test]
+    fn a_search_filter_without_a_side_is_refused_rather_than_read_as_either() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pj = proj(tx, "bound");
+        worded_task(tx, "索引を張る", "", pj);
+
+        let run = |kind| {
+            search(
+                tx.conn(),
+                crate::reach::Reach::All,
+                SearchParams {
+                    text: "索引".to_string(),
+                    kind,
+                    filter_expr: Some("status:todo".to_string()),
+                    ..Default::default()
+                },
+            )
+        };
+        let refused = run(None).unwrap_err().to_string();
+        assert!(refused.contains("--kind task"), "the refusal names the way out: {refused}");
+        assert!(run(Some(SearchKind::Task)).is_ok(), "and naming the side is that way out");
+        // The other grammar is read as itself: `status:todo` is no key a decision has, so the same
+        // expression that just passed is an error on the other side rather than a quiet empty page.
+        assert!(run(Some(SearchKind::Decision)).is_err());
     }
 
     /// A pin is a line of the answer like any other, so the scope reaches it too — otherwise a search

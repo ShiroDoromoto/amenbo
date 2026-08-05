@@ -273,7 +273,11 @@ export interface SearchQuery {
   kind: SearchKind | null;
   /** Which face of the record the words are on — the other axis. `null` keeps every face. */
   face: SearchFace | null;
-  /** `task list`'s grammar, so a search carrying one is a search of tasks. Empty means no narrowing. */
+  /**
+   * The grammar of the side `kind` names — `task list`'s for a task, `decision list`'s for a decision
+   * (`AMB-D-563`). Empty means no narrowing; a narrowing with no `kind` beside it is refused, there
+   * being no vocabulary to read it in.
+   */
   filter: string;
   offset: number;
 }

@@ -2,7 +2,8 @@
 # carry the word, which is the question anyone holding half a memory of something actually asks — and
 # since words left the filter grammar, this is the only place they go. The line holds the five faces a
 # reader lands on (a title, a body, a remark on it, a label it was filed under, the name of what is
-# attached), the folding that decides what counts as a match at all, and the narrowings.
+# attached), the folding that decides what counts as a match at all, the narrowings, and what each row
+# says about where the record it points at stands.
 id: find-where-a-word-is-written
 title: A word leads to the places it is written — a title, a body, a comment, a label, an attachment — and the narrowings leave the rest out
 description: >
@@ -10,7 +11,9 @@ description: >
   write the first word into a decision as well. Then ask for each word and check the face it comes
   back on. What is under test is that the answer names the place: a search that returned the right
   record on the wrong face, or that quietly returned everything, reads as a green list either way, so
-  every arm names the face it expects and every narrowing is asserted from both sides.
+  every arm names the face it expects and every narrowing is asserted from both sides. The row is asked
+  one thing more — where the record it points at stands — because a place in work that is over is a
+  different answer from a place in work still to be taken, and the ref says neither.
 steps_cli:
   - type: action
     domain: task
@@ -267,6 +270,53 @@ steps_cli:
       kind: decision
       only_face: comment
       present: false
+
+  # Past where the words are, to what the record carrying them is. A row that says only the ref sends
+  # the reader off to `show` for the very thing they were about to ask — is this place work still to be
+  # taken, or work that is over — so both answers are asked for, and the decision is asked in its own
+  # vocabulary rather than the task's.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO TASK — the retention pass that already ran
+    as: ran
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: ran
+
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: ran
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: ran
+      standing: done
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: window
+      standing: todo
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      standing: proposed
 
   # `--filter` is the task list's own grammar, and it is task vocabulary: it narrows the task side,
   # and the decisions fall away rather than answering a question about a status they do not have.

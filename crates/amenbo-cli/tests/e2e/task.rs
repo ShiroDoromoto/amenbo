@@ -1038,3 +1038,59 @@ fn search_reaches_the_labels_and_what_is_attached() {
     cli.json(&["dimension", "unset", &labelled, "エリア", "配色", "--json"]);
     assert!(ids_for("配色").is_empty(), "an unset label is no longer one of the task's words");
 }
+
+/// What the hit row says about the record past its ref and its title (`AMB-D-567`): the reader asking
+/// where a word is written is also asking whether that place is work still to be taken or work that is
+/// over, and the answer arrives on a line of its own before the excerpt. Each side speaks its own
+/// vocabulary — a task carries a priority and what it is filed under, a decision carries neither.
+#[test]
+fn search_says_where_each_record_stands_before_the_excerpt() {
+    let cli = Cli::new();
+    let pid = cli.a_project();
+
+    let open = id_str(&cli.json(&[
+        "task", "add", "--project", &pid, "--title", "掃引の実装", "--priority", "high", "--json",
+    ])["task"]["id"]);
+    cli.finish_creating(&open);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "エリア", "--json"]);
+    cli.json(&["dimension", "value-add", "エリア", "--name", "実装", "--json"]);
+    cli.json(&["dimension", "set", &open, "エリア", "実装", "--json"]);
+
+    let over = id_str(
+        &cli.json(&["task", "add", "--project", &pid, "--title", "掃引の下ごしらえ", "--json"])["task"]["id"],
+    );
+    cli.finish_creating(&over);
+    cli.json(&["task", "done", &over, "--json"]);
+
+    let did = id_str(
+        &cli.json(&["decision", "add", "--project", &pid, "--title", "掃引を夜に回す", "--json"])["decision"]["id"],
+    );
+
+    // Scoped with `--project`, not the filter: the filter's grammar is task vocabulary, and a search
+    // carrying one drops the decision this row is about.
+    let (out, code) = cli.run(&["search", "掃引", "--project", &pid, "--limit", "100"]);
+    assert_eq!(code, 0, "the search ran: {out}");
+    // The line under each ref, read back by the record it belongs to.
+    let standing = |id_ref: &str| -> String {
+        let mut lines = out.lines().skip_while(|l| !l.contains(id_ref));
+        lines.next().unwrap_or_else(|| panic!("{id_ref} is among the hits:\n{out}"));
+        lines.next().expect("a row is followed by more lines").trim().to_string()
+    };
+    assert_eq!(standing(&format!("AMB-T-{open}")), "todo [high] · エリア=実装", "state, urgency and filing");
+    assert_eq!(standing(&format!("AMB-T-{over}")), "done", "work that is over says so, and has nothing else to say");
+    assert_eq!(standing(&format!("AMB-D-{did}")), "proposed", "a decision has a state and no more");
+
+    // The same standing, unabridged, for a caller that parses instead of reading.
+    let hit = cli.json(&["search", "掃引", "--project", &pid, "--limit", "100", "--json"])
+        ["hits"]
+        .as_array()
+        .expect("hits is an array")
+        .iter()
+        .find(|h| h["ref"] == format!("AMB-T-{open}"))
+        .expect("the open task is among the hits")
+        .clone();
+    assert_eq!(hit["standing"]["status"], "todo");
+    assert_eq!(hit["standing"]["priority"], "high");
+    assert_eq!(hit["standing"]["labels"][0]["axis"], "エリア");
+    assert_eq!(hit["standing"]["labels"][0]["value"], "実装");
+}

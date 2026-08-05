@@ -58,6 +58,16 @@ pub fn perf() -> Option<String> {
     var("AMENBO_PERF")
 }
 
+/// `NO_COLOR` — the cross-tool convention (no-color.org) for "do not emit ANSI escapes". It is the one
+/// variable here amenbo does not name itself, because that is the whole point of it: a person turns
+/// colour off once, for every tool they run, rather than per tool.
+///
+/// **Presence alone is the signal, whatever the value** — that is what the convention says, so an empty
+/// `NO_COLOR=` counts too. Hence `Option`, and no parsing: a caller asks `is_some()`.
+pub fn no_color() -> Option<String> {
+    var("NO_COLOR")
+}
+
 /// `AMENBO_UPDATE_CHECK` — the environment override for the update check (the static latest.json
 /// query). `0` / `off` / `false` / `no` **disable** it, overriding `config.update_check`: a hard kill
 /// switch for CI, for privacy, and for tests that must guarantee nothing ever leaves the machine.

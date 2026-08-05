@@ -13,8 +13,8 @@ pub struct Flags {
     pub json: bool,
     pub yes: bool,
     pub quiet: bool,
-    /// Reserved for colored output; nothing is colored yet.
-    #[allow(dead_code)]
+    /// The caller's `--no-color`. Read through [`Flags::color`], never on its own: it is one of the three
+    /// things that turn escapes off, and a site that asks only this one gets the other two wrong.
     pub no_color: bool,
     /// The facet of this invocation (human / ai), from `--actor` and nowhere else. `None` is **not a
     /// default standing in for one**: it means this command declared no facet, which only a command that
@@ -29,6 +29,21 @@ impl Flags {
     /// wrong line there fails loud instead of quietly stamping a facet nobody named.
     pub fn facet(&self) -> Result<amenbo_core::model::ActorKind, CliError> {
         self.actor.ok_or_else(CliError::facet_required)
+    }
+
+    /// May human output carry ANSI escapes? Three answers have to be no for it to be yes, and they are
+    /// gathered here so no caller decides on one of them alone.
+    ///
+    /// - `--no-color`, the caller saying so outright;
+    /// - `NO_COLOR` in the environment, the same thing said once for every tool the person runs;
+    /// - stdout not being a terminal, which is what a redirect and a pipe both look like — escapes there
+    ///   land in a file or in the next program's input, where nothing renders them.
+    ///
+    /// An escape is decoration and never content: everything a reader needs is in the characters, so this
+    /// answering `false` costs nothing but the emphasis. `--json` is not consulted, because the machine
+    /// face is built by [`print_json`] and never passes through here.
+    pub fn color(&self) -> bool {
+        !self.no_color && amenbo_core::env::no_color().is_none() && std::io::stdout().is_terminal()
     }
 }
 
@@ -368,6 +383,47 @@ pub fn human(flags: &Flags, line: impl AsRef<str>) {
     }
 }
 
+/// An excerpt with the places the words landed lit up, for a terminal that will render escapes.
+///
+/// **The ranges are taken as given and never re-derived here.** Which characters a term matches is the
+/// index's answer, folded once (`AMB-D-450`) and reported by the core as positions in this very string
+/// (`AMB-D-566`); a face matching again for itself would be a second definition of the same word. So this
+/// only ever slices: the ranges arrive sorted, disjoint and counted in **characters**, and the walk turns
+/// them into an alternation of plain and bright runs.
+///
+/// Bold is the emphasis, not a colour: the excerpt is one line among several on the row, a hue would ask
+/// the reader to know what it means, and weight reads the same on every theme and to a reader who sees no
+/// colour at all. `color = false` returns the excerpt untouched — the characters are the whole of the
+/// answer, and nothing is lost with the escapes.
+///
+/// A range reaching past the end is clamped rather than trusted, and one whose start is behind where the
+/// walk already stands is dropped: this is display code, and a bad pair should cost the emphasis, never a
+/// character of the text or a panic on a character boundary.
+pub fn highlight(snippet: &str, matches: &[amenbo_core::store_engine::search::MatchRange], color: bool) -> String {
+    const BOLD: &str = "\u{1b}[1m";
+    const PLAIN: &str = "\u{1b}[0m";
+    if !color || matches.is_empty() {
+        return snippet.to_string();
+    }
+    let chars: Vec<char> = snippet.chars().collect();
+    let mut out = String::with_capacity(snippet.len());
+    let mut at = 0usize;
+    for m in matches {
+        let start = m.start.max(at).min(chars.len());
+        let end = m.end.min(chars.len());
+        if end <= start {
+            continue;
+        }
+        out.extend(&chars[at..start]);
+        out.push_str(BOLD);
+        out.extend(&chars[start..end]);
+        out.push_str(PLAIN);
+        at = end;
+    }
+    out.extend(&chars[at..]);
+    out
+}
+
 /// Print an error to stderr and return the exit code.
 pub fn render_error(flags: &Flags, err: &CliError) -> i32 {
     if flags.json {
@@ -620,5 +676,49 @@ mod tests {
     fn body_hints_no_body_is_silent() {
         assert!(body_hints("").is_empty());
         assert!(body_hints("   \n  ").is_empty());
+    }
+
+    fn range(start: usize, end: usize) -> amenbo_core::store_engine::search::MatchRange {
+        amenbo_core::store_engine::search::MatchRange { start, end }
+    }
+
+    /// The ranges arrive as character positions, and the excerpt they point into is a person's prose —
+    /// so the walk has to count characters, not bytes. A search worth highlighting is routinely one
+    /// where they differ.
+    #[test]
+    fn highlight_counts_characters_and_not_bytes() {
+        let out = highlight("全文検索の索引を張る", &[range(2, 4)], true);
+        assert_eq!(out, "全文\u{1b}[1m検索\u{1b}[0mの索引を張る");
+    }
+
+    /// Two words, two runs, and the text between and around them intact. The ranges are the core's,
+    /// already sorted and disjoint, so the walk only alternates.
+    #[test]
+    fn highlight_lights_every_range_and_keeps_the_text_between() {
+        let out = highlight("alpha beta gamma", &[range(0, 5), range(11, 16)], true);
+        assert_eq!(out, "\u{1b}[1malpha\u{1b}[0m beta \u{1b}[1mgamma\u{1b}[0m");
+    }
+
+    /// Off, the excerpt comes back exactly as it went in — not "the same text with the escapes
+    /// stripped", which is a different promise and one an off-by-one could break.
+    #[test]
+    fn highlight_off_hands_the_excerpt_straight_back() {
+        let text = "全文検索の索引を張る";
+        assert_eq!(highlight(text, &[range(2, 4)], false), text);
+        assert_eq!(highlight(text, &[], true), text, "a face with none of the words is the routine case");
+    }
+
+    /// This is display code: a range that does not fit the excerpt costs the emphasis and nothing else.
+    /// Never a panic on a character boundary, and never a character of the text.
+    #[test]
+    fn highlight_survives_a_range_that_does_not_fit() {
+        assert_eq!(highlight("abc", &[range(1, 99)], true), "a\u{1b}[1mbc\u{1b}[0m", "past the end, clamped");
+        assert_eq!(highlight("abc", &[range(9, 99)], true), "abc", "wholly past the end, dropped");
+        assert_eq!(highlight("abc", &[range(2, 1)], true), "abc", "inverted, dropped");
+        assert_eq!(
+            highlight("abcdef", &[range(2, 4), range(1, 3)], true),
+            "ab\u{1b}[1mcd\u{1b}[0mef",
+            "a second range behind where the walk stands is dropped, and no text is lost with it"
+        );
     }
 }

@@ -32,8 +32,8 @@ use amenbo_core::{activity_log, ops, query, time, Store};
 
 use cli::*;
 use output::{
-    confirm, human, print_json, render_error, set_setup_report, warn_body, write_envelope,
-    CliError, CliErrorCode, Flags,
+    confirm, highlight, human, print_json, render_error, set_setup_report, warn_body,
+    write_envelope, CliError, CliErrorCode, Flags,
 };
 
 /// The effective project id picked by an explicit override (`--project`). It is a process-wide setting
@@ -2933,13 +2933,18 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 print_json(&result);
             } else {
                 human(flags, count_header(result.count, result.total_matched, "hit"));
+                // Asked once for the whole listing rather than per row: whether escapes render is a
+                // property of where the output is going, and it cannot change between two hits.
+                let color = flags.color();
                 for h in &result.hits {
                     // Where it landed, then what it is: the ref reads first because it is what the reader
                     // opens next. A comment says which one, since the ref alone names only the record.
                     let face = format!("{:?}", h.face).to_lowercase();
                     let at = h.comment.as_deref().map(|c| format!(" · {c}")).unwrap_or_default();
                     human(flags, format!("  [{face}] {} {}{at}", h.r#ref, h.title));
-                    human(flags, format!("      {}", h.snippet));
+                    // The excerpt says where the words are; this says where in the excerpt they are, which
+                    // is the question a two-word search leaves open (`AMB-D-566`).
+                    human(flags, format!("      {}", highlight(&h.snippet, &h.matches, color)));
                 }
             }
         }

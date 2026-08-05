@@ -371,6 +371,14 @@ impl Instructor {
                 }
                 format!("Open the task \"{}\" and set {}.", self.target_label(with), set.join(", "))
             }
+            // Hanging a file on a record. Where it goes is the whole of the instruction, because the
+            // screen keeps two ways in and they are not the same place: a record's own attachments have
+            // a section of their own on its pane, and a remark's fold into the button under it.
+            (Domain::Task, "attach") => format!(
+                "Open the task \"{}\" and attach a file named \"{}\" to it, from the attachments section on its pane.",
+                self.target_label(with),
+                file_named(with)?
+            ),
             (Domain::Decision, "create") => {
                 format!("Create a decision titled \"{}\".", req(with, "title")?)
             }
@@ -381,6 +389,15 @@ impl Instructor {
                 "Open the decision \"{}\" and add the comment \"{}\".",
                 self.target_label(with),
                 req(with, "text")?
+            ),
+            // The same bytes hung one level down, and the reason the two moves are written apart: a
+            // remark carries no section, so its way in is the button standing under it. The remark is
+            // named by what it says, which is what an operator has to read it off the timeline by —
+            // nothing else on screen tells one remark from another.
+            (Domain::Comment, "attach") => format!(
+                "Find the comment \"{}\" and attach a file named \"{}\" to it, with the button for that under the remark itself.",
+                self.target_label(with),
+                file_named(with)?
             ),
             // The words go into the box, and what they do to the board is the shot after this one. It is
             // written as a move rather than folded into the assert for the reason the other moves here
@@ -851,9 +868,29 @@ fn arg_str<'a>(with: &'a Args, key: &str) -> Option<&'a str> {
 
 /// The words on screen for what an action made — what a later step's `target:` has to be read back
 /// as. A record is written under a `title`, and the two things that hold records (a project, a
-/// dimension's axis) under a `name`; an action that made neither has no label to offer.
+/// dimension's axis) under a `name`; a remark is written under neither, and what it says is the whole
+/// of how an operator picks it out of a timeline, so its `text` answers for it. An action that wrote
+/// none of the three has no label to offer.
 fn label(with: &Args) -> Option<&str> {
-    arg_str(with, "title").or_else(|| arg_str(with, "name"))
+    arg_str(with, "title").or_else(|| arg_str(with, "name")).or_else(|| arg_str(with, "text"))
+}
+
+/// The name the file an attach hangs has to carry, which is the whole of what the road needs of it:
+/// what a search reaches of an attachment is what it is called, never its bytes.
+///
+/// The file itself is the operator's to bring, and that is the one thing this move cannot be handed.
+/// Both ways in on screen — the picker and the drop — read the disk the operator is sitting at, and
+/// nothing a run lays down is anywhere either of them is pointed. A link is turned away for the other
+/// half of the same fact: those two ways in take bytes, and the screen offers no face that takes an
+/// address.
+fn file_named(with: &Args) -> Result<&str, String> {
+    if with.contains_key("url") {
+        return Err(
+            "`url` hangs a link, and the screen has no way in for one — the picker and the drop both take a file"
+                .to_string(),
+        );
+    }
+    req(with, "file")
 }
 
 fn req<'a>(with: &'a Args, key: &str) -> Result<&'a str, String> {
@@ -1491,6 +1528,75 @@ steps_gui:
         ins.render(&steps[0]).unwrap();
         let err = ins.render(&steps[1]).expect_err("a place off the list has no instruction");
         assert!(err.contains("project"), "got: {err}");
+    }
+
+    /// Hanging a file on a record and on a remark on one. Both lines say where on screen the file goes,
+    /// because that is the whole of what separates them — and the remark is named by what it says,
+    /// since a timeline offers nothing else to pick one out by.
+    #[test]
+    fn a_file_is_hung_where_the_screen_keeps_the_way_in_for_it() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: task
+    op: comment
+    with: { target: seed, text: the sweep runs nightly }
+    as: remark
+  - type: action
+    domain: task
+    op: attach
+    with: { target: seed, file: throughput.log }
+  - type: action
+    domain: comment
+    op: attach
+    with: { target: remark, file: handover.log }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        for step in &steps[..2] {
+            ins.render(step).unwrap();
+        }
+        let on_record = ins.render(&steps[2]).unwrap();
+        assert!(on_record.contains("the task \"SEED\""), "got: {on_record}");
+        assert!(on_record.contains("attachments section on its pane"), "got: {on_record}");
+        let on_remark = ins.render(&steps[3]).unwrap();
+        assert!(on_remark.contains("the comment \"the sweep runs nightly\""), "got: {on_remark}");
+        assert!(on_remark.contains("under the remark itself"), "got: {on_remark}");
+    }
+
+    /// A link named where a file belongs. The screen's two ways in both take bytes off a disk, so there
+    /// is nothing to instruct — and an operator handed a line about a URL would go looking for a face
+    /// the app does not have.
+    #[test]
+    fn a_link_has_no_way_in_on_the_screen_and_is_refused() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: task
+    op: attach
+    with: { target: seed, url: "https://example.com/spec" }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        ins.render(&steps[0]).unwrap();
+        let err = ins.render(&steps[1]).expect_err("a link is not something this screen hangs");
+        assert!(err.contains("url") && err.contains("picker"), "got: {err}");
     }
 
     /// The settings form: a choice is answered by ticking and saving, declined by clearing every box,

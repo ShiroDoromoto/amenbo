@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from "react";
-import { agoLabel, errText, t, tf } from "../core/i18n";
+import { PriorityDot } from "../components/atoms";
+import { agoLabel, errText, isPriority, isStatus, statusLabel, t, tf } from "../core/i18n";
 import { parseRef } from "../core/idref";
 import { SEARCH_PAGE, useSearch, type SearchFace, type SearchHit, type SearchKind } from "../core/reads";
 import { asTyped } from "../core/keys";
@@ -270,6 +271,7 @@ function HitRow({
           )}{" "}
           {hit.title}
         </div>
+        <Standing hit={hit} />
         <div className="srch__snippet"><Excerpt snippet={hit.snippet} matches={hit.matches} /></div>
         <div className="feed__meta">
           {/* The two axes in words, in the order they are asked: which thing, then where on it. A hit on
@@ -281,6 +283,50 @@ function HitRow({
           <span>{agoLabel(hit.at)}</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The record's state in the words of the side it is on. The wire carries a bare string with no union left
+ * on it, so `task` is what says which of the two vocabularies reads it — the same job `kind` does for
+ * everything else the two sides share on a hit. A value neither dictionary has a word for is shown as it
+ * came, rather than letting a key escape onto the screen.
+ */
+function statusWord(status: string, task: boolean): string {
+  if (task) return isStatus(status) ? statusLabel(status) : status;
+  const key = `dec.status.${status}`;
+  const word = t(key);
+  return word === key ? status : word;
+}
+
+/**
+ * Where the record a hit points at stands (`AMB-D-567`), between the ref and the excerpt — where the CLI
+ * puts it too, so the same reading order holds across the two surfaces.
+ *
+ * Each side says what it has: a task its status, its priority and what it is filed under, a decision its
+ * status, which is all there is. The placements are written `axis=value`, the way the narrowing box above
+ * takes them, so a row that came back on 🏷 can be typed straight back in as `dim:axis=value`.
+ *
+ * **The line clips rather than wraps.** A task can be filed on any number of axes, and a row that grew
+ * with them would push the excerpt — what the reader came here for — down the page a hit at a time.
+ *
+ * Nothing is drawn at all when the read that fills this in came back empty: the words really are written
+ * there, so the row stays, but a chip claiming no state would say less than saying nothing.
+ */
+function Standing({ hit }: { hit: SearchHit }) {
+  if (!hit.standing) return null;
+  const { status, priority, labels } = hit.standing;
+  const task = sideOf(hit) === "task";
+  return (
+    <div className="srch__standing">
+      <span className="chip">{statusWord(status, task)}</span>
+      {priority !== undefined && isPriority(priority) && <PriorityDot priority={priority} />}
+      {labels.map((l) => (
+        <span key={`${l.axis}=${l.value}`} className="chip srch__filed">
+          {FACE_GLYPH.label} {l.axis}={l.value}
+        </span>
+      ))}
     </div>
   );
 }

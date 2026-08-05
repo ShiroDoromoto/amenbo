@@ -605,6 +605,28 @@ steps_gui:
       filter: "status:proposed"
       face: title
 
+  # What the row says about the record it points at, past the ref and the title. Each side is asked for
+  # its own vocabulary — a task's state is not a decision's — because the row reads them out of two
+  # dictionaries and a build that crossed them would still draw a line here. The CLI walked the same
+  # ground above; this is the half only an eye can close, the row being the screen's own.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: window
+      face: title
+      standing: todo
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      face: title
+      standing: proposed
+
   # The fourth control, and the only one the screen offers as a choice rather than as an expression: a
   # project is one finite list of names, the same for both sides. A second project is raised to have
   # something to choose between, and a record of each kind is written into it — the board and the

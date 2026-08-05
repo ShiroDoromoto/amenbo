@@ -120,7 +120,7 @@ pub(crate) fn judge_found(
     // record to be there, so a row that is missing the state fails as loudly as a wrong one.
     if let Some(want) = with.get("standing").and_then(|v| v.as_str()) {
         let said: Vec<&str> = mine.iter().filter_map(|h| h["standing"]["status"].as_str()).collect();
-        let says = said.iter().any(|s| *s == want);
+        let says = said.contains(&want);
         return Ok(Outcome::assert(
             says,
             format!(

@@ -42,7 +42,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
 });
 
 import { SearchScreen } from "./SearchScreen";
-import { agoLabel, t } from "../core/i18n";
+import { agoLabel, priorityLabel, statusLabel, t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -287,6 +287,42 @@ describe("the search screen", () => {
       "AMB-DC-8",
       agoLabel(AT),
     ]);
+  });
+
+  it("says where each record stands, in the words of the side it is on", () => {
+    hoisted.answer = {
+      hits: [
+        hit({
+          ref: "AMB-T-1",
+          standing: {
+            status: "in_progress",
+            priority: "high",
+            labels: [{ axis: "Area", value: "core" }, { axis: "Phase", value: "second" }],
+          },
+        }),
+        hit({ ref: "AMB-D-2", standing: { status: "accepted", labels: [] } }),
+        hit({ ref: "AMB-T-3" }),
+      ],
+      totalMatched: 3,
+    };
+    render();
+    type(inputs()[0], "search");
+    press(button(t("search.run")));
+    const standing = (i: number) => rows()[i].querySelector(".srch__standing");
+    // A task says all three things it has. `in_progress` arrives as a bare string with no union left on
+    // it, and the row still reads it as a status rather than printing the wire word.
+    expect(standing(0)!.textContent).toContain(statusLabel("in_progress"));
+    expect(standing(0)!.textContent).toContain(priorityLabel("high"));
+    // The placements are written the way the narrowing box takes them, so a row that came back on a
+    // label can be typed straight back in as `dim:Area=core`.
+    expect(standing(0)!.textContent).toContain("Area=core");
+    expect(standing(0)!.textContent).toContain("Phase=second");
+    // The other side reads the same field from its own dictionary, and has only the one thing to say.
+    expect(standing(1)!.textContent).toContain(t("dec.status.accepted"));
+    // A record that stopped being readable between the page and the read draws no line at all — and the
+    // row stays, because the words really are written there.
+    expect(standing(2)).toBeNull();
+    expect(rows()).toHaveLength(3);
   });
 
   it("says a search could not run rather than showing it as nothing matched", () => {

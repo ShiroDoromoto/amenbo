@@ -523,3 +523,55 @@ fn search_narrows_by_face_as_an_axis_apart_from_the_side() {
     assert_eq!(code, 1, "an unknown face is an error: {err}");
     assert!(err.contains("notes"), "the message names what was asked for: {err}");
 }
+
+/// Several words and `--kind` together (`AMB-T-2750`). Two words are what puts the record-level question
+/// into the statement, and `--kind` is what takes one side's answer to it away — the side the caller
+/// narrowed off must then be asked nothing, or the search dies on a set nobody built. One word alone
+/// never asks, and no `--kind` builds both, which is why the pair is its own case.
+#[test]
+fn search_narrows_by_side_while_several_words_ask_the_record() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "二語で絞るPJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    let did = id_str(
+        &cli.json(&["decision", "add", "--project", &pid, "--title", "遠泳の決定", "--json"])["decision"]["id"],
+    );
+    cli.json(&["decision", "comment", "add", &did, "--text", "帆走はここで測る", "--json"]);
+    let tid = id_str(
+        &cli.json(&["task", "add", "--project", &pid, "--title", "遠泳を書く", "--json"])["task"]["id"],
+    );
+    cli.finish_creating(&tid);
+    cli.json(&["comment", "add", &tid, "--text", "帆走はここで走る", "--json"]);
+
+    let refs = |narrowing: &[&str]| -> Vec<String> {
+        let mut args = vec!["search", "遠泳", "帆走"];
+        args.extend_from_slice(narrowing);
+        args.extend_from_slice(&["--limit", "100", "--json"]);
+        let mut said: Vec<String> = cli.json(&args)["hits"]
+            .as_array()
+            .expect("hits is an array")
+            .iter()
+            .map(|h| h["ref"].as_str().expect("a hit names its record").to_string())
+            .collect();
+        said.sort();
+        said.dedup();
+        said
+    };
+
+    assert_eq!(
+        refs(&["--kind", "task"]),
+        vec![format!("AMB-T-{tid}")],
+        "two words on the task side alone, where the decision's set was never built"
+    );
+    assert_eq!(
+        refs(&["--kind", "decision"]),
+        vec![format!("AMB-D-{did}")],
+        "and the same the other way round"
+    );
+    assert_eq!(
+        refs(&[]),
+        vec![format!("AMB-D-{did}"), format!("AMB-T-{tid}")],
+        "with neither side narrowed off, both records still answer both words"
+    );
+}

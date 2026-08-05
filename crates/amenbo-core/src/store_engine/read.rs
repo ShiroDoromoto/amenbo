@@ -685,6 +685,78 @@ fn dimension_pred(f: &crate::query::DimensionFilter) -> Pred {
     exists.negated_if(resolved.value_ids.is_none())
 }
 
+/// [`filter_preds`]'s twin on the other side: `decision list`'s own keys, said in SQL so a search can be
+/// narrowed by them (`AMB-D-563`). `decision list` itself matches them in Rust over a bounded page
+/// ([`crate::query::DecisionFilter::matches`]) — it can, having read the rows already; a search cuts its
+/// page in SQL, so it needs them as predicates. The two must answer alike, which is why each arm below
+/// names the line of `matches` it restates.
+///
+/// `text` is not among them: words are not a filter key on either side (`AMB-D-449`), and where a search
+/// is concerned they are the search itself.
+fn decision_filter_preds(f: &crate::query::DecisionFilter) -> Vec<Pred> {
+    let mut preds: Vec<Pred> = Vec::new();
+
+    if let Some(status) = f.status {
+        preds.push(Pred::eq(DEC.status, status.as_str()));
+    }
+    if let Some(want) = f.superseded {
+        // Currency is the edges' to say, never a column (`AMB-D-410`) — the very predicate the reads that
+        // project `current` stand on, so the two cannot disagree about which decisions are still standing.
+        preds.push(superseded(DEC).negated_if(!want));
+    }
+    debug_assert!(
+        f.project_ref.is_none(),
+        "DecisionFilter::resolve was not run (`project:` is silently dropped)"
+    );
+    if let Some(project_id) = f.project_id {
+        preds.push(Pred::eq(DEC.project_id, project_id));
+    }
+    if let Some(nf) = &f.number {
+        // A `T-` typed value names a task, so it matches no decision; anything else matches the decision
+        // id (the id **is** the number). Mirrors `NumberFilter::matches_decision`.
+        preds.push(if nf.require_decision == Some(false) {
+            Pred::never()
+        } else {
+            Pred::eq(DEC.id, nf.number as i64)
+        });
+    }
+    if let Some(task) = f.task {
+        // `task:` — the decisions a task rests on, walked through the link (live link, live task), as an
+        // EXISTS so it seeks the link index rather than scanning the links per decision. The mirror of
+        // `decision:` on the task side.
+        const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
+        const TL: col::task::Cols = col::task::of("tl");
+
+        preds.push(
+            Exists::over(L.table)
+                .join(TL.table, same(TL.id, L.task_id))
+                .filter(same(L.decision_id, DEC.id))
+                .filter(Pred::eq(L.task_id, i64::from(task)))
+                .pred(),
+        );
+    }
+    // Acceptance time, at day granularity with the named day included at each end. The stored instant is
+    // UTC text of one fixed width, so the cut is lexicographic — and it has to be the instant the named
+    // day begins *here* (`time::local_day_start_utc`), or the day would be UTC's and so the wrong hours
+    // everywhere else. A decision never accepted carries no instant and matches neither direction, which
+    // `is_not_null` says outright rather than leaving to how NULL compares.
+    if let Some(d) = f.decided_after {
+        preds.push(Pred::is_not_null(DEC.decided_at).and(Pred::cmp(
+            DEC.decided_at,
+            ">=",
+            crate::time::local_day_start_utc(d).to_rfc3339_z(),
+        )));
+    }
+    if let Some(d) = f.decided_before {
+        preds.push(Pred::is_not_null(DEC.decided_at).and(Pred::cmp(
+            DEC.decided_at,
+            "<",
+            crate::time::local_day_start_utc(d + Duration::days(1)).to_rfc3339_z(),
+        )));
+    }
+    preds
+}
+
 fn assignee_pred(a: &AssigneeFilter) -> Pred {
     match a {
         AssigneeFilter::None => Pred::is_null(T.assignee_kind),
@@ -1656,10 +1728,11 @@ pub struct SearchQuery<'a> {
     /// never everything. It narrows **both** sides, because a project is an axis a task and a decision
     /// carry alike (`AMB-D-564`).
     pub project_id: Option<i64>,
-    /// The structural narrowing, in the grammar `task list` speaks. It is a **task** vocabulary, so a
-    /// search carrying one is a search of tasks: the decision arms drop out rather than quietly ignoring
-    /// a `status:todo` no decision could answer.
-    pub filter: Option<&'a Filter>,
+    /// The structural narrowing, already read in the grammar of the side it was asked of
+    /// ([`crate::query::SearchNarrowing`], `AMB-D-563`) — which is why it narrows one side and says
+    /// nothing about the other. The other side is taken out by `kind`, not by this: the caller had to
+    /// name the side to be given a vocabulary at all, so the arms are already gated when this is here.
+    pub filter: Option<&'a crate::query::SearchNarrowing>,
     /// Today, for the filter's day-relative keys (`due:today` and friends).
     pub today: NaiveDate,
     /// Which record the words are on, and which face of it — the two axes, kept apart ([`kept_by_axes`]).
@@ -1685,9 +1758,10 @@ pub struct SearchQuery<'a> {
 ///
 /// **What narrows it.** The reach, first and always — folded into `project_id` before it gets here. Then
 /// the caller's own: `project_id` again where the caller named one, which narrows both sides alike; a
-/// structural `filter`, which is the very predicate `task list` narrows by and therefore speaks of tasks
-/// alone; and the two axes — `kind`, which record the words are on, and `face`, which face of it — which
-/// between them keep the arms that were asked for ([`kept_by_axes`]).
+/// structural `filter`, which lands on the side whose grammar it was written in and is the very predicate
+/// that side's own listing narrows by ([`filter_preds`] / [`decision_filter_preds`]); and the two axes —
+/// `kind`, which record the words are on, and `face`, which face of it — which between them keep the arms
+/// that were asked for ([`kept_by_axes`]).
 ///
 /// **The order arrives with the rows.** The page is cut in SQL, so the sort cannot be something the
 /// reader applies to what it was handed. The compound query names its order by position, which is the
@@ -1722,11 +1796,11 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     let asked = asked.as_slice();
 
     // Everything asked of one side, folded once and cloned into every arm that owns that side: the
-    // record-level AND, the reach, and — on the task side — the structural filter, which is the very
-    // predicate `task list` narrows by (`filter_preds`), so the two reads cannot come to read one
-    // expression differently.
-    let task_filter = q.filter.map(|f| {
-        filter_preds(&TaskQuery {
+    // record-level AND, the reach, and the structural narrowing, which lands on the side whose grammar
+    // it was written in and is the very predicate that side's own listing narrows by (`filter_preds` /
+    // `decision_filter_preds`), so the two reads cannot come to read one expression differently.
+    let task_filter = match q.filter {
+        Some(crate::query::SearchNarrowing::Task(f)) => Some(filter_preds(&TaskQuery {
             reach: q.reach,
             project_id,
             filter: f,
@@ -1734,8 +1808,9 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
             today: q.today,
             limit: None,
             offset: None,
-        })
-    });
+        })),
+        _ => None,
+    };
     let task_side = Pred::all(
         [
             Pred::all(asked.iter().map(|t| task_text_term(*t))),
@@ -1745,20 +1820,19 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         .into_iter()
         .flatten(),
     );
-    // A filter is task vocabulary, so a search carrying one is a search of tasks. Said as a predicate no
-    // row meets rather than by dropping the arms, so the row shape stays the arms' to declare.
-    let decision_side = if q.filter.is_some() {
-        Some(Pred::never())
-    } else {
-        Pred::all(
-            [
-                Pred::all(asked.iter().map(|t| decision_text_term(*t))),
-                project_id.map(|pid| Pred::eq(DEC.project_id, pid)),
-            ]
-            .into_iter()
-            .flatten(),
-        )
+    let decision_filter = match q.filter {
+        Some(crate::query::SearchNarrowing::Decision(f)) => Some(decision_filter_preds(f)),
+        _ => None,
     };
+    let decision_side = Pred::all(
+        [
+            Pred::all(asked.iter().map(|t| decision_text_term(*t))),
+            project_id.map(|pid| Pred::eq(DEC.project_id, pid)),
+            decision_filter.and_then(Pred::all),
+        ]
+        .into_iter()
+        .flatten(),
+    );
     let gate = |face: HitFace, owner_kind: &str| {
         (!kept_by_axes(q.kind, q.face, owner_kind, face)).then(Pred::never)
     };
@@ -5688,6 +5762,12 @@ mod tests {
         assert_eq!(ids("   "), vec![1, 2, 3], "no term is no constraint");
     }
 
+    /// When the fixture's decision was accepted. Named rather than inlined because the day-granularity
+    /// filters are asserted against the day *this instant falls on where the test runs*, which is the
+    /// same reading the filter makes — an instant compared against a hard-coded day would pass in one
+    /// zone and fail in another.
+    const DECIDED_AT: &str = "2026-07-05T00:00:00Z";
+
     /// A store the hit-level search reads: one word written on every face there is — a task's title and
     /// notes, a comment on it, a decision's title, a label another task was placed on, and the name of a
     /// file attached to that task — plus one task in another project, for the reach.
@@ -5736,6 +5816,9 @@ mod tests {
             ],
         )
         .unwrap();
+        // Status and acceptance instant are written out for the reason the tasks' status is: the decision
+        // grammar reads them, and a record raised field by field holds the column's default until
+        // something fills it.
         e.put_record(
             "decision",
             1,
@@ -5743,6 +5826,8 @@ mod tests {
                 ("project_id", Value::Integer(1)),
                 ("title", text("索引を退役させる")),
                 ("body", text("読み手がいない")),
+                ("status", text("accepted")),
+                ("decided_at", text(DECIDED_AT)),
                 at("2026-07-05T00:00:00Z"),
             ],
         )
@@ -5813,6 +5898,19 @@ mod tests {
             limit: None,
             offset: 0,
         }
+    }
+
+    /// A narrowing read in one grammar or the other — what the entry point hands the read once the
+    /// caller has named the side (`AMB-D-563`). Neither expression here carries a `project:`, so neither
+    /// needs the resolve step the entry point runs.
+    fn task_narrowing(expr: &str, today: NaiveDate) -> crate::query::SearchNarrowing {
+        crate::query::SearchNarrowing::Task(Filter::parse(expr, today).unwrap())
+    }
+
+    fn decision_narrowing(expr: &str, today: NaiveDate) -> crate::query::SearchNarrowing {
+        crate::query::SearchNarrowing::Decision(
+            crate::query::DecisionFilter::parse(expr, today).unwrap(),
+        )
     }
 
     /// The total, and the hits in the order they come back.
@@ -5980,24 +6078,75 @@ mod tests {
         );
     }
 
-    /// A structural filter is task vocabulary, so it narrows the task side **and** takes the decisions out
-    /// — a decision has no `status:todo` to answer, and leaving its faces in would answer a question nobody
-    /// asked.
+    /// A narrowing written in the task grammar lands on the task side. What takes the decisions out is
+    /// the `kind` the caller had to name to be given that grammar at all (`AMB-D-563`) — never the filter
+    /// quietly standing in for one.
     #[test]
-    fn a_filter_narrows_the_task_side_and_drops_the_decisions() {
+    fn a_task_narrowing_lands_on_the_task_side() {
         let e = search_store();
         let t = search::terms("索引");
         let today = crate::time::today();
-        let filter = Filter::parse("status:in_progress", today).unwrap();
+        let ask_with = |f: &crate::query::SearchNarrowing| {
+            found(
+                &e,
+                &SearchQuery {
+                    filter: Some(f),
+                    kind: Some(crate::query::SearchKind::Task),
+                    ..ask(&t)
+                },
+            )
+            .1
+        };
+        let none = task_narrowing("status:in_progress", today);
         assert!(
-            found(&e, &SearchQuery { filter: Some(&filter), ..ask(&t) }).1.is_empty(),
+            ask_with(&none).is_empty(),
             "no task is in progress in the fixture, and the decision does not stand in for one"
         );
-        let filter = Filter::parse("status:todo", today).unwrap();
+        let all = task_narrowing("status:todo", today);
         assert_eq!(
-            found(&e, &SearchQuery { filter: Some(&filter), ..ask(&t) }).1,
+            ask_with(&all),
             vec!["Title AMB-T-1", "Body AMB-T-1", "Comment AMB-T-1 #5", "Label AMB-T-2", "Attachment AMB-T-2"],
         );
+    }
+
+    /// The other grammar, on the other side: `decision list`'s keys narrow the decision arms, which is
+    /// what a search of decisions could not be asked before (`AMB-D-563`). The day-granularity arms are
+    /// asserted against the day the fixture's instant falls on *here*, since that is the reading the
+    /// filter makes.
+    #[test]
+    fn a_decision_narrowing_lands_on_the_decision_side() {
+        let e = search_store();
+        let t = search::terms("索引");
+        let today = crate::time::today();
+        let ask_with = |expr: &str| {
+            let f = decision_narrowing(expr, today);
+            found(
+                &e,
+                &SearchQuery {
+                    filter: Some(&f),
+                    kind: Some(crate::query::SearchKind::Decision),
+                    ..ask(&t)
+                },
+            )
+            .1
+        };
+        assert_eq!(ask_with("status:accepted"), vec!["Title AMB-D-1"]);
+        assert!(ask_with("status:proposed").is_empty(), "the fixture's decision was accepted");
+        assert!(ask_with("superseded:yes").is_empty(), "nothing overturned it");
+        assert_eq!(ask_with("superseded:no"), vec!["Title AMB-D-1"]);
+        assert_eq!(ask_with("number:1"), vec!["Title AMB-D-1"], "the id is the number");
+        assert!(ask_with("number:T-1").is_empty(), "a task-typed number names no decision");
+        assert!(ask_with("task:1").is_empty(), "no task links to it in the fixture");
+
+        let decided = crate::time::Timestamp::parse_rfc3339(DECIDED_AT).unwrap().local_date();
+        let day = |d: chrono::NaiveDate| d.to_string();
+        assert_eq!(ask_with(&format!("decided_after:{}", day(decided))), vec!["Title AMB-D-1"]);
+        assert_eq!(ask_with(&format!("decided_before:{}", day(decided))), vec!["Title AMB-D-1"]);
+        assert!(
+            ask_with(&format!("decided_after:{}", day(decided + Duration::days(1)))).is_empty(),
+            "the day it was accepted on is included at each end, and the day after is past it"
+        );
+        assert!(ask_with(&format!("decided_before:{}", day(decided - Duration::days(1)))).is_empty());
     }
 
     /// No words is not "no constraint" here, the way it is in a filter: every face of every record is not

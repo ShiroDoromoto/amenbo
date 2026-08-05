@@ -328,6 +328,11 @@ const ui = {
   "search.face.title": "Title", "search.face.body": "Body", "search.face.comment": "Comment",
   // A label hit is the name of a category or of one of its values, which is what the GUI calls a dimension.
   "search.face.label": "Category", "search.face.attachment": "Attachment",
+  // What the words were found ON — the record, or a comment on it, on either side. The other axis from
+  // `search.face.*`, and singular where the `search.kind.*` chips are plural: a chip narrows a set, this
+  // names one hit.
+  "search.on.task": "Task", "search.on.taskComment": "Comment on a task",
+  "search.on.decision": "Decision", "search.on.decisionComment": "Comment on a decision",
   "commands.note": "Full command reference (from agent --json · read-only)",
   "commands.search": "Search commands", "commands.empty": "No commands", "commands.loading": "Loading…",
   "commands.other": "Other", "commands.required": "required", "commands.examples": "Examples",

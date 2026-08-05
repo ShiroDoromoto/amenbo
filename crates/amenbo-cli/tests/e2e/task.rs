@@ -941,7 +941,7 @@ fn search_reaches_every_face_of_a_task_and_folds_the_spellings() {
     // task, so the refs are folded back to one id apiece.
     let ids_for = |term: &str| -> Vec<String> {
         let mut ids: Vec<String> = cli.json(&[
-            "search", term, "--filter", &format!("project:{pid}"), "--limit", "100", "--json",
+            "search", term, "--project", &pid, "--limit", "100", "--json",
         ])["hits"]
             .as_array()
             .expect("hits is an array")
@@ -1009,7 +1009,7 @@ fn search_reaches_the_labels_and_what_is_attached() {
     // task, so the refs are folded back to one id apiece.
     let ids_for = |term: &str| -> Vec<String> {
         let mut ids: Vec<String> = cli.json(&[
-            "search", term, "--filter", &format!("project:{pid}"), "--limit", "100", "--json",
+            "search", term, "--project", &pid, "--limit", "100", "--json",
         ])["hits"]
             .as_array()
             .expect("hits is an array")

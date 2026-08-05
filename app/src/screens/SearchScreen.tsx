@@ -147,6 +147,33 @@ const FACE_GLYPH: Record<SearchFace, string> = {
 };
 
 /**
+ * The mark for the side a hit's record is on, drawn **beside** the face's rather than folded into it
+ * (`AMB-D-565`). Which record and which of its faces are two questions, and one emoji answering both is
+ * what left the side legible only in the ref — where a reader had to spell `AMB-T-` out to find it.
+ *
+ * `⚖` is the decision's mark everywhere else on the screen, so it is the decision's here too.
+ */
+const KIND_GLYPH = { task: "☑", decision: "⚖" } as const;
+
+/** Which side a hit is on. The wire carries a bare string, and everything but `task` is the other side. */
+function sideOf(hit: SearchHit): keyof typeof KIND_GLYPH {
+  return hit.kind === "task" ? "task" : "decision";
+}
+
+/**
+ * What the words were found on, as one of the four things a hit can be (`AMB-D-565`): the record itself
+ * or a remark on it, on either side.
+ *
+ * An attachment hangs off whichever of the two it was put on, so this is also what tells "attached to the
+ * record" from "attached to a remark" — the target says which thing, and the face says it is an
+ * attachment.
+ */
+function targetKey(hit: SearchHit): string {
+  const side = sideOf(hit);
+  return `search.on.${hit.comment ? `${side}Comment` : side}`;
+}
+
+/**
  * One place the words are written. The ref reads first because it is what the reader opens next; the
  * excerpt sits under it, and a comment ref says which remark when the hit is not on the record's own
  * faces.
@@ -168,7 +195,10 @@ function HitRow({
     : undefined;
   return (
     <div className="feed__item">
-      <span className="srch__face" title={t(`search.face.${hit.face}`)}>{FACE_GLYPH[hit.face]}</span>
+      <span className="srch__face">
+        <span title={t(targetKey(hit))}>{KIND_GLYPH[sideOf(hit)]}</span>
+        <span title={t(`search.face.${hit.face}`)}>{FACE_GLYPH[hit.face]}</span>
+      </span>
       <div className="feed__body">
         <div className="feed__line">
           {open ? (
@@ -178,13 +208,49 @@ function HitRow({
           )}{" "}
           {hit.title}
         </div>
-        <div className="srch__snippet">{hit.snippet}</div>
+        <div className="srch__snippet"><Excerpt snippet={hit.snippet} matches={hit.matches} /></div>
         <div className="feed__meta">
-          <span>{t(`search.face.${hit.face}`)}</span>
+          {/* The two axes in words, in the order they are asked: which thing, then where on it. A hit on
+              a remark's own text needs no second word — the target already said "remark", and repeating
+              it as the face is what made one word stand for two axes in the first place. */}
+          <span>{t(targetKey(hit))}</span>
+          {hit.face !== "comment" && <span>{t(`search.face.${hit.face}`)}</span>}
           {hit.comment && <span>{hit.comment}</span>}
           <span>{agoLabel(hit.at)}</span>
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * The excerpt, with the runs the words landed on marked.
+ *
+ * **The ranges are taken as given and never re-derived here** (`AMB-D-566`). Deciding which characters a
+ * term matches takes the folding the index already applied once (NFKC, case, kana), and a screen matching
+ * again for itself would be a second answer to what a word matches — so the core says where, and this only
+ * slices. `<mark>` is the element for it: relevance to what the reader asked, which is exactly what a hit
+ * is.
+ *
+ * The positions are counted in **characters**, so the split is `Array.from` and not `snippet[i]` — an
+ * excerpt is a person's prose, and indexing would cut a surrogate pair in half and draw the wreckage.
+ *
+ * A range that does not fit the excerpt is skipped rather than trusted: this is display, and a bad pair
+ * should cost the emphasis, never a character of the text.
+ */
+function Excerpt({ snippet, matches }: { snippet: string; matches: SearchHit["matches"] }) {
+  if (matches.length === 0) return <>{snippet}</>;
+  const chars = Array.from(snippet);
+  const parts: React.ReactNode[] = [];
+  let at = 0;
+  matches.forEach((m, i) => {
+    const start = Math.min(Math.max(m.start, at), chars.length);
+    const end = Math.min(m.end, chars.length);
+    if (end <= start) return;
+    if (start > at) parts.push(chars.slice(at, start).join(""));
+    parts.push(<mark key={i}>{chars.slice(start, end).join("")}</mark>);
+    at = end;
+  });
+  if (at < chars.length) parts.push(chars.slice(at).join(""));
+  return <>{parts}</>;
 }

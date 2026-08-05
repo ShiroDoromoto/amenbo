@@ -2006,16 +2006,15 @@ impl SearchSort {
     }
 }
 
-/// Which hits a search keeps — three narrowings, not a partition. Two of them name **whose** words they
-/// are and the third **which face**, because that is how the three are asked for.
+/// Which record a hit is on — one of the two axes a search narrows by (`AMB-D-562`). It says **whose**
+/// words they are and nothing about where on the record they sit; that is the face's to say ([`HitFace`]).
+/// Left unnamed it keeps both sides.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SearchKind {
     /// The words on a task: its own faces, its comments, its labels, what is attached to it.
     Task,
     /// The words on a decision, the same way.
     Decision,
-    /// The words in a comment, on either side.
-    Comment,
 }
 
 impl SearchKind {
@@ -2024,9 +2023,8 @@ impl SearchKind {
         match value.trim() {
             "task" => Ok(Self::Task),
             "decision" => Ok(Self::Decision),
-            "comment" => Ok(Self::Comment),
             other => Err(Error::invalid(format!(
-                "unknown kind '{other}' (task/decision/comment — the words on a task, on a decision, or in a comment)"
+                "unknown kind '{other}' (task/decision — which record the words are on; which face of it is the other axis)"
             ))),
         }
     }
@@ -2036,12 +2034,39 @@ impl SearchKind {
         match self {
             Self::Task => "task",
             Self::Decision => "decision",
-            Self::Comment => "comment",
         }
     }
 }
 
 pub use crate::store_engine::search::HitFace;
+
+impl HitFace {
+    /// Parse the face a caller narrows by — the axis beside [`SearchKind`] (`AMB-D-562`). The spellings
+    /// are the ones a hit row is written with, so a reader can ask back for exactly what they just read.
+    pub fn parse(value: &str) -> Result<Self> {
+        match value.trim() {
+            "title" => Ok(Self::Title),
+            "body" => Ok(Self::Body),
+            "comment" => Ok(Self::Comment),
+            "label" => Ok(Self::Label),
+            "attachment" => Ok(Self::Attachment),
+            other => Err(Error::invalid(format!(
+                "unknown face '{other}' (title/body/comment/label/attachment — which face of the record the words are on; which record it is is the other axis)"
+            ))),
+        }
+    }
+
+    /// The value this narrowing was written as — what the result echoes back.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Title => "title",
+            Self::Body => "body",
+            Self::Comment => "comment",
+            Self::Label => "label",
+            Self::Attachment => "attachment",
+        }
+    }
+}
 
 /// One place a word is written: the face it landed on, the record that face belongs to, and a short
 /// excerpt around the match.
@@ -2073,6 +2098,8 @@ pub struct SearchQueryEcho {
     pub filter: Option<String>,
     /// The `--kind` value, as it was written (`null` when the search was not narrowed to one).
     pub kind: Option<String>,
+    /// The `--face` value, the same way — the second axis, echoed apart from the first (`AMB-D-562`).
+    pub face: Option<String>,
     pub sort: String,
 }
 
@@ -2093,7 +2120,11 @@ pub struct SearchParams {
     /// The structural narrowing, in `task list`'s own grammar. Task vocabulary, so a search carrying one
     /// is a search of tasks.
     pub filter_expr: Option<String>,
+    /// Which record the words are on. `None` keeps both sides.
     pub kind: Option<SearchKind>,
+    /// Which face of it they are on. `None` keeps every face — and the two axes are judged apart, so
+    /// naming both is the product of them ("the remarks on decisions", `AMB-D-562`).
+    pub face: Option<HitFace>,
     pub sort: SearchSort,
     /// Page size. `None` takes [`SEARCH_LIMIT_DEFAULT`] — this is the one read where "no limit named" is
     /// not "everything".
@@ -2153,6 +2184,7 @@ pub fn search(
             filter: filter.as_ref(),
             today,
             kind: params.kind,
+            face: params.face,
             sort: params.sort,
             limit: Some(limit.saturating_sub(shown_pins.len())),
             offset: offset.saturating_sub(pins.len()),
@@ -2189,6 +2221,7 @@ pub fn search(
             text: params.text,
             filter: params.filter_expr,
             kind: params.kind.map(|k| k.as_str().to_string()),
+            face: params.face.map(|f| f.as_str().to_string()),
             sort: params.sort.as_str().to_string(),
         },
         count: hits.len(),

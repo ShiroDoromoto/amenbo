@@ -2921,6 +2921,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     text: words.join(" "),
                     filter_expr: filter,
                     kind: kind.as_deref().map(query::SearchKind::parse).transpose().map_err(CliError::from)?,
+                    face: None,
                     sort: query::SearchSort::parse(&sort).map_err(CliError::from)?,
                     limit,
                     offset,

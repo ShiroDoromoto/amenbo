@@ -1764,10 +1764,14 @@ pub struct SearchResultDto {
 ///
 /// `filter` is `task list`'s grammar, so a search carrying one is a search of tasks — an expression that
 /// does not parse comes back as the error it is, rather than as a silently unfiltered page.
+///
+/// `kind` and `face` are the two axes (`AMB-D-562`) and travel apart: which record the words are on, and
+/// which face of it. Either left unnamed keeps everything on that axis.
 #[tauri::command]
 pub fn search(
     text: String,
     kind: Option<String>,
+    face: Option<String>,
     filter: Option<String>,
     limit: Option<usize>,
     offset: Option<usize>,
@@ -1778,6 +1782,7 @@ pub fn search(
         text,
         filter_expr: filter.filter(|f| !f.trim().is_empty()),
         kind: kind.as_deref().map(amenbo_core::query::SearchKind::parse).transpose()?,
+        face: face.as_deref().map(amenbo_core::query::HitFace::parse).transpose()?,
         sort: amenbo_core::query::SearchSort::default(),
         limit,
         offset,

@@ -5,6 +5,14 @@ import { SEARCH_PAGE, useSearch, type SearchFace, type SearchHit, type SearchKin
 import { asTyped } from "../core/keys";
 
 /**
+ * What the chip row can be set to. Two of them name a kind, one names a face and one names neither, which
+ * is exactly the mixing `AMB-D-562` takes apart underneath — the row is still the one control it was, and
+ * drawing the two axes as two of them is its own piece of work.
+ */
+type Chip = SearchKind | "comment" | null;
+const CHIPS: readonly Chip[] = [null, "task", "decision", "comment"];
+
+/**
  * The cross-cutting search (`AMB-D-449`): where a word is written, across tasks, decisions and the
  * comments on either.
  *
@@ -31,7 +39,11 @@ export function SearchScreen({
   const [asked, setAsked] = useState("");
   const [filterDraft, setFilterDraft] = useState("");
   const [filter, setFilter] = useState("");
-  const [kind, setKind] = useState<SearchKind | null>(null);
+  // One row of chips, but no longer one axis: "comment" is a face and the two named ones are kinds
+  // (`AMB-D-562`). What is held is therefore which chip is on, and the two axes are derived from it.
+  const [chip, setChip] = useState<Chip>(null);
+  const kind: SearchKind | null = chip === "comment" ? null : chip;
+  const face: SearchFace | null = chip === "comment" ? "comment" : null;
   const [offset, setOffset] = useState(0);
 
   const submit = () => {
@@ -39,14 +51,14 @@ export function SearchScreen({
     setFilter(filterDraft);
     setOffset(0); // A new question starts at its first page, never wherever the last one was being read.
   };
-  // Narrowing to a face is not a new question, so it keeps the words — but it does change what the
-  // pages are cut from, so it still returns to the first one.
-  const narrow = (k: SearchKind | null) => {
-    setKind(k);
+  // Narrowing is not a new question, so it keeps the words — but it does change what the pages are cut
+  // from, so it still returns to the first one.
+  const narrow = (c: Chip) => {
+    setChip(c);
     setOffset(0);
   };
 
-  const { answer, loading, error } = useSearch({ text: asked, kind, filter, offset });
+  const { answer, loading, error } = useSearch({ text: asked, kind, face, filter, offset });
   const total = answer?.totalMatched ?? 0;
   const shown = answer?.hits.length ?? 0;
 
@@ -76,13 +88,13 @@ export function SearchScreen({
         <button className="btn btn--primary" onClick={submit}>{t("search.run")}</button>
         <div className="board__sep" />
         <span className="faint srch__label">{t("search.kind")}</span>
-        {([null, "task", "decision", "comment"] as const).map((k) => (
+        {CHIPS.map((c) => (
           <button
-            key={k ?? "all"}
-            className={kind === k ? "filterchip filterchip--on" : "filterchip"}
-            onClick={() => narrow(k)}
+            key={c ?? "all"}
+            className={chip === c ? "filterchip filterchip--on" : "filterchip"}
+            onClick={() => narrow(c)}
           >
-            {k === null ? t("search.kindAll") : t(`search.kind.${k}`)}
+            {c === null ? t("search.kindAll") : t(`search.kind.${c}`)}
           </button>
         ))}
         <div className="topbar__spacer" />

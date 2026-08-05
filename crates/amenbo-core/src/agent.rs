@@ -234,7 +234,7 @@ const JA_PHRASEBOOK: &[(&str, &str)] = &[
     // flags.help / args.help (the help text of flags and arguments)
     ("the words to look for (ANDed)", "探す語（AND）"),
     ("narrow structurally, in the grammar task list uses (see filterGrammar). That is task vocabulary, so a search carrying one is a search of tasks", "構造で絞る。task list と同じ文法（filterGrammar 参照）。これはタスクの語彙なので、付けた検索はタスクの検索になる"),
-    ("keep one side or one face: the words on a task, the words on a decision, or the words in a comment on either", "片側か 1 つの面だけ残す：タスクの語、決定記録の語、またはどちらかのコメントの語"),
+    ("keep one side: the words on a task, or the words on a decision", "片側だけ残す：タスクの語か、決定記録の語か"),
     ("face (default: the face first, newest within it), -time (newest first), time (oldest first). The instant is the hit's own — a comment's posting time, or when the text it sits in was last written", "face（既定：面が先・面の中は新しい順）、-time（新しい順）、time（古い順）。時刻はヒット自身のもの ── コメントなら投稿時刻、他はその文が最後に書かれた時刻"),
     ("max hits (default 20). total_matched says what the ceiling left behind", "最大ヒット数（既定 20）。上限が何を残したかは total_matched が言う"),
     ("number of hits to skip in sort order (paging)", "並び順で読み飛ばすヒット数（ページング）"),
@@ -1005,7 +1005,7 @@ fn all_commands() -> Value {
         json!({ "name": "search", "summary": "Finds where words are written, across tasks, decisions and the comments on both — plus the labels a task is filed under and the names of what is attached. Answers with one line per PLACE, not per record: the face the words landed on (title / body / comment / label / attachment), the record it belongs to, the comment to open where there is one, and a short excerpt. Words are ANDed and match as substrings, with no word boundaries (so a search for part of a compound word finds it); full-width, case and kana spellings are folded together. Every word has to land somewhere on the record — not all on one face — and each face carrying one is a line, which is what makes the answer 'here is where each of your words is written'. A word written as a ref (AMB-T-<n> / AMB-D-<n>) pins that record to the top, so holding a number takes the same command as holding a phrase. Default order is the face first (a name outranks a paragraph, and that a remark), newest within it. This read has a ceiling of its own — a hit carries an excerpt — so with no --limit it returns the first 20 and reports the total.",
             "args": [{ "name": "word...", "required": true, "help": "the words to look for (ANDed)" }],
             "flags": [{ "name": "--filter <expr>", "help": "narrow structurally, in the grammar task list uses (see filterGrammar). That is task vocabulary, so a search carrying one is a search of tasks" },
-                      { "name": "--kind <task|decision|comment>", "help": "keep one side or one face: the words on a task, the words on a decision, or the words in a comment on either" },
+                      { "name": "--kind <task|decision>", "help": "keep one side: the words on a task, or the words on a decision" },
                       { "name": "--sort <face|time|-time>", "help": "face (default: the face first, newest within it), -time (newest first), time (oldest first). The instant is the hit's own — a comment's posting time, or when the text it sits in was last written" },
                       { "name": "--limit <n>", "help": "max hits (default 20). total_matched says what the ceiling left behind" },
                       { "name": "--offset <n>", "help": "number of hits to skip in sort order (paging)" },

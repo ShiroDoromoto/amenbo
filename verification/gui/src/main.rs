@@ -138,6 +138,13 @@ fn run(opts: &Opts) -> Result<bool, String> {
         .clone()
         .unwrap_or_else(|| default_evidence_dir(&scenario.id));
 
+    // What the premise stood up, said before the walk rather than only in the summary afterwards.
+    // Some of it is a road's to reach for — a file the operator has to find in a picker lies under a
+    // throwaway path nothing in the road can name, since the instructions are rendered from the YAML
+    // alone — so a line that arrives after the last step arrives too late to be of use.
+    for line in world.as_ref().map(World::stood).unwrap_or_default() {
+        eprintln!("world: {line}");
+    }
     eprintln!(
         "{} step(s) — each one is handed over before it is shot",
         scenario.steps(amenbo_scenario::Driver::Gui).len()

@@ -20,6 +20,11 @@ description: >
 # question is where a word is written, not how work gets onto a board — and standing it up is what
 # gets the screen open at all: an untouched store has no project, so there is no board to walk this
 # on, and none of the columns the road's own later card is added from.
+#
+# The two files are here for the same reason and one more. A screen road cannot make a file — hanging
+# one is a move on a record, and the bytes have to be lying somewhere already — so the road that hangs
+# these was asking an operator to attach what nothing had written. What they hold does not matter:
+# what a search reaches of an attachment is what it is called, never its bytes.
 given:
   - type: action
     domain: task
@@ -33,6 +38,20 @@ given:
     op: finish-creating
     with:
       target: window
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: throughput.log
+      content: "one\n"
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: handover.log
+      content: "one\n"
 
 steps_cli:
   - type: action

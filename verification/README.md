@@ -186,7 +186,11 @@ an evidence directory, so a premise that could not be stood up leaves no shots o
 world. Where it stops is the screen's own moves — `steps_gui` is the operator's to walk, and a
 driver that carried those out would leave the road proving something already done. A scenario that
 declares no world gets none and opens on an empty store. What was stood up is written into
-`manifest.json` under `world`, because the store it describes goes out with the run.
+`manifest.json` under `world`, because the store it describes goes out with the run — and it is said
+on stderr before the first step is handed over, because part of it is the operator's to reach for. A
+file a premise wrote lies under a throwaway path, and the instructions are rendered from the YAML
+alone, so nothing in the road can name it: the line that says where it landed is the only way to
+find it in a picker.
 
 An assert is judged by asking that same tool to read the shot back (macOS's own **Vision** behind
 it): the harness derives the text the step expects on screen — for a `listed` assert, the bound
@@ -503,6 +507,11 @@ road that opens by filing a task has no way to make that move, and an untouched 
 to open a board for in the first place. The premise is what puts the columns there: the work the road
 takes for granted, or — where filing is what the road is about — one piece of ordinary work that was
 already standing on that board.
+
+The same goes for anything a screen road hands to amenbo from outside it. Hanging a file is a move on
+a record and not a way of making one, so the bytes have to be lying in the run's folder before the
+step that attaches them: `repo write-file` is how they get there, and a road that asks for a file
+nobody wrote stalls on the operator having nothing to pick.
 
 A premise is not a road: a file carrying a world and no steps is refused like any other file nothing
 walks.

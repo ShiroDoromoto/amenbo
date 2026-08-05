@@ -1812,8 +1812,9 @@ pub struct SearchResultDto {
 /// facet running the same read is held to its bound project by the same call. The window here is wide
 /// because the human's is.
 ///
-/// `filter` is `task list`'s grammar, so a search carrying one is a search of tasks — an expression that
-/// does not parse comes back as the error it is, rather than as a silently unfiltered page.
+/// `filter` is read in the grammar of the side `kind` names (`AMB-D-563`), and so needs one: an
+/// expression that does not parse — or one sent with no side to read it in — comes back as the error it
+/// is, rather than as a silently unfiltered page.
 ///
 /// `kind` and `face` are the two axes (`AMB-D-562`) and travel apart: which record the words are on, and
 /// which face of it. Either left unnamed keeps everything on that axis.

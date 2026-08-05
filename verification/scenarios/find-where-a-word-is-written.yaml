@@ -268,14 +268,16 @@ steps_cli:
       only_face: comment
       present: false
 
-  # `--filter` is the task list's own grammar, and it is task vocabulary: it narrows the task side,
-  # and the decisions fall away rather than answering a question about a status they do not have.
+  # `--filter` is read in the grammar of the side named beside it, and each side has its own: the task
+  # list's keys narrow the tasks, the decision list's narrow the decisions. Both halves are walked,
+  # because a narrowing that reached only one side would read as green from either one alone.
   - type: assert
     domain: task
     op: found
     with:
       words: retention
       target: window
+      kind: task
       filter: "status:todo"
       face: title
 
@@ -285,7 +287,30 @@ steps_cli:
     with:
       words: retention
       target: outbox
+      kind: task
       filter: "status:todo"
+      present: false
+
+  # The other grammar, on the other side. `status:proposed` is a decision's word — a task has no such
+  # status — and the decision comes back on it, which is the whole of what this narrowing was for.
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      kind: decision
+      filter: "status:proposed"
+      face: title
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      kind: decision
+      filter: "status:accepted"
       present: false
 
   # `--project` is the other narrowing, and deliberately not a key of that grammar: a project is an
@@ -446,7 +471,8 @@ steps_gui:
       present: false
 
   # The two narrowings the screen draws its own controls for — the chips that keep one side, and the box
-  # that takes the task list's grammar. Each takes the decision out of an answer it was in a step ago.
+  # that takes that side's own grammar. Each takes the decision out of an answer it was in a step ago,
+  # and the box is read in whichever grammar the chip beside it names.
   - type: assert
     domain: decision
     op: found
@@ -462,6 +488,7 @@ steps_gui:
     with:
       words: retention
       target: window
+      kind: task
       filter: "status:todo"
       face: title
 
@@ -471,5 +498,16 @@ steps_gui:
     with:
       words: retention
       target: outbox
+      kind: task
       filter: "status:todo"
       present: false
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      kind: decision
+      filter: "status:proposed"
+      face: title

@@ -327,6 +327,26 @@ impl IdSet {
     }
 }
 
+/// These sets as **one statement**: `<set> UNION <set>…`, the very rows [`Pred::is_in_any`] tests
+/// membership of. `None` for no sets at all, which is the set nothing is in.
+///
+/// The same union written for a caller that means to make it **once and name it** — the body of a
+/// `WITH … AS MATERIALIZED (…)` at a statement's head ([`Sql::with_head`]) — where `is_in_any` writes it
+/// where the question is asked. A statement that asks the same set in a dozen places is a statement that
+/// builds it a dozen times, and which of the two shapes to use is the caller's call, since only the
+/// caller knows how many places ask. Both come from here, so a set named at the head and a set written
+/// in place cannot come to reach different rows.
+pub fn id_union(sets: impl IntoIterator<Item = IdSet>) -> Option<Sql> {
+    let mut arms = sets.into_iter().map(|s| s.0.open());
+    let first = arms.next()?;
+    let mut sql = Sql::default();
+    sql.push_sql(&first);
+    for arm in arms {
+        sql.push(" UNION ").push_sql(&arm);
+    }
+    Some(sql)
+}
+
 /// The other shape of the same subquery: `(SELECT COUNT(*) FROM <table> [JOIN <table> ON <pred>]… WHERE
 /// <pred>)` — **how many** rows the correlation reaches, where [`Exists`] asks only whether there is one.
 ///
@@ -613,16 +633,11 @@ impl Pred {
     /// find is still one row, so folding the duplicates away here is cheaper than probing them twice.
     /// An empty list matches nothing, as [`Pred::is_in`]'s does.
     pub fn is_in_any<N: Nullability>(col: Col<Int, N>, sets: impl IntoIterator<Item = IdSet>) -> Self {
-        let mut arms = sets.into_iter().map(|s| s.0.open());
-        let Some(first) = arms.next() else {
+        let Some(union) = id_union(sets) else {
             return Self::never();
         };
         let mut sql = Sql::new(format!("{} IN (", col.to_sql()));
-        sql.push_sql(&first);
-        for arm in arms {
-            sql.push(" UNION ").push_sql(&arm);
-        }
-        sql.push(")");
+        sql.push_sql(&union).push(")");
         Self::raw(sql.text(), sql.params().to_vec())
     }
 

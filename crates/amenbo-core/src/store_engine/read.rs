@@ -23,8 +23,8 @@ use super::schema::col;
 use super::search;
 use super::search::HitFace;
 use super::sql::{
-    same, Col, Count, Exists, Expr, IdSet, Int, NotNull, Nullability, Nullable, Pred, Select, Slot, Sort,
-    Sql, Text as SqlText, Union,
+    id_union, same, Col, Count, Exists, Expr, IdSet, Int, NotNull, Nullability, Nullable, Pred, Select,
+    Slot, Sort, Sql, Text as SqlText, Union,
 };
 use super::{StoreEngineError, Result};
 use crate::model::{ActorKind, DecisionStatus, Priority, TaskStatus};
@@ -398,10 +398,17 @@ const SD: col::search_doc::Cols = col::search_doc::of("sd");
 /// own title or notes, the body of one of its live comments, a label it was placed on, or the name of
 /// something attached to it or to one of those comments.
 ///
-/// Which faces those are is [`search::FACES`]'s to say; whose they are is this function's. Two of them
-/// are not held on the task at all and are reached by the edge that makes them the task's: a label
-/// through the assignment (and, from the value, the axis it is a value of), an attachment through what
-/// it hangs off.
+/// Which faces those are is [`search::FACES`]'s to say; whose they are is [`task_word_sets`]'s. The
+/// question is asked **where it is written** here; a statement asking it in a dozen places makes the set
+/// once at its head instead ([`push_words_cte`]) and probes that, which is the same set either way.
+fn task_text_term(term: search::Term<'_>) -> Pred {
+    Pred::is_in_any(T.id, task_word_sets(term))
+}
+
+/// The six ways a term reaches a task — the sets [`task_text_term`] asks membership of. Two of them are
+/// not held on the task at all and are reached by the edge that makes them the task's: a label through
+/// the assignment (and, from the value, the axis it is a value of), an attachment through what it hangs
+/// off.
 ///
 /// Every arm reaches the task's id **from its own side** — through that side's index
 /// (`task_comment_by_task`, `task_dimension_value_by_task`, `attachment_by_target`) and the copy's face
@@ -414,9 +421,10 @@ const SD: col::search_doc::Cols = col::search_doc::of("sd");
 /// nothing and hands back membership of what it found (`AMB-D-507`), so the lookup happens once wherever
 /// it is written. Which path it took inside — the trigram index or a scan of the copy — is
 /// [`search::Term`]'s to decide, and does not change what matching means; so is whether the statement
-/// writes the lookup into each of these six arms or made it once at its head and named it, which is the
-/// caller's call because only the caller knows how many places ask.
-fn task_text_term(term: search::Term<'_>) -> Pred {
+/// writes the lookup into each of these six arms or made it once at its head and named it, and so is
+/// whether the union of the arms is itself written in place or named ([`id_union`]). All three are the
+/// caller's call, because only the caller knows how many places ask.
+fn task_word_sets(term: search::Term<'_>) -> [IdSet; 6] {
     const TC: col::task_comment::Cols = col::task_comment::of("tc");
     let own = IdSet::of(SD.table, SD.owner_id)
         .filter(Pred::eq(SD.owner_kind, search::DATASET_TASK))
@@ -440,7 +448,7 @@ fn task_text_term(term: search::Term<'_>) -> Pred {
         .join(A.table, hangs_off(search::DATASET_TASK_COMMENT, TC.id))
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
         .filter(term.pred(SD));
-    Pred::is_in_any(T.id, [own, in_comment, on_value, on_axis, attached, attached_to_comment])
+    [own, in_comment, on_value, on_axis, attached, attached_to_comment]
 }
 
 /// The decision's columns as the decision-side word queries name them: `FROM decision d`. The mirror of
@@ -451,6 +459,12 @@ const DEC: col::decision::Cols = col::decision::of("d");
 /// title and body, the body of one of its live comments, and the name of something attached to it or to
 /// one of those comments. The labels are the one difference: only a task is placed on an axis.
 fn decision_text_term(term: search::Term<'_>) -> Pred {
+    Pred::is_in_any(DEC.id, decision_word_sets(term))
+}
+
+/// The four ways a term reaches a decision — the mirror of [`task_word_sets`], and the same reason for
+/// being a list of sets rather than the question over them.
+fn decision_word_sets(term: search::Term<'_>) -> [IdSet; 4] {
     const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
     let own = IdSet::of(SD.table, SD.owner_id)
         .filter(Pred::eq(SD.owner_kind, search::DATASET_DECISION))
@@ -463,7 +477,7 @@ fn decision_text_term(term: search::Term<'_>) -> Pred {
         .join(A.table, hangs_off(search::DATASET_DECISION_COMMENT, DC.id))
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
         .filter(term.pred(SD));
-    Pred::is_in_any(DEC.id, [own, in_comment, attached, attached_to_comment])
+    [own, in_comment, attached, attached_to_comment]
 }
 
 /// What is attached, as the arms above alias it.
@@ -1693,6 +1707,30 @@ fn face_hit(dataset: &str, id: Col<Int>, columns: &[&str], terms: &[search::Term
     Pred::is_in_any(id, [carriers])
 }
 
+/// The name one side's record-level word set goes under at a statement's head, by the term's position.
+/// Namespaced the way the term lookups are, and for the same reason: a `WITH` name shadows a real table
+/// of that name, silently and for the whole statement.
+fn words_cte(owner_kind: &str, i: usize) -> String {
+    format!("search_words_{owner_kind}_{i}")
+}
+
+/// One side's record-level word set, put at the head under that name — the union
+/// ([`task_word_sets`] / [`decision_word_sets`]) made once instead of in each place that asks.
+/// `MATERIALIZED` for the reason the term lookups carry it: left to itself SQLite may inline a `WITH`
+/// name into every use, which is the repetition being taken out.
+fn push_words_cte(head: &mut Sql, owner_kind: &str, i: usize, sets: impl IntoIterator<Item = IdSet>) {
+    let Some(union) = id_union(sets) else { return };
+    head.push(format!(", {}(id) AS MATERIALIZED (", words_cte(owner_kind, i)))
+        .push_sql(&union)
+        .push(") ");
+}
+
+/// Membership of that set: what an arm asks of a record in place of building the set for itself. The
+/// column arrives already written, since the two sides name their id through different aliases.
+fn words_named(id: String, owner_kind: &str, i: usize) -> Pred {
+    Pred::plain(format!("{id} IN (SELECT id FROM {})", words_cte(owner_kind, i)))
+}
+
 /// One arm's `WHERE`: this face carries a term, the record it belongs to answers everything asked of
 /// that side (the terms, the reach, the structural filter), and the arm is one the two axes left standing.
 fn hit_where(face: Pred, side: &Option<Pred>, gate: &Option<Pred>) -> Option<Pred> {
@@ -1791,9 +1829,43 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     // that (`AMB-D-511`). Twelve arms put the same words to the same copy, and the statement is built
     // twice over — the count and the page — so a lookup written where it is asked is a walk of the copy
     // per arm, whichever path the term's length takes it down. What each arm means is untouched.
-    let head = search::terms_head(terms);
+    let mut head = search::terms_head(terms);
     let asked: Vec<search::Term<'_>> = (0..terms.len()).map(search::Term::Named).collect();
     let asked = asked.as_slice();
+
+    // Which sides still have an arm standing. A side the caller narrowed away is one whose every arm is
+    // gated off, so its sets are made for nobody — and a `MATERIALIZED` set is built when the statement
+    // runs, not when a row needs it.
+    let wants_task = q.kind != Some(crate::query::SearchKind::Decision);
+    let wants_decision = q.kind != Some(crate::query::SearchKind::Task);
+
+    // **One word asks nothing of the record.** The record-level AND is there so that several words may
+    // land on a record by different faces and still be one answer; with a single word, an arm whose face
+    // carries it *is* the record carrying it — every arm's face is one of the ways the record-level set
+    // reaches the record, so the second question can only ever agree with the first. Asking it anyway is
+    // what a common word used to cost: one set of every place the word is written, probed once per arm.
+    // Which is also the shape a person searches in — the first thing typed is one ordinary word.
+    let record_level = terms.len() > 1;
+
+    // With several words the set is still needed, and then it goes to the head for the same reason the
+    // lookups do: "this task carries the word somewhere" is a union over six ways in — its own copy, its
+    // comments, its labels, the axis behind them, what is attached to it and to those comments — and
+    // written into the arms it is built by each of the twelve, twice over. Named here, it is built once.
+    if let Some(head) = &mut head {
+        if record_level {
+            for i in 0..terms.len() {
+                if wants_task {
+                    push_words_cte(head, TASK, i, task_word_sets(search::Term::Named(i)));
+                }
+                if wants_decision {
+                    push_words_cte(head, DECISION, i, decision_word_sets(search::Term::Named(i)));
+                }
+            }
+        }
+    }
+    let side_words = |id: String, owner_kind: &'static str| {
+        record_level.then(|| Pred::all((0..terms.len()).map(|i| words_named(id.clone(), owner_kind, i))))
+    };
 
     // Everything asked of one side, folded once and cloned into every arm that owns that side: the
     // record-level AND, the reach, and the structural narrowing, which lands on the side whose grammar
@@ -1813,7 +1885,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     };
     let task_side = Pred::all(
         [
-            Pred::all(asked.iter().map(|t| task_text_term(*t))),
+            side_words(T.id.to_sql(), TASK).flatten(),
             project_id.map(|pid| Pred::eq(T.project_id, pid)),
             task_filter.and_then(Pred::all),
         ]
@@ -1826,7 +1898,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     };
     let decision_side = Pred::all(
         [
-            Pred::all(asked.iter().map(|t| decision_text_term(*t))),
+            side_words(DEC.id.to_sql(), DECISION).flatten(),
             project_id.map(|pid| Pred::eq(DEC.project_id, pid)),
             decision_filter.and_then(Pred::all),
         ]

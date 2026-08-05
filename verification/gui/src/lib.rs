@@ -610,6 +610,12 @@ impl Instructor {
                 if let Some(kind) = arg_str(with, "kind") {
                     line.push_str(&format!(", narrowed to {kind}"));
                 }
+                // The other knob, said separately because it is the other axis: the screen carries one
+                // for which record and one for which of its faces, and either can be set without giving
+                // up the other. A step naming both is asking for the pairing.
+                if let Some(face) = arg_str(with, "only_face") {
+                    line.push_str(&format!(", narrowed to what is written on a {face}"));
+                }
                 if let Some(filter) = arg_str(with, "filter") {
                     line.push_str(&format!(", narrowed by `{filter}`"));
                 }

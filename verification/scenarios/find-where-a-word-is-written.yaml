@@ -470,9 +470,10 @@ steps_gui:
       target: window
       present: false
 
-  # The two narrowings the screen draws its own controls for — the chips that keep one side, and the box
-  # that takes that side's own grammar. Each takes the decision out of an answer it was in a step ago,
-  # and the box is read in whichever grammar the chip beside it names.
+  # The three narrowings the screen draws its own controls for — one row of chips for which record, a
+  # second for which of its faces, and the box that takes that side's own grammar. Each takes something
+  # out of an answer it was in a step ago, and the box is read in whichever grammar the chips beside it
+  # name.
   - type: assert
     domain: decision
     op: found
@@ -480,6 +481,48 @@ steps_gui:
       words: retention
       target: outbox
       kind: task
+      present: false
+
+  # The second row, on its own: the words are written on this task's title and on a remark on it, and
+  # asking for remarks alone leaves only the second.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: sweep
+      target: window
+      only_face: comment
+      face: comment
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: window
+      only_face: comment
+      present: false
+
+  # Both rows at once — the question one row of chips could not put, since picking the face gave up the
+  # side. It is asked here of the pairing that has an answer, and of the one that cannot.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: sweep
+      target: window
+      kind: task
+      only_face: comment
+      face: comment
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: sweep
+      target: window
+      kind: decision
+      only_face: comment
       present: false
 
   - type: assert

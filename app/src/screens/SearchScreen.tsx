@@ -5,12 +5,15 @@ import { SEARCH_PAGE, useSearch, type SearchFace, type SearchHit, type SearchKin
 import { asTyped } from "../core/keys";
 
 /**
- * What the chip row can be set to. Two of them name a kind, one names a face and one names neither, which
- * is exactly the mixing `AMB-D-562` takes apart underneath — the row is still the one control it was, and
- * drawing the two axes as two of them is its own piece of work.
+ * The two knobs, each its own axis (`AMB-D-562`). `null` leads both: it is the arm that narrows nothing,
+ * and it has to be reachable or a reader who narrowed once could never widen again.
+ *
+ * They are separate because they answer separate questions — which record the words are on, and which of
+ * its faces — so every pairing of them is a question someone can ask. As one row they were exclusive, and
+ * "a comment on a task" was the answer nobody could reach: picking the face gave up the side.
  */
-type Chip = SearchKind | "comment" | null;
-const CHIPS: readonly Chip[] = [null, "task", "decision", "comment"];
+const KINDS: readonly (SearchKind | null)[] = [null, "task", "decision"];
+const FACES: readonly (SearchFace | null)[] = [null, "title", "body", "comment", "label", "attachment"];
 
 /**
  * The cross-cutting search (`AMB-D-449`): where a word is written, across tasks, decisions and the
@@ -39,11 +42,11 @@ export function SearchScreen({
   const [asked, setAsked] = useState("");
   const [filterDraft, setFilterDraft] = useState("");
   const [filter, setFilter] = useState("");
-  // One row of chips, but no longer one axis: "comment" is a face and the two named ones are kinds
-  // (`AMB-D-562`). What is held is therefore which chip is on, and the two axes are derived from it.
-  const [chip, setChip] = useState<Chip>(null);
-  const kind: SearchKind | null = chip === "comment" ? null : chip;
-  const face: SearchFace | null = chip === "comment" ? "comment" : null;
+  // Two axes, held apart (`AMB-D-562`): which record the words are on, and which of its faces. Either
+  // alone narrows, and both together are a product — "a comment on a task" is now a question the screen
+  // can put, where one row of chips could only give up one to ask the other.
+  const [kind, setKind] = useState<SearchKind | null>(null);
+  const [face, setFace] = useState<SearchFace | null>(null);
   const [offset, setOffset] = useState(0);
 
   const submit = () => {
@@ -52,9 +55,10 @@ export function SearchScreen({
     setOffset(0); // A new question starts at its first page, never wherever the last one was being read.
   };
   // Narrowing is not a new question, so it keeps the words — but it does change what the pages are cut
-  // from, so it still returns to the first one.
-  const narrow = (c: Chip) => {
-    setChip(c);
+  // from, so it still returns to the first one. Setting one axis leaves the other where it was: that is
+  // what makes the two of them compose rather than replace each other.
+  const narrow = (set: () => void) => {
+    set();
     setOffset(0);
   };
 
@@ -88,13 +92,24 @@ export function SearchScreen({
         <button className="btn btn--primary" onClick={submit}>{t("search.run")}</button>
         <div className="board__sep" />
         <span className="faint srch__label">{t("search.kind")}</span>
-        {CHIPS.map((c) => (
+        {KINDS.map((k) => (
           <button
-            key={c ?? "all"}
-            className={chip === c ? "filterchip filterchip--on" : "filterchip"}
-            onClick={() => narrow(c)}
+            key={k ?? "all"}
+            className={kind === k ? "filterchip filterchip--on" : "filterchip"}
+            onClick={() => narrow(() => setKind(k))}
           >
-            {c === null ? t("search.kindAll") : t(`search.kind.${c}`)}
+            {k === null ? t("search.kindAll") : t(`search.kind.${k}`)}
+          </button>
+        ))}
+        <div className="board__sep" />
+        <span className="faint srch__label">{t("search.faceAxis")}</span>
+        {FACES.map((f) => (
+          <button
+            key={f ?? "all"}
+            className={face === f ? "filterchip filterchip--on" : "filterchip"}
+            onClick={() => narrow(() => setFace(f))}
+          >
+            {f === null ? t("search.faceAll") : t(`search.face.${f}`)}
           </button>
         ))}
         <div className="topbar__spacer" />

@@ -122,19 +122,32 @@ describe("the search screen", () => {
     expect(openedDecisions).toEqual([449]);
   });
 
-  it("narrows to a face without losing the words, and back to the first page", () => {
+  it("narrows on either axis without losing the words, and back to the first page", () => {
     hoisted.answer = { hits: [hit({ ref: "AMB-T-1" })], totalMatched: 60 };
     render();
     type(inputs()[0], "search");
     press(button(t("search.run")));
     press(button("›")); // walk forward a page…
     expect(lastAsked().offset).toBeGreaterThan(0);
-    press(button(t("search.kind.comment"))); // …then narrow
-    // The chip that reads "comment" narrows the face, not the kind: which record the words are on and
-    // which face of it are two axes, so this one leaves both sides standing (`AMB-D-562`).
+    press(button(t("search.face.comment"))); // …then narrow the face
     expect(lastAsked()).toMatchObject({ text: "search", kind: null, face: "comment", offset: 0 });
+  });
+
+  it("holds the two axes apart, so a comment on a task is a question it can put", () => {
+    hoisted.answer = { hits: [hit({ ref: "AMB-T-1" })], totalMatched: 1 };
+    render();
+    type(inputs()[0], "search");
+    press(button(t("search.run")));
+    // Setting one axis leaves the other where it was, which is the whole of `AMB-D-562`: as one row of
+    // chips these were exclusive, and picking the face gave up the side.
     press(button(t("search.kind.task")));
-    expect(lastAsked()).toMatchObject({ text: "search", kind: "task", face: null, offset: 0 });
+    press(button(t("search.face.comment")));
+    expect(lastAsked()).toMatchObject({ text: "search", kind: "task", face: "comment" });
+    // And each widens on its own, or a reader who narrowed once could never get back.
+    press(button(t("search.faceAll")));
+    expect(lastAsked()).toMatchObject({ kind: "task", face: null });
+    press(button(t("search.kindAll")));
+    expect(lastAsked()).toMatchObject({ kind: null, face: null });
   });
 
   it("marks the runs the core says the words landed on, and leaves the excerpt otherwise whole", () => {

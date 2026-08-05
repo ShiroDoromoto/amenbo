@@ -319,8 +319,11 @@ const ui = {
   // search screen (where a word is written, across tasks, decisions and the comments on either)
   "search.placeholder": "Words to look for", "search.run": "Search",
   "search.filterPh": "status:todo …",
-  "search.kind": "In", "search.kindAll": "Everything",
-  "search.kind.task": "Tasks", "search.kind.decision": "Decisions", "search.kind.comment": "Comments",
+  // The two knobs the screen narrows by, each labelling its own axis (`AMB-D-562`). "In" used to head one
+  // row holding both, which is what made a comment look like a third kind of record.
+  "search.kind": "Kind", "search.kindAll": "Both",
+  "search.kind.task": "Tasks", "search.kind.decision": "Decisions",
+  "search.faceAxis": "Where", "search.faceAll": "Anywhere",
   "search.note": "Where a word is written · every project",
   "search.idle": "Type the words you are looking for.",
   "search.empty": "Nothing is written with those words.",

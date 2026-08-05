@@ -1863,8 +1863,14 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
             }
         }
     }
-    let side_words = |id: String, owner_kind: &'static str| {
-        record_level.then(|| Pred::all((0..terms.len()).map(|i| words_named(id.clone(), owner_kind, i))))
+    // Named only where it was built. A side the caller narrowed away has no set at the head, so nothing
+    // may name one: the arms of that side are all gated off and never answer, but the reference stands in
+    // the statement all the same, and a `WITH` name that was never pushed is a table SQLite cannot find —
+    // the whole search fails to prepare rather than the dead side going quiet. So the gate that decided
+    // whether to build the set is the gate that decides whether to ask it.
+    let side_words = |wanted: bool, id: String, owner_kind: &'static str| {
+        (record_level && wanted)
+            .then(|| Pred::all((0..terms.len()).map(|i| words_named(id.clone(), owner_kind, i))))
     };
 
     // Everything asked of one side, folded once and cloned into every arm that owns that side: the
@@ -1885,7 +1891,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     };
     let task_side = Pred::all(
         [
-            side_words(T.id.to_sql(), TASK).flatten(),
+            side_words(wants_task, T.id.to_sql(), TASK).flatten(),
             project_id.map(|pid| Pred::eq(T.project_id, pid)),
             task_filter.and_then(Pred::all),
         ]
@@ -1898,7 +1904,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     };
     let decision_side = Pred::all(
         [
-            side_words(DEC.id.to_sql(), DECISION).flatten(),
+            side_words(wants_decision, DEC.id.to_sql(), DECISION).flatten(),
             project_id.map(|pid| Pred::eq(DEC.project_id, pid)),
             decision_filter.and_then(Pred::all),
         ]

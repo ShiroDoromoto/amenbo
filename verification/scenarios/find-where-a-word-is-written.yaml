@@ -273,6 +273,38 @@ steps_cli:
       only_face: comment
       present: false
 
+  # Several words and a side, together. Words are ANDed over the record, and that question is only put
+  # when there is more than one of them — so it is the pair that reaches the crossing: one word never
+  # asks it, and naming no side asks it of both. Each side is walked from the side that keeps it, and
+  # once from the side that does not, because a crossing that answered nothing at all would read as
+  # green from the negative half alone.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention nightly
+      target: window
+      kind: task
+      face: title
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention sweep
+      target: outbox
+      kind: decision
+      face: title
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention nightly
+      target: window
+      kind: decision
+      present: false
+
   # Past where the words are, to what the record carrying them is. A row that says only the ref sends
   # the reader off to `show` for the very thing they were about to ask — is this place work still to be
   # taken, or work that is over — so both answers are asked for, and the decision is asked in its own
@@ -588,6 +620,36 @@ steps_gui:
       target: window
       kind: decision
       only_face: comment
+      present: false
+
+  # Several words and a side chip together. The screen ANDs the words over the record the same way the
+  # terminal does, and that question is only put when there is more than one of them — so the chip and
+  # the second word cross here and nowhere else on this road. Both sides are kept once and dropped once.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention sweep
+      target: window
+      kind: task
+      face: title
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention drained
+      target: outbox
+      kind: decision
+      face: title
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention sweep
+      target: window
+      kind: decision
       present: false
 
   # The third control, before anything is written into it. Its grammar follows the side, so with no side

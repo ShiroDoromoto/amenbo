@@ -1646,6 +1646,11 @@ pub struct SearchQuery<'a> {
     pub reach: crate::reach::Reach,
     /// The words, already folded ([`search::terms`]). No terms is no search — not "no constraint".
     pub terms: &'a [String],
+    /// The one project to look in — the same slot [`TaskQuery`] carries, and read the same way: the
+    /// reach is folded into it here, so an empty slot under a closed reach is that reach's project and
+    /// never everything. It narrows **both** sides, because a project is an axis a task and a decision
+    /// carry alike (`AMB-D-564`).
+    pub project_id: Option<i64>,
     /// The structural narrowing, in the grammar `task list` speaks. It is a **task** vocabulary, so a
     /// search carrying one is a search of tasks: the decision arms drop out rather than quietly ignoring
     /// a `status:todo` no decision could answer.
@@ -1671,9 +1676,10 @@ pub struct SearchQuery<'a> {
 /// carries *any* of them: a search for two words returns the places each is written, rather than only the
 /// places both happen to sit together.
 ///
-/// **What narrows it.** The reach, first and always. Then the caller's own two: a structural `filter`,
-/// which is the very predicate `task list` narrows by and therefore speaks of tasks alone, and a `kind`,
-/// which keeps the arms whose side or whose face was asked for ([`kept_by_kind`]).
+/// **What narrows it.** The reach, first and always — folded into `project_id` before it gets here. Then
+/// the caller's own three: `project_id` again where the caller named one, which narrows both sides alike;
+/// a structural `filter`, which is the very predicate `task list` narrows by and therefore speaks of tasks
+/// alone; and a `kind`, which keeps the arms whose side or whose face was asked for ([`kept_by_kind`]).
 ///
 /// **The order arrives with the rows.** The page is cut in SQL, so the sort cannot be something the
 /// reader applies to what it was handed. The compound query names its order by position, which is the
@@ -1685,7 +1691,11 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     if terms.is_empty() {
         return Ok(SearchPage { total_matched: 0, hits: Vec::new() });
     }
-    let project_id = q.reach.narrow(None).map_err(StoreEngineError::OutOfReach)?;
+    // The scope the arms narrow by: what the caller asked for, with the reach folded in here as well as
+    // where it was asked. The fold is idempotent, and doing it at the engine is the same containment
+    // `list_task_ids` keeps — a caller that leaves the slot empty gets its bound project, never
+    // everything.
+    let project_id = q.reach.narrow(q.project_id).map_err(StoreEngineError::OutOfReach)?;
     let started = std::time::Instant::now();
 
     const TC: col::task_comment::Cols = col::task_comment::of("tc");
@@ -5669,6 +5679,7 @@ mod tests {
         SearchQuery {
             reach: crate::reach::Reach::binding(1),
             terms,
+            project_id: None,
             filter: None,
             today: crate::time::today(),
             kind: None,
@@ -5786,6 +5797,22 @@ mod tests {
         );
         let all = found(&e, &SearchQuery { reach: crate::reach::Reach::All, ..ask(&t) });
         assert!(all.1.contains(&"Title AMB-T-3".to_string()));
+    }
+
+    /// The scope slot narrows on its own, without a reach to carry it — that is what `--project` is, and
+    /// it reaches both sides at once (`AMB-D-564`), unlike a filter, which speaks of tasks alone.
+    #[test]
+    fn the_scope_slot_narrows_both_sides_under_a_reach_that_holds_everything() {
+        let e = search_store();
+        let t = search::terms("索引");
+        let open = SearchQuery { reach: crate::reach::Reach::All, ..ask(&t) };
+        let (_, everywhere) = found(&e, &open);
+        assert!(everywhere.contains(&"Title AMB-D-1".to_string()));
+        assert!(everywhere.contains(&"Title AMB-T-3".to_string()));
+
+        let (_, scoped) = found(&e, &SearchQuery { project_id: Some(1), ..open });
+        assert!(!scoped.contains(&"Title AMB-T-3".to_string()), "the other project's task is out");
+        assert!(scoped.contains(&"Title AMB-D-1".to_string()), "and this project's decision is in");
     }
 
     /// `--kind` narrows by whose words they are, or by the face they are on — three narrowings that

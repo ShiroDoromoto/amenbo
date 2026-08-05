@@ -447,7 +447,9 @@ button.feed__target:hover { color: var(--c-accent); }
 .srch__filter { flex: 1 1 140px; min-width: 100px; max-width: 200px; margin: 0; font-size: var(--fs-sm); font-family: var(--font-mono); }
 .srch__label { flex: none; font-size: var(--fs-xs); }
 .srch__note { flex: 0 1 auto; min-width: 0; font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.srch__face { flex: none; width: 20px; text-align: center; }
+/* Two marks, not one: the side the record is on, then the face the words landed on. They sit together
+   because they name the same hit, and apart because they answer different questions (`AMB-D-565`). */
+.srch__face { flex: none; width: 38px; text-align: center; white-space: nowrap; letter-spacing: 1px; }
 .srch__ref { font-family: var(--font-mono); }
 /* The excerpt is a glance at where something is written, not the reading — it keeps the writer's own
    line breaks but never grows the row past two lines. */

@@ -147,6 +147,33 @@ const FACE_GLYPH: Record<SearchFace, string> = {
 };
 
 /**
+ * The mark for the side a hit's record is on, drawn **beside** the face's rather than folded into it
+ * (`AMB-D-565`). Which record and which of its faces are two questions, and one emoji answering both is
+ * what left the side legible only in the ref — where a reader had to spell `AMB-T-` out to find it.
+ *
+ * `⚖` is the decision's mark everywhere else on the screen, so it is the decision's here too.
+ */
+const KIND_GLYPH = { task: "☑", decision: "⚖" } as const;
+
+/** Which side a hit is on. The wire carries a bare string, and everything but `task` is the other side. */
+function sideOf(hit: SearchHit): keyof typeof KIND_GLYPH {
+  return hit.kind === "task" ? "task" : "decision";
+}
+
+/**
+ * What the words were found on, as one of the four things a hit can be (`AMB-D-565`): the record itself
+ * or a remark on it, on either side.
+ *
+ * An attachment hangs off whichever of the two it was put on, so this is also what tells "attached to the
+ * record" from "attached to a remark" — the target says which thing, and the face says it is an
+ * attachment.
+ */
+function targetKey(hit: SearchHit): string {
+  const side = sideOf(hit);
+  return `search.on.${hit.comment ? `${side}Comment` : side}`;
+}
+
+/**
  * One place the words are written. The ref reads first because it is what the reader opens next; the
  * excerpt sits under it, and a comment ref says which remark when the hit is not on the record's own
  * faces.
@@ -168,7 +195,10 @@ function HitRow({
     : undefined;
   return (
     <div className="feed__item">
-      <span className="srch__face" title={t(`search.face.${hit.face}`)}>{FACE_GLYPH[hit.face]}</span>
+      <span className="srch__face">
+        <span title={t(targetKey(hit))}>{KIND_GLYPH[sideOf(hit)]}</span>
+        <span title={t(`search.face.${hit.face}`)}>{FACE_GLYPH[hit.face]}</span>
+      </span>
       <div className="feed__body">
         <div className="feed__line">
           {open ? (
@@ -180,7 +210,11 @@ function HitRow({
         </div>
         <div className="srch__snippet"><Excerpt snippet={hit.snippet} matches={hit.matches} /></div>
         <div className="feed__meta">
-          <span>{t(`search.face.${hit.face}`)}</span>
+          {/* The two axes in words, in the order they are asked: which thing, then where on it. A hit on
+              a remark's own text needs no second word — the target already said "remark", and repeating
+              it as the face is what made one word stand for two axes in the first place. */}
+          <span>{t(targetKey(hit))}</span>
+          {hit.face !== "comment" && <span>{t(`search.face.${hit.face}`)}</span>}
           {hit.comment && <span>{hit.comment}</span>}
           <span>{agoLabel(hit.at)}</span>
         </div>

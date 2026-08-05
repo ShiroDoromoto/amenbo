@@ -160,6 +160,11 @@ pub enum Command {
         /// the words to look for (ANDed)
         #[arg(value_name = "WORD", required = true)]
         words: Vec<String>,
+        /// look in this project alone (name or ID; human only — an AI is already scoped to its bound
+        /// project). It is an argument of its own rather than a `--filter` key, so scoping to a project
+        /// keeps decisions in the answer
+        #[arg(long)]
+        project: Option<String>,
         /// narrow structurally, in the grammar `task list` uses (e.g. `--filter "status:todo"`). That is
         /// task vocabulary, so a search carrying one is a search of tasks
         #[arg(long)]

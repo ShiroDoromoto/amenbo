@@ -237,6 +237,84 @@ steps_cli:
       filter: "status:todo"
       present: false
 
+  # `--project` is the other narrowing, and deliberately not a key of that grammar: a project is an
+  # axis both sides carry, so scoping to one has to leave the decisions standing where the filter above
+  # took them out. Both halves are asserted — the neighbour's rows fall away, and the decision of the
+  # project asked for does not.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: scenario-elsewhere
+    as: elsewhere
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO TASK — the retention window, filed elsewhere
+    as: exile
+
+  - type: action
+    domain: task
+    op: move
+    with:
+      target: exile
+      project: elsewhere
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — retention, decided elsewhere
+      project: elsewhere
+    as: exile_why
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: exile
+      present: true
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: exile
+      project: elsewhere
+      face: title
+
+  # The half the filter cannot do: the scope keeps the decision of the project asked for.
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: exile_why
+      project: elsewhere
+      face: title
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: retention
+      target: window
+      project: elsewhere
+      present: false
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: retention
+      target: outbox
+      project: elsewhere
+      present: false
+
 # The same goal reached on the screen that answers it. The road is shorter than the terminal's, and cut
 # on what a reading can settle rather than on what matters less: a hit row leads with the record it
 # belongs to whichever face the words were on, so the screen says which records the words reach, and the

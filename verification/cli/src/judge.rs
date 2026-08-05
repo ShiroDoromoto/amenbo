@@ -70,6 +70,13 @@ impl Driver<'_> {
                 args.push(value.to_string());
             }
         }
+        // The project is named the way every other step names one — by a binding a `project create`
+        // left behind — because it is a record, not a word of the grammar. So it rides a flag of its
+        // own here, and never goes into the filter expression.
+        if with.contains_key("project") {
+            args.push("--project".into());
+            args.push(self.resolve_key(with, "project")?.to_string());
+        }
         args.push("--json".into());
         self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())
     }

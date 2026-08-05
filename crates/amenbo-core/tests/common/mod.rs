@@ -287,6 +287,7 @@ pub fn run_search(s: &Seeded, term: &str) -> (usize, usize) {
         &store_engine::read::SearchQuery {
             reach: amenbo_core::reach::Reach::All,
             terms: &terms,
+            project_id: None,
             filter: None,
             today: time::today(),
             kind: None,

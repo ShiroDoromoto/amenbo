@@ -2913,12 +2913,15 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 render_status(&result);
             }
         }
-        Command::Search { words, filter, kind, sort, limit, offset } => {
+        Command::Search { words, project, filter, kind, sort, limit, offset } => {
+            let project_id =
+                project.map(|p| store.resolve_project_ref(&p)).transpose().map_err(CliError::from)?;
             let result = store
                 .search(query::SearchParams {
                     // The words arrive as separate arguments (a shell has already split them), and the read
                     // splits on whitespace — so they are handed over joined rather than re-quoted.
                     text: words.join(" "),
+                    project_id,
                     filter_expr: filter,
                     kind: kind.as_deref().map(query::SearchKind::parse).transpose().map_err(CliError::from)?,
                     face: None,
@@ -5032,9 +5035,9 @@ fn bound_project(store: &Store) -> Option<i64> {
 fn named_project_flag(cli: &Cli) -> Option<&'static str> {
     let named = cli.project.is_some()
         || match &cli.command {
-            Some(Command::Bind { project, .. }) | Some(Command::Activity { project, .. }) => {
-                project.is_some()
-            }
+            Some(Command::Bind { project, .. })
+            | Some(Command::Activity { project, .. })
+            | Some(Command::Search { project, .. }) => project.is_some(),
             Some(Command::Task { sub }) => matches!(
                 sub,
                 TaskCmd::Add { project: Some(_), .. }

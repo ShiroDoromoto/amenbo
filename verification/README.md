@@ -29,10 +29,11 @@ verification/
                throwaway store, and the vocabulary a `given:` world is stood up in.
 ```
 
-`core/`, `cli/` and `gui/` are members of this cargo workspace, outside the main workspace, so
-they are never pulled into `make test`. CI has a job of its own for them, gated to changes under
-`verification/` (`.github/workflows/ci.yml`), and this is the line it runs — run the same one before
-you land a change here, so a red arrives at your terminal rather than at main:
+`core/`, `cli/` and `gui/` are members of this cargo workspace, outside the main workspace, so the
+root manifest's own clippy and tests never reach them. What does is a stage of its own on either
+side: CI's `verification` job, gated to changes under `verification/` (`.github/workflows/ci.yml`),
+and `make gate-verification` locally, which `make gate` runs when this layer is what a change
+touched and `make test` runs unconditionally. Both are the same two lines:
 
 ```sh
 cargo clippy --manifest-path verification/Cargo.toml --all-targets -- -D warnings -A clippy::disallowed_methods

@@ -141,7 +141,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate selfupdate-gate ts-derive-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate selfupdate-gate ts-derive-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -454,7 +454,8 @@ else
 GATE_STAGES := gate-cheap \
   $(if $(filter rust gui,$(GATE_FACETS)),gate-tools) \
   $(if $(filter rust,$(GATE_FACETS)),gate-rust gate-app-rust) \
-  $(if $(filter gui,$(GATE_FACETS)),gate-gui)
+  $(if $(filter gui,$(GATE_FACETS)),gate-gui) \
+  $(if $(filter verification,$(GATE_FACETS)),gate-verification)
 endif
 endif
 
@@ -473,6 +474,10 @@ gate:
 ## test. The same gate as CI's app-rust + gui-web jobs (the app crate's clippy/test + GUI
 ## typecheck/build/test) runs here too, catching it locally before it slips into main. The GUI tests
 ## are only the host-independent lightweight ones (do not add heavy features).
+## The pre-distribution harness (verification/) is out of the root workspace for the same reason and
+## runs here as a stage of its own too. It is the cheap end of this target — nothing there drives a
+## binary — and leaving it out would make the narrowed gate stricter than the full one, which is the
+## one thing the narrowing must never be.
 ## **But this gate sees only the OS it ran on**: code under `#[cfg(target_os = "linux")]` / `windows`
 ## is not even compiled on mac, so clippy violations and type errors there slip past a full green into
 ## main.
@@ -487,6 +492,7 @@ test:
 	$(MAKE) --no-print-directory gate-rust
 	$(MAKE) --no-print-directory gate-app-rust
 	$(MAKE) --no-print-directory gate-gui
+	$(MAKE) --no-print-directory gate-verification
 	## Sweep last. By the time we get here the build has touched core/cli, the app crate and the GUI, so
 	## the live artifacts' atime is fresh. Sweeping before the build would drop assets not yet read (the
 	## bench criterion data etc.) and cold them. Under the threshold it is a no-op that exits after one
@@ -546,6 +552,17 @@ gate-app-rust:
 ## ones (do not add heavy features).
 gate-gui:
 	cd app && npm run typecheck && npm run build && npm test
+
+## The pre-distribution harness stage (verification/, a cargo workspace of its own outside the root
+## one): CI's `verification` job, the same two lines. Nothing here drives a binary — the scenarios are
+## loaded and linted and the drivers' own units run — so it is seconds, and it is the only place the
+## harness is compiled at all: the workspace clippy above walks the root manifest and never reaches it.
+## `-A clippy::disallowed_methods` is the harness's own exemption and not slack: it black-box-drives
+## the shipped binary, so it reads process env raw rather than through the funnel the rest of the tree
+## goes through (verification/README.md says it at length).
+gate-verification:
+	cargo clippy --manifest-path verification/Cargo.toml --all-targets -- -D warnings -A clippy::disallowed_methods
+	cargo test --manifest-path verification/Cargo.toml
 
 ## Run the Linux-target clippy from mac. The code under `#[cfg(target_os = "linux")]` that `make test`
 ## does not see — store_watch's inotify/statfs paths are the real thing — is only checked once it is

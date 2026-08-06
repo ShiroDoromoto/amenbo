@@ -502,6 +502,13 @@ const REGISTRY: &[OpSpec] = &[
     // asserting today's sentence would go red on a change amenbo had no part in. `when` is the occasion;
     // `cmd` and `does` are one call, which is enough to see the calling form amenbo puts in front of it.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-agent", required: &["name", "when"], refs: &[], strings: &["name", "when", "cmd", "does"], binds: false },
+    // An installed plugin that is nobody's but its author's. The badge is the catalog's to grant and no
+    // author can write it onto themselves, which is what makes it the one thing amenbo can safely split
+    // a stranger from a colleague by — and it is also why a road cannot reach a stranger by installing
+    // one: every plugin the official catalog serves comes back badged. So the badge is taken off the
+    // installed manifest here, the way `declare-agent` writes the block onto it, and what follows is the
+    // state a user reaches the moment they install from anywhere else.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "unbadge", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // An installed plugin whose program answers with the secrets it was handed. A secret travels to a
     // run as an environment variable on the child process — off argv, off the log, out of the store —
     // so the only place it can be seen arriving is inside the run, and only a plugin willing to say
@@ -850,6 +857,9 @@ const REGISTRY: &[OpSpec] = &[
     // What is on this machine and whose gate is open (`enabled` asks the gate; without it the
     // question is only whether the plugin is there at all), what the last call returned on its own
     // stdout, and what the execution log kept of a run.
+    // `desc` asks whether the author's one required sentence is readable here — not what it says. The
+    // wording is the author's and they may change it any day, while where it is readable is amenbo's
+    // and is the whole of what the split between a colleague's plugin and a stranger's decides.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "listed", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // One project a row names among those the plugin fires in — or, with `present: false`, one it does
     // not. The question is asked a project at a time because that is what a list can be wrong about: a
@@ -958,7 +968,11 @@ const REGISTRY: &[OpSpec] = &[
     //
     // A CLI road alone: the entry point is a document for whoever drives the terminal, and no screen
     // prints it.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "at-entry", required: &["name", "present"], refs: &[], strings: &["name", "when", "cmd", "because"], binds: false },
+    // `absent` is the reading the other three cannot give: naming a field asks what it says, and a field
+    // that is not there says nothing to compare. It takes the field names a step expects to find nothing
+    // under, comma-separated — what an author wrote and this reader does not get, whether because the
+    // author is a stranger or because what they wrote no longer passes the rules.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "at-entry", required: &["name", "present"], refs: &[], strings: &["name", "when", "cmd", "because", "absent"], binds: false },
     // The author's own door, before anything is installed anywhere: a manifest file is held up to the
     // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
     // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.

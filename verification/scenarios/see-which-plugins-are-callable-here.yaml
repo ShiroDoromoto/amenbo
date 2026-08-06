@@ -102,7 +102,7 @@ steps_cli:
     with:
       name: worktree
       present: true
-      guide: false
+      absent: when,commands
 
   # And a block that passes is relayed as before, so what was refused was the block and not the road.
   - type: action
@@ -120,7 +120,7 @@ steps_cli:
     with:
       name: worktree
       present: true
-      guide: true
+      when: SCENARIO — when an AI should reach for this plugin
 
   - type: action
     domain: plugin

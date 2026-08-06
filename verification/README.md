@@ -407,7 +407,11 @@ everything else — and the published plugins use their settings rather than rep
 `plugin read-back-program` leaves one calling amenbo back, which is the only witness the read-back
 route has: an event names a record and carries none of it, so the content is fetched by running the
 binary with the store and the window amenbo handed over — and the published plugins work everything
-out from the repository they are called in, asking amenbo nothing. `plugin installed-dir` shuts what
+out from the repository they are called in, asking amenbo nothing. `plugin unbadge` takes the catalog's badge off an installed
+plugin, which is the only way a road meets a stranger's: the badge is the catalog's to grant and an
+author who could write it onto themselves would be the reason it is worth nothing, so every plugin
+the official catalog serves arrives with it and no install reaches the state a user is in the moment
+they install from anywhere else. `plugin installed-dir` shuts what
 is installed away and gives it back, which is the only way a write's delivery is left standing:
 delivery rides along with the write that caused it, so a push made by hand carries something only
 where that drive never ran — and amenbo skips it exactly when the installed plugins will not read.

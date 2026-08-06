@@ -353,6 +353,23 @@ impl Driver<'_> {
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 Ok(Outcome::action(format!("`{name}` now says for itself: {when}")))
             }
+            // The badge off, so what is installed is a stranger's. Nothing a road does with amenbo can
+            // reach this state: the badge is the catalog's to grant, every plugin the official catalog
+            // serves arrives with it, and an author who could write it onto themselves would be the
+            // reason the split is worth nothing. So it comes off the installed manifest here — and what
+            // follows is what a user meets the moment they install from anywhere else.
+            "unbadge" => {
+                let name = req_str(with, "name")?;
+                let path = self.session.home.join("plugins").join(name).join("manifest.json");
+                let raw = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
+                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
+                manifest["official"] = serde_json::Value::Bool(false);
+                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                Ok(Outcome::action(format!("`{name}` is installed as a stranger's now, not the catalog's")))
+            }
             // Standing in a program that says what it was handed, so the injection has a witness. A
             // config value reaches a run and nowhere else: the store holds the answer rather than what
             // it is worth, the log is kept clear of it, and the read that says a secret is set says
@@ -576,6 +593,28 @@ impl Driver<'_> {
                 // reader gets wrong — so the two are asked apart, never rolled into one answer. The row
                 // names the projects holding the gate open, so "open" is that list having anything in
                 // it, and the projects themselves are read back into the line.
+                // The author's one required sentence, on the face a person reads. Whether it is readable
+                // here is the whole of what the split between a colleague's plugin and a stranger's
+                // decides — the sentence is not dropped, it is kept where its reader is. What it says is
+                // deliberately not read back: the wording is the author's to change any day, and a line
+                // holding them to today's would go red on a change amenbo had no part in.
+                if let Some(want) = opt_bool(with, "desc") {
+                    let said = row.and_then(|r| r["desc"].as_str()).unwrap_or_default();
+                    let pass = said.is_empty() != want;
+                    return Ok(Outcome::assert(
+                        pass,
+                        format!(
+                            "`plugin list` {} (expected it {}, {})",
+                            if said.is_empty() {
+                                format!("says nothing about `{name}`")
+                            } else {
+                                format!("describes `{name}` as {said:?}")
+                            },
+                            if want { "described" } else { "left undescribed" },
+                            if pass { "as expected" } else { "MISMATCH" }
+                        ),
+                    ));
+                }
                 match opt_bool(with, "enabled") {
                     Some(want) => {
                         let on: Option<Vec<&str>> = row.and_then(|r| {
@@ -673,20 +712,35 @@ impl Driver<'_> {
                         format!("the entry point offers `{name}` (expected nothing, MISMATCH)"),
                     ));
                 }
-                // Whether the author's block is relayed at all. A guide the rules no longer admit is
-                // turned away whole where it is read out, which leaves an entry reading exactly like
-                // one whose author wrote no block — the plugin still named, and nothing of its own
-                // around the name. Naming the two apart is what a road needs to show that the rules
-                // reach a manifest edited after it was installed.
-                if let Some(want) = with.get("guide").and_then(|v| v.as_bool()) {
-                    let carried = entry.get("when").is_some() || entry.get("commands").is_some();
+                // What the author wrote and this reader does not get. Naming a field asks what it says,
+                // which a field that is not there cannot answer — so the absence is its own reading, and
+                // it is the one two different rules both land in: a stranger's prose never reaches this
+                // document at all, and a block that stopped passing the rules is turned away whole where
+                // it is read out. Both leave an entry that has to be told apart from one whose author
+                // wrote nothing, and this is what tells them apart.
+                if let Some(fields) = with.get("absent").and_then(|v| v.as_str()) {
+                    let carried: Vec<&str> = fields
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|f| !f.is_empty())
+                        .filter(|f| match *f {
+                            // `does` is written beside each call rather than on the entry, so it is
+                            // asked of the calls: one line still carrying it is one sentence arriving.
+                            "does" => entry["commands"]
+                                .as_array()
+                                .is_some_and(|cs| cs.iter().any(|c| c.get("does").is_some())),
+                            field => entry.get(field).is_some(),
+                        })
+                        .collect();
                     return Ok(Outcome::assert(
-                        carried == want,
+                        carried.is_empty(),
                         format!(
-                            "the entry point carries {} of what `{name}`'s author wrote (expected {}, {})",
-                            if carried { "some" } else { "none" },
-                            if want { "the block relayed" } else { "the block turned away" },
-                            if carried == want { "as expected" } else { "MISMATCH" }
+                            "`{name}` carries {} at the entry point (expected none of `{fields}`, {})",
+                            match carried.as_slice() {
+                                [] => "none of them".to_string(),
+                                cs => cs.join(", "),
+                            },
+                            if carried.is_empty() { "as expected" } else { "MISMATCH" }
                         ),
                     ));
                 }

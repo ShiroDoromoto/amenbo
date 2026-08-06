@@ -4,16 +4,17 @@
 # switched on is part of what it owes: switching it on was an instruction, and an entry point that
 # does not carry it leaves the AI working without something someone put there on purpose.
 #
-# amenbo holds no words of its own about a third party's plugin — no plugin's name appears in its
-# source — so what rides at the entry point is read off the manifest beside the binary at the moment
-# the question is asked. That is what makes this a path worth a gate rather than a field to test: the
-# words are the author's, the gate is the user's, and the only thing amenbo contributes is the line an
-# AI can type.
+# amenbo holds no words of its own about a plugin — no plugin's name appears in its source — so what
+# rides at the entry point is read off the manifest beside the binary at the moment the question is
+# asked. That is what makes this a path worth a gate rather than a field to test: the words are the
+# author's, the gate is the user's, and the only thing amenbo contributes is the line an AI can type.
 #
 # The subject is the official `worktree` plugin, installed from the catalog like the rest of the plugin
-# scenarios, so this needs the network. What it says for itself is written onto the installed manifest
-# here rather than read out of the catalog: an author may reword their block any day, and a line
-# asserting today's sentence would go red on a change amenbo had no part in.
+# scenarios, so this needs the network. Official is also what makes the author's sentences readable
+# here at all: prose reaches the entry point for an official plugin alone, and a third party's entry
+# carries the `cmd` line and nothing it wrote around it. What this plugin says for itself is written
+# onto the installed manifest here rather than read out of the catalog: an author may reword their
+# block any day, and a line asserting today's sentence would go red on a change amenbo had no part in.
 id: see-which-plugins-are-callable-here
 title: An AI's entry point names the plugins this folder can call, in their authors' words, as lines it can type — and says which empty it is when it names none
 description: >

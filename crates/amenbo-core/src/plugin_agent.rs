@@ -22,6 +22,13 @@
 //! one-line description and what it observes. It said nothing about how to drive it, which is different
 //! from it not being here: an AI that can see an enabled plugin firing on `task.done` can reason about
 //! what it is watching, and nothing amenbo could invent would be more true than the author's silence.
+//!
+//! **The author's prose rides here only for an official plugin** (`AMB-D-575`). Whether a sentence is an
+//! instruction to the reading AI is not something a machine can rule on (`AMB-D-572`), and the review that
+//! would catch it does not exist, so the split is drawn where a machine cannot be wrong: `official` is the
+//! catalog's badge and no third party can self-grant it (`AMB-D-347`). A third party's entry carries `cmd`
+//! — held to a grammar, so no prose fits in it — and nothing else the author wrote in the `agent` block:
+//! no `when`, and no `does` beside the line. It is not filtered out; there is no field for it to land in.
 
 use serde_json::{json, Map, Value};
 
@@ -43,6 +50,10 @@ pub fn entries(plugins: &[&InstalledPlugin], command_name: &str) -> Value {
 /// command), and `events` is absent for a plugin that subscribes to nothing. An absent key says the
 /// author wrote nothing there, which is the truth; an empty one would spend a reader's attention to say
 /// the same.
+///
+/// **`when` and `does` are an official plugin's alone** (`AMB-D-575`): for a third party, the block still
+/// yields its commands, but each one is the `cmd` line by itself. A third party that named no command has
+/// nothing left to carry, so the block leaves no key at all.
 pub fn entry(plugin: &InstalledPlugin, command_name: &str) -> Value {
     let manifest = &plugin.manifest;
     let mut out = Map::new();
@@ -50,18 +61,29 @@ pub fn entry(plugin: &InstalledPlugin, command_name: &str) -> Value {
     out.insert("desc".into(), json!(manifest.desc));
 
     if let Some(agent) = &manifest.agent {
-        out.insert("when".into(), json!(agent.when));
+        // The badge is the catalog's, never self-declared (`AMB-D-347`), which is what makes this the one
+        // split a machine can draw without ever being wrong about it.
+        let official = manifest.official;
+        if official {
+            out.insert("when".into(), json!(agent.when));
+        }
         if !agent.commands.is_empty() {
             let commands: Vec<Value> = agent
                 .commands
                 .iter()
                 .map(|c| {
-                    json!({
-                        // The author wrote the face; the calling form is amenbo's, assembled from the name
-                        // it just read off disk (`AMB-D-437`).
-                        "cmd": format!("{command_name} plugin run {} {}", plugin.name, c.cmd),
-                        "does": c.does,
-                    })
+                    // The author wrote the face; the calling form is amenbo's, assembled from the name
+                    // it just read off disk (`AMB-D-437`). `cmd` is held to a grammar (`AMB-D-572`), so
+                    // it is the one thing a third party's sentence cannot ride in on.
+                    let mut entry = Map::new();
+                    entry.insert(
+                        "cmd".into(),
+                        json!(format!("{command_name} plugin run {} {}", plugin.name, c.cmd)),
+                    );
+                    if official {
+                        entry.insert("does".into(), json!(c.does));
+                    }
+                    Value::Object(entry)
                 })
                 .collect();
             out.insert("commands".into(), Value::Array(commands));
@@ -84,7 +106,7 @@ mod tests {
     use crate::plugin_manifest::{AgentCommand, AgentGuide, EventSubscription, Manifest, Os};
     use std::path::PathBuf;
 
-    /// An installed plugin carrying `agent` and `events` as the author wrote them.
+    /// An installed **official** plugin carrying `agent` and `events` as the author wrote them.
     fn installed(name: &str, agent: Option<AgentGuide>, events: &[&str]) -> InstalledPlugin {
         InstalledPlugin {
             name: name.to_string(),
@@ -112,6 +134,13 @@ mod tests {
         }
     }
 
+    /// The same plugin without the catalog's badge — what anyone outside the amenbo team installs as.
+    fn third_party(name: &str, agent: Option<AgentGuide>, events: &[&str]) -> InstalledPlugin {
+        let mut p = installed(name, agent, events);
+        p.manifest.official = false;
+        p
+    }
+
     fn guide() -> AgentGuide {
         AgentGuide {
             when: "Starting work on a task that will produce commits".into(),
@@ -125,10 +154,10 @@ mod tests {
         }
     }
 
-    /// The whole of one entry, and the one thing amenbo contributes to it: the calling form in front of
-    /// the author's own face.
+    /// The whole of one official entry, and the one thing amenbo contributes to it: the calling form in
+    /// front of the author's own face.
     #[test]
-    fn a_plugin_that_wrote_a_block_hands_back_a_line_an_ai_can_type() {
+    fn an_official_plugin_that_wrote_a_block_hands_back_a_line_an_ai_can_type() {
         let plugin = installed("worktree", Some(guide()), &["task.status_changed"]);
         assert_eq!(
             entry(&plugin, "amenbo"),
@@ -176,6 +205,37 @@ mod tests {
         assert!(out.get("when").is_none(), "silence is not a sentence amenbo writes for them");
         assert!(out.get("commands").is_none());
         assert_eq!(out["events"], json!(["comment.added"]), "what it watches is still readable");
+    }
+
+    /// A third party gets the line and nothing it wrote around it (`AMB-D-575`) — the calling form is
+    /// still assembled, so the plugin stays callable, but the prose has nowhere to land.
+    #[test]
+    fn a_third_party_carries_the_line_alone() {
+        let plugin = third_party("worktree", Some(guide()), &["task.status_changed"]);
+        assert_eq!(
+            entry(&plugin, "amenbo"),
+            json!({
+                "name": "worktree",
+                "desc": "Isolate each task in its own git worktree",
+                "commands": [
+                    { "cmd": "amenbo plugin run worktree start <task-id>" },
+                    { "cmd": "amenbo plugin run worktree finish <task-id>" },
+                ],
+                "events": ["task.status_changed"],
+            })
+        );
+    }
+
+    /// A third party that only watches wrote nothing but prose, so its block leaves no key behind — the
+    /// plugin is still named, and what it observes is still readable.
+    #[test]
+    fn a_third_party_that_named_no_command_leaves_the_block_empty() {
+        let guide = AgentGuide { when: "It only watches".into(), commands: vec![] };
+        let out = entry(&third_party("watcher", Some(guide), &["task.done"]), "amenbo");
+        assert!(out.get("when").is_none(), "the occasion is prose, and prose is official's alone");
+        assert!(out.get("commands").is_none());
+        assert_eq!(out["name"], "watcher");
+        assert_eq!(out["events"], json!(["task.done"]), "what it watches is not the author's sentence");
     }
 
     /// Subscribing to nothing leaves no key: a command-only plugin does not carry an empty list.

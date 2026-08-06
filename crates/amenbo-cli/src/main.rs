@@ -673,8 +673,9 @@ fn bound_dir_is_under_git() -> bool {
         .is_some_and(|(dir, _)| worktree::under_git(&dir))
 }
 
-/// **The plugins the agent spec names** (`AMB-D-437`): what this project can actually call, described in
-/// the words their authors wrote ([`amenbo_core::plugin_agent`]).
+/// **The plugins the agent spec names** (`AMB-D-437`): what this project can actually call — described in
+/// the words their authors wrote where those authors are the amenbo team, and by the line to type alone
+/// where they are not (`AMB-D-575`/`AMB-D-576`, [`amenbo_core::plugin_agent`]).
 ///
 /// The filter is the callable set, and it is the same set an actual call passes
 /// ([`plugin_invoke::prepare`](amenbo_core::plugin_invoke::prepare)): installed, **enabled in the project
@@ -2818,12 +2819,13 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                         cycles.remove("worktree");
                     }
                 }
-                // What the user installed and switched on here, in the author's own words (`AMB-D-437`).
-                // A key of its own, never folded into `cycles`: those are amenbo's own working practice and
-                // amenbo answers for every line of them, while these are a third party's — kept on a
-                // separate shelf so a reader can always tell whose words they are reading. Runtime like the
-                // fields above, and for the same reason: what is installed and open is the store's answer,
-                // not the static spec's.
+                // What the user installed and switched on here (`AMB-D-437`) — in the author's own words
+                // when amenbo is that author, and as the callable line alone when it is not
+                // (`AMB-D-575`/`AMB-D-576`). A key of its own, never folded into `cycles`: those are
+                // amenbo's own working practice and amenbo answers for every line of them, while these
+                // are a third party's — kept on a separate shelf so a reader can always tell whose words
+                // they are reading. Runtime like the fields above, and for the same reason: what is
+                // installed and open is the store's answer, not the static spec's.
                 let (plugins, empty_because) = plugins_for_agent(&store, bound_project(&store));
                 map.insert("plugins".to_string(), plugins);
                 // Only when there is nothing to name: a reader with a list in hand has no use for a

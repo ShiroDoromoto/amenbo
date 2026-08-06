@@ -18,17 +18,24 @@
 //! [`plugin_invoke::prepare`](crate::plugin_invoke::prepare) is the same set for an actual call). A plugin
 //! the entry point named but a call would refuse is worse than one it left out.
 //!
-//! **A plugin that wrote no `agent` block still appears**, with what its manifest says regardless — its
-//! one-line description and what it observes. It said nothing about how to drive it, which is different
-//! from it not being here: an AI that can see an enabled plugin firing on `task.done` can reason about
-//! what it is watching, and nothing amenbo could invent would be more true than the author's silence.
+//! **A plugin that wrote no `agent` block still appears**, with what its manifest says regardless — what
+//! it observes, and for an official one its description besides. It said nothing about how to drive it,
+//! which is different from it not being here: an AI that can see an enabled plugin firing on `task.done`
+//! can reason about what it is watching, and nothing amenbo could invent would be more true than the
+//! author's silence.
 //!
 //! **The author's prose rides here only for an official plugin** (`AMB-D-575`). Whether a sentence is an
 //! instruction to the reading AI is not something a machine can rule on (`AMB-D-572`), and the review that
 //! would catch it does not exist, so the split is drawn where a machine cannot be wrong: `official` is the
 //! catalog's badge and no third party can self-grant it (`AMB-D-347`). A third party's entry carries `cmd`
-//! — held to a grammar, so no prose fits in it — and nothing else the author wrote in the `agent` block:
-//! no `when`, and no `does` beside the line. It is not filtered out; there is no field for it to land in.
+//! — held to a grammar, so no prose fits in it — and nothing else its author wrote anywhere in the
+//! manifest: no `when`, no `does` beside the line, and no `desc` (`AMB-D-576`), which is a required field
+//! and so would otherwise be the one sentence every third party still gets to place here. It is not
+//! filtered out; there is no field for it to land in.
+//!
+//! **`desc` is not gone, it is elsewhere**: `plugin list` is the face a person reads, and every plugin's
+//! description is written there whoever wrote it (`AMB-D-576`). What the split decides is which reader a
+//! sentence reaches, not whether it is kept.
 
 use serde_json::{json, Map, Value};
 
@@ -45,25 +52,29 @@ pub fn entries(plugins: &[&InstalledPlugin], command_name: &str) -> Value {
 
 /// One plugin's entry: who it is, when to reach for it, what to type, and what it watches.
 ///
-/// Only `name` and `desc` are always there — they are the manifest's required fields. `when` and
-/// `commands` come from the author's `agent` block and are absent when it is (or when it names no
-/// command), and `events` is absent for a plugin that subscribes to nothing. An absent key says the
-/// author wrote nothing there, which is the truth; an empty one would spend a reader's attention to say
-/// the same.
+/// Only `name` is always there. `desc` is the manifest's other required field, but it is the author's
+/// sentence, so it rides for an official plugin alone (`AMB-D-576`); `when` and `commands` come from the
+/// author's `agent` block and are absent when it is (or when it names no command); and `events` is absent
+/// for a plugin that subscribes to nothing. An absent key says nothing was written there, or that what
+/// was is not this reader's — an empty one would spend their attention to say the same.
 ///
-/// **`when` and `does` are an official plugin's alone** (`AMB-D-575`): for a third party, the block still
-/// yields its commands, but each one is the `cmd` line by itself. A third party that named no command has
-/// nothing left to carry, so the block leaves no key at all.
+/// **`desc`, `when` and `does` are an official plugin's alone** (`AMB-D-575`/`AMB-D-576`): for a third
+/// party, the block still yields its commands, but each one is the `cmd` line by itself. A third party
+/// that named no command is down to its name and what it watches.
 pub fn entry(plugin: &InstalledPlugin, command_name: &str) -> Value {
     let manifest = &plugin.manifest;
+    // The badge is the catalog's, never self-declared (`AMB-D-347`), which is what makes this the one
+    // split a machine can draw without ever being wrong about it.
+    let official = manifest.official;
     let mut out = Map::new();
     out.insert("name".into(), json!(plugin.name));
-    out.insert("desc".into(), json!(manifest.desc));
+    if official {
+        // Required of every manifest, and still the author's own line — so it goes to `plugin list`,
+        // where a person reads it, and not here (`AMB-D-576`).
+        out.insert("desc".into(), json!(manifest.desc));
+    }
 
     if let Some(agent) = &manifest.agent {
-        // The badge is the catalog's, never self-declared (`AMB-D-347`), which is what makes this the one
-        // split a machine can draw without ever being wrong about it.
-        let official = manifest.official;
         if official {
             out.insert("when".into(), json!(agent.when));
         }
@@ -207,8 +218,10 @@ mod tests {
         assert_eq!(out["events"], json!(["comment.added"]), "what it watches is still readable");
     }
 
-    /// A third party gets the line and nothing it wrote around it (`AMB-D-575`) — the calling form is
-    /// still assembled, so the plugin stays callable, but the prose has nowhere to land.
+    /// A third party gets the line and nothing it wrote around it (`AMB-D-575`/`AMB-D-576`) — the calling
+    /// form is still assembled, so the plugin stays callable, but the prose has nowhere to land. `desc` is
+    /// required of every manifest and still absent here: required is not the same as addressed to this
+    /// reader.
     #[test]
     fn a_third_party_carries_the_line_alone() {
         let plugin = third_party("worktree", Some(guide()), &["task.status_changed"]);
@@ -216,7 +229,6 @@ mod tests {
             entry(&plugin, "amenbo"),
             json!({
                 "name": "worktree",
-                "desc": "Isolate each task in its own git worktree",
                 "commands": [
                     { "cmd": "amenbo plugin run worktree start <task-id>" },
                     { "cmd": "amenbo plugin run worktree finish <task-id>" },
@@ -226,16 +238,17 @@ mod tests {
         );
     }
 
-    /// A third party that only watches wrote nothing but prose, so its block leaves no key behind — the
-    /// plugin is still named, and what it observes is still readable.
+    /// A third party that only watches wrote nothing but prose, so it is down to the two things it did
+    /// not write: the name the catalog knows it by, and the events amenbo named.
     #[test]
-    fn a_third_party_that_named_no_command_leaves_the_block_empty() {
+    fn a_third_party_that_named_no_command_is_down_to_its_name_and_its_events() {
         let guide = AgentGuide { when: "It only watches".into(), commands: vec![] };
         let out = entry(&third_party("watcher", Some(guide), &["task.done"]), "amenbo");
-        assert!(out.get("when").is_none(), "the occasion is prose, and prose is official's alone");
-        assert!(out.get("commands").is_none());
-        assert_eq!(out["name"], "watcher");
-        assert_eq!(out["events"], json!(["task.done"]), "what it watches is not the author's sentence");
+        assert_eq!(
+            out,
+            json!({ "name": "watcher", "events": ["task.done"] }),
+            "the vocabulary is amenbo's, and that is the whole of what is left"
+        );
     }
 
     /// Subscribing to nothing leaves no key: a command-only plugin does not carry an empty list.

@@ -673,6 +673,23 @@ impl Driver<'_> {
                         format!("the entry point offers `{name}` (expected nothing, MISMATCH)"),
                     ));
                 }
+                // Whether the author's block is relayed at all. A guide the rules no longer admit is
+                // turned away whole where it is read out, which leaves an entry reading exactly like
+                // one whose author wrote no block — the plugin still named, and nothing of its own
+                // around the name. Naming the two apart is what a road needs to show that the rules
+                // reach a manifest edited after it was installed.
+                if let Some(want) = with.get("guide").and_then(|v| v.as_bool()) {
+                    let carried = entry.get("when").is_some() || entry.get("commands").is_some();
+                    return Ok(Outcome::assert(
+                        carried == want,
+                        format!(
+                            "the entry point carries {} of what `{name}`'s author wrote (expected {}, {})",
+                            if carried { "some" } else { "none" },
+                            if want { "the block relayed" } else { "the block turned away" },
+                            if carried == want { "as expected" } else { "MISMATCH" }
+                        ),
+                    ));
+                }
                 // The author's own line, verbatim. A `when` the step does not name is not asked about:
                 // a plugin whose author wrote no block is still offered, and that reading is the step
                 // that names nothing here.

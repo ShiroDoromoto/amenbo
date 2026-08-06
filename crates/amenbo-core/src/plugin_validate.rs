@@ -303,6 +303,24 @@ pub fn validate_list_entry(e: &ListEntry) -> Vec<Problem> {
     problems
 }
 
+/// Validate the **agent block alone**, over a manifest already on disk (`AMB-D-573`). Empty ⇒ the block
+/// may be relayed; anything else and [`crate::plugin_agent`] drops the guide rather than trimming it.
+///
+/// Exposed on its own because the door is not the last place these rules have to hold. `validate_manifest`
+/// runs at install, and nothing re-runs it when amenbo itself is updated — so a rule added today reaches
+/// only what is installed after today, while yesterday's plugin keeps relaying what yesterday's rules let
+/// through. The manifest is a plain file beside the binary, too: the checksum guards the program, not the
+/// document, and `plugin rollback` writes back one that passed under older rules.
+///
+/// The block alone, and not the whole manifest: what the entry point relays is the guide, so that is what
+/// it has standing to refuse. A checksum that stopped satisfying a later rule says nothing about whether
+/// the author's lines are safe to read out.
+pub fn validate_agent(m: &Manifest) -> Vec<Problem> {
+    let mut problems = Vec::new();
+    check_agent(&mut problems, m);
+    problems
+}
+
 /// Validate a plugin id (`name`) against the grammar (`AMB-D-360`) — exposed on its own because the same
 /// rules gate a name at install-time conflict resolution, not only at manifest intake. Each broken rule is
 /// its own problem, so an author sees all of them at once.

@@ -25,9 +25,12 @@
 //! The reserved `registry` directory ([`is_reserved_plugin_name`]) is not a plugin and is skipped.
 //!
 //! **Reading is not the door.** A manifest's *rules* are enforced fail-closed where untrusted input enters
-//! — the install/intake door (`AMB-D-354`, [`crate::plugin_validate`]). What is on disk here has already
-//! passed it, so this layer checks only what could have rotted since: that the files exist, parse, and
-//! still agree on the name.
+//! — the install/intake door (`AMB-D-354`, [`crate::plugin_validate`]). What is on disk here passed it
+//! *then*, which is not the same as passing it now: the rules travel with amenbo and the manifest does
+//! not, so a build carrying a newer rule meets documents admitted under older ones, and the file is a
+//! plain one beside the binary that the checksum never covered. So this layer still checks only what it
+//! can — that the files exist, parse, and agree on the name — and the rules are re-asked where what they
+//! guard is actually used (`AMB-D-573`, [`crate::plugin_agent`] for the guide an entry point relays).
 //!
 //! **One broken install never hides the rest.** [`installed`] warns and skips a directory it cannot read,
 //! the same best-effort posture the dispatch resolver takes with a plugin whose config will not resolve

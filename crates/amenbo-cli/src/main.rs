@@ -754,7 +754,15 @@ fn plugins_for_agent(
             }),
         );
     }
-    (amenbo_core::plugin_agent::entries(&callable, amenbo_core::config::Paths::command_name()), None)
+    let (list, rejected) =
+        amenbo_core::plugin_agent::entries(&callable, amenbo_core::config::Paths::command_name());
+    // A guide turned away at the moment it was read out (`AMB-D-573`) is the user's to know about: their
+    // plugin is installed and enabled, and the entry point still does not carry what its author wrote.
+    // On stderr, like every other advisory here, so a `--json` reader's stdout stays one document.
+    for line in rejected {
+        eprintln!("⚠ {line}");
+    }
+    (list, None)
 }
 
 /// Can this invocation reach a store at all — is one named, by a pointer or by env (AMENBO_HOME /

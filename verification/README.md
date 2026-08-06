@@ -508,6 +508,11 @@ to open a board for in the first place. The premise is what puts the columns the
 takes for granted, or — where filing is what the road is about — one piece of ordinary work that was
 already standing on that board.
 
+A board the road raised itself is that same empty board, and no earlier step can fill it: a project a
+road makes is one the premise never saw. So a second project a road only reads across — the neighbour
+a narrowing has to have something to leave out — is stood up in the premise whole, with the records
+in it, and the road is left holding the narrowing alone.
+
 The same goes for anything a screen road hands to amenbo from outside it. Hanging a file is a move on
 a record and not a way of making one, so the bytes have to be lying in the run's folder before the
 step that attaches them: `repo write-file` is how they get there, and a road that asks for a file

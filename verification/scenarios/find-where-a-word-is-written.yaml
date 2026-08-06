@@ -19,7 +19,14 @@ description: >
 # The record both roads write their words onto. Filing it is nothing this scenario asks about — the
 # question is where a word is written, not how work gets onto a board — and standing it up is what
 # gets the screen open at all: an untouched store has no project, so there is no board to walk this
-# on, and none of the columns the road's own later card is added from.
+# on, and no card to open for the remark the road writes onto it.
+#
+# The neighbouring project and the two records filed in it are here for the same reason: what the last
+# narrowing on either road needs is something to leave out, and raising a project and filing work in it
+# are roads of their own. The screen's road needs them stood up for one more reason. A board with
+# nothing on it draws the first loop and no way to add a card — that is the board's own decision, and
+# the graduation is meant to happen by itself when the first task lands — so a road that raised this
+# project itself would then be asking an operator to put a card on a board that offers no way to.
 #
 # The two files are here for the same reason and one more. A screen road cannot make a file — hanging
 # one is a move on a record, and the bytes have to be lying somewhere already — so the road that hangs
@@ -38,6 +45,39 @@ given:
     op: finish-creating
     with:
       target: window
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: scenario-elsewhere
+    as: elsewhere
+
+  # Its title is written so that neither record's title holds the other's inside it. The screen's road
+  # is judged by reading the shot back, and a reading is a substring: a neighbour named as an extension
+  # of the record above would leave the step that asks for it to be gone unable to say it is, whatever
+  # the screen actually drew.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO TASK — retention, filed elsewhere
+      project: elsewhere
+    as: exile
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: exile
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — retention, decided elsewhere
+      project: elsewhere
+    as: exile_why
 
   - type: action
     domain: repo
@@ -430,36 +470,7 @@ steps_cli:
   # `--project` is the other narrowing, and deliberately not a key of that grammar: a project is an
   # axis both sides carry, so scoping to one has to leave the decisions standing where the filter above
   # took them out. Both halves are asserted — the neighbour's rows fall away, and the decision of the
-  # project asked for does not.
-  - type: action
-    domain: project
-    op: create
-    with:
-      name: scenario-elsewhere
-    as: elsewhere
-
-  - type: action
-    domain: task
-    op: create
-    with:
-      title: SCENARIO TASK — retention, filed elsewhere
-    as: exile
-
-  - type: action
-    domain: task
-    op: move
-    with:
-      target: exile
-      project: elsewhere
-
-  - type: action
-    domain: decision
-    op: create
-    with:
-      title: SCENARIO DECISION — retention, decided elsewhere
-      project: elsewhere
-    as: exile_why
-
+  # project asked for does not. The neighbour it reads across is the one the premise stood up.
   - type: assert
     domain: task
     op: found
@@ -736,33 +747,10 @@ steps_gui:
       standing: proposed
 
   # The fourth control, and the only one the screen offers as a choice rather than as an expression: a
-  # project is one finite list of names, the same for both sides. A second project is raised to have
-  # something to choose between, and a record of each kind is written into it — the board and the
-  # decisions face both stand in the project just created.
-  - type: action
-    domain: project
-    op: create
-    with:
-      name: scenario-elsewhere
-    as: elsewhere
-
-  # Its title is written so that neither record's title holds the other's inside it. This road is judged
-  # by reading the shot back, and a reading is a substring: a neighbour named as an extension of this
-  # one would leave the step below unable to say it is gone, whatever the screen actually drew.
-  - type: action
-    domain: task
-    op: create
-    with:
-      title: SCENARIO TASK — retention, filed elsewhere
-    as: exile
-
-  - type: action
-    domain: decision
-    op: create
-    with:
-      title: SCENARIO DECISION — retention, decided elsewhere
-    as: exile_why
-
+  # project is one finite list of names, the same for both sides. The second project the premise stood
+  # up is what there is to choose between, and it holds a record of each kind — so the pull-down has a
+  # neighbour to name, and naming it has something to keep as well as something to drop.
+  #
   # Both halves, because a scope that did nothing would read as green from either one alone: the
   # neighbour's rows fall away, and the rows of the project asked for stay.
   - type: assert

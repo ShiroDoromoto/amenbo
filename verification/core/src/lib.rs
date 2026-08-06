@@ -992,6 +992,10 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Task, "assign"),
     (Domain::Task, "status"),
     (Domain::Task, "update"),
+    // And the record on the other side, for a road that reads across both. A screen narrowed to one
+    // project has to have a decision standing in another to leave out, and which project a decision
+    // was filed under is nothing such a road proves — recording one is a road of its own.
+    (Domain::Decision, "create"),
     // A device that has been used for a while. It is the one premise no amount of doing reaches: what
     // it stands up is the passage of time itself — launches tallied across days written on — which a
     // road can only be given, never earn.

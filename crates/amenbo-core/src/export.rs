@@ -350,14 +350,32 @@ fn safe_name(raw: &str) -> String {
 /// [`crate::archive::backup_from`] — so it is unit-testable against a hand-built store; the OS-glue entry
 /// point is [`export_json`]. The document is `{"amenbo_export": <header>, "tables": {…}}`: one database, so
 /// there is no per-store envelope to write. The source is opened **read-only** at the connection layer (no
-/// migration, no `Database` hydrate) and its datasets streamed a row at a time. On a progress cancellation
-/// the caller owns removing the partial output; this returns the cancellation error at the next boundary.
+/// migration, no `Database` hydrate) and its datasets streamed a row at a time, every table from **one read
+/// transaction** — so what lands is one instant of the store rather than several ([`open_source`]). On a
+/// progress cancellation the caller owns removing the partial output; this returns the cancellation error
+/// at the next boundary.
 pub fn export_json_from(
     db_path: &Path,
     w: &mut impl Write,
     progress: &mut impl FnMut(&Progress) -> ControlFlow<()>,
 ) -> Result<()> {
     stream_json(db_path, w, None, progress)
+}
+
+/// The connection an export reads through: **read-only**, so it can never mutate (or migrate) the source
+/// it is copying out of, and carrying the engine's wait-don't-fail `busy_timeout`
+/// ([`StoreEngine::init`](crate::store_engine::StoreEngine)) like every other connection onto this file.
+/// A WAL another process is recovering or checkpointing holds the lock for a moment, and an export that
+/// gives up the instant it is contended fails for no reason at all.
+fn open_source(db_path: &Path) -> Result<Connection> {
+    let conn = Connection::open_with_flags(
+        db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
+    )
+    .map_err(crate::error::sqlite_at(db_path))?;
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .map_err(crate::error::sqlite_at(db_path))?;
+    Ok(conn)
 }
 
 /// The shared body of the two whole-device JSON paths: records only (`bundle` = `None`, the stdout
@@ -386,17 +404,22 @@ fn stream_json(
         return Err(cancelled());
     }
 
-    // Open read-only — export must never mutate (or migrate) the source it is copying out of.
-    let conn = Connection::open_with_flags(
-        db_path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
-    )
-    .map_err(crate::error::sqlite_at(db_path))?;
+    let conn = open_source(db_path)?;
+    // **One snapshot for every table.** Each statement would otherwise take its own, so a write
+    // committing between two tables lands in the later one and not the earlier — an export holding a
+    // comment whose task it never saw. Nothing says the artifact is torn, which is what makes it worse
+    // than a failure. Deferred is the only shape a read-only connection can take, and it is enough: the
+    // snapshot is fixed by the first table's read and held to the last. `backup` gets the same guarantee
+    // from `VACUUM INTO` being a single statement; this is that guarantee, spelled out.
+    //
+    // A long read does keep the WAL from being checkpointed while it runs, which is the cost — bounded
+    // by how long the export takes, and paid to hand out an artifact that is internally consistent.
+    let snapshot = conn.unchecked_transaction().map_err(crate::error::sqlite_at(db_path))?;
 
     w.write_all(b"{\"amenbo_export\":")?;
     write_json(w, &header)?;
     w.write_all(b",\"tables\":")?;
-    stream_store_tables(&conn, &exported_datasets(), w, bundle, progress)?;
+    stream_store_tables(&snapshot, &exported_datasets(), w, bundle, progress)?;
     w.write_all(b"}")?;
     Ok(())
 }
@@ -593,6 +616,91 @@ mod export_tests {
         let titles = task_titles(&exported);
         assert_eq!(titles.len(), 2, "the deleted row is gone, not tombstoned");
         assert!(!titles.contains(&"drop"), "the deleted task is not in the export");
+    }
+
+    /// Every table comes from the same instant. A task and its comment committed **while the export is
+    /// streaming** are in neither, rather than the comment turning up on its own — which is what a
+    /// snapshot per statement would produce, and what nothing in the artifact would say. The write goes in
+    /// through the progress callback, the one place a test can reach inside the row loop, from a second
+    /// connection: exactly where another amenbo process stands.
+    #[test]
+    fn an_export_reads_every_table_from_one_snapshot() {
+        /// Enough tasks that the row loop's cancellation poll (every [`CANCEL_POLL_ROWS`] rows) fires
+        /// while `task` is streaming — that poll is the moment the test writes, and `task_comment`
+        /// streams after it.
+        const SEEDED: i64 = CANCEL_POLL_ROWS as i64 + 44;
+        /// Far above the seeded ids, so the row the writer adds cannot collide with one of them.
+        const LATE: i64 = 900_001;
+
+        let base = scratch("snapshot");
+        let a = base.join("a");
+        std::fs::create_dir_all(&a).unwrap();
+        // Opening the store is what puts the schema in the file; the rows go in underneath it, since a
+        // few hundred tasks through the write wrappers would be a transaction each for a fixture no test
+        // reads as a model.
+        drop(Store::open_at(Paths::at(a.clone())).unwrap());
+        let db = store_file(&a);
+
+        let seeder = Connection::open(&db).unwrap();
+        seeder.execute_batch("BEGIN").unwrap();
+        for i in 1..=SEEDED {
+            seeder
+                .execute("INSERT INTO task (id, title) VALUES (?1, ?2)", (i, format!("seeded {i}")))
+                .unwrap();
+        }
+        seeder.execute_batch("COMMIT").unwrap();
+
+        let writer = Connection::open(&db).unwrap();
+        writer.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+
+        let mut written = false;
+        let mut buf = Vec::new();
+        let mut cb = |p: &Progress| {
+            // The call carrying a total is the header's, raised before the store is even opened; the row
+            // loop's polls carry none, and those are the ones the write has to land between.
+            if p.total.is_none() && !written {
+                written = true;
+                writer
+                    .execute("INSERT INTO task (id, title) VALUES (?1, 'landed mid-export')", [LATE])
+                    .unwrap();
+                writer
+                    .execute(
+                        "INSERT INTO task_comment (id, task_id, text) VALUES (?1, ?1, 'on a task the export never saw')",
+                        [LATE],
+                    )
+                    .unwrap();
+            }
+            ControlFlow::Continue(())
+        };
+        export_json_from(&db, &mut buf, &mut cb).unwrap();
+        assert!(written, "the row loop polled progress, so the write did land mid-export");
+
+        let doc: serde_json::Value = serde_json::from_slice(&buf).unwrap();
+        let tasks = doc["tables"]["task"].as_array().unwrap();
+        let comments = doc["tables"]["task_comment"].as_array().unwrap();
+        assert_eq!(tasks.len(), SEEDED as usize, "the export carried the store it was pointed at");
+        assert!(
+            !comments.iter().any(|c| c["task_id"] == LATE),
+            "a comment whose task is not in this export means the tables came from two instants",
+        );
+        assert!(
+            !tasks.iter().any(|t| t["id"] == LATE),
+            "and the task is not there either — one instant, held to the last table",
+        );
+    }
+
+    /// The export's connection waits for a contended lock rather than failing on it, like every other
+    /// connection onto the store (`StoreEngine::init`).
+    #[test]
+    fn the_source_connection_waits_out_a_contended_lock() {
+        let base = scratch("busy");
+        let a = base.join("a");
+        std::fs::create_dir_all(&a).unwrap();
+        seed_store(&a, &["x"]);
+
+        let conn = open_source(&store_file(&a)).unwrap();
+        let ms: i64 = conn.query_row("PRAGMA busy_timeout", [], |r| r.get(0)).unwrap();
+        assert!(ms >= 5000, "the export waits at least 5s for a contended lock (got {ms}ms)");
     }
 
     #[test]

@@ -1,0 +1,127 @@
+# The step that tells an AI to do a thing, and the call that carries it out, meeting in one place.
+#
+# The entry point keeps amenbo's own working practice and what a plugin says for itself on two
+# shelves, and it has to: a step's body is amenbo's own and it answers for every word of it, while a
+# plugin's sentences are its author's. The cost of that separation is a document where the advice and
+# the tool for it cannot see each other — a step saying cut a worktree per task names no command,
+# since no plugin's name appears in amenbo's source, so an AI told to cut has nothing in hand there.
+#
+# The join is drawn in the one direction that keeps the shelves apart: the author names the step, by
+# id, and the step is handed the calling form alone. So what this road walks is not a field but a
+# crossing — the same line read on both sides, and what becomes of it when the id names nothing.
+#
+# The subject is the official `worktree` plugin, installed from the catalog like the rest of the
+# plugin scenarios, so this needs the network. What it says for itself is written onto the installed
+# manifest here rather than read out of the catalog: an author may reword their block, or move where
+# it claims to be a tool, any day, and a line asserting today's declaration would go red on a change
+# amenbo had no part in.
+id: find-the-tool-at-the-step-that-needs-it
+title: A step of amenbo's own cycle carries the call an installed plugin declared for it, and carries nothing where the name lands nowhere
+description: >
+  Install a plugin, switch it on, and have its author say that one call is a tool at one step. Read
+  the entry point from both sides: the plugin's own shelf still carries the call under its author's
+  words, and the step amenbo wrote now carries the line to type — the same call, with nothing of the
+  author's around it. The step nobody named carries nothing, so the line went where it was sent and
+  not everywhere. Then move the declaration to a step this build does not have, which is the state a
+  rename leaves on a manifest that never moved: the plugin is still offered, its author's words are
+  intact, and the step the working id names carries nothing. An id that lands nowhere costs a reader
+  one absent line, and nothing else.
+steps_cli:
+  # The step this road reads is in the cycle amenbo only offers where git is in play — advice about
+  # checkouts reaches the people checkouts reach, and off a git tree the whole cycle is left out
+  # rather than arriving with a caveat. So the folder is made one, which is also the shape the folder
+  # a person binds amenbo to has.
+  - type: action
+    domain: repo
+    op: git-init
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  # The author's block, and the one thing that is new in it: this call says where it is a tool.
+  - type: action
+    domain: plugin
+    op: declare-agent
+    with:
+      name: worktree
+      when: SCENARIO — when an AI should reach for this plugin
+      cmd: start <task-id>
+      does: SCENARIO — what the call does, and what it returns
+      steps: worktree.cut-per-task
+
+  # The shelf is unchanged: what the author wrote is still read as the author's, in one piece.
+  - type: assert
+    domain: plugin
+    op: at-entry
+    with:
+      name: worktree
+      present: true
+      when: SCENARIO — when an AI should reach for this plugin
+      cmd: start <task-id>
+
+  # And the crossing itself: the step amenbo wrote now carries the line an AI can type. The sentences
+  # did not travel with it — they are back on the shelf, where a reader can tell whose they are.
+  - type: assert
+    domain: plugin
+    op: at-step
+    with:
+      name: worktree
+      step: worktree.cut-per-task
+      cmd: start <task-id>
+      present: true
+
+  # One step, not every step. A tool that hung on the whole document would be a plugin writing itself
+  # into amenbo's advice wholesale, which is the thing the id is here to stop.
+  - type: assert
+    domain: plugin
+    op: at-step
+    with:
+      name: worktree
+      step: worktree.fold-it
+      cmd: start <task-id>
+      present: false
+
+  # What a rename leaves behind. The steps travel with amenbo while a manifest stays where it was
+  # installed, so a block can go on naming a step that is no longer there — and the rule that reads
+  # blocks out is deliberately not asked to catch it: refusing the block would fail an author for a
+  # change they had no part in, and a block refused is refused whole.
+  - type: action
+    domain: plugin
+    op: declare-agent
+    with:
+      name: worktree
+      when: SCENARIO — when an AI should reach for this plugin
+      cmd: start <task-id>
+      does: SCENARIO — what the call does, and what it returns
+      steps: worktree.no-step-of-this-name
+
+  # So the plugin is offered exactly as before, with its author's words intact.
+  - type: assert
+    domain: plugin
+    op: at-entry
+    with:
+      name: worktree
+      present: true
+      when: SCENARIO — when an AI should reach for this plugin
+      cmd: start <task-id>
+
+  # And `worktree.cut-per-task` carries nothing, since the block names a step this document does not
+  # have. That is the whole cost of an id that lands nowhere: one line a reader does not get, in a
+  # document that is untouched around it.
+  - type: assert
+    domain: plugin
+    op: at-step
+    with:
+      name: worktree
+      step: worktree.cut-per-task
+      cmd: start <task-id>
+      present: false

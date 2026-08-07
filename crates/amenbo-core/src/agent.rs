@@ -12,7 +12,9 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const SCHEMA_VERSION: &str = "1";
+/// The shape of what this build hands out. Bumped at `2` when `agentCycle` stopped being a list of
+/// numbered lines and became a described list of steps, each with the `id` that names it.
+pub const SCHEMA_VERSION: &str = "2";
 
 /// The spec with a locale applied, for the GUI to display. The single source of truth stays the
 /// English [`build`]: the CLI and `agent --json`, which the AI reads, call it directly and get
@@ -507,14 +509,7 @@ fn spec_as_authored() -> Value {
             "facet": "The facet of an operation (a person / that person's AI) is declared with --actor, and there alone: no environment variable carries it, and it is never defaulted. Every operation that uses a facet requires one — the writes that stamp it onto created_by / assign / activity, and the reads that surface store content, which draw an AI's reach from it (see reach). One without it is refused with facet_required (exit 2), so pass --actor ai on every command, reads included. Writes echo the facet back as acted_facet, so a mis-set one is immediately visible.",
             "exitCodes": { "0": "success", "1": "error", "2": "unknown command or bad arguments (also facet_required)" }
         },
-        "agentCycle": [
-            "The AI's recommended execution backbone (pass --actor ai on every command) — a proven default for proceeding autonomously while avoiding parallel collisions, not a mandate. When you follow it, run the steps in order from the one you enter at: step 0 for work the human just handed you, step 1 for work you go looking for. Branch to a `cycles` entry only when its trigger fires.",
-            "0. intake: work the human hands you in this session lands here first, and the question to ask of it is what it leaves behind. **What to do** belongs on the backlog if it is not there yet, and filing it takes two commands: `amenbo task add ... --to me-ai` when you are the one continuing, then `amenbo task finish-creating <id>` once the dependencies, premises and classification it needs are on it — until that lands nobody can reserve it, you included. Look first at what is already being created (`task list --filter \"draft:yes\"`): a creation someone left open is the task you would otherwise file twice. Then join at step 2 (reserve) with the id `add` handed back. **Why it is being done this way** — a choice picked among real alternatives — is worth offering as a decision (`amenbo decision add`), and one request can leave both. Asking once, here, is the whole of it: no later step asks again. Work you pulled off the backlog yourself is already recorded, so it needs no intake — enter at step 1.",
-            "1. list: your mailbox is `amenbo task list --filter \"assignee:me-ai status:todo ready:yes\" --sort priority --json`. Take the highest-priority task; if it comes back empty, widen once to `assignee:none status:todo ready:yes` and assign what you take. (`status:todo` is fresh, unreserved work — a task already `in_progress` is one another session is on, so it stays out of the mailbox and you never double-book; `blocked` is deliberately out, being an external stall — a second machine, a human go/no-go — that you should not self-assign. Waiting on a ruling, on a day, or on the writing being finished is not one of those: an unsettled premise, a start day still ahead and a creation still open are all derived as `ready:no`, never declared as `blocked`. `ready:yes` hides work whose declared premises are unmet — an open blocker, a linked decision that is not settled, a start day still ahead, or a creation nobody has finished — so you never grab it early; query `ready:no` to see each task's blocked_by_open, blocked_by_decisions, not_started_until and draft, `start:future` for the queue waiting on its day alone, and `draft:yes` for the creations still open.)",
-            "2. reserve: `amenbo task status <id> in_progress` (todo→in_progress), then re-confirm it is in_progress with `amenbo task show <id>` before starting. `status` is the whole double-work guard, and reserving is a compare-and-swap: `→ in_progress` succeeds only when the task is currently `todo`. If another session reserved it first, your reserve is rejected with `already_reserved` (a non-zero exit) instead of silently succeeding — so the collision is actually detected. The reserve also requires `ready`, so a task with an open blocker, an unsettled premise, a start day still ahead, or a creation still unfinished is rejected with `not_ready` (also a non-zero exit), and there is no `--force`. The two failures pull in opposite directions. On `already_reserved` the task is taken by someone else: go back to step 1 and pick the next one. On `not_ready` it is your own declaration that holds it: resolve the premise — finish the blocker or `task undepend` it; `decision accept` the linked decision, or `decision link --unlink` it; correct a start day you declared wrong with `task update <id> --start today` (or `--clear-start`); end a creation that is still open with `task finish-creating <id>` — and reserve only then. Both guards judge this transition only: an edge added, or a decision rejected, under a running task never strips its status, and `→ todo` / `→ blocked` / `→ done` stay unconditional, so the hand-back path is never closed.",
-            "3. execute: first read the task's latest comments and whatever they reference — linked notes, decisions, attachments (`amenbo comment list <id>`) — if the direction feels undecided, you have not read enough; then do the work, moving state with `amenbo task status <id> blocked` if you stall.",
-            "4. finish: a task ends one of two ways — `amenbo task done <id>` for work you carried out, `amenbo task reject <id> --reason ...` for work you concluded should not be done (neither `done` nor `delete`). Either way, leave the context on the task's timeline with `amenbo comment add <id> --text ...` so the next session can pick up. (If you decide not to take a reserved task — as opposed to deciding it should not be done at all — hand it back with `amenbo task status <id> todo`.)"
-        ],
+        "agentCycle": agent_cycle(),
         "cycles": cycles(),
         "inspect": [
             "amenbo config --json",
@@ -696,6 +691,109 @@ fn names_a_command(after: &str, commands: &HashSet<String>) -> bool {
 fn standalone(before: &str, after: &str) -> bool {
     let edge = |c: char| !(c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | '/'));
     before.chars().next_back().is_none_or(edge) && after.chars().next().is_none_or(edge)
+}
+
+/// One step of the execution backbone. It is a **structure with an id**, not a numbered line of
+/// prose: the number and the name used to live inside the sentence, where nothing but a substring
+/// match could reach them, so no test could say more than "that text is in there somewhere" and no
+/// cross-reference could be checked at all.
+///
+/// What it does **not** carve up is the writing. One step is one block of prose, authored whole —
+/// [`Step::prose`] is the last field for that reason. Cutting it into per-aspect fields would turn
+/// the job from "write so it lands" into "fill the boxes", and the output would read like a
+/// generated document, which is the opposite of the point.
+struct Step {
+    /// What everything else addresses this step by, and what a machine can hold. Unique across the
+    /// cycle.
+    id: &'static str,
+    /// Where the step sits in the run, and the number the prose elsewhere names it by ("step 0 puts
+    /// the request there", "defined once in agentCycle step 1"). Held to its place in the array by a
+    /// test, so the two can never drift.
+    n: u8,
+    /// What puts you *at* this step to begin with. Only an entry point has one — every other step is
+    /// simply the next, and declaring a trigger there would invite entering the cycle in the middle.
+    /// The same word as `cycles` uses, and for the same job: the AI self-gates on it.
+    trigger: Option<&'static str>,
+    /// The commands the step tells you to run. The prose names them too, in the sentences that say
+    /// when and why; this is the same set with the sentence taken off, so a machine can check every
+    /// one exists.
+    commands: &'static [&'static str],
+    /// The step itself, in one block.
+    prose: &'static str,
+}
+
+impl Step {
+    fn to_value(&self) -> Value {
+        let mut value = json!({
+            "id": self.id,
+            "n": self.n,
+            "commands": self.commands,
+            "step": self.prose,
+        });
+        if let (Some(map), Some(trigger)) = (value.as_object_mut(), self.trigger) {
+            map.insert("trigger".to_string(), json!(trigger));
+        }
+        value
+    }
+}
+
+/// The hot path: the backbone every session runs, in order. Authored here as steps and assembled by
+/// [`agent_cycle`] — the emitted `agentCycle` is this list, and there is nowhere else it is written.
+const AGENT_CYCLE: &[Step] = &[
+    Step {
+        id: "intake",
+        n: 0,
+        trigger: Some("the human handed you work in this session"),
+        commands: &["task add", "task finish-creating", "task list", "decision add"],
+        prose: "work the human hands you in this session lands here first, and the question to ask of it is what it leaves behind. **What to do** belongs on the backlog if it is not there yet, and filing it takes two commands: `amenbo task add ... --to me-ai` when you are the one continuing, then `amenbo task finish-creating <id>` once the dependencies, premises and classification it needs are on it — until that lands nobody can reserve it, you included. Look first at what is already being created (`task list --filter \"draft:yes\"`): a creation someone left open is the task you would otherwise file twice. Then join at step 2 (reserve) with the id `add` handed back. **Why it is being done this way** — a choice picked among real alternatives — is worth offering as a decision (`amenbo decision add`), and one request can leave both. Asking once, here, is the whole of it: no later step asks again. Work you pulled off the backlog yourself is already recorded, so it needs no intake — enter at step 1.",
+    },
+    Step {
+        id: "list",
+        n: 1,
+        trigger: Some("you are going looking for work yourself"),
+        commands: &["task list"],
+        prose: "your mailbox is `amenbo task list --filter \"assignee:me-ai status:todo ready:yes\" --sort priority --json`. Take the highest-priority task; if it comes back empty, widen once to `assignee:none status:todo ready:yes` and assign what you take. (`status:todo` is fresh, unreserved work — a task already `in_progress` is one another session is on, so it stays out of the mailbox and you never double-book; `blocked` is deliberately out, being an external stall — a second machine, a human go/no-go — that you should not self-assign. Waiting on a ruling, on a day, or on the writing being finished is not one of those: an unsettled premise, a start day still ahead and a creation still open are all derived as `ready:no`, never declared as `blocked`. `ready:yes` hides work whose declared premises are unmet — an open blocker, a linked decision that is not settled, a start day still ahead, or a creation nobody has finished — so you never grab it early; query `ready:no` to see each task's blocked_by_open, blocked_by_decisions, not_started_until and draft, `start:future` for the queue waiting on its day alone, and `draft:yes` for the creations still open.)",
+    },
+    Step {
+        id: "reserve",
+        n: 2,
+        trigger: None,
+        commands: &[
+            "task status",
+            "task show",
+            "task undepend",
+            "decision accept",
+            "decision link",
+            "task update",
+            "task finish-creating",
+        ],
+        prose: "`amenbo task status <id> in_progress` (todo→in_progress), then re-confirm it is in_progress with `amenbo task show <id>` before starting. `status` is the whole double-work guard, and reserving is a compare-and-swap: `→ in_progress` succeeds only when the task is currently `todo`. If another session reserved it first, your reserve is rejected with `already_reserved` (a non-zero exit) instead of silently succeeding — so the collision is actually detected. The reserve also requires `ready`, so a task with an open blocker, an unsettled premise, a start day still ahead, or a creation still unfinished is rejected with `not_ready` (also a non-zero exit), and there is no `--force`. The two failures pull in opposite directions. On `already_reserved` the task is taken by someone else: go back to step 1 and pick the next one. On `not_ready` it is your own declaration that holds it: resolve the premise — finish the blocker or `task undepend` it; `decision accept` the linked decision, or `decision link --unlink` it; correct a start day you declared wrong with `task update <id> --start today` (or `--clear-start`); end a creation that is still open with `task finish-creating <id>` — and reserve only then. Both guards judge this transition only: an edge added, or a decision rejected, under a running task never strips its status, and `→ todo` / `→ blocked` / `→ done` stay unconditional, so the hand-back path is never closed.",
+    },
+    Step {
+        id: "execute",
+        n: 3,
+        trigger: None,
+        commands: &["comment list", "task status"],
+        prose: "first read the task's latest comments and whatever they reference — linked notes, decisions, attachments (`amenbo comment list <id>`) — if the direction feels undecided, you have not read enough; then do the work, moving state with `amenbo task status <id> blocked` if you stall.",
+    },
+    Step {
+        id: "finish",
+        n: 4,
+        trigger: None,
+        commands: &["task done", "task reject", "comment add", "task status"],
+        prose: "a task ends one of two ways — `amenbo task done <id>` for work you carried out, `amenbo task reject <id> --reason ...` for work you concluded should not be done (neither `done` nor `delete`). Either way, leave the context on the task's timeline with `amenbo comment add <id> --text ...` so the next session can pick up. (If you decide not to take a reserved task — as opposed to deciding it should not be done at all — hand it back with `amenbo task status <id> todo`.)",
+    },
+];
+
+/// Assembles [`AGENT_CYCLE`] into the emitted shape: the standing description, then the steps in
+/// order, each carrying the id that names it. Where a step used to open with `0. intake:`, the
+/// number and the name are now fields beside the prose — one place, readable by a machine, and no
+/// longer said twice.
+fn agent_cycle() -> Value {
+    json!({
+        "description": "The AI's recommended execution backbone (pass --actor ai on every command) — a proven default for proceeding autonomously while avoiding parallel collisions, not a mandate. When you follow it, enter at the step whose `trigger` describes where you are and run from there in order; a step with no trigger is simply the next one. Branch to a `cycles` entry only when its trigger fires.",
+        "steps": AGENT_CYCLE.iter().map(Step::to_value).collect::<Vec<Value>>(),
+    })
 }
 
 /// cold path: the trigger-indexed catalog agentCycle branches to. Each cycle separates a
@@ -1646,6 +1744,44 @@ mod tests {
         assert_eq!(ja["agentCycle"], en["agentCycle"]);
     }
 
+    /// Discipline: every step of the backbone is addressable. An id nothing else answers to, a
+    /// number that is its place in the run — the number every cross-reference elsewhere in the spec
+    /// names it by, so a step inserted without renumbering makes those references point at the wrong
+    /// work — prose that is actually there, and only commands that exist. The entry points declare
+    /// themselves with a `trigger`; a step that is simply the next one must not, or the cycle can be
+    /// entered in the middle.
+    #[test]
+    fn agent_cycle_steps_are_addressable() {
+        let spec = build();
+        let known: std::collections::HashSet<String> = command_names().into_iter().collect();
+        assert!(
+            spec["agentCycle"]["description"].as_str().is_some_and(|s| !s.is_empty()),
+            "the backbone needs the standing description that says how to read the steps"
+        );
+        let steps = spec["agentCycle"]["steps"].as_array().expect("agentCycle.steps is an array");
+        assert!(steps.len() >= 5, "the backbone lost steps: only {} left", steps.len());
+
+        let mut ids = std::collections::HashSet::new();
+        for (at, step) in steps.iter().enumerate() {
+            let id = step["id"].as_str().unwrap_or("");
+            assert!(!id.is_empty(), "a step has no id: {step}");
+            assert!(ids.insert(id), "two steps answer to the id {id:?}");
+            assert_eq!(step["n"], json!(at), "step {id} is numbered {} but sits at {at}", step["n"]);
+            assert!(step["step"].as_str().is_some_and(|s| !s.is_empty()), "step {id} has no prose");
+            if let Some(trigger) = step.get("trigger") {
+                assert!(trigger.as_str().is_some_and(|s| !s.is_empty()), "step {id} carries an empty trigger");
+            }
+            for c in step["commands"].as_array().expect("step.commands is an array") {
+                let n = c.as_str().unwrap_or("");
+                assert!(known.contains(n), "step {id} names an unknown command {n:?}");
+            }
+        }
+        assert!(
+            steps.iter().any(|s| s.get("trigger").is_some()),
+            "no step declares a trigger, so nothing says where the cycle is entered"
+        );
+    }
+
     /// Discipline: every item of the cold-path `cycles` must be self-describing — `kind` is
     /// mandatory, an `optional` item carries a `trigger`, a `backbone` item does not — and every
     /// command it names must exist.
@@ -1874,7 +2010,8 @@ mod tests {
         let mut dev = spec_as_authored();
         retarget(&mut dev, Paths::DEV_APP_NAME);
 
-        let cycle = dev["agentCycle"].as_array().unwrap().iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ");
+        let cycle = dev["agentCycle"]["steps"].as_array().unwrap().iter()
+            .filter_map(|s| s["step"].as_str()).collect::<Vec<_>>().join(" ");
         assert!(cycle.contains("`amenbo-dev task list --filter"), "the mailbox query still names the production CLI: {cycle}");
         assert!(cycle.contains("`amenbo-dev task status <id> in_progress`"), "the reserve step still names the production CLI");
         assert!(dev["conventions"]["reach"].as_str().unwrap().contains("`amenbo-dev bind --project"), "the way out of an unbound folder still names the production CLI");

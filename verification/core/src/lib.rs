@@ -501,7 +501,10 @@ const REGISTRY: &[OpSpec] = &[
     // does not read the catalog's own wording back: an author may reword their block any day, and a line
     // asserting today's sentence would go red on a change amenbo had no part in. `when` is the occasion;
     // `cmd` and `does` are one call, which is enough to see the calling form amenbo puts in front of it.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-agent", required: &["name", "when"], refs: &[], strings: &["name", "when", "cmd", "does"], binds: false },
+    // `steps` is where that call says it is a tool — the ids of amenbo's own steps, comma-separated, the
+    // way an author writes them. It is the author's word too, and no published plugin writes one yet, so
+    // the road to a step carrying a tool is only walkable once a block here declares it.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-agent", required: &["name", "when"], refs: &[], strings: &["name", "when", "cmd", "does", "steps"], binds: false },
     // An installed plugin that is nobody's but its author's. The badge is the catalog's to grant and no
     // author can write it onto themselves, which is what makes it the one thing amenbo can safely split
     // a stranger from a colleague by — and it is also why a road cannot reach a stranger by installing
@@ -988,6 +991,19 @@ const REGISTRY: &[OpSpec] = &[
     // under, comma-separated — what an author wrote and this reader does not get, whether because the
     // author is a stranger or because what they wrote no longer passes the rules.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "at-entry", required: &["name", "present"], refs: &[], strings: &["name", "when", "cmd", "because", "absent"], binds: false },
+    // The other half of the same document: a step of amenbo's own working cycle, and whether this
+    // plugin's call is hanging on it. The two shelves are kept apart on purpose — a step's body is
+    // amenbo's own and a plugin's sentences stay in its entry — so what crosses is the line to type and
+    // the id the author named it by, and this is the reading that says the join really happened.
+    //
+    // `step` is that id (`<run>.<step>`, as the author writes it) and `cmd` the call's own face, since
+    // what hangs there is the calling form amenbo builds, not the bare subcommand. `present: false` is
+    // the reading with more work to do: a step nobody named, and a ref naming a step this build does not
+    // have, both leave a document where nothing hung — which is what says an unknown ref costs a reader
+    // one absent line and nothing else.
+    //
+    // A CLI road alone, like `at-entry` and for the same reason: no screen prints this document.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "at-step", required: &["name", "step", "cmd", "present"], refs: &[], strings: &["name", "step", "cmd"], binds: false },
     // The author's own door, before anything is installed anywhere: a manifest file is held up to the
     // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
     // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.

@@ -346,12 +346,32 @@ impl Driver<'_> {
                 // so a step that names no call writes no `commands` — the same shape its author would.
                 if let Some(cmd) = with.get("cmd").and_then(|v| v.as_str()) {
                     let does = with.get("does").and_then(|v| v.as_str()).unwrap_or(cmd);
-                    agent["commands"] = serde_json::json!([{ "cmd": cmd, "does": does }]);
+                    let mut call = serde_json::json!({ "cmd": cmd, "does": does });
+                    // Where the author says this call is a tool. A block that names none is the shape
+                    // every manifest had before the field existed, so an absent `steps` writes none.
+                    let named: Vec<&str> = with
+                        .get("steps")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    if !named.is_empty() {
+                        call["steps"] = serde_json::json!(named);
+                    }
+                    agent["commands"] = serde_json::json!([call]);
                 }
                 manifest["agent"] = agent;
                 std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
-                Ok(Outcome::action(format!("`{name}` now says for itself: {when}")))
+                // The steps are said back, so two declarations that differ only in where the call
+                // claims to be a tool do not read alike in the report.
+                let hung = match with.get("steps").and_then(|v| v.as_str()) {
+                    Some(steps) if !steps.trim().is_empty() => format!(", a tool at {steps}"),
+                    _ => String::new(),
+                };
+                Ok(Outcome::action(format!("`{name}` now says for itself: {when}{hung}")))
             }
             // The badge off, so what is installed is a stranger's. Nothing a road does with amenbo can
             // reach this state: the badge is the catalog's to grant, every plugin the official catalog
@@ -790,6 +810,48 @@ impl Driver<'_> {
                     ),
                 ))
             }
+            // The same document, read where the author said their call belongs. `at-entry` reads the
+            // shelf a plugin's own words sit on; this reads the step amenbo wrote, and asks whether the
+            // line to type is hanging there. Nothing else about the step is read: what a reader is owed
+            // at a step is amenbo's own sentence plus, at most, a call they can make.
+            "at-step" => {
+                let name = req_str(with, "name")?;
+                let named = req_str(with, "step")?;
+                let face = req_str(with, "cmd")?;
+                let present = req_bool(with, "present")?;
+                // As the AI, like `at-entry`: this document is the one an AI is pointed at, and what
+                // hangs on a step is what is callable in the folder it is bound to.
+                let v = self.run_json(&["agent", "--json", "--actor", "ai"])?;
+                let Some((run, id)) = named.split_once('.') else {
+                    return Err(format!("`{named}` is no step id — a run and the step within it, `<run>.<step>`"));
+                };
+                let step = hung_on(&v, run, id);
+                // The line amenbo builds, not the face the author wrote: the command word in front is
+                // this build's own name, so it is read back off the line rather than dictated here.
+                let tail = format!(" plugin run {name} {face}");
+                let hung: Vec<&str> = step.clone().unwrap_or_default();
+                let typed = hung.iter().find(|line| line.ends_with(&tail) && line.len() > tail.len());
+                Ok(Outcome::assert(
+                    typed.is_some() == present,
+                    match (typed, present) {
+                        (Some(line), true) => format!("`{named}` carries `{line}` — as expected"),
+                        (Some(line), false) => {
+                            format!("`{named}` carries `{line}` (expected nothing there, MISMATCH)")
+                        }
+                        (None, false) => format!(
+                            "`{named}` carries no call to `{face}` from `{name}` (expected none, as expected)"
+                        ),
+                        (None, true) => format!(
+                            "`{named}` carries {} — none of them a call to `{face}` from `{name}` (MISMATCH)",
+                            match (step.is_some(), hung.as_slice()) {
+                                (false, _) => "no such step in this document".to_string(),
+                                (true, []) => "no tool at all".to_string(),
+                                (true, ls) => ls.join(", "),
+                            }
+                        ),
+                    },
+                ))
+            }
             "outdated" => {
                 let name = req_str(with, "name")?;
                 let present = req_bool(with, "present")?;
@@ -1211,6 +1273,34 @@ fn make_runnable(path: &Path) -> Result<(), String> {
     ))
 }
 
+/// The call lines hanging on one step of the entry point's document, by the id that names it
+/// (`<run>.<step>`, split into its halves by the caller).
+///
+/// The two runs keep their steps in different places, and both are read here: the backbone's are one
+/// list, a cycle's are two buckets — which bucket a step sits in is the cycle's business and no part of
+/// the name. `None` says this document has no such step, which is a different answer from a step with
+/// nothing on it: a run left out because it does not apply here, or an id no build of amenbo has, both
+/// land in the first, and a scenario walking that case reads the same emptiness for a reason worth
+/// naming in the report.
+fn hung_on<'a>(doc: &'a serde_json::Value, run: &str, id: &str) -> Option<Vec<&'a str>> {
+    let buckets: Vec<&serde_json::Value> = if run == "agentCycle" {
+        vec![&doc["agentCycle"]["steps"]]
+    } else {
+        vec![&doc["cycles"][run]["backbone"], &doc["cycles"][run]["optional"]]
+    };
+    let step = buckets
+        .into_iter()
+        .filter_map(|bucket| bucket.as_array())
+        .flatten()
+        .find(|step| step["id"].as_str() == Some(id))?;
+    Some(
+        step["tools"]
+            .as_array()
+            .map(|lines| lines.iter().filter_map(|line| line.as_str()).collect())
+            .unwrap_or_default(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1225,6 +1315,68 @@ mod tests {
             .find(|(p, _)| p == path)
             .unwrap_or_else(|| panic!("nothing is published at {path}: {docs:?}"));
         serde_json::from_str(&body.1).expect("a document a catalog serves is JSON")
+    }
+
+    /// The shape the entry point hands back: the backbone's steps in one list, and a cycle's split
+    /// across the two buckets its items sit in. Tools hang on a step wherever it was written.
+    fn entry_point() -> serde_json::Value {
+        serde_json::json!({
+            "agentCycle": { "steps": [
+                { "id": "list", "step": "your mailbox is …" },
+                { "id": "reserve", "step": "reserve it …", "tools": ["amenbo plugin run worktree start <task-id>"] },
+            ]},
+            "cycles": {
+                "worktree": {
+                    "backbone": [
+                        { "id": "cut-per-task", "step": "cut one per task", "tools": [
+                            "amenbo plugin run worktree start <task-id>",
+                            "amenbo plugin run mirror sync",
+                        ]},
+                        { "id": "fold-it", "step": "fold it once merged" },
+                    ],
+                    "optional": [
+                        { "id": "borrow-one", "step": "borrow a standing one", "tools": ["amenbo plugin run worktree list"] },
+                    ],
+                },
+            },
+        })
+    }
+
+    /// A step is found by the id that names it, in whichever run and bucket it was written, and what
+    /// comes back is the lines hanging there — every one of them, since a step is a place and two
+    /// plugins may both have named it.
+    #[test]
+    fn a_step_is_found_by_its_id_in_either_run() {
+        let doc = entry_point();
+        assert_eq!(
+            hung_on(&doc, "agentCycle", "reserve"),
+            Some(vec!["amenbo plugin run worktree start <task-id>"])
+        );
+        assert_eq!(
+            hung_on(&doc, "worktree", "cut-per-task"),
+            Some(vec![
+                "amenbo plugin run worktree start <task-id>",
+                "amenbo plugin run mirror sync",
+            ]),
+            "both lines, in the order the document carries them"
+        );
+        assert_eq!(
+            hung_on(&doc, "worktree", "borrow-one"),
+            Some(vec!["amenbo plugin run worktree list"]),
+            "a self-gated item is a step like any other — the bucket is no part of the name"
+        );
+    }
+
+    /// A step with nothing hanging on it and a step this document does not have are different
+    /// answers: the first is a place a reader reached and found no tool, the second is a name that
+    /// landed nowhere — an id no build has, or a whole cycle left out as inapplicable.
+    #[test]
+    fn nothing_hanging_and_no_such_step_are_told_apart() {
+        let doc = entry_point();
+        assert_eq!(hung_on(&doc, "worktree", "fold-it"), Some(Vec::new()));
+        assert_eq!(hung_on(&doc, "worktree", "no-step-of-this-name"), None);
+        assert_eq!(hung_on(&doc, "agentCycle", "cut-per-task"), None, "an id is only its own run's");
+        assert_eq!(hung_on(&doc, "commit", "lint-what-leaves"), None, "a cycle the run left out");
     }
 
     /// A road about the trust root alone names no rows, and the shelf it stands on is empty — which

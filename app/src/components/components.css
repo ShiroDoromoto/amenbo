@@ -226,7 +226,6 @@
 }
 .compose__input:focus { border-color: var(--c-accent); }
 .compose__actions { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-top: var(--s-2); }
-.btn--primary:disabled { opacity: 0.45; cursor: default; }
 /* A small label chip, as used for a blocker or a reference to a decision. */
 .chip { font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm); background: var(--c-surface-sunken); }
 /* A clickable chip: the link that navigates to a dependency's blocker. It drops the button
@@ -369,6 +368,10 @@
   border: 1px solid var(--c-border-strong); background: var(--c-surface);
   border-radius: var(--r-sm); padding: var(--s-1) var(--s-3); font-size: var(--fs-sm);
 }
+/* A button that cannot be pressed says so before it is pressed: faded, and without the pointer
+   the global button rule hands every button. This is the base every variant inherits — a variant
+   that wants a different fade overrides it, but none may leave the disabled state invisible. */
+.btn:disabled { opacity: 0.5; cursor: default; }
 .btn--primary { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
 /* For a button that is a single glyph. line-height: 0 leaves the line box at the parent's
    strut (the body size) and scales only the glyph, so the button's dimensions do not
@@ -398,7 +401,7 @@
 /* The button for a destructive operation (delete): a restrained red outline that fills in
    on hover. */
 .btn--danger { color: var(--c-danger, #c0392b); border-color: var(--c-danger, #c0392b); background: transparent; }
-.btn--danger:hover { background: var(--c-danger, #c0392b); color: #fff; }
+.btn--danger:hover:not(:disabled) { background: var(--c-danger, #c0392b); color: #fff; }
 .detail__danger { margin-top: var(--s-3); display: flex; justify-content: flex-end; }
 .notes { background: var(--c-surface-sunken); border-radius: var(--r-md); padding: var(--s-4); font-size: var(--fs-body); line-height: 1.7; white-space: pre-wrap; max-width: var(--measure-prose); }
 /* Notes rendered as Markdown are a run of block elements, so pre-wrap comes back off (this
@@ -425,7 +428,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .feed__target--gone { color: var(--c-text-faint); }
 .feed__meta { font-size: var(--fs-xs); color: var(--c-text-faint); display: flex; gap: var(--s-3); margin-top: 2px; }
 .feed__action { font-size: var(--fs-xs); color: var(--c-text-faint); border: none; background: none; }
-.feed__action:hover { color: var(--c-accent); }
+/* Only a pressable one turns accent, and a disabled one fades: this class is the borderless
+   sibling of .btn and carries the same rule, since it is disabled in as many places. */
+.feed__action:hover:not(:disabled) { color: var(--c-accent); }
+.feed__action:disabled { opacity: 0.5; cursor: default; }
 
 /* ---------- command catalog ---------- */
 .cmdcat__search { max-width: 280px; margin: 0; }
@@ -643,7 +649,6 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ---------- pager (list/smart-view windowing) ---------- */
 .pager { display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: var(--s-3); }
 .pager__info { font-size: var(--fs-sm); color: var(--c-text-muted); min-width: 12ch; text-align: center; }
-.pager .btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ---------- onboarding ---------- */
 .onboard { padding: var(--s-7); max-width: 640px; margin: 0 auto; }

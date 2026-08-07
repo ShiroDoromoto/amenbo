@@ -273,7 +273,7 @@ fn the_worktree_cycle_reaches_only_a_bound_folder_under_git() {
     let with = cycles_of(&under_git);
     assert!(with.contains(&"worktree".to_string()), "under git, the cycle is served: {with:?}");
     let backbone = under_git["cycles"]["worktree"]["backbone"].as_array().unwrap();
-    assert_eq!(backbone.len(), 3, "all three steps come through: {backbone:?}");
+    assert_eq!(backbone.len(), 6, "every step comes through, the fold included: {backbone:?}");
     assert_eq!(
         without.len() + 1,
         with.len(),

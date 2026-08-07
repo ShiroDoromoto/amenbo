@@ -2099,6 +2099,128 @@ mod tests {
         );
     }
 
+    /// Every piece of prose the spec emits, with its path, walked the way [`localize_prose`] and the
+    /// retarget walk it: a runnable line is a line to type rather than prose about one, and `name` is
+    /// an identifier. Everything else is something a reader reads.
+    fn all_prose(node: &Value, path: &str, out: &mut Vec<(String, String)>) {
+        match node {
+            Value::Object(map) => {
+                for (key, value) in map {
+                    if RUNNABLE_LINE_FIELDS.contains(&key.as_str()) || key == "name" {
+                        continue;
+                    }
+                    all_prose(value, &format!("{path}/{key}"), out);
+                }
+            }
+            Value::Array(items) => {
+                for (at, item) in items.iter().enumerate() {
+                    all_prose(item, &format!("{path}[{at}]"), out);
+                }
+            }
+            Value::String(text) => out.push((path.to_string(), text.clone())),
+            _ => {}
+        }
+    }
+
+    /// The length at which a shared run of text stops being a turn of phrase and starts being the
+    /// same fact written twice (`AMB-D-574`). Any longer match contains a window this size, so
+    /// windows are all this has to look at.
+    const SAME_FACT_TWICE: usize = 40;
+
+    /// Reports the same fact written in two places — and reports only, never failing. Some
+    /// repetition is doing real work (a refrain the reader is meant to meet again where it applies),
+    /// so which of these is a duplicate and which is deliberate is the writer's call, not a
+    /// threshold's (`AMB-D-574`). What it replaces is nobody watching at all: the cross-references
+    /// this spec holds by hand — "the mailbox query is defined once in agentCycle step 1, referenced
+    /// and not repeated here" — keep only as long as a writer's attention does.
+    ///
+    /// Read it with `cargo test duplicated_facts -- --nocapture`. What is asserted is only that the
+    /// walk still reaches the prose: a collector that quietly stopped would otherwise report a clean
+    /// spec forever.
+    #[test]
+    fn duplicated_facts_are_reported() {
+        let mut prose = Vec::new();
+        all_prose(&build(), "", &mut prose);
+        assert!(prose.len() > 100, "the walk found almost no prose ({}) — it stopped reaching it", prose.len());
+
+        let normalised: Vec<String> = prose
+            .iter()
+            .map(|(_, t)| t.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase())
+            .collect();
+        // Window → the strings holding it. A window in one string alone is not a repetition.
+        let mut windows: HashMap<&str, std::collections::BTreeSet<usize>> = HashMap::new();
+        for (at, text) in normalised.iter().enumerate() {
+            let edges: Vec<usize> = text.char_indices().map(|(i, _)| i).chain([text.len()]).collect();
+            for window in edges.windows(SAME_FACT_TWICE + 1) {
+                windows.entry(&text[window[0]..window[SAME_FACT_TWICE]]).or_default().insert(at);
+            }
+        }
+        // One pair of places may share several overlapping windows; the longest is the readable one.
+        let mut shared: HashMap<std::collections::BTreeSet<usize>, &str> = HashMap::new();
+        for (window, places) in windows.iter().filter(|(_, places)| places.len() > 1) {
+            let longest = shared.entry(places.clone()).or_insert(window);
+            if window.len() > longest.len() {
+                *longest = window;
+            }
+        }
+
+        let mut report: Vec<(&std::collections::BTreeSet<usize>, &&str)> = shared.iter().collect();
+        report.sort_by_key(|(places, _)| places.iter().copied().collect::<Vec<_>>());
+        println!("── the same text in more than one place ({} to judge) ──", report.len());
+        for (places, window) in report {
+            let where_ = places.iter().map(|at| prose[*at].0.as_str()).collect::<Vec<_>>().join(" ⇄ ");
+            println!("  {where_}\n    …{window}…");
+        }
+    }
+
+    /// A command named in the prose must exist. The `commands` beside each step is checked against
+    /// the registry already; what nothing watched is the sentences, where a command is named far more
+    /// often — and a name that has been renamed or dropped reads exactly like one that still works
+    /// (`AMB-D-574`).
+    ///
+    /// A code span is what marks prose as a line to type, so that is the whole of what is read: a
+    /// span that opens a command name must go on to name a real one. Prose outside the spans is left
+    /// alone, where "the task status" is English and not an instruction.
+    ///
+    /// One word on its own is only read as a command when it *is* one whole. A cycle is spelled the
+    /// same way a command opens — the `decision` cycle, the `commit` cycle — and a lone opener is a
+    /// noun as often as an instruction, so demanding it name a command would fail on English.
+    #[test]
+    fn every_command_named_in_the_prose_exists() {
+        let spec = build();
+        let known: HashSet<String> = command_names().into_iter().collect();
+        let openers: HashSet<&str> = known.iter().filter_map(|n| n.split(' ').next()).collect();
+        let cli = Paths::command_name();
+
+        let mut named = 0;
+        let mut check = |where_: &str, prose: &str| {
+            for span in prose.split('`').skip(1).step_by(2) {
+                let words: Vec<&str> = span.split_whitespace().skip_while(|w| *w == cli).collect();
+                let Some(opener) = words.first() else { continue };
+                if !openers.contains(opener) || (words.len() == 1 && !known.contains(*opener)) {
+                    continue;
+                }
+                // Longest first: `task commit add` is a command, and so is the `task commit` inside it.
+                let matched =
+                    (1..=3.min(words.len())).rev().map(|n| words[..n].join(" ")).find(|c| known.contains(c));
+                assert!(matched.is_some(), "{where_} names `{span}`, which is no command of ours");
+                named += 1;
+            }
+        };
+
+        for step in spec["agentCycle"]["steps"].as_array().expect("agentCycle.steps is an array") {
+            check(&format!("agentCycle.{}", step["id"]), step["step"].as_str().unwrap_or(""));
+        }
+        for cycle in CYCLES {
+            for bucket in ["backbone", "optional"] {
+                for item in spec["cycles"][cycle.id][bucket].as_array().expect("a cycle bucket is an array") {
+                    check(&format!("{}.{}", cycle.id, item["id"]), item["step"].as_str().unwrap_or(""));
+                }
+            }
+        }
+        assert!(named > 10, "the scan found almost no commands in the prose ({named}) — it stopped reading the spans");
+    }
+
     /// Collects the localizable prose `build()` actually emits (capability / command.summary /
     /// args.help / flags.help), walking the same path `localize_prose` does. An empty help — a flag
     /// self-evident enough not to need one — has nothing to translate and is dropped.

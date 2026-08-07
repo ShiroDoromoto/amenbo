@@ -2635,6 +2635,14 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // What the restore replaces is guarded where the replacing happens: the swap holds the store's swap lock,
     // and the archive's own gates (layout, generation) still refuse what this build cannot carry.
     if let Some(Command::Restore { path }) = &cli.command {
+        // The one reach check that cannot wait for the store to be opened, because this command replaces
+        // the store rather than reading it. A window was opened to observe one project (`AMB-D-406`), and
+        // what this would do is overwrite every project on the device with the contents of a file — the
+        // furthest thing from observing. `AMB-D-224` allowed it to the AI facet as the recovery an agent
+        // runs on their user's own device; nothing launched a plugin to do that.
+        if let Some(window) = plugin_window {
+            window.refuse_whole_device("restore").map_err(CliError::from)?;
+        }
         return run_restore(flags, path.clone());
     }
     // Migration runs here — before the store is opened, before the command matters. There is no saying
@@ -7033,8 +7041,14 @@ fn export(store: &Store, flags: &Flags, out: Option<String>) -> Result<i32, CliE
 /// Backup: stream a verified snapshot of this device's store into one `.amenbo-backup` archive at `path`.
 /// A destination is required (the archive is a deliberate, self-placed disaster-recovery file), so an
 /// omitted `path` is refused with a hint.
+///
+/// **A plugin's window is refused it** (`Reach::refuse_whole_device`, `AMB-D-406`): the archive holds every
+/// project on the device, so writing one is the whole store leaving through a door that was opened to
+/// observe a single project. `AMB-D-224` allowed it to the AI facet as the disaster recovery an agent is
+/// there to run, which is not work a plugin was launched for.
 fn run_backup(store: &Store, flags: &Flags, path: Option<String>) -> Result<i32, CliError> {
     use amenbo_core::archive;
+    store.reach().refuse_whole_device("backup").map_err(CliError::from)?;
     let Some(path) = path else {
         return Err(CliError {
             code: "missing_required_flag",
@@ -7052,7 +7066,8 @@ fn run_backup(store: &Store, flags: &Flags, path: Option<String>) -> Result<i32,
             exit: 1,
         });
     };
-    let _ = store; // backup reads the on-disk layout, not the opened store; open is the exec guard.
+    // Beyond the reach above, the opened store is not what is copied: backup reads the on-disk layout,
+    // and the open is the exec guard.
     let mut progress = progress_fn(flags);
     let report = archive::backup_from(&source, dest, &mut progress).map_err(|e| CliError {
         code: "backup_error",

@@ -292,18 +292,26 @@ fn an_ais_diagnostics_and_export_stay_inside_the_project_it_is_bound_to() {
     assert!(dumped.contains("theirs"), "the exported file holds the whole machine (unfiltered)");
 }
 
-/// The export a binding keeps (above) is refused to a **window** — the reach a plugin is launched with
-/// (`AMB-D-406`). The two are the same distance apart on every other read, and part company only here:
-/// what `AMB-D-224` let through was the user taking their own data out, and a plugin is not the user. It
-/// moves to no other tool, and the project it observes was chosen by the runner before its code ran, so a
-/// dump of every project is not a wider reading of that window — it is the way around it.
+/// The commands that take the whole device — the export a binding keeps (above), the archive beside it,
+/// and the restore that writes one back — are refused to a **window**, the reach a plugin is launched
+/// with (`AMB-D-406`). Binding and window are the same distance apart on every other call, and part
+/// company only here: what `AMB-D-224` let through was the user taking their own data out and the
+/// recovery their agent runs, and a plugin is neither. It moves to no other tool, recovers nothing, and
+/// the project it observes was chosen by the runner before its code ran — so every project at once is not
+/// a wider reading of that window, it is the way around it.
 #[test]
 fn a_plugins_window_is_refused_the_whole_device() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
     let bound = cli.bound_project();
-    let other = id_str(&cli.json(&["project", "add", "--name", "Other", "--json"])["project"]["id"]);
     cli.json(&["task", "add", "--title", "observed", "--project", &bound, "--json"]);
+
+    // An archive the human took, so the restore below is refused on a real one rather than failing for
+    // want of a file — and taken *now*, before the second project exists, so a restore that went through
+    // would be visible afterwards as that project's work missing.
+    cli.json(&["backup", "kept.amenbo-backup", "--json"]);
+
+    let other = id_str(&cli.json(&["project", "add", "--name", "Other", "--json"])["project"]["id"]);
     cli.json(&["task", "add", "--title", "theirs", "--project", &other, "--json"]);
 
     // A plugin's process: the store and the window in the environment, no facet, and a CWD that is
@@ -324,9 +332,15 @@ fn a_plugins_window_is_refused_the_whole_device() {
         )
     };
 
-    // Both shapes are refused: the stream would put every project in the plugin's stdout, and a
-    // destination would leave the same bytes on disk for it to read back.
-    for args in [vec!["export", "--json"], vec!["export", "--out", "taken", "--json"]] {
+    // Every shape is refused. Export streams every project into the plugin's stdout, or leaves the same
+    // bytes on disk for it to read back; the archive is that second one under another name; and the
+    // restore does not read the device at all — it overwrites it.
+    for args in [
+        vec!["export", "--json"],
+        vec!["export", "--out", "taken", "--json"],
+        vec!["backup", "taken.amenbo-backup", "--json"],
+        vec!["restore", "kept.amenbo-backup", "--yes", "--json"],
+    ] {
         let (stdout, stderr, code) = plugin(&args);
         assert_ne!(code, 0, "{args:?} must not hand a plugin the device: {stdout}");
         assert!(stderr.contains("out_of_reach"), "{args:?} is out_of_reach: {stderr}");
@@ -335,6 +349,12 @@ fn a_plugins_window_is_refused_the_whole_device() {
         assert!(!stderr.contains(".amenbo"), "a window is not a binding: {stderr}");
     }
     assert!(!cli.home.join("taken").exists(), "the refused export wrote nothing");
+    assert!(!cli.home.join("taken.amenbo-backup").exists(), "the refused backup wrote nothing");
+
+    // And the refused restore left the device standing: the work filed after the archive was taken is
+    // still here, which it would not be had the store been replaced by that archive's.
+    let after = cli.json(&["task", "list", "--json"]).to_string();
+    assert!(after.contains("theirs"), "the refused restore replaced the device anyway: {after}");
 
     // What the window does open is unchanged: the project it fires for still reads back.
     let (stdout, stderr, code) = plugin(&["task", "list", "--json"]);

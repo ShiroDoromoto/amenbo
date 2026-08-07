@@ -560,6 +560,21 @@ fn spec_as_authored() -> Value {
 /// below has to know which strings it may rewrite.
 const RUNNABLE_LINE_FIELDS: [&str; 3] = ["examples", "example", "inspect"];
 
+/// The fields that hold a **reference** rather than something a reader reads: the commands a step
+/// names ([`Cmd`]), the bucket an item was found in, and a command's own name in the index. The scan
+/// below judges prose by guessing — is the word after `amenbo` a command? — and a guess has no
+/// business over a name that is already exact, so these are where it stops.
+///
+/// `commands` is two fields under one name: a step's is a list of names, and the spec's own is the
+/// command registry, whose entries are objects carrying prose like any other. What tells them apart
+/// is that a reference is always a leaf — the key rides down the array with the value, and only the
+/// strings it reaches are left alone.
+///
+/// `id` is deliberately not here, though a step and a cycle both answer to one: `conventions.id` is a
+/// paragraph filed under the same key, and reading a field by its name alone cannot tell the two
+/// apart. Nothing is lost — an id is one lowercase word, so no rule would rewrite it either way.
+const REFERENCE_FIELDS: [&str; 3] = ["commands", "kind", "name"];
+
 /// Retargets the whole spec to `cli` — the CLI this build actually installs
 /// ([`Paths::command_name`]). Everything is authored with the production spelling and rewritten on
 /// the way out, so the source stays literal, readable and copy-pasteable and no author has to
@@ -567,19 +582,20 @@ const RUNNABLE_LINE_FIELDS: [&str; 3] = ["examples", "example", "inspect"];
 /// command catalog, commands that are not installed there — beside a heading the GUI already spells
 /// from `command_name`.
 ///
-/// Two rules, because the spec holds two kinds of string, and the looser rule would be wrong for
-/// prose. A runnable line is nothing but a command, so every standalone occurrence goes. Prose says
-/// `amenbo` for the product as often as for the command (`Update amenbo:`, `amenbo is a single local
-/// store`), and only a following command name tells the two apart. Production rewrites nothing (the
-/// authored spelling is already its own), but it still walks — one path for both channels means a
-/// break shows up wherever the tests run.
+/// Three rules, because the spec holds three kinds of string. A runnable line
+/// ([`RUNNABLE_LINE_FIELDS`]) is nothing but a command, so every standalone occurrence goes. Prose
+/// says `amenbo` for the product as often as for the command (`Update amenbo:`, `amenbo is a single
+/// local store`), and only a following command name tells the two apart — a guess, and the reason
+/// the third kind exists: a reference ([`REFERENCE_FIELDS`]) is a name already exact, so the guess is
+/// not run over it at all. Production rewrites nothing (the authored spelling is already its own),
+/// but it still walks — one path for both channels means a break shows up wherever the tests run.
 ///
 /// This runs **last**, after any locale swap: a translation is looked up by its authored English, and
 /// arrives holding the authored command word, so it has to be retargeted after it lands rather than
 /// looked up after the source moved ([`build_localized`]).
 fn retarget(spec: &mut Value, cli: &str) {
     let commands = command_words(spec);
-    retarget_node(spec, cli, &commands);
+    retarget_node(spec, "", cli, &commands);
 }
 
 /// Retargets one piece of **prose** written elsewhere — the `--help` text clap builds out of the doc
@@ -622,19 +638,21 @@ fn command_words(spec: &Value) -> HashSet<String> {
         .unwrap_or_default()
 }
 
-fn retarget_node(node: &mut Value, cli: &str, commands: &HashSet<String>) {
+/// Walks the spec, carrying the field name each string was written under: an array hands its own key
+/// down, so a list of references is judged by what it is a list of rather than by being a list.
+fn retarget_node(node: &mut Value, key: &str, cli: &str, commands: &HashSet<String>) {
     match node {
         Value::Object(map) => {
             for (key, value) in map.iter_mut() {
                 if RUNNABLE_LINE_FIELDS.contains(&key.as_str()) {
                     retarget_line(value, cli);
                 } else {
-                    retarget_node(value, cli, commands);
+                    retarget_node(value, key, cli, commands);
                 }
             }
         }
-        Value::Array(items) => items.iter_mut().for_each(|i| retarget_node(i, cli, commands)),
-        Value::String(prose) => {
+        Value::Array(items) => items.iter_mut().for_each(|i| retarget_node(i, key, cli, commands)),
+        Value::String(prose) if !REFERENCE_FIELDS.contains(&key) => {
             *prose = rewrite(prose, cli, |after| names_a_command(after, commands));
         }
         _ => {}
@@ -693,6 +711,69 @@ fn standalone(before: &str, after: &str) -> bool {
     before.chars().next_back().is_none_or(edge) && after.chars().next().is_none_or(edge)
 }
 
+/// Declares [`Cmd`] — the variant a step names a command by, and the name the registry answers to —
+/// in one table, so the two can never be written apart.
+macro_rules! commands {
+    ($($variant:ident => $name:literal,)*) => {
+        /// A command a step names, as a value rather than a spelling. A step used to carry the name
+        /// as text, where a command renamed or dropped left a reference that read exactly like a
+        /// working one and that nothing caught until an AI typed it. Naming one is now
+        /// `Cmd::TaskAdd`, and a command that is not in the table below does not compile
+        /// (`AMB-D-574`: what a type can refuse never needs a test).
+        ///
+        /// What the type cannot reach is the registry ([`all_commands`]), which is still written as
+        /// text — so `every_command_a_step_names_exists` holds this table's far end against it, and
+        /// `no_command_is_named_that_no_step_names` keeps the table from outliving its callers.
+        #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+        enum Cmd { $($variant,)* }
+
+        impl Cmd {
+            /// Every variant, for the tests that hold this table against the registry and the steps.
+            #[cfg(test)]
+            const ALL: &'static [Cmd] = &[$(Cmd::$variant,)*];
+
+            /// The name the registry answers to — what is emitted, and what the prose spells out.
+            const fn name(self) -> &'static str {
+                match self { $(Cmd::$variant => $name,)* }
+            }
+        }
+    };
+}
+
+commands! {
+    CommentAdd => "comment add",
+    CommentList => "comment list",
+    DecisionAccept => "decision accept",
+    DecisionAdd => "decision add",
+    DecisionAmend => "decision amend",
+    DecisionEdit => "decision edit",
+    DecisionLink => "decision link",
+    DecisionList => "decision list",
+    DecisionPromote => "decision promote",
+    DecisionShow => "decision show",
+    DecisionSupersede => "decision supersede",
+    DimensionAdd => "dimension add",
+    DimensionSet => "dimension set",
+    HooksInstall => "hooks install",
+    HooksStatus => "hooks status",
+    Lint => "lint",
+    Search => "search",
+    TaskAdd => "task add",
+    TaskAssign => "task assign",
+    TaskBlock => "task block",
+    TaskCommitAdd => "task commit add",
+    TaskDepend => "task depend",
+    TaskDone => "task done",
+    TaskFinishCreating => "task finish-creating",
+    TaskList => "task list",
+    TaskReject => "task reject",
+    TaskShow => "task show",
+    TaskStatus => "task status",
+    TaskUndepend => "task undepend",
+    TaskUpdate => "task update",
+    Validate => "validate",
+}
+
 /// One step of a run — the hot-path backbone ([`AGENT_CYCLE`]) and the cold-path cycles
 /// ([`CYCLES`]) are both written out of this. It is a **structure with an id**, not a numbered line
 /// of prose: the number and the name used to live inside the sentence, where nothing but a substring
@@ -724,9 +805,10 @@ struct Step {
     /// it is ever done, so it always carries one.
     trigger: Option<&'static str>,
     /// The commands the step tells you to run. The prose names them too, in the sentences that say
-    /// when and why; this is the same set with the sentence taken off, so a machine can check every
-    /// one exists.
-    commands: &'static [&'static str],
+    /// when and why; this is the same set with the sentence taken off, and a reference rather than a
+    /// spelling ([`Cmd`]), so one that names nothing is a build error rather than something to test
+    /// for.
+    commands: &'static [Cmd],
     /// The step itself, in one block.
     prose: &'static str,
 }
@@ -738,7 +820,7 @@ impl Step {
     fn to_value(&self, kind: Option<&str>) -> Value {
         let mut value = json!({
             "id": self.id,
-            "commands": self.commands,
+            "commands": self.commands.iter().map(|c| c.name()).collect::<Vec<&str>>(),
             "step": self.prose,
         });
         let Some(map) = value.as_object_mut() else { return value };
@@ -762,14 +844,14 @@ const AGENT_CYCLE: &[Step] = &[
         id: "intake",
         n: Some(0),
         trigger: Some("the human handed you work in this session"),
-        commands: &["task add", "task finish-creating", "task list", "decision add"],
+        commands: &[Cmd::TaskAdd, Cmd::TaskFinishCreating, Cmd::TaskList, Cmd::DecisionAdd],
         prose: "work the human hands you in this session lands here first, and the question to ask of it is what it leaves behind. **What to do** belongs on the backlog if it is not there yet, and filing it takes two commands: `amenbo task add ... --to me-ai` when you are the one continuing, then `amenbo task finish-creating <id>` once the dependencies, premises and classification it needs are on it — until that lands nobody can reserve it, you included. Look first at what is already being created (`task list --filter \"draft:yes\"`): a creation someone left open is the task you would otherwise file twice. Then join at step 2 (reserve) with the id `add` handed back. **Why it is being done this way** — a choice picked among real alternatives — is worth offering as a decision (`amenbo decision add`), and one request can leave both. Asking once, here, is the whole of it: no later step asks again. Work you pulled off the backlog yourself is already recorded, so it needs no intake — enter at step 1.",
     },
     Step {
         id: "list",
         n: Some(1),
         trigger: Some("you are going looking for work yourself"),
-        commands: &["task list"],
+        commands: &[Cmd::TaskList],
         prose: "your mailbox is `amenbo task list --filter \"assignee:me-ai status:todo ready:yes\" --sort priority --json`. Take the highest-priority task; if it comes back empty, widen once to `assignee:none status:todo ready:yes` and assign what you take. (`status:todo` is fresh, unreserved work — a task already `in_progress` is one another session is on, so it stays out of the mailbox and you never double-book; `blocked` is deliberately out, being an external stall — a second machine, a human go/no-go — that you should not self-assign. Waiting on a ruling, on a day, or on the writing being finished is not one of those: an unsettled premise, a start day still ahead and a creation still open are all derived as `ready:no`, never declared as `blocked`. `ready:yes` hides work whose declared premises are unmet — an open blocker, a linked decision that is not settled, a start day still ahead, or a creation nobody has finished — so you never grab it early; query `ready:no` to see each task's blocked_by_open, blocked_by_decisions, not_started_until and draft, `start:future` for the queue waiting on its day alone, and `draft:yes` for the creations still open.)",
     },
     Step {
@@ -777,13 +859,13 @@ const AGENT_CYCLE: &[Step] = &[
         n: Some(2),
         trigger: None,
         commands: &[
-            "task status",
-            "task show",
-            "task undepend",
-            "decision accept",
-            "decision link",
-            "task update",
-            "task finish-creating",
+            Cmd::TaskStatus,
+            Cmd::TaskShow,
+            Cmd::TaskUndepend,
+            Cmd::DecisionAccept,
+            Cmd::DecisionLink,
+            Cmd::TaskUpdate,
+            Cmd::TaskFinishCreating,
         ],
         prose: "`amenbo task status <id> in_progress` (todo→in_progress), then re-confirm it is in_progress with `amenbo task show <id>` before starting. `status` is the whole double-work guard, and reserving is a compare-and-swap: `→ in_progress` succeeds only when the task is currently `todo`. If another session reserved it first, your reserve is rejected with `already_reserved` (a non-zero exit) instead of silently succeeding — so the collision is actually detected. The reserve also requires `ready`, so a task with an open blocker, an unsettled premise, a start day still ahead, or a creation still unfinished is rejected with `not_ready` (also a non-zero exit), and there is no `--force`. The two failures pull in opposite directions. On `already_reserved` the task is taken by someone else: go back to step 1 and pick the next one. On `not_ready` it is your own declaration that holds it: resolve the premise — finish the blocker or `task undepend` it; `decision accept` the linked decision, or `decision link --unlink` it; correct a start day you declared wrong with `task update <id> --start today` (or `--clear-start`); end a creation that is still open with `task finish-creating <id>` — and reserve only then. Both guards judge this transition only: an edge added, or a decision rejected, under a running task never strips its status, and `→ todo` / `→ blocked` / `→ done` stay unconditional, so the hand-back path is never closed.",
     },
@@ -791,14 +873,14 @@ const AGENT_CYCLE: &[Step] = &[
         id: "execute",
         n: Some(3),
         trigger: None,
-        commands: &["comment list", "task status"],
+        commands: &[Cmd::CommentList, Cmd::TaskStatus],
         prose: "first read the task's latest comments and whatever they reference — linked notes, decisions, attachments (`amenbo comment list <id>`) — if the direction feels undecided, you have not read enough; then do the work, moving state with `amenbo task status <id> blocked` if you stall.",
     },
     Step {
         id: "finish",
         n: Some(4),
         trigger: None,
-        commands: &["task done", "task reject", "comment add", "task status"],
+        commands: &[Cmd::TaskDone, Cmd::TaskReject, Cmd::CommentAdd, Cmd::TaskStatus],
         prose: "a task ends one of two ways — `amenbo task done <id>` for work you carried out, `amenbo task reject <id> --reason ...` for work you concluded should not be done (neither `done` nor `delete`). Either way, leave the context on the task's timeline with `amenbo comment add <id> --text ...` so the next session can pick up. (If you decide not to take a reserved task — as opposed to deciding it should not be done at all — hand it back with `amenbo task status <id> todo`.)",
     },
 ];
@@ -857,28 +939,28 @@ const CYCLES: &[Cycle] = &[
                 id: "decompose",
                 n: Some(0),
                 trigger: None,
-                commands: &["task add"],
+                commands: &[Cmd::TaskAdd],
                 prose: "There are no subtasks: decompose larger work into separate tasks, each belonging to exactly one project.",
             },
             Step {
                 id: "order",
                 n: Some(1),
                 trigger: None,
-                commands: &["task depend", "task undepend"],
+                commands: &[Cmd::TaskDepend, Cmd::TaskUndepend],
                 prose: "Before you leave the split, draw a dependency edge wherever one task has to be done first: the edge is what holds the order once the session that knew it is gone, so whoever arrives later takes the work in the order it has rather than inferring it from titles. Looking is the step, not the linking — parts with no order between them are an answer. Declare the order you actually mean.",
             },
             Step {
                 id: "finish-creating",
                 n: Some(2),
                 trigger: None,
-                commands: &["task finish-creating"],
+                commands: &[Cmd::TaskFinishCreating],
                 prose: "End each creation once its task is written — the edges, the premises and the classification all on it. Until then it cannot be reserved, which is what keeps a half-written task from being taken mid-split. Filing several at once, create them all, draw the edges between them, and finish them last.",
             },
             Step {
                 id: "settle-the-parent",
                 n: Some(3),
                 trigger: None,
-                commands: &["task done", "task reject"],
+                commands: &[Cmd::TaskDone, Cmd::TaskReject],
                 prose: "Settle the task you split from, once the parts are filed and the edges are drawn. With no subtasks it never becomes a parent that empties itself: either it keeps one of the parts as its own work, or it is closed — done if the work moved out of it entirely, rejected if it turned out not to be work at all. Left standing with nothing in it, it comes back to whoever reads the backlog next, who finds nothing there to do.",
             },
         ],
@@ -887,28 +969,28 @@ const CYCLES: &[Cycle] = &[
                 id: "time-axis",
                 n: None,
                 trigger: Some("the work spans ordered time-direction stages"),
-                commands: &["dimension add", "dimension set"],
+                commands: &[Cmd::DimensionAdd, Cmd::DimensionSet],
                 prose: "Add a --time-axis dimension and place tasks on its ordered values, gating later stages behind earlier ones with a dependency.",
             },
             Step {
                 id: "delegate",
                 n: None,
                 trigger: Some("you are handing work to a person, that person's AI, or yourself (`--to me-ai`) to continue"),
-                commands: &["task add", "task assign"],
+                commands: &[Cmd::TaskAdd, Cmd::TaskAssign],
                 prose: "Delegate at creation (--to/--ai) or afterward.",
             },
             Step {
                 id: "record-the-why",
                 n: None,
                 trigger: Some("the work rests on a choice worth recording"),
-                commands: &["decision add", "decision link"],
+                commands: &[Cmd::DecisionAdd, Cmd::DecisionLink],
                 prose: "Offer to record the rationale as a decision — the `decision` cycle carries it from there, linking it to the tasks that implement it. Surface it for the human to accept or reject; don't author it as already settled.",
             },
             Step {
                 id: "check-the-shape",
                 n: None,
                 trigger: Some("a task's shape looks off (missing project/priority, malformed)"),
-                commands: &["validate"],
+                commands: &[Cmd::Validate],
                 prose: "Check its shape before relying on it.",
             },
         ],
@@ -921,21 +1003,21 @@ const CYCLES: &[Cycle] = &[
                 id: "read-the-neighbourhood",
                 n: Some(0),
                 trigger: None,
-                commands: &["search", "decision show"],
+                commands: &[Cmd::Search, Cmd::DecisionShow],
                 prose: "Read the neighbourhood before you write, not after — a duplicate you find first is one you never propose. Pull a bounded, relevant slice (search <term> --kind decision --limit N), not the whole corpus, and read the bodies it points at (decision show). Don't settle for one term: prose is written in the human's language while identifiers and code spans stay English, so pull again on another word for the same idea. If one contradicts what you are about to record, propose it to the human as a candidate supersede/amend with your reasoning; do not author the edge yourself (detection proposes, the human disposes).",
             },
             Step {
                 id: "freeze-the-rationale",
                 n: Some(1),
                 trigger: None,
-                commands: &["decision add", "decision promote"],
+                commands: &[Cmd::DecisionAdd, Cmd::DecisionPromote],
                 prose: "Freeze the rationale as an append-only decision — it starts proposed (your proposal; the human accepts or rejects it), so offer the record, don't impose it.",
             },
             Step {
                 id: "link-the-work",
                 n: Some(2),
                 trigger: None,
-                commands: &["decision link"],
+                commands: &[Cmd::DecisionLink],
                 prose: "Before you leave it, look for the work this decision governs and link it: the task then names the decision it rests on, and the decision names the work it produced, so whoever picks the work up reads why. Looking is the step, not the linking — finding nothing to link is an answer. Link implementation tasks only: never the task of ruling on the decision itself, and never a rejected decision, or one that has been superseded, that you merely want to cite (that belongs in the body).",
             },
             Step {
@@ -951,35 +1033,35 @@ const CYCLES: &[Cycle] = &[
                 id: "supersede",
                 n: None,
                 trigger: Some("a new decision wholly replaces an existing one"),
-                commands: &["decision supersede"],
+                commands: &[Cmd::DecisionSupersede],
                 prose: "Chain it as a supersession — the old one stops being current (the edge says so; no status changes).",
             },
             Step {
                 id: "amend",
                 n: None,
                 trigger: Some("a new decision partially revises an existing one that stays current"),
-                commands: &["decision amend"],
+                commands: &[Cmd::DecisionAmend],
                 prose: "Chain it as an amendment — the old one is not superseded; read the two together.",
             },
             Step {
                 id: "accept",
                 n: None,
                 trigger: Some("a proposed decision is agreed and ready to settle"),
-                commands: &["decision accept"],
+                commands: &[Cmd::DecisionAccept],
                 prose: "Accept it (stamps decided_at/decided_by).",
             },
             Step {
                 id: "edit-in-place",
                 n: None,
                 trigger: Some("an accepted decision needs a minor fix (typo / stale line)"),
-                commands: &["decision edit"],
+                commands: &[Cmd::DecisionEdit],
                 prose: "Edit it in place — accepting no longer freezes the body, so there is no reopen/re-accept round-trip. Supersede stays for a change of mind; reopen for un-settling a too-hasty acceptance.",
             },
             Step {
                 id: "check-for-contradiction",
                 n: None,
                 trigger: Some("you just added or accepted a decision"),
-                commands: &["search", "decision show", "decision supersede", "decision amend"],
+                commands: &[Cmd::Search, Cmd::DecisionShow, Cmd::DecisionSupersede, Cmd::DecisionAmend],
                 prose: "Check whether it semantically contradicts an existing one. Pull a bounded, relevant neighbourhood — search the new decision's key terms (search <term> --kind decision --limit N), not the whole corpus — and read the bodies it points at (decision show). If one contradicts, propose it to the human as a candidate supersede/amend with your reasoning; do not author the edge yourself (detection proposes, the human disposes).",
             },
         ],
@@ -992,14 +1074,14 @@ const CYCLES: &[Cycle] = &[
                 id: "sweep",
                 n: Some(0),
                 trigger: None,
-                commands: &["decision list"],
+                commands: &[Cmd::DecisionList],
                 prose: "Sweep the current (accepted) decisions for semantically contradicting pairs, but keep each pass bounded: page through a slice you can actually reason over (decision list --filter status:accepted --with-body --limit N --offset …) rather than loading everything at once, and rotate the window across passes. Detection is best-effort recall by design — as the corpus outgrows one pass, coverage stays bounded to what you can reach now and repeated passes widen it over time.",
             },
             Step {
                 id: "surface-the-pairs",
                 n: Some(1),
                 trigger: None,
-                commands: &["decision supersede", "decision amend"],
+                commands: &[Cmd::DecisionSupersede, Cmd::DecisionAmend],
                 prose: "Surface each suspected contradiction to the human as a candidate supersede/amend with your reasoning. Never author the edge yourself, and only run supersede/amend once the human confirms — detection proposes, the human disposes, so a false positive cannot silently kill a good decision.",
             },
         ],
@@ -1020,7 +1102,7 @@ const CYCLES: &[Cycle] = &[
                 id: "rejoin-the-cycle",
                 n: Some(1),
                 trigger: None,
-                commands: &["comment add"],
+                commands: &[Cmd::CommentAdd],
                 prose: "An exception is a detour, not an exit. Once you have handled it, rejoin the cycle where it broke — a task handed back puts you at the mailbox again, a premise resolved at the reserve, a blocker cleared at the work itself. What must not happen is stopping here with the task still reserved and nothing on its timeline: the reservation is what keeps it out of the mailbox, so it is not waiting for anyone, it is lost.",
             },
         ],
@@ -1029,28 +1111,28 @@ const CYCLES: &[Cycle] = &[
                 id: "hand-to-the-human",
                 n: None,
                 trigger: Some("you cannot proceed and need a human decision or action"),
-                commands: &["task assign", "comment add"],
+                commands: &[Cmd::TaskAssign, Cmd::CommentAdd],
                 prose: "Reassign to the human and say what is needed (a silent reassignment is unhelpful).",
             },
             Step {
                 id: "declare-blocked",
                 n: None,
                 trigger: Some("a physical blocker no one can move past"),
-                commands: &["task block"],
+                commands: &[Cmd::TaskBlock],
                 prose: "Mark it blocked with the reason.",
             },
             Step {
                 id: "resolve-the-premise",
                 n: None,
                 trigger: Some("your reserve was rejected with not_ready"),
-                commands: &["task done", "task undepend", "decision accept", "decision link", "task update", "task finish-creating"],
+                commands: &[Cmd::TaskDone, Cmd::TaskUndepend, Cmd::DecisionAccept, Cmd::DecisionLink, Cmd::TaskUpdate, Cmd::TaskFinishCreating],
                 prose: "Resolve the premise you declared, rather than working around it: finish the blocker or drop the edge; get the linked decision accepted, unlink it, or relink it to its successor; move or clear a start day that has not come; end a creation that is still open. There is no --force. Two resolve without anyone else: a start day resolves itself, so if the work is meant to wait, leave it and take the next task; an open creation resolves where you stand, once you have read what is there and it is a task to work on.",
             },
             Step {
                 id: "hand-back",
                 n: None,
                 trigger: Some("you decide not to take a task you reserved"),
-                commands: &["task status"],
+                commands: &[Cmd::TaskStatus],
                 prose: "Hand it back with `task status <id> todo` so another session can take it.",
             },
         ],
@@ -1063,14 +1145,14 @@ const CYCLES: &[Cycle] = &[
                 id: "lint-what-leaves",
                 n: Some(0),
                 trigger: None,
-                commands: &["lint"],
+                commands: &[Cmd::Lint],
                 prose: "Lint what is leaving, before it leaves: the staged diff, and the commit message. It reports and never edits, so a ref it names is yours to rewrite out of the text.",
             },
             Step {
                 id: "anchor-the-sha",
                 n: Some(1),
                 trigger: None,
-                commands: &["task commit add"],
+                commands: &[Cmd::TaskCommitAdd],
                 prose: "Once the commit lands, record its SHA on the task — a task takes many, and a SHA already there is a no-op, so anchor every commit you merge.",
             },
         ],
@@ -1079,7 +1161,7 @@ const CYCLES: &[Cycle] = &[
                 id: "install-the-hooks",
                 n: None,
                 trigger: Some("the human wants every commit linted without anyone having to remember"),
-                commands: &["hooks install", "hooks status"],
+                commands: &[Cmd::HooksInstall, Cmd::HooksStatus],
                 prose: "Offer the lint hooks (opt-in, asked once for the device).",
             },
         ],
@@ -2051,19 +2133,20 @@ mod tests {
     }
 
     /// What every step owes, wherever it was written: an id nothing else in its run answers to,
-    /// prose that is actually there, only commands that exist, and a way of being reached — its
-    /// place in a run (`n`, which must be its actual place, or a step inserted without renumbering
-    /// leaves every cross-reference pointing at the wrong work) or a `trigger` that fires it, or
-    /// both. A step declaring neither is unreachable: nothing arrives at it and nothing calls it.
-    /// Returns the id, so the caller can hold the run's ids apart.
-    fn check_step<'a>(step: &'a Value, at: usize, run: &str, known: &HashSet<String>) -> &'a str {
+    /// prose that is actually there, and a way of being reached — its place in a run (`n`, which must
+    /// be its actual place, or a step inserted without renumbering leaves every cross-reference
+    /// pointing at the wrong work) or a `trigger` that fires it, or both. A step declaring neither is
+    /// unreachable: nothing arrives at it and nothing calls it. Returns the id, so the caller can
+    /// hold the run's ids apart.
+    ///
+    /// What it no longer asks is whether the commands exist: they are [`Cmd`] variants now, so a step
+    /// naming a command that is not in the table does not build (`every_command_a_step_names_exists`
+    /// is what holds the table's other end against the registry).
+    fn check_step<'a>(step: &'a Value, at: usize, run: &str) -> &'a str {
         let id = step["id"].as_str().unwrap_or("");
         assert!(!id.is_empty(), "a step of {run} has no id: {step}");
         assert!(step["step"].as_str().is_some_and(|s| !s.is_empty()), "{run}.{id} has no prose");
-        for c in step["commands"].as_array().expect("step.commands is an array") {
-            let named = c.as_str().unwrap_or("");
-            assert!(known.contains(named), "{run}.{id} names an unknown command {named:?}");
-        }
+        assert!(step["commands"].is_array(), "{run}.{id} does not emit its commands as an array");
         let placed = step.get("n").is_some();
         if placed {
             assert_eq!(step["n"], json!(at), "{run}.{id} is numbered {} but sits at {at}", step["n"]);
@@ -2084,7 +2167,6 @@ mod tests {
     #[test]
     fn agent_cycle_steps_are_addressable() {
         let spec = build();
-        let known: HashSet<String> = command_names().into_iter().collect();
         assert!(
             spec["agentCycle"]["description"].as_str().is_some_and(|s| !s.is_empty()),
             "the backbone needs the standing description that says how to read the steps"
@@ -2094,7 +2176,7 @@ mod tests {
 
         let mut ids = HashSet::new();
         for (at, step) in steps.iter().enumerate() {
-            let id = check_step(step, at, "agentCycle", &known);
+            let id = check_step(step, at, "agentCycle");
             assert!(ids.insert(id), "two steps of the backbone answer to the id {id:?}");
             assert!(step.get("n").is_some(), "agentCycle.{id} has no place in the run");
             assert!(step.get("kind").is_none(), "the backbone has one bucket, so a step needs no kind: {step}");
@@ -2112,7 +2194,6 @@ mod tests {
     #[test]
     fn cycles_are_addressable() {
         let spec = build();
-        let known: HashSet<String> = command_names().into_iter().collect();
         let cycles = spec["cycles"].as_object().expect("cycles is an object");
         let mut cycle_ids = HashSet::new();
         let mut item_count = 0;
@@ -2127,7 +2208,7 @@ mod tests {
                 let items = emitted[bucket].as_array().unwrap_or_else(|| panic!("cycle {name}.{bucket} is an array"));
                 for (at, item) in items.iter().enumerate() {
                     item_count += 1;
-                    let id = check_step(item, at, name, &known);
+                    let id = check_step(item, at, name);
                     assert!(ids.insert(id), "two items of {name} answer to the id {id:?}");
                     assert_eq!(item["kind"], json!(bucket), "item in {name}.{bucket} carries the wrong kind: {item}");
                     assert_eq!(
@@ -2151,25 +2232,27 @@ mod tests {
         );
     }
 
-    /// Every piece of prose the spec emits, with its path, walked the way [`localize_prose`] and the
-    /// retarget walk it: a runnable line is a line to type rather than prose about one, and `name` is
-    /// an identifier. Everything else is something a reader reads.
-    fn all_prose(node: &Value, path: &str, out: &mut Vec<(String, String)>) {
+    /// Every piece of prose the spec emits, with its path, walked the way [`retarget_node`] walks it
+    /// and split the same three ways: a runnable line is a line to type rather than prose about one,
+    /// a reference is a name. Everything else is something a reader reads.
+    fn all_prose(node: &Value, key: &str, path: &str, out: &mut Vec<(String, String)>) {
         match node {
             Value::Object(map) => {
                 for (key, value) in map {
-                    if RUNNABLE_LINE_FIELDS.contains(&key.as_str()) || key == "name" {
+                    if RUNNABLE_LINE_FIELDS.contains(&key.as_str()) {
                         continue;
                     }
-                    all_prose(value, &format!("{path}/{key}"), out);
+                    all_prose(value, key, &format!("{path}/{key}"), out);
                 }
             }
             Value::Array(items) => {
                 for (at, item) in items.iter().enumerate() {
-                    all_prose(item, &format!("{path}[{at}]"), out);
+                    all_prose(item, key, &format!("{path}[{at}]"), out);
                 }
             }
-            Value::String(text) => out.push((path.to_string(), text.clone())),
+            Value::String(text) if !REFERENCE_FIELDS.contains(&key) => {
+                out.push((path.to_string(), text.clone()));
+            }
             _ => {}
         }
     }
@@ -2192,7 +2275,7 @@ mod tests {
     #[test]
     fn duplicated_facts_are_reported() {
         let mut prose = Vec::new();
-        all_prose(&build(), "", &mut prose);
+        all_prose(&build(), "", "", &mut prose);
         assert!(prose.len() > 100, "the walk found almost no prose ({}) — it stopped reaching it", prose.len());
 
         let normalised: Vec<String> = prose
@@ -2225,8 +2308,62 @@ mod tests {
         }
     }
 
-    /// A command named in the prose must exist. The `commands` beside each step is checked against
-    /// the registry already; what nothing watched is the sentences, where a command is named far more
+    /// The other end of [`Cmd`]. A variant names the registry by a string, and the registry is
+    /// written as text, so this is the one seam the type cannot close: a command renamed or dropped
+    /// there leaves a variant pointing at nothing, and every step holding it goes on compiling.
+    #[test]
+    fn every_command_a_step_names_exists() {
+        let known: HashSet<String> = command_names().into_iter().collect();
+        for cmd in Cmd::ALL {
+            assert!(known.contains(cmd.name()), "{cmd:?} names {:?}, which is no command of ours", cmd.name());
+        }
+    }
+
+    /// The table is for naming commands from steps, so an entry no step names is one nobody asked
+    /// for. Left standing it reads as "a step somewhere runs this", which is what makes the list
+    /// worth trusting when someone drops a command and comes here to see who is affected.
+    #[test]
+    fn no_command_is_named_that_no_step_names() {
+        let named: HashSet<&str> = AGENT_CYCLE
+            .iter()
+            .chain(CYCLES.iter().flat_map(|c| c.backbone.iter().chain(c.optional)))
+            .flat_map(|s| s.commands.iter().map(|c| c.name()))
+            .collect();
+        for cmd in Cmd::ALL {
+            assert!(named.contains(cmd.name()), "{cmd:?} is in the table and no step names it");
+        }
+    }
+
+    /// The narrowing the references bought: a name is exact, so the retarget's guess — is the word
+    /// after `amenbo` a command? — is not run over one. Held against the authored spec rather than
+    /// against a list of paths, so a reference field added anywhere is covered by having been added.
+    #[test]
+    fn the_retarget_leaves_references_alone() {
+        fn compare(authored: &Value, dev: &Value, key: &str, path: &str) {
+            match (authored, dev) {
+                (Value::Object(a), Value::Object(d)) => {
+                    for (key, value) in a {
+                        compare(value, &d[key], key, &format!("{path}/{key}"));
+                    }
+                }
+                (Value::Array(a), Value::Array(d)) => {
+                    for (at, item) in a.iter().enumerate() {
+                        compare(item, &d[at], key, &format!("{path}[{at}]"));
+                    }
+                }
+                (Value::String(a), Value::String(d)) if REFERENCE_FIELDS.contains(&key) => {
+                    assert_eq!(a, d, "the retarget rewrote the reference at {path}");
+                }
+                _ => {}
+            }
+        }
+        let mut dev = spec_as_authored();
+        retarget(&mut dev, Paths::DEV_APP_NAME);
+        compare(&spec_as_authored(), &dev, "", "");
+    }
+
+    /// A command named in the prose must exist. The `commands` beside each step is a [`Cmd`] and so
+    /// cannot be wrong; what nothing watched is the sentences, where a command is named far more
     /// often — and a name that has been renamed or dropped reads exactly like one that still works
     /// (`AMB-D-574`).
     ///

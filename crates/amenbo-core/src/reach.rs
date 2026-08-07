@@ -27,6 +27,10 @@
 //! - Mutations that never resolve a reference — the paths that take a comment / attachment / dimension-value
 //!   id directly, and the paths that create new entities — are checked at the single write door
 //!   (`Store::write_one`, via `store::write_reach`).
+//! - An operation that hands over the **whole device** without naming anything in it (`export`) has no
+//!   project for either of those to catch, so it asks [`Reach::refuse_whole_device`] outright — and gets a
+//!   different answer for each way a reach was closed (`AMB-D-224` ruled the AI facet's export through;
+//!   a plugin's window is not the user taking their own data out).
 //!
 //! Doors alone would spring a leak the day someone adds a surface that queries the engine
 //! (`store_engine::read`) directly: forgetting to declare a scope still compiles, and quietly returns
@@ -155,6 +159,32 @@ impl Reach {
         }
     }
 
+    /// Refuse an operation that hands over **the whole device** to a reader holding only a window
+    /// (`AMB-D-406`). A window is the gate a plugin fires through, so what it may read is what it may
+    /// observe — and a dump of every project is the one call that steps past that in a single command,
+    /// without ever naming a project for [`narrow`](Self::narrow) or [`check`](Self::check) to catch.
+    /// (`what` is the operation, e.g. `export`.)
+    ///
+    /// **A binding is let through, and the asymmetry is a ruling rather than an oversight.**
+    /// `AMB-D-224` weighed this same dump for the AI facet and allowed it: taking your own data out is
+    /// the user's right, their AI acts for them, and refusing would read as "you cannot export". What
+    /// that decision narrowed was the door, not the contents — with no destination the export writes a
+    /// file instead of streaming the device into the session. A plugin is not the user: it migrates
+    /// nowhere, and its window was fixed by the runner before its own code ran.
+    pub fn refuse_whole_device(self, what: &str) -> Result<()> {
+        match self {
+            Reach::All | Reach::Project { closed_by: Closed::Binding, .. } => Ok(()),
+            Reach::Project { id, closed_by: Closed::Window } => {
+                let bound = crate::idref::project(id);
+                Err(Error::out_of_reach(format!(
+                    "{what} hands over this whole device, and a plugin reads only through the window it \
+                     fires in ({bound}) — a window no argument widens. Read what you were launched to \
+                     observe instead: the ids in the payload name it."
+                )))
+            }
+        }
+    }
+
     /// Is the entity named by an id within the reach? (`what` is the display ref, e.g. `AMB-T-<n>`.)
     pub fn check(self, what: &str, project_id: Option<i64>) -> Result<()> {
         match self {
@@ -265,5 +295,20 @@ mod tests {
         assert!(
             binding.refuse_project_choice("--project").unwrap_err().to_string().contains(".amenbo")
         );
+    }
+
+    /// Handing over the whole device is the one place the two closed reaches part company. A window is
+    /// refused it — observing one project is the whole of what a plugin was launched for. A binding keeps
+    /// it, because `AMB-D-224` ruled the AI facet's export through as the user's own way out of the tool.
+    #[test]
+    fn only_a_window_is_refused_the_whole_device() {
+        assert!(Reach::All.refuse_whole_device("export").is_ok());
+        assert!(Reach::binding(3).refuse_whole_device("export").is_ok());
+
+        let refused = Reach::window(3).refuse_whole_device("export").unwrap_err();
+        assert_eq!(refused.code(), "out_of_reach");
+        let said = refused.to_string();
+        assert!(said.contains("export") && said.contains("plugin"), "got: {said}");
+        assert!(said.contains("AMB-P-3"), "it names the window it was closed to: {said}");
     }
 }

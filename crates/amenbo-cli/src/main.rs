@@ -6964,8 +6964,15 @@ fn default_export_dir() -> String {
 /// as "you cannot export". Instead the destination is chosen for it and the export goes to a file, which
 /// returns only a path and a count. What the AI can then do with that file is raw file access, which amenbo
 /// does not stop.
+///
+/// **A plugin's window is refused the command outright** (`Reach::refuse_whole_device`, `AMB-D-406`). The
+/// reasoning above turns on whose data is being taken out: an AI acts for the user whose device this is,
+/// so narrowing its door is enough. A plugin moves to no other tool, and the window it reads through was
+/// fixed by the runner that launched it — so the whole device is not a wider reading of what it was
+/// launched to observe, it is the way around it.
 fn export(store: &Store, flags: &Flags, out: Option<String>) -> Result<i32, CliError> {
     use amenbo_core::export;
+    store.reach().refuse_whole_device("export").map_err(CliError::from)?;
     let out = match out {
         Some(path) => Some(path),
         None if store.reach().project().is_some() => Some(default_export_dir()),

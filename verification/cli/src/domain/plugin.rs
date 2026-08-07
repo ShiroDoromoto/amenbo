@@ -426,10 +426,12 @@ impl Driver<'_> {
             // window does not, and a write still says who is writing. The published plugins take none of
             // this route (see the registry), so there is nothing to ask but a stand-in.
             //
-            // Two faces, `read` and `write`, and everything after the id goes to amenbo as it was
-            // written: the call each step makes is then readable in the scenario. The binary is named in
-            // full because the one under test is not the `amenbo` on `PATH` — an author writes `amenbo`,
-            // and this is that line pointed at the build being verified.
+            // Three faces. `read` and `write` name a task and hand everything after the id to amenbo as
+            // it was written, so the call each step makes is readable in the scenario. `take` names
+            // nothing, because the call it makes — `export` — asks for the whole device rather than for
+            // anything a window could hold, which is why it is the one call refused outright. The binary
+            // is named in full because the one under test is not the `amenbo` on `PATH` — an author
+            // writes `amenbo`, and this is that line pointed at the build being verified.
             "read-back-program" => {
                 let name = req_str(with, "name")?;
                 let path = self.session.home.join("plugins").join(name).join(name);
@@ -448,11 +450,14 @@ impl Driver<'_> {
                     &path,
                     format!(
                         "#!/bin/sh\n\
-                         if [ $# -lt 2 ]; then echo 'this face takes the id of a task'; exit 0; fi\n\
-                         face=\"$1\"; id=\"$2\"; shift 2\n\
+                         face=\"$1\"; shift\n\
                          case \"$face\" in\n\
-                         read) set -- task show \"$id\" --json \"$@\" ;;\n\
-                         write) set -- comment add \"$id\" --json \"$@\" ;;\n\
+                         take) set -- export --json \"$@\" ;;\n\
+                         read|write)\n\
+                           if [ $# -lt 1 ]; then echo 'this face takes the id of a task'; exit 0; fi\n\
+                           id=\"$1\"; shift\n\
+                           if [ \"$face\" = read ]; then set -- task show \"$id\" --json \"$@\"\n\
+                           else set -- comment add \"$id\" --json \"$@\"; fi ;;\n\
                          *) echo \"no face called $face\"; exit 0 ;;\n\
                          esac\n\
                          '{bin}' \"$@\" 2>&1\n\

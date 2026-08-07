@@ -22,8 +22,10 @@ description: >
   registered, and read the record off what it returns — the call it made named no actor, and the
   window is why it did not have to. Ask it for a task in another project, and read the refusal: the
   window it was handed is the whole of what it may see, and it is not the folder it happens to stand
-  in. Then a write with nothing said about who is writing, which is refused for that reason alone —
-  and the same write with the author named, which lands on the task's timeline.
+  in. Ask it to export, and read that refusal too: a dump of the device names no project for the
+  window to narrow, so it is turned away rather than trimmed. Then a write with nothing said about who
+  is writing, which is refused for that reason alone — and the same write with the author named, which
+  lands on the task's timeline.
 steps_cli:
   - type: action
     domain: plugin
@@ -100,6 +102,23 @@ steps_cli:
       name: worktree
       command: read
       task: unseen
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: out_of_reach
+
+  # And the one call that names no project at all. `export` hands over everything on the device, so
+  # there is nothing in it for the window to narrow — it is refused outright rather than answered with
+  # a smaller dump. The user's own AI keeps this command; a plugin is not the user leaving for another
+  # tool, and the project it observes was chosen by whoever launched it.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: take
 
   - type: assert
     domain: plugin

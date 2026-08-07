@@ -292,6 +292,56 @@ fn an_ais_diagnostics_and_export_stay_inside_the_project_it_is_bound_to() {
     assert!(dumped.contains("theirs"), "the exported file holds the whole machine (unfiltered)");
 }
 
+/// The export a binding keeps (above) is refused to a **window** — the reach a plugin is launched with
+/// (`AMB-D-406`). The two are the same distance apart on every other read, and part company only here:
+/// what `AMB-D-224` let through was the user taking their own data out, and a plugin is not the user. It
+/// moves to no other tool, and the project it observes was chosen by the runner before its code ran, so a
+/// dump of every project is not a wider reading of that window — it is the way around it.
+#[test]
+fn a_plugins_window_is_refused_the_whole_device() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let bound = cli.bound_project();
+    let other = id_str(&cli.json(&["project", "add", "--name", "Other", "--json"])["project"]["id"]);
+    cli.json(&["task", "add", "--title", "observed", "--project", &bound, "--json"]);
+    cli.json(&["task", "add", "--title", "theirs", "--project", &other, "--json"]);
+
+    // A plugin's process: the store and the window in the environment, no facet, and a CWD that is
+    // whatever its launcher happened to be in (never the bound folder).
+    let plugin = |args: &[&str]| -> (String, String, i32) {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &cli.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .env("AMENBO_PLUGIN_REACH", amenbo_core::idref::project(bound.parse().unwrap()))
+            .current_dir(&cli.home)
+            .args(args)
+            .output()
+            .expect("run amenbo");
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            String::from_utf8_lossy(&out.stderr).to_string(),
+            exit_code(&out),
+        )
+    };
+
+    // Both shapes are refused: the stream would put every project in the plugin's stdout, and a
+    // destination would leave the same bytes on disk for it to read back.
+    for args in [vec!["export", "--json"], vec!["export", "--out", "taken", "--json"]] {
+        let (stdout, stderr, code) = plugin(&args);
+        assert_ne!(code, 0, "{args:?} must not hand a plugin the device: {stdout}");
+        assert!(stderr.contains("out_of_reach"), "{args:?} is out_of_reach: {stderr}");
+        assert!(!stdout.contains("theirs"), "{args:?} leaked another project: {stdout}");
+        assert!(stderr.contains("plugin"), "the refusal is in the plugin's terms: {stderr}");
+        assert!(!stderr.contains(".amenbo"), "a window is not a binding: {stderr}");
+    }
+    assert!(!cli.home.join("taken").exists(), "the refused export wrote nothing");
+
+    // What the window does open is unchanged: the project it fires for still reads back.
+    let (stdout, stderr, code) = plugin(&["task", "list", "--json"]);
+    assert_eq!(code, 0, "the read-back the window exists for still passes: {stderr}");
+    assert!(stdout.contains("observed") && !stdout.contains("theirs"), "got: {stdout}");
+}
+
 /// **An AI does not pick a project** — the binding does. `--project` and the `project:` filter are human
 /// vocabulary: an AI passing either is an error, even when it names the bound project itself (no silent
 /// ignore, no silent fallback). The flip side: an AI's `task add` needs no `--project` and lands in the binding.

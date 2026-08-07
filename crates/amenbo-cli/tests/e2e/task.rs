@@ -911,6 +911,27 @@ fn commit_filter_walks_git_back_to_the_task() {
     assert_ne!(code, 0, "an empty commit value is refused, not treated as match-nothing");
 }
 
+/// The door admits full hex only (`AMB-D-281`), and the value nearest to hand is the one it refuses:
+/// `git log --oneline` prints the short form. So the refusal says the shape *and* names the one command
+/// that gets you the other spelling — amenbo does not run it, since it never reads git at all.
+#[test]
+fn a_short_sha_is_refused_with_the_way_to_the_full_one() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.a_project();
+    let t = id_str(&cli.json(&["task", "add", "--project", &pid, "--title", "one", "--json"])["task"]["id"]);
+
+    let (stderr, code) = cli.run_err(&["task", "commit", "add", &t, "abc1234", "--json"]);
+    assert_ne!(code, 0, "a short SHA must be refused: {stderr}");
+    let v: Value = serde_json::from_str(stderr.trim()).unwrap_or_else(|_| panic!("error JSON: {stderr}"));
+    assert_eq!(v["error"]["code"], "invalid_commit_sha", "the refusal names itself: {stderr}");
+    let hint = v["error"]["hint"].as_str().unwrap_or("");
+    assert!(hint.contains("git rev-parse"), "the hint names what expands a short SHA: {stderr}");
+
+    // The expanded form goes straight through, which is what the hint promises.
+    cli.json(&["task", "commit", "add", &t, &"a".repeat(40), "--json"]);
+}
+
 /// `search` over the word index (`AMB-D-450`), end to end: it reaches every face of a task — its title,
 /// its notes, the body of a comment on it — and it folds width, case and kana on both sides, so a word
 /// typed one way finds the same word written another.

@@ -304,7 +304,7 @@ impl CliError {
 
 impl From<amenbo_core::Error> for CliError {
     fn from(e: amenbo_core::Error) -> CliError {
-        use amenbo_core::Error as E;
+        use amenbo_core::{Error as E, ErrorCode};
         let cmd = Paths::command_name();
         let hint = match &e {
             E::AmbiguousId { candidates, .. } => {
@@ -321,6 +321,14 @@ impl From<amenbo_core::Error> for CliError {
             E::NotReady(_) => Some(format!(
                 "A declared premise is unmet, and there is no --force. Resolve it: finish the blocker (`{cmd} task done <blocker>`) or drop the edge (`{cmd} task undepend <id> --on <blocker>`); settle the premise (`{cmd} decision accept AMB-D-N`) or unlink it (`{cmd} decision link AMB-D-N <id> --unlink`); finish creating the task (`{cmd} task finish-creating <id>`)."
             )),
+            // The refusal states the shape and stops there, which leaves the caller holding the very
+            // value that failed: `git log --oneline` prints the short form, so the value nearest to hand
+            // is the one the door will never take. amenbo does not expand it — it never runs git
+            // (`AMB-D-281`) — so what it can do is name the one command that does.
+            E::Invalid(m) if m.code() == Some(ErrorCode::InvalidCommitSha) => Some(
+                "`git log --oneline` prints the short form. Expand it with `git rev-parse <short sha>` and pass what that returns — amenbo never runs git itself."
+                    .to_string(),
+            ),
             _ => None,
         };
         CliError {

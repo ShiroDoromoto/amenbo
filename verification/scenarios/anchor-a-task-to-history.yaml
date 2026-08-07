@@ -15,6 +15,16 @@ steps_cli:
       title: SCENARIO SEED — anchored to its history
     as: seed
 
+  # The short form is what `git log --oneline` hands you, so it is the spelling most likely to arrive
+  # at the door — and the one the door never takes, since two spellings of one commit would both land.
+  - type: action
+    domain: task
+    op: commit-add
+    with:
+      target: seed
+      sha: "a1a1a1a"
+      refused: invalid_commit_sha
+
   - type: action
     domain: task
     op: commit-add

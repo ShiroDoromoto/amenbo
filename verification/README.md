@@ -586,9 +586,13 @@ it, so asking a word where it is written is one command there and there is nothi
 hit through to the record it points at, and reading which record that opened (`task open-hit` /
 `task opened`), is the same kind again: a terminal prints its hits as text, and the ref is typed into
 `show` rather than pressed. Reading the cross-cutting search's narrowing box as one that cannot be typed
-into at all (`task narrowing-shut`) is the last of them: a flag either arrives on a command line or it
-does not, so only a screen holds a control a reader can see, reach and not use — which is the shape the
-box takes while no side is chosen and there is no grammar to read the words in.
+into at all (`task narrowing-shut`), and the button a consent is taken back with as one that cannot be
+pressed (`repo ai-launch-consent-clear-shut`), are the last of them: a flag either arrives on a command
+line or it does not, so only a screen holds a control a reader can see, reach and not use — which is the
+shape the box takes while no side is chosen and there is no grammar to read the words in, and the shape
+the button takes while there is no answer left to clear. Both are read off how the control is drawn, not
+off what it does when used: one shut in the build and painted like a live one is one a reader still
+reaches for.
 
 One road's alone is sometimes an *argument* rather than a whole op, and then it is the driver that
 cannot answer it which says so. A search hit is the case: what the row **calls** the place it points

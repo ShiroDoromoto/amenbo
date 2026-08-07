@@ -17,9 +17,10 @@
 # Hence a road for the screen alone. The terminal writes the answer and never reads it back, so it has no
 # face to read the record on and none to clear it from.
 #
-# Both readings of the record are closed by an eye rather than by a reading. All three answers are drawn
+# Every reading of the record is closed by an eye rather than by a reading. All three answers are drawn
 # as words of the interface, and which of them is standing is not something the presence of text on a
-# shot settles; the file the report names is the one line here a reading can close.
+# shot settles — and whether the way back out is still open is read off how its button is drawn, which a
+# reading gives nothing of at all. The file the report names is the one line here a reading can close.
 #
 # The world is declared below: the project named there, bound to a folder carrying the provider's own
 # directory with nothing about amenbo in it, and one task on its board — a project that has never held
@@ -35,8 +36,8 @@ description: >
   place the refusal is legible at all: read it, drop it, and read what dropping left. Not a yes and not a
   no, but a project that has never been answered for — with nothing further to clear, since there is no
   longer an answer to take back, and the report waiting to come back the next time this project is
-  opened. A screen that lost the refusal in silence, or that left it standing after the press, is what
-  this road exists to catch.
+  opened. A screen that lost the refusal in silence, that left it standing after the press, or that kept
+  the way back out looking pressable with nothing behind it, is what this road exists to catch.
 given:
   - type: action
     domain: project
@@ -125,9 +126,17 @@ steps_gui:
 
   # And that is where it left it. Never answered is not a no, and the difference is the whole point of
   # the press — the report is drawn from this state, so the next opening of the project has it standing
-  # again. The button that brought the screen here is shut now, since there is nothing left to take back.
+  # again.
   - type: assert
     domain: repo
     op: ai-launch-answer
     with:
       answer: unanswered
+
+  # And the button that brought the screen here, now that there is nothing left to take back. It is a
+  # step of its own rather than a clause on the read above, because it is answered by a different thing:
+  # the record says there is nothing to clear, and this says the screen agrees — read off how the button
+  # is drawn, since one shut in the build and painted like a live one is one a reader still presses.
+  - type: assert
+    domain: repo
+    op: ai-launch-consent-clear-shut

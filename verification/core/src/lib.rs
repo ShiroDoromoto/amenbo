@@ -738,6 +738,21 @@ const REGISTRY: &[OpSpec] = &[
     // out of a refusal would be offered where there is nothing to take back. The yes reaches the record
     // from the terminal, which is where the question is still put.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-answer", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
+    // The other half of that face: the button the answer is taken back with, read where there is nothing
+    // left to take back. `ai-launch-answer: unanswered` says the record is gone and stops there, so a
+    // build that left the way out standing open beside it passes that read — and offers a press that
+    // undoes nothing.
+    //
+    // What it asks about is the drawing, not the wiring. A button shut in the markup is turned away
+    // whatever it looks like, so the miss this exists to catch is the one only a hand meets: shut, and
+    // drawn pixel for pixel like a button that can be pressed. Naming the attribute would close it on the
+    // half that was already right.
+    //
+    // Hence a `Review`, twice over: a control refusing the hand leaves no text on a shot either way, and
+    // what separates a shut one from a live one is paint. A screen road alone, like the press it reads —
+    // a terminal writes the answer and never reads it back, so it has no face to clear it from, and none
+    // to draw a way out shut on.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-consent-clear-shut", required: &[], refs: &[], strings: &[], binds: false },
     // A folder named among the ones that one text is still waiting on. Consent is answered for a project
     // and the paste lands in a folder, so what a reader who answered yes still owes is a list — and the
     // report puts its text up once with that list under it rather than repeating the request per folder.

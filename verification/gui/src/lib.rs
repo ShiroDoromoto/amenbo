@@ -293,6 +293,11 @@ impl Instructor {
     /// is: all three of its answers — the yes, the no, and the never asked — are drawn as words of the
     /// interface, and which of them is standing is not something the presence of text can settle.
     ///
+    /// `ai-launch-consent-clear-shut` is a `Review` beside it, and for a reason of its own: what it is
+    /// about is a button refusing the hand, which puts no words on a shot either way. The one thing that
+    /// tells it from a button that can be pressed is how it is drawn, and paint is not something a reading
+    /// gives back.
+    ///
     /// `ai-launch-waiting` is a `Review` for the reason `open-existing` is: the folder it names is
     /// listed a second time on that same screen, among the ones bound to the project, so a reading of
     /// the name would pass over a build that dropped the inventory and kept the binding.
@@ -797,6 +802,18 @@ impl Instructor {
                     return Err(format!("assert `ai-launch-answer` does not know the answer `{other}`"))
                 }
             },
+            // The way back out, read while there is no answer to take back. The line names how the button
+            // is drawn rather than what it does when pressed: a press that goes nowhere is what the state
+            // row beside it already says, and the fault this stands against is a button that is shut and
+            // says nothing of it — so what the eye is sent to look for is the fade and the pointer the
+            // pressable ones on the same screen are wearing, held up against them.
+            (Domain::Repo, "ai-launch-consent-clear-shut") => {
+                "Confirm the button that clears this project's answer is drawn as one that cannot be \
+                 pressed: faded beside the buttons on this screen that can be, and answering the pointer \
+                 with neither a hand cursor nor a colour of its own. That it does nothing when pressed is \
+                 not the reading — a button shut and drawn like a live one is the state this closes."
+                    .to_string()
+            }
             // Which folders that one text is still waiting on. The line says "under" on purpose: what is
             // under test is a list standing beneath a single request, so a screen carrying the request
             // once per folder is the miss it catches — and a road naming several folders writes a step
@@ -2179,6 +2196,9 @@ steps_gui:
     domain: repo
     op: ai-launch-answer
     with: { answer: unanswered }
+  - type: assert
+    domain: repo
+    op: ai-launch-consent-clear-shut
 "#;
         let s = load(yaml);
         let mut ins = Instructor::new();
@@ -2186,9 +2206,13 @@ steps_gui:
         assert!(lines[0].contains("answered no") && lines[0].contains("only way back"), "got: {}", lines[0]);
         assert!(lines[1].contains("clears its answer"), "got: {}", lines[1]);
         assert!(lines[2].contains("not been answered for") && lines[2].contains("nothing left to clear"), "got: {}", lines[2]);
+        // And the button, sent to the eye as something drawn rather than something wired: the line names
+        // the fade and the pointer, and says out loud that a press going nowhere is not what closes it.
+        assert!(lines[3].contains("faded") && lines[3].contains("cursor"), "got: {}", lines[3]);
+        assert!(lines[3].contains("does nothing when pressed is not the reading"), "got: {}", lines[3]);
         assert!(
             s.steps(Driver::Gui).iter().all(|st| ins.expectation(st).is_none()),
-            "an answer drawn in the interface's own words is not a reading"
+            "an answer drawn in the interface's own words is not a reading, and neither is paint"
         );
     }
 

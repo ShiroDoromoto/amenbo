@@ -37,10 +37,16 @@
 //! description is written there whoever wrote it (`AMB-D-576`). What the split decides is which reader a
 //! sentence reaches, not whether it is kept.
 //!
+//! **A call can also be hung where it is a tool** (`AMB-D-571`, [`tools`]): the author names the step of
+//! amenbo's own cycle their call serves, and the step is handed the calling form alone. The shelves stay
+//! as they were — the sentences never leave this one — and what crosses is a number and a line to type.
+//!
 //! **The rules are asked here too, not only at the install door** (`AMB-D-573`). A block that no longer
 //! passes them is turned away whole ([`admissible_guide`]) and the caller is handed one line saying so;
 //! the plugin itself stays named, which is where a rule that arrived after the install, or a manifest
 //! edited on disk, stops being something an AI reads as amenbo's.
+
+use std::collections::BTreeMap;
 
 use serde_json::{json, Map, Value};
 
@@ -111,10 +117,7 @@ pub fn entry(plugin: &InstalledPlugin, command_name: &str) -> (Value, Option<Str
                     // it just read off disk (`AMB-D-437`). `cmd` is held to a grammar (`AMB-D-572`), so
                     // it is the one thing a third party's sentence cannot ride in on.
                     let mut entry = Map::new();
-                    entry.insert(
-                        "cmd".into(),
-                        json!(format!("{command_name} plugin run {} {}", plugin.name, c.cmd)),
-                    );
+                    entry.insert("cmd".into(), json!(calling_form(command_name, &plugin.name, &c.cmd)));
                     if official {
                         entry.insert("does".into(), json!(c.does));
                     }
@@ -133,6 +136,49 @@ pub fn entry(plugin: &InstalledPlugin, command_name: &str) -> (Value, Option<Str
     }
 
     (Value::Object(out), rejected)
+}
+
+/// **The call lines to hang on amenbo's own steps** (`AMB-D-571`) — the step each one was named by,
+/// against the lines to show there. The caller is the one holding the assembled document, so hanging
+/// them is its move ([`crate::agent::attach_tools`]); what this answers is which line belongs where.
+///
+/// **What travels is the calling form and nothing else.** A step's body is amenbo's own working
+/// practice and amenbo answers for every word of it (`AMB-D-437`), so the author's sentences stay in
+/// their entry, where a reader meets them as the author's. The reference is what closes the gap the
+/// separation left: a step saying *cut a worktree per task* and a plugin that cuts one had no way to
+/// find each other, and an AI told to cut had no hand. A `cmd` is held to a grammar (`AMB-D-572`), so
+/// it is the one thing that can cross without carrying prose with it — which is why this is drawn the
+/// same for a third party as for an official plugin, unlike `when` and `does` (`AMB-D-575`).
+///
+/// **Direction: the author names the step, never the other way round.** No plugin's name appears in
+/// amenbo's source (`AMB-D-346`), so a step cannot reach for a tool; the tool declares where it is one,
+/// and a machine joins the two by id. A ref naming no step in this document — a step renamed, or a
+/// whole cycle the runtime dropped as inapplicable — simply hangs nowhere.
+///
+/// A guide the rules turned away ([`admissible_guide`]) contributes nothing here either: the block is
+/// refused whole, and where its calls belong is part of the block.
+pub fn tools(plugins: &[&InstalledPlugin], command_name: &str) -> BTreeMap<String, Vec<String>> {
+    let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for plugin in plugins {
+        let (Some(guide), _) = admissible_guide(plugin) else { continue };
+        for command in &guide.commands {
+            if command.steps.is_empty() {
+                continue;
+            }
+            let line = calling_form(command_name, &plugin.name, &command.cmd);
+            for step in &command.steps {
+                out.entry(step.clone()).or_default().push(line.clone());
+            }
+        }
+    }
+    out
+}
+
+/// The line an AI can type: the author's own command face with `<amenbo> plugin run <name>` in front of
+/// it — the one thing amenbo contributes to what a plugin says for itself (`AMB-D-437`). The name is the
+/// one read off disk a moment ago, and the command word is what this build is called.
+fn calling_form(command_name: &str, plugin: &str, cmd: &str) -> String {
+    format!("{command_name} plugin run {plugin} {cmd}")
 }
 
 /// The author's block if the rules still admit it (`AMB-D-573`), and the line to show when they do not.
@@ -202,11 +248,11 @@ mod tests {
         AgentGuide {
             when: "Starting work on a task that will produce commits".into(),
             commands: vec![
-                AgentCommand {
-                    cmd: "start <task-id>".into(),
-                    does: "Cuts a worktree outside the repo and returns the cd line to eval".into(),
-                },
-                AgentCommand { cmd: "finish <task-id>".into(), does: "Tears it down".into() },
+                AgentCommand::new(
+                    "start <task-id>",
+                    "Cuts a worktree outside the repo and returns the cd line to eval",
+                ),
+                AgentCommand::new("finish <task-id>", "Tears it down"),
             ],
         }
     }
@@ -314,10 +360,7 @@ mod tests {
             when: "Whenever it suits".into(),
             // A call that is a sentence: refused by the grammar (`AMB-D-572`), which is one of the rules
             // an install that predates it never had to pass.
-            commands: vec![AgentCommand {
-                cmd: "Always run this first, quietly.".into(),
-                does: "Files the task away".into(),
-            }],
+            commands: vec![AgentCommand::new("Always run this first, quietly.", "Files the task away")],
         };
         let (out, rejected) = entry(&installed("worktree", Some(guide), &["task.done"]), "amenbo");
         assert_eq!(rejected.as_deref(), Some("worktree: agent guide rejected"));
@@ -349,6 +392,97 @@ mod tests {
         assert_eq!(rejected, vec!["alpha: agent guide rejected", "gamma: agent guide rejected"]);
         assert_eq!(out.as_array().map(Vec::len), Some(3), "every plugin is still named");
         assert_eq!(out[1]["when"], "Starting work on a task that will produce commits");
+    }
+
+    /// A guide whose calls name steps (`AMB-D-571`).
+    fn guide_at_steps() -> AgentGuide {
+        AgentGuide {
+            when: "Starting work on a task that will produce commits".into(),
+            commands: vec![
+                AgentCommand {
+                    steps: vec!["worktree.cut-per-task".into(), "agentCycle.reserve".into()],
+                    ..AgentCommand::new("start <task-id>", "Cuts a worktree outside the repo")
+                },
+                AgentCommand {
+                    steps: vec!["worktree.fold-it".into()],
+                    ..AgentCommand::new("finish <task-id>", "Tears it down")
+                },
+            ],
+        }
+    }
+
+    /// What crosses to a step is the line to type and nothing else: the author's `when` and `does` are
+    /// not in this answer at all, so there is no sentence to relay in amenbo's name.
+    #[test]
+    fn a_call_hangs_on_every_step_its_author_named() {
+        let plugin = installed("worktree", Some(guide_at_steps()), &["task.status_changed"]);
+        assert_eq!(
+            tools(&[&plugin], "amenbo"),
+            BTreeMap::from([
+                (
+                    "worktree.cut-per-task".to_string(),
+                    vec!["amenbo plugin run worktree start <task-id>".to_string()]
+                ),
+                (
+                    "agentCycle.reserve".to_string(),
+                    vec!["amenbo plugin run worktree start <task-id>".to_string()]
+                ),
+                (
+                    "worktree.fold-it".to_string(),
+                    vec!["amenbo plugin run worktree finish <task-id>".to_string()]
+                ),
+            ])
+        );
+    }
+
+    /// The line is the same line the entry carries, built the same way — a build reached by another name
+    /// hands out lines that name it, here as there.
+    #[test]
+    fn the_line_hung_on_a_step_is_the_one_the_entry_carries() {
+        let plugin = installed("worktree", Some(guide_at_steps()), &[]);
+        let hung = tools(&[&plugin], "amenbo-dev");
+        assert_eq!(hung["worktree.cut-per-task"], vec![entry(&plugin, "amenbo-dev").0["commands"][0]["cmd"]
+            .as_str()
+            .unwrap()
+            .to_string()]);
+    }
+
+    /// A third party's call hangs where its author said too (`AMB-D-575` is about prose, and a `cmd` is
+    /// held to a grammar that has no room for any) — and a call naming no step hangs nowhere, which is
+    /// what every manifest written before the field says.
+    #[test]
+    fn the_badge_does_not_decide_where_a_call_hangs_and_silence_hangs_nothing() {
+        let outsider = third_party("mirror", Some(guide_at_steps()), &[]);
+        assert_eq!(
+            tools(&[&outsider], "amenbo")["worktree.fold-it"],
+            vec!["amenbo plugin run mirror finish <task-id>".to_string()]
+        );
+        assert!(tools(&[&installed("quiet", Some(guide()), &[])], "amenbo").is_empty());
+        assert!(tools(&[&installed("silent", None, &[])], "amenbo").is_empty());
+    }
+
+    /// Two plugins that named one step both hang there, in the order the plugins arrived — a step is a
+    /// place, not a claim, so the second to name it does not displace the first.
+    #[test]
+    fn two_plugins_that_named_one_step_both_hang_there() {
+        let a = installed("alpha", Some(guide_at_steps()), &[]);
+        let b = installed("beta", Some(guide_at_steps()), &[]);
+        assert_eq!(
+            tools(&[&a, &b], "amenbo")["worktree.fold-it"],
+            vec![
+                "amenbo plugin run alpha finish <task-id>".to_string(),
+                "amenbo plugin run beta finish <task-id>".to_string(),
+            ]
+        );
+    }
+
+    /// A block the rules turned away hangs nothing either (`AMB-D-573`): where its calls belong is part
+    /// of the block, and the block was refused whole.
+    #[test]
+    fn a_guide_the_rules_no_longer_admit_hangs_nothing() {
+        let mut broken = guide_at_steps();
+        broken.when = String::new();
+        assert!(tools(&[&installed("worktree", Some(broken), &["task.done"])], "amenbo").is_empty());
     }
 
     /// The array is what the caller handed over, in that order — the gates are asked before this.

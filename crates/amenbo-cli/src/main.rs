@@ -675,7 +675,8 @@ fn bound_dir_is_under_git() -> bool {
 
 /// **The plugins the agent spec names** (`AMB-D-437`): what this project can actually call — described in
 /// the words their authors wrote where those authors are the amenbo team, and by the line to type alone
-/// where they are not (`AMB-D-575`/`AMB-D-576`, [`amenbo_core::plugin_agent`]).
+/// where they are not (`AMB-D-575`/`AMB-D-576`, [`amenbo_core::plugin_agent`]) — and, off the same set,
+/// the lines to hang on the steps their authors named (`AMB-D-571`).
 ///
 /// The filter is the callable set, and it is the same set an actual call passes
 /// ([`plugin_invoke::prepare`](amenbo_core::plugin_invoke::prepare)): installed, **enabled in the project
@@ -693,40 +694,28 @@ fn bound_dir_is_under_git() -> bool {
 /// binding, nothing installed, everything installed needing a different amenbo, nothing switched on here).
 /// Best-effort, like the rest of this runtime seam: a base directory that cannot be listed answers with
 /// that as the reason rather than an entry point that fails to answer.
-fn plugins_for_agent(
-    store: &Store,
-    project: Option<i64>,
-) -> (serde_json::Value, Option<&'static str>) {
-    let empty = || serde_json::Value::Array(Vec::new());
+fn plugins_for_agent(store: &Store, project: Option<i64>) -> PluginsAtEntry {
+    let empty = PluginsAtEntry::empty;
     let Some(project) = project else {
-        return (
-            empty(),
-            Some(
-                "no project is in context: a plugin's switch is one project's, so there is no gate to \
-                 read outside a bound folder — run this from one",
-            ),
+        return empty(
+            "no project is in context: a plugin's switch is one project's, so there is no gate to \
+             read outside a bound folder — run this from one",
         );
     };
     let Ok(installed) = amenbo_core::plugin_installed::installed(&store.paths) else {
-        return (empty(), Some("the plugins directory could not be read, so nothing could be listed"));
+        return empty("the plugins directory could not be read, so nothing could be listed");
     };
     if installed.is_empty() {
-        return (
-            empty(),
-            Some("no plugin is installed on this machine — `plugin list` shows what is"),
-        );
+        return empty("no plugin is installed on this machine — `plugin list` shows what is");
     }
     let compatible: Vec<_> = installed
         .iter()
         .filter(|p| amenbo_core::plugin_compat::check(&p.manifest).is_ok())
         .collect();
     if compatible.is_empty() {
-        return (
-            empty(),
-            Some(
-                "every installed plugin speaks a contract this build does not, so none of them can be \
-                 called — `plugin list` names the mismatch",
-            ),
+        return empty(
+            "every installed plugin speaks a contract this build does not, so none of them can be \
+             called — `plugin list` names the mismatch",
         );
     }
     // A gate that cannot be read is not the same answer as a gate that is shut, and this is the one place
@@ -745,25 +734,53 @@ fn plugins_for_agent(
         })
         .collect();
     if callable.is_empty() {
-        return (
-            empty(),
-            Some(if unreadable_gate {
-                "whether a plugin is enabled here could not be read from the store"
-            } else {
-                "no plugin is enabled in this project — installing one never turns it on; \
-                 `plugin enable <name>` opens its gate here"
-            }),
-        );
+        return empty(if unreadable_gate {
+            "whether a plugin is enabled here could not be read from the store"
+        } else {
+            "no plugin is enabled in this project — installing one never turns it on; \
+             `plugin enable <name>` opens its gate here"
+        });
     }
-    let (list, rejected) =
-        amenbo_core::plugin_agent::entries(&callable, amenbo_core::config::Paths::command_name());
+    let command_name = amenbo_core::config::Paths::command_name();
+    let (list, rejected) = amenbo_core::plugin_agent::entries(&callable, command_name);
     // A guide turned away at the moment it was read out (`AMB-D-573`) is the user's to know about: their
     // plugin is installed and enabled, and the entry point still does not carry what its author wrote.
     // On stderr, like every other advisory here, so a `--json` reader's stdout stays one document.
     for line in rejected {
         eprintln!("⚠ {line}");
     }
-    (list, None)
+    PluginsAtEntry {
+        list,
+        tools: amenbo_core::plugin_agent::tools(&callable, command_name),
+        empty_because: None,
+    }
+}
+
+/// What the entry point carries about plugins: the `plugins` array, the call lines to hang on the steps
+/// whose ids their authors named (`AMB-D-571`), and — when the array is empty — which empty it is.
+///
+/// The three travel together because they come of one question, asked once: which plugins can this
+/// project actually call. Splitting them would ask it twice, and a second answer can disagree with the
+/// first.
+struct PluginsAtEntry {
+    /// The `plugins` key itself — one entry per callable plugin (`AMB-D-437`).
+    list: serde_json::Value,
+    /// Step ref → the lines to show at that step ([`amenbo_core::agent::attach_tools`] hangs them).
+    tools: std::collections::BTreeMap<String, Vec<String>>,
+    /// Why the list is empty, when it is: several unrelated states fall to the same empty array and
+    /// they want opposite moves from the reader.
+    empty_because: Option<&'static str>,
+}
+
+impl PluginsAtEntry {
+    /// Nothing to name, and the reason. Nothing to hang either — the tools come off the same plugins.
+    fn empty(why: &'static str) -> Self {
+        PluginsAtEntry {
+            list: serde_json::Value::Array(Vec::new()),
+            tools: std::collections::BTreeMap::new(),
+            empty_because: Some(why),
+        }
+    }
 }
 
 /// Can this invocation reach a store at all — is one named, by a pointer or by env (AMENBO_HOME /
@@ -2806,6 +2823,11 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             // The default is the entry point: how to work, in full; commands, as an index. `--full` piles on
             // every command's spec.
             let mut spec = if full { agent::build() } else { agent::build_index() };
+            // Asked once, and the whole of what plugins put in this document: the shelf they are named
+            // on, and the lines their authors hung on amenbo's own steps. Asking twice would walk the
+            // disk twice and let the two halves disagree.
+            let PluginsAtEntry { list, tools, empty_because } =
+                plugins_for_agent(&store, bound_project(&store));
             if let serde_json::Value::Object(map) = &mut spec {
                 // Fill in the static spec's `updateAvailable` (false by default) with what the upstream
                 // actually says, so an AI can learn that an update is out.
@@ -2834,8 +2856,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 // are a third party's — kept on a separate shelf so a reader can always tell whose words
                 // they are reading. Runtime like the fields above, and for the same reason: what is
                 // installed and open is the store's answer, not the static spec's.
-                let (plugins, empty_because) = plugins_for_agent(&store, bound_project(&store));
-                map.insert("plugins".to_string(), plugins);
+                map.insert("plugins".to_string(), list);
                 // Only when there is nothing to name: a reader with a list in hand has no use for a
                 // sentence about lists that are empty, and the key's presence is itself the answer.
                 if let Some(why) = empty_because {
@@ -2845,6 +2866,11 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     );
                 }
             }
+            // And where a plugin's author named a step of amenbo's own cycle, hang the line to type on
+            // that step (`AMB-D-571`): the advice and the tool for it are otherwise in one document
+            // with no way to reach each other, which leaves an AI told to cut a worktree with no hand.
+            // After the cycle drop above, so a step this run does not carry gets nothing hung on it.
+            amenbo_core::agent::attach_tools(&mut spec, &tools);
             print_json(&spec);
         }
         Command::Version => {
@@ -7612,9 +7638,13 @@ mod tests {
             .unwrap()
             .id;
         let why = |store: &Store, project: Option<i64>| {
-            let (list, why) = plugins_for_agent(store, project);
-            assert!(list.as_array().is_some_and(|rows| rows.is_empty()), "a reason comes with an empty list");
-            why.unwrap_or("")
+            let at_entry = plugins_for_agent(store, project);
+            assert!(
+                at_entry.list.as_array().is_some_and(|rows| rows.is_empty()),
+                "a reason comes with an empty list"
+            );
+            assert!(at_entry.tools.is_empty(), "no plugin to name is no line to hang either");
+            at_entry.empty_because.unwrap_or("")
         };
 
         // Standing in no project: a gate is one project's, so there is none to read.
@@ -7650,9 +7680,9 @@ mod tests {
 
         // Switched on here: the list is the answer, and there is nothing to explain.
         amenbo_core::plugin_trust::enable(&mut store, "notes", project, &[], |_| true).unwrap();
-        let (list, why_now) = plugins_for_agent(&store, Some(project));
-        assert_eq!(list[0]["name"], "notes");
-        assert_eq!(why_now, None, "a list in hand needs no sentence about empty ones");
+        let at_entry = plugins_for_agent(&store, Some(project));
+        assert_eq!(at_entry.list[0]["name"], "notes");
+        assert_eq!(at_entry.empty_because, None, "a list in hand needs no sentence about empty ones");
 
         // A build that speaks a different payload contract is dropped before the gate is asked.
         plant(&store, amenbo_core::plugin_payload::VERSION + 1);

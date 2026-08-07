@@ -689,12 +689,17 @@ impl ConfigField {
 ///   commands:
 ///     - cmd: <subcommand and arguments>
 ///       does: what it does, and what it returns (one line)
+///       steps: [<the ids of amenbo's own steps this call is a tool for>]
 /// ```
 ///
 /// **The calling form is amenbo's to build.** [`cmd`](AgentCommand::cmd) holds the plugin's own command
 /// face alone; the entry point puts `amenbo plugin run <name> ` in front of it from the name it just read,
 /// so an AI receives a line it can type. An author writing the whole line would be writing their own name
 /// into it, which is the one thing this shape keeps out.
+///
+/// **Where a call belongs is named by id, never in prose** (`AMB-D-571`). An author who wants their
+/// call to appear beside the step it serves names that step in [`AgentCommand::steps`]; the step then
+/// carries the calling form alone, and every sentence about it stays here.
 ///
 /// **The text is the author's one language.** amenbo's own entry point carries its wording in more than
 /// one, and it holds no translation for a plugin's — what was written is what is relayed.
@@ -714,13 +719,35 @@ pub struct AgentGuide {
     pub commands: Vec<AgentCommand>,
 }
 
-/// One call an author puts on the record (`AMB-D-437`): what to type, and what comes back.
+/// One call an author puts on the record (`AMB-D-437`): what to type, what comes back, and where in
+/// amenbo's own working cycle it is a tool.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentCommand {
     /// The subcommand and its arguments — without the `amenbo plugin run <name>` the reader prepends.
     pub cmd: String,
     /// One line: what the call does, and what it returns.
     pub does: String,
+    /// **The steps of amenbo's own cycle this call is a tool for** (`AMB-D-571`), each named by id:
+    /// `<run>.<step>`, where the run is `agentCycle` for the backbone or a cycle's key
+    /// (`cycles.worktree` is written `worktree`), and the step is its id within that run. What travels
+    /// to a named step is the calling form and nothing else — the sentences stay in this block, where a
+    /// reader meets them as the author's rather than as amenbo's (`AMB-D-437`/`AMB-D-571`).
+    ///
+    /// **Naming a step no longer there is not an error.** The steps travel with amenbo while a manifest
+    /// stays where it was installed, and a step can be renamed, retired, or — like the `worktree` cycle
+    /// off a git checkout — left out of the run the reader is handed. A ref that resolves to nothing
+    /// hangs nowhere and takes nothing with it. Absent means the call is a tool for no step in
+    /// particular, which is what a manifest written before this field says.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub steps: Vec<String>,
+}
+
+impl AgentCommand {
+    /// A call tied to no step of amenbo's own cycle — what an author writes who names their command
+    /// face and stops there.
+    pub fn new(cmd: impl Into<String>, does: impl Into<String>) -> Self {
+        AgentCommand { cmd: cmd.into(), does: does.into(), steps: Vec::new() }
+    }
 }
 
 #[cfg(test)]

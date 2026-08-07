@@ -9,7 +9,7 @@
 
 use crate::config::Paths;
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The shape of what this build hands out. Bumped at `2` when `agentCycle` stopped being a list of
@@ -891,7 +891,7 @@ const AGENT_CYCLE: &[Step] = &[
 /// longer said twice.
 fn agent_cycle() -> Value {
     json!({
-        "description": "The AI's recommended execution backbone (pass --actor ai on every command) — a proven default for proceeding autonomously while avoiding parallel collisions, not a mandate. When you follow it, enter at the step whose `trigger` describes where you are and run from there in order; a step with no trigger is simply the next one. Branch to a `cycles` entry only when its trigger fires.",
+        "description": "The AI's recommended execution backbone (pass --actor ai on every command) — a proven default for proceeding autonomously while avoiding parallel collisions, not a mandate. When you follow it, enter at the step whose `trigger` describes where you are and run from there in order; a step with no trigger is simply the next one. Branch to a `cycles` entry only when its trigger fires. A step may also carry `tools`: lines to type that an installed plugin declared for it — its own, and described under `plugins`.",
         "steps": AGENT_CYCLE.iter().map(|s| s.to_value(None)).collect::<Vec<Value>>(),
     })
 }
@@ -1227,6 +1227,58 @@ fn cycles() -> Value {
         map.insert(cycle.id.to_string(), cycle.to_value());
     }
     Value::Object(map)
+}
+
+/// The key the hot path is emitted under — and so the run's name where a step is addressed from
+/// outside, `agentCycle.<step>` (`AMB-D-571`). A cold-path cycle is addressed by its own id, the key
+/// [`cycles`] files it under.
+const BACKBONE: &str = "agentCycle";
+
+/// **Hangs each call line on the step that named it** (`AMB-D-571`): `tools` keyed by `<run>.<step>`,
+/// against a step of `agentCycle` or of a cycle, wherever the id lands.
+///
+/// The join is one-directional and that is the point. A plugin's manifest names a step
+/// ([`crate::plugin_agent::tools`] is where the naming is read); nothing here names a plugin, so
+/// amenbo's source stays free of any plugin's name (`AMB-D-346`) and this spec keeps saying the same
+/// true thing with none installed. What lands is the line to type and nothing around it — the words
+/// about it are on the `plugins` shelf, where a reader can tell whose they are (`AMB-D-437`).
+///
+/// **A ref that names nothing here is dropped, not reported.** The steps travel with amenbo and a
+/// manifest stays where it was installed, so a ref can outlive the step it named; the runtime also
+/// drops whole cycles that do not apply (the `worktree` cycle off a git checkout), which would make an
+/// accurate ref look like a broken one. Either way the reader loses a line they had no use for.
+///
+/// Runtime, so it runs on the built spec rather than inside it: what is installed and switched on is
+/// the store's answer, and [`build`] stays a static builder.
+pub fn attach_tools(spec: &mut Value, tools: &BTreeMap<String, Vec<String>>) {
+    for (step_ref, lines) in tools {
+        let Some((run, id)) = step_ref.split_once('.') else { continue };
+        let Some(step) = find_step(spec, run, id) else { continue };
+        let Some(map) = step.as_object_mut() else { continue };
+        // Call lines, and never prose: `tools` is a shelf a sentence has no way onto.
+        map.insert("tools".to_string(), json!(lines));
+    }
+}
+
+/// The emitted step `id` names within `run` — the backbone's steps under [`BACKBONE`], a cycle's under
+/// its own key, both buckets of it, since which bucket an item sits in is the cycle's business and not
+/// the namer's. `None` where the run, the step, or the whole cycle is not in this document.
+fn find_step<'a>(spec: &'a mut Value, run: &str, id: &str) -> Option<&'a mut Value> {
+    let buckets: Vec<&mut Value> = if run == BACKBONE {
+        vec![spec.get_mut(BACKBONE)?.get_mut("steps")?]
+    } else {
+        let cycle = spec.get_mut("cycles")?.get_mut(run)?.as_object_mut()?;
+        cycle
+            .iter_mut()
+            .filter(|(key, _)| *key == "backbone" || *key == "optional")
+            .map(|(_, items)| items)
+            .collect()
+    };
+    buckets
+        .into_iter()
+        .filter_map(Value::as_array_mut)
+        .flatten()
+        .find(|step| step.get("id").and_then(Value::as_str) == Some(id))
 }
 
 fn cmd(name: &str, summary: &str, flags: Value, examples: Value) -> Value {
@@ -2356,6 +2408,72 @@ mod tests {
             }
         }
         assert!(named > 10, "the scan found almost no commands in the prose ({named}) — it stopped reading the spans");
+    }
+
+    /// One plugin's line, hung on a step by the id its author named.
+    fn hung(step_ref: &str) -> BTreeMap<String, Vec<String>> {
+        BTreeMap::from([(
+            step_ref.to_string(),
+            vec!["amenbo plugin run worktree start <task-id>".to_string()],
+        )])
+    }
+
+    /// The step named gets the line, wherever it was written — a step of the backbone, a cycle's
+    /// ordered item, or a cycle's self-gated one (`AMB-D-571`). Nothing else on the step moves, and no
+    /// other step is touched.
+    #[test]
+    fn a_line_lands_on_the_step_that_named_it() {
+        for (step_ref, at) in [
+            ("agentCycle.reserve", "/agentCycle/steps"),
+            ("worktree.cut-per-task", "/cycles/worktree/backbone"),
+            ("commit.install-the-hooks", "/cycles/commit/optional"),
+        ] {
+            let (_, id) = step_ref.split_once('.').unwrap();
+            let mut spec = build();
+            attach_tools(&mut spec, &hung(step_ref));
+
+            let mut pointer = spec.pointer(at).and_then(Value::as_array).unwrap().iter();
+            let step = pointer.find(|s| s["id"] == id).unwrap_or_else(|| panic!("{step_ref} is gone"));
+            assert_eq!(step["tools"], json!(["amenbo plugin run worktree start <task-id>"]));
+            assert!(step["step"].as_str().is_some_and(|s| !s.is_empty()), "the step's own prose stands");
+            assert!(
+                pointer.all(|other| other.get("tools").is_none()),
+                "a line landed on a step nobody named"
+            );
+        }
+    }
+
+    /// A ref naming nothing in this document is dropped where it falls, and never invents what it
+    /// names. The steps travel with amenbo while a manifest stays where it was installed, so an
+    /// unknown ref is the ordinary end of a step renamed or a cycle the runtime left out — not an
+    /// error to raise at a reader who cannot act on it.
+    #[test]
+    fn a_ref_naming_nothing_here_is_dropped() {
+        let before = build();
+        for step_ref in [
+            "worktree.retired-long-ago",
+            "noSuchCycle.cut-per-task",
+            "agentCycle.no-such-step",
+            "cycles.worktree",
+            "worktree",
+            "",
+        ] {
+            let mut spec = build();
+            attach_tools(&mut spec, &hung(step_ref));
+            assert_eq!(spec, before, "{step_ref:?} changed the document");
+        }
+    }
+
+    /// A cycle the runtime dropped takes its steps' refs with it: what is not in the document cannot
+    /// be hung on, so the advice and the tool for it disappear together rather than one without the
+    /// other.
+    #[test]
+    fn a_dropped_cycle_leaves_nothing_to_hang_on() {
+        let mut spec = build();
+        spec["cycles"].as_object_mut().unwrap().remove("worktree");
+        let without = spec.clone();
+        attach_tools(&mut spec, &hung("worktree.cut-per-task"));
+        assert_eq!(spec, without);
     }
 
     /// Collects the localizable prose `build()` actually emits (capability / command.summary /

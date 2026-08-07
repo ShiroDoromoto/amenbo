@@ -693,26 +693,35 @@ fn standalone(before: &str, after: &str) -> bool {
     before.chars().next_back().is_none_or(edge) && after.chars().next().is_none_or(edge)
 }
 
-/// One step of the execution backbone. It is a **structure with an id**, not a numbered line of
-/// prose: the number and the name used to live inside the sentence, where nothing but a substring
+/// One step of a run — the hot-path backbone ([`AGENT_CYCLE`]) and the cold-path cycles
+/// ([`CYCLES`]) are both written out of this. It is a **structure with an id**, not a numbered line
+/// of prose: the number and the name used to live inside the sentence, where nothing but a substring
 /// match could reach them, so no test could say more than "that text is in there somewhere" and no
 /// cross-reference could be checked at all.
+///
+/// [`Step::n`] and [`Step::trigger`] are the two ways a step can be reached, and every step declares
+/// at least one of them: `n` says *this is a place in a run* — arrive at it by having done the one
+/// before — and `trigger` says *this fires when*. The hot path is mostly the first (an entry point
+/// carries both), a cycle's `optional` items are only ever the second.
 ///
 /// What it does **not** carve up is the writing. One step is one block of prose, authored whole —
 /// [`Step::prose`] is the last field for that reason. Cutting it into per-aspect fields would turn
 /// the job from "write so it lands" into "fill the boxes", and the output would read like a
 /// generated document, which is the opposite of the point.
 struct Step {
-    /// What everything else addresses this step by, and what a machine can hold. Unique across the
-    /// cycle.
+    /// What everything else addresses this step by, and what a machine can hold. Unique within the
+    /// run it belongs to.
     id: &'static str,
-    /// Where the step sits in the run, and the number the prose elsewhere names it by ("step 0 puts
-    /// the request there", "defined once in agentCycle step 1"). Held to its place in the array by a
-    /// test, so the two can never drift.
-    n: u8,
-    /// What puts you *at* this step to begin with. Only an entry point has one — every other step is
-    /// simply the next, and declaring a trigger there would invite entering the cycle in the middle.
-    /// The same word as `cycles` uses, and for the same job: the AI self-gates on it.
+    /// Where the step sits in the run, and — on the backbone — the number the prose elsewhere names
+    /// it by ("step 0 puts the request there", "defined once in agentCycle step 1"). Held to its
+    /// place in the array by a test, so the two can never drift. Absent where there is no run to sit
+    /// in: a self-gated `optional` item is reached by its trigger and nothing else, and numbering it
+    /// would invent an order the AI would then feel bound by.
+    n: Option<u8>,
+    /// What puts you *at* this step to begin with. On the backbone only an entry point has one —
+    /// every other step is simply the next, and declaring a trigger there would invite entering the
+    /// run in the middle. An `optional` item is the other way round: the trigger is the whole of why
+    /// it is ever done, so it always carries one.
     trigger: Option<&'static str>,
     /// The commands the step tells you to run. The prose names them too, in the sentences that say
     /// when and why; this is the same set with the sentence taken off, so a machine can check every
@@ -723,14 +732,23 @@ struct Step {
 }
 
 impl Step {
-    fn to_value(&self) -> Value {
+    /// The step as it is emitted. `kind` is not the step's own — it is which bucket of a cycle the
+    /// step was found in, so the caller that knows passes it in, and the backbone (which has one
+    /// bucket and needs no word for it) passes `None`.
+    fn to_value(&self, kind: Option<&str>) -> Value {
         let mut value = json!({
             "id": self.id,
-            "n": self.n,
             "commands": self.commands,
             "step": self.prose,
         });
-        if let (Some(map), Some(trigger)) = (value.as_object_mut(), self.trigger) {
+        let Some(map) = value.as_object_mut() else { return value };
+        if let Some(kind) = kind {
+            map.insert("kind".to_string(), json!(kind));
+        }
+        if let Some(n) = self.n {
+            map.insert("n".to_string(), json!(n));
+        }
+        if let Some(trigger) = self.trigger {
             map.insert("trigger".to_string(), json!(trigger));
         }
         value
@@ -742,21 +760,21 @@ impl Step {
 const AGENT_CYCLE: &[Step] = &[
     Step {
         id: "intake",
-        n: 0,
+        n: Some(0),
         trigger: Some("the human handed you work in this session"),
         commands: &["task add", "task finish-creating", "task list", "decision add"],
         prose: "work the human hands you in this session lands here first, and the question to ask of it is what it leaves behind. **What to do** belongs on the backlog if it is not there yet, and filing it takes two commands: `amenbo task add ... --to me-ai` when you are the one continuing, then `amenbo task finish-creating <id>` once the dependencies, premises and classification it needs are on it — until that lands nobody can reserve it, you included. Look first at what is already being created (`task list --filter \"draft:yes\"`): a creation someone left open is the task you would otherwise file twice. Then join at step 2 (reserve) with the id `add` handed back. **Why it is being done this way** — a choice picked among real alternatives — is worth offering as a decision (`amenbo decision add`), and one request can leave both. Asking once, here, is the whole of it: no later step asks again. Work you pulled off the backlog yourself is already recorded, so it needs no intake — enter at step 1.",
     },
     Step {
         id: "list",
-        n: 1,
+        n: Some(1),
         trigger: Some("you are going looking for work yourself"),
         commands: &["task list"],
         prose: "your mailbox is `amenbo task list --filter \"assignee:me-ai status:todo ready:yes\" --sort priority --json`. Take the highest-priority task; if it comes back empty, widen once to `assignee:none status:todo ready:yes` and assign what you take. (`status:todo` is fresh, unreserved work — a task already `in_progress` is one another session is on, so it stays out of the mailbox and you never double-book; `blocked` is deliberately out, being an external stall — a second machine, a human go/no-go — that you should not self-assign. Waiting on a ruling, on a day, or on the writing being finished is not one of those: an unsettled premise, a start day still ahead and a creation still open are all derived as `ready:no`, never declared as `blocked`. `ready:yes` hides work whose declared premises are unmet — an open blocker, a linked decision that is not settled, a start day still ahead, or a creation nobody has finished — so you never grab it early; query `ready:no` to see each task's blocked_by_open, blocked_by_decisions, not_started_until and draft, `start:future` for the queue waiting on its day alone, and `draft:yes` for the creations still open.)",
     },
     Step {
         id: "reserve",
-        n: 2,
+        n: Some(2),
         trigger: None,
         commands: &[
             "task status",
@@ -771,14 +789,14 @@ const AGENT_CYCLE: &[Step] = &[
     },
     Step {
         id: "execute",
-        n: 3,
+        n: Some(3),
         trigger: None,
         commands: &["comment list", "task status"],
         prose: "first read the task's latest comments and whatever they reference — linked notes, decisions, attachments (`amenbo comment list <id>`) — if the direction feels undecided, you have not read enough; then do the work, moving state with `amenbo task status <id> blocked` if you stall.",
     },
     Step {
         id: "finish",
-        n: 4,
+        n: Some(4),
         trigger: None,
         commands: &["task done", "task reject", "comment add", "task status"],
         prose: "a task ends one of two ways — `amenbo task done <id>` for work you carried out, `amenbo task reject <id> --reason ...` for work you concluded should not be done (neither `done` nor `delete`). Either way, leave the context on the task's timeline with `amenbo comment add <id> --text ...` so the next session can pick up. (If you decide not to take a reserved task — as opposed to deciding it should not be done at all — hand it back with `amenbo task status <id> todo`.)",
@@ -792,105 +810,341 @@ const AGENT_CYCLE: &[Step] = &[
 fn agent_cycle() -> Value {
     json!({
         "description": "The AI's recommended execution backbone (pass --actor ai on every command) — a proven default for proceeding autonomously while avoiding parallel collisions, not a mandate. When you follow it, enter at the step whose `trigger` describes where you are and run from there in order; a step with no trigger is simply the next one. Branch to a `cycles` entry only when its trigger fires.",
-        "steps": AGENT_CYCLE.iter().map(Step::to_value).collect::<Vec<Value>>(),
+        "steps": AGENT_CYCLE.iter().map(|s| s.to_value(None)).collect::<Vec<Value>>(),
     })
 }
 
-/// cold path: the trigger-indexed catalog agentCycle branches to. Each cycle separates a
-/// `backbone` (what always applies within that cycle, in order) from `optional` items (done
-/// only when the item's `trigger` situation matches). Every item carries a machine-readable
-/// `kind` so it stays self-describing if flattened/filtered; optional items additionally carry
-/// a `trigger`. This is how amenbo *shows what you can do* without directing you to do it: the
-/// AI self-gates on the trigger. Referencing only real command names is guarded by the
-/// `cycles_reference_real_commands` test.
+/// cold path: the trigger-indexed catalog the backbone branches to. Each cycle separates a
+/// `backbone` — what always applies within that cycle, in order — from `optional` items, done only
+/// when the item's `trigger` situation matches. This is how amenbo *shows what you can do* without
+/// directing you to do it: the AI self-gates on the trigger.
+///
+/// The items are [`Step`]s, the same structure the hot path is written in, so every one of them has
+/// an id to be named by and the two runs can be checked by one rule rather than two.
+struct Cycle {
+    /// The key this cycle is emitted under, and the name a step names it by when it says to branch
+    /// here. Unique across [`CYCLES`].
+    id: &'static str,
+    /// The situation that sends you into this cycle at all — the branch condition, above the
+    /// per-item triggers inside it.
+    when: &'static str,
+    /// What always applies within the cycle, in order. Each item carries its place as
+    /// [`Step::n`].
+    backbone: &'static [Step],
+    /// What is done only when the item's own trigger matches. No order and no numbers: these are
+    /// self-gated, and numbering them would invent a sequence the AI would then feel bound by.
+    optional: &'static [Step],
+}
+
+impl Cycle {
+    fn to_value(&self) -> Value {
+        json!({
+            "when": self.when,
+            "backbone": self.backbone.iter().map(|s| s.to_value(Some("backbone"))).collect::<Vec<Value>>(),
+            "optional": self.optional.iter().map(|s| s.to_value(Some("optional"))).collect::<Vec<Value>>(),
+        })
+    }
+}
+
+/// Every cold-path cycle, in the order they are emitted. Referencing only real command names, and
+/// carrying ids nothing else answers to, is guarded by the `cycles_are_addressable` test.
+const CYCLES: &[Cycle] = &[
+    Cycle {
+        id: "taskShaping",
+        when: "You are registering or decomposing work.",
+        backbone: &[
+            Step {
+                id: "decompose",
+                n: Some(0),
+                trigger: None,
+                commands: &["task add"],
+                prose: "There are no subtasks: decompose larger work into separate tasks, each belonging to exactly one project.",
+            },
+            Step {
+                id: "order",
+                n: Some(1),
+                trigger: None,
+                commands: &["task depend", "task undepend"],
+                prose: "Before you leave the split, draw a dependency edge wherever one task has to be done first: the edge is what holds the order once the session that knew it is gone, so whoever arrives later takes the work in the order it has rather than inferring it from titles. Looking is the step, not the linking — parts with no order between them are an answer. Declare the order you actually mean.",
+            },
+            Step {
+                id: "finish-creating",
+                n: Some(2),
+                trigger: None,
+                commands: &["task finish-creating"],
+                prose: "End each creation once its task is written — the edges, the premises and the classification all on it. Until then it cannot be reserved, which is what keeps a half-written task from being taken mid-split. Filing several at once, create them all, draw the edges between them, and finish them last.",
+            },
+            Step {
+                id: "settle-the-parent",
+                n: Some(3),
+                trigger: None,
+                commands: &["task done", "task reject"],
+                prose: "Settle the task you split from, once the parts are filed and the edges are drawn. With no subtasks it never becomes a parent that empties itself: either it keeps one of the parts as its own work, or it is closed — done if the work moved out of it entirely, rejected if it turned out not to be work at all. Left standing with nothing in it, it comes back to whoever reads the backlog next, who finds nothing there to do.",
+            },
+        ],
+        optional: &[
+            Step {
+                id: "time-axis",
+                n: None,
+                trigger: Some("the work spans ordered time-direction stages"),
+                commands: &["dimension add", "dimension set"],
+                prose: "Add a --time-axis dimension and place tasks on its ordered values, gating later stages behind earlier ones with a dependency.",
+            },
+            Step {
+                id: "delegate",
+                n: None,
+                trigger: Some("you are handing work to a person, that person's AI, or yourself (`--to me-ai`) to continue"),
+                commands: &["task add", "task assign"],
+                prose: "Delegate at creation (--to/--ai) or afterward.",
+            },
+            Step {
+                id: "record-the-why",
+                n: None,
+                trigger: Some("the work rests on a choice worth recording"),
+                commands: &["decision add", "decision link"],
+                prose: "Offer to record the rationale as a decision — the `decision` cycle carries it from there, linking it to the tasks that implement it. Surface it for the human to accept or reject; don't author it as already settled.",
+            },
+            Step {
+                id: "check-the-shape",
+                n: None,
+                trigger: Some("a task's shape looks off (missing project/priority, malformed)"),
+                commands: &["validate"],
+                prose: "Check its shape before relying on it.",
+            },
+        ],
+    },
+    Cycle {
+        id: "decision",
+        when: "You are putting a 'why' on the record — offering a new one, or fitting it to the decisions already there (step 0 is where you judge that it is worth offering).",
+        backbone: &[
+            Step {
+                id: "read-the-neighbourhood",
+                n: Some(0),
+                trigger: None,
+                commands: &["search", "decision show"],
+                prose: "Read the neighbourhood before you write, not after — a duplicate you find first is one you never propose. Pull a bounded, relevant slice (search <term> --kind decision --limit N), not the whole corpus, and read the bodies it points at (decision show). Don't settle for one term: prose is written in the human's language while identifiers and code spans stay English, so pull again on another word for the same idea. If one contradicts what you are about to record, propose it to the human as a candidate supersede/amend with your reasoning; do not author the edge yourself (detection proposes, the human disposes).",
+            },
+            Step {
+                id: "freeze-the-rationale",
+                n: Some(1),
+                trigger: None,
+                commands: &["decision add", "decision promote"],
+                prose: "Freeze the rationale as an append-only decision — it starts proposed (your proposal; the human accepts or rejects it), so offer the record, don't impose it.",
+            },
+            Step {
+                id: "link-the-work",
+                n: Some(2),
+                trigger: None,
+                commands: &["decision link"],
+                prose: "Before you leave it, look for the work this decision governs and link it: the task then names the decision it rests on, and the decision names the work it produced, so whoever picks the work up reads why. Looking is the step, not the linking — finding nothing to link is an answer. Link implementation tasks only: never the task of ruling on the decision itself, and never a rejected decision, or one that has been superseded, that you merely want to cite (that belongs in the body).",
+            },
+            Step {
+                id: "hand-it-over",
+                n: Some(3),
+                trigger: None,
+                commands: &[],
+                prose: "Hand it over, rather than filing it and moving on — that, and not the record itself, is where your part ends. It stays proposed until the human rules on it, and meanwhile every task you linked it to reads ready:no, so the work it governs is stalled on an answer nobody was asked for. Say what you offered and what waits on it.",
+            },
+        ],
+        optional: &[
+            Step {
+                id: "supersede",
+                n: None,
+                trigger: Some("a new decision wholly replaces an existing one"),
+                commands: &["decision supersede"],
+                prose: "Chain it as a supersession — the old one stops being current (the edge says so; no status changes).",
+            },
+            Step {
+                id: "amend",
+                n: None,
+                trigger: Some("a new decision partially revises an existing one that stays current"),
+                commands: &["decision amend"],
+                prose: "Chain it as an amendment — the old one is not superseded; read the two together.",
+            },
+            Step {
+                id: "accept",
+                n: None,
+                trigger: Some("a proposed decision is agreed and ready to settle"),
+                commands: &["decision accept"],
+                prose: "Accept it (stamps decided_at/decided_by).",
+            },
+            Step {
+                id: "edit-in-place",
+                n: None,
+                trigger: Some("an accepted decision needs a minor fix (typo / stale line)"),
+                commands: &["decision edit"],
+                prose: "Edit it in place — accepting no longer freezes the body, so there is no reopen/re-accept round-trip. Supersede stays for a change of mind; reopen for un-settling a too-hasty acceptance.",
+            },
+            Step {
+                id: "check-for-contradiction",
+                n: None,
+                trigger: Some("you just added or accepted a decision"),
+                commands: &["search", "decision show", "decision supersede", "decision amend"],
+                prose: "Check whether it semantically contradicts an existing one. Pull a bounded, relevant neighbourhood — search the new decision's key terms (search <term> --kind decision --limit N), not the whole corpus — and read the bodies it points at (decision show). If one contradicts, propose it to the human as a candidate supersede/amend with your reasoning; do not author the edge yourself (detection proposes, the human disposes).",
+            },
+        ],
+    },
+    Cycle {
+        id: "decisionAudit",
+        when: "Periodically — contradictions accumulate over time as new decisions land far from older ones.",
+        backbone: &[
+            Step {
+                id: "sweep",
+                n: Some(0),
+                trigger: None,
+                commands: &["decision list"],
+                prose: "Sweep the current (accepted) decisions for semantically contradicting pairs, but keep each pass bounded: page through a slice you can actually reason over (decision list --filter status:accepted --with-body --limit N --offset …) rather than loading everything at once, and rotate the window across passes. Detection is best-effort recall by design — as the corpus outgrows one pass, coverage stays bounded to what you can reach now and repeated passes widen it over time.",
+            },
+            Step {
+                id: "surface-the-pairs",
+                n: Some(1),
+                trigger: None,
+                commands: &["decision supersede", "decision amend"],
+                prose: "Surface each suspected contradiction to the human as a candidate supersede/amend with your reasoning. Never author the edge yourself, and only run supersede/amend once the human confirms — detection proposes, the human disposes, so a false positive cannot silently kill a good decision.",
+            },
+        ],
+        optional: &[],
+    },
+    Cycle {
+        id: "executionExceptions",
+        when: "You hit something that breaks the straight-line cycle.",
+        backbone: &[
+            Step {
+                id: "state-is-not-assignment",
+                n: Some(0),
+                trigger: None,
+                commands: &[],
+                prose: "Progress state and assignment are orthogonal: reassignment is plain (the task just moves to its new assignee — no special status, no round-trip counter), and status=blocked is reserved for a physical blocker no one can move past. An unmet premise is not one: a pending dependency, an unsettled linked decision, and a start day that has not come are all derived as ready:no, so declaring them blocked duplicates a truth amenbo already computes.",
+            },
+            Step {
+                id: "rejoin-the-cycle",
+                n: Some(1),
+                trigger: None,
+                commands: &["comment add"],
+                prose: "An exception is a detour, not an exit. Once you have handled it, rejoin the cycle where it broke — a task handed back puts you at the mailbox again, a premise resolved at the reserve, a blocker cleared at the work itself. What must not happen is stopping here with the task still reserved and nothing on its timeline: the reservation is what keeps it out of the mailbox, so it is not waiting for anyone, it is lost.",
+            },
+        ],
+        optional: &[
+            Step {
+                id: "hand-to-the-human",
+                n: None,
+                trigger: Some("you cannot proceed and need a human decision or action"),
+                commands: &["task assign", "comment add"],
+                prose: "Reassign to the human and say what is needed (a silent reassignment is unhelpful).",
+            },
+            Step {
+                id: "declare-blocked",
+                n: None,
+                trigger: Some("a physical blocker no one can move past"),
+                commands: &["task block"],
+                prose: "Mark it blocked with the reason.",
+            },
+            Step {
+                id: "resolve-the-premise",
+                n: None,
+                trigger: Some("your reserve was rejected with not_ready"),
+                commands: &["task done", "task undepend", "decision accept", "decision link", "task update", "task finish-creating"],
+                prose: "Resolve the premise you declared, rather than working around it: finish the blocker or drop the edge; get the linked decision accepted, unlink it, or relink it to its successor; move or clear a start day that has not come; end a creation that is still open. There is no --force. Two resolve without anyone else: a start day resolves itself, so if the work is meant to wait, leave it and take the next task; an open creation resolves where you stand, once you have read what is there and it is a task to work on.",
+            },
+            Step {
+                id: "hand-back",
+                n: None,
+                trigger: Some("you decide not to take a task you reserved"),
+                commands: &["task status"],
+                prose: "Hand it back with `task status <id> todo` so another session can take it.",
+            },
+        ],
+    },
+    Cycle {
+        id: "commit",
+        when: "You are about to commit, or to send text out of this store some other way (a PR body, an issue, a message).",
+        backbone: &[
+            Step {
+                id: "lint-what-leaves",
+                n: Some(0),
+                trigger: None,
+                commands: &["lint"],
+                prose: "Lint what is leaving, before it leaves: the staged diff, and the commit message. It reports and never edits, so a ref it names is yours to rewrite out of the text.",
+            },
+            Step {
+                id: "anchor-the-sha",
+                n: Some(1),
+                trigger: None,
+                commands: &["task commit add"],
+                prose: "Once the commit lands, record its SHA on the task — a task takes many, and a SHA already there is a no-op, so anchor every commit you merge.",
+            },
+        ],
+        optional: &[
+            Step {
+                id: "install-the-hooks",
+                n: None,
+                trigger: Some("the human wants every commit linted without anyone having to remember"),
+                commands: &["hooks install", "hooks status"],
+                prose: "Offer the lint hooks (opt-in, asked once for the device).",
+            },
+        ],
+    },
+    Cycle {
+        id: "worktree",
+        when: "You are working a task in a worktree — from the one you cut to the one you fold.",
+        backbone: &[
+            Step {
+                id: "cut-per-task",
+                n: Some(0),
+                trigger: None,
+                commands: &[],
+                prose: "Cut a worktree per task, whenever the work will produce commits. Reserving guards the task, not the files, so two sessions on two tasks still share one working tree. Work that lands no commit — a local-only edit under gitignore — needs none.",
+            },
+            Step {
+                id: "cut-outside",
+                n: Some(1),
+                trigger: None,
+                commands: &[],
+                prose: "Cut it outside the project folder. A worktree cut inside inherits that folder's `.amenbo` through the upward walk, and amenbo refuses to run there (`nested_worktree`).",
+            },
+            Step {
+                id: "leave-a-standing-one",
+                n: Some(2),
+                trigger: None,
+                commands: &[],
+                prose: "A worktree already standing for that task is not yours to enter: someone cut it and may still be in it, and what you reserved was the task's status, not the checkout on disk. Leave it untouched and take the next task — do not read it to judge whether it is live, and do not remove it to clear your way.",
+            },
+            Step {
+                id: "run-the-line",
+                n: Some(3),
+                trigger: None,
+                commands: &[],
+                prose: "If cutting one hands a line back to you, that line is to run, not to read: what a called command face writes on stdout is its return value, relayed verbatim, so the way in arrives as text — wrap it (`eval \"$(…)\"`, or `iex (…)` in PowerShell). Read it and stop, and you are still standing in the project folder with a worktree nobody entered.",
+            },
+            Step {
+                id: "operate-in-the-project-folder",
+                n: Some(4),
+                trigger: None,
+                commands: &[],
+                prose: "Operate amenbo in the project folder itself. A worktree outside it carries no `.amenbo` and so reaches nothing — that is the intent, and binding this checkout is not the way around it.",
+            },
+            Step {
+                id: "fold-it",
+                n: Some(5),
+                trigger: None,
+                commands: &[],
+                prose: "Fold the worktree once its commits are merged, in the session that cut it — nothing else will. A reserved task is out of the mailbox, so the task and the worktree left standing for it go unseen together, and the next session that reaches for that task is turned away by the checkout still on disk.",
+            },
+        ],
+        optional: &[],
+    },
+];
+
+/// Assembles [`CYCLES`] into the emitted map: the standing description, then each cycle under the
+/// key that is its id — the key the runtime reaches for when it drops a cycle that does not apply
+/// here.
 fn cycles() -> Value {
-    json!({
-        "description": "Cold-path catalog branched to from agentCycle when a trigger fires. `backbone` always applies within its cycle (in order); each `optional` item is done only when its `trigger` matches (the AI self-gates — amenbo shows what you can do, it does not direct you). Every item carries `kind`; optional items also carry `trigger`.",
-        "taskShaping": {
-            "when": "You are registering or decomposing work.",
-            "backbone": [
-                backbone_step("There are no subtasks: decompose larger work into separate tasks, each belonging to exactly one project.", &["task add"]),
-                backbone_step("Before you leave the split, draw a dependency edge wherever one task has to be done first: the edge is what holds the order once the session that knew it is gone, so whoever arrives later takes the work in the order it has rather than inferring it from titles. Looking is the step, not the linking — parts with no order between them are an answer. Declare the order you actually mean.", &["task depend", "task undepend"]),
-                backbone_step("End each creation once its task is written — the edges, the premises and the classification all on it. Until then it cannot be reserved, which is what keeps a half-written task from being taken mid-split. Filing several at once, create them all, draw the edges between them, and finish them last.", &["task finish-creating"]),
-                backbone_step("Settle the task you split from, once the parts are filed and the edges are drawn. With no subtasks it never becomes a parent that empties itself: either it keeps one of the parts as its own work, or it is closed — done if the work moved out of it entirely, rejected if it turned out not to be work at all. Left standing with nothing in it, it comes back to whoever reads the backlog next, who finds nothing there to do.", &["task done", "task reject"]),
-            ],
-            "optional": [
-                optional_step("the work spans ordered time-direction stages", "Add a --time-axis dimension and place tasks on its ordered values, gating later stages behind earlier ones with a dependency.", &["dimension add", "dimension set"]),
-                optional_step("you are handing work to a person, that person's AI, or yourself (`--to me-ai`) to continue", "Delegate at creation (--to/--ai) or afterward.", &["task add", "task assign"]),
-                optional_step("the work rests on a choice worth recording", "Offer to record the rationale as a decision — the `decision` cycle carries it from there, linking it to the tasks that implement it. Surface it for the human to accept or reject; don't author it as already settled.", &["decision add", "decision link"]),
-                optional_step("a task's shape looks off (missing project/priority, malformed)", "Check its shape before relying on it.", &["validate"]),
-            ]
-        },
-        "decision": {
-            "when": "You are putting a 'why' on the record — offering a new one, or fitting it to the decisions already there (step 0 is where you judge that it is worth offering).",
-            "backbone": [
-                backbone_step("Read the neighbourhood before you write, not after — a duplicate you find first is one you never propose. Pull a bounded, relevant slice (search <term> --kind decision --limit N), not the whole corpus, and read the bodies it points at (decision show). Don't settle for one term: prose is written in the human's language while identifiers and code spans stay English, so pull again on another word for the same idea. If one contradicts what you are about to record, propose it to the human as a candidate supersede/amend with your reasoning; do not author the edge yourself (detection proposes, the human disposes).", &["search", "decision show"]),
-                backbone_step("Freeze the rationale as an append-only decision — it starts proposed (your proposal; the human accepts or rejects it), so offer the record, don't impose it.", &["decision add", "decision promote"]),
-                backbone_step("Before you leave it, look for the work this decision governs and link it: the task then names the decision it rests on, and the decision names the work it produced, so whoever picks the work up reads why. Looking is the step, not the linking — finding nothing to link is an answer. Link implementation tasks only: never the task of ruling on the decision itself, and never a rejected decision, or one that has been superseded, that you merely want to cite (that belongs in the body).", &["decision link"]),
-                backbone_step("Hand it over, rather than filing it and moving on — that, and not the record itself, is where your part ends. It stays proposed until the human rules on it, and meanwhile every task you linked it to reads ready:no, so the work it governs is stalled on an answer nobody was asked for. Say what you offered and what waits on it.", &[]),
-            ],
-            "optional": [
-                optional_step("a new decision wholly replaces an existing one", "Chain it as a supersession — the old one stops being current (the edge says so; no status changes).", &["decision supersede"]),
-                optional_step("a new decision partially revises an existing one that stays current", "Chain it as an amendment — the old one is not superseded; read the two together.", &["decision amend"]),
-                optional_step("a proposed decision is agreed and ready to settle", "Accept it (stamps decided_at/decided_by).", &["decision accept"]),
-                optional_step("an accepted decision needs a minor fix (typo / stale line)", "Edit it in place — accepting no longer freezes the body, so there is no reopen/re-accept round-trip. Supersede stays for a change of mind; reopen for un-settling a too-hasty acceptance.", &["decision edit"]),
-                optional_step("you just added or accepted a decision", "Check whether it semantically contradicts an existing one. Pull a bounded, relevant neighbourhood — search the new decision's key terms (search <term> --kind decision --limit N), not the whole corpus — and read the bodies it points at (decision show). If one contradicts, propose it to the human as a candidate supersede/amend with your reasoning; do not author the edge yourself (detection proposes, the human disposes).", &["search", "decision show", "decision supersede", "decision amend"]),
-            ]
-        },
-        "decisionAudit": {
-            "when": "Periodically — contradictions accumulate over time as new decisions land far from older ones.",
-            "backbone": [
-                backbone_step("Sweep the current (accepted) decisions for semantically contradicting pairs, but keep each pass bounded: page through a slice you can actually reason over (decision list --filter status:accepted --with-body --limit N --offset …) rather than loading everything at once, and rotate the window across passes. Detection is best-effort recall by design — as the corpus outgrows one pass, coverage stays bounded to what you can reach now and repeated passes widen it over time.", &["decision list"]),
-                backbone_step("Surface each suspected contradiction to the human as a candidate supersede/amend with your reasoning. Never author the edge yourself, and only run supersede/amend once the human confirms — detection proposes, the human disposes, so a false positive cannot silently kill a good decision.", &["decision supersede", "decision amend"]),
-            ],
-            "optional": []
-        },
-        "executionExceptions": {
-            "when": "You hit something that breaks the straight-line cycle.",
-            "backbone": [
-                backbone_step("Progress state and assignment are orthogonal: reassignment is plain (the task just moves to its new assignee — no special status, no round-trip counter), and status=blocked is reserved for a physical blocker no one can move past. An unmet premise is not one: a pending dependency, an unsettled linked decision, and a start day that has not come are all derived as ready:no, so declaring them blocked duplicates a truth amenbo already computes.", &[]),
-                backbone_step("An exception is a detour, not an exit. Once you have handled it, rejoin the cycle where it broke — a task handed back puts you at the mailbox again, a premise resolved at the reserve, a blocker cleared at the work itself. What must not happen is stopping here with the task still reserved and nothing on its timeline: the reservation is what keeps it out of the mailbox, so it is not waiting for anyone, it is lost.", &["comment add"]),
-            ],
-            "optional": [
-                optional_step("you cannot proceed and need a human decision or action", "Reassign to the human and say what is needed (a silent reassignment is unhelpful).", &["task assign", "comment add"]),
-                optional_step("a physical blocker no one can move past", "Mark it blocked with the reason.", &["task block"]),
-                optional_step("your reserve was rejected with not_ready", "Resolve the premise you declared, rather than working around it: finish the blocker or drop the edge; get the linked decision accepted, unlink it, or relink it to its successor; move or clear a start day that has not come; end a creation that is still open. There is no --force. Two resolve without anyone else: a start day resolves itself, so if the work is meant to wait, leave it and take the next task; an open creation resolves where you stand, once you have read what is there and it is a task to work on.", &["task done", "task undepend", "decision accept", "decision link", "task update", "task finish-creating"]),
-                optional_step("you decide not to take a task you reserved", "Hand it back with `task status <id> todo` so another session can take it.", &["task status"]),
-            ]
-        },
-        "commit": {
-            "when": "You are about to commit, or to send text out of this store some other way (a PR body, an issue, a message).",
-            "backbone": [
-                backbone_step("Lint what is leaving, before it leaves: the staged diff, and the commit message. It reports and never edits, so a ref it names is yours to rewrite out of the text.", &["lint"]),
-                backbone_step("Once the commit lands, record its SHA on the task — a task takes many, and a SHA already there is a no-op, so anchor every commit you merge.", &["task commit add"]),
-            ],
-            "optional": [
-                optional_step("the human wants every commit linted without anyone having to remember", "Offer the lint hooks (opt-in, asked once for the device).", &["hooks install", "hooks status"]),
-            ]
-        },
-        "worktree": {
-            "when": "You are working a task in a worktree — from the one you cut to the one you fold.",
-            "backbone": [
-                backbone_step("Cut a worktree per task, whenever the work will produce commits. Reserving guards the task, not the files, so two sessions on two tasks still share one working tree. Work that lands no commit — a local-only edit under gitignore — needs none.", &[]),
-                backbone_step("Cut it outside the project folder. A worktree cut inside inherits that folder's `.amenbo` through the upward walk, and amenbo refuses to run there (`nested_worktree`).", &[]),
-                backbone_step("A worktree already standing for that task is not yours to enter: someone cut it and may still be in it, and what you reserved was the task's status, not the checkout on disk. Leave it untouched and take the next task — do not read it to judge whether it is live, and do not remove it to clear your way.", &[]),
-                backbone_step("If cutting one hands a line back to you, that line is to run, not to read: what a called command face writes on stdout is its return value, relayed verbatim, so the way in arrives as text — wrap it (`eval \"$(…)\"`, or `iex (…)` in PowerShell). Read it and stop, and you are still standing in the project folder with a worktree nobody entered.", &[]),
-                backbone_step("Operate amenbo in the project folder itself. A worktree outside it carries no `.amenbo` and so reaches nothing — that is the intent, and binding this checkout is not the way around it.", &[]),
-                backbone_step("Fold the worktree once its commits are merged, in the session that cut it — nothing else will. A reserved task is out of the mailbox, so the task and the worktree left standing for it go unseen together, and the next session that reaches for that task is turned away by the checkout still on disk.", &[]),
-            ],
-            "optional": []
-        }
-    })
-}
-
-/// cold-path backbone item: always applies within its cycle, in order (no trigger).
-fn backbone_step(step: &str, commands: &[&str]) -> Value {
-    json!({ "kind": "backbone", "step": step, "commands": commands })
-}
-
-/// cold-path optional item: done only when its `trigger` situation matches (the AI self-gates).
-fn optional_step(trigger: &str, step: &str, commands: &[&str]) -> Value {
-    json!({ "kind": "optional", "trigger": trigger, "step": step, "commands": commands })
+    let mut map = serde_json::Map::new();
+    map.insert("description".to_string(), json!("Cold-path catalog branched to from agentCycle when a trigger fires. `backbone` always applies within its cycle (in order); each `optional` item is done only when its `trigger` matches (the AI self-gates — amenbo shows what you can do, it does not direct you). Every item carries `kind` and an `id`; a `backbone` item carries its place as `n`, an `optional` item its `trigger` instead."));
+    for cycle in CYCLES {
+        map.insert(cycle.id.to_string(), cycle.to_value());
+    }
+    Value::Object(map)
 }
 
 fn cmd(name: &str, summary: &str, flags: Value, examples: Value) -> Value {
@@ -1744,16 +1998,41 @@ mod tests {
         assert_eq!(ja["agentCycle"], en["agentCycle"]);
     }
 
-    /// Discipline: every step of the backbone is addressable. An id nothing else answers to, a
-    /// number that is its place in the run — the number every cross-reference elsewhere in the spec
-    /// names it by, so a step inserted without renumbering makes those references point at the wrong
-    /// work — prose that is actually there, and only commands that exist. The entry points declare
-    /// themselves with a `trigger`; a step that is simply the next one must not, or the cycle can be
-    /// entered in the middle.
+    /// What every step owes, wherever it was written: an id nothing else in its run answers to,
+    /// prose that is actually there, only commands that exist, and a way of being reached — its
+    /// place in a run (`n`, which must be its actual place, or a step inserted without renumbering
+    /// leaves every cross-reference pointing at the wrong work) or a `trigger` that fires it, or
+    /// both. A step declaring neither is unreachable: nothing arrives at it and nothing calls it.
+    /// Returns the id, so the caller can hold the run's ids apart.
+    fn check_step<'a>(step: &'a Value, at: usize, run: &str, known: &HashSet<String>) -> &'a str {
+        let id = step["id"].as_str().unwrap_or("");
+        assert!(!id.is_empty(), "a step of {run} has no id: {step}");
+        assert!(step["step"].as_str().is_some_and(|s| !s.is_empty()), "{run}.{id} has no prose");
+        for c in step["commands"].as_array().expect("step.commands is an array") {
+            let named = c.as_str().unwrap_or("");
+            assert!(known.contains(named), "{run}.{id} names an unknown command {named:?}");
+        }
+        let placed = step.get("n").is_some();
+        if placed {
+            assert_eq!(step["n"], json!(at), "{run}.{id} is numbered {} but sits at {at}", step["n"]);
+        }
+        match step.get("trigger") {
+            Some(trigger) => {
+                assert!(trigger.as_str().is_some_and(|s| !s.is_empty()), "{run}.{id} carries an empty trigger");
+            }
+            None => assert!(placed, "{run}.{id} declares neither a place nor a trigger — nothing reaches it"),
+        }
+        id
+    }
+
+    /// Discipline: the hot-path backbone is a run. Every step is addressable, every one carries the
+    /// number the cross-references elsewhere in the spec name it by, and the entry points are the
+    /// only ones that declare a `trigger` — a step that is simply the next one must not, or the run
+    /// can be entered in the middle.
     #[test]
     fn agent_cycle_steps_are_addressable() {
         let spec = build();
-        let known: std::collections::HashSet<String> = command_names().into_iter().collect();
+        let known: HashSet<String> = command_names().into_iter().collect();
         assert!(
             spec["agentCycle"]["description"].as_str().is_some_and(|s| !s.is_empty()),
             "the backbone needs the standing description that says how to read the steps"
@@ -1761,62 +2040,63 @@ mod tests {
         let steps = spec["agentCycle"]["steps"].as_array().expect("agentCycle.steps is an array");
         assert!(steps.len() >= 5, "the backbone lost steps: only {} left", steps.len());
 
-        let mut ids = std::collections::HashSet::new();
+        let mut ids = HashSet::new();
         for (at, step) in steps.iter().enumerate() {
-            let id = step["id"].as_str().unwrap_or("");
-            assert!(!id.is_empty(), "a step has no id: {step}");
-            assert!(ids.insert(id), "two steps answer to the id {id:?}");
-            assert_eq!(step["n"], json!(at), "step {id} is numbered {} but sits at {at}", step["n"]);
-            assert!(step["step"].as_str().is_some_and(|s| !s.is_empty()), "step {id} has no prose");
-            if let Some(trigger) = step.get("trigger") {
-                assert!(trigger.as_str().is_some_and(|s| !s.is_empty()), "step {id} carries an empty trigger");
-            }
-            for c in step["commands"].as_array().expect("step.commands is an array") {
-                let n = c.as_str().unwrap_or("");
-                assert!(known.contains(n), "step {id} names an unknown command {n:?}");
-            }
+            let id = check_step(step, at, "agentCycle", &known);
+            assert!(ids.insert(id), "two steps of the backbone answer to the id {id:?}");
+            assert!(step.get("n").is_some(), "agentCycle.{id} has no place in the run");
+            assert!(step.get("kind").is_none(), "the backbone has one bucket, so a step needs no kind: {step}");
         }
         assert!(
             steps.iter().any(|s| s.get("trigger").is_some()),
-            "no step declares a trigger, so nothing says where the cycle is entered"
+            "no step declares a trigger, so nothing says where the run is entered"
         );
     }
 
-    /// Discipline: every item of the cold-path `cycles` must be self-describing — `kind` is
-    /// mandatory, an `optional` item carries a `trigger`, a `backbone` item does not — and every
-    /// command it names must exist.
+    /// Discipline: every cold-path cycle is addressable, and its items are the same steps the hot
+    /// path is written in. Each item stays self-describing if it is ever flattened or filtered out of
+    /// its bucket (`kind`), a `backbone` item carries its place and no trigger, and an `optional`
+    /// item is the other way round — self-gated, so a trigger and no place to arrive at.
     #[test]
-    fn cycles_reference_real_commands() {
+    fn cycles_are_addressable() {
         let spec = build();
-        let known: std::collections::HashSet<String> = command_names().into_iter().collect();
+        let known: HashSet<String> = command_names().into_iter().collect();
         let cycles = spec["cycles"].as_object().expect("cycles is an object");
+        let mut cycle_ids = HashSet::new();
         let mut item_count = 0;
-        for (name, cycle) in cycles {
-            if name == "description" {
-                continue;
-            }
-            assert!(cycle["when"].as_str().is_some_and(|s| !s.is_empty()), "cycle {name} needs a `when`");
+        for cycle in CYCLES {
+            let name = cycle.id;
+            assert!(cycle_ids.insert(name), "two cycles answer to the id {name:?}");
+            let emitted = cycles.get(name).unwrap_or_else(|| panic!("cycle {name} is not emitted"));
+            assert!(emitted["when"].as_str().is_some_and(|s| !s.is_empty()), "cycle {name} needs a `when`");
+
+            let mut ids = HashSet::new();
             for (bucket, expect_trigger) in [("backbone", false), ("optional", true)] {
-                let items = cycle[bucket].as_array().unwrap_or_else(|| panic!("cycle {name}.{bucket} is an array"));
-                for it in items {
+                let items = emitted[bucket].as_array().unwrap_or_else(|| panic!("cycle {name}.{bucket} is an array"));
+                for (at, item) in items.iter().enumerate() {
                     item_count += 1;
-                    let kind = it["kind"].as_str().unwrap_or("");
-                    assert_eq!(kind, bucket, "item in {name}.{bucket} has kind {kind:?}: {it}");
-                    assert!(it["step"].as_str().is_some_and(|s| !s.is_empty()), "item missing step text: {it}");
-                    if expect_trigger {
-                        assert!(it["trigger"].as_str().is_some_and(|s| !s.is_empty()), "optional item needs a trigger: {it}");
-                    } else {
-                        assert!(it.get("trigger").is_none(), "backbone item must not carry a trigger: {it}");
-                    }
-                    let cmds = it["commands"].as_array().expect("item.commands is an array");
-                    for c in cmds {
-                        let n = c.as_str().unwrap_or("");
-                        assert!(known.contains(n), "cycles references unknown command {n:?}: {it}");
-                    }
+                    let id = check_step(item, at, name, &known);
+                    assert!(ids.insert(id), "two items of {name} answer to the id {id:?}");
+                    assert_eq!(item["kind"], json!(bucket), "item in {name}.{bucket} carries the wrong kind: {item}");
+                    assert_eq!(
+                        item.get("trigger").is_some(),
+                        expect_trigger,
+                        "an item of {name}.{bucket} has the trigger the other bucket's items carry: {item}"
+                    );
+                    assert_eq!(
+                        item.get("n").is_some(),
+                        !expect_trigger,
+                        "a self-gated item is numbered, or an ordered one is not: {item}"
+                    );
                 }
             }
         }
         assert!(item_count >= 9, "expected every cycle to carry its items, got {item_count}");
+        assert_eq!(
+            cycles.len(),
+            CYCLES.len() + 1,
+            "the emitted map holds something other than the cycles and their description"
+        );
     }
 
     /// Collects the localizable prose `build()` actually emits (capability / command.summary /

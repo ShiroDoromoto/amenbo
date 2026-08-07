@@ -2839,16 +2839,6 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     "store_status".to_string(),
                     serde_json::to_value(&vs).unwrap_or(serde_json::Value::Null),
                 );
-                // Where git is not in play, drop the `worktree` cycle outright rather than letting it arrive
-                // with a "if you use git" caveat: a caveat still spends the reader's context, and what the
-                // spec advises here is not a thing they can do. The question is about the **bound folder** —
-                // the pointer's, not wherever the caller stands — since that is the checkout the work happens
-                // in. Core stays a static builder; this is the same runtime seam the two fields above use.
-                if !bound_dir_is_under_git() {
-                    if let Some(serde_json::Value::Object(cycles)) = map.get_mut("cycles") {
-                        cycles.remove("worktree");
-                    }
-                }
                 // What the user installed and switched on here (`AMB-D-437`) — in the author's own words
                 // when amenbo is that author, and as the callable line alone when it is not
                 // (`AMB-D-575`/`AMB-D-576`). A key of its own, never folded into `cycles`: those are
@@ -2865,6 +2855,16 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                         serde_json::Value::String(why.to_string()),
                     );
                 }
+            }
+            // Where git is not in play, drop the `worktree` cycle outright rather than letting it arrive
+            // with a "if you use git" caveat: a caveat still spends the reader's context, and what the
+            // spec advises here is not a thing they can do. The steps that branch to it lose the branch
+            // with it, which is why this goes through core rather than lifting the key out here. The
+            // question is about the **bound folder** — the pointer's, not wherever the caller stands —
+            // since that is the checkout the work happens in. Core stays a static builder; this is the
+            // same runtime seam the fields above use.
+            if !bound_dir_is_under_git() {
+                amenbo_core::agent::drop_cycle(&mut spec, amenbo_core::agent::Cyc::Worktree);
             }
             // And where a plugin's author named a step of amenbo's own cycle, hang the line to type on
             // that step (`AMB-D-571`): the advice and the tool for it are otherwise in one document

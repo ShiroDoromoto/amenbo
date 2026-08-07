@@ -1,9 +1,8 @@
 // Command devtool is amenbo's portable developer-support CLI: a single static
 // Go binary (no runtime, no venv) that can be dropped into any project. It gives
-// a task the throwaway dev GUI it is verified in, it measures what a diff does to
-// the `amenbo agent --json` entry, and it stands up a fake outside world
-// (fixtures.go) for verifying the GUI against answers the real one will not give
-// on demand.
+// a task the throwaway dev GUI it is verified in, and it stands up a fake outside
+// world (fixtures.go) for verifying the GUI against answers the real one will not
+// give on demand.
 //
 // The checkout a task is written in is a git worktree outside the repo, cut by
 // amenbo's official `worktree` plugin:
@@ -48,8 +47,6 @@ func main() {
 	switch args[0] {
 	case "devgui":
 		devGUICmd(args[1:])
-	case "agent":
-		agentCmd(args[1:])
 	case "fixtures":
 		fixturesCmd(args[1:])
 	case "plugin":
@@ -73,7 +70,6 @@ Usage:
   devtool devgui shot      [<id>] [--no-front]
   devtool devgui rm        <id>
   devtool devgui sweep     [--yes]
-  devtool agent size       [--base main] [--json]
   devtool fixtures refresh [--catalog <url|path>] [--repo owner/name]
   devtool fixtures gui     [--fail <face>=<status|timeout>] [--port n] [--app path] [--no-launch]
   devtool plugin round     --manifest <path.json> [--program path] [--set k=v] [--events list] [--keep]
@@ -130,12 +126,7 @@ plugin round run one plugin through one lap of a store that is thrown away
              Nothing is asserted — the receiving side (a webhook to stand in for,
              a checkout to look at) is the plugin author's. Without --program it
              installs devtool's stand-in, which records the documents it is
-             handed, so a payload can be read without writing a plugin for it.
-agent size   print what this tree does to the 'amenbo agent --json' entry, by
-             section, against the merge-base with --base. A signal, not a gate:
-             it always exits 0. The entry is read once per AI session, so what
-             lands there is paid forever — the delta asks the author whether
-             what grew is a spec or an argument.`)
+             handed, so a payload can be read without writing a plugin for it.`)
 }
 
 // parseAroundID parses `fs` over args in which the task id may sit on either side of

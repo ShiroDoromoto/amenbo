@@ -774,6 +774,36 @@ commands! {
     Validate => "validate",
 }
 
+/// Declares [`Cyc`] — the variant a step names a cold-path cycle by, and the key that cycle is
+/// emitted under — in one table, the way [`Cmd`] is declared for commands.
+macro_rules! cycle_ids {
+    ($($variant:ident => $key:literal,)*) => {
+        /// A cold-path cycle, as a value rather than a spelling. Both ends of the branch are written
+        /// with it: [`CYCLES`] files each cycle under one, and [`Step::cycles`] names the ones that
+        /// can fire at that step, so a step pointing at a cycle nobody wrote does not compile
+        /// (`AMB-D-574`: what a type can refuse never needs a test). What a type cannot refuse is a
+        /// cycle no step points *at* — `every_cycle_is_reachable_from_a_step` is that half.
+        #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+        pub enum Cyc { $($variant,)* }
+
+        impl Cyc {
+            /// The key the cycle is emitted under, and the name a step branches to it by.
+            pub const fn key(self) -> &'static str {
+                match self { $(Cyc::$variant => $key,)* }
+            }
+        }
+    };
+}
+
+cycle_ids! {
+    TaskShaping => "taskShaping",
+    Decision => "decision",
+    DecisionAudit => "decisionAudit",
+    ExecutionExceptions => "executionExceptions",
+    Commit => "commit",
+    Worktree => "worktree",
+}
+
 /// One step of a run — the hot-path backbone ([`AGENT_CYCLE`]) and the cold-path cycles
 /// ([`CYCLES`]) are both written out of this. It is a **structure with an id**, not a numbered line
 /// of prose: the number and the name used to live inside the sentence, where nothing but a substring
@@ -809,6 +839,14 @@ struct Step {
     /// spelling ([`Cmd`]), so one that names nothing is a build error rather than something to test
     /// for.
     commands: &'static [Cmd],
+    /// The cold-path cycles that can fire here — the branch the backbone's description tells the
+    /// reader to take when a trigger fires, written down rather than left to be inferred from a
+    /// cycle's `when`. Empty where nothing branches off this step, which is most of them.
+    ///
+    /// It is what makes the branch checkable from both ends: naming one is [`Cyc`], so a branch to a
+    /// cycle nobody wrote is a build error, and a cycle nothing here names is unreachable — written,
+    /// emitted, paid for by every session, and arrived at by no one.
+    cycles: &'static [Cyc],
     /// The step itself, in one block.
     prose: &'static str,
 }
@@ -833,6 +871,9 @@ impl Step {
         if let Some(trigger) = self.trigger {
             map.insert("trigger".to_string(), json!(trigger));
         }
+        if !self.cycles.is_empty() {
+            map.insert("cycles".to_string(), json!(self.cycles.iter().map(|c| c.key()).collect::<Vec<&str>>()));
+        }
         value
     }
 }
@@ -845,6 +886,7 @@ const AGENT_CYCLE: &[Step] = &[
         n: Some(0),
         trigger: Some("the human handed you work in this session"),
         commands: &[Cmd::TaskAdd, Cmd::TaskFinishCreating, Cmd::TaskList, Cmd::DecisionAdd],
+        cycles: &[Cyc::TaskShaping, Cyc::Decision],
         prose: "work the human hands you in this session lands here first, and the question to ask of it is what it leaves behind. **What to do** belongs on the backlog if it is not there yet, and filing it takes two commands: `amenbo task add ... --to me-ai` when you are the one continuing, then `amenbo task finish-creating <id>` once the dependencies, premises and classification it needs are on it — until that lands nobody can reserve it, you included. Look first at what is already being created (`task list --filter \"draft:yes\"`): a creation someone left open is the task you would otherwise file twice. Then join at step 2 (reserve) with the id `add` handed back. **Why it is being done this way** — a choice picked among real alternatives — is worth offering as a decision (`amenbo decision add`), and one request can leave both. Asking once, here, is the whole of it: no later step asks again. Work you pulled off the backlog yourself is already recorded, so it needs no intake — enter at step 1.",
     },
     Step {
@@ -852,6 +894,7 @@ const AGENT_CYCLE: &[Step] = &[
         n: Some(1),
         trigger: Some("you are going looking for work yourself"),
         commands: &[Cmd::TaskList],
+        cycles: &[Cyc::DecisionAudit],
         prose: "your mailbox is `amenbo task list --filter \"assignee:me-ai status:todo ready:yes\" --sort priority --json`. Take the highest-priority task; if it comes back empty, widen once to `assignee:none status:todo ready:yes` and assign what you take. (`status:todo` is fresh, unreserved work — a task already `in_progress` is one another session is on, so it stays out of the mailbox and you never double-book; `blocked` is deliberately out, being an external stall — a second machine, a human go/no-go — that you should not self-assign. Waiting on a ruling, on a day, or on the writing being finished is not one of those: an unsettled premise, a start day still ahead and a creation still open are all derived as `ready:no`, never declared as `blocked`. `ready:yes` hides work whose declared premises are unmet — an open blocker, a linked decision that is not settled, a start day still ahead, or a creation nobody has finished — so you never grab it early; query `ready:no` to see each task's blocked_by_open, blocked_by_decisions, not_started_until and draft, `start:future` for the queue waiting on its day alone, and `draft:yes` for the creations still open.)",
     },
     Step {
@@ -867,6 +910,7 @@ const AGENT_CYCLE: &[Step] = &[
             Cmd::TaskUpdate,
             Cmd::TaskFinishCreating,
         ],
+        cycles: &[Cyc::Worktree, Cyc::ExecutionExceptions],
         prose: "`amenbo task status <id> in_progress` (todo→in_progress), then re-confirm it is in_progress with `amenbo task show <id>` before starting. `status` is the whole double-work guard, and reserving is a compare-and-swap: `→ in_progress` succeeds only when the task is currently `todo`. If another session reserved it first, your reserve is rejected with `already_reserved` (a non-zero exit) instead of silently succeeding — so the collision is actually detected. The reserve also requires `ready`, so a task with an open blocker, an unsettled premise, a start day still ahead, or a creation still unfinished is rejected with `not_ready` (also a non-zero exit), and there is no `--force`. The two failures pull in opposite directions. On `already_reserved` the task is taken by someone else: go back to step 1 and pick the next one. On `not_ready` it is your own declaration that holds it: resolve the premise — finish the blocker or `task undepend` it; `decision accept` the linked decision, or `decision link --unlink` it; correct a start day you declared wrong with `task update <id> --start today` (or `--clear-start`); end a creation that is still open with `task finish-creating <id>` — and reserve only then. Both guards judge this transition only: an edge added, or a decision rejected, under a running task never strips its status, and `→ todo` / `→ blocked` / `→ done` stay unconditional, so the hand-back path is never closed.",
     },
     Step {
@@ -874,6 +918,7 @@ const AGENT_CYCLE: &[Step] = &[
         n: Some(3),
         trigger: None,
         commands: &[Cmd::CommentList, Cmd::TaskStatus],
+        cycles: &[Cyc::Commit, Cyc::TaskShaping, Cyc::Decision, Cyc::ExecutionExceptions],
         prose: "first read the task's latest comments and whatever they reference — linked notes, decisions, attachments (`amenbo comment list <id>`) — if the direction feels undecided, you have not read enough; then do the work, moving state with `amenbo task status <id> blocked` if you stall.",
     },
     Step {
@@ -881,6 +926,7 @@ const AGENT_CYCLE: &[Step] = &[
         n: Some(4),
         trigger: None,
         commands: &[Cmd::TaskDone, Cmd::TaskReject, Cmd::CommentAdd, Cmd::TaskStatus],
+        cycles: &[Cyc::Worktree],
         prose: "a task ends one of two ways — `amenbo task done <id>` for work you carried out, `amenbo task reject <id> --reason ...` for work you concluded should not be done (neither `done` nor `delete`). Either way, leave the context on the task's timeline with `amenbo comment add <id> --text ...` so the next session can pick up. (If you decide not to take a reserved task — as opposed to deciding it should not be done at all — hand it back with `amenbo task status <id> todo`.)",
     },
 ];
@@ -891,7 +937,7 @@ const AGENT_CYCLE: &[Step] = &[
 /// longer said twice.
 fn agent_cycle() -> Value {
     json!({
-        "description": "The AI's recommended execution backbone (pass --actor ai on every command) — a proven default for proceeding autonomously while avoiding parallel collisions, not a mandate. When you follow it, enter at the step whose `trigger` describes where you are and run from there in order; a step with no trigger is simply the next one. Branch to a `cycles` entry only when its trigger fires. A step may also carry `tools`: lines to type that an installed plugin declared for it — its own, and described under `plugins`.",
+        "description": "The AI's recommended execution backbone (pass --actor ai on every command) — a proven default for proceeding autonomously while avoiding parallel collisions, not a mandate. When you follow it, enter at the step whose `trigger` describes where you are and run from there in order; a step with no trigger is simply the next one. A step's `cycles` are the cold-path cycles that branch off it — take one only when its own trigger fires, then come back. A step may also carry `tools`: lines to type that an installed plugin declared for it — its own, and described under `plugins`.",
         "steps": AGENT_CYCLE.iter().map(|s| s.to_value(None)).collect::<Vec<Value>>(),
     })
 }
@@ -904,9 +950,10 @@ fn agent_cycle() -> Value {
 /// The items are [`Step`]s, the same structure the hot path is written in, so every one of them has
 /// an id to be named by and the two runs can be checked by one rule rather than two.
 struct Cycle {
-    /// The key this cycle is emitted under, and the name a step names it by when it says to branch
-    /// here. Unique across [`CYCLES`].
-    id: &'static str,
+    /// Which cycle this is: the key it is emitted under, and the value a step names it by when it
+    /// branches here ([`Cyc`]). One variant is written by exactly one cycle, held by
+    /// `cycles_are_addressable`.
+    id: Cyc,
     /// The situation that sends you into this cycle at all — the branch condition, above the
     /// per-item triggers inside it.
     when: &'static str,
@@ -929,10 +976,11 @@ impl Cycle {
 }
 
 /// Every cold-path cycle, in the order they are emitted. Referencing only real command names, and
-/// carrying ids nothing else answers to, is guarded by the `cycles_are_addressable` test.
+/// carrying ids nothing else answers to, is guarded by the `cycles_are_addressable` test; that one of
+/// these is reached at all, by `every_cycle_is_reachable_from_a_step`.
 const CYCLES: &[Cycle] = &[
     Cycle {
-        id: "taskShaping",
+        id: Cyc::TaskShaping,
         when: "You are registering or decomposing work.",
         backbone: &[
             Step {
@@ -940,6 +988,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(0),
                 trigger: None,
                 commands: &[Cmd::TaskAdd],
+                cycles: &[],
                 prose: "There are no subtasks: decompose larger work into separate tasks, each belonging to exactly one project.",
             },
             Step {
@@ -947,6 +996,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(1),
                 trigger: None,
                 commands: &[Cmd::TaskDepend, Cmd::TaskUndepend],
+                cycles: &[],
                 prose: "Before you leave the split, draw a dependency edge wherever one task has to be done first: the edge is what holds the order once the session that knew it is gone, so whoever arrives later takes the work in the order it has rather than inferring it from titles. Looking is the step, not the linking — parts with no order between them are an answer. Declare the order you actually mean.",
             },
             Step {
@@ -954,6 +1004,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(2),
                 trigger: None,
                 commands: &[Cmd::TaskFinishCreating],
+                cycles: &[],
                 prose: "End each creation once its task is written — the edges, the premises and the classification all on it. Until then it cannot be reserved, which is what keeps a half-written task from being taken mid-split. Filing several at once, create them all, draw the edges between them, and finish them last.",
             },
             Step {
@@ -961,6 +1012,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(3),
                 trigger: None,
                 commands: &[Cmd::TaskDone, Cmd::TaskReject],
+                cycles: &[],
                 prose: "Settle the task you split from, once the parts are filed and the edges are drawn. With no subtasks it never becomes a parent that empties itself: either it keeps one of the parts as its own work, or it is closed — done if the work moved out of it entirely, rejected if it turned out not to be work at all. Left standing with nothing in it, it comes back to whoever reads the backlog next, who finds nothing there to do.",
             },
         ],
@@ -970,6 +1022,7 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("the work spans ordered time-direction stages"),
                 commands: &[Cmd::DimensionAdd, Cmd::DimensionSet],
+                cycles: &[],
                 prose: "Add a --time-axis dimension and place tasks on its ordered values, gating later stages behind earlier ones with a dependency.",
             },
             Step {
@@ -977,6 +1030,7 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("you are handing work to a person, that person's AI, or yourself (`--to me-ai`) to continue"),
                 commands: &[Cmd::TaskAdd, Cmd::TaskAssign],
+                cycles: &[],
                 prose: "Delegate at creation (--to/--ai) or afterward.",
             },
             Step {
@@ -984,6 +1038,7 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("the work rests on a choice worth recording"),
                 commands: &[Cmd::DecisionAdd, Cmd::DecisionLink],
+                cycles: &[Cyc::Decision],
                 prose: "Offer to record the rationale as a decision — the `decision` cycle carries it from there, linking it to the tasks that implement it. Surface it for the human to accept or reject; don't author it as already settled.",
             },
             Step {
@@ -991,12 +1046,13 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("a task's shape looks off (missing project/priority, malformed)"),
                 commands: &[Cmd::Validate],
+                cycles: &[],
                 prose: "Check its shape before relying on it.",
             },
         ],
     },
     Cycle {
-        id: "decision",
+        id: Cyc::Decision,
         when: "You are putting a 'why' on the record — offering a new one, or fitting it to the decisions already there (step 0 is where you judge that it is worth offering).",
         backbone: &[
             Step {
@@ -1004,6 +1060,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(0),
                 trigger: None,
                 commands: &[Cmd::Search, Cmd::DecisionShow],
+                cycles: &[],
                 prose: "Read the neighbourhood before you write, not after — a duplicate you find first is one you never propose. Pull a bounded, relevant slice (search <term> --kind decision --limit N), not the whole corpus, and read the bodies it points at (decision show). Don't settle for one term: prose is written in the human's language while identifiers and code spans stay English, so pull again on another word for the same idea. If one contradicts what you are about to record, propose it to the human as a candidate supersede/amend with your reasoning; do not author the edge yourself (detection proposes, the human disposes).",
             },
             Step {
@@ -1011,6 +1068,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(1),
                 trigger: None,
                 commands: &[Cmd::DecisionAdd, Cmd::DecisionPromote],
+                cycles: &[],
                 prose: "Freeze the rationale as an append-only decision — it starts proposed (your proposal; the human accepts or rejects it), so offer the record, don't impose it.",
             },
             Step {
@@ -1018,6 +1076,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(2),
                 trigger: None,
                 commands: &[Cmd::DecisionLink],
+                cycles: &[],
                 prose: "Before you leave it, look for the work this decision governs and link it: the task then names the decision it rests on, and the decision names the work it produced, so whoever picks the work up reads why. Looking is the step, not the linking — finding nothing to link is an answer. Link implementation tasks only: never the task of ruling on the decision itself, and never a rejected decision, or one that has been superseded, that you merely want to cite (that belongs in the body).",
             },
             Step {
@@ -1025,6 +1084,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(3),
                 trigger: None,
                 commands: &[],
+                cycles: &[],
                 prose: "Hand it over, rather than filing it and moving on — that, and not the record itself, is where your part ends. It stays proposed until the human rules on it, and meanwhile every task you linked it to reads ready:no, so the work it governs is stalled on an answer nobody was asked for. Say what you offered and what waits on it.",
             },
         ],
@@ -1034,6 +1094,7 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("a new decision wholly replaces an existing one"),
                 commands: &[Cmd::DecisionSupersede],
+                cycles: &[],
                 prose: "Chain it as a supersession — the old one stops being current (the edge says so; no status changes).",
             },
             Step {
@@ -1041,6 +1102,7 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("a new decision partially revises an existing one that stays current"),
                 commands: &[Cmd::DecisionAmend],
+                cycles: &[],
                 prose: "Chain it as an amendment — the old one is not superseded; read the two together.",
             },
             Step {
@@ -1048,6 +1110,7 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("a proposed decision is agreed and ready to settle"),
                 commands: &[Cmd::DecisionAccept],
+                cycles: &[],
                 prose: "Accept it (stamps decided_at/decided_by).",
             },
             Step {
@@ -1055,6 +1118,7 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("an accepted decision needs a minor fix (typo / stale line)"),
                 commands: &[Cmd::DecisionEdit],
+                cycles: &[],
                 prose: "Edit it in place — accepting no longer freezes the body, so there is no reopen/re-accept round-trip. Supersede stays for a change of mind; reopen for un-settling a too-hasty acceptance.",
             },
             Step {
@@ -1062,12 +1126,13 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("you just added or accepted a decision"),
                 commands: &[Cmd::Search, Cmd::DecisionShow, Cmd::DecisionSupersede, Cmd::DecisionAmend],
+                cycles: &[],
                 prose: "Check whether it semantically contradicts an existing one. Pull a bounded, relevant neighbourhood — search the new decision's key terms (search <term> --kind decision --limit N), not the whole corpus — and read the bodies it points at (decision show). If one contradicts, propose it to the human as a candidate supersede/amend with your reasoning; do not author the edge yourself (detection proposes, the human disposes).",
             },
         ],
     },
     Cycle {
-        id: "decisionAudit",
+        id: Cyc::DecisionAudit,
         when: "Periodically — contradictions accumulate over time as new decisions land far from older ones.",
         backbone: &[
             Step {
@@ -1075,6 +1140,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(0),
                 trigger: None,
                 commands: &[Cmd::DecisionList],
+                cycles: &[],
                 prose: "Sweep the current (accepted) decisions for semantically contradicting pairs, but keep each pass bounded: page through a slice you can actually reason over (decision list --filter status:accepted --with-body --limit N --offset …) rather than loading everything at once, and rotate the window across passes. Detection is best-effort recall by design — as the corpus outgrows one pass, coverage stays bounded to what you can reach now and repeated passes widen it over time.",
             },
             Step {
@@ -1082,13 +1148,14 @@ const CYCLES: &[Cycle] = &[
                 n: Some(1),
                 trigger: None,
                 commands: &[Cmd::DecisionSupersede, Cmd::DecisionAmend],
+                cycles: &[],
                 prose: "Surface each suspected contradiction to the human as a candidate supersede/amend with your reasoning. Never author the edge yourself, and only run supersede/amend once the human confirms — detection proposes, the human disposes, so a false positive cannot silently kill a good decision.",
             },
         ],
         optional: &[],
     },
     Cycle {
-        id: "executionExceptions",
+        id: Cyc::ExecutionExceptions,
         when: "You hit something that breaks the straight-line cycle.",
         backbone: &[
             Step {
@@ -1096,6 +1163,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(0),
                 trigger: None,
                 commands: &[],
+                cycles: &[],
                 prose: "Progress state and assignment are orthogonal: reassignment is plain (the task just moves to its new assignee — no special status, no round-trip counter), and status=blocked is reserved for a physical blocker no one can move past. An unmet premise is not one: a pending dependency, an unsettled linked decision, and a start day that has not come are all derived as ready:no, so declaring them blocked duplicates a truth amenbo already computes.",
             },
             Step {
@@ -1103,6 +1171,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(1),
                 trigger: None,
                 commands: &[Cmd::CommentAdd],
+                cycles: &[],
                 prose: "An exception is a detour, not an exit. Once you have handled it, rejoin the cycle where it broke — a task handed back puts you at the mailbox again, a premise resolved at the reserve, a blocker cleared at the work itself. What must not happen is stopping here with the task still reserved and nothing on its timeline: the reservation is what keeps it out of the mailbox, so it is not waiting for anyone, it is lost.",
             },
         ],
@@ -1112,6 +1181,7 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("you cannot proceed and need a human decision or action"),
                 commands: &[Cmd::TaskAssign, Cmd::CommentAdd],
+                cycles: &[],
                 prose: "Reassign to the human and say what is needed (a silent reassignment is unhelpful).",
             },
             Step {
@@ -1119,6 +1189,7 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("a physical blocker no one can move past"),
                 commands: &[Cmd::TaskBlock],
+                cycles: &[],
                 prose: "Mark it blocked with the reason.",
             },
             Step {
@@ -1126,6 +1197,7 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("your reserve was rejected with not_ready"),
                 commands: &[Cmd::TaskDone, Cmd::TaskUndepend, Cmd::DecisionAccept, Cmd::DecisionLink, Cmd::TaskUpdate, Cmd::TaskFinishCreating],
+                cycles: &[],
                 prose: "Resolve the premise you declared, rather than working around it: finish the blocker or drop the edge; get the linked decision accepted, unlink it, or relink it to its successor; move or clear a start day that has not come; end a creation that is still open. There is no --force. Two resolve without anyone else: a start day resolves itself, so if the work is meant to wait, leave it and take the next task; an open creation resolves where you stand, once you have read what is there and it is a task to work on.",
             },
             Step {
@@ -1133,12 +1205,13 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("you decide not to take a task you reserved"),
                 commands: &[Cmd::TaskStatus],
+                cycles: &[],
                 prose: "Hand it back with `task status <id> todo` so another session can take it.",
             },
         ],
     },
     Cycle {
-        id: "commit",
+        id: Cyc::Commit,
         when: "You are about to commit, or to send text out of this store some other way (a PR body, an issue, a message).",
         backbone: &[
             Step {
@@ -1146,6 +1219,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(0),
                 trigger: None,
                 commands: &[Cmd::Lint],
+                cycles: &[],
                 prose: "Lint what is leaving, before it leaves: the staged diff, and the commit message. It reports and never edits, so a ref it names is yours to rewrite out of the text.",
             },
             Step {
@@ -1153,6 +1227,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(1),
                 trigger: None,
                 commands: &[Cmd::TaskCommitAdd],
+                cycles: &[],
                 prose: "Once the commit lands, record its SHA on the task — a task takes many, and a SHA already there is a no-op, so anchor every commit you merge.",
             },
         ],
@@ -1162,12 +1237,13 @@ const CYCLES: &[Cycle] = &[
                 n: None,
                 trigger: Some("the human wants every commit linted without anyone having to remember"),
                 commands: &[Cmd::HooksInstall, Cmd::HooksStatus],
+                cycles: &[],
                 prose: "Offer the lint hooks (opt-in, asked once for the device).",
             },
         ],
     },
     Cycle {
-        id: "worktree",
+        id: Cyc::Worktree,
         when: "You are working a task in a worktree — from the one you cut to the one you fold.",
         backbone: &[
             Step {
@@ -1175,6 +1251,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(0),
                 trigger: None,
                 commands: &[],
+                cycles: &[],
                 prose: "Cut a worktree per task, whenever the work will produce commits. Reserving guards the task, not the files, so two sessions on two tasks still share one working tree. Work that lands no commit — a local-only edit under gitignore — needs none.",
             },
             Step {
@@ -1182,6 +1259,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(1),
                 trigger: None,
                 commands: &[],
+                cycles: &[],
                 prose: "Cut it outside the project folder. A worktree cut inside inherits that folder's `.amenbo` through the upward walk, and amenbo refuses to run there (`nested_worktree`).",
             },
             Step {
@@ -1189,6 +1267,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(2),
                 trigger: None,
                 commands: &[],
+                cycles: &[],
                 prose: "A worktree already standing for that task is not yours to enter: someone cut it and may still be in it, and what you reserved was the task's status, not the checkout on disk. Leave it untouched and take the next task — do not read it to judge whether it is live, and do not remove it to clear your way.",
             },
             Step {
@@ -1196,6 +1275,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(3),
                 trigger: None,
                 commands: &[],
+                cycles: &[],
                 prose: "If cutting one hands a line back to you, that line is to run, not to read: what a called command face writes on stdout is its return value, relayed verbatim, so the way in arrives as text — wrap it (`eval \"$(…)\"`, or `iex (…)` in PowerShell). Read it and stop, and you are still standing in the project folder with a worktree nobody entered.",
             },
             Step {
@@ -1203,6 +1283,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(4),
                 trigger: None,
                 commands: &[],
+                cycles: &[],
                 prose: "Operate amenbo in the project folder itself. A worktree outside it carries no `.amenbo` and so reaches nothing — that is the intent, and binding this checkout is not the way around it.",
             },
             Step {
@@ -1210,6 +1291,7 @@ const CYCLES: &[Cycle] = &[
                 n: Some(5),
                 trigger: None,
                 commands: &[],
+                cycles: &[],
                 prose: "Fold the worktree once its commits are merged, in the session that cut it — nothing else will. A reserved task is out of the mailbox, so the task and the worktree left standing for it go unseen together, and the next session that reaches for that task is turned away by the checkout still on disk.",
             },
         ],
@@ -1222,11 +1304,46 @@ const CYCLES: &[Cycle] = &[
 /// here.
 fn cycles() -> Value {
     let mut map = serde_json::Map::new();
-    map.insert("description".to_string(), json!("Cold-path catalog branched to from agentCycle when a trigger fires. `backbone` always applies within its cycle (in order); each `optional` item is done only when its `trigger` matches (the AI self-gates — amenbo shows what you can do, it does not direct you). Every item carries `kind` and an `id`; a `backbone` item carries its place as `n`, an `optional` item its `trigger` instead."));
+    map.insert("description".to_string(), json!("Cold-path catalog: each cycle here is named by the `cycles` of the step it branches off, and taken when its own trigger fires. `backbone` always applies within its cycle (in order); each `optional` item is done only when its `trigger` matches (the AI self-gates — amenbo shows what you can do, it does not direct you). Every item carries `kind` and an `id`; a `backbone` item carries its place as `n`, an `optional` item its `trigger` instead."));
     for cycle in CYCLES {
-        map.insert(cycle.id.to_string(), cycle.to_value());
+        map.insert(cycle.id.key().to_string(), cycle.to_value());
     }
     Value::Object(map)
+}
+
+/// **Takes a cold-path cycle out of a built spec, and every branch to it with it.** The runtime drops
+/// a cycle that does not apply where the caller stands (the `worktree` one off a git checkout), and a
+/// step would otherwise go on naming it in its `cycles` — a branch to a key the reader cannot find,
+/// which reads as a document with a piece missing rather than one that never had it.
+///
+/// A step left naming nothing drops the key entirely, the same way [`Step::to_value`] never writes an
+/// empty one: the absence is the answer, and an empty array is a line of context that says it worse.
+pub fn drop_cycle(spec: &mut Value, cycle: Cyc) {
+    if let Some(steps) = spec.get_mut(BACKBONE).and_then(|b| b.get_mut("steps")) {
+        drop_branch(steps, cycle);
+    }
+    if let Some(Value::Object(cycles)) = spec.get_mut("cycles") {
+        cycles.remove(cycle.key());
+        for (_, other) in cycles.iter_mut() {
+            for bucket in ["backbone", "optional"] {
+                if let Some(items) = other.get_mut(bucket) {
+                    drop_branch(items, cycle);
+                }
+            }
+        }
+    }
+}
+
+/// The branch to `cycle` taken out of every step in one emitted bucket.
+fn drop_branch(steps: &mut Value, cycle: Cyc) {
+    for step in steps.as_array_mut().into_iter().flatten() {
+        let Some(map) = step.as_object_mut() else { continue };
+        let Some(Value::Array(branches)) = map.get_mut("cycles") else { continue };
+        branches.retain(|named| named.as_str() != Some(cycle.key()));
+        if branches.is_empty() {
+            map.remove("cycles");
+        }
+    }
 }
 
 /// The key the hot path is emitted under — and so the run's name where a step is addressed from
@@ -2198,7 +2315,7 @@ mod tests {
         let mut cycle_ids = HashSet::new();
         let mut item_count = 0;
         for cycle in CYCLES {
-            let name = cycle.id;
+            let name = cycle.id.key();
             assert!(cycle_ids.insert(name), "two cycles answer to the id {name:?}");
             let emitted = cycles.get(name).unwrap_or_else(|| panic!("cycle {name} is not emitted"));
             assert!(emitted["when"].as_str().is_some_and(|s| !s.is_empty()), "cycle {name} needs a `when`");
@@ -2230,6 +2347,177 @@ mod tests {
             CYCLES.len() + 1,
             "the emitted map holds something other than the cycles and their description"
         );
+    }
+
+    /// Every step of both runs, hot path and cold, in one iterator — what the checks below hold the
+    /// whole spec to have to reach either without caring which it is looking at.
+    fn every_step() -> impl Iterator<Item = (&'static str, &'static Step)> {
+        AGENT_CYCLE.iter().map(|s| (BACKBONE, s)).chain(
+            CYCLES
+                .iter()
+                .flat_map(|c| c.backbone.iter().chain(c.optional).map(move |s| (c.id.key(), s))),
+        )
+    }
+
+    /// Discipline: a cycle nothing branches to is unreachable. It is written, emitted, and paid for
+    /// by every session that reads the entry — and arrived at by no one, because the only thing that
+    /// ever said when to take it was its own `when`, which nothing in the run pointed at
+    /// (`AMB-D-574`). The other direction needs no test: a branch names a [`Cyc`], so one pointing at
+    /// a cycle nobody wrote does not compile.
+    #[test]
+    fn every_cycle_is_reachable_from_a_step() {
+        let mut branched: HashMap<&str, Vec<&str>> = HashMap::new();
+        for (run, step) in every_step() {
+            let mut named = HashSet::new();
+            for cycle in step.cycles {
+                assert!(named.insert(*cycle), "{run}.{} branches to {} twice", step.id, cycle.key());
+                branched.entry(cycle.key()).or_default().push(step.id);
+            }
+        }
+        for cycle in CYCLES {
+            let key = cycle.id.key();
+            assert!(
+                branched.contains_key(key),
+                "no step branches to the {key} cycle, so nothing reaches it — name it in the `cycles` of \
+                 the step it fires at, or drop the cycle"
+            );
+        }
+    }
+
+    /// The most one step may say, in bytes of its prose. A step is one block a reader takes in before
+    /// acting on it, and past this it has stopped being a step and become the argument for one — which
+    /// belongs in a decision record, where it is read once, rather than here, where it is read every
+    /// session (`AMB-D-574`).
+    const MOST_A_STEP_SAYS: usize = 1600;
+
+    /// The most one cold-path cycle may weigh, as the JSON it is emitted as: its `when`, its items,
+    /// and their prose. A cycle past this is two cycles.
+    const MOST_A_CYCLE_SAYS: usize = 4500;
+
+    /// The most the whole entry point may weigh. Every AI session reads it before it does anything,
+    /// so this is the standing cost of the tool having a face at all.
+    const MOST_THE_ENTRY_SAYS: usize = 48_000;
+
+    /// Discipline: nothing in the spec says more than its share. The ceilings are deliberately above
+    /// where the writing sits — they catch the piece that ran away, not the sentence that grew, which
+    /// is what the snapshot beside them is for (`the_entry_size_is_the_one_recorded`).
+    #[test]
+    fn nothing_says_more_than_its_share() {
+        for (run, step) in every_step() {
+            let said = step.prose.len();
+            assert!(
+                said <= MOST_A_STEP_SAYS,
+                "{run}.{} says {said} bytes, past the {MOST_A_STEP_SAYS} one step may — split it, or move \
+                 the reasoning to a decision record",
+                step.id
+            );
+        }
+        for cycle in CYCLES {
+            let said = cycle.to_value().to_string().len();
+            assert!(
+                said <= MOST_A_CYCLE_SAYS,
+                "the {} cycle weighs {said} bytes, past the {MOST_A_CYCLE_SAYS} one cycle may",
+                cycle.id.key()
+            );
+        }
+        let whole = entry_as_measured().to_string().len();
+        assert!(
+            whole <= MOST_THE_ENTRY_SAYS,
+            "the entry point weighs {whole} bytes, past the {MOST_THE_ENTRY_SAYS} it may — every session \
+             pays this before it does anything"
+        );
+    }
+
+    /// The entry point as the size checks read it: [`build_index`], with the version pinned. The
+    /// version is the one part of the document that moves without anyone writing a word, and a
+    /// release that grows it by a digit would otherwise turn the snapshot red at the worst moment.
+    fn entry_as_measured() -> Value {
+        let mut spec = build_index();
+        if let Value::Object(map) = &mut spec {
+            map.insert("version".to_string(), json!("x.y.z"));
+        }
+        spec
+    }
+
+    /// Where the recorded sizes live — beside the source they measure, so the diff that grows the
+    /// entry and the diff that records the growth are the same diff.
+    fn size_snapshot() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/agent-entry-size.txt")
+    }
+
+    /// The sizes as the snapshot spells them: every top-level section by the bytes of its value, then
+    /// the whole document. The sections never sum to the total — the keys and punctuation between
+    /// them are the document's too — and that is left as it is rather than explained away.
+    fn entry_sizes() -> String {
+        let spec = entry_as_measured();
+        let mut out = String::from(
+            "# `amenbo agent --json` in bytes: each top-level section, then the whole document.\n\
+             # Not a ceiling — those are constants in agent.rs. This is the increment, made to land in a diff.\n\
+             # Rewrite it deliberately: cargo test -p amenbo-core record_the_entry_size -- --ignored\n",
+        );
+        for (key, value) in spec.as_object().expect("the entry point is an object") {
+            out.push_str(&format!("{key:<16} {}\n", value.to_string().len()));
+        }
+        out.push_str(&format!("{:<16} {}\n", "TOTAL", spec.to_string().len()));
+        out
+    }
+
+    /// Discipline: the entry point is the size it was last recorded as. The ceilings above catch a
+    /// section that ran away; this catches the creep under them — a paragraph a session, none of them
+    /// worth stopping for, and a year later the entry costs twice what it did (`AMB-D-574`).
+    ///
+    /// It is a snapshot rather than a diff against another revision, so nothing has to be built twice
+    /// and no measurement can quietly read a different document at each end. Recording the new size is
+    /// one line, and it lands in the commit, where what grew is read next to why.
+    #[test]
+    fn the_entry_size_is_the_one_recorded() {
+        // What is recorded is the shipped spelling. The retarget writes every command with this
+        // build's CLI name, and a dev build's is four bytes longer everywhere it appears — measuring
+        // one would record a document nobody is served. The gate builds the tests under neither, so
+        // this only steps aside for a developer who set the name by hand.
+        if Paths::command_name() != Paths::PRODUCTION_APP_NAME {
+            return;
+        }
+        let now = entry_sizes();
+        let recorded = std::fs::read_to_string(size_snapshot()).unwrap_or_default();
+        if now == recorded {
+            return;
+        }
+        let was: HashMap<&str, i64> = recorded.lines().filter_map(one_size).collect();
+        let mut moved: Vec<String> = now
+            .lines()
+            .filter_map(one_size)
+            .filter(|(section, size)| was.get(section) != Some(size))
+            .map(|(section, size)| format!("  {section:<16} {:>+8}  → {size}", size - was.get(section).unwrap_or(&0)))
+            .collect();
+        moved.sort();
+        panic!(
+            "the entry point is not the size it was recorded as:\n{}\n\nEvery session reads this. Is what \
+             you added a spec, or an argument? An argument belongs in a decision record; a command's detail \
+             belongs behind `agent --command`. If it belongs here, record the new size:\n  \
+             cargo test -p amenbo-core record_the_entry_size -- --ignored",
+            moved.join("\n")
+        );
+    }
+
+    /// Records what the check above compares against. It is the one way the snapshot is written, and
+    /// deliberately not something a failing run does for you: `#[ignore]`d so no gate ever reaches it,
+    /// typed out by whoever grew the entry, and landing in their commit beside the growth it measures.
+    #[test]
+    #[ignore = "writes the recorded entry sizes — run it when the entry has deliberately grown"]
+    fn record_the_entry_size() {
+        assert_eq!(
+            Paths::command_name(),
+            Paths::PRODUCTION_APP_NAME,
+            "this build spells the CLI the dev way, so what it would record is a document nobody is served"
+        );
+        std::fs::write(size_snapshot(), entry_sizes()).expect("could not write the recorded sizes");
+    }
+
+    /// One `<section> <bytes>` line of the snapshot. A comment or a blank line is not one.
+    fn one_size(line: &str) -> Option<(&str, i64)> {
+        let (section, size) = line.split_once(char::is_whitespace)?;
+        Some((section, size.trim().parse().ok()?))
     }
 
     /// Every piece of prose the spec emits, with its path, walked the way [`retarget_node`] walks it
@@ -2402,8 +2690,8 @@ mod tests {
         }
         for cycle in CYCLES {
             for bucket in ["backbone", "optional"] {
-                for item in spec["cycles"][cycle.id][bucket].as_array().expect("a cycle bucket is an array") {
-                    check(&format!("{}.{}", cycle.id, item["id"]), item["step"].as_str().unwrap_or(""));
+                for item in spec["cycles"][cycle.id.key()][bucket].as_array().expect("a cycle bucket is an array") {
+                    check(&format!("{}.{}", cycle.id.key(), item["id"]), item["step"].as_str().unwrap_or(""));
                 }
             }
         }
@@ -2474,6 +2762,30 @@ mod tests {
         let without = spec.clone();
         attach_tools(&mut spec, &hung("worktree.cut-per-task"));
         assert_eq!(spec, without);
+    }
+
+    /// A cycle the runtime drops takes every branch to it with it. Left behind, a step would go on
+    /// telling the reader to take a cycle that is not in the document they were handed — which reads
+    /// as a piece gone missing rather than one that never applied here.
+    #[test]
+    fn dropping_a_cycle_takes_the_branches_to_it() {
+        let mut spec = build();
+        assert!(
+            spec[BACKBONE]["steps"].as_array().is_some_and(|steps| steps
+                .iter()
+                .any(|s| s["cycles"].as_array().is_some_and(|c| c.contains(&json!("worktree"))))),
+            "nothing branches to the worktree cycle, so this proves nothing"
+        );
+        drop_cycle(&mut spec, Cyc::Worktree);
+
+        assert!(spec["cycles"].get("worktree").is_none(), "the cycle itself is still there");
+        for (run, step) in every_step() {
+            let emitted = find_step(&mut spec, run, step.id);
+            let Some(emitted) = emitted else { continue }; // the step was inside the dropped cycle
+            let branches = emitted["cycles"].as_array().cloned().unwrap_or_default();
+            assert!(!branches.contains(&json!("worktree")), "{run}.{} still branches to it", step.id);
+            assert!(!branches.is_empty() || emitted.get("cycles").is_none(), "an emptied branch was left as []");
+        }
     }
 
     /// Collects the localizable prose `build()` actually emits (capability / command.summary /

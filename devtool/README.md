@@ -5,9 +5,9 @@ no venv) you can drop into any project regardless of its language.
 
 On macOS it gives a task its own throwaway **dev GUI** — bundle, app-data and
 all — so several implementation sessions can run in parallel without installing
-over each other, it measures what a diff does to the `amenbo agent --json`
-entry, and it stands up a **fake outside world** the dev GUI can be verified
-against — including the failures the real one will not produce on demand.
+over each other, and it stands up a **fake outside world** the dev GUI can be
+verified against — including the failures the real one will not produce on
+demand.
 
 ## Build
 
@@ -241,39 +241,6 @@ a store behind under a number nobody will type again.
 
 Only the digits form an instance: a hand-made `amenbo (dev wip).app` is
 somebody's own, and the shared `amenbo (dev)` app is permanent.
-
-### `devtool agent size [--base main] [--json]`
-
-Prints what this tree does to the size of the `amenbo agent --json` entry, section
-by section:
-
-```
-agent --json entry size — this tree vs merge-base with main (ab513f194c7f)
-
-  section                 base      head     delta
-  notes                  5,922     4,100    -1,822
-  ...
-  TOTAL                 48,794    46,972    -1,822
-```
-
-**A signal, not a gate — it always exits 0.** The entry is what every AI session
-reads first, so bytes landing there are paid once per session, forever. A byte
-ceiling would not hold: the constant is raised by whoever trips it, and the thing
-worth catching (rationale written in the voice of a spec) hides inside
-legitimately long fields, where no size check can see it. Only a reader can tell a
-spec from an argument, and only while writing it. So the delta puts that question
-to the author instead of answering it.
-
-- **head** is this tree as it stands — uncommitted changes included.
-- **base** is the merge-base with `--base`, so what others landed on main is not
-  billed to your diff.
-- The base is built in a **persistent rig** (a detached worktree under the user
-  cache dir) and the result is cached by commit SHA. A throwaway worktree has no
-  `target/`, so every run would pay a cold build; the rig only ever holds base
-  commits, so it stays warm. A base that has not moved costs nothing.
-- Measurement goes through `make verify`, which is what pins the isolation (a
-  throwaway `AMENBO_HOME` **and** a CWD with no `.amenbo` ancestor) — the real
-  store is never read.
 
 ### `devtool fixtures refresh [--catalog <url|path|repo dir>] [--amenbo <bin>] [--repo owner/name]`
 

@@ -789,11 +789,27 @@ plain_tables! {
     /// leave a screen wrong, which an after-the-fact append cannot rule out). `id` is the reader's
     /// cursor: monotonic, gap-free enough to say "everything after N" (AUTOINCREMENT, so a truncation
     /// can never hand a later row an id a reader has already passed).
+    ///
+    /// `project` is **the window the change belongs to** — the one thing here beyond the instruction, and
+    /// it is not part of it: it says who may be told, not what happened. A reader closed to one project
+    /// (a carrier reading the feed from a cursor, `AMB-D-582`) must be handed that project's changes and
+    /// no others, and the row cannot be asked afterwards — a deleted row has no project left to look up,
+    /// and a re-homed one names only where it landed. So it is **stamped**, off the very declaration that
+    /// moves `project_version` (`WriteTx::touches_project`), for the reason `AMB-D-405` stamps the
+    /// outbox's: it is a fact about the moment. No foreign key — a feed row about a deleted project must
+    /// stand, that deletion being exactly what its carrier has to hear.
+    ///
+    /// A change inside two projects at once — a task re-homed — is **one row per window**, because that
+    /// is what each window saw: the project it left saw it go, the one it joined saw it arrive. An open
+    /// reach reads both and re-reads the row twice, which is one instruction said twice. `NULL` is "no
+    /// window": store-wide bookkeeping that moves no project's version, and rows from before this column
+    /// existed — both outside every closed reach.
     change_feed {
         id: integer("PRIMARY KEY AUTOINCREMENT"),
         dataset: text,
         row_id: bigint,
         op: text,
+        project: bigint_opt,
     }
 
     /// One project's **sync version**: the `change_feed` id of the last committed transaction that

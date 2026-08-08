@@ -40,6 +40,7 @@ mod write_reach;
 mod tests;
 
 pub use hard_erase::{HardEraseReport, HardEraseTarget};
+pub use read::SyncChanges;
 
 /// Result of the read-only integrity check run at startup. Computed once in `open` when
 /// `config.startup_integrity_check` is on; the CLI/GUI surfaces any problem as a warning. Inspection

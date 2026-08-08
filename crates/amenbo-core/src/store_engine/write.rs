@@ -200,27 +200,49 @@ impl<'a> WriteTx<'a> {
     /// reader could act on. Distinct ops are *not* collapsed (an insert followed by a delete of the same
     /// id stays two rows), and the order SQLite reported them in is kept, so "everything after id N"
     /// replays as it happened.
+    ///
+    /// **Each instruction is stamped with the window it belongs to** — one row per project this operation
+    /// declared it touches ([`touches_project`](Self::touches_project)), so a reader closed to one
+    /// project can be handed its own changes without the row being asked afterwards, which a deletion
+    /// makes impossible. A batch that declared none writes one unattributed row: store-wide bookkeeping
+    /// moves no project's version and belongs to no window. The one operation that names two — a
+    /// re-homing — therefore writes the instruction twice, once for the window that lost the row and once
+    /// for the one that gained it; that is not a repeat, it is what each window saw.
     fn write_change_feed(&self) -> Result<()> {
         let changes = self.engine.take_changes();
         if changes.is_empty() {
             return Ok(());
         }
         let feed = col::change_feed::ALL;
-        let mut written = std::collections::HashSet::new();
+        // The windows this operation is in, or a single `None` — "no window" is a place too, and writing
+        // it as one keeps the loop below from having a second shape for the empty case.
+        let windows: Vec<Option<i64>> = {
+            let declared = self.projects.borrow();
+            match declared.is_empty() {
+                true => vec![None],
+                false => declared.iter().map(|&p| Some(p)).collect(),
+            }
+        };
+        let mut collapsed = std::collections::HashSet::new();
+        let mut rows = 0u64;
         for c in &changes {
-            if !written.insert((c.dataset, c.row_id, c.op)) {
+            if !collapsed.insert((c.dataset, c.row_id, c.op)) {
                 continue;
             }
-            Insert::into(feed.table)
-                .set(feed.dataset, c.dataset)
-                .set(feed.row_id, c.row_id)
-                .set(feed.op, c.op)
-                .sql()
-                .execute(&self.tx)
-                .map_err(StoreEngineError::from)?;
+            for window in &windows {
+                Insert::into(feed.table)
+                    .set(feed.dataset, c.dataset)
+                    .set(feed.row_id, c.row_id)
+                    .set(feed.op, c.op)
+                    .set_opt(feed.project, *window)
+                    .sql()
+                    .execute(&self.tx)
+                    .map_err(StoreEngineError::from)?;
+                rows += 1;
+            }
         }
         self.stamp_project_versions()?;
-        self.engine.trim_change_feed_if_due(&self.tx, written.len() as u64)
+        self.engine.trim_change_feed_if_due(&self.tx, rows)
     }
 
     /// Move the sync version of every project this operation declared it touches

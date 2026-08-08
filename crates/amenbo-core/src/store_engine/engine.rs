@@ -101,6 +101,14 @@ const CHANGE_FEED_TRIM_EVERY: u64 = 500;
 /// has missed changes — see [`super::read::changes_since`].
 pub(super) const META_FEED_TRUNCATED_THROUGH: &str = "change_feed_truncated_through";
 
+/// `store_meta` key: the highest feed id written **before** this store began stamping each change with
+/// the window it belongs to (`AMB-D-582`). Those rows name no project and can no longer be attributed —
+/// a deleted row has nothing left to ask — so a reader closed to one project whose cursor sits below
+/// this has changes it will never be handed, and [`super::read::changes_since`] says so rather than
+/// returning the empty page that reads as "nothing changed". Written once, by the migration step that
+/// adds the column; a store born with it carries no row here, which reads as `0`.
+pub(super) const META_FEED_WINDOWS_FROM: &str = "change_feed_windows_from";
+
 /// What the `update_hook` collects between `BEGIN` and `commit`, shared with the callback SQLite owns.
 /// `Arc<Mutex<_>>` because rusqlite requires the hook be `Send + 'static` — not because two threads
 /// write it (the engine is one connection, and its writes are serialised by the transaction).

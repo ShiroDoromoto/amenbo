@@ -377,7 +377,48 @@ pub const STEPS: &[Step] = &[
              );",
         ),
     },
+    Step {
+        to: 23,
+        name: "add change_feed.project, the window each change belongs to",
+        apply: Apply::Custom(add_feed_project),
+    },
 ];
+
+/// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to
+/// one project can be handed its own changes — a question the row itself cannot answer once it is gone.
+///
+/// Probed rather than bare, for the reason [`add_outbox_project`] gives: a store handed the table whole
+/// by today's genesis already has the column, and a bare `ALTER TABLE … ADD COLUMN` would fail on exactly
+/// those with `duplicate column name`.
+///
+/// **The rows already in the feed stay unstamped, and the store says how far that reaches.** There is
+/// nothing to derive them from: a change is attributed from what the write door declared it touched, and
+/// no build before this one wrote that down — the rows a deletion names are gone, and a re-homed row
+/// names only where it landed. Backfilling from the live rows would therefore be a guess that is silently
+/// wrong on exactly the changes a carrier most needs. So the watermark records where stamping begins, and
+/// a window whose cursor is below it is told its cursor is gone rather than handed a page with holes in
+/// it. No window can hold such a cursor yet — the road that reads the feed from one arrives with this
+/// column — so this costs nobody a reconcile in practice; it is what keeps the silent hole from existing.
+fn add_feed_project(ctx: &Ctx<'_>) -> Result<()> {
+    let held: i64 = ctx.tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('change_feed') WHERE name = 'project'",
+        [],
+        |r| r.get(0),
+    )?;
+    if held == 0 {
+        // Frozen text, like every step's: a nullable integer, whatever the registry names the kind later.
+        ctx.tx.execute_batch("ALTER TABLE change_feed ADD COLUMN project BIGINT;")?;
+    }
+    let head: i64 = ctx.tx.query_row("SELECT COALESCE(MAX(id), 0) FROM change_feed", [], |r| r.get(0))?;
+    if head > 0 {
+        ctx.tx.execute(
+            "INSERT INTO store_meta (key, value) VALUES ('change_feed_windows_from', ?1) \
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [head.to_string()],
+        )?;
+    }
+    Ok(())
+}
 
 /// v17: build the word index for a store whose records predate it. It is exactly the rebuild any repair
 /// would run (`AMB-D-450` — the index holds no truth of its own), so there is nothing here for the chain
@@ -1804,6 +1845,48 @@ mod tests {
         assert!(dir.join("blob-moved").is_file(), "the step's file half landed");
         assert_eq!(engine.get_meta("blob_layout").unwrap().as_deref(), Some("2"));
         assert_eq!(engine.format_version().unwrap(), 3);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **v23 says how far the feed is unattributable, instead of leaving a silent hole.** The rows a
+    /// store already carries name no window and cannot be given one — the ones a deletion named are gone —
+    /// so the step records where stamping begins, and a window whose cursor is below that is told its
+    /// cursor is gone rather than handed a page with holes in it.
+    #[test]
+    fn the_step_that_stamps_the_feed_says_where_the_unattributable_rows_end() {
+        let dir = scratch("feed-windows-from");
+        let engine = store_at(&dir, 22);
+        for row in 1..=3 {
+            engine
+                .conn()
+                .execute(
+                    "INSERT INTO change_feed (id, dataset, row_id, op) VALUES (?1, 'task', ?1, 'insert')",
+                    [row],
+                )
+                .unwrap();
+        }
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(
+            engine.get_meta(crate::store_engine::engine::META_FEED_WINDOWS_FROM).unwrap().as_deref(),
+            Some("3"),
+            "the three rows that predate the column are declared unattributable",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A store with an empty feed has nothing unattributable, so the step leaves no watermark at all —
+    /// which reads as `0` and lets a carrier start from the beginning without being told of a gap that
+    /// does not exist.
+    #[test]
+    fn the_step_leaves_no_watermark_on_a_store_whose_feed_is_empty() {
+        let dir = scratch("feed-windows-none");
+        let engine = store_at(&dir, 22);
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.get_meta(crate::store_engine::engine::META_FEED_WINDOWS_FROM).unwrap(), None);
         std::fs::remove_dir_all(&dir).ok();
     }
 

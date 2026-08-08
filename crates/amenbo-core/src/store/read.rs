@@ -2,9 +2,33 @@
 
 use crate::error::Result;
 use crate::reach::Reach;
+use crate::store_engine::read::FeedRow;
 use crate::store_engine::StoreEngine;
 
 use super::Store;
+
+/// What a carrier gets back when it asks this reach for everything after its cursor
+/// ([`Store::sync_changes`], `AMB-D-582`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncChanges {
+    /// The changes since the cursor, **oldest first** — the order they were committed in, which is the
+    /// order a copy outside has to apply them in.
+    Changes {
+        /// One instruction per record that moved: the dataset, the record's id, and the `op`.
+        rows: Vec<FeedRow>,
+        /// The cursor to come back with — the last row's id, or the one that came in on an empty page.
+        cursor: i64,
+        /// The `limit` cut this page short and there is more waiting; come straight back with `cursor`.
+        more: bool,
+    },
+    /// **The cursor is gone.** The feed is a window a reader catches up through, not a history, and this
+    /// one has been away longer than it holds: the changes between are no longer there to be named.
+    /// Saying so is the point — an empty page would be indistinguishable from nothing having happened,
+    /// and the copy outside would sit stale believing it was current. The way back is to take the whole
+    /// window again (`AMB-D-583`); that snapshot names the position it was taken at, which is the cursor
+    /// to resume from.
+    Gap,
+}
 
 impl Store {
     // ── Reach ─────────────────────────────────────────────────────────────────────
@@ -262,6 +286,46 @@ impl Store {
             None => crate::store_engine::read::change_feed_head(conn),
         }
         .map_err(crate::error::engine_on(conn))
+    }
+
+    /// **What has changed in this reach since `after`** — the second of the two roads a carrier takes off
+    /// this device (`AMB-D-582`). The version above says *whether* to come; this says *what*, so a carrier
+    /// that has a copy already re-reads only the records that moved instead of the window entire.
+    ///
+    /// What comes back is the ledger's own instruction and nothing more: which dataset, which record, and
+    /// which of insert / update / delete. **The record itself is not carried** — the feed holds no column
+    /// names and no values by construction (`AMB-D-367`), so a carrier reads the record back by name and
+    /// gets the current one. A `delete` is the exception that makes the road work at all: there is nothing
+    /// left to read back, and the `op` is what lets the copy outside drop it rather than keep a record
+    /// that no longer exists.
+    ///
+    /// **It closes on the window.** Through a closed reach — a carrier's window, the AI facet's binding —
+    /// it is that project's changes and no others, by the window the write door stamped on each row; a
+    /// record next door is not named, not counted, and not hinted at by a hole in the cursor. Through
+    /// `All` it is the device's whole feed.
+    ///
+    /// `limit` bounds one read: a carrier that has been away pages through with the cursor it is handed
+    /// back, and `more` says another page is waiting. The cursor to come back with is the last row's id,
+    /// or the one that came in when the page is empty — so an unread-nothing read costs one indexed seek
+    /// and hands back what it was given.
+    ///
+    /// [`SyncChanges::Gap`] is the honest answer when the cursor has fallen out of the feed's window: the
+    /// changes between are gone, and saying nothing would be indistinguishable from nothing having
+    /// happened. The way back is the full snapshot (`AMB-D-583`), which names the position it was taken
+    /// at, so there is no cursor to hand out here.
+    pub fn sync_changes(&self, after: i64, limit: i64) -> Result<SyncChanges> {
+        use crate::store_engine::read::FeedSlice;
+        let conn = self.engine.conn();
+        let slice = crate::store_engine::read::changes_since(conn, after, limit, self.reach.project())
+            .map_err(crate::error::engine_on(conn))?;
+        Ok(match slice {
+            FeedSlice::Changes { rows, more } => SyncChanges::Changes {
+                cursor: rows.last().map(|r| r.id).unwrap_or(after),
+                rows,
+                more,
+            },
+            FeedSlice::Gap => SyncChanges::Gap,
+        })
     }
 
     /// The read behind bare `amenbo` (discover). The `status` material it builds on comes from the

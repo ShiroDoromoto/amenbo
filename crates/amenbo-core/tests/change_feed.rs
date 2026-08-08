@@ -21,7 +21,7 @@ fn temp_store() -> Store {
 }
 
 fn feed(store: &Store, after: i64) -> Vec<FeedRow> {
-    match read::changes_since(store.read_model().conn(), after, 10_000).unwrap() {
+    match read::changes_since(store.read_model().conn(), after, 10_000, None).unwrap() {
         FeedSlice::Changes { rows, .. } => rows,
         FeedSlice::Gap => panic!("the cursor was still in the feed's window"),
     }
@@ -177,7 +177,8 @@ fn the_feed_carries_no_values_only_ids() {
         )
         .unwrap();
     assert!(!dumped.contains("秘密"), "no body text rides in the feed");
-    // The table has no room for one: id, dataset, row_id, op — that is the whole row.
+    // The table has no room for one: the instruction — id, dataset, row_id, op — and the window it
+    // belongs to, which says who may be told and nothing about what the record holds.
     let cols: Vec<String> = {
         let mut stmt = conn.prepare("PRAGMA table_info(change_feed)").unwrap();
         let out = stmt
@@ -187,7 +188,7 @@ fn the_feed_carries_no_values_only_ids() {
             .unwrap();
         out
     };
-    assert_eq!(cols, vec!["id", "dataset", "row_id", "op"]);
+    assert_eq!(cols, vec!["id", "dataset", "row_id", "op", "project"]);
 }
 
 /// The shadow tables SQLite touches on its own — `sqlite_sequence`, `store_meta` and `change_feed`
@@ -296,7 +297,7 @@ fn a_cursor_the_truncation_outran_is_declared_a_gap_not_an_empty_answer() {
 
     let conn = store.read_model().conn();
     assert_eq!(
-        read::changes_since(conn, stale_cursor, 100).unwrap(),
+        read::changes_since(conn, stale_cursor, 100, None).unwrap(),
         FeedSlice::Gap,
         "the changes it never saw are gone, and it is told rather than reassured"
     );
@@ -305,7 +306,7 @@ fn a_cursor_the_truncation_outran_is_declared_a_gap_not_an_empty_answer() {
     let head = read::change_feed_head(conn).unwrap();
     store.set_task_status(task, amenbo_core::model::TaskStatus::Done, ActorKind::Ai).unwrap();
     let conn = store.read_model().conn();
-    match read::changes_since(conn, head, 100).unwrap() {
+    match read::changes_since(conn, head, 100, None).unwrap() {
         FeedSlice::Changes { rows, more } => {
             assert!(!more, "one operation fits in a page");
             assert!(rows.iter().any(|r| r.dataset == "task" && r.row_id == task));
@@ -327,7 +328,7 @@ fn a_short_page_says_there_is_more() {
         store.set_task_status(task, amenbo_core::model::TaskStatus::Todo, ActorKind::Ai).unwrap();
     }
 
-    match read::changes_since(store.read_model().conn(), head, 3).unwrap() {
+    match read::changes_since(store.read_model().conn(), head, 3, None).unwrap() {
         FeedSlice::Changes { rows, more } => {
             assert_eq!(rows.len(), 3, "the page is the size that was asked for");
             assert!(more, "and it says the feed holds more");

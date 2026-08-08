@@ -861,31 +861,42 @@ pub enum FeedSlice {
     Gap,
 }
 
-/// The change feed after a cursor. `limit` bounds one read, so a reader that has been away drains the
-/// feed in pages instead of materialising it; it returns [`FeedSlice::Gap`] when truncation has passed
-/// the cursor, and a reader with no cursor yet (`after_id = 0`) is in the same position by definition
-/// once anything has been trimmed, and is told so.
-pub fn changes_since(conn: &Connection, after_id: i64, limit: i64) -> Result<FeedSlice> {
-    // The store's scalars are text (`store_meta` is one key/value table for all of them), so the
-    // watermark is read back as the integer it was written as. A store that has never truncated carries
-    // no row at all — which is the same answer as `0`, said by the absence rather than by a `COALESCE`.
-    let mut sel = Select::new();
-    let mark = sel.expr::<i64>(format!("CAST({} AS INTEGER)", META.value.to_sql()));
-    let mut sql = Sql::from(&sel, META.table);
-    sql.push_where(Some(&Pred::eq(META.key, super::engine::META_FEED_TRUNCATED_THROUGH)));
-    let truncated_through: i64 = conn
-        .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| mark.get(r))
-        .optional()
-        .map_err(StoreEngineError::from)?
-        .unwrap_or(0);
-    if after_id < truncated_through {
+/// The change feed after a cursor, **within one window**. `limit` bounds one read, so a reader that has
+/// been away drains the feed in pages instead of materialising it; it returns [`FeedSlice::Gap`] when
+/// truncation has passed the cursor, and a reader with no cursor yet (`after_id = 0`) is in the same
+/// position by definition once anything has been trimmed, and is told so.
+///
+/// `window` is the project a closed reader may see — its rows and no others, by the `project` the drain
+/// stamped on each one. `None` is the open reach (a human, the GUI), which narrows nothing and reads the
+/// device's whole feed. A window is told [`FeedSlice::Gap`] for a second reason as well: a cursor from
+/// before this store began stamping windows names rows nobody can attribute now, and dropping them
+/// silently would look exactly like "nothing changed".
+pub fn changes_since(
+    conn: &Connection,
+    after_id: i64,
+    limit: i64,
+    window: Option<i64>,
+) -> Result<FeedSlice> {
+    // A store that has never truncated carries no row at all — which is the same answer as `0`, said by
+    // the absence rather than by a `COALESCE`.
+    let truncated_through = meta_i64(conn, super::engine::META_FEED_TRUNCATED_THROUGH)?;
+    // The unattributable stretch is a gap **only for a window**: the open reach reads those rows fine.
+    let unstamped_through = match window {
+        None => 0,
+        Some(_) => meta_i64(conn, super::engine::META_FEED_WINDOWS_FROM)?,
+    };
+    if after_id < truncated_through.max(unstamped_through) {
         return Ok(FeedSlice::Gap);
     }
     // One row past the page, so "is there more?" costs no second query.
     let mut sel = Select::new();
     let (id, dataset, row_id, op) = (sel.col(FEED.id), sel.col(FEED.dataset), sel.col(FEED.row_id), sel.col(FEED.op));
+    let mut after = Pred::cmp(FEED.id, ">", after_id);
+    if let Some(project) = window {
+        after = after.and(Pred::eq(FEED.project, project));
+    }
     let mut page = Sql::from(&sel, FEED.table);
-    page.push_where(Some(&Pred::cmp(FEED.id, ">", after_id)))
+    page.push_where(Some(&after))
         .order_by([Sort::by(FEED.id)])
         .limit(limit.saturating_add(1));
     let mut stmt = conn.prepare(page.text()).map_err(StoreEngineError::from)?;
@@ -899,6 +910,20 @@ pub fn changes_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Fee
     let more = rows.len() as i64 > limit;
     rows.truncate(limit.max(0) as usize);
     Ok(FeedSlice::Changes { rows, more })
+}
+
+/// One of the store's scalar watermarks, as the integer it was written as. The scalars are text
+/// (`store_meta` is one key/value table for all of them), and a key nobody has written carries no row at
+/// all — which reads back as `0`, said by the absence rather than by a `COALESCE`.
+fn meta_i64(conn: &Connection, key: &str) -> Result<i64> {
+    let mut sel = Select::new();
+    let mark = sel.expr::<i64>(format!("CAST({} AS INTEGER)", META.value.to_sql()));
+    let mut sql = Sql::from(&sel, META.table);
+    sql.push_where(Some(&Pred::eq(META.key, key)));
+    conn.query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| mark.get(r))
+        .optional()
+        .map(|v| v.unwrap_or(0))
+        .map_err(StoreEngineError::from)
 }
 
 /// The feed's newest id — the cursor a reader starts from when it has just loaded the store from the

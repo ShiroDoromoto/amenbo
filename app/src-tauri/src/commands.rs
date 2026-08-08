@@ -1416,6 +1416,10 @@ const CHANGES_PAGE: usize = 500;
 /// `cur1_`/`cur2_` cursors** — those are a three-part cursor merging the file ledger and
 /// `task_comment` in time order, whereas this is a single table with monotonic ids, where a plain
 /// `id > ?` is all it takes.
+///
+/// The window is `None`: the GUI stands at the open reach and shows the whole device, so it reads every
+/// change rather than one project's. Narrowing the same feed to a window is the carrier's road
+/// (`Store::sync_changes`, `AMB-D-582`).
 #[tauri::command]
 pub fn changes_since(cursor: i64, limit: Option<usize>) -> Result<ChangesDto, CmdError> {
     use amenbo_core::store_engine::read::{self, FeedSlice};
@@ -1424,7 +1428,7 @@ pub fn changes_since(cursor: i64, limit: Option<usize>) -> Result<ChangesDto, Cm
     let store = open_store_read()?;
     let conn = store.read_model().conn();
     let limit = limit.unwrap_or(CHANGES_PAGE);
-    match read::changes_since(conn, cursor, limit as i64)? {
+    match read::changes_since(conn, cursor, limit as i64, None)? {
         FeedSlice::Changes { rows, more } => Ok(ChangesDto {
             cursor: rows.last().map(|r| r.id).unwrap_or(cursor),
             rows: rows

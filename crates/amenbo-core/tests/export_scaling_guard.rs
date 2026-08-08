@@ -37,7 +37,9 @@ fn peak_export_rows(s: &Seeded) -> usize {
     // The registry the real export walks, so the guard measures the path a person's export takes.
     export::stream_store_tables(
         s.engine.conn(),
-        &export::exported_datasets(),
+        &export::datasets_carried_out(),
+        // The export narrows nothing — it is the whole device by definition.
+        None,
         &mut sink,
         None,
         &mut progress::ignore,

@@ -789,6 +789,24 @@ pub enum SyncCmd {
     /// This is a **carrier's** road, not a reading one — the whole window lands on stdout, so send it
     /// somewhere, do not read it. To look at the work, use `task list` / `task show`.
     Snapshot,
+
+    /// Read what has changed in this window since a cursor — the unread, and the cursor to come back
+    /// with.
+    ///
+    /// What comes back is which records moved and how (`insert` / `update` / `delete`), not what they now
+    /// hold: read a changed record back by name, and drop a deleted one. The cursor to start from is the
+    /// one a `sync snapshot` names in its header; each answer names the next.
+    ///
+    /// A page is bounded, and says when it cut one short — come straight back with the cursor it handed
+    /// you. When the cursor has fallen out of the ledger's window the answer is a **gap**
+    /// (`sync_gap`), not an empty page: take a fresh `sync snapshot` and read on from the cursor it
+    /// names (`AMB-D-583`).
+    Changes {
+        /// the cursor to read on from — everything after it, exclusive (0 reads from the oldest the
+        /// ledger still holds)
+        #[arg(long, value_name = "CURSOR")]
+        since: i64,
+    },
 }
 
 #[derive(Subcommand, Debug)]

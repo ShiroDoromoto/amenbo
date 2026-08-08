@@ -415,6 +415,52 @@ fn a_carriers_road_is_open_to_the_window_the_whole_device_is_refused_to() {
     assert_eq!(version(), before, "a write in another project sent this carrier re-reading");
     cli.json(&["task", "add", "--title", "mine too", "--project", &bound, "--json"]);
     assert_ne!(version(), before, "a write inside the window left the carrier holding a stale copy");
+
+    // And the third road: once it holds a copy, the carrier reads on from a cursor instead of sending the
+    // window again. The changes it is handed are its own window's — the churn next door above is what
+    // makes that a real question rather than a restatement of the snapshot's.
+    let page = |since: &str| -> (serde_json::Value, i32) {
+        let (stdout, stderr, code) = plugin(&["sync", "changes", "--since", since, "--json"]);
+        assert_eq!(code, 0, "a window reads on with no facet: {stderr}");
+        (serde_json::from_str(&stdout).expect("json"), code)
+    };
+    let (all, _) = page("0");
+    assert_eq!(id_str(&all["project_id"]), bound, "the page names the window it is of");
+    let datasets_and_ids: Vec<(String, i64)> = all["changes"]
+        .as_array()
+        .expect("changes")
+        .iter()
+        .map(|c| (c["dataset"].as_str().unwrap().to_string(), c["record_id"].as_i64().unwrap()))
+        .collect();
+    assert!(!datasets_and_ids.is_empty(), "the window's own writes are named: {all}");
+    // What the window may not see is not named, not counted, and not left as a hole: every task the page
+    // names reads back through this same window.
+    for (dataset, record_id) in &datasets_and_ids {
+        if dataset != "task" {
+            continue;
+        }
+        let (stdout, _, code) = plugin(&["task", "show", &format!("AMB-T-{record_id}"), "--json"]);
+        assert_eq!(code, 0, "a task the page named is out of the window it was handed to: {stdout}");
+    }
+
+    // The cursor it hands back is where it stands: read again from there and there is nothing new, which
+    // is the cheap answer a carrier gets on almost every pass.
+    let cursor = all["cursor"].as_i64().expect("a cursor");
+    let (nothing, _) = page(&cursor.to_string());
+    assert_eq!(nothing["changes"].as_array().unwrap().len(), 0, "nothing has happened since: {nothing}");
+    assert_eq!(nothing["cursor"].as_i64(), Some(cursor), "an empty page hands the cursor straight back");
+
+    // A gap is not that. Both the exit code and the payload have to part company with the empty page
+    // above, or a carrier reads "your copy is unusable" as "you are up to date" and sits stale forever.
+    // `--since=-1` rather than `--since -1`: a bare leading minus is an option to the parser, so the
+    // attached form is how a negative reaches the road at all.
+    for bad in ["--since=900000001", "--since=-1"] {
+        let (stdout, stderr, code) = plugin(&["sync", "changes", bad, "--json"]);
+        assert_ne!(code, 0, "a cursor the ledger cannot speak for is not a success: {stdout}");
+        assert!(stderr.contains("sync_gap"), "and it says which condition it is: {stderr}");
+        assert!(stderr.contains("sync snapshot"), "the way on is in the answer: {stderr}");
+        assert!(stdout.is_empty(), "nothing on stdout for a carrier to mistake for a page: {stdout}");
+    }
 }
 
 /// **An AI does not pick a project** — the binding does. `--project` and the `project:` filter are human

@@ -437,6 +437,7 @@ amenbo restore ./everything.amenbo-backup --yes # destructively restore this dev
 # closed to the window the caller reads through, and no plugin secret ever rides along.
 amenbo sync version                         # one number: has anything here changed? (no snapshot is built)
 amenbo sync snapshot > ./window.json        # one whole picture of it, from one instant (records only) — its header names the ledger position it stands at, to read on from
+amenbo sync changes --since 4821 --json     # ...and from there on, only what moved: which records, and the next cursor
 
 # Keep amenbo's refs out of what leaves the store — an id resolves only for
 # someone holding it, so `AMB-` refs are noise in a commit, a diff or a PR body.

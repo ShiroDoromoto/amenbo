@@ -11,8 +11,9 @@
 //!   have to ask after every record it holds, on every pass.
 //! - **It closes on the window.** A record next door is not named, not counted, and not hinted at —
 //!   the same strictness the whole-device roads are held to (`AMB-T-2789` / `AMB-T-2791`).
-//! - **A gap is said out loud.** A cursor the feed's window has outrun is told so, because an empty page
-//!   is indistinguishable from nothing having happened, and a copy that reads it as such sits stale
+//! - **A gap is said out loud.** A cursor outside what the ledger can speak for — fallen behind its
+//!   window, or ahead of anything it has ever reached — is told so, because an empty page is
+//!   indistinguishable from nothing having happened, and a copy that reads it as such sits stale
 //!   believing it is current.
 //!
 //! Like the sibling suites they go through the **public ops** (`Store::…`) rather than poking the engine,
@@ -229,12 +230,28 @@ fn a_cursor_the_feed_outran_is_a_gap_and_not_an_empty_page() {
     }
 
     assert_eq!(read(&store, project, stale, 100), SyncChanges::Gap, "the cursor is gone, and says so");
-    // The current end of the feed is not a gap — the window is what the reader fell out of, not the road.
-    let head = match read(&store, project, i64::MAX / 2, 100) {
-        SyncChanges::Changes { rows, .. } => rows,
-        SyncChanges::Gap => panic!("a cursor ahead of the feed has missed nothing"),
-    };
-    assert_eq!(head, Vec::new(), "and there is nothing after the end of it");
+
+    // The current end of the feed is **not** a gap: caught up is not the same as fallen behind, and a
+    // carrier that reads on every few seconds must not be sent for a snapshot every time.
+    let head = store.sync_version().unwrap();
+    let (rows, _) = drained(&store, project, head);
+    assert_eq!(rows, Vec::new(), "a cursor at the head is served, and there is nothing after it");
+}
+
+/// A cursor the ledger has **never reached** is a gap as well — a position from another store's ledger,
+/// or from this one before a `restore` wound it back. Read as an empty page it would swallow every change
+/// until the feed climbed past it, silently and for as long as that took. A negative cursor is the same
+/// answer from the other side: it sits below the floor.
+#[test]
+fn a_cursor_the_ledger_has_never_reached_is_a_gap_and_so_is_one_below_the_floor() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let _ = filed(&mut store, new_task("タスク", project));
+
+    assert_eq!(read(&store, project, i64::MAX / 2, 100), SyncChanges::Gap, "far past the head");
+    assert_eq!(read(&store, project, -1, 100), SyncChanges::Gap, "below the floor");
+    // The device's own reach answers the same: it is the ledger that has not been there, not the window.
+    assert_eq!(store.sync_changes(i64::MAX / 2, 100).unwrap(), SyncChanges::Gap);
 }
 
 /// **The retention boundary, exactly.** A cursor sitting on the last id the truncation removed has seen
@@ -252,7 +269,7 @@ fn a_cursor_on_the_last_id_the_truncation_took_is_not_a_gap_and_misses_nothing()
 
     // Opening a store enforces the feed's bound as well, so let one open settle the cut before the
     // watermark is read: otherwise the read below trims again and moves the very boundary being tested.
-    let _ = read(&store, project, i64::MAX / 2, 1);
+    let _ = read(&store, project, 1, 1);
 
     // How far the truncation reached — the store's own watermark, read the way it was written.
     let cut: i64 = store

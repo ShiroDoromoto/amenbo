@@ -63,6 +63,13 @@ pub enum CliErrorCode {
     UnbindNoBinding,
     FacetRequired,
     AiGuardrail,
+    /// The ledger can no longer say what changed since the cursor a carrier came back with, so the
+    /// answer is this rather than the empty page that reads as "nothing changed" (`AMB-D-582`). Not a
+    /// fault in the call: the way on is a fresh `sync snapshot` (`AMB-D-583`), which is why it is said
+    /// in a code the caller can branch on.
+    SyncGap,
+    /// A road out of this store could not be walked — the snapshot could not be streamed.
+    SyncError,
 }
 
 impl CliErrorCode {
@@ -80,6 +87,8 @@ impl CliErrorCode {
             CliErrorCode::UnbindNoBinding => "unbind_no_binding",
             CliErrorCode::FacetRequired => "facet_required",
             CliErrorCode::AiGuardrail => "ai_guardrail",
+            CliErrorCode::SyncGap => "sync_gap",
+            CliErrorCode::SyncError => "sync_error",
         }
     }
 
@@ -98,6 +107,8 @@ impl CliErrorCode {
         CliErrorCode::UnbindNoBinding,
         CliErrorCode::FacetRequired,
         CliErrorCode::AiGuardrail,
+        CliErrorCode::SyncGap,
+        CliErrorCode::SyncError,
     ];
 }
 
@@ -595,6 +606,8 @@ mod tests {
             "unbind_no_binding",
             "facet_required",
             "ai_guardrail",
+            "sync_gap",
+            "sync_error",
         ]);
         let actual = set(CliErrorCode::ALL.iter().map(|c| c.as_str()));
         assert_eq!(actual, expected, "the full set of CLI error codes does not match the contract");

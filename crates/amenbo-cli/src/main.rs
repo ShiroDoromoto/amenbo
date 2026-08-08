@@ -7043,15 +7043,16 @@ fn export(store: &Store, flags: &Flags, out: Option<String>) -> Result<i32, CliE
 }
 
 /// `sync` — the road out for a plugin that carries this store's data somewhere else (`AMB-D-581`), in the
-/// two faces a carrier actually uses: **ask the version**, and take a **snapshot** only when it moved.
+/// three faces a carrier actually uses: **ask the version**, take a **snapshot** only when it moved, and
+/// from the position that snapshot names, read on through **changes**.
 ///
 /// The split is the point, not a convenience. A carrier has to ask often and send rarely, so the asking
 /// must not cost what the sending costs: `version` reads one row and never builds a snapshot
-/// (`AMB-D-582`). Both answer **through the reach this surface already holds** — a plugin's window
-/// (`AMB-D-406`), an AI's binding, or the whole device for a human — so neither needs a door of its own,
-/// and neither can be widened by an argument.
+/// (`AMB-D-582`), and `changes` re-reads only what moved rather than the window entire. All three answer
+/// **through the reach this surface already holds** — a plugin's window (`AMB-D-406`), an AI's binding, or
+/// the whole device for a human — so none needs a door of its own, and none can be widened by an argument.
 ///
-/// **Neither is refused to a window, unlike `export` and `backup`.** Those act on the whole device and so
+/// **None is refused to a window, unlike `export` and `backup`.** Those act on the whole device and so
 /// step past what a plugin was launched to observe; these are that window, answered. Nor is a facet
 /// required on the plugin face: they read and record nothing, so there is no actor for one to name
 /// (`stamps_facet`).
@@ -7071,11 +7072,12 @@ fn sync_cmd(store: &Store, flags: &Flags, sub: SyncCmd) -> Result<i32, CliError>
                 println!("{version}");
             }
         }
+        SyncCmd::Changes { since } => return sync_changes(store, flags, since),
         SyncCmd::Snapshot => {
             let stdout = std::io::stdout();
             let mut w = stdout.lock();
             amenbo_core::sync_snapshot::stream(store.reach(), &mut w).map_err(|e| CliError {
-                code: "sync_error",
+                code: CliErrorCode::SyncError.as_str(),
                 message: e.to_string(),
                 hint: None,
                 exit: 1,
@@ -7089,6 +7091,84 @@ fn sync_cmd(store: &Store, flags: &Flags, sub: SyncCmd) -> Result<i32, CliError>
                 );
             }
         }
+    }
+    Ok(0)
+}
+
+/// The payload version this road speaks (`AMB-D-349`): one integer, at the front, raised only when the
+/// shape changes in a way a reader built on the old one cannot survive. A field added later does not
+/// raise it — a carrier ignores what it does not know.
+const SYNC_CHANGES_V: u32 = 1;
+
+/// How many changes one call hands back. A carrier that has been away drains in pages, watching `more`
+/// and coming back with the cursor it was given, so this bounds what either side has to hold rather than
+/// what either side can learn. The ledger's own retention is thousands of rows, so a page this size is a
+/// handful of calls even for a carrier that has been away a long time.
+const SYNC_CHANGES_PAGE: i64 = 500;
+
+/// `sync changes --since <cursor>`: **what moved in this window since the cursor**, and the cursor to come
+/// back with (`AMB-D-582`). The last of the three a carrier walks — the version says whether to come, the
+/// snapshot hands over the whole, and this hands over what has happened since.
+///
+/// What it names is which records moved and how, never what they now hold: the ledger carries no values
+/// by construction (`AMB-D-367`), so a carrier reads a changed record back by name and gets the current
+/// one. `delete` is the arm that makes the road work at all — there is nothing left to read back, and a
+/// carrier that had to notice by re-reading everything it holds would be asking after the whole window on
+/// every pass.
+///
+/// **The window is the reach's, and no argument widens it** — the same standing as `version` and
+/// `snapshot` beside it. Nothing here names a project, so there is nothing to refuse: the answer is
+/// simply that window's, or the device's for a human.
+///
+/// **A gap is not an empty page.** A cursor outside what the ledger can speak for — fallen behind the
+/// window it keeps, or ahead of anything it has ever reached — has changes it will never be handed, and
+/// answering nothing would be indistinguishable from nothing having happened, leaving the copy outside
+/// stale and confident. So it is said in a code the caller can branch on (`sync_gap`) with a non-zero
+/// exit, and the way on (a fresh snapshot, which names its own cursor) is in the hint: one operation
+/// fixes it, whatever went wrong (`AMB-D-583`).
+fn sync_changes(store: &Store, flags: &Flags, since: i64) -> Result<i32, CliError> {
+    use amenbo_core::store::SyncChanges;
+
+    let window = store.reach().project();
+    let (rows, cursor, more) = match store.sync_changes(since, SYNC_CHANGES_PAGE).map_err(CliError::from)? {
+        SyncChanges::Changes { rows, cursor, more } => (rows, cursor, more),
+        SyncChanges::Gap => {
+            return Err(CliError {
+                code: CliErrorCode::SyncGap.as_str(),
+                message: format!(
+                    "the ledger cannot say what changed since {since} — that cursor is outside the \
+                     stretch it still speaks for",
+                ),
+                hint: Some(
+                    "Take the window again with `amenbo sync snapshot` and read on from the cursor its \
+                     header names."
+                        .to_string(),
+                ),
+                exit: 1,
+            })
+        }
+    };
+
+    if flags.json {
+        // The window is named beside the answer, as `version`'s is: two carriers on one device hold
+        // cursors from different windows, and only this says which one this page is of.
+        print_json(&json!({
+            "v": SYNC_CHANGES_V,
+            "project_id": window,
+            "cursor": cursor,
+            "more": more,
+            "changes": rows
+                .iter()
+                .map(|r| json!({ "dataset": r.dataset, "record_id": r.row_id, "op": r.op }))
+                .collect::<Vec<_>>(),
+        }));
+    } else {
+        // The changes *are* the answer, not a success message — so `--quiet` does not eat them, exactly
+        // as it does not eat `version`'s number.
+        for r in &rows {
+            println!("{:<8} {:<16} {}", r.op, r.dataset, r.row_id);
+        }
+        println!("cursor: {cursor}{}", if more { " (more waiting)" } else { "" });
     }
     Ok(0)
 }

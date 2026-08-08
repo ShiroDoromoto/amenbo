@@ -871,6 +871,13 @@ pub enum FeedSlice {
 /// device's whole feed. A window is told [`FeedSlice::Gap`] for a second reason as well: a cursor from
 /// before this store began stamping windows names rows nobody can attribute now, and dropping them
 /// silently would look exactly like "nothing changed".
+///
+/// **A cursor the ledger has never reached is a gap too.** The valid range is the floor up to the head,
+/// and a cursor above the head names a position in some other store's ledger — a copy carried to another
+/// device, or this one wound back by a `restore`. Read as an empty page it would swallow every change
+/// until the feed climbed past it, silently and for as long as that took; said out loud it costs one
+/// reconcile. It is asked only when the page came back empty, so a reader with something to collect pays
+/// nothing for it.
 pub fn changes_since(
     conn: &Connection,
     after_id: i64,
@@ -899,6 +906,9 @@ pub fn changes_since(
         .map_err(StoreEngineError::from)?
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(StoreEngineError::from)?;
+    if rows.is_empty() && after_id > change_feed_head(conn)? {
+        return Ok(FeedSlice::Gap);
+    }
     let more = rows.len() as i64 > limit;
     rows.truncate(limit.max(0) as usize);
     Ok(FeedSlice::Changes { rows, more })

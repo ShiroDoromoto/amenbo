@@ -672,19 +672,30 @@ mod tests {
             let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
             let mine = seed_project(&mut s, "mine");
             seed_task(&mut s, Some(mine), "written once, long ago");
+            // Everything after that happens next door, so this window's version stands still while the
+            // ledger climbs past it — which is the whole of what "dormant" means here.
+            let theirs = seed_project(&mut s, "theirs");
+            for i in 0..5 {
+                seed_task(&mut s, Some(theirs), &format!("churn {i}"));
+            }
             mine
         };
         let db = store_file(&dir);
+        let conn = rusqlite::Connection::open(&db).unwrap();
 
         // Truncation is amortised over thousands of rows, so the watermark is written by hand rather than
-        // earned. The key is `store_engine::engine::META_FEED_TRUNCATED_THROUGH`, private to that module;
-        // the gap assertion below is what pins this literal to it — a wrong key would read back as `0`
-        // and gap nothing.
-        const PAST_THE_WINDOW: i64 = 900_001;
-        let conn = rusqlite::Connection::open(&db).unwrap();
+        // earned. It is placed **between** this window's version and the ledger's head, which is where a
+        // real cut lands: truncation only ever removes rows below the newest, so a floor above the head is
+        // a state no store can be in. The key is `store_engine::engine::META_FEED_TRUNCATED_THROUGH`,
+        // private to that module; the gap assertion below is what pins this literal to it — a wrong key
+        // would read back as `0` and gap nothing.
+        let head: i64 =
+            conn.query_row("SELECT COALESCE(MAX(id), 0) FROM change_feed", [], |r| r.get(0)).unwrap();
+        let past_the_window = head - 1;
+        assert!(past_the_window > 0, "the churn left a ledger to cut into: head={head}");
         conn.execute(
             "INSERT INTO store_meta (key, value) VALUES ('change_feed_truncated_through', ?1)",
-            [PAST_THE_WINDOW],
+            [past_the_window],
         )
         .unwrap();
         assert!(
@@ -696,7 +707,7 @@ mod tests {
         );
 
         let cursor = take(&db, Reach::window(mine))["amenbo_sync"]["cursor"].as_i64().unwrap();
-        assert_eq!(cursor, PAST_THE_WINDOW, "the position is lifted to the feed's floor");
+        assert_eq!(cursor, past_the_window, "the position is lifted to the feed's floor");
         assert!(
             !matches!(
                 crate::store_engine::read::changes_since(&conn, cursor, 10, Some(mine)).unwrap(),

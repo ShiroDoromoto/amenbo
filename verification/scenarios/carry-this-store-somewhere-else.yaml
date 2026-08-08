@@ -14,8 +14,9 @@ description: >
   between, and it stands still: that is the whole of what makes the cheap question worth asking. Then
   take the picture and read the written document back off disk, because that document is what the other
   side receives. Finally, file work in a second project and ask again from inside a plugin, where the
-  window is real: the number the plugin is handed is its own project's, and the picture it takes carries
-  that project's work and not the work next door.
+  window is real: the number the plugin is handed is its own project's, the picture it takes carries that
+  project's work and not the work next door, and reading on from the position that picture named hands it
+  what moved since — or says so plainly when the cursor is one the ledger cannot speak for.
 steps_cli:
   - type: action
     domain: task
@@ -170,3 +171,46 @@ steps_cli:
     with:
       contains: filed where the carrier cannot see it
       present: false
+
+  # And the road that follows the picture. Having sent the whole once, a carrier never sends it again: it
+  # reads on from the position the picture named and re-reads only the records that moved. This is the
+  # call it makes on every pass, so what it has to be is unambiguous — it names the window it answered
+  # for, and hands back the cursor to come back with.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: changes
+      args:
+        - --since=0
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: '"cursor"'
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: project_id
+
+  # The case a copy outside is silently ruined by: a cursor the ledger cannot speak for. Answered with an
+  # empty page it reads as "nothing changed", and the carrier stays confident and stale for as long as
+  # nobody looks. So it is said out loud, in a word the caller can branch on.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: changes
+      args:
+        - --since=900000001
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: sync_gap

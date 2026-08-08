@@ -1,0 +1,161 @@
+# The road out for something that keeps a copy of this store elsewhere — a viewer, an audit trail, a
+# mirror in another tool. It is walked in the order a carrier really uses it: ask the number, and take
+# the picture only when the number moved. So what this road proves is not that two commands answer, but
+# that the pair is usable — that the cheap question tells the truth about whether the expensive one is
+# worth asking, and that the picture is closed to the window the caller reads through.
+#
+# The window is the half only a plugin can walk. A terminal reads with the whole device in view, which is
+# the right answer for the person sitting at it and the wrong one to prove containment with — so the last
+# stretch is made from inside a launched plugin, where a window is what it will be in the wild.
+id: carry-this-store-somewhere-else
+title: A carrier asks one number, sends only when it moved, and is handed its own window and nothing more
+description: >
+  Seed a store, read the version, and write — the number moves. Read it again with nothing written in
+  between, and it stands still: that is the whole of what makes the cheap question worth asking. Then
+  take the picture and read the written document back off disk, because that document is what the other
+  side receives. Finally, file work in a second project and ask again from inside a plugin, where the
+  window is real: the number the plugin is handed is its own project's, and the picture it takes carries
+  that project's work and not the work next door.
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — carried out to somewhere else
+    as: seed
+
+  - type: action
+    domain: store
+    op: sync-version
+    as: before
+
+  # A write inside the window moves the number. Nothing about *what* changed reaches a carrier — that is
+  # the point of the number — so the change made here is an ordinary one and the assert is about the
+  # number alone.
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — a note is a change like any other, and the number says so
+    as: note
+
+  - type: assert
+    domain: store
+    op: version
+    with:
+      since: before
+      moved: true
+
+  # And the other half, which is what makes asking cheap worth anything: with nothing written, the number
+  # stands still. A number that drifted on its own would send a carrier the whole store every time it
+  # looked.
+  - type: action
+    domain: store
+    op: sync-version
+    as: settled
+
+  - type: assert
+    domain: store
+    op: version
+    with:
+      since: settled
+      moved: false
+
+  # The picture. It is read back off disk rather than out of amenbo, for the same reason an export is:
+  # what the other side receives is this document.
+  - type: action
+    domain: store
+    op: sync-snapshot
+    as: picture
+
+  - type: assert
+    domain: task
+    op: synced
+    with:
+      target: seed
+      from: picture
+      present: true
+
+  # Work filed where a window will not reach. A project is the unit a plugin is let in on, so a second
+  # project is where "outside" lives.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: scenario-other
+    as: other
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — filed where the carrier cannot see it
+    as: unseen
+
+  - type: action
+    domain: task
+    op: move
+    with:
+      target: unseen
+      project: other
+
+  # From here on the calls are made from inside a launched plugin, which is the only place a window is
+  # what it will be in the wild: amenbo puts the store and the window into the child's environment, and
+  # no argument the plugin passes widens either.
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: read-back-program
+    with:
+      name: worktree
+
+  # The cheap question, asked with no actor anywhere — a read declares none, and the window has already
+  # settled how far it gets. What comes back names the window it answered for, which is the only thing
+  # that tells two carriers on one device whose number each is holding.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: version
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: project_id
+
+  # And the picture, taken through that window. Its own project's work is in it.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: carry
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: carried out to somewhere else
+
+  # What lies outside the window did not travel. This is the line the whole window exists for: a carrier
+  # that could pick up the project next door would be publishing work nobody let it in on.
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: filed where the carrier cannot see it
+      present: false

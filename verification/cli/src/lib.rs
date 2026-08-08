@@ -165,9 +165,14 @@ pub(crate) struct Driver<'a> {
     /// nowhere to be read afterwards — the store shows the state, not who declined to touch it.
     last_flush: Option<serde_json::Value>,
     /// The files the `store` actions wrote, under the same names. A scenario has one binding
-    /// namespace — the loader keeps it unique across both — and which of the two maps a name lands
-    /// in follows from the op that bound it: nothing in the store is a path, and no archive is an id.
+    /// namespace — the loader keeps it unique across all of them — and which map a name lands in
+    /// follows from the op that bound it: nothing in the store is a path, and no archive is an id.
     artifacts: HashMap<String, std::path::PathBuf>,
+    /// The numbers a `store` action read back, under the names their steps bound. The third thing an
+    /// `as:` can hold, and apart from the other two for the reason they are apart from each other:
+    /// which map a name lands in follows from the op that bound it, and a version is neither a row in
+    /// the store nor a file on disk.
+    numbers: HashMap<String, i64>,
     /// The catalogs the run stood up itself, under the names their steps bound. They are held here
     /// for the length of the scenario because a host answers only while it is alive: dropping one
     /// after the step that made it would leave every later step pointed at a closed port.
@@ -196,6 +201,7 @@ impl<'a> Driver<'a> {
             last_unbind: None,
             last_flush: None,
             artifacts: HashMap::new(),
+            numbers: HashMap::new(),
             catalogs: HashMap::new(),
             refusal: None,
         };
@@ -284,6 +290,25 @@ impl<'a> Driver<'a> {
             ));
         }
         Ok(())
+    }
+
+    /// Run for what it *wrote to stdout* — the shape a command takes when its stdout is the document
+    /// rather than a report about one (`sync snapshot`). The bytes come back unread: what they hold is
+    /// the step's business, and treating a document as text here would put an encoding between a
+    /// carrier's file and the file this run judges.
+    fn run_stdout(&self, args: &[&str]) -> Result<Vec<u8>, String> {
+        let out = self.invoke(args)?;
+        if let Some(code) = self.refused_code(&out) {
+            return Err(format!("{REFUSED}{code}"));
+        }
+        if !out.status.success() {
+            return Err(format!(
+                "`amenbo {}` failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(out.stdout)
     }
 
     /// Resolve a path a step named against the session's own folder, refusing anything that would
@@ -396,12 +421,12 @@ impl<'a> Driver<'a> {
         }
     }
 
-    /// Judge an assert by handing it to the domain that answers for it. One op is named for what it
-    /// is about rather than for a domain of its own: an export is read out of the archive whatever
-    /// kind of row is being looked for in it.
+    /// Judge an assert by handing it to the domain that answers for it. Two ops are named for what
+    /// they are about rather than for a domain of their own: a document amenbo handed out — an
+    /// export's archive, a carrier's snapshot — is read for whatever kind of row is looked for in it.
     fn assert(&self, domain: Domain, op: &str, with: &Args) -> Result<Outcome, String> {
-        if op == "exported" {
-            return self.judge_exported(domain, with);
+        if op == "exported" || op == "synced" {
+            return self.judge_carried(domain, op, with);
         }
         match domain {
             Domain::Task => self.task_assert(op, with),
@@ -437,6 +462,26 @@ impl<'a> Driver<'a> {
             None => format!("{kind}-{}", self.artifacts.len()),
         };
         self.artifacts.insert(name, path);
+    }
+
+    /// Record a number an action read back, under the name a later step will ask for it by. A step
+    /// that binds nothing still gets a slot, so nothing is silently dropped on the way.
+    fn remember_number(&mut self, bind: Option<&str>, kind: &str, value: i64) {
+        let name = match bind {
+            Some(name) => name.to_string(),
+            None => format!("{kind}-{}", self.numbers.len()),
+        };
+        self.numbers.insert(name, value);
+    }
+
+    /// Resolve a name to the number an earlier `store` action read. As with a file, the loader proved
+    /// the name resolves to an earlier `as:`, so what is left here is a name bound by an op that
+    /// produced something else.
+    fn number_ref(&self, with: &Args, key: &str) -> Result<i64, String> {
+        let name = req_str(with, key)?;
+        self.numbers.get(name).copied().ok_or_else(|| {
+            format!("`{key}: {name}` names no number a `store` action read in this run")
+        })
     }
 
     /// Resolve a name to the file an earlier `store` action wrote. The loader proved the name

@@ -27,6 +27,40 @@ impl Driver<'_> {
                 self.remember(bind, "backup", path.clone());
                 Ok(Outcome::action(format!("wrote a {bytes}-byte snapshot to {}", path.display())))
             }
+            // The two faces something keeping a copy of this store elsewhere uses. Asking is the cheap half
+            // and is meant to be done often, so what it binds is the number itself — the only shape a
+            // later step can say it moved in. The window it answered for rides in the note, since two
+            // carriers on one device hold numbers that are not each other's.
+            "sync-version" => {
+                let v = self.run_json(&["sync", "version", "--json"])?;
+                let version = v["version"]
+                    .as_i64()
+                    .ok_or("`sync version` did not report a version")?;
+                let window = match v["project_id"].as_i64() {
+                    Some(id) => format!("project {id}"),
+                    None => "the whole device".to_string(),
+                };
+                self.remember_number(bind, "sync-version", version);
+                Ok(Outcome::action(format!("{window} is at version {version}")))
+            }
+            // The sending half. The document *is* stdout — that is the shape a carrier pipes — so it is
+            // caught into a file of the run's own, and bound the way `export` binds what it wrote.
+            "sync-snapshot" => {
+                let out = self.artifact(bind, "sync-snapshot", ".json");
+                let document = self.run_stdout(&["sync", "snapshot", "--json"])?;
+                if let Some(dir) = out.parent() {
+                    std::fs::create_dir_all(dir)
+                        .map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+                }
+                std::fs::write(&out, &document)
+                    .map_err(|e| format!("could not write {}: {e}", out.display()))?;
+                self.remember(bind, "sync-snapshot", out.clone());
+                Ok(Outcome::action(format!(
+                    "took a {}-byte snapshot of this window into {}",
+                    document.len(),
+                    out.display()
+                )))
+            }
             "restore" => {
                 let path = self.artifact_ref(with, "target")?;
                 // A destructive replace asks first; the driver is unattended, so it answers up front.
@@ -198,6 +232,26 @@ impl Driver<'_> {
                 let v = self.run_check(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
                 Ok(judge_check("validate", want, &v))
             }
+            // Whether the number a carrier watches has moved since an earlier step read it. Asked as
+            // moved-or-not and never as a value: the number means nothing outside the store that
+            // issued it, and a road that named one would be pinning an implementation detail. It is
+            // read the same way the carrier reads it, through the command rather than off the store.
+            "version" => {
+                let before = self.number_ref(with, "since")?;
+                let moved = req_bool(with, "moved")?;
+                let v = self.run_json(&["sync", "version", "--json"])?;
+                let now = v["version"].as_i64().ok_or("`sync version` did not report a version")?;
+                let did = now != before;
+                Ok(Outcome::assert(
+                    did == moved,
+                    format!(
+                        "the version went {before} → {now} ({}; expected it to have {}, {})",
+                        if did { "moved" } else { "stood still" },
+                        if moved { "moved" } else { "stood still" },
+                        if did == moved { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             "config" => {
                 let v = self.run_json(&["config", "--json"])?;
                 judge_field("this store's configuration", with, &v)
@@ -216,25 +270,29 @@ impl Driver<'_> {
         }
     }
 
-    /// Is the object an earlier step bound in the export written by another? The export is read off
-    /// disk as the document it is, because that document is the whole promise of the capability:
-    /// what another tool receives is this file, not what amenbo would say about it.
-    pub(crate) fn judge_exported(&self, domain: Domain, with: &Args) -> Result<Outcome, String> {
+    /// Is the object an earlier step bound in the document written by another? The document is read
+    /// off disk as it stands, because that document is the whole promise of the capability: what the
+    /// other side receives is this file, not what amenbo would say about it.
+    ///
+    /// Two capabilities hand one out and the question put to both is the same, so the reading is one:
+    /// `exported` names an archive, whose records lie in an `export.json` beside the attachment files,
+    /// and `synced` names a carrier's snapshot, which is that document on its own.
+    pub(crate) fn judge_carried(&self, domain: Domain, op: &str, with: &Args) -> Result<Outcome, String> {
         let target = self.resolve(with)?;
-        let dir = self.artifact_ref(with, "from")?;
+        let written = self.artifact_ref(with, "from")?;
         let present = opt_bool(with, "present").unwrap_or(true);
-        let file = dir.join("export.json");
+        let file = if op == "synced" { written } else { written.join("export.json") };
         let text = std::fs::read_to_string(&file)
-            .map_err(|e| format!("could not read the export at {}: {e}", file.display()))?;
+            .map_err(|e| format!("could not read the document at {}: {e}", file.display()))?;
         let v: serde_json::Value = serde_json::from_str(&text)
-            .map_err(|e| format!("the export at {} is not JSON: {e}", file.display()))?;
+            .map_err(|e| format!("the document at {} is not JSON: {e}", file.display()))?;
         // The tables an object of this domain lands in. A comment is looked for on both timelines:
         // a bound comment id is whichever of the two the step that posted it made.
         let (noun, tables): (&str, &[&str]) = match domain {
             Domain::Task => ("task", &["task"]),
             Domain::Decision => ("decision", &["decision"]),
             Domain::Comment => ("comment", &["task_comment", "decision_comment"]),
-            other => return Err(format!("`exported` says nothing about domain `{other:?}`")),
+            other => return Err(format!("`{op}` says nothing about domain `{other:?}`")),
         };
         let found = tables.iter().any(|t| {
             v["tables"][t]
@@ -245,7 +303,7 @@ impl Driver<'_> {
         Ok(Outcome::assert(
             pass,
             format!(
-                "{noun} {target} {} the export at {} under {} (expected {}, {})",
+                "{noun} {target} {} the document at {} under {} (expected {}, {})",
                 if found { "is in" } else { "is missing from" },
                 file.display(),
                 tables.join("/"),

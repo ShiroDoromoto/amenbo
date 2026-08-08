@@ -326,6 +326,13 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "export", required: &[], refs: &[], strings: &[], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "backup", required: &[], refs: &[], strings: &[], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "restore", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // The road out for something that keeps a copy of this store elsewhere, in the two faces it is
+    // used in. `sync-version` asks the one number the window is at, and binds **the number** rather
+    // than a file — a third thing an `as:` can hold, alongside an object's id and an archive's path,
+    // and the only shape in which a road can say later that it moved (or did not). `sync-snapshot`
+    // writes the whole window as one document and binds that, the way `export` binds what it wrote.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "sync-version", required: &[], refs: &[], strings: &[], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "sync-snapshot", required: &[], refs: &[], strings: &[], binds: true },
     // Erasing content from the truth source itself: a comment goes in full, a decision keeps its
     // number and loses its body to the replacement text.
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "hard-erase", required: &["target"], refs: &["target"], strings: &[], binds: false },
@@ -683,6 +690,15 @@ const REGISTRY: &[OpSpec] = &[
     // word that must not be in them — the one question about a file amenbo hands out that needs no
     // reading of its layout, and the only way to say a secret really stayed out of it.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "snapshot", required: &["target"], refs: &["target"], strings: &["absent", "contains"], binds: false },
+    // What the number a carrier asks for did between two steps. `since` names the version an earlier
+    // `sync-version` bound, and `moved` is the whole question: a write inside the window moves it, and
+    // anything else leaves it alone. It is asked as *moved or not* rather than as a value, because the
+    // number itself means nothing outside the store that issued it — only that it is another one does.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "version", required: &["since", "moved"], refs: &["since"], strings: &[], binds: false },
+    // Whether an object is in the snapshot a carrier was handed — `exported`'s question, put to the
+    // other document. `from` names what a `sync-snapshot` bound, and `present: false` asks the half the
+    // window exists for: that what lies outside it did **not** travel.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "synced", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Comment, op: "exported", required: &["target", "from"], refs: &["target", "from"], strings: &[], binds: false },
@@ -893,6 +909,9 @@ const REGISTRY: &[OpSpec] = &[
     // runs down the side of every screen, and a reading answers which words are on a shot and never
     // which part of it they came from — so finding the name proves nothing about the row.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "fires-in", required: &["name", "project", "present"], refs: &[], strings: &["name", "project"], binds: false },
+    // What the last call handed back. `contains` is the word to find in it; `present: false` puts the
+    // same question the other way, which is how a road says a value the window shuts out did not come
+    // back in what a plugin was handed.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "returned", required: &["contains"], refs: &[], strings: &["contains"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "ran", required: &["name"], refs: &[], strings: &["name", "outcome"], binds: false },
     // What one plugin's queue owes, and whether anything is working it. The execution log

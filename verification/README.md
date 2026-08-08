@@ -373,6 +373,12 @@ what the name then holds is the file: `restore` names the archive it puts back t
 an earlier result, so a mistyped name is a lint failure and not a driver hunting for a file nobody
 wrote. The files land in the run's own throwaway space and go with it.
 
+A **`store` action that reads a number** binds the number itself, which is the third thing a name can
+hold. `sync-version` is the one: what a carrier watches is a value, not a row and not a file, and the
+only thing a later step can say about it is that it moved or did not (`store version`'s `since:` and
+`moved:`). Which of the three maps a name lands in follows from the op that bound it, as it does for
+the other two.
+
 One domain is not in the store at all. **`repo`** is the folder the run works in: `write-file` puts
 a file there (what an attachment ingests, what the lint is pointed at), `copy-fixture` puts one
 there from `fixtures/`, and `git-init` makes the folder a git repository, which is the only way the

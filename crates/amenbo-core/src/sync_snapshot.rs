@@ -641,7 +641,7 @@ mod tests {
 
         let conn = rusqlite::Connection::open(&db).unwrap();
         let cursor = doc["amenbo_sync"]["cursor"].as_i64().unwrap();
-        let rows = match crate::store_engine::read::changes_since(&conn, cursor, 10_000).unwrap() {
+        let rows = match crate::store_engine::read::changes_since(&conn, cursor, 10_000, Some(mine)).unwrap() {
             crate::store_engine::read::FeedSlice::Changes { rows, .. } => rows,
             crate::store_engine::read::FeedSlice::Gap => {
                 panic!("a snapshot handed out a cursor the feed had already lost")
@@ -689,7 +689,7 @@ mod tests {
         .unwrap();
         assert!(
             matches!(
-                crate::store_engine::read::changes_since(&conn, 0, 10).unwrap(),
+                crate::store_engine::read::changes_since(&conn, 0, 10, Some(mine)).unwrap(),
                 crate::store_engine::read::FeedSlice::Gap,
             ),
             "the watermark is in force — a cursor below it is a gap",
@@ -699,7 +699,7 @@ mod tests {
         assert_eq!(cursor, PAST_THE_WINDOW, "the position is lifted to the feed's floor");
         assert!(
             !matches!(
-                crate::store_engine::read::changes_since(&conn, cursor, 10).unwrap(),
+                crate::store_engine::read::changes_since(&conn, cursor, 10, Some(mine)).unwrap(),
                 crate::store_engine::read::FeedSlice::Gap,
             ),
             "and so the carrier that reads on from it is not sent back for another snapshot",

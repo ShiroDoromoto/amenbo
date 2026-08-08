@@ -877,15 +877,7 @@ pub fn changes_since(
     limit: i64,
     window: Option<i64>,
 ) -> Result<FeedSlice> {
-    // A store that has never truncated carries no row at all — which is the same answer as `0`, said by
-    // the absence rather than by a `COALESCE`.
-    let truncated_through = meta_i64(conn, super::engine::META_FEED_TRUNCATED_THROUGH)?;
-    // The unattributable stretch is a gap **only for a window**: the open reach reads those rows fine.
-    let unstamped_through = match window {
-        None => 0,
-        Some(_) => meta_i64(conn, super::engine::META_FEED_WINDOWS_FROM)?,
-    };
-    if after_id < truncated_through.max(unstamped_through) {
+    if after_id < feed_floor(conn, window)? {
         return Ok(FeedSlice::Gap);
     }
     // One row past the page, so "is there more?" costs no second query.
@@ -910,6 +902,26 @@ pub fn changes_since(
     let more = rows.len() as i64 > limit;
     rows.truncate(limit.max(0) as usize);
     Ok(FeedSlice::Changes { rows, more })
+}
+
+/// **The feed's floor for one reader**: the id below which the feed can no longer say what changed for
+/// it. A cursor under this has lost changes it never saw, which is what [`changes_since`] answers
+/// [`FeedSlice::Gap`] to — and what a cursor being handed *out* has to stay clear of
+/// ([`crate::sync_snapshot`]). Both ask this one question, so the position a snapshot names and the
+/// position a read accepts cannot drift apart.
+///
+/// Every reader has the truncation floor, cut by
+/// [`super::engine::StoreEngine::trim_change_feed_if_due`]. A **window** has a second: the stretch
+/// written before this store began stamping each change with the window it belongs to
+/// ([`super::engine::META_FEED_WINDOWS_FROM`]) names rows nobody can attribute now, so a window reading
+/// across it would be handed a page with holes in it. The open reach has no such floor — those rows are
+/// its rows either way.
+pub fn feed_floor(conn: &Connection, window: Option<i64>) -> Result<i64> {
+    let truncated = meta_i64(conn, super::engine::META_FEED_TRUNCATED_THROUGH)?;
+    match window {
+        None => Ok(truncated),
+        Some(_) => Ok(truncated.max(meta_i64(conn, super::engine::META_FEED_WINDOWS_FROM)?)),
+    }
 }
 
 /// One of the store's scalar watermarks, as the integer it was written as. The scalars are text

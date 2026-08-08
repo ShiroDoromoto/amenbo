@@ -445,6 +445,9 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         | Command::Restore { .. } // replaces the truth source from a snapshot; maintenance op, records no facet or activity
         | Command::HardErase { .. } // physically erases append-only content; maintenance op, records no facet or activity
         | Command::Export { .. }
+        // The carrier's road out: both faces read (a version, a snapshot) and neither records an act —
+        // which is what lets a plugin call them with no facet at all (`facet_required`).
+        | Command::Sync { .. }
         | Command::Lint { .. } // reads the text it is handed; no store, so nothing to stamp a facet onto
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
@@ -3134,6 +3137,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::Decision { sub } => return with_dispatch(&mut store, |s| decision(s, flags, sub)),
         Command::Attach { sub } => return attach(&mut store, flags, sub),
         Command::Export { out } => return export(&store, flags, out),
+        Command::Sync { sub } => return sync_cmd(&store, flags, sub),
         Command::Backup { path } => return run_backup(&store, flags, path),
         Command::HardErase { sub } => return hard_erase(&mut store, flags, sub),
         Command::Restore { .. } => {
@@ -7031,6 +7035,57 @@ fn export(store: &Store, flags: &Flags, out: Option<String>) -> Result<i32, CliE
                 eprintln!(
                     "note: attachment files are not in this stream — run `{} export --out <dir>` to take them with you",
                     Paths::command_name()
+                );
+            }
+        }
+    }
+    Ok(0)
+}
+
+/// `sync` — the road out for a plugin that carries this store's data somewhere else (`AMB-D-581`), in the
+/// two faces a carrier actually uses: **ask the version**, and take a **snapshot** only when it moved.
+///
+/// The split is the point, not a convenience. A carrier has to ask often and send rarely, so the asking
+/// must not cost what the sending costs: `version` reads one row and never builds a snapshot
+/// (`AMB-D-582`). Both answer **through the reach this surface already holds** — a plugin's window
+/// (`AMB-D-406`), an AI's binding, or the whole device for a human — so neither needs a door of its own,
+/// and neither can be widened by an argument.
+///
+/// **Neither is refused to a window, unlike `export` and `backup`.** Those act on the whole device and so
+/// step past what a plugin was launched to observe; these are that window, answered. Nor is a facet
+/// required on the plugin face: they read and record nothing, so there is no actor for one to name
+/// (`stamps_facet`).
+///
+/// **`snapshot`'s stdout is the document.** Anything else amenbo has to say goes to stderr, so the stream
+/// stays pipeable — the same rule `export`'s stream shape follows.
+fn sync_cmd(store: &Store, flags: &Flags, sub: SyncCmd) -> Result<i32, CliError> {
+    match sub {
+        SyncCmd::Version => {
+            let version = store.sync_version().map_err(CliError::from)?;
+            if flags.json {
+                // The window is named beside the number: two carriers on one device hold numbers from
+                // different windows, and only this says which one this is.
+                print_json(&json!({ "version": version, "project_id": store.reach().project() }));
+            } else {
+                // The number *is* the answer, not a success message — so `--quiet` does not eat it.
+                println!("{version}");
+            }
+        }
+        SyncCmd::Snapshot => {
+            let stdout = std::io::stdout();
+            let mut w = stdout.lock();
+            amenbo_core::sync_snapshot::stream(store.reach(), &mut w).map_err(|e| CliError {
+                code: "sync_error",
+                message: e.to_string(),
+                hint: None,
+                exit: 1,
+            })?;
+            // Never let the stream pass for everything the window holds. The note goes to stderr, and
+            // `--json` silences it: under that flag stdout is being read by a program, which was told
+            // this by the row it is holding.
+            if !flags.json && !flags.quiet {
+                eprintln!(
+                    "note: attachment files are not in this snapshot — each row names the bytes it stands for, but the bytes stay here",
                 );
             }
         }

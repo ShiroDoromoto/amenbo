@@ -432,6 +432,12 @@ amenbo export > ./amenbo-export.json        # ...or the same JSON on stdout (rec
 amenbo backup ./everything.amenbo-backup      # archive: the store plus its attachments (disaster recovery)
 amenbo restore ./everything.amenbo-backup --yes # destructively restore this device from the archive
 
+# The road a plugin carries your data outward on — a viewer, an audit trail, a mirror
+# elsewhere. Ask the version, and take a snapshot only when it moved; what comes back is
+# closed to the window the caller reads through, and no plugin secret ever rides along.
+amenbo sync version                         # one number: has anything here changed? (no snapshot is built)
+amenbo sync snapshot > ./window.json        # one whole picture of it, from one instant (records only)
+
 # Keep amenbo's refs out of what leaves the store — an id resolves only for
 # someone holding it, so `AMB-` refs are noise in a commit, a diff or a PR body.
 # Read-only: it reports `path:line` and exits non-zero, and never edits anything.

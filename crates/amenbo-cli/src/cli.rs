@@ -273,6 +273,17 @@ pub enum Command {
         #[arg(long)]
         out: Option<String>,
     },
+    /// The road out for a plugin that carries this store's data somewhere else — a viewer, an audit
+    /// trail, a mirror in another tool (`AMB-D-581`).
+    ///
+    /// Two faces, and the order they are used in is the whole design: **ask the version**, and take a
+    /// **snapshot** only if it moved. What comes back is closed to the window the caller reads through,
+    /// so a plugin launched to observe one project gets that project and nothing else. The road is
+    /// one-way — nothing here reads a snapshot back in (`AMB-D-578`).
+    Sync {
+        #[command(subcommand)]
+        sub: SyncCmd,
+    },
     /// Back up this device — its store and its attachment bytes — into a single
     /// verified `.amenbo-backup` archive at `path`. The store is snapshotted with `VACUUM INTO`
     /// (checkpointed, no torn DB+WAL) and bounded-verified; a `manifest.json` records its migration
@@ -755,6 +766,29 @@ pub enum HooksCmd {
 
     /// Show what is in each hook slot and what this project answered — the two facts, side by side.
     Status,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SyncCmd {
+    /// Ask what version this window is at — one number, and the only question worth asking often.
+    ///
+    /// It moves whenever something in the window is written and stays put when nothing is, so a carrier
+    /// that remembers the last number it sent can tell in one cheap call whether there is anything to
+    /// send. **Compare it for inequality, not for order**: a `restore` winds the store back, and the
+    /// version comes back with it — lower is still changed.
+    ///
+    /// No snapshot is built to answer this (`AMB-D-582`).
+    Version,
+
+    /// Take one whole picture of what this window may see, as JSON on stdout.
+    ///
+    /// Every table comes from **one instant**, so nothing in it refers to something that is not in it,
+    /// and a plugin's secrets stay home (`AMB-D-434`). Records only: an attachment's row travels, its
+    /// bytes do not (`AMB-D-588`).
+    ///
+    /// This is a **carrier's** road, not a reading one — the whole window lands on stdout, so send it
+    /// somewhere, do not read it. To look at the work, use `task list` / `task show`.
+    Snapshot,
 }
 
 #[derive(Subcommand, Debug)]

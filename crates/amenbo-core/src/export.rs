@@ -9,6 +9,10 @@
 //!   hung on. This is the migration artifact, and it is **one-way**: nothing reads it back into amenbo.
 //!   (Getting your own data *back* is what backup and restore are for.)
 //! - Without `--out`: the same JSON, simply streamed (for a pipe — attachment bytes have nowhere to go).
+//!
+//! The **streaming core** below ([`stream_store_tables`]) is shared with the sync snapshot
+//! ([`crate::sync_snapshot`]), which is a different road out and says so in its own module — the export
+//! never narrows ([`Scope`] is always `None` here, `AMB-D-180`), and the snapshot always does.
 
 use std::io::Write;
 use std::ops::ControlFlow;
@@ -107,8 +111,27 @@ fn table_exists(conn: &Connection, table: &str) -> Result<bool> {
     .map_err(crate::error::sqlite_on(conn))
 }
 
+/// Narrows every table a stream carries to **one project**: the id each predicate binds as `?1`, and the
+/// predicate saying how a given dataset's table reaches a project.
+///
+/// The export never carries one — moving to another tool means everything, and nothing narrower
+/// (`AMB-D-180`). The sync snapshot always does: what it may carry is the window it was asked through,
+/// so the narrowing is what closes it ([`crate::sync_snapshot`], `AMB-D-581`).
+///
+/// `predicate` returns `None` for a dataset that declares no way to reach a project. That is a gap in the
+/// declaration, not a table to carry whole, so a stream that meets one **fails** rather than widening
+/// past the window.
+#[derive(Clone, Copy)]
+pub struct Scope {
+    /// The project every predicate is bound to (`?1`).
+    pub project_id: i64,
+    /// This dataset's `WHERE` predicate — how its table reaches a project.
+    pub predicate: fn(&Dataset) -> Option<&'static str>,
+}
+
 /// Stream one read-model table as a JSON array of `{column: value}` objects, **one row at a time**
-/// (O(1) memory). Every row is live, so the whole table streams. Cancellation is polled every
+/// (O(1) memory). Every row is live, so the whole table streams — narrowed by `scope` when the caller
+/// carries one project rather than the device. Cancellation is polled every
 /// [`CANCEL_POLL_ROWS`] rows (cheap — a whole-table scan can't be cut mid-statement, but a huge table
 /// still yields often enough). The caller has already written the `"table":` key and expects this to
 /// emit the `[...]` value. With a `bundle`, the `attachment` table's rows also carry the blob out to disk
@@ -119,10 +142,25 @@ fn table_exists(conn: &Connection, table: &str) -> Result<bool> {
 fn stream_table(
     conn: &Connection,
     dataset: &Dataset,
+    scope: Option<&Scope>,
     w: &mut impl Write,
     bundle: Option<&mut AttachmentBundle>,
     progress: &mut impl FnMut(&Progress) -> ControlFlow<()>,
 ) -> Result<()> {
+    // A narrowing that cannot say how *this* table reaches a project would otherwise stream it whole —
+    // past the window, which is the one thing a scoped stream exists to prevent. Refuse the table
+    // instead of carrying it (`Scope`).
+    let narrowing = match scope {
+        None => None,
+        Some(scope) => Some((scope.predicate)(dataset).ok_or_else(|| {
+            Error::invalid(format!(
+                "cannot narrow the `{}` dataset to one project: nothing declares how its table reaches \
+                 one, and carrying it whole would reach past the window",
+                dataset.name
+            ))
+        })?),
+    };
+
     let mut bundle = bundle.filter(|_| dataset.table == ATTACHMENT_TABLE);
     if !table_exists(conn, dataset.table)? {
         w.write_all(b"[]")?;
@@ -131,15 +169,26 @@ fn stream_table(
 
     // `id` (the row key) plus every registry column; the audit columns are included by `all_columns`.
     // Quote each identifier so it can never be mistaken for SQL. Every row is live, so the whole table
-    // streams — there is no tombstone to filter out.
+    // streams — there is no tombstone to filter out, only the narrowing when there is one.
     let cols: Vec<&str> =
         std::iter::once("id").chain(dataset.all_columns().map(|c| c.name)).collect();
     let select_list = cols.iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(", ");
-    let sql = format!("SELECT {select_list} FROM \"{}\"", dataset.table);
+    let table = dataset.table;
+    let sql = match narrowing {
+        // Parenthesised, so a predicate that is itself an `OR` chain (the polymorphic `attachment`
+        // target) stays one condition however this clause is grown later.
+        Some(predicate) => format!("SELECT {select_list} FROM \"{table}\" WHERE ({predicate})"),
+        None => format!("SELECT {select_list} FROM \"{table}\""),
+    };
+    // The one parameter any predicate binds — the project a scoped stream is closed to.
+    let bound: &[i64] = match scope {
+        Some(scope) => std::slice::from_ref(&scope.project_id),
+        None => &[],
+    };
 
     let fail = crate::error::sqlite_on(conn);
     let mut stmt = conn.prepare(&sql).map_err(&fail)?;
-    let mut rows = stmt.query([]).map_err(&fail)?;
+    let mut rows = stmt.query(rusqlite::params_from_iter(bound)).map_err(&fail)?;
 
     w.write_all(b"[")?;
     let mut first = true;
@@ -190,36 +239,41 @@ fn stream_table(
 /// bundling export poll every row instead — see [`stream_table`].
 const CANCEL_POLL_ROWS: u64 = 256;
 
-/// Datasets an export leaves behind, by their stable name (`AMB-D-434`).
+/// Datasets no road out of this store carries, by their stable name (`AMB-D-434`).
 ///
-/// A plugin's secrets are the one thing here that is a credential in plain text, and an export is a
-/// one-way door out of amenbo: the file lands in another tool's hands and stays there. So the whole
-/// table stays home. Table-level and not row-level on purpose — a rule that has to judge each row is a
-/// rule that can be got wrong once; a table nobody streams cannot leak the row nobody remembered.
+/// A plugin's secrets are the one thing here that is a credential in plain text, and every road out is
+/// one-way: the export lands in another tool's hands and stays there, and the sync snapshot
+/// ([`crate::sync_snapshot`]) lands wherever a carrier plugin puts it. So the whole table stays home on
+/// both. Table-level and not row-level on purpose — a rule that has to judge each row is a rule that can
+/// be got wrong once; a table nobody streams cannot leak the row nobody remembered.
 ///
 /// `backup` carries them, and must: that road leads back to the same person's own store, and dropping
 /// them there would mean typing every credential in again after each restore. It copies the database
 /// file whole ([`crate::archive`]), so it never walks this list.
-pub const WITHHELD_FROM_EXPORT: &[&str] = &["plugin_secret"];
+pub const WITHHELD_ON_THE_WAY_OUT: &[&str] = &["plugin_secret"];
 
-/// The registry an export walks: every dataset except [`WITHHELD_FROM_EXPORT`].
+/// The registry a road out walks: every dataset except [`WITHHELD_ON_THE_WAY_OUT`]. One list, walked by
+/// the export and by the sync snapshot alike — `AMB-D-581` draws `AMB-D-434`'s line straight through to
+/// the snapshot, so a second list here could only come to disagree with this one.
 ///
-/// A dataset stays in [`DATASETS`] whether or not it is exported — that list is the schema itself, and
-/// a snapshot's verification requires every table in it. What an export carries is a narrower question,
-/// and this is where it is answered.
-pub fn exported_datasets() -> Vec<&'static Dataset> {
-    DATASETS.iter().filter(|d| !WITHHELD_FROM_EXPORT.contains(&d.name)).collect()
+/// A dataset stays in [`DATASETS`] whether or not it is carried out — that list is the schema itself, and
+/// a backup snapshot's verification requires every table in it. What leaves the device is a narrower
+/// question, and this is where it is answered.
+pub fn datasets_carried_out() -> Vec<&'static Dataset> {
+    DATASETS.iter().filter(|d| !WITHHELD_ON_THE_WAY_OUT.contains(&d.name)).collect()
 }
 
-/// Stream a store's whole read model — the `{ "task": [...], "project": [...], … }` object — to `w`,
-/// one row at a time (O(1) memory). `datasets` is the registry to walk ([`exported_datasets`]). Public
-/// so the scale guard can exercise the streaming core directly against an in-memory connection; the
-/// whole-device export writes it as the document's `tables` value. `bundle` is `Some` when the export is
-/// writing a directory — the attachment rows then also carry their bytes out (see [`AttachmentBundle`]);
-/// `None` streams records only (stdout).
+/// Stream a store's read model — the `{ "task": [...], "project": [...], … }` object — to `w`, one row at
+/// a time (O(1) memory). `datasets` is the registry to walk ([`datasets_carried_out`]); `scope` narrows
+/// every table to one project, or is `None` for the whole device ([`Scope`]). Public so the scale guard
+/// can exercise the streaming core directly against an in-memory connection, and so the sync snapshot
+/// can walk it narrowed; the whole-device export writes it as the document's `tables` value. `bundle` is
+/// `Some` when the export is writing a directory — the attachment rows then also carry their bytes out
+/// (see [`AttachmentBundle`]); `None` streams records only (stdout).
 pub fn stream_store_tables(
     conn: &Connection,
     datasets: &[&Dataset],
+    scope: Option<&Scope>,
     w: &mut impl Write,
     mut bundle: Option<&mut AttachmentBundle>,
     progress: &mut impl FnMut(&Progress) -> ControlFlow<()>,
@@ -231,7 +285,7 @@ pub fn stream_store_tables(
         }
         write_json(w, &dataset.table)?;
         w.write_all(b":")?;
-        stream_table(conn, dataset, w, bundle.as_deref_mut(), progress)?;
+        stream_table(conn, dataset, scope, w, bundle.as_deref_mut(), progress)?;
     }
     w.write_all(b"}")?;
     Ok(())
@@ -367,7 +421,10 @@ pub fn export_json_from(
 /// ([`StoreEngine::init`](crate::store_engine::StoreEngine)) like every other connection onto this file.
 /// A WAL another process is recovering or checkpointing holds the lock for a moment, and an export that
 /// gives up the instant it is contended fails for no reason at all.
-fn open_source(db_path: &Path) -> Result<Connection> {
+///
+/// Shared with the sync snapshot ([`crate::sync_snapshot`]), which reads under exactly the same terms:
+/// read-only, waiting rather than failing, one transaction held to the last table.
+pub(crate) fn open_source(db_path: &Path) -> Result<Connection> {
     let conn = Connection::open_with_flags(
         db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
@@ -419,7 +476,7 @@ fn stream_json(
     w.write_all(b"{\"amenbo_export\":")?;
     write_json(w, &header)?;
     w.write_all(b",\"tables\":")?;
-    stream_store_tables(&snapshot, &exported_datasets(), w, bundle, progress)?;
+    stream_store_tables(&snapshot, &datasets_carried_out(), None, w, bundle, progress)?;
     w.write_all(b"}")?;
     Ok(())
 }

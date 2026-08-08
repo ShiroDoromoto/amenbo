@@ -362,6 +362,61 @@ fn a_plugins_window_is_refused_the_whole_device() {
     assert!(stdout.contains("observed") && !stdout.contains("theirs"), "got: {stdout}");
 }
 
+/// The carrier's road is the other side of the test above: `sync` is **open** to a window where the
+/// whole-device commands are refused, because it *is* that window answered rather than a way past it
+/// (`AMB-D-581`). Three things have to hold at once for a carrier plugin to work at all — it is launched
+/// with no facet, it must be told when to send, and what it sends must be its own project.
+#[test]
+fn a_carriers_road_is_open_to_the_window_the_whole_device_is_refused_to() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let bound = cli.bound_project();
+    cli.json(&["task", "add", "--title", "observed", "--project", &bound, "--json"]);
+    let other = id_str(&cli.json(&["project", "add", "--name", "Other", "--json"])["project"]["id"]);
+    cli.json(&["task", "add", "--title", "theirs", "--project", &other, "--json"]);
+
+    // A plugin's process: the store and the window in the environment, and **no facet** — a read decides
+    // nothing by one, and a carrier has none to declare.
+    let plugin = |args: &[&str]| -> (String, String, i32) {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &cli.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .env("AMENBO_PLUGIN_REACH", amenbo_core::idref::project(bound.parse().unwrap()))
+            .current_dir(&cli.home)
+            .args(args)
+            .output()
+            .expect("run amenbo");
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            String::from_utf8_lossy(&out.stderr).to_string(),
+            exit_code(&out),
+        )
+    };
+    let version = || -> i64 {
+        let (stdout, stderr, code) = plugin(&["sync", "version", "--json"]);
+        assert_eq!(code, 0, "a window asks its own version with no facet: {stderr}");
+        let v: serde_json::Value = serde_json::from_str(&stdout).expect("json");
+        assert_eq!(id_str(&v["project_id"]), bound, "the answer names the window it is for: {stdout}");
+        v["version"].as_i64().expect("a number")
+    };
+
+    // What the carrier sends is its own project, from one document — and never the other's.
+    let (stdout, stderr, code) = plugin(&["sync", "snapshot"]);
+    assert_eq!(code, 0, "a window takes its own snapshot with no facet: {stderr}");
+    assert!(stdout.contains("observed"), "the window's own work is in it: {stdout}");
+    assert!(!stdout.contains("theirs"), "another project's work is not: {stdout}");
+    assert!(!stdout.contains("Other"), "nor is the other project named at all: {stdout}");
+
+    // The version is what tells a carrier whether to send that at all: it moves on a write inside the
+    // window, and does not move for one next door — which is the whole of why it is asked per window and
+    // not per device.
+    let before = version();
+    cli.json(&["task", "add", "--title", "more", "--project", &other, "--json"]);
+    assert_eq!(version(), before, "a write in another project sent this carrier re-reading");
+    cli.json(&["task", "add", "--title", "mine too", "--project", &bound, "--json"]);
+    assert_ne!(version(), before, "a write inside the window left the carrier holding a stale copy");
+}
+
 /// **An AI does not pick a project** — the binding does. `--project` and the `project:` filter are human
 /// vocabulary: an AI passing either is an error, even when it names the bound project itself (no silent
 /// ignore, no silent fallback). The flip side: an AI's `task add` needs no `--project` and lands in the binding.

@@ -232,6 +232,38 @@ impl Store {
         crate::query::project_detail(self.engine.conn(), project_id)
     }
 
+    /// **The version of what this reach can see** — the one number that answers "has anything changed
+    /// here?" for a reader carrying a copy of this store out (`AMB-D-582`). It moves on every write within
+    /// the reach and stays put when nothing is written; what it never says is *what* changed, because
+    /// whoever asks re-sends the whole window either way.
+    ///
+    /// Through a closed reach — the AI facet's binding, or the window a plugin fires in — it is that one
+    /// project's version, so churn in another project does not send anyone re-reading. Through `All` it is
+    /// the change feed's head: the whole device is the window, and the feed's own cursor is already the
+    /// number that moves with every committed write. Both are ids from the same feed, so a project's
+    /// version never runs ahead of the store's; neither is a count, and nothing but their order means
+    /// anything.
+    ///
+    /// A project no write has reached since the store began stamping reads as `0` — below every id the
+    /// feed will hand out, so the first write after that carries it forward and the copy is sent once.
+    ///
+    /// Two edges are worth knowing before building on it. **Compare it for inequality, not for order**:
+    /// `restore` replaces the truth source with a snapshot, and the version arrives with it, so a store
+    /// wound back reads *lower* than the number a carrier last saw — which is a change, and is meant to
+    /// be read as one. And what it covers is the project's own records, reached through what the write
+    /// door declares it touches: store-wide plugin bookkeeping that spans every project at once (a
+    /// plugin's uninstall forgetting its settings) moves no project's version.
+    ///
+    /// See [`crate::store_engine::write::WriteTx::touches_project`] for where the number is stamped.
+    pub fn sync_version(&self) -> Result<i64> {
+        let conn = self.engine.conn();
+        match self.reach.project() {
+            Some(project_id) => crate::store_engine::read::project_version(conn, project_id),
+            None => crate::store_engine::read::change_feed_head(conn),
+        }
+        .map_err(crate::error::engine_on(conn))
+    }
+
     /// The read behind bare `amenbo` (discover). The `status` material it builds on comes from the
     /// engine's indexed SQL ([`crate::query::discover`]).
     pub fn discover(&self) -> Result<crate::query::DiscoverResult> {

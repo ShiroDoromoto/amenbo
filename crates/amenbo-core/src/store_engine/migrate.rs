@@ -356,6 +356,27 @@ pub const STEPS: &[Step] = &[
             "ALTER TABLE task ADD COLUMN draft BOOLEAN NOT NULL DEFAULT 0 CHECK(draft IN (0, 1));",
         ),
     },
+    Step {
+        to: 22,
+        name: "add project_version, the version a project answers a sync with",
+        // `AMB-D-582`. The genesis batch creates a table an older store is missing at open, so this DDL
+        // has usually run before the chain reaches here — writing it down anyway is what makes the chain
+        // say when the table arrived, as v20's does.
+        //
+        // **Unseeded, and `0` — the absent row — is the honest seed.** The version is the feed id of the
+        // last transaction that touched the project, and no build before this one stamped one, so there
+        // is nothing in an upgrading store to read it off. Absent reads as `0`, which sits below every id
+        // the feed will hand out next: the first write after the upgrade moves the project forward, and
+        // whoever carries it out sends the whole thing once. Seeding it with today's feed head would
+        // instead claim the project last changed at an instant nothing about it did, and hold back the
+        // send that upgrade owes.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS project_version (\
+               project_id INTEGER PRIMARY KEY REFERENCES project(id) ON DELETE CASCADE NOT NULL, \
+               version BIGINT NOT NULL\
+             );",
+        ),
+    },
 ];
 
 /// v17: build the word index for a store whose records predate it. It is exactly the rebuild any repair

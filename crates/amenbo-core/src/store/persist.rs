@@ -342,6 +342,10 @@ impl Store {
     /// closed reach (the AI facet) fails with `out_of_reach`. Because the declaration is an argument
     /// it **cannot be forgotten** — a new write wrapper necessarily goes through the guard. The check
     /// runs before `op`, so "written, then refused" cannot happen.
+    ///
+    /// The same declaration is what moves the **sync version** of every project the mutation reaches
+    /// (`AMB-D-582`): read here, before `op`, while a row about to be deleted can still name its project
+    /// and a re-homing still names both ends; stamped at the commit, and only if the batch wrote anything.
     fn write_one<T>(
         &mut self,
         targets: &[WriteTarget],
@@ -350,6 +354,9 @@ impl Store {
         let reach = self.reach;
         let tx = self.engine.write()?;
         write_reach::guard(tx.conn(), reach, targets)?;
+        for project in write_reach::projects_of(tx.conn(), targets)? {
+            tx.touches_project(project);
+        }
         let out = op(&tx)?;
         tx.commit()?;
         Ok(out)

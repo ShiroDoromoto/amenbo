@@ -48,6 +48,10 @@ use super::sql::Insert;
 pub struct WriteTx<'a> {
     engine: &'a StoreEngine,
     tx: rusqlite::Transaction<'a>,
+    /// The projects this operation declared it touches — what [`commit`](Self::commit) stamps its
+    /// version onto. A set: the same project named twice is one project, and the order is nobody's.
+    /// `RefCell` because the write methods take `&self`, not because two threads reach it.
+    projects: std::cell::RefCell<std::collections::BTreeSet<i64>>,
 }
 
 impl<'a> WriteTx<'a> {
@@ -58,7 +62,19 @@ impl<'a> WriteTx<'a> {
         // rows and nothing else — a rolled-back batch leaves its collected rows behind, and they must not
         // be attributed to the next one.
         engine.take_changes();
-        Ok(WriteTx { engine, tx })
+        Ok(WriteTx { engine, tx, projects: Default::default() })
+    }
+
+    /// Declare that this operation touches `project`, so [`commit`](Self::commit) moves that project's
+    /// sync version (`AMB-D-582`). Say it **before** the mutation: a row the batch is about to delete can
+    /// still name its project, and one about to be re-homed can still name the project it is leaving.
+    ///
+    /// The store interprets nothing here — as with the outbox's own `project` (`AMB-D-405`), the caller
+    /// is the one that knows. The declaration the write door already makes for the reach guard
+    /// (`store::write_reach::WriteTarget`) is where these come from, so there is no second thing for a new
+    /// write path to remember.
+    pub fn touches_project(&self, project: i64) {
+        self.projects.borrow_mut().insert(project);
     }
 
     /// The connection this transaction runs on — the **read half of a read-then-write**. Every
@@ -168,7 +184,8 @@ impl<'a> WriteTx<'a> {
     /// committed change therefore always has its feed rows — the feed cannot say less than the truth
     /// source does, which is what a reader keeping a screen current depends on (an append *after* the
     /// commit, which is what the activity ledger does deliberately, can lose the row and leave the
-    /// screen wrong).
+    /// screen wrong). The sync version of every project this operation declared it touches rides the same
+    /// drain ([`stamp_project_versions`](Self::stamp_project_versions)), for the same reason.
     pub fn commit(self) -> Result<()> {
         self.write_change_feed()?;
         self.tx.commit().map_err(StoreEngineError::from)
@@ -202,7 +219,42 @@ impl<'a> WriteTx<'a> {
                 .execute(&self.tx)
                 .map_err(StoreEngineError::from)?;
         }
+        self.stamp_project_versions()?;
         self.engine.trim_change_feed_if_due(&self.tx, written.len() as u64)
+    }
+
+    /// Move the sync version of every project this operation declared it touches
+    /// ([`touches_project`](Self::touches_project)) to the feed id this transaction just reached — the
+    /// one number a reader outside the store asks to decide whether to re-send its window (`AMB-D-582`).
+    ///
+    /// Called from the drain, and so **only when the batch actually wrote a record row**: an operation
+    /// that changed nothing leaves the version where it was, which is the whole of "no write, no move".
+    /// Taking the feed's own head rather than counting is what keeps the number from ever rewinding, and
+    /// keeps a project's version below the store's.
+    ///
+    /// A project the batch has just deleted is skipped rather than stamped: the row would have no project
+    /// to reference, and a version is an answer about a project that is still there. Whoever was watching
+    /// it learns it is gone from the store's own version, which moved with this commit.
+    fn stamp_project_versions(&self) -> Result<()> {
+        let projects = self.projects.borrow();
+        if projects.is_empty() {
+            return Ok(());
+        }
+        let version = super::read::change_feed_head(self.conn())?;
+        let pv = col::project_version::ALL;
+        for &project in projects.iter() {
+            if !super::read::record_exists(self.conn(), "project", project)? {
+                continue;
+            }
+            Insert::into(pv.table)
+                .set(pv.project_id, project)
+                .set(pv.version, version)
+                .on_conflict_update(pv.project_id)
+                .sql()
+                .execute(&self.tx)
+                .map_err(StoreEngineError::from)?;
+        }
+        Ok(())
     }
 }
 

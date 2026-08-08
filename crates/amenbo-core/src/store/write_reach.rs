@@ -23,6 +23,11 @@
 //!
 //! Only entities that belong to a project are in scope here. The store-wide surfaces that have no project
 //! boundary (config, the binding registry, diagnostics / export) sit outside this guard.
+//!
+//! The declaration earns a second keep beyond the guard: [`projects_of`] reads the **projects a mutation
+//! touches** off the same [`WriteTarget`]s, which is what moves each one's sync version (`AMB-D-582`).
+//! The two questions differ — *may this write happen* and *whose version does it move* — but they are put
+//! to the same declaration, so a write path that cannot forget the one cannot forget the other either.
 
 use rusqlite::Connection;
 
@@ -63,6 +68,53 @@ pub(super) fn guard(conn: &Connection, reach: Reach, targets: &[WriteTarget]) ->
         check(conn, reach, bound, *target)?;
     }
     Ok(())
+}
+
+/// **The projects this mutation touches**, read off the very same declaration the guard above reads —
+/// which is what makes the sync version (`AMB-D-582`) something a new write path cannot forget to move:
+/// [`WriteTarget`] is already an argument it cannot omit.
+///
+/// Resolved **before** the mutation, like the guard, and that is not a convenience: a row about to be
+/// deleted can still name its project, and a re-homing declares both ends (`WriteTarget::Task` for the
+/// project it leaves, `WriteTarget::NewIn` for the one it lands in), so both move. Asked afterwards,
+/// neither could be answered.
+///
+/// Unlike the guard this runs under every reach — the version is the store's own bookkeeping, not a
+/// containment check, so a human's write moves it exactly as an AI's does. What it costs is the same
+/// handful of indexed lookups [`owner`] does for the guard.
+///
+/// A target that belongs to no project ([`WriteTarget::NewProject`], an inbox task) contributes nothing:
+/// there is no project whose version could move.
+pub(super) fn projects_of(
+    conn: &Connection,
+    targets: &[WriteTarget],
+) -> Result<std::collections::BTreeSet<i64>> {
+    let mut projects = std::collections::BTreeSet::new();
+    for target in targets {
+        if let Some(project) = project_of(conn, *target)? {
+            projects.insert(project);
+        }
+    }
+    Ok(projects)
+}
+
+/// The project one target belongs to — the same walk [`check`] narrows on, without the judgement.
+fn project_of(conn: &Connection, target: WriteTarget) -> Result<Option<i64>> {
+    match target {
+        WriteTarget::Task(id) => owner::task(conn, id),
+        WriteTarget::Decision(id) => owner::decision(conn, id),
+        WriteTarget::Project(id) => Ok(Some(id)),
+        WriteTarget::TaskComment(id) => owner::task_comment(conn, id),
+        WriteTarget::DecisionComment(id) => owner::decision_comment(conn, id),
+        WriteTarget::Dimension(id) => owner::dimension(conn, id),
+        WriteTarget::DimensionValue(id) => owner::dimension_value(conn, id),
+        WriteTarget::Attachment(id) => owner::attachment(conn, id),
+        WriteTarget::AttachTo(kind, id) => owner::attach_target(conn, kind, id),
+        WriteTarget::NewIn(project) => Ok(project),
+        // The project does not exist yet, so it has no version to move. Its first version is `0` — the
+        // absent row — and the first write that names it carries it forward from there.
+        WriteTarget::NewProject => Ok(None),
+    }
 }
 
 fn check(conn: &Connection, reach: Reach, bound: i64, target: WriteTarget) -> Result<()> {

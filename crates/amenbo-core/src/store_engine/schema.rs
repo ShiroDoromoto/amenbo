@@ -796,6 +796,29 @@ plain_tables! {
         op: text,
     }
 
+    /// One project's **sync version**: the `change_feed` id of the last committed transaction that
+    /// touched it. This is what a reader outside the store asks when all it needs is *whether* anything
+    /// in its window changed (`AMB-D-582`) — one number, monotonic, and left alone by writes in other
+    /// projects, so the answer decides a full re-send without anyone reading the feed itself.
+    ///
+    /// **Stamped, not derived.** The feed says which rows moved but not which project they were in, and a
+    /// row that has just been deleted can no longer be asked. So the number is written where the question
+    /// is still answerable: the write door declares the entities it touches *before* it touches them
+    /// (`store::write_reach::WriteTarget`), which is also what makes a re-homing stamp both ends. Derived
+    /// after the fact, a delete would be unattributable and a task leaving a project would never bump the
+    /// project it left.
+    ///
+    /// **The feed's own id, not a counter of its own.** `AUTOINCREMENT` hands no id out twice, so this
+    /// never rewinds — not on a truncation of the feed, which only ever removes rows below it — and a
+    /// project's version is never above the store's. A project with no row here has not been written
+    /// since the table arrived, and reads as `0`, which is below every id the feed will hand out next.
+    ///
+    /// CASCADE: the number is *about* the project, so it has nothing left to say once the project is gone.
+    project_version {
+        project_id: integer("PRIMARY KEY REFERENCES project(id) ON DELETE CASCADE"),
+        version: bigint,
+    }
+
     /// The **plugin observation outbox**: one row per semantic lifecycle event a committed operation
     /// fired (`task.created`, `task.status_changed`, `comment.added`, …). It is a *sibling* of
     /// `change_feed`, not a layer on it (`AMB-D-367`): the feed carries DB-row *instructions* for the

@@ -913,6 +913,24 @@ pub fn change_feed_head(conn: &Connection) -> Result<i64> {
         .map_err(StoreEngineError::from)
 }
 
+/// The columns of the per-project sync version.
+const PV: col::project_version::Cols = col::project_version::ALL;
+
+/// One project's **sync version** — the feed id the last transaction that touched it reached, stamped by
+/// [`super::write::WriteTx::commit`]. `0` for a project nothing has written since the stamping began, and
+/// for one that is not there: an id with no row answers the same as a project with no writes, because
+/// what the number is for is deciding whether to re-send, and both say "you have nothing of mine yet".
+pub fn project_version(conn: &Connection, project_id: i64) -> Result<i64> {
+    let mut sel = Select::new();
+    let version = sel.col(PV.version);
+    let mut sql = Sql::from(&sel, PV.table);
+    sql.push_where(Some(&Pred::eq(PV.project_id, project_id)));
+    conn.query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| version.get(r))
+        .optional()
+        .map(|v| v.unwrap_or(0))
+        .map_err(StoreEngineError::from)
+}
+
 /// Whether any live `blob` attachment still points at these bytes — the single-hash question the delete
 /// path asks instead of materialising the whole root set. Content-addressing means two attachments can
 /// share one blob, so "the attachment that held it is gone" is *not* "the bytes are garbage": only this

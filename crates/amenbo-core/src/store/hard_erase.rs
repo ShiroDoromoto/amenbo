@@ -65,6 +65,16 @@ pub struct HardEraseReport {
     pub bytes_reclaimed: u64,
 }
 
+/// The project an erase target belongs to — through [`super::owner`], the same walk the reach checks use,
+/// so a target reaches its project one way in this store and not two.
+fn owner_of(conn: &rusqlite::Connection, target: &HardEraseTarget) -> Result<Option<i64>> {
+    match target {
+        HardEraseTarget::TaskComment { id } => super::owner::task_comment(conn, *id),
+        HardEraseTarget::DecisionComment { id } => super::owner::decision_comment(conn, *id),
+        HardEraseTarget::DecisionBody { id, .. } => super::owner::decision(conn, *id),
+    }
+}
+
 impl Store {
     /// Physically erase the given targets from the plaintext truth source, then VACUUM so the bytes leave
     /// the file. All targets are validated against the truth source up front — a single unknown id fails
@@ -95,6 +105,14 @@ impl Store {
                 };
                 if !crate::store_engine::read::record_exists(tx.conn(), dataset, *id)? {
                     return Err(Error::not_found(format!("{noun} {id}")));
+                }
+                // This is the one write that does not go through `write_one`, so the sync version it
+                // moves is declared here (`AMB-D-582`) — and here, before the erase, is the only place
+                // the walk from a comment up to its project can still be made. An erased comment that
+                // left the version standing would keep living in every copy carried out of this store,
+                // which is the exact opposite of what this capability is for.
+                if let Some(project) = owner_of(tx.conn(), t)? {
+                    tx.touches_project(project);
                 }
             }
 

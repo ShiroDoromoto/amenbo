@@ -20,6 +20,11 @@
 //! - **It is one instant.** Every table is read inside a single read transaction, so a write landing
 //!   mid-stream cannot put a comment in the snapshot whose task is not — the tearing that nothing in the
 //!   artifact would confess to. Same handling as the export's (`AMB-T-2790`).
+//! - **It says which instant.** The header names the change-feed position the picture stands at
+//!   ([`ledger_position`]), read from that same transaction, so the carrier reads the feed on from there
+//!   and the whole and the stream are continuous (`AMB-D-582`). A snapshot that did not say would leave
+//!   its reader guessing between losing the writes that landed while it read, and replaying what it
+//!   already holds.
 //!
 //! **What it returns is JSON, records only.** The shape is the export's plain `{table: [rows]}` — a
 //! consumer that can read one can read the other, and there is nothing about a snapshot that wants a
@@ -69,6 +74,39 @@ struct SnapshotHeader {
     /// because a carrier holding two snapshots has no other way to tell what each one was allowed to
     /// see, and "everything I got" is not the same claim as "everything there is".
     project_id: Option<i64>,
+    /// **Where in the ledger this snapshot stands** — the change-feed position to read on from, so the
+    /// full picture and the stream of changes are one continuous thing rather than two that nearly meet
+    /// ([`ledger_position`]).
+    cursor: i64,
+}
+
+/// The change-feed position a snapshot names: **read the feed after this and you get exactly what
+/// happened to this window since, with nothing missed and nothing replayed** (`AMB-D-582`). Without it a
+/// carrier that has just taken the full picture has no defensible place to start reading, and picks
+/// between losing the writes that landed while it read and re-applying the ones it already has.
+///
+/// It is the reach's own version ([`crate::store::Store::sync_version`] — this project's, or the feed's
+/// head for the device), which is the last feed id that reached the window. Every window row at or below
+/// it is *in* this snapshot, so an exclusive read (`> cursor`) replays none of them; every window change
+/// after this instant is above it, so none is missed. Read here rather than through `Store` because it
+/// has to come from the **same transaction as the tables** — asked afterwards on another connection it
+/// would name an instant the document does not show, and the writes in between would fall down the seam.
+///
+/// **Floored at the feed's own floor**, which is the one case the reach's version alone gets wrong: a
+/// window nothing has written for a long time keeps a version from before truncation reached it, and a
+/// cursor below the floor reads back as [`FeedSlice::Gap`](crate::store_engine::read::FeedSlice::Gap) —
+/// telling a carrier that just took a complete picture that it has lost changes, and sending it round to
+/// take another. Nothing is skipped by raising it: the rows between the two are, by definition, not this
+/// window's, and they are gone from the feed either way.
+fn ledger_position(conn: &rusqlite::Connection, reach: Reach) -> Result<i64> {
+    use crate::store_engine::read;
+    let version = match reach.project() {
+        Some(project_id) => read::project_version(conn, project_id),
+        None => read::change_feed_head(conn),
+    }
+    .map_err(crate::error::engine_on(conn))?;
+    let floor = read::change_feed_truncated_through(conn).map_err(crate::error::engine_on(conn))?;
+    Ok(version.max(floor))
 }
 
 /// How each dataset's table reaches the project a snapshot is closed to: the `WHERE` predicate that keeps
@@ -179,6 +217,17 @@ pub fn stream_from(db_path: &Path, reach: Reach, w: &mut impl Write) -> Result<(
         }
     };
 
+    let conn = export::open_source(db_path)?;
+    // **One snapshot for every table** — the whole point of the word. Each statement would otherwise
+    // take its own, so a write committing between two tables lands in the later one and not the earlier,
+    // and the carrier mirrors a state the store was never in. Deferred is the only shape a read-only
+    // connection can take, and it is enough: the instant is fixed by the first read and held to the last.
+    let snapshot = conn.unchecked_transaction().map_err(crate::error::sqlite_at(db_path))?;
+
+    // **The first read, and so the read that fixes the instant** — which is exactly what the position has
+    // to name. Taken after the tables it would be a promise about a moment already past.
+    let cursor = ledger_position(&snapshot, reach)?;
+
     let header = SnapshotHeader {
         format: SNAPSHOT_FORMAT,
         format_version: SNAPSHOT_VERSION,
@@ -186,15 +235,8 @@ pub fn stream_from(db_path: &Path, reach: Reach, w: &mut impl Write) -> Result<(
         app_version: export::APP_VERSION,
         taken_at: Timestamp::now().0.to_rfc3339(),
         project_id: reach.project(),
+        cursor,
     };
-
-    let conn = export::open_source(db_path)?;
-    // **One snapshot for every table** — the whole point of the word. Each statement would otherwise
-    // take its own, so a write committing between two tables lands in the later one and not the earlier,
-    // and the carrier mirrors a state the store was never in. Deferred is the only shape a read-only
-    // connection can take, and it is enough: the instant is fixed by the first table's read and held to
-    // the last.
-    let snapshot = conn.unchecked_transaction().map_err(crate::error::sqlite_at(db_path))?;
 
     w.write_all(b"{\"amenbo_sync\":")?;
     serde_json::to_writer(&mut *w, &header).map_err(Error::from)?;
@@ -555,6 +597,109 @@ mod tests {
         assert!(
             !tasks.iter().any(|t| t["id"] == LATE),
             "and the task is not there either — one instant, held to the last table",
+        );
+    }
+
+    /// **The whole and the stream meet exactly at the position the snapshot names.** A write landing
+    /// *while the snapshot is being read* is the case that decides it: it is in neither the document nor
+    /// anything a carrier could infer, so unless the feed replays it from the stated position it is lost
+    /// in the seam between the two roads — silently, and for as long as nothing touches that task again.
+    ///
+    /// The other half is the boundary: what the snapshot already carries is **not** replayed, so a
+    /// carrier that reads on does not re-apply what it just installed. The last write before the
+    /// snapshot sits exactly *on* the cursor, which is what pins the read as exclusive.
+    #[test]
+    fn the_feed_runs_on_from_the_position_the_snapshot_names() {
+        let dir = scratch("position");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mut writer = Store::open_at(Paths::at(dir.clone())).unwrap();
+        let mine = seed_project(&mut writer, "mine");
+        let (seeded, on_seeded) = seed_task(&mut writer, Some(mine), "seeded");
+        let db = store_file(&dir);
+
+        // The seam: the moment `"task_comment"` appears in the output, `task` has been read and the
+        // writer's task cannot reach the document — only the ledger can carry it.
+        let mut out = Vec::new();
+        let mut late = 0;
+        {
+            let mut tap = Tap {
+                out: &mut out,
+                at: "\"task_comment\"",
+                fired: false,
+                on: || late = seed_task(&mut writer, Some(mine), "landed mid-stream").0,
+            };
+            stream_from(&db, Reach::window(mine), &mut tap).unwrap();
+            assert!(tap.fired, "the tap never reached the seam — the table order changed under it");
+        }
+
+        let doc: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        assert_eq!(titles(&doc), vec!["seeded"], "the mid-stream task is not in the document");
+
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        let cursor = doc["amenbo_sync"]["cursor"].as_i64().unwrap();
+        let rows = match crate::store_engine::read::changes_since(&conn, cursor, 10_000).unwrap() {
+            crate::store_engine::read::FeedSlice::Changes { rows, .. } => rows,
+            crate::store_engine::read::FeedSlice::Gap => {
+                panic!("a snapshot handed out a cursor the feed had already lost")
+            }
+        };
+        let named = |dataset: &str, row_id: i64| {
+            rows.iter().any(|r| r.dataset == dataset && r.row_id == row_id)
+        };
+        assert!(named("task", late), "the write that landed mid-stream comes back from the position");
+        assert!(!named("task", seeded), "and what the snapshot already carries is not replayed");
+        assert!(
+            !named("task_comment", on_seeded),
+            "the last write before the snapshot sits on the cursor, and the read is exclusive",
+        );
+    }
+
+    /// A snapshot never hands out a cursor the feed has already lost. A window nothing has written for a
+    /// long time keeps a version from before truncation reached it, and a cursor below the feed's floor
+    /// reads back as a gap — which would tell a carrier holding a complete picture that it had missed
+    /// changes, and send it round for another one, forever. The floor costs nothing: the rows between the
+    /// two are not this window's, and they are gone from the feed either way.
+    #[test]
+    fn a_dormant_window_is_not_handed_a_cursor_the_feed_has_already_lost() {
+        let dir = scratch("floor");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mine = {
+            let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
+            let mine = seed_project(&mut s, "mine");
+            seed_task(&mut s, Some(mine), "written once, long ago");
+            mine
+        };
+        let db = store_file(&dir);
+
+        // Truncation is amortised over thousands of rows, so the watermark is written by hand rather than
+        // earned. The key is `store_engine::engine::META_FEED_TRUNCATED_THROUGH`, private to that module;
+        // the gap assertion below is what pins this literal to it — a wrong key would read back as `0`
+        // and gap nothing.
+        const PAST_THE_WINDOW: i64 = 900_001;
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        conn.execute(
+            "INSERT INTO store_meta (key, value) VALUES ('change_feed_truncated_through', ?1)",
+            [PAST_THE_WINDOW],
+        )
+        .unwrap();
+        assert!(
+            matches!(
+                crate::store_engine::read::changes_since(&conn, 0, 10).unwrap(),
+                crate::store_engine::read::FeedSlice::Gap,
+            ),
+            "the watermark is in force — a cursor below it is a gap",
+        );
+
+        let cursor = take(&db, Reach::window(mine))["amenbo_sync"]["cursor"].as_i64().unwrap();
+        assert_eq!(cursor, PAST_THE_WINDOW, "the position is lifted to the feed's floor");
+        assert!(
+            !matches!(
+                crate::store_engine::read::changes_since(&conn, cursor, 10).unwrap(),
+                crate::store_engine::read::FeedSlice::Gap,
+            ),
+            "and so the carrier that reads on from it is not sent back for another snapshot",
         );
     }
 

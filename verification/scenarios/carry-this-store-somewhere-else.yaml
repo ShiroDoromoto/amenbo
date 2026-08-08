@@ -77,6 +77,17 @@ steps_cli:
       from: picture
       present: true
 
+  # And the picture says where it stands. Without this the carrier holds a complete state and no
+  # defensible place to read on from, so it picks between losing the writes that landed while it read and
+  # re-applying what it already has. It is asked of the document as text because the document is what the
+  # other side receives — the number itself means nothing here, only that the picture names one.
+  - type: assert
+    domain: store
+    op: snapshot
+    with:
+      target: picture
+      contains: '"cursor":'
+
   # Work filed where a window will not reach. A project is the unit a plugin is let in on, so a second
   # project is where "outside" lives.
   - type: action

@@ -866,19 +866,7 @@ pub enum FeedSlice {
 /// the cursor, and a reader with no cursor yet (`after_id = 0`) is in the same position by definition
 /// once anything has been trimmed, and is told so.
 pub fn changes_since(conn: &Connection, after_id: i64, limit: i64) -> Result<FeedSlice> {
-    // The store's scalars are text (`store_meta` is one key/value table for all of them), so the
-    // watermark is read back as the integer it was written as. A store that has never truncated carries
-    // no row at all — which is the same answer as `0`, said by the absence rather than by a `COALESCE`.
-    let mut sel = Select::new();
-    let mark = sel.expr::<i64>(format!("CAST({} AS INTEGER)", META.value.to_sql()));
-    let mut sql = Sql::from(&sel, META.table);
-    sql.push_where(Some(&Pred::eq(META.key, super::engine::META_FEED_TRUNCATED_THROUGH)));
-    let truncated_through: i64 = conn
-        .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| mark.get(r))
-        .optional()
-        .map_err(StoreEngineError::from)?
-        .unwrap_or(0);
-    if after_id < truncated_through {
+    if after_id < change_feed_truncated_through(conn)? {
         return Ok(FeedSlice::Gap);
     }
     // One row past the page, so "is there more?" costs no second query.
@@ -899,6 +887,25 @@ pub fn changes_since(conn: &Connection, after_id: i64, limit: i64) -> Result<Fee
     let more = rows.len() as i64 > limit;
     rows.truncate(limit.max(0) as usize);
     Ok(FeedSlice::Changes { rows, more })
+}
+
+/// **The feed's floor**: how far truncation has cut, as recorded by
+/// [`super::engine::StoreEngine::trim_change_feed_if_due`]. A cursor below it has lost changes it never
+/// saw, which is what [`changes_since`] answers [`FeedSlice::Gap`] to — and what a cursor being handed
+/// *out* has to stay clear of ([`crate::sync_snapshot`]).
+///
+/// The store's scalars are text (`store_meta` is one key/value table for all of them), so the watermark is
+/// read back as the integer it was written as. A store that has never truncated carries no row at all —
+/// which is the same answer as `0`, said by the absence rather than by a `COALESCE`.
+pub fn change_feed_truncated_through(conn: &Connection) -> Result<i64> {
+    let mut sel = Select::new();
+    let mark = sel.expr::<i64>(format!("CAST({} AS INTEGER)", META.value.to_sql()));
+    let mut sql = Sql::from(&sel, META.table);
+    sql.push_where(Some(&Pred::eq(META.key, super::engine::META_FEED_TRUNCATED_THROUGH)));
+    conn.query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| mark.get(r))
+        .optional()
+        .map_err(StoreEngineError::from)
+        .map(|v| v.unwrap_or(0))
 }
 
 /// The feed's newest id — the cursor a reader starts from when it has just loaded the store from the

@@ -1,17 +1,20 @@
 //! The v1 plugin payload: the JSON document a fired event hands to a plugin.
 //!
-//! Events are appended to the plugin observation outbox at the ops write points (see
-//! [`outbox`](crate::store_engine::outbox) and `AMB-D-367`); this layer defines the *shape* of what a
-//! plugin receives for each named event: the four fields every event carries, plus, where the event name
-//! alone does not say it, the record's **new state**.
+//! Events are appended to the plugin observation outbox (see [`outbox`](crate::store_engine::outbox) and
+//! `AMB-D-367`) — the semantic ones at the ops write points, the ledger's own signal at the change feed's
+//! drain (`AMB-D-582`). This layer defines the *shape* of what a plugin receives for each named event: the
+//! three fields every event carries, plus whatever the name alone does not say.
 //!
 //! ```json
 //! { "v": 1, "event": "task.status_changed", "id": 42, "actor": "ai", "at": "2026-07-22T09:00:00Z", "new": "in_progress" }
 //! { "v": 1, "event": "task.deleted", "id": 42, "actor": "ai", "at": "2026-07-22T09:01:00Z", "record": { "id": 42, "title": "…" } }
+//! { "v": 1, "event": "store.changed", "id": 1, "at": "2026-07-22T09:02:00Z", "version": 1234 }
 //! ```
 //!
-//! - **Common four** (`event`, `id`, `actor`, `at`) — present on every event. `event` is the namespace
-//!   name a plugin dispatches on; `id` the affected record; `actor` who drove the write; `at` when.
+//! - **Common three** (`event`, `id`, `at`) — present on every event. `event` is the namespace name a
+//!   plugin dispatches on; `id` the affected record; `at` when.
+//! - **The actor** (`actor`) — who drove the write. On every event but one: the ledger's own signal is
+//!   composed where nobody's name is known, and says so by carrying none (see [`name::STORE_CHANGED`]).
 //! - **New state** (`new`) — the record's state *after* the change, for the events an `update`
 //!   disambiguates (a status change, an assignment, a move). Absent on events whose name already is the
 //!   whole state (a creation, a deletion, a done, an accept/reject, a comment). No *before* value is
@@ -24,13 +27,16 @@
 //!   events. A removed comment names it because the deletion took the relation with it; a posted one names
 //!   it because no read answers for a comment by its own id, which is where the read-back of a live record
 //!   (`AMB-D-406`) stops short.
-//! - **Version** `v` — a single integer for the whole contract, `1` today. Adding a field does **not**
+//! - **The version** (`version`) — the number a project is now at, on the ledger's signal and nowhere
+//!   else (`AMB-D-582`). A reader that carries a copy of one project out compares it with the one it last
+//!   carried, and re-sends when they differ.
+//! - **Contract version** `v` — a single integer for the whole contract, `1` today. Adding a field does **not**
 //!   bump it: a consumer ignores keys it does not know, so new fields are additive and silent. `v`
 //!   rises only on a breaking change to an existing field's meaning (see `AMB-D-349`).
 //!
-//! This module is the single source of truth for the payload *type* and the [`eleven v1 event
-//! names`](name). It does not read the store or launch anything: a caller on the write path (which alone
-//! knows the actor) builds a [`Payload`] with the values it already holds and hands it to the hook runner.
+//! This module is the single source of truth for the payload *type* and the [`v1 event names`](name). It
+//! does not read the store or launch anything: whoever is at the seam builds a [`Payload`] out of the
+//! values it already holds and hands it to the hook runner.
 
 use serde::Serialize;
 
@@ -41,11 +47,12 @@ use crate::time::Timestamp;
 /// change to an existing field — additive fields do not touch it (`AMB-D-349`).
 pub const VERSION: u32 = 1;
 
-/// The eleven v1 event names — the one source of truth for the strings a plugin dispatches on, shared
-/// with the ops write points that emit them. Three are the events an `update` alone cannot tell apart
-/// (named alongside the new state that does); the other eight name themselves outright — a creation, a
-/// deletion, a terminal, a comment posted or taken back. Together they are the v1 catalog
-/// ([`V1_EVENTS`]).
+/// The v1 event names — the one source of truth for the strings a plugin dispatches on, shared with the
+/// write points that emit them. Eleven are semantic: three the events an `update` alone cannot tell apart
+/// (named alongside the new state that does), and eight that name themselves outright — a creation, a
+/// deletion, a terminal, a comment posted or taken back. The twelfth ([`name::STORE_CHANGED`]) is not
+/// one of that family at all: it is the ledger saying only that something moved. Together they are the
+/// v1 catalog ([`V1_EVENTS`]).
 pub mod name {
     /// A task was created. No `new` — the name is the whole state. It fires when the **creation ends**
     /// (`task finish-creating`), not when `task add` returns (`AMB-D-557`): between the two nobody can
@@ -77,11 +84,28 @@ pub mod name {
     /// is nothing left to read), so without this event a mirror keeps a comment that is gone. No `new` —
     /// the name is the whole state.
     pub const COMMENT_REMOVED: &str = "comment.removed";
+    /// **Something in this project changed** — the one signal that says only that, and is the odd one out
+    /// of this catalog on purpose (`AMB-D-582`). The eleven above are *semantic*: composed at an ops write
+    /// point, which alone knows which of the six an `update` was and who drove it. This one is composed at
+    /// the **ledger seam** — the change feed's drain, inside the very transaction that wrote — so it
+    /// reaches every write, including the ones no name above covers: a notes edit, a due date, a
+    /// classification put on or taken off, an edge drawn, a decision settled, an attachment gone.
+    ///
+    /// What it carries is what that seam knows and no more. `id` is the project, `version` is the number
+    /// that project is now at ([`super::Payload::version`]), and there is **no `actor`**: the feed
+    /// records which rows moved, never who moved them. A subscriber that wants to know *what* changed does not read it
+    /// out of this — it re-reads its window, which is what it would do anyway (`AMB-D-582`).
+    ///
+    /// It is a signal, not a record: it may be missed, and nothing is built on its arrival. Whoever
+    /// carries a copy out also checks the version at startup and on a timer, so a dropped signal costs a
+    /// delay and never a divergence.
+    pub const STORE_CHANGED: &str = "store.changed";
 }
 
-/// The complete v1 event catalog — all eleven names in [`name`]. A plugin's subscription is checked
-/// against this set.
-pub const V1_EVENTS: [&str; 11] = [
+/// The complete v1 event catalog — every name in [`name`]. A plugin's subscription is checked against
+/// this set. Eleven of them are semantic; the twelfth ([`name::STORE_CHANGED`]) is the ledger's own
+/// signal and says nothing about what happened.
+pub const V1_EVENTS: [&str; 12] = [
     name::TASK_CREATED,
     name::TASK_STATUS_CHANGED,
     name::TASK_DONE,
@@ -93,12 +117,13 @@ pub const V1_EVENTS: [&str; 11] = [
     name::DECISION_REJECTED,
     name::COMMENT_ADDED,
     name::COMMENT_REMOVED,
+    name::STORE_CHANGED,
 ];
 
 /// One fired event, ready to serialize to the JSON a plugin receives.
 ///
 /// Build one with the per-event constructor ([`task_status_changed`](Self::task_status_changed) and its
-/// kin) — each fills `event` with the right name and `new` with the right state, so the eleven events are
+/// kin) — each fills `event` with the right name and `new` with the right state, so an event is
 /// constructed by name and cannot be mismatched. Field order is the wire order: `v` leads, as `AMB-D-349`
 /// asks.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -107,10 +132,14 @@ pub struct Payload {
     pub v: u32,
     /// The event's namespace name — one of [`V1_EVENTS`].
     pub event: &'static str,
-    /// The affected record's id — the conversational number a reader knows it by.
+    /// The affected record's id — the conversational number a reader knows it by. On
+    /// [`store.changed`](name::STORE_CHANGED), which is about no record, it is the project's.
     pub id: i64,
-    /// Who drove the write, human or the human's AI.
-    pub actor: ActorKind,
+    /// Who drove the write, human or the human's AI. Absent on [`store.changed`](name::STORE_CHANGED)
+    /// alone: that one is composed at the change feed's drain, and the feed records which rows moved
+    /// without ever holding who moved them (`AMB-D-348`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actor: Option<ActorKind>,
     /// When the event fired, as `2026-07-22T09:00:00Z`.
     pub at: Timestamp,
     /// The record's new state, for the events an `update` disambiguates; absent on the rest.
@@ -137,13 +166,29 @@ pub struct Payload {
     /// than left inside `record` so routing does not depend on knowing amenbo's field names.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<i64>,
+    /// The **version the project is now at**, on [`store.changed`](name::STORE_CHANGED) and nowhere else
+    /// (`AMB-D-582`). It is the whole content of that signal: a reader compares it with the version it
+    /// last carried out, and re-sends its window if the two differ. Nothing but that comparison is meant
+    /// by it — it is not a count, and only the fact that it is *another* number matters.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<i64>,
 }
 
 impl Payload {
     /// The shared shell — the common four plus `v`, with no new state. The named constructors below add
     /// `new` where the event carries one.
     fn base(event: &'static str, id: i64, actor: ActorKind, at: Timestamp) -> Self {
-        Self { v: VERSION, event, id, actor, at, new: None, record: None, parent: None }
+        Self {
+            v: VERSION,
+            event,
+            id,
+            actor: Some(actor),
+            at,
+            new: None,
+            record: None,
+            parent: None,
+            version: None,
+        }
     }
 
     /// `task.created` — a task was created, which on this wire means its creation ended and it can be
@@ -210,6 +255,24 @@ impl Payload {
         Self::base(name::COMMENT_REMOVED, id, actor, at)
     }
 
+    /// `store.changed` — something in project `project_id` changed, and it is now at `version`
+    /// (`AMB-D-582`). The one constructor that takes no actor, because the seam it is built at knows
+    /// none: it fires from the change feed's drain, which holds which rows moved and nothing about who
+    /// moved them.
+    pub fn store_changed(project_id: i64, at: Timestamp, version: i64) -> Self {
+        Self {
+            v: VERSION,
+            event: name::STORE_CHANGED,
+            id: project_id,
+            actor: None,
+            at,
+            new: None,
+            record: None,
+            parent: None,
+            version: Some(version),
+        }
+    }
+
     /// Rebuild the payload a fired event carries from its stored outbox row (`AMB-D-367`). The store
     /// classifies nothing — an [`OutboxRow`](crate::store_engine::OutboxRow) holds the wire fields as
     /// opaque strings — so this is the mapping half that turns one back into the typed payload the
@@ -260,7 +323,11 @@ impl Payload {
         parent: Option<i64>,
     ) -> Option<Self> {
         let event = V1_EVENTS.iter().copied().find(|name| *name == event)?;
-        let actor = ActorKind::parse(actor)?;
+        // The ledger's own signal carries no actor and never did, so its stored column is not read: a
+        // parse there would only ask this build to recognise a value the seam never wrote. Every other
+        // event must name one, and a row that cannot is dropped rather than fired with a guess.
+        let signal = event == name::STORE_CHANGED;
+        let actor = if signal { None } else { Some(ActorKind::parse(actor)?) };
         let at = Timestamp::parse_rfc3339(at)?;
         Some(Self {
             v: VERSION,
@@ -268,7 +335,10 @@ impl Payload {
             id: record_id,
             actor,
             at,
-            new: new.map(str::to_string),
+            // The signal's stored scalar is its version, and the store keeps its one scalar column
+            // whatever the event means by it — the reading apart is this mapping's, as it is for `new`.
+            version: signal.then(|| new.and_then(|v| v.parse().ok())).flatten(),
+            new: (!signal).then(|| new.map(str::to_string)).flatten(),
             // A shape that will not parse is dropped rather than passed on as text: the field is a JSON
             // object on the wire, and half an answer in the shape of one is worse than the absence a
             // subscriber already has to handle (an older store's deletion carries none).
@@ -287,11 +357,54 @@ mod tests {
     }
 
     #[test]
-    fn the_catalog_holds_eleven_distinct_names() {
+    fn the_catalog_holds_distinct_names() {
         let mut seen = V1_EVENTS.to_vec();
         seen.sort_unstable();
         seen.dedup();
-        assert_eq!(seen.len(), 11, "the v1 catalog is eleven distinct events");
+        assert_eq!(seen.len(), V1_EVENTS.len(), "no name is in the v1 catalog twice");
+    }
+
+    /// The ledger's signal is the one event with no actor on the wire, and the one that carries a version
+    /// (`AMB-D-582`). Both are the same fact said twice: it is composed at the change feed's drain, which
+    /// knows the number the store reached and nothing about who drove it there.
+    #[test]
+    fn the_change_signal_carries_a_version_and_names_nobody() {
+        let json = serde_json::to_value(Payload::store_changed(3, at(), 1234)).unwrap();
+        assert_eq!(json["event"], "store.changed");
+        assert_eq!(json["id"], 3, "the id is the project the signal is about");
+        assert_eq!(json["version"], 1234);
+        assert!(json.get("actor").is_none(), "no actor is claimed: {json}");
+        assert!(json.get("new").is_none(), "the version is not smuggled in as a new state: {json}");
+    }
+
+    /// The signal rebuilds from its stored row the way every event does — and the columns the seam left
+    /// empty stay empty rather than being read as something. The version comes back typed, off the one
+    /// scalar column the store keeps without interpreting.
+    #[test]
+    fn the_change_signals_row_rebuilds_without_inventing_an_actor() {
+        use crate::store_engine::OutboxRow;
+        let row = OutboxRow {
+            id: 9,
+            event: "store.changed".to_string(),
+            record_id: 3,
+            actor: String::new(),
+            at: "2026-07-22T09:00:00Z".to_string(),
+            new_state: Some("1234".to_string()),
+            project: Some(3),
+            record: None,
+            parent: None,
+        };
+        let rebuilt = Payload::from_outbox_row(&row).unwrap();
+        assert_eq!(
+            serde_json::to_string(&rebuilt).unwrap(),
+            serde_json::to_string(&Payload::store_changed(3, at(), 1234)).unwrap(),
+            "the row rebuilds byte-for-byte what the named constructor emits",
+        );
+
+        // An empty actor is fatal to every other event: a semantic one that cannot name who drove it is
+        // dropped rather than fired with a guess.
+        let semantic = OutboxRow { event: "task.done".to_string(), ..row };
+        assert_eq!(Payload::from_outbox_row(&semantic), None);
     }
 
     #[test]
@@ -308,6 +421,7 @@ mod tests {
             Payload::decision_rejected(1, ActorKind::Human, at()),
             Payload::comment_added(1, ActorKind::Human, at()),
             Payload::comment_removed(1, ActorKind::Human, at()),
+            Payload::store_changed(1, at(), 7),
         ];
         for p in &all {
             assert!(V1_EVENTS.contains(&p.event), "{} is in the catalog", p.event);

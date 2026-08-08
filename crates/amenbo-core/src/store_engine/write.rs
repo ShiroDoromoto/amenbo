@@ -235,12 +235,16 @@ impl<'a> WriteTx<'a> {
     /// A project the batch has just deleted is skipped rather than stamped: the row would have no project
     /// to reference, and a version is an answer about a project that is still there. Whoever was watching
     /// it learns it is gone from the store's own version, which moved with this commit.
+    ///
+    /// Each project that moves also gets the **signal** that it did
+    /// ([`signal_change`](Self::signal_change)), on this same transaction.
     fn stamp_project_versions(&self) -> Result<()> {
         let projects = self.projects.borrow();
         if projects.is_empty() {
             return Ok(());
         }
         let version = super::read::change_feed_head(self.conn())?;
+        let at = crate::time::Timestamp::now().to_rfc3339_z();
         let pv = col::project_version::ALL;
         for &project in projects.iter() {
             if !super::read::record_exists(self.conn(), "project", project)? {
@@ -253,8 +257,37 @@ impl<'a> WriteTx<'a> {
                 .sql()
                 .execute(&self.tx)
                 .map_err(StoreEngineError::from)?;
+            self.signal_change(project, version, &at)?;
         }
         Ok(())
+    }
+
+    /// Put the **change signal** on the outbox for one project (`AMB-D-582`): `store.changed`, carrying
+    /// the version and nothing else. It rides this transaction like every other event, so a committed
+    /// change always has its signal — generation stays leak-free even though delivery is best-effort.
+    ///
+    /// This is the one event the **store composes**, and the exception is the point. Every other row on
+    /// the outbox is built at an ops write point, which alone can say which of the six an `update` was and
+    /// who drove it ([`super::outbox`]). This one is built here because what it says is the ledger's own
+    /// fact — the version this transaction reached — and because being built here is what makes it reach
+    /// every write, including the many no semantic name covers. What the seam cannot supply, the signal
+    /// therefore does not claim: the stored actor is empty, and the mapping reads it back as none rather
+    /// than as a guess ([`crate::plugin_payload::Payload::store_changed`]).
+    ///
+    /// The version travels in the row's one scalar column (`new_state`) as decimal text. The store keeps
+    /// that column without interpreting it, here as everywhere: what a scalar means is the event's, and
+    /// reading it back apart is the payload mapping's.
+    fn signal_change(&self, project: i64, version: i64, at: &str) -> Result<()> {
+        self.emit_event(&super::outbox::EventRow {
+            event: crate::plugin_payload::name::STORE_CHANGED,
+            record_id: project,
+            actor: "",
+            at,
+            new_state: Some(&version.to_string()),
+            project: Some(project),
+            record: None,
+            parent: None,
+        })
     }
 }
 

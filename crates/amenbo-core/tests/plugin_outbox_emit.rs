@@ -1,5 +1,5 @@
 //! The outbox emit half of `AMB-D-367`: a write point appends the semantic event it alone can name —
-//! which of the eleven v1 events happened, the actor that drove it, the new state — to the plugin outbox,
+//! which of the eleven happened, the actor that drove it, the new state — to the plugin outbox,
 //! **inside the mutation's own transaction**. These tests drive the events through the public `Store`
 //! wrappers (the one seam CLI and GUI share), read them back through `outbox::events_since`, and pin
 //! four things: the right event fires with the right `new_state`, the actor is stamped from the caller
@@ -62,10 +62,19 @@ fn head(store: &Store) -> i64 {
     outbox_head(store.read_model().conn()).unwrap()
 }
 
-/// The events the outbox gained after `after`.
+/// The **semantic** events the outbox gained after `after`.
+///
+/// The ledger's own signal (`store.changed`, `AMB-D-582`) rides the same table and is left out here: it
+/// is composed at the change feed's drain rather than at a write point, so it says nothing about which
+/// event happened — which is the entire subject of this file. It has its own tests
+/// (`plugin_change_signal.rs`), and dropping it here keeps "exactly one event" and "nothing was emitted"
+/// meaning what they meant before it existed.
 fn since(store: &Store, after: i64) -> Vec<OutboxRow> {
     match events_since(store.read_model().conn(), after, 10_000).unwrap() {
-        OutboxSlice::Events { rows, .. } => rows,
+        OutboxSlice::Events { rows, .. } => rows
+            .into_iter()
+            .filter(|r| r.event != amenbo_core::plugin_payload::name::STORE_CHANGED)
+            .collect(),
         OutboxSlice::Gap => panic!("nothing was trimmed, so there is no gap"),
     }
 }

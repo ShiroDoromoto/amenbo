@@ -22,7 +22,8 @@
 //!
 //! For each such plugin the resolver builds a [`Subscriber`]: the program to run, its secret config set as
 //! environment variables (off argv, off logs), the read-back path beside it ([`plugin_callback`],
-//! `AMB-D-406` — the store to call `amenbo` into and the window to read it through), and its non-secret
+//! `AMB-D-406` — the store to call `amenbo` into and the window to read it through, which is this project
+//! for a `project` plugin and the whole device for a `machine` one, `AMB-D-601`), and its non-secret
 //! config for the payload's `config` key. It never sets the event payload itself —
 //! [`plugin_dispatch`](crate::plugin_dispatch) composes stdin, so the payload channel stays the
 //! dispatcher's.
@@ -52,7 +53,7 @@ use crate::plugin_dispatch::{Subscriber, Subscribers};
 use crate::plugin_exec::PluginInvocation;
 use crate::plugin_inject;
 use crate::plugin_installed::Origin;
-use crate::plugin_manifest::{Face, Manifest};
+use crate::plugin_manifest::{Face, Manifest, Scope};
 use crate::plugin_trust;
 use crate::store::Store;
 
@@ -173,10 +174,12 @@ impl Subscribers for EnabledSubscribers<'_> {
             }
             // The read-back path (`AMB-D-406`): the store to call `amenbo` into, and the window to read it
             // through — the same gate that let this subscriber fire, since what a plugin may observe is what
-            // it may read.
-            for (name, value) in
-                plugin_callback::env(&self.store.paths.base_dir, plugin_callback::reach_of(project))
-            {
+            // it may read. The layer its author declared says which gate that is (`AMB-D-601`): this
+            // project, or the whole device.
+            for (name, value) in plugin_callback::env(
+                &self.store.paths.base_dir,
+                plugin_callback::reach_of(plugin.manifest.scope, project),
+            ) {
                 invocation = invocation.env(name, value);
             }
             subscribers.push(Subscriber {
@@ -187,6 +190,16 @@ impl Subscribers for EnabledSubscribers<'_> {
             });
         }
         subscribers
+    }
+
+    /// Read the layer straight off the installed manifest (`AMB-D-601`). A name that is not installed here
+    /// answers `false` — the project layer, which is what the runner counts by when nothing says otherwise,
+    /// and the same answer a plugin uninstalled mid-queue gets everywhere else in this resolver.
+    fn reaches_the_device(&self, plugin: &str) -> bool {
+        self.installed
+            .iter()
+            .find(|p| p.name == plugin)
+            .is_some_and(|p| p.manifest.scope == Scope::Machine)
     }
 }
 
@@ -215,6 +228,11 @@ mod tests {
     /// Open a plugin's gate in one project — what an enable does.
     fn enable_in(store: &mut Store, plugin: &str, project: i64) {
         plugin_trust::enable(store, plugin, Layer::Project(project), &[], |_| true).unwrap();
+    }
+
+    /// The device gate — where a `scope: machine` plugin's one switch is (`AMB-D-601`).
+    fn enable_on_the_device(store: &mut Store, plugin: &str) {
+        plugin_trust::enable(store, plugin, Layer::Device, &[], |_| true).unwrap();
     }
 
     /// A project to hang an event on.
@@ -466,6 +484,47 @@ mod tests {
         let resolver = EnabledSubscribers::new(&plugins, &store);
         let subs = resolver.resolve("task.created", Some(p), Face::Cli);
         assert_eq!(env_of(&subs[0], crate::plugin_callback::REACH_ENV), crate::idref::project(p));
+    }
+
+    /// A plugin whose author declared the device layer reads the device (`AMB-D-601`): the gate it fired
+    /// through is the machine's, and the window is that gate read back — so the project the event happened
+    /// in narrows nothing.
+    #[test]
+    fn a_device_wide_subscribers_window_is_the_whole_device() {
+        let (mut store, _dir, p) = store_in_a_project("callback-reach-machine");
+        // Its one switch is the device's, so that is where it is opened — the gate follows the
+        // declaration, and a project's row would not answer for this plugin at all.
+        enable_on_the_device(&mut store, "carrier");
+        let mut plugin = installed("carrier", &["task.created"], vec![]);
+        plugin.manifest.scope = Scope::Machine;
+        let plugins = [plugin];
+
+        let resolver = EnabledSubscribers::new(&plugins, &store);
+        let subs = resolver.resolve("task.created", Some(p), Face::Cli);
+        assert_eq!(
+            env_of(&subs[0], crate::plugin_callback::REACH_ENV),
+            crate::plugin_callback::ALL_REACH
+        );
+        assert!(resolver.reaches_the_device("carrier"), "and the runner counts its queue that way");
+    }
+
+    /// A manifest that declares no layer keeps the window it always had — which is what leaves the plugins
+    /// already published untouched by `scope` existing at all (`AMB-D-601`).
+    #[test]
+    fn a_plugin_declaring_no_layer_keeps_one_projects_window() {
+        let (mut store, _dir, p) = store_in_a_project("callback-reach-default");
+        enable_in(&mut store, "slack", p);
+        let mut plugin = installed("slack", &["task.created"], vec![]);
+        plugin.manifest.scope = Scope::default();
+        let plugins = [plugin];
+
+        let resolver = EnabledSubscribers::new(&plugins, &store);
+        let subs = resolver.resolve("task.created", Some(p), Face::Cli);
+        assert_eq!(env_of(&subs[0], crate::plugin_callback::REACH_ENV), crate::idref::project(p));
+        assert!(!resolver.reaches_the_device("slack"));
+        // And a name nothing on disk answers for is the project layer too — the safe side of a plugin
+        // uninstalled while its rows were still queued.
+        assert!(!resolver.reaches_the_device("gone"));
     }
 
     /// One variable's value off a resolved subscriber's invocation.

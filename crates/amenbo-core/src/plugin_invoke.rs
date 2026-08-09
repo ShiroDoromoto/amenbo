@@ -13,8 +13,9 @@
 //!
 //! - **installed** — read by name off disk ([`plugin_installed::read`]),
 //!   which errors rather than shrugging: a caller who named a plugin is owed the reason it did not run;
-//! - **enabled** — the gate of the project it is called in (`AMB-D-434`/`AMB-D-351`; `install ≠ enable`, and
-//!   running a plugin's arbitrary code is exactly what the consent is for);
+//! - **enabled** — the gate at the layer its author declared (`AMB-D-434`/`AMB-D-351`/`AMB-D-601`: the
+//!   project it is called in, or the device; `install ≠ enable`, and running a plugin's arbitrary code is
+//!   exactly what the consent is for);
 //! - **compatible** — this amenbo speaks the payload contract it reads and clears its version floor
 //!   (`AMB-D-359`);
 //! - **its config resolves** — secrets to environment variables, text settings to stdin (`AMB-D-356`).
@@ -35,7 +36,8 @@
 //!
 //! In its environment it receives its secret settings (`AMB-D-356`) and the read-back path
 //! ([`plugin_callback`], `AMB-D-406`): the store to call `amenbo` into, and the window to read it through —
-//! the gate this run just passed, since what a plugin may observe is what it may read.
+//! the gate this run just passed, since what a plugin may observe is what it may read. A plugin declaring
+//! `scope: machine` passed the device's gate, so its window is the device (`AMB-D-601`).
 //!
 //! **The run is logged like any other** (`AMB-D-361`): the execution log answers *why did nothing happen*,
 //! and a command that refused to launch or exited non-zero is as much that question's material as a silent
@@ -84,8 +86,10 @@ pub fn command_stdin(config: Map<String, Value>) -> String {
 /// Split from [`call`] so the assembly is testable without spawning anything, and so a caller that wants to
 /// inspect what would run (or run it under its own policy — a timeout is the caller's, `AMB-D-352`) can.
 /// `project` is the run's project context, which a command has and an observation does not: an invocation
-/// happens inside one bound folder, so the gate and the project's config override are both answerable
-/// here. Outside one there is no gate to ask (`AMB-D-434`), and the refusal says so.
+/// happens inside one bound folder, so the window a run reads the store through is answerable here. The
+/// gate and the settings are answered at the layer the author declared instead (`AMB-D-601`) — for a
+/// project's plugin that is this same folder's, and outside one there is no gate to ask (`AMB-D-434`), which
+/// is what the refusal says.
 pub fn prepare(
     store: &Store,
     name: &str,
@@ -117,11 +121,13 @@ pub fn prepare(
         invocation = invocation.env(key, value);
     }
     // The read-back path (`AMB-D-406`): the store to call into, and the window to read it through — which is
-    // the gate this run just passed, since what a plugin may observe is what it may read. Still one
-    // project's window whatever the plugin's layer: opening it for a `scope: machine` plugin is
-    // `AMB-T-2869`'s, and until then such a plugin is asked for a project here like any other.
+    // the gate this run just passed, since what a plugin may observe is what it may read. Which gate that is
+    // follows the layer the author declared (`AMB-D-601`): this project, or the whole device.
     let project = require_project(project)?;
-    for (key, value) in plugin_callback::env(&store.paths.base_dir, plugin_callback::reach_of(project)) {
+    for (key, value) in plugin_callback::env(
+        &store.paths.base_dir,
+        plugin_callback::reach_of(plugin.manifest.scope, project),
+    ) {
         invocation = invocation.env(key, value);
     }
     Ok(invocation)

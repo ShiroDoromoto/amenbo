@@ -6754,13 +6754,61 @@ fn task_finish_creating(store: &mut Store, flags: &Flags, id: &str) -> Result<i3
     let still_being_created = store.task(tid).map_err(CliError::from)?.is_some_and(|t| t.draft);
     if !still_being_created {
         let detail = store.task_detail(tid).map_err(CliError::from)?;
-        write_envelope(flags, "task.finish-creating", "task", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("(no change) {}", task_label(tid)));
+        say_creation_finished(flags, &detail, vec![], true, format!("(no change) {}", task_label(tid)));
         return Ok(0);
     }
     let t = store.finish_task_creation(tid, flags.facet()?).map_err(CliError::from)?;
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
-    write_envelope(flags, "task.finish-creating", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["draft".to_string(), "ready".to_string()]), false, format!("✓ Finished creating: {}", task_label(t.id)));
+    let changed = vec!["draft".to_string(), "ready".to_string()];
+    say_creation_finished(flags, &detail, changed, false, format!("✓ Finished creating: {}", task_label(t.id)));
     Ok(0)
+}
+
+/// Report a finished creation, with the unassigned nudge folded in where one is owed
+/// ([`unassigned_hint`]). Both of `finish-creating`'s endings come through here — the real transition and
+/// the no-op — because the state the hint reads is the same in each: a task nobody is going to pick up says
+/// so whether this call is what finished it or the one before was.
+///
+/// A `--json` caller reads the hint as a key on the task and never as a line on stderr; a person reads the
+/// line. One or the other, since a program told the same thing twice has two places to look for it.
+fn say_creation_finished(
+    flags: &Flags,
+    detail: &amenbo_core::view::TaskDetail,
+    changed: Vec<String>,
+    noop: bool,
+    human_line: String,
+) {
+    let hint = unassigned_hint(flags, detail);
+    let mut resource = serde_json::to_value(detail).unwrap();
+    if let (Some(h), Some(obj)) = (&hint, resource.as_object_mut()) {
+        obj.insert("hint".to_string(), json!(h));
+    }
+    write_envelope(flags, "task.finish-creating", "task", resource, Some(changed), noop, human_line);
+    if let Some(h) = hint.filter(|_| !flags.json) {
+        eprintln!("hint: {h}");
+    }
+}
+
+/// The one thing worth saying as a creation ends: **nobody has this task**.
+///
+/// The cycle's first step already says to file AI work with `--to me-ai`, and it gets read past. What that
+/// leaves is the one state no mailbox shows — a finished task with no assignee matches nobody's
+/// `assignee:`, so it sits in the backlog looking filed and is never taken. Guidance did not close that, so
+/// it is said here instead, at the hand that just moved, as the next line to type rather than as a question
+/// (`AMB-D-558`).
+///
+/// **Only the AI facet.** A person filing work for whoever picks it up is doing an ordinary thing, and has
+/// the board to see it on besides. **And only here, never at `task add`**: a task is still being created
+/// there (`AMB-D-554`), so having no assignee yet is not a state to name — it is the middle of writing one.
+fn unassigned_hint(flags: &Flags, detail: &amenbo_core::view::TaskDetail) -> Option<String> {
+    if flags.actor != Some(ActorKind::Ai) || detail.assignee_kind.is_some() {
+        return None;
+    }
+    Some(format!(
+        "担当者が未割当です。{} task assign {} --to me-ai",
+        Paths::command_name(),
+        amenbo_core::idref::task(detail.id),
+    ))
 }
 
 fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) -> Result<i32, CliError> {

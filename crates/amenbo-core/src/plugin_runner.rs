@@ -14,12 +14,13 @@
 //!   leaves only by releasing it on the transaction that finds its queue empty. Both sides pass through one
 //!   write lock, so there is no gap between "nothing left" and "nobody running" for an event to fall into:
 //!   whichever lands first, the other sees the state it left.
-//! - **Every run is told how much is behind it, within the project it reaches** ([`REACH_QUEUE_REMAINING_VAR`],
+//! - **Every run is told how much is behind it, as far as it reaches** ([`REACH_QUEUE_REMAINING_VAR`],
 //!   `AMB-D-417`, `AMB-D-457`). A plugin sees one event per launch and has no way to know that forty-nine
 //!   more are already queued for it, so the one thing standing between a project deletion and fifty messages
-//!   is a number only the runner can give. It is counted per project because a run reaches one project
-//!   (`AMB-D-434`) and can act on no other's rows. Delivery itself is unchanged — nothing is held back, and
-//!   whether to batch on the number is entirely the plugin's call.
+//!   is a number only the runner can give. It is counted per project for a plugin that reaches one project,
+//!   and over the whole queue for one whose window is the device (`AMB-D-601`) — the reach is what decides
+//!   which rows the run could act on. Delivery itself is unchanged — nothing is held back, and whether to
+//!   batch on the number is entirely the plugin's call.
 //! - **Nothing is killed for being slow.** A runner has nobody behind it but the rest of its own plugin's
 //!   queue, so a hook is waited on to its end ([`plugin_hooks::run_queued`](crate::plugin_hooks::run_queued))
 //!   rather than cut off at five seconds — being cut off mid-work is exactly the half-done outside effect
@@ -79,23 +80,26 @@ use crate::time::Timestamp;
 /// reading until its queue is empty, so this bounds memory and nothing else.
 const RUN_PAGE: i64 = 256;
 
-/// The environment variable a plugin is told **how many events are still behind this one, within the
-/// project this run reaches** under (`AMB-D-417`, `AMB-D-457`).
+/// The environment variable a plugin is told **how many events are still behind this one, as far as this
+/// run reaches** under (`AMB-D-417`, `AMB-D-457`).
 ///
 /// A plugin is run once per event and cannot see its own queue, so batching — one message for the fifty
 /// events a project deletion emitted, rather than fifty — is something only the runner can make possible.
 /// It does not do the batching: amenbo delivers as fast as it can, in order (`AMB-D-399`), and what a
 /// plugin does with the number is the plugin's business. It only says what it knows.
 ///
-/// **The number is the run's own project's, which is why the name carries `REACH`** (`AMB-D-457`). A run
-/// fires through one project's gate and holds one project's settings and secrets (`AMB-D-434`), so a total
-/// across projects would be a number this run could not act on: reaching `0` on it, a run would send for
-/// events it cannot address, and rows waiting in another project would sit until something else happened
-/// there. Rows carrying no project are one such group of their own, and the number is always given.
+/// **The number counts exactly as far as the run reaches, which is why the name carries `REACH`**
+/// (`AMB-D-457`). A `project` plugin fires through one project's gate and holds that project's settings and
+/// secrets, so a total across projects would be a number it could not act on: reaching `0` on it, a run
+/// would send for events it cannot address, and rows waiting in another project would sit until something
+/// else happened there. Rows carrying no project are one such group of their own, and the number is always
+/// given. A `machine` plugin's window is the device (`AMB-D-601`), so the same rule counts its whole queue
+/// at once — split per project, its number would hit `0` once per project and undo the very batching the
+/// variable exists for.
 ///
-/// **`0` means this project's queue is empty as of this launch, not that nothing more is coming.** An event
-/// queued a moment later is delivered like any other, so a plugin that flushes on `0` may end up sending
-/// twice — two messages instead of one, never a message lost.
+/// **`0` means the queue within that reach is empty as of this launch, not that nothing more is coming.**
+/// An event queued a moment later is delivered like any other, so a plugin that flushes on `0` may end up
+/// sending twice — two messages instead of one, never a message lost.
 pub const REACH_QUEUE_REMAINING_VAR: &str = "AMENBO_PLUGIN_REACH_QUEUE_REMAINING";
 
 /// How far ahead a runner holds its lease, pushed out again before every row it takes and while one runs.
@@ -405,12 +409,23 @@ pub fn run_queue(
     owner: &str,
     log: Option<&Path>,
 ) {
+    // How far one run of this plugin reaches, which is how far its number has to count (`AMB-D-601`). Read
+    // once, outside the loop: the layer is the author's declaration, and no row can move it.
+    let device_wide = subs.reaches_the_device(plugin);
+    // Which bucket a row's number is counted in. A device-wide plugin has one, because it can act on every
+    // project's rows; a project's plugin has one per project, and rows carrying none are their own group.
+    let bucket = |project: Option<i64>| if device_wide { None } else { project };
     loop {
         // What this pass has to get through, counted once over the whole queue rather than per row
         // (`AMB-D-417`): a number counted again for every launch would sit at whatever is waiting right
         // now, so a plugin batching on it would never see the queue end while writes kept arriving. Counted
-        // per project (`AMB-D-457`), because that is as far as any one run reaches.
-        let counted = match queued_count_by_project(engine.conn(), plugin) {
+        // as far as any one run reaches (`AMB-D-457`) — per project, or the whole queue at once for a plugin
+        // whose window is the device.
+        let counted = match device_wide {
+            true => queued_count(engine.conn(), plugin).map(|all| HashMap::from([(None, all)])),
+            false => queued_count_by_project(engine.conn(), plugin),
+        };
+        let counted = match counted {
             Ok(counted) => counted,
             Err(e) => return warn_stop(plugin, &e.to_string()),
         };
@@ -420,21 +435,21 @@ pub fn run_queue(
         };
         // Rows queued between the count and the read belong to the next pass — the number handed out must
         // only fall — but the page in hand is work this pass is certainly doing, so it is the floor. Each
-        // project's floor is its own share of the page: the projects never draw on each other's counts.
+        // bucket's floor is its own share of the page: the buckets never draw on each other's counts.
         let mut left = counted;
         let mut in_page: HashMap<Option<i64>, i64> = HashMap::new();
         for row in &rows {
-            *in_page.entry(row.project).or_default() += 1;
+            *in_page.entry(bucket(row.project)).or_default() += 1;
         }
-        for (project, on_page) in in_page {
-            let counted = left.entry(project).or_default();
+        for (bucket, on_page) in in_page {
+            let counted = left.entry(bucket).or_default();
             *counted = (*counted).max(on_page);
         }
         for row in &rows {
-            // What stays behind in this row's project once it has been run, whether or not it reaches a
-            // plugin: a row that resolves to nobody still leaves the queue.
+            // What stays behind within this run's reach once the row has been run, whether or not it
+            // reaches a plugin: a row that resolves to nobody still leaves the queue.
             let remaining = {
-                let counted = left.entry(row.project).or_default();
+                let counted = left.entry(bucket(row.project)).or_default();
                 *counted = (*counted - 1).max(0);
                 *counted
             };
@@ -854,6 +869,54 @@ mod tests {
             ["2", "0", "1", "0"],
             "one project's rows count down past the other's, which reaches 0 on its only row"
         );
+    }
+
+    /// A plugin reaching the device counts one queue, not one per project (`AMB-D-601`). The very rows the
+    /// test above reads as `2,0,1,0` are read `3,2,1,0` here: this run can act on every project's rows, so
+    /// the projects are not a seam it has to stop at — and the `0` it does reach is the one moment its whole
+    /// queue is empty, which is the moment the number exists to name (`AMB-D-417`).
+    #[cfg(unix)]
+    #[test]
+    fn a_device_wide_plugin_counts_down_one_queue_across_every_project() {
+        let dir = amenbo_scratch::scratch("plugin-runner-remaining-device-wide");
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("remaining.txt");
+        let _ = std::fs::remove_file(&out);
+
+        let e = StoreEngine::open_in_memory().unwrap();
+        queue_in(&e, "carrier", Some(1), 1);
+        queue_in(&e, "carrier", Some(2), 2);
+        queue_in(&e, "carrier", Some(1), 3);
+        queue_in(&e, "carrier", Some(1), 4);
+        claim(&e, "carrier", "mine");
+
+        run_queue(
+            &e,
+            &DeviceWide(Reporting { plugin: "carrier", out: out.clone() }),
+            "carrier",
+            "mine",
+            None,
+        );
+
+        assert_eq!(
+            reported(&out),
+            ["3", "2", "1", "0"],
+            "one count for the device, reaching 0 only when nothing is left anywhere"
+        );
+    }
+
+    /// A resolver answering exactly as the one it wraps, except that its plugin's layer is the device's —
+    /// the one input the count reads that a hand-built resolver would otherwise have no way to declare.
+    #[cfg(unix)]
+    struct DeviceWide(Reporting);
+    #[cfg(unix)]
+    impl Subscribers for DeviceWide {
+        fn resolve(&self, event: &str, project: Option<i64>, face: Face) -> Vec<Subscriber> {
+            self.0.resolve(event, project, face)
+        }
+        fn reaches_the_device(&self, _plugin: &str) -> bool {
+            true
+        }
     }
 
     /// The number never grows while a pass is being counted down (`AMB-D-417`). An event queued *during* the

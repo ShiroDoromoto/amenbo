@@ -11,18 +11,19 @@
 //! | variable | what it says |
 //! |---|---|
 //! | [`STORE_ENV`] (`AMENBO_HOME`) | the store to open — the base directory the run's own store sits in |
-//! | [`REACH_ENV`] (`AMENBO_PLUGIN_REACH`) | how far it may read — the project it fires for, as a ref |
+//! | [`REACH_ENV`] (`AMENBO_PLUGIN_REACH`) | how far it may read — the project it fires for, or the device |
 //!
 //! **The store is named, never resolved.** A plugin's working directory is whatever its launcher happened
 //! to be in, so the `.amenbo` walk would answer about a folder nobody consulted — and a runner works the
 //! store its parent drove, not whichever one its own environment would find. Naming it is the same choice
 //! [`SelfRunner`](crate::plugin_runner::SelfRunner) makes one level up.
 //!
-//! **The reach is the gate, read back.** A plugin fires through one project's gate (`AMB-D-434`), and that
-//! gate is also the window: it observes that project, so what it may read is what it may observe, and
-//! [`reach_of`] is that identity spelled out. Both faces resolve the project before anything runs
-//! ([`plugin_trust::require_project`](crate::plugin_trust::require_project)), so neither has to decide this
-//! twice.
+//! **The reach is the gate, read back.** A plugin fires through its own gate, and that gate is also the
+//! window: it observes what it observes, so what it may read is what it may observe, and [`reach_of`] is
+//! that identity spelled out. Which gate that is comes from the layer the author declared (`AMB-D-601`) —
+//! one project for a `project` plugin, the whole device for a `machine` one. Both faces resolve the project
+//! before anything runs ([`plugin_trust::require_project`](crate::plugin_trust::require_project)), so
+//! neither has to decide this twice.
 //!
 //! **This is not isolation** (`AMB-D-406`). A plugin has a shell: it can rewrite these variables, and it can
 //! open the store file directly. The trust boundary is the explicit enable (`AMB-D-351`), not a sandbox —
@@ -33,6 +34,7 @@ use std::path::Path;
 
 use crate::error::{Error, Result};
 use crate::idref::{self, RefKind};
+use crate::plugin_manifest::Scope;
 use crate::reach::Reach;
 
 /// The variable naming the store a plugin reads back from. It is amenbo's own `AMENBO_HOME` — the root that
@@ -43,15 +45,23 @@ pub const STORE_ENV: &str = crate::env::HOME_VAR;
 /// The variable declaring how far a plugin may read: [`ALL_REACH`], or a project's `AMB-P-<n>` ref.
 pub const REACH_ENV: &str = crate::env::PLUGIN_REACH_VAR;
 
-/// The value of [`REACH_ENV`] that means the whole device. No plugin is handed it any more — every gate is
-/// a project's (`AMB-D-434`) — but the spelling stays readable, so a variable left over from an older
-/// amenbo resolves to what it meant rather than to an error the reader cannot place.
+/// The value of [`REACH_ENV`] that means the whole device — what a plugin declaring `scope: machine` is
+/// handed (`AMB-D-601`). Its work is the machine's, so one project's window would hide most of what it was
+/// enabled to carry; enabling it is the consent to let it read the whole device, and nothing asks again.
 pub const ALL_REACH: &str = "all";
 
-/// The window a plugin reads through, from the gate it fires through (`AMB-D-406`): one project's gate is
-/// that project's window.
-pub fn reach_of(project: i64) -> Reach {
-    Reach::window(project)
+/// The window a plugin reads through, from the gate it fires through (`AMB-D-406`): the layer its author
+/// declared (`AMB-D-601`) is what says which gate that is.
+///
+/// A `project` plugin — the default, and what a manifest saying nothing means — reaches the one project
+/// whose gate let it fire, and `project` is that project. A `machine` plugin's gate is the device's, so its
+/// window is the device: it is handed [`Reach::All`], and the `project` it fired for narrows nothing. That
+/// is not a wider grant than the gate — it *is* the gate, read back, exactly as the project case is.
+pub fn reach_of(scope: Scope, project: i64) -> Reach {
+    match scope {
+        Scope::Project => Reach::window(project),
+        Scope::Machine => Reach::All,
+    }
 }
 
 /// The variables to set on a plugin's process: the store at `base_dir`, and `reach` as its window. In the
@@ -131,7 +141,16 @@ mod tests {
 
     #[test]
     fn a_gate_is_the_window_it_fires_through() {
-        assert_eq!(reach_of(7), Reach::window(7));
+        assert_eq!(reach_of(Scope::Project, 7), Reach::window(7));
+    }
+
+    #[test]
+    fn a_device_wide_plugin_reads_the_device_and_the_project_it_fired_for_narrows_nothing() {
+        assert_eq!(reach_of(Scope::Machine, 7), Reach::All);
+        assert_eq!(reach_of(Scope::Machine, 9), Reach::All);
+        // An undeclared layer is the project's (`AMB-D-601`), so a manifest written before `scope` existed
+        // keeps the window it has always had.
+        assert_eq!(reach_of(Scope::default(), 7), Reach::window(7));
     }
 
     #[test]
@@ -161,6 +180,11 @@ mod tests {
                 ("AMENBO_HOME".to_string(), "/data/amenbo".to_string()),
                 ("AMENBO_PLUGIN_REACH".to_string(), "AMB-P-3".to_string()),
             ]
+        );
+        // And the device-wide half, which is the same two variables with the window opened.
+        assert_eq!(
+            env(Path::new("/data/amenbo"), reach_of(Scope::Machine, 3))[1],
+            ("AMENBO_PLUGIN_REACH".to_string(), ALL_REACH.to_string())
         );
     }
 }

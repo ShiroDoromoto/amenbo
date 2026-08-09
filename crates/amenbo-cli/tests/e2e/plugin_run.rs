@@ -437,6 +437,96 @@ fn a_plugin_reads_its_own_project_back_and_no_other() {
     assert!(refusal.contains("out_of_reach"), "the refusal says why: {refusal}");
 }
 
+/// The other layer, end to end (`AMB-D-601`): a plugin whose author declared `scope: machine` is launched
+/// reaching the **device**, and the carrier's road answers it for the device.
+///
+/// It is the same launch as the test above with one word changed in the manifest, which is the point — the
+/// author's declaration is the only thing that moves the window, and nothing the plugin itself does can. So
+/// the assertions are that test's, inverted: the project one over reads back rather than being refused, and
+/// what `sync` hands over covers both projects instead of one.
+#[cfg(unix)]
+#[test]
+fn a_device_wide_plugin_is_launched_reaching_every_project_on_the_machine() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "観測されるPJ"]);
+    let bound = cli.bound_project();
+    cli.json(&["task", "add", "--title", "中の仕事", "--project", &bound, "--json"]);
+
+    let other = cli.json(&["project", "add", "--name", "別のPJ", "--json"]);
+    let other_id = id_str(&other["project"]["id"]);
+    let outside = cli.json(&["task", "add", "--title", "外の仕事", "--project", &other_id, "--json"]);
+    let outside_id = id_str(&outside["task"]["id"]);
+
+    install_plugin(&cli, "carrier", serde_json::json!([]));
+    declare_scope(&cli, "carrier", "machine");
+    let answers = cli.home.join("answers");
+    std::fs::create_dir_all(&answers).unwrap();
+    let program = cli.home.join("plugins").join("carrier").join("carrier");
+    // The four calls a carrier really makes, and one read of the project it was never bound to. None of
+    // them names a facet: a read decides nothing by one once a window has been handed over.
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\ncat >/dev/null\n\
+             '{bin}' sync version --json > '{out}/version.json'\n\
+             '{bin}' sync snapshot > '{out}/snapshot.json'\n\
+             '{bin}' sync changes --since 0 --json > '{out}/changes.json'\n\
+             '{bin}' task show {outside_id} --json > '{out}/show.out' 2> '{out}/show.err'\n\
+             printf '%s' \"$?\" > '{out}/show.code'\n",
+            bin = env!("CARGO_BIN_EXE_amenbo"),
+            out = answers.display(),
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    cli.json(&["plugin", "enable", "carrier", "--json"]);
+
+    let run = cli.json(&["plugin", "run", "--json", "--actor", "human", "carrier"]);
+    assert_eq!(run["ok"], true, "the plugin ran: {run}");
+
+    // The version names no project, because the window it is for is not one — which is how a carrier
+    // holding this number knows it is the device's and not a project's.
+    let version: Value =
+        serde_json::from_str(&std::fs::read_to_string(answers.join("version.json")).unwrap()).unwrap();
+    assert!(version["version"].as_i64().is_some(), "a number came back: {version}");
+    assert!(version["project_id"].is_null(), "the device's version names no project: {version}");
+
+    // And what it carries out is both projects, in one document.
+    let snapshot = std::fs::read_to_string(answers.join("snapshot.json")).unwrap();
+    assert!(snapshot.contains("中の仕事"), "the bound project's work is in it: {snapshot}");
+    assert!(snapshot.contains("外の仕事"), "and so is the other project's: {snapshot}");
+
+    let changes: Value =
+        serde_json::from_str(&std::fs::read_to_string(answers.join("changes.json")).unwrap()).unwrap();
+    assert!(changes["project_id"].is_null(), "the page is of the device: {changes}");
+    assert!(
+        !changes["changes"].as_array().unwrap().is_empty(),
+        "and it names what moved on it: {changes}"
+    );
+
+    // The read that was refused one layer down goes through here. Enabling this plugin was the consent
+    // for exactly that (`AMB-D-601`), so there is nothing left for the window to turn away.
+    let code = std::fs::read_to_string(answers.join("show.code")).unwrap();
+    let refusal = std::fs::read_to_string(answers.join("show.err")).unwrap();
+    assert_eq!(code, "0", "a device-wide plugin reads any project on it: {refusal}");
+    let shown = std::fs::read_to_string(answers.join("show.out")).unwrap();
+    assert!(shown.contains("外の仕事"), "and gets the record: {shown}");
+}
+
+/// Declare an installed plugin's layer (`AMB-D-601`) — the manifest key that decides how far the runner
+/// opens its window. Written onto the install rather than passed at install time, the way the events list
+/// is: what a plugin declares is the author's, and a test standing in for one says so here.
+#[cfg(unix)]
+fn declare_scope(cli: &Cli, name: &str, scope: &str) {
+    let manifest_file = cli.home.join("plugins").join(name).join("manifest.json");
+    let mut manifest: Value =
+        serde_json::from_str(&std::fs::read_to_string(&manifest_file).unwrap()).unwrap();
+    manifest["scope"] = serde_json::json!(scope);
+    std::fs::write(&manifest_file, serde_json::to_vec(&manifest).unwrap()).unwrap();
+}
+
 /// Plant an installed plugin that subscribes to `events` — [`install_plugin`] with the manifest field the
 /// dispatch resolver reads. The executable it lays down does nothing; a caller that wants the plugin to
 /// *do* something overwrites it.

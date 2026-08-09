@@ -157,6 +157,22 @@ pub trait Subscribers {
     ) -> Option<Subscriber> {
         self.resolve(event, project, face).into_iter().find(|s| s.plugin == plugin)
     }
+
+    /// Does `plugin` reach the whole device rather than one project — the runner's other question: *how far
+    /// does what I tell this plugin about its own queue have to count?*
+    ///
+    /// It is the manifest's declared layer (`AMB-D-601`) asked from the one place a runner already has for
+    /// reading manifests, rather than a second read of the plugins directory beside it. The count that
+    /// rides on the answer is [`REACH_QUEUE_REMAINING_VAR`](crate::plugin_runner::REACH_QUEUE_REMAINING_VAR):
+    /// a number is only worth giving as far as the run can act on it (`AMB-D-457`), and that distance is
+    /// exactly this.
+    ///
+    /// The default is `false` — one project, which is what a manifest saying nothing declares — so a
+    /// resolver that knows nothing of manifests answers correctly by not answering.
+    fn reaches_the_device(&self, plugin: &str) -> bool {
+        let _ = plugin;
+        false
+    }
 }
 
 /// The empty resolver: no event has a subscriber. It is what a face with no mount drives, and what the

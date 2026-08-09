@@ -5215,6 +5215,24 @@ pub struct PluginProjectRowDto {
     required_unset: bool,
 }
 
+/// The device's own row, for a plugin its author declared the machine's (`AMB-D-601`) — the same three
+/// readings a crossing carries, with no project to key them by.
+///
+/// It is a shape of its own rather than a [`PluginProjectRowDto`] with a hole in it: a device row is not a
+/// crossing that lost its project, it is the one row a machine-wide plugin has, and a face handed a
+/// project-shaped row would have gone looking for the project it names.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginDeviceRowDto {
+    /// Whether the plugin fires on this device — the one gate it has (`AMB-D-601`).
+    enabled: bool,
+    /// Whether the device holds a value for any setting the author declares.
+    has_value: bool,
+    /// Whether a `required` setting is empty here — the reason an enable would be refused.
+    required_unset: bool,
+}
+
 /// One plugin this machine holds, as the market draws its state on top of the catalog entry of the same
 /// name (`AMB-D-351`). Installed and enabled are two facts, not one: an installed plugin that fires
 /// nothing is the ordinary state.
@@ -5229,6 +5247,14 @@ pub struct PluginInstallDto {
     /// answer; a truth value read from one project is not, because it hides the projects it is still
     /// firing in (`AMB-D-412`).
     projects: Vec<PluginProjectRowDto>,
+    /// **The device's row**, and only for a plugin whose author declared it the machine's (`AMB-D-601`).
+    /// `None` is the ordinary plugin, whose rows are the projects' — so a face reads which of the two
+    /// lists to draw off the declaration and never off an empty one, which every freshly installed plugin
+    /// has. Without it a machine-wide plugin's gate has nowhere on screen to be read or moved: it crosses
+    /// no project, so `projects` is rightly empty for it, and the row it does have was not in this answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    device: Option<PluginDeviceRowDto>,
     /// **What layer its author declared it lives at** (`AMB-D-601`) — read off the manifest that was
     /// installed, so it says what *this* build of the plugin declares rather than what the catalog now
     /// carries. It is not a switch and there is nothing to set: the declaration is what makes
@@ -5272,12 +5298,17 @@ fn config_field_row(
     })
 }
 
-/// Read one installed plugin into its DTO, naming every intersection it has a row at (`AMB-D-447`) — the
-/// projects it fires in (`AMB-D-412`) and the projects that filled it in without turning it on.
+/// Read one installed plugin into its DTO, naming every row it has: the projects it crosses (`AMB-D-447`)
+/// — the ones it fires in (`AMB-D-412`) and the ones that filled it in without turning it on — or, for a
+/// plugin its author declared the machine's, the single row the device holds (`AMB-D-601`).
+///
+/// Which of the two is read comes from the declaration and not from a count: a machine-wide plugin crosses
+/// no project, so asking the project list would answer "nowhere" for something that may well be firing.
 fn install_row(
     store: &Store,
     plugin: &amenbo_core::plugin_subscribe::InstalledPlugin,
 ) -> Result<PluginInstallDto, CmdError> {
+    use amenbo_core::plugin_layer::Layer;
     let why = amenbo_core::plugin_compat::check(&plugin.manifest).err();
     let config = plugin.manifest.config.iter().map(wanted_setting).collect();
     let projects =
@@ -5290,9 +5321,30 @@ fn install_row(
                 required_unset: at.required_unset,
             })
             .collect();
+    let device = match plugin.manifest.scope {
+        amenbo_core::plugin_manifest::Scope::Project => None,
+        amenbo_core::plugin_manifest::Scope::Machine => {
+            let held = amenbo_core::plugin_config::held_at(
+                store,
+                &plugin.name,
+                &plugin.manifest.config,
+                Layer::Device,
+            )?;
+            Some(PluginDeviceRowDto {
+                enabled: amenbo_core::plugin_trust::effective_enabled_in(
+                    store,
+                    &plugin.name,
+                    Layer::Device,
+                )?,
+                has_value: held.has_value,
+                required_unset: held.required_unset,
+            })
+        }
+    };
     Ok(PluginInstallDto {
         name: plugin.name.clone(),
         projects,
+        device,
         scope: plugin.manifest.scope,
         compatible: why.is_none(),
         incompatible_reason: why.map(|why| why.to_string()),
@@ -5902,6 +5954,17 @@ mod tests {
         plant_plugin_with(home, name, serde_json::json!([]));
     }
 
+    /// The same plant for a plugin whose author declared it the machine's (`AMB-D-601`) — the layer no
+    /// published plugin declares, and the one this face draws a row of its own for.
+    fn plant_machine_plugin(home: &std::path::Path, name: &str, config: serde_json::Value) {
+        plant_plugin_with(home, name, config);
+        let path = home.join("plugins").join(name).join("manifest.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        manifest["scope"] = serde_json::json!("machine");
+        std::fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    }
+
     /// The GUI's creation screen asks for a name and nothing else, so the view a new project opens on
     /// has one source: the configured `default_view`. It is the same answer the CLI gives when `--view`
     /// is omitted, and the reason the setting is a setting rather than a value nothing acts on.
@@ -6037,6 +6100,68 @@ mod tests {
         assert!(plugin_set_enabled("notify".into(), Some(short), true).is_err());
         assert!(plugin_set_enabled("notify".into(), Some(filled), true).unwrap().enabled);
         assert!(rows()[0].enabled, "the gate opened where nothing was in the way");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// A plugin its author declared the machine's has one gate and crosses no project (`AMB-D-601`), so
+    /// what a face draws it from is the device's own row. It has to come back **with the install**: the
+    /// project list is rightly empty for such a plugin, and a screen reading only that would draw "off
+    /// everywhere" over something firing on the whole machine — which is what it did before this row
+    /// existed.
+    #[test]
+    fn a_machine_wide_plugin_answers_with_the_devices_row_and_no_crossings() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("plugin-device-row");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "テストPJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        plant_machine_plugin(
+            &tmp,
+            "carry",
+            serde_json::json!([
+                {"key": "endpoint", "label": "送り先", "secret": false, "required": true},
+            ]),
+        );
+        let row = || plugin_installs().unwrap().into_iter().find(|r| r.name == "carry").unwrap();
+
+        // Off, holding nothing, and short of what the author requires — the mark said before the switch
+        // is pressed, exactly as a crossing wears it.
+        let before = row();
+        assert!(before.projects.is_empty(), "no project crosses a device-wide plugin");
+        let device = before.device.expect("the declaration is what puts a device row on the answer");
+        assert_eq!(
+            (device.enabled, device.has_value, device.required_unset),
+            (false, false, true)
+        );
+
+        // The value is the device's, and it is written with no project named.
+        plugin_config_set("carry".into(), "endpoint".into(), "https://example.invalid/in".into(), None)
+            .unwrap();
+        let filled = row().device.unwrap();
+        assert!(filled.has_value && !filled.required_unset, "the device holds it now");
+
+        // One gate, opened without naming a project — and opening it is itself the consent to let the
+        // plugin read every project on the machine.
+        assert!(plugin_set_enabled("carry".into(), None, true).unwrap().enabled);
+        let on = row();
+        assert!(on.device.unwrap().enabled);
+        assert!(on.projects.is_empty(), "opening the device's gate draws no project row");
+
+        // Standing in a project changes none of that: the declaration picks the layer, the caller's
+        // location only feeds it — so a face that passed its project along still moved the one gate.
+        assert!(!plugin_set_enabled("carry".into(), Some(project_id), false).unwrap().enabled);
+        assert!(!row().device.unwrap().enabled);
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

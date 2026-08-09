@@ -738,7 +738,7 @@ impl Instructor {
                 let name = req(with, "name")?;
                 match req(with, "scope")? {
                     "machine" => format!(
-                        "Confirm the row for \"{name}\" among the installed plugins says, in so many words, that it reads every project on this device rather than one — said on that row as a sentence, with nothing beside it for anyone to set."
+                        "Confirm the row for \"{name}\" among the installed plugins says, in so many words, that it reads every project on this device rather than one — put as a sentence about the one gate that row carries, and not as a second thing to set."
                     ),
                     "project" => format!(
                         "Confirm the row for \"{name}\" among the same installed plugins says no such thing: nothing on it claims to read the device, this being the ordinary plugin whose reach is one project at a time."

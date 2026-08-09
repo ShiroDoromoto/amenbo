@@ -689,6 +689,28 @@ compatible: boolean,
 incompatibleReason?: string, };
 
 /**
+ * The device's own row, for a plugin its author declared the machine's (`AMB-D-601`) — the same three
+ * readings a crossing carries, with no project to key them by.
+ *
+ * It is a shape of its own rather than a [`PluginProjectRowDto`] with a hole in it: a device row is not a
+ * crossing that lost its project, it is the one row a machine-wide plugin has, and a face handed a
+ * project-shaped row would have gone looking for the project it names.
+ */
+export type PluginDeviceRowDto = { 
+/**
+ * Whether the plugin fires on this device — the one gate it has (`AMB-D-601`).
+ */
+enabled: boolean, 
+/**
+ * Whether the device holds a value for any setting the author declares.
+ */
+hasValue: boolean, 
+/**
+ * Whether a `required` setting is empty here — the reason an enable would be refused.
+ */
+requiredUnset: boolean, };
+
+/**
  * One entry of the plugin market list. Only what the list draws: identity, the one-line
  * description, and the axes it is filtered on (`AMB-D-347`). Nothing an install needs — the
  * signature, the checksum and the asset map are the detail's, not the list's (`AMB-D-385`).
@@ -777,6 +799,14 @@ name: string,
  * firing in (`AMB-D-412`).
  */
 projects: Array<PluginProjectRowDto>, 
+/**
+ * **The device's row**, and only for a plugin whose author declared it the machine's (`AMB-D-601`).
+ * `None` is the ordinary plugin, whose rows are the projects' — so a face reads which of the two
+ * lists to draw off the declaration and never off an empty one, which every freshly installed plugin
+ * has. Without it a machine-wide plugin's gate has nowhere on screen to be read or moved: it crosses
+ * no project, so `projects` is rightly empty for it, and the row it does have was not in this answer.
+ */
+device?: PluginDeviceRowDto, 
 /**
  * **What layer its author declared it lives at** (`AMB-D-601`) — read off the manifest that was
  * installed, so it says what *this* build of the plugin declares rather than what the catalog now

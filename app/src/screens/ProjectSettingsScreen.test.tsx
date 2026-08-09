@@ -194,6 +194,9 @@ describe("invariants held by the rows of the linked-folder list", () => {
 /**
  * One installed plugin, crossing no project until a test names one: `on` is a project it fires in,
  * `filledIn` one that holds a value without the switch being on (`AMB-D-434`).
+ *
+ * Naming a `device` row instead is a plugin its author declared the machine's (`AMB-D-601`) — one gate
+ * and no crossings — so the declaration follows from the row rather than being written twice.
  */
 function install(
   { on = [], filledIn = [], ...over }:
@@ -206,7 +209,7 @@ function install(
       ...filledIn.map((project) => ({ project, enabled: false, hasValue: true, requiredUnset: false })),
     ],
     config: [],
-    scope: "project",
+    scope: over.device ? "machine" : "project",
     ...over,
   };
 }
@@ -268,19 +271,40 @@ describe("this project's plugin crossings", () => {
     expect(section.querySelector("select")).toBeNull();
   });
 
-  // This face is one project's, so a device-wide plugin is the row that does not tell the whole story
-  // (`AMB-D-601`) — the declaration is said beside it, and only beside the rows it is true of.
-  it("says on a device-wide plugin's row that it reads every project", async () => {
+  // A device-wide plugin crosses no project (`AMB-D-601`), so this face names it rather than drawing a
+  // switch that would move a gate the whole machine shares and read back as untouched. That it fires
+  // here is still said: a project's settings that never mentioned it would be hiding it.
+  it("names a device-wide plugin apart from the rows, with no switch of this project's", async () => {
     hoisted.installs = [
-      install({ name: "carry", on: [1], scope: "machine" }),
+      install({ name: "carry", device: { enabled: true, hasValue: false, requiredUnset: false } }),
       install({ name: "notify", on: [1] }),
     ];
     await render([]);
 
-    const said = Array.from(pluginsSection().querySelectorAll("div")).filter((d) =>
-      d.textContent === t("plugins.scope.machine"),
+    const section = pluginsSection();
+    expect(section.textContent).toContain(t("projset.pluginsDevice"));
+    expect(section.textContent).toContain("carry");
+    expect(section.textContent).toContain(t("plugins.scope.machine"));
+    // One switch on this face, and it is the crossing's. The device's own is on the plugin screen.
+    const switches = Array.from(section.querySelectorAll("button")).filter(
+      (b) => b.textContent === t("plugins.enable") || b.textContent === t("plugins.disable"),
     );
-    expect(said).toHaveLength(1);
+    expect(switches).toHaveLength(1);
+    // And nothing offers to add it here: there is no crossing to make.
+    expect(section.querySelector("select")).toBeNull();
+  });
+
+  // With only the device's own installed there is no crossing anyone could have made, so reporting that
+  // none were made would be an absence nobody could have filled.
+  it("does not report an empty crossing list when the only plugin is the device's", async () => {
+    hoisted.installs = [
+      install({ name: "carry", device: { enabled: false, hasValue: false, requiredUnset: false } }),
+    ];
+    await render([]);
+
+    const section = pluginsSection();
+    expect(section.textContent).not.toContain(t("projset.pluginsNone"));
+    expect(section.textContent).toContain(t("projset.pluginsDevice"));
   });
 
   it("says so when this project crosses none, without hiding what is installed", async () => {

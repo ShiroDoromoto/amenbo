@@ -8,6 +8,7 @@ import {
   usePluginConfig,
   type PluginConfigField,
   type PluginInstall,
+  type PluginLayer,
 } from "../core/pluginInstalls";
 
 /**
@@ -28,22 +29,25 @@ import {
  * to draw — which is why setting one asks for it twice: with nothing to compare against afterwards, the
  * second box is the only check on a typo.
  *
- * **Every value is one project's** (`AMB-D-434`), secret or not, so the form edits one project — and
- * **which one is the caller's to say** (`AMB-D-447`): it is drawn inside the row for a crossing, and
- * that row has already answered. A picker of its own would be a second place to choose a project on a
- * screen that has one, and the two would not agree.
+ * **Every value belongs to one layer** (`AMB-D-434` / `AMB-D-601`), secret or not — a project's rows, or
+ * the device's for a plugin its author declared the machine's — and **which one is the caller's to say**
+ * (`AMB-D-447`): the form is drawn inside a row, and that row has already answered. A picker of its own
+ * would be a second place to choose on a screen that has one, and the two would not agree.
  *
  * That is not the gate: which project a plugin *fires* in is its enable row, while a setting is
  * something any plugin can carry in a project it is off in — so a crossing has a form whether or not
  * the plugin is on there.
  *
  * The author's schema comes from the install (it is the same wherever you stand) and what is *held* is
- * read for the named project, which is why the two arrive separately.
+ * read for the named layer, which is why the two arrive separately.
  */
-export function PluginConfigForm({ install, projectId, onWrote }: {
+export function PluginConfigForm({ install, layer, onWrote }: {
   install: PluginInstall;
-  /** The project whose values are being written — the crossing this form was opened inside. */
-  projectId: number;
+  /**
+   * The layer whose values are being written — the row this form was opened inside. `null` is the
+   * device's own row, for a plugin its author declared the machine's (`AMB-D-601`).
+   */
+  layer: PluginLayer;
   /**
    * Called once a write to this crossing lands, so the row around the form can retire what a value
    * standing here made out of date — the refusal an enable met over a `required` setting this form has
@@ -61,7 +65,7 @@ export function PluginConfigForm({ install, projectId, onWrote }: {
   const [error, setError] = useState<string | null>(null);
   // What the last write did, said back in its own words: a clear removed a value, a save wrote one.
   const [done, setDone] = useState<"plugins.cfg.saved" | "plugins.cfg.cleared" | null>(null);
-  const { fields } = usePluginConfig(install.name, projectId);
+  const { fields } = usePluginConfig(install.name, layer);
 
   // What that project holds for a key — absent until the read lands, which is not "unset".
   const heldFor = (key: string): PluginConfigField | undefined => fields.find((f) => f.key === key);
@@ -105,11 +109,11 @@ export function PluginConfigForm({ install, projectId, onWrote }: {
           const pair = secrets[f.key];
           if (!pair || pair.value === "") continue;
           if (pair.value !== pair.confirm) throw new Error(t("plugins.cfg.secretMismatch"));
-          await setPluginConfig(install.name, f.key, pair.value, projectId);
+          await setPluginConfig(install.name, f.key, pair.value, layer);
         } else {
           const next = edits[f.key];
           if (next === undefined || next === stored(f)) continue;
-          await setPluginConfig(install.name, f.key, next, projectId);
+          await setPluginConfig(install.name, f.key, next, layer);
         }
       }
       setEdits({});
@@ -118,7 +122,7 @@ export function PluginConfigForm({ install, projectId, onWrote }: {
 
   const onClear = (f: PluginWantedSettingDto) =>
     run(async () => {
-      await setPluginConfig(install.name, f.key, "", projectId);
+      await setPluginConfig(install.name, f.key, "", layer);
       setEdits((e) => ({ ...e, [f.key]: "" }));
       setSecrets((s) => ({ ...s, [f.key]: { value: "", confirm: "" } }));
     }, "plugins.cfg.cleared");
@@ -181,7 +185,13 @@ export function PluginConfigForm({ install, projectId, onWrote }: {
                   }))
                 }
               />
-              <div className="faint plugcfg__note">{t("plugins.cfg.secretNote")}</div>
+              {/* Where the secret is kept, said as the layer this form is writing at (`AMB-D-601`):
+                  a project's row, or the device's. It is the one line here that names the place, so a
+                  device row wearing the project's wording would be telling a reader their token went
+                  somewhere it did not. */}
+              <div className="faint plugcfg__note">
+                {t(layer == null ? "plugins.cfg.secretNoteDevice" : "plugins.cfg.secretNote")}
+              </div>
             </>
           ) : f.fieldType === "multi" ? (
             /* The candidates, in the author's order. Unticking the last box does not empty the field —

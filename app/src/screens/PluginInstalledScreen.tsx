@@ -27,10 +27,12 @@ import { getSnapshot, subscribe } from "../core/snapshot";
 // whether or not the index that offered them is up. The cost is that nothing here shows what the catalog
 // knows (a description, an author) — those belong to the market's copy of the entry, not to the install.
 //
-// Everything a plugin can *do* here is done at a crossing (`PluginCrossings`, `AMB-D-447`): one row per
-// project, carrying that project's switch and that project's settings. **The screen holds no project of
-// its own** (`AMB-D-412`): the rows name their own, so no single choice up here can decide what a row is
-// allowed to say.
+// Everything a plugin can *do* here is done at a row (`PluginCrossings`, `AMB-D-447`): one per project,
+// carrying that project's switch and that project's settings — or, for a plugin its author declared the
+// machine's, the one row the device holds (`AMB-D-601`). **The screen holds no project of its own**
+// (`AMB-D-412`): the rows name their own, so no single choice up here can decide what a row is allowed
+// to say — and it is where a device-wide plugin is managed, since a project's own settings have no row
+// for something no project crosses.
 
 export function PluginInstalledScreen() {
   const projects = useSyncExternalStore(subscribe, () => getSnapshot().projects);

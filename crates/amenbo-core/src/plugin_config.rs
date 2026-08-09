@@ -292,6 +292,47 @@ pub struct Intersection {
     pub required_unset: bool,
 }
 
+/// What one layer holds for a plugin's declared settings — the two readings a row draws beside its gate.
+///
+/// The gate is not in here on purpose: a list of crossings reads every gate in one go, while a single
+/// layer's is one read, so folding them together would cost a read per project to say something already
+/// known. What is folded together is the pair that has to mean the same thing on every face.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Held {
+    /// Whether it holds a value for any setting the author declares. Off with values is an ordinary state
+    /// (`AMB-D-434`), which is why it is a fact of its own and not a reading of the gate.
+    pub has_value: bool,
+    /// Whether a `required` setting is empty here — an enable at this layer would be refused
+    /// (`AMB-D-351`), which is the one thing a face wants to say *before* the switch is pressed.
+    pub required_unset: bool,
+}
+
+/// Read one layer's settings whole — one project's, or the device's (`AMB-D-601`).
+///
+/// [`intersections`] is this made once per project that has a row at all. The device layer has exactly one
+/// row and no list to walk, so a face drawing it asks here directly rather than deciding for itself what
+/// "has a value" and "would be refused" mean — which is the drift this being one function prevents.
+pub fn held_at(
+    store: &Store,
+    plugin: &str,
+    fields: &[ConfigField],
+    layer: Layer,
+) -> Result<Held> {
+    Ok(held_from(fields, &satisfied_keys(store, plugin, fields, layer)?))
+}
+
+/// The same two readings off a satisfied set already in hand — what [`intersections`] has after its own
+/// probe, and what keeps it from paying for a second one.
+fn held_from(fields: &[ConfigField], satisfied: &[String]) -> Held {
+    Held {
+        has_value: !satisfied.is_empty(),
+        required_unset: !crate::plugin_trust::missing_required(fields, |f| {
+            satisfied.iter().any(|k| k == &f.key)
+        })
+        .is_empty(),
+    }
+}
+
 /// Every intersection this plugin has a row at (`AMB-D-447`): the projects it fires in, and the projects
 /// that hold a value for it while it is off. Ordered by project id, so two reads draw the rows in the same
 /// order.
@@ -307,7 +348,8 @@ pub struct Intersection {
 ///
 /// **Project crossings only.** A `scope: machine` plugin's one gate and its settings are the device's, and
 /// no project crosses it (`AMB-D-601`), so this answers empty for one — rightly, since there is no project
-/// row to draw. Showing the device layer instead of a project list is the faces' work (`AMB-T-2874`).
+/// row to draw. The device's own row is read by [`held_at`] beside the gate, and drawing it in place of a
+/// project list is the faces' work.
 pub fn intersections(
     store: &Store,
     plugin: &str,
@@ -327,14 +369,12 @@ pub fn intersections(
         if !on && satisfied.is_empty() {
             continue;
         }
+        let held = held_from(fields, &satisfied);
         rows.push(Intersection {
             project,
             enabled: on,
-            has_value: !satisfied.is_empty(),
-            required_unset: !crate::plugin_trust::missing_required(fields, |f| {
-                satisfied.iter().any(|k| k == &f.key)
-            })
-            .is_empty(),
+            has_value: held.has_value,
+            required_unset: held.required_unset,
         });
     }
     Ok(rows)
@@ -744,6 +784,38 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert!(rows[0].required_unset, "the gate that is short of the value is marked");
         assert!(!rows[1].required_unset, "the project that filled it in is not");
+    }
+
+    /// The device's row is read the same way and by the same function, which is the whole point of it
+    /// being one: a machine-wide plugin has no crossing to be in [`intersections`], so a face drawing it
+    /// would otherwise have to work out for itself what "has a value" and "would be refused" mean
+    /// (`AMB-D-601`).
+    #[test]
+    fn the_device_layer_is_read_by_the_same_two_readings_a_crossing_is() {
+        let (mut store, _dir) = store_at("held-at-device");
+        let elsewhere = mk_project(&mut store, "elsewhere");
+        let fields = vec![required_field("webhook_url")];
+
+        let empty = held_at(&store, "slack", &fields, Layer::Device).unwrap();
+        assert_eq!(
+            (empty.has_value, empty.required_unset),
+            (false, true),
+            "nothing held, and the required setting is what an enable here would be refused over",
+        );
+
+        // A project holding it is not the device holding it: the two layers are separate rows.
+        set(&mut store, &required_field("webhook_url"), "slack", Layer::Project(elsewhere), "https://hooks/x")
+            .unwrap();
+        assert!(held_at(&store, "slack", &fields, Layer::Device).unwrap().required_unset);
+
+        set(&mut store, &required_field("webhook_url"), "slack", Layer::Device, "https://hooks/y").unwrap();
+        let filled = held_at(&store, "slack", &fields, Layer::Device).unwrap();
+        assert_eq!((filled.has_value, filled.required_unset), (true, false));
+
+        // And it is nowhere in the crossings, which name projects and only projects.
+        let rows = intersections(&store, "slack", &fields).unwrap();
+        assert_eq!(rows.len(), 1, "only the project that filled it in");
+        assert_eq!(rows[0].project, elsewhere);
     }
 
     /// A secret is a value like any other here: which table the author's flag sent it to (`AMB-D-356`)

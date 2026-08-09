@@ -426,8 +426,14 @@ function HarnessSection({ projectId }: { projectId: number }) {
  * **added** from the picker rather than enabled by it, for the reason the plugin face adds a project —
  * the crossing has to exist before what would refuse it can be read or filled in.
  *
- * What is installed is read once for the whole store — an install already carries the projects it
- * crosses — so this section is a filter over that, with no reading of its own.
+ * **A plugin its author declared the machine's is not one of those rows** (`AMB-D-601`). It crosses no
+ * project, so a switch drawn here would move a gate this project does not own and read back as untouched
+ * — which is what it did before the layer was drawn at all. It is named below the rows instead, with
+ * whether it fires, because a device-wide plugin does fire *here* and a project's own settings that never
+ * mentioned it would be hiding that; moving it stays on the plugin's own face, where its one row is.
+ *
+ * What is installed is read once for the whole store — an install already carries the rows it has — so
+ * this section is a filter over that, with no reading of its own.
  */
 function PluginsSection({ projectId }: { projectId: number }) {
   const { installs } = usePluginInstalls();
@@ -435,11 +441,15 @@ function PluginsSection({ projectId }: { projectId: number }) {
   // left, so turning one off does not make the row someone is working in vanish.
   const [added, setAdded] = useState<string[]>([]);
 
+  // The device's own, which no project crosses — kept out of the rows and out of the picker, and said
+  // apart below.
+  const deviceWide = installs.filter((i) => i.device != null);
+  const crossable = installs.filter((i) => i.device == null);
   // In the store's own order, so the same two plugins do not swap places between two visits.
-  const shown = installs.filter(
+  const shown = crossable.filter(
     (i) => added.includes(i.name) || i.projects.some((row) => row.project === projectId),
   );
-  const rest = installs.filter((i) => !shown.includes(i));
+  const rest = crossable.filter((i) => !shown.includes(i));
 
   return (
     <div className="settings__section">
@@ -448,22 +458,16 @@ function PluginsSection({ projectId }: { projectId: number }) {
         <span className="newproj__hint">{t("projset.pluginsHint")}</span>
 
         {installs.length === 0 && <span className="faint">{t("plugins.emptyInstalled")}</span>}
-        {installs.length > 0 && shown.length === 0 && (
+        {/* Judged on what this project *could* cross: with only the device's own installed there is no
+            crossing to have made, so saying none were made would be reporting an absence nobody could
+            have filled. */}
+        {crossable.length > 0 && shown.length === 0 && (
           <span className="faint">{t("projset.pluginsNone")}</span>
         )}
 
         {shown.map((i) => (
           <div key={i.name}>
-            <PluginCrossingRow install={i} project={projectId} name={i.name} />
-            {/* The layer its author declared (`AMB-D-601`), said on the row it is about. This face is one
-                project's, which is exactly why it is worth saying here: a device-wide plugin reads every
-                project on the machine, so what this row shows of it is not the whole of it. It is the
-                declaration and nothing to set, so it is stated rather than warned about. */}
-            {i.scope === "machine" && (
-              <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>
-                {t("plugins.scope.machine")}
-              </div>
-            )}
+            <PluginCrossingRow install={i} layer={projectId} name={i.name} />
             {/* Said per row, unlike the plugin face where every row is the same plugin: here each row is
                 a different one, and only some of them are builds this amenbo cannot speak to. */}
             {!i.compatible && (
@@ -471,6 +475,24 @@ function PluginsSection({ projectId }: { projectId: number }) {
             )}
           </div>
         ))}
+
+        {/* The device's own, named rather than switched (`AMB-D-601`). Whether it fires is worth saying
+            here because a device-wide plugin that is on fires in this project too — but the switch is one
+            the whole machine shares, so it stays where its single row is. */}
+        {deviceWide.length > 0 && (
+          <>
+            <span className="newproj__hint">{t("projset.pluginsDevice")}</span>
+            {deviceWide.map((i) => (
+              <div className="pluggate" key={i.name}>
+                <span className="chip">{i.name}</span>
+                {i.device?.enabled && <span className="chip">{t("plugins.enabledChip")}</span>}
+                <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+                  {t("plugins.scope.machine")}
+                </span>
+              </div>
+            ))}
+          </>
+        )}
 
         {rest.length > 0 && (
           <div className="newproj__nextrow">

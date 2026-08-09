@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { errText, t, tn } from "../core/i18n";
-import { crossingAt, setPluginEnabled, type PluginInstall } from "../core/pluginInstalls";
+import {
+  crossingAt,
+  setPluginEnabled,
+  type PluginInstall,
+  type PluginLayer,
+} from "../core/pluginInstalls";
 import { PluginConfigForm } from "./PluginConfigForm";
 
 /**
@@ -22,12 +27,20 @@ import { PluginConfigForm } from "./PluginConfigForm";
  *
  * What differs between the two faces is the name on the row and nothing else: the plugin screen lists
  * projects, a project's settings list plugins, and the same crossing is the same row either way.
+ *
+ * **A device row is this same row at the other layer** (`AMB-D-601`). A plugin its author declared the
+ * machine's crosses no project and has one gate, so what it gets is one of these with `layer` at `null` —
+ * the same switch, the same settings opened inside it, and a name that says the device rather than a
+ * project. Nothing here decides which: the caller read the declaration off the install.
  */
-export function PluginCrossingRow({ install, project, name }: {
+export function PluginCrossingRow({ install, layer, name }: {
   install: PluginInstall;
-  /** The project this crossing is in — whose gate the switch moves, and whose values the form writes. */
-  project: number;
-  /** What names the crossing on this face: the project, or the plugin. */
+  /**
+   * Which layer this row is at — the project whose gate the switch moves and whose values the form
+   * writes, or `null` for the device's own row.
+   */
+  layer: PluginLayer;
+  /** What names the row on this face: the project, the plugin, or the device it is the whole of. */
   name: string;
 }) {
   const [busy, setBusy] = useState(false);
@@ -37,14 +50,14 @@ export function PluginCrossingRow({ install, project, name }: {
   // it matters — the same silence the CLI keeps.
   const [dropped, setDropped] = useState(0);
   const [open, setOpen] = useState(false);
-  const at = crossingAt(install, project);
+  const at = crossingAt(install, layer);
 
   const move = async (next: boolean) => {
     setBusy(true);
     setError(null);
     setDropped(0);
     try {
-      const moved = await setPluginEnabled(install.name, project, next);
+      const moved = await setPluginEnabled(install.name, layer, next);
       setDropped(moved.droppedQueued);
     } catch (e) {
       // A refusal is core's — a build this amenbo cannot speak to, a `required` setting this project
@@ -91,7 +104,7 @@ export function PluginCrossingRow({ install, project, name }: {
           would be a row saying its settings are filled in and unfillable in the same breath. What may be
           enabled now is answered by pressing again, which is the one thing that can answer it. */}
       {open && (
-        <PluginConfigForm install={install} projectId={project} onWrote={() => setError(null)} />
+        <PluginConfigForm install={install} layer={layer} onWrote={() => setError(null)} />
       )}
     </div>
   );

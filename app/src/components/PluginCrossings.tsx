@@ -16,6 +16,12 @@ import { PluginCrossingRow } from "./PluginCrossingRow";
  * its `required` settings can be filled in, and the mark that says an enable would be refused is only
  * worth having if it is readable before the switch is pressed — so picking draws the row, and the row's
  * own switch is the permission to run somebody else's code (`AMB-D-351`).
+ *
+ * **A plugin its author declared the machine's gets one row instead of that list** (`AMB-D-601`). Its
+ * gate, its settings and its secrets are the device's, so there is no project to cross and nothing for a
+ * picker to add: a list drawn for it would be projects whose switches move a gate none of them owns. The
+ * one row is the whole of what there is to read and to move, and pressing its switch is the consent to
+ * let the plugin read every project on the machine.
  */
 export function PluginCrossings({ install, projects }: {
   install: PluginInstall;
@@ -32,6 +38,24 @@ export function PluginCrossings({ install, projects }: {
   );
   const rest = projects.filter((p) => !shown.includes(p));
 
+  // The device layer is not a shorter project list — it is a different row, with nothing to add beside
+  // it. The one warning that still belongs under it is the build's: an open gate on a plugin this amenbo
+  // cannot speak to fires nothing, wherever that gate sits.
+  if (install.device) {
+    return (
+      <>
+        <PluginCrossingRow install={install} layer={null} name={t("plugins.gate.device")} />
+        {!install.compatible && (
+          <div className="pluggate">
+            <div className="pluggate__note">
+              {install.incompatibleReason ?? t("plugins.incompatible")}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       {shown.length === 0 && (
@@ -40,7 +64,7 @@ export function PluginCrossings({ install, projects }: {
         </span>
       )}
       {shown.map((p) => (
-        <PluginCrossingRow key={p.id} install={install} project={p.id} name={p.name} />
+        <PluginCrossingRow key={p.id} install={install} layer={p.id} name={p.name} />
       ))}
       {/* A plugin with a row in every project there is has nothing left to add, and a compatible one
           has nothing to warn about — so the line under the rows is drawn only when it carries something. */}

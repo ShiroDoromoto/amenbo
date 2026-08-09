@@ -16,7 +16,6 @@ import type {
   PluginConfigFieldDto,
   PluginGateMovedDto,
   PluginInstallDto,
-  PluginProjectRowDto,
   PluginRemovedDto,
 } from "../bindings/bindings";
 
@@ -28,6 +27,24 @@ export type PluginConfigField = PluginConfigFieldDto;
 export type PluginRemoved = PluginRemovedDto;
 /** Where a moved gate ended up, and what closing it dropped (generated DTO). */
 export type PluginGateMoved = PluginGateMovedDto;
+
+/**
+ * Which layer a row is drawn at — a project's id, or `null` for the device's own row (`AMB-D-601`).
+ *
+ * `null` **is** the device layer and not a project nobody named, which mirrors what the row is underneath
+ * (a `project_id` that is NULL). Nothing here picks it: the declaration on the install does, so a face
+ * reads `install.device` to know which kind of row it is drawing, and passes the answer down.
+ */
+export type PluginLayer = number | null;
+
+/**
+ * The three readings a row draws, whichever layer it is at (`AMB-D-447` / `AMB-D-601`) — on or off, whether
+ * anything is filled in, and whether a `required` setting is empty.
+ *
+ * It carries no project because a device row has none, and the two kinds of row are drawn by the same
+ * component: what names the row on screen is the face's, not this.
+ */
+export type PluginRowState = { enabled: boolean; hasValue: boolean; requiredUnset: boolean };
 
 const NONE: PluginInstall[] = [];
 const NO_FIELDS: PluginConfigField[] = [];
@@ -74,27 +91,31 @@ function reloadInstalls(): void {
 }
 
 /**
- * Read what one project holds for a plugin's declared settings (Tauri: `plugin_config_read`).
+ * Read what one layer holds for a plugin's declared settings (Tauri: `plugin_config_read`).
  *
- * Separate from the installs because a value is one project's and an install is not (`AMB-D-434`): with
- * no project named there is nothing to read, and no blanks are invented in its place — the form draws
- * the author's schema from the install row until a project answers for it.
+ * Separate from the installs because a value belongs to a layer and an install does not (`AMB-D-434`):
+ * the form draws the author's schema from the install row, and what is *held* is read for the layer the
+ * row it was opened in stands at.
+ *
+ * A `null` layer is the device's row (`AMB-D-601`), not an unasked question — which is why it is passed
+ * through rather than short-circuited. Core settles the pairing off the declaration: a `scope: project`
+ * plugin asked without a project is refused there, so no blanks are invented for it here.
  */
 export async function fetchPluginConfig(
   name: string,
-  projectId: number | null,
+  layer: PluginLayer,
 ): Promise<PluginConfigField[]> {
-  if (!inTauri() || projectId == null) return NO_FIELDS;
-  return invoke<PluginConfigField[]>("plugin_config_read", { name, projectId });
+  if (!inTauri()) return NO_FIELDS;
+  return invoke<PluginConfigField[]>("plugin_config_read", { name, projectId: layer });
 }
 
-/** What one project holds for a plugin — the settings form's own read. */
+/** What one layer holds for a plugin — the settings form's own read. */
 export function usePluginConfig(
   name: string,
-  projectId: number | null,
+  layer: PluginLayer,
 ): { fields: PluginConfigField[]; loading: boolean } {
-  const { data, loading } = useQuery<PluginConfigField[]>(["plugin-config", name, projectId], () =>
-    fetchPluginConfig(name, projectId),
+  const { data, loading } = useQuery<PluginConfigField[]>(["plugin-config", name, layer], () =>
+    fetchPluginConfig(name, layer),
   );
   return { fields: data ?? NO_FIELDS, loading };
 }
@@ -130,14 +151,21 @@ export async function installPlugin(name: string): Promise<PluginInstall | null>
  * `droppedQueued` is the discard a disable makes (`AMB-D-399`): whatever was waiting on that plugin's
  * queue is gone, and it is not caught up on when the plugin comes back. The caller is expected to say so
  * — the count is the only trace those events leave.
+ *
+ * A `null` layer is the device's gate (`AMB-D-601`), and opening that one is the consent to let the plugin
+ * read every project on the machine — which is why it is the same call and not a second question.
  */
 export async function setPluginEnabled(
   name: string,
-  projectId: number,
+  layer: PluginLayer,
   enabled: boolean,
 ): Promise<PluginGateMoved> {
   if (!inTauri()) return { enabled: false, droppedQueued: 0 };
-  const now = await invoke<PluginGateMoved>("plugin_set_enabled", { name, projectId, enabled });
+  const now = await invoke<PluginGateMoved>("plugin_set_enabled", {
+    name,
+    projectId: layer,
+    enabled,
+  });
   reloadInstalls();
   return now;
 }
@@ -145,20 +173,20 @@ export async function setPluginEnabled(
 /**
  * Write one setting the plugin's author declared (Tauri: `plugin_config_set`, `AMB-D-356`).
  *
- * `projectId` names the project the value belongs to and is required (`AMB-D-434`) — the author's
- * `secret` flag decides which of the two tables it lands in, and this seam never says which is which.
- * An **empty** value clears the setting.
+ * `layer` names where the value belongs — one project's rows (`AMB-D-434`) or, as `null`, the device's
+ * (`AMB-D-601`). The author's `secret` flag decides which of the two tables it lands in, and this seam
+ * never says which is which. An **empty** value clears the setting.
  *
- * What that project holds is refetched afterwards, since it is what the form draws from.
+ * What that layer holds is refetched afterwards, since it is what the form draws from.
  */
 export async function setPluginConfig(
   name: string,
   key: string,
   value: string,
-  projectId: number | null,
+  layer: PluginLayer,
 ): Promise<void> {
   if (!inTauri()) return;
-  await invoke<null>("plugin_config_set", { name, key, value, projectId });
+  await invoke<null>("plugin_config_set", { name, key, value, projectId: layer });
   reloadConfig();
 }
 
@@ -181,18 +209,18 @@ export async function uninstallPlugin(name: string): Promise<PluginRemoved | nul
 }
 
 /**
- * The state of one project × plugin crossing (`AMB-D-447`), for a face that is drawing that row.
+ * The state of one row (`AMB-D-447`), for a face that is drawing it — one project's crossing, or the
+ * device's own row when `layer` is `null` (`AMB-D-601`).
  *
- * A project the install names nothing about is one that never held the plugin on and never filled it in
+ * A layer the install names nothing about is one that never held the plugin on and never filled it in
  * — off, holding nothing, and short of whatever the author marked `required` without a default. That
  * last part is read off the schema rather than left blank, so a row opened from the picker carries its
  * warning before the switch is pressed rather than after core refuses it.
  */
-export function crossingAt(install: PluginInstall, projectId: number): PluginProjectRowDto {
-  const row = install.projects.find((p) => p.project === projectId);
-  if (row) return row;
+export function crossingAt(install: PluginInstall, layer: PluginLayer): PluginRowState {
+  const row = layer == null ? install.device : install.projects.find((p) => p.project === layer);
+  if (row) return { enabled: row.enabled, hasValue: row.hasValue, requiredUnset: row.requiredUnset };
   return {
-    project: projectId,
     enabled: false,
     hasValue: false,
     requiredUnset: install.config.some((f) => f.required && f.defaultValue == null),
@@ -200,18 +228,14 @@ export function crossingAt(install: PluginInstall, projectId: number): PluginPro
 }
 
 /**
- * Whether the plugin fires in one project — that crossing's gate (`AMB-D-434`). A project with no row is
- * one that never held the plugin on and never filled it in, which reads the same as off.
- */
-export function enabledIn(install: PluginInstall, projectId: number): boolean {
-  return install.projects.some((p) => p.project === projectId && p.enabled);
-}
-
-/**
  * Whether the plugin fires anywhere at all — the one-line reading a badge about the *plugin* wants
  * (`AMB-D-412`). Which projects is a row's to name.
+ *
+ * A plugin its author declared the machine's has one gate and no project rows (`AMB-D-601`), so reading
+ * the project list for it would answer "nowhere" for something firing on the whole device.
  */
 export function firesAnywhere(install: PluginInstall): boolean {
+  if (install.device) return install.device.enabled;
   return install.projects.some((p) => p.enabled);
 }
 

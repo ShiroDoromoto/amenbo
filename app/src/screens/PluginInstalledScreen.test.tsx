@@ -8,7 +8,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NONE_SELECTED } from "../core/pluginInstalls";
 import type { PluginConfigField, PluginInstall } from "../core/pluginInstalls";
-import type { PluginProjectRowDto, PluginWantedSettingDto } from "../bindings/bindings";
+import type {
+  PluginDeviceRowDto,
+  PluginProjectRowDto,
+  PluginWantedSettingDto,
+} from "../bindings/bindings";
 import type { PluginCatalogRead, PluginUpdate } from "../core/pluginUpdates";
 
 const hoisted = vi.hoisted(() => ({
@@ -119,12 +123,26 @@ const at = (project: number, over: Partial<PluginProjectRowDto> = {}): PluginPro
   ...over,
 });
 
-/** One installed plugin; `on` names the projects it fires in, as rows of those crossings. */
+/** The device's own row (`AMB-D-601`): off and holding nothing, until a test says otherwise. */
+const onDevice = (over: Partial<PluginDeviceRowDto> = {}): PluginDeviceRowDto => ({
+  enabled: false,
+  hasValue: false,
+  requiredUnset: false,
+  ...over,
+});
+
+/**
+ * One installed plugin; `on` names the projects it fires in, as rows of those crossings.
+ *
+ * Naming a `device` row instead is what a plugin its author declared the machine's looks like
+ * (`AMB-D-601`) — one gate, and no project crossing at all — so the declaration follows from the row
+ * rather than being spelled twice and able to disagree with itself.
+ */
 const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?: number[] }): PluginInstall => ({
   compatible: true,
   projects: on.map((project) => at(project, { enabled: true })),
   config: [],
-  scope: "project",
+  scope: over.device ? "machine" : "project",
   ...over,
 });
 
@@ -347,18 +365,36 @@ describe("a plugin this build cannot speak to", () => {
   });
 });
 
-// The layer is the author's (`AMB-D-601`), and this face reads it off the manifest that was installed. It
-// is drawn as a sentence and nothing else: the whole point of settling the layer by declaration is that
-// `plugin enable` means one thing, so a second switch here would undo it (`AMB-D-379`).
+// The layer is the author's (`AMB-D-601`), and this face reads it off the manifest that was installed. The
+// declaration is said in prose and the gate it settles is drawn as one row: the whole point of settling
+// the layer by declaration is that `plugin enable` means one thing, so a second switch would undo it
+// (`AMB-D-379`).
 describe("the layer a plugin declared", () => {
-  it("says a device-wide plugin reads every project, without adding anything to press", () => {
+  it("says a device-wide plugin reads every project, and draws its one gate as the device's row", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
-    hoisted.installs = [row({ name: "carry", scope: "machine" })];
+    hoisted.installs = [row({ name: "carry", device: onDevice() })];
     render();
 
     expect(container.textContent).toContain(t("plugins.scope.machine"));
-    // Only the badges the row already wore: the declaration is prose, not a state of its own.
-    expect(chips()).toEqual([]);
+    // One row, named for the device rather than for a project — and no project to add beside it, since
+    // there is no crossing to make.
+    expect(chips()).toEqual([t("plugins.gate.device")]);
+    expect(container.querySelector("select")).toBeNull();
+    expect(container.textContent).not.toContain(t("plugins.gate.offEverywhere"));
+  });
+
+  it("draws that one row as on once the device's gate is open", () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
+    hoisted.installs = [row({ name: "carry", device: onDevice({ enabled: true }) })];
+    render();
+
+    // The badge on the plugin itself reads the device's gate too: a machine-wide plugin has no project
+    // row for `firesAnywhere` to have found.
+    expect(chips()).toEqual([
+      t("plugins.enabledChip"),
+      t("plugins.gate.device"),
+      t("plugins.enabledChip"),
+    ]);
   });
 
   it("says nothing for a project's plugin, which is every plugin that declared nothing", () => {
@@ -367,6 +403,7 @@ describe("the layer a plugin declared", () => {
     render();
 
     expect(container.textContent).not.toContain(t("plugins.scope.machine"));
+    expect(container.textContent).not.toContain(t("plugins.gate.device"));
   });
 });
 

@@ -606,6 +606,22 @@ const REGISTRY: &[OpSpec] = &[
     // the step is the screen's.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "enable-in", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "disable-in", required: &["name", "project"], refs: &[], strings: &["name", "project"], binds: false },
+    // The same switch for a plugin its author declared the machine's: it crosses no
+    // project, so its row is the device's own and there is no name to give one. Pressing it is the
+    // consent to let the plugin read every project on the machine — one act, because the declaration
+    // already settled what the one switch means.
+    //
+    // A step of its own rather than `enable-in` with the project left out, for the reason the two rows
+    // are different rows: a road that named no project would be read as one that forgot to.
+    //
+    // A screen road alone, and not by omission: a terminal moves this same gate with `plugin enable`,
+    // which needs no word for the layer at all — the declaration picks it. A screen has two kinds of
+    // row and which one is pressed is the whole question, so the word is the screen's to need.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "enable-on-device", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // The settings of that same row, opened inside it. It is `open-config-in-row`'s sibling and exists
+    // for the same reason: a form reached from the row needs no layer answered, and one reached anywhere
+    // else would be asking what the row has already said.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "open-config-on-device", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // Drawing the crossing and nothing else: the picker beside the rows puts one there, and leaves the
     // switch in it where it was. It is a step of its own rather than the first half of `enable-in`
     // because what it leaves behind is a state worth reading — a row standing with the plugin still off
@@ -816,6 +832,11 @@ const REGISTRY: &[OpSpec] = &[
     // to see that something did happen. `absent` is no row, `drawn` a row with the plugin off in it,
     // `firing` a row saying the plugin is on.
     //
+    // `device` is the fourth, and it is not a state of a crossing at all: a plugin its author declared
+    // the machine's crosses no project, so this face names it and offers nothing to press.
+    // It is told apart from `absent` because the two differ where it matters — an absent row is one the
+    // picker here offers to draw, and this one is not on that list and never will be.
+    //
     // A screen road alone, and a `Review` like `fires-in`: whether the plugin is on here is drawn as a
     // button, and a button's label is a word of the interface — so what separates `drawn` from `firing`
     // is not something the presence of text on a shot can settle.
@@ -931,6 +952,22 @@ const REGISTRY: &[OpSpec] = &[
     // runs down the side of every screen, and a reading answers which words are on a shot and never
     // which part of it they came from — so finding the name proves nothing about the row.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "fires-in", required: &["name", "project", "present"], refs: &[], strings: &["name", "project"], binds: false },
+    // The same reading for the one gate a machine-wide plugin has. It names no project
+    // because there is none to name: what is open is the device's, and reading a project list for it
+    // would answer "nowhere" for something firing on the whole machine.
+    //
+    // A screen road alone, and not by omission: what `plugin list` reports of this gate is a line of
+    // text a build could keep answering while the row that moves it was never drawn — which is the state
+    // this exists to close.
+    //
+    // A `Review`, for the reason `fires-in` is one tier along: what tells an open gate from a shut one is
+    // the word on the button standing in the row, which is a word of the interface.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "fires-on-device", required: &["name", "present"], refs: &[], strings: &["name"], binds: false },
+    // What that same row says about the settings kept there — `settings-in`'s sibling, with the same
+    // three states and for the same reasons: `required-empty` is the mark worn before anything is
+    // pressed, `open` is the form standing inside the row asking for no layer, and `filled` is the row
+    // saying the value is in.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "settings-on-device", required: &["name", "state"], refs: &[], strings: &["name", "state"], binds: false },
     // What the last call handed back. `contains` is the word to find in it; `present: false` puts the
     // same question the other way, which is how a road says a value the window shuts out did not come
     // back in what a plugin was handed.

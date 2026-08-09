@@ -1,0 +1,142 @@
+# A plugin its author declared the machine's has exactly one gate, and until there was a row for it the
+# screen had nowhere to put it. Its settings and its switch are the device's, and no project crosses it —
+# so the list of crossings a plugin's row is otherwise made of is empty for this one, rightly, and a face
+# that drew only that list said "off everywhere" about something that could be firing on the whole machine.
+#
+# This is that row being used, end to end: the mark it wears before anything is pressed, the settings
+# opened inside it, the value going in there, and the one press that follows. What the press consents to
+# is the whole device — there is no second question under it, because the declaration already settled what
+# the switch means.
+#
+# The last two steps are the other half of "one gate": a reader standing in a project must not find a
+# second switch there. A project's own settings name the plugin and offer nothing to press, and the
+# picker that adds a crossing does not list it — there is no crossing to add.
+#
+# A screen road alone, and not by omission: from a terminal the same gate is one `plugin enable` with no
+# project to name, which the road beside this one walks. What only a screen can be wrong about is whether
+# the row exists at all, and whether the project's face quietly offers a switch of its own.
+#
+# The declaration and the setting are written onto the installed manifest by the driver, because no plugin
+# the official catalog serves carries either. The world is stood up before the app is; what is left to the
+# operator is where to start, which is the installed plugins screen.
+id: put-a-device-wide-plugin-to-work
+title: A plugin declared the machine's is filled in and turned on from its own row, and a project's settings offer no second switch for it
+description: >
+  Start with a plugin the machine's, installed and firing nowhere, owing a setting its author says it
+  cannot work without. Its row is the device's own: it carries the mark before anything is pressed, the
+  settings open inside it and ask for no project, the value goes in there, the mark gives way, and one
+  press turns the plugin on for the whole machine. Then open a project's own settings and read the other
+  half of that: the plugin is named there as the device's, with nothing to press and nothing in the picker
+  to add.
+given:
+  # The project the last two steps stand in. A road on screen cannot raise one on its way past, and a
+  # project's own settings are what the second half of this is read on.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # The layer, before anything else touches the gate: an enable writes the rows the declaration picks, so
+  # a plugin enabled first would have opened a project's gate and be holding the wrong one.
+  - type: action
+    domain: plugin
+    op: declare-scope
+    with:
+      name: worktree
+      scope: machine
+
+  # And something the plugin cannot work without, so the row has a reason to refuse and a place to be
+  # answered. No plugin in the official catalog declares a setting at all, so this is written onto the
+  # installed manifest too.
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: base
+      label: Base branch
+      required: true
+
+steps_gui:
+  # The mark before the switch. A warning that only arrives after the refusal arrives too late, and on
+  # this row it is the one thing standing between a reader and a press that would be turned away.
+  - type: assert
+    domain: plugin
+    op: settings-on-device
+    with:
+      name: worktree
+      state: required-empty
+
+  - type: assert
+    domain: plugin
+    op: fires-on-device
+    with:
+      name: worktree
+      present: false
+
+  # The settings, reached from inside the row. A form opened anywhere else would have to ask which layer
+  # it is writing at, and the row has already answered.
+  - type: action
+    domain: plugin
+    op: open-config-on-device
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: settings-on-device
+    with:
+      name: worktree
+      state: open
+
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: base
+      value: main
+
+  # The mark gives way, which is the row saying the press would now go through.
+  - type: assert
+    domain: plugin
+    op: settings-on-device
+    with:
+      name: worktree
+      state: filled
+
+  - type: action
+    domain: plugin
+    op: enable-on-device
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: fires-on-device
+    with:
+      name: worktree
+      present: true
+
+  # And the other half of one gate. A project's own settings are where a second switch would appear if
+  # there were one, so this is the face the road has to end on rather than the one it started from.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  - type: assert
+    domain: project
+    op: plugin-row
+    with:
+      project: Greenhouse
+      plugin: worktree
+      state: device

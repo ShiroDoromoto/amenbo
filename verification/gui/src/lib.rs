@@ -267,6 +267,11 @@ impl Instructor {
     /// reading that finds the name cannot say it came from the row, and one that fails to find it
     /// would be reading a screen the plugin's row is not even on.
     ///
+    /// `plugin fires-on-device` and `plugin settings-on-device` are `Review`s beside them, for the reasons
+    /// their crossing-shaped siblings are: what tells an open gate from a shut one is the word on a button,
+    /// the marks a row wears are words of the interface, and what `open` turns on is a picker that is *not*
+    /// there.
+    ///
     /// `plugin layer` is a `Review` for the same reason once more, and on both of its states: the
     /// sentence a declared row carries is a word of the interface, and the state beside it is a row
     /// carrying no sentence — which is an absence, and a reading answers which words are on a shot and
@@ -506,6 +511,21 @@ impl Instructor {
                 "Turn \"{}\" off in the row where it crosses \"{}\".",
                 req(with, "name")?,
                 req(with, "project")?
+            ),
+            // The one switch a machine-wide plugin has, in the one row it has. The line
+            // says where the row is *not* as well: a reader who went looking for it in a project's own
+            // settings would find the plugin named there and nothing to press, which is the state the
+            // step after this one reads.
+            (Domain::Plugin, "enable-on-device") => format!(
+                "On the installed plugins screen, find \"{}\"'s own row — the one for this device, which names no project — and turn the plugin on there.",
+                req(with, "name")?
+            ),
+            // Its settings, opened inside that same row. Where they are opened from is the whole of the
+            // step, as it is for a crossing: a form reached from the row asks for no layer, and one
+            // reached anywhere else would be asking what the row has already answered.
+            (Domain::Plugin, "open-config-on-device") => format!(
+                "In \"{}\"'s own row for this device, open the settings kept there — from inside that row and nowhere else on the screen.",
+                req(with, "name")?
             ),
             // The picker on its own. What it leaves behind is the row and nothing more, so the
             // instruction stops where the picker does — pressing anything in the row is the next step's,
@@ -758,6 +778,40 @@ impl Instructor {
                     ),
                 }
             }
+            // The one gate a machine-wide plugin has, read in its own row. It names no project on
+            // purpose: what is open is the device's, and a line naming one would be reading the wrong
+            // kind of row.
+            (Domain::Plugin, "fires-on-device") => {
+                let name = req(with, "name")?;
+                match present(with) {
+                    true => format!(
+                        "Confirm \"{name}\"'s own row for this device says the plugin is on — one row, and no project named anywhere in it."
+                    ),
+                    false => format!(
+                        "Confirm \"{name}\"'s own row for this device offers to turn the plugin on rather than off, which is the gate still shut."
+                    ),
+                }
+            }
+            // What that row says about the settings kept there — the same three states `settings-in`
+            // reads on a crossing, and asked apart from the gate for the same reason: a row refused an
+            // enable over a missing value is marked and off, and one word could not say both halves.
+            (Domain::Plugin, "settings-on-device") => {
+                let name = req(with, "name")?;
+                match req(with, "state")? {
+                    "required-empty" => format!(
+                        "Confirm \"{name}\"'s own row for this device is marked as owing a setting the plugin cannot be enabled without."
+                    ),
+                    "open" => format!(
+                        "Confirm the settings for \"{name}\" are standing open inside that same row, and that nothing in them asks which project they are for."
+                    ),
+                    "filled" => format!(
+                        "Confirm \"{name}\"'s own row for this device says the settings there are filled in, and that nothing in it still says a required one is empty."
+                    ),
+                    other => {
+                        return Err(format!("assert `settings-on-device` does not know the state `{other}`"))
+                    }
+                }
+            }
             // The same crossing as `fires-in`, read where a project's own settings draw it. Three
             // states and not two: what the picker leaves behind is a row with the plugin off in it, and
             // a line that could only say "not on" would read the same over a screen where nothing was
@@ -774,6 +828,9 @@ impl Instructor {
                     ),
                     "firing" => format!(
                         "Confirm \"{project}\"'s own settings draw a row for \"{plugin}\", and that row says the plugin is on in this project."
+                    ),
+                    "device" => format!(
+                        "Confirm \"{project}\"'s own settings name \"{plugin}\" as the device's own — said apart from the crossings, with no switch of this project's on it, and not among what the picker there offers to add."
                     ),
                     other => {
                         return Err(format!("assert `plugin-row` does not know the state `{other}`"))
@@ -1512,6 +1569,80 @@ steps_gui:
         for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
             assert!(ins.expectation(st).is_none(), "step {i} turns on a button's label, which no reading settles");
         }
+    }
+
+    /// The one row a machine-wide plugin has, walked the way the road walks it: the mark before the
+    /// switch, the settings opened inside it, the press, and the project's own face offering no second
+    /// switch. Not one line of it names a project — a device row has none, and a step that named one
+    /// would be sending the operator to the wrong kind of row.
+    #[test]
+    fn the_device_row_is_marked_opened_and_pressed_without_naming_a_project() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: settings-on-device
+    with: { name: worktree, state: required-empty }
+  - type: action
+    domain: plugin
+    op: open-config-on-device
+    with: { name: worktree }
+  - type: assert
+    domain: plugin
+    op: settings-on-device
+    with: { name: worktree, state: open }
+  - type: action
+    domain: plugin
+    op: enable-on-device
+    with: { name: worktree }
+  - type: assert
+    domain: plugin
+    op: fires-on-device
+    with: { name: worktree, present: true }
+  - type: assert
+    domain: project
+    op: plugin-row
+    with: { project: Greenhouse, plugin: worktree, state: device }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("owing a setting"), "got: {}", lines[0]);
+        assert!(lines[1].contains("open the settings kept there"), "got: {}", lines[1]);
+        assert!(lines[2].contains("asks which project"), "got: {}", lines[2]);
+        assert!(lines[3].contains("turn the plugin on there"), "got: {}", lines[3]);
+        assert!(lines[4].contains("says the plugin is on"), "got: {}", lines[4]);
+        // The last line is the one that does name a project, since it is read on that project's face —
+        // and what it says about the plugin is that the face has nothing of its own to press.
+        assert!(lines[5].contains("as the device's own"), "got: {}", lines[5]);
+        for line in &lines[..5] {
+            assert!(!line.contains("Greenhouse"), "a device row has no project to name: {line}");
+        }
+
+        for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
+            assert!(ins.expectation(st).is_none(), "step {i} reads a word of the interface's own");
+        }
+    }
+
+    /// A device-row state the face does not have is refused by name, rather than rendered as a line
+    /// telling an operator to confirm nothing.
+    #[test]
+    fn an_unknown_device_row_state_is_refused() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: settings-on-device
+    with: { name: worktree, state: half-filled }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let err = ins.render(&s.steps(Driver::Gui)[0]).expect_err("an unknown state has no instruction");
+        assert!(err.contains("half-filled"), "got: {err}");
     }
 
     /// The layer read off the row: the declared one carries a sentence about the device, and the one

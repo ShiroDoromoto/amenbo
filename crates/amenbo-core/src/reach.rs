@@ -7,11 +7,13 @@
 //!
 //! The type has exactly two values:
 //! - [`Reach::All`] — everything on this machine. **The default for a human** (the overview is the human's
-//!   place to stand), and what the GUI runs with.
+//!   place to stand), what the GUI runs with, and what a plugin declaring `scope: machine` is launched with
+//!   (`AMB-D-601`: its gate is the device's, and the gate is the window).
 //! - [`Reach::Project`] — one project and nothing else. This is where the **AI facet** (`--actor ai`) lands,
-//!   and also where a plugin calling amenbo back lands (`AMB-D-406`) — two ways in that reach exactly as
-//!   far as each other. What closed it is carried along ([`Closed`]) for one reason: a refusal has to name
-//!   something the reader can act on, and a plugin's author cannot act on a binding they never made.
+//!   and also where a `scope: project` plugin calling amenbo back lands (`AMB-D-406`) — two ways in that
+//!   reach exactly as far as each other. What closed it is carried along ([`Closed`]) for one reason: a
+//!   refusal has to name something the reader can act on, and a plugin's author cannot act on a binding
+//!   they never made.
 //!
 //! "An AI in an unbound folder" is not a third value but an **error** ([`Reach::for_ai`]). An empty reach
 //! lets no operation through at all, so refusing at the door is both more honest than carrying an empty
@@ -170,9 +172,14 @@ impl Reach {
     /// `AMB-D-224` weighed these same three for the AI facet and allowed them: taking your own data out
     /// is the user's right, their AI acts for them, and disaster recovery is work an agent is there to
     /// run. What that decision narrowed was the door, not the contents — with no destination the export
-    /// writes a file instead of streaming the device into the session. A plugin is not the user: it
-    /// migrates nowhere, recovers nothing, and its window was fixed by the runner before its own code
-    /// ran.
+    /// writes a file instead of streaming the device into the session. A plugin holding one project's
+    /// window is not the user: it migrates nowhere, recovers nothing, and its window was fixed by the
+    /// runner before its own code ran.
+    ///
+    /// A plugin whose author declared `scope: machine` holds no window to step past — it was launched
+    /// reaching the device (`AMB-D-601`), and enabling it was the consent for exactly that — so it lands in
+    /// the first arm with the human and the binding. That is the layer being taken at its word, not a hole:
+    /// this refusal has always asked *how far does this reader reach*, never *what kind of reader is it*.
     pub fn refuse_whole_device(self, what: &str) -> Result<()> {
         match self {
             Reach::All | Reach::Project { closed_by: Closed::Binding, .. } => Ok(()),

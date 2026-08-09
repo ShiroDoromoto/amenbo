@@ -35,7 +35,8 @@
 //!
 //! In its environment it receives its secret settings (`AMB-D-356`) and the read-back path
 //! ([`plugin_callback`], `AMB-D-406`): the store to call `amenbo` into, and the window to read it through —
-//! the gate this run just passed, since what a plugin may observe is what it may read.
+//! the gate this run just passed, since what a plugin may observe is what it may read. A plugin declaring
+//! `scope: machine` passed the device's gate, so its window is the device (`AMB-D-601`).
 //!
 //! **The run is logged like any other** (`AMB-D-361`): the execution log answers *why did nothing happen*,
 //! and a command that refused to launch or exited non-zero is as much that question's material as a silent
@@ -105,6 +106,7 @@ pub fn prepare(
         ));
     }
 
+    let scope = plugin.manifest.scope;
     let injection = plugin_inject::resolve(store, name, &plugin.manifest.config, project)?;
     let mut invocation =
         PluginInvocation::new(plugin.program).stdin_json(command_stdin(injection.text));
@@ -115,8 +117,11 @@ pub fn prepare(
         invocation = invocation.env(key, value);
     }
     // The read-back path (`AMB-D-406`): the store to call into, and the window to read it through — which is
-    // the gate this run just passed, since what a plugin may observe is what it may read.
-    for (key, value) in plugin_callback::env(&store.paths.base_dir, plugin_callback::reach_of(project)) {
+    // the gate this run just passed, since what a plugin may observe is what it may read. Which gate that is
+    // follows the layer the author declared (`AMB-D-601`): this project, or the whole device.
+    for (key, value) in
+        plugin_callback::env(&store.paths.base_dir, plugin_callback::reach_of(scope, project))
+    {
         invocation = invocation.env(key, value);
     }
     Ok(invocation)
